@@ -173,7 +173,9 @@ class SSETransport(MCPTransport):
         buffer: list[str] = []
 
         try:
-            async with self._client.stream("GET", self._url, headers=self._auth_headers) as response:
+            async with self._client.stream(
+                "GET", self._url, headers=self._auth_headers
+            ) as response:
                 async for line in response.aiter_lines():
                     if line.startswith("event:"):
                         event_type = line[len("event:") :].strip()

@@ -5,22 +5,20 @@ Connects Ravn to the ODIN event backbone.
 
 import abc
 import logging
-import msgpack
-from datetime import datetime, timezone
 from typing import Any
+
+import msgpack
 
 try:
     import pynng
 except ImportError:
     pynng = None
 
-import logging
-
 logger = logging.getLogger(__name__)
 
 class EventPublisher(abc.ABC):
     """Abstract base class for event publishing."""
-    
+
     @abc.abstractmethod
     async def publish(self, event: Any) -> None:
         """Publish a RavnEvent."""
@@ -63,13 +61,15 @@ class SleipnirPublisher(EventPublisher):
             self._is_connected = True
             logger.info(f"Connected to Sleipnir at {self.address}")
         except Exception as e:
-            self.fallback_logger.warning(f"Failed to connect to Sleipnir at {self.address}: {e}. Falling back to CLI.")
+            self.fallback_logger.warning(
+                f"Failed to connect to Sleipnir at {self.address}: {e}. Falling back to CLI."
+            )
             self._is_connected = False
 
     async def publish(self, event: Any) -> None:
         """
         Publishes a RavnEvent.
-        
+
         Args:
             event: A RavnEvent instance.
         """
@@ -95,7 +95,9 @@ class SleipnirPublisher(EventPublisher):
         try:
             self.socket.send(packed_data)
         except Exception as e:
-            self.fallback_logger.warning(f"Failed to publish event to Sleipnir: {e}. Falling back to CLI.")
+            self.fallback_logger.warning(
+                f"Failed to publish event to Sleipnir: {e}. Falling back to CLI."
+            )
             self.fallback_logger.info(f"[FALLBACK] {event.type.upper()}: {event.payload}")
             # Try to reconnect on next attempt if it was a connection issue
             self._is_connected = False
