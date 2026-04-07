@@ -100,7 +100,8 @@ def _make_drive_loop(
         queue_journal_path=journal_path,
         heartbeat_interval_seconds=heartbeat_seconds,
     )
-    settings = MagicMock(spec=Settings)
+    settings = MagicMock()
+    settings.cascade.enabled = False
     kwargs: dict = {"agent_factory": agent_factory, "config": cfg, "settings": settings}
     if event_publisher is not None:
         kwargs["event_publisher"] = event_publisher
