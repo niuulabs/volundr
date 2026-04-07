@@ -359,23 +359,25 @@ class TestSupersessionLogic:
         )
         # Mock the DB to return the candidate
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[
-            {
-                "fact_id": candidate.fact_id,
-                "fact_type": candidate.fact_type.value,
-                "content": candidate.content,
-                "entities": candidate.entities,
-                "confidence": candidate.confidence,
-                "source": candidate.source,
-                "valid_from": candidate.valid_from,
-                "embedding": json.dumps(candidate_embedding),
-                "valid_until": None,
-                "superseded_by": None,
-                "source_context": "",
-                "cluster_id": None,
-                "tags": [],
-            }
-        ])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "fact_id": candidate.fact_id,
+                    "fact_type": candidate.fact_type.value,
+                    "content": candidate.content,
+                    "entities": candidate.entities,
+                    "confidence": candidate.confidence,
+                    "source": candidate.source,
+                    "valid_from": candidate.valid_from,
+                    "embedding": json.dumps(candidate_embedding),
+                    "valid_until": None,
+                    "superseded_by": None,
+                    "source_context": "",
+                    "cluster_id": None,
+                    "tags": [],
+                }
+            ]
+        )
         mock_pool = _make_pool(mock_conn)
         adapter._pool = mock_pool
 
@@ -398,23 +400,25 @@ class TestSupersessionLogic:
             fact_type=FactType.PREFERENCE,
         )
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[
-            {
-                "fact_id": candidate.fact_id,
-                "fact_type": candidate.fact_type.value,
-                "content": candidate.content,
-                "entities": candidate.entities,
-                "confidence": candidate.confidence,
-                "source": candidate.source,
-                "valid_from": candidate.valid_from,
-                "embedding": json.dumps(shared_embedding),
-                "valid_until": None,
-                "superseded_by": None,
-                "source_context": "",
-                "cluster_id": None,
-                "tags": [],
-            }
-        ])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "fact_id": candidate.fact_id,
+                    "fact_type": candidate.fact_type.value,
+                    "content": candidate.content,
+                    "entities": candidate.entities,
+                    "confidence": candidate.confidence,
+                    "source": candidate.source,
+                    "valid_from": candidate.valid_from,
+                    "embedding": json.dumps(shared_embedding),
+                    "valid_until": None,
+                    "superseded_by": None,
+                    "source_context": "",
+                    "cluster_id": None,
+                    "tags": [],
+                }
+            ]
+        )
         mock_pool = _make_pool(mock_conn)
         adapter._pool = mock_pool
 
@@ -485,16 +489,18 @@ class TestClusterAssignment:
         # Existing cluster with nearly identical centroid
         existing_centroid = [1.0, 0.0]
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[
-            {
-                "cluster_id": "existing-cluster",
-                "centroid": json.dumps(existing_centroid),
-                "radius": 0.05,
-                "member_count": 5,
-                "dominant_type": "preference",
-                "label": None,
-            }
-        ])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "cluster_id": "existing-cluster",
+                    "centroid": json.dumps(existing_centroid),
+                    "radius": 0.05,
+                    "member_count": 5,
+                    "dominant_type": "preference",
+                    "label": None,
+                }
+            ]
+        )
         mock_conn.execute = AsyncMock()
         mock_pool = _make_pool(mock_conn)
         adapter._pool = mock_pool
@@ -570,10 +576,12 @@ class TestTemporalQuery:
         superseded = _fact(content="old preference", valid_until=datetime.now(UTC))
 
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[
-            self._make_row(current),
-            self._make_row(superseded),
-        ])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                self._make_row(current),
+                self._make_row(superseded),
+            ]
+        )
         mock_pool = _make_pool(mock_conn)
         adapter._pool = mock_pool
 
@@ -649,16 +657,22 @@ class TestFactExtractionParsing:
     @pytest.mark.asyncio
     async def test_extraction_with_valid_json(self) -> None:
         """Mock LLM returns valid JSON; facts should be ingested."""
-        extracted_json = json.dumps([
-            {
-                "type": "directive", "content": "Use early returns",
-                "entities": ["Python"], "confidence": 0.9,
-            },
-            {
-                "type": "decision", "content": "RabbitMQ chosen",
-                "entities": ["RabbitMQ"], "confidence": 0.8,
-            },
-        ])
+        extracted_json = json.dumps(
+            [
+                {
+                    "type": "directive",
+                    "content": "Use early returns",
+                    "entities": ["Python"],
+                    "confidence": 0.9,
+                },
+                {
+                    "type": "decision",
+                    "content": "RabbitMQ chosen",
+                    "entities": ["RabbitMQ"],
+                    "confidence": 0.8,
+                },
+            ]
+        )
         mock_llm_response = MagicMock()
         mock_llm_response.content = extracted_json
 
@@ -691,12 +705,16 @@ class TestFactExtractionParsing:
     @pytest.mark.asyncio
     async def test_extraction_with_low_confidence_downgrades_type(self) -> None:
         """Low confidence facts (< min_confidence) should become observations."""
-        extracted_json = json.dumps([
-            {
-                "type": "directive", "content": "Maybe use early returns",
-                "entities": [], "confidence": 0.3,
-            },
-        ])
+        extracted_json = json.dumps(
+            [
+                {
+                    "type": "directive",
+                    "content": "Maybe use early returns",
+                    "entities": [],
+                    "confidence": 0.3,
+                },
+            ]
+        )
         mock_llm_response = MagicMock()
         mock_llm_response.content = extracted_json
 
@@ -761,9 +779,16 @@ class TestFactExtractionParsing:
     @pytest.mark.asyncio
     async def test_extraction_strips_markdown_fences(self) -> None:
         """JSON wrapped in ``` fences should parse correctly."""
-        extracted_json = json.dumps([
-            {"type": "preference", "content": "Tabs over spaces", "entities": [], "confidence": 0.8}
-        ])
+        extracted_json = json.dumps(
+            [
+                {
+                    "type": "preference",
+                    "content": "Tabs over spaces",
+                    "entities": [],
+                    "confidence": 0.8,
+                }
+            ]
+        )
         fenced = f"```json\n{extracted_json}\n```"
 
         mock_llm_response = MagicMock()
@@ -1011,13 +1036,15 @@ class TestSessionStateUpdate:
         adapter = self._make_adapter()
         now = datetime.now(UTC)
         mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value={
-            "session_id": "s1",
-            "rolling_summary": "Context: built RabbitMQ transport",
-            "active_entities": ["RabbitMQ", "Sleipnir"],
-            "turn_count": 3,
-            "last_updated": now,
-        })
+        mock_conn.fetchrow = AsyncMock(
+            return_value={
+                "session_id": "s1",
+                "rolling_summary": "Context: built RabbitMQ transport",
+                "active_entities": ["RabbitMQ", "Sleipnir"],
+                "turn_count": 3,
+                "last_updated": now,
+            }
+        )
         mock_pool = _make_pool(mock_conn)
         adapter._pool = mock_pool
 
@@ -1244,9 +1271,7 @@ class TestQueryFacts:
     @pytest.mark.asyncio
     async def test_query_returns_type_weighted_sorted(self) -> None:
         adapter = self._make_adapter()
-        directive = _fact(
-            content="Use early returns", fact_type=FactType.DIRECTIVE, confidence=0.9
-        )
+        directive = _fact(content="Use early returns", fact_type=FactType.DIRECTIVE, confidence=0.9)
         observation = _fact(
             content="Something happened", fact_type=FactType.OBSERVATION, confidence=0.9
         )
@@ -1272,9 +1297,7 @@ class TestQueryFacts:
     @pytest.mark.asyncio
     async def test_query_with_fact_type_filter(self) -> None:
         adapter = self._make_adapter()
-        directive = _fact(
-            content="Use tabs", fact_type=FactType.DIRECTIVE, confidence=0.8
-        )
+        directive = _fact(content="Use tabs", fact_type=FactType.DIRECTIVE, confidence=0.8)
 
         call_num = 0
 
@@ -1389,21 +1412,25 @@ class TestProcessInlineFacts:
         forgotten = _fact(content="some old fact")
         mock_conn = AsyncMock()
         # query_facts returns our fact for forget
-        mock_conn.fetch = AsyncMock(return_value=[{
-            "fact_id": forgotten.fact_id,
-            "fact_type": forgotten.fact_type.value,
-            "content": forgotten.content,
-            "entities": forgotten.entities,
-            "confidence": forgotten.confidence,
-            "source": forgotten.source,
-            "valid_from": forgotten.valid_from,
-            "embedding": None,
-            "valid_until": None,
-            "superseded_by": None,
-            "source_context": "",
-            "cluster_id": None,
-            "tags": [],
-        }])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "fact_id": forgotten.fact_id,
+                    "fact_type": forgotten.fact_type.value,
+                    "content": forgotten.content,
+                    "entities": forgotten.entities,
+                    "confidence": forgotten.confidence,
+                    "source": forgotten.source,
+                    "valid_from": forgotten.valid_from,
+                    "embedding": None,
+                    "valid_until": None,
+                    "superseded_by": None,
+                    "source_context": "",
+                    "cluster_id": None,
+                    "tags": [],
+                }
+            ]
+        )
         mock_conn.execute = AsyncMock()
         mock_pool = _make_pool(mock_conn)
         adapter._pool = mock_pool
@@ -1470,15 +1497,17 @@ class TestGetRelationships:
             call_count += 1
             if call_count == 1:
                 # First hop: "Astri" → "Niuu"
-                return [{
-                    "rel_id": "r1",
-                    "from_entity": "Astri",
-                    "relation": "works_at",
-                    "to_entity": "Niuu",
-                    "valid_from": now,
-                    "valid_until": None,
-                    "fact_id": None,
-                }]
+                return [
+                    {
+                        "rel_id": "r1",
+                        "from_entity": "Astri",
+                        "relation": "works_at",
+                        "to_entity": "Niuu",
+                        "valid_from": now,
+                        "valid_until": None,
+                        "fact_id": None,
+                    }
+                ]
             # Second hop: no more relationships
             return []
 
@@ -1495,6 +1524,7 @@ class TestGetRelationships:
 class TestFormatFact:
     def test_current_fact_no_superseded_marker(self) -> None:
         from ravn.adapters.tools.buri_tools import _format_fact
+
         f = _fact(content="Use early returns")
         formatted = _format_fact(f)
         assert "[superseded]" not in formatted
@@ -1502,6 +1532,7 @@ class TestFormatFact:
 
     def test_superseded_fact_has_marker(self) -> None:
         from ravn.adapters.tools.buri_tools import _format_fact
+
         f = _fact(content="Old preference", valid_until=datetime.now(UTC))
         formatted = _format_fact(f)
         assert "[superseded]" in formatted
@@ -1510,6 +1541,7 @@ class TestFormatFact:
 class TestRowToFact:
     def test_json_embedding_parsed(self) -> None:
         from ravn.adapters.memory.buri import _row_to_fact
+
         now = datetime.now(UTC)
         row = {
             "fact_id": "f1",
@@ -1532,6 +1564,7 @@ class TestRowToFact:
 
     def test_list_embedding_preserved(self) -> None:
         from ravn.adapters.memory.buri import _row_to_fact
+
         now = datetime.now(UTC)
         row = {
             "fact_id": "f2",
@@ -1556,6 +1589,7 @@ class TestRowToFact:
         import datetime as dt
 
         from ravn.adapters.memory.buri import _row_to_fact
+
         naive = dt.datetime(2026, 1, 1, 12, 0, 0)  # no tzinfo
         row = {
             "fact_id": "f3",
@@ -1579,6 +1613,7 @@ class TestRowToFact:
 class TestRowToCluster:
     def test_json_centroid_parsed(self) -> None:
         from ravn.adapters.memory.buri import _row_to_cluster
+
         row = {
             "cluster_id": "c1",
             "centroid": json.dumps([0.1, 0.9]),
@@ -1603,6 +1638,7 @@ class TestRequirePool:
 class TestSharedContext:
     def test_inject_and_retrieve(self) -> None:
         from ravn.domain.models import SharedContext
+
         adapter = BuriMemoryAdapter.__new__(BuriMemoryAdapter)
         adapter._shared_context = None
         ctx = SharedContext(data={"session_id": "s1"})
@@ -1725,18 +1761,22 @@ class TestQueryEpisodes:
         adapter = self._make_adapter()
         now = datetime.now(UTC)
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[{
-            "episode_id": "ep1",
-            "session_id": "s1",
-            "timestamp": now,
-            "summary": "Did some work",
-            "task_description": "Task",
-            "tools_used": ["bash"],
-            "outcome": "success",
-            "tags": ["git"],
-            "embedding": None,
-            "rank_score": 0.9,
-        }])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "episode_id": "ep1",
+                    "session_id": "s1",
+                    "timestamp": now,
+                    "summary": "Did some work",
+                    "task_description": "Task",
+                    "tools_used": ["bash"],
+                    "outcome": "success",
+                    "tags": ["git"],
+                    "embedding": None,
+                    "rank_score": 0.9,
+                }
+            ]
+        )
         mock_pool = _make_pool(mock_conn)
         adapter._pool = mock_pool
 
@@ -1801,17 +1841,21 @@ class TestSearchSessions:
         adapter = self._make_adapter()
         now = datetime.now(UTC)
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[{
-            "episode_id": "ep1",
-            "session_id": "session-abc",
-            "timestamp": now,
-            "summary": "Configured RabbitMQ transport",
-            "task_description": "Setup Sleipnir",
-            "tools_used": ["bash", "read"],
-            "outcome": "success",
-            "tags": ["rabbitmq", "sleipnir"],
-            "embedding": None,
-        }])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "episode_id": "ep1",
+                    "session_id": "session-abc",
+                    "timestamp": now,
+                    "summary": "Configured RabbitMQ transport",
+                    "task_description": "Setup Sleipnir",
+                    "tools_used": ["bash", "read"],
+                    "outcome": "success",
+                    "tags": ["rabbitmq", "sleipnir"],
+                    "embedding": None,
+                }
+            ]
+        )
         mock_pool = _make_pool(mock_conn)
         adapter._pool = mock_pool
         results = await adapter.search_sessions("RabbitMQ")
@@ -2093,3 +2137,78 @@ class TestBuildKnowledgeContextWithSessionState:
         context = await adapter.build_knowledge_context("sleipnir")
         assert "[SESSION CONTEXT]" in context
         assert "Sleipnir" in context
+
+
+# ---------------------------------------------------------------------------
+# MemoryPort hook tests (NIU-542)
+# ---------------------------------------------------------------------------
+
+
+def _make_buri_adapter() -> BuriMemoryAdapter:
+    """Return a BuriMemoryAdapter with all required attrs set (no real pool)."""
+    adapter = BuriMemoryAdapter.__new__(BuriMemoryAdapter)
+    adapter._dsn = "postgresql://test"
+    adapter._pool = None
+    adapter._cluster_merge_threshold = 0.15
+    adapter._supersession_cosine_threshold = 0.85
+    adapter._min_confidence = 0.6
+    adapter._extraction_model = "test-model"
+    adapter._session_summary_max_tokens = 400
+    adapter._prefetch_budget = 2000
+    adapter._prefetch_limit = 5
+    adapter._prefetch_min_relevance = 0.3
+    adapter._recency_half_life_days = 14.0
+    adapter._session_search_truncate_chars = 100_000
+    adapter._llm = None
+    adapter._shared_context = None
+    return adapter
+
+
+class TestExtraTools:
+    def test_buri_adapter_returns_five_tools(self) -> None:
+        adapter = _make_buri_adapter()
+        tools = adapter.extra_tools(session_id="test-session")
+        assert len(tools) == 5
+        tool_types = {type(t).__name__ for t in tools}
+        assert tool_types == {
+            "BuriRecallTool",
+            "BuriFactsTool",
+            "BuriHistoryTool",
+            "BuriRememberTool",
+            "BuriForgetTool",
+        }
+
+    def test_sqlite_adapter_returns_empty_list(self) -> None:
+        from ravn.adapters.memory.sqlite import SqliteMemoryAdapter
+
+        adapter = SqliteMemoryAdapter.__new__(SqliteMemoryAdapter)
+        tools = adapter.extra_tools(session_id="x")
+        assert tools == []
+
+
+class TestOnTurnComplete:
+    @pytest.mark.asyncio
+    async def test_buri_adapter_calls_update_session_state(self) -> None:
+        adapter = _make_buri_adapter()
+        adapter.update_session_state = AsyncMock()
+
+        await adapter.on_turn_complete(
+            session_id="s1",
+            user_input="hello",
+            response_summary="world",
+        )
+
+        adapter.update_session_state.assert_awaited_once_with("s1", "hello", "world")
+
+    @pytest.mark.asyncio
+    async def test_sqlite_adapter_on_turn_complete_is_noop(self) -> None:
+        from ravn.adapters.memory.sqlite import SqliteMemoryAdapter
+
+        adapter = SqliteMemoryAdapter.__new__(SqliteMemoryAdapter)
+        # Should complete without error and return None
+        result = await adapter.on_turn_complete(
+            session_id="s1",
+            user_input="hello",
+            response_summary="world",
+        )
+        assert result is None

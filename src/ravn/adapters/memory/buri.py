@@ -65,9 +65,7 @@ _TYPE_WEIGHTS: dict[str, float] = {
 }
 
 # Patterns for mid-session auto-detection (compiled once at module load)
-_REMEMBER_PAT = re.compile(
-    r"\b(remember\s+that|note\s+that|don[''']t\s+forget)\b", re.IGNORECASE
-)
+_REMEMBER_PAT = re.compile(r"\b(remember\s+that|note\s+that|don[''']t\s+forget)\b", re.IGNORECASE)
 _PREFER_PAT = re.compile(
     r"\b(i\s+prefer|i\s+like|i\s+don[''']t\s+like|i\s+hate|i\s+love)\b", re.IGNORECASE
 )
@@ -529,10 +527,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
         facts = [_row_to_fact(r) for r in fact_rows]
 
         # Apply type-weighted scoring
-        scored = [
-            (f, _TYPE_WEIGHTS.get(f.fact_type, 1.0) * f.confidence)
-            for f in facts
-        ]
+        scored = [(f, _TYPE_WEIGHTS.get(f.fact_type, 1.0) * f.confidence) for f in facts]
         scored.sort(key=lambda x: x[1], reverse=True)
         return [f for f, _ in scored[:limit]]
 
@@ -754,10 +749,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
 
         directives = [_row_to_fact(r) for r in directive_rows]
         goals = [_row_to_fact(r) for r in goal_rows]
-        decisions = [
-            f for f in relevant_facts
-            if f.fact_type == FactType.DECISION
-        ]
+        decisions = [f for f in relevant_facts if f.fact_type == FactType.DECISION]
 
         sections: list[str] = []
 
@@ -771,8 +763,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
 
         if decisions:
             items = "\n".join(
-                f"• {f.content} ({f.valid_from.strftime('%B %Y')})"
-                for f in decisions
+                f"• {f.content} ({f.valid_from.strftime('%B %Y')})" for f in decisions
             )
             sections.append(f"[RELEVANT DECISIONS]\n{items}")
 
@@ -835,6 +826,37 @@ class BuriMemoryAdapter(BuriMemoryPort):
         return written
 
     # ------------------------------------------------------------------
+    # MemoryPort hook overrides
+    # ------------------------------------------------------------------
+
+    def extra_tools(self, session_id: str) -> list:
+        """Return the five Búri agent tools for this adapter."""
+        from ravn.adapters.tools.buri_tools import (
+            BuriFactsTool,
+            BuriForgetTool,
+            BuriHistoryTool,
+            BuriRecallTool,
+            BuriRememberTool,
+        )
+
+        return [
+            BuriRecallTool(self),
+            BuriFactsTool(self),
+            BuriHistoryTool(self),
+            BuriRememberTool(self, session_id=session_id),
+            BuriForgetTool(self),
+        ]
+
+    async def on_turn_complete(
+        self,
+        session_id: str,
+        user_input: str,
+        response_summary: str,
+    ) -> None:
+        """Update the proto-RWKV rolling summary after each turn."""
+        await self.update_session_state(session_id, user_input, response_summary)
+
+    # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 
@@ -843,9 +865,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
             raise RuntimeError("BuriMemoryAdapter not initialized. Call initialize() first.")
         return self._pool
 
-    async def _find_supersedable_fact(
-        self, new_fact: KnowledgeFact
-    ) -> KnowledgeFact | None:
+    async def _find_supersedable_fact(self, new_fact: KnowledgeFact) -> KnowledgeFact | None:
         """Find an existing fact that should be superseded by *new_fact*.
 
         Criteria: same fact_type + at least one overlapping entity + cosine
@@ -959,9 +979,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
         async with pool.acquire() as conn:
             await self._write_fact_conn(conn, fact)
 
-    async def _write_fact_conn(
-        self, conn: asyncpg.Connection, fact: KnowledgeFact
-    ) -> None:
+    async def _write_fact_conn(self, conn: asyncpg.Connection, fact: KnowledgeFact) -> None:
         await conn.execute(
             """
             INSERT INTO knowledge_facts
@@ -993,8 +1011,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
 
         # Use rolling summary if available, else fall back to episode summary
         state = await self.get_session_state(episode.session_id)
-        source_text = (state.rolling_summary if state and state.rolling_summary
-                       else episode.summary)
+        source_text = state.rolling_summary if state and state.rolling_summary else episode.summary
 
         if not source_text.strip():
             return
@@ -1080,7 +1097,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
             # Fallback: simple concatenation truncated to budget
             combined = f"{current_summary}\n\nLatest: {user_input} → {response_summary}"
             chars_budget = self._session_summary_max_tokens * _CHARS_PER_TOKEN
-            return combined[-int(chars_budget):]
+            return combined[-int(chars_budget) :]
 
         prompt = (
             f"Current state (max {self._session_summary_max_tokens} tokens):\n"
@@ -1095,8 +1112,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
             response = await self._llm.complete(
                 model=self._extraction_model,
                 system=(
-                    "You are a concise state tracker. "
-                    "Return only the updated state, no commentary."
+                    "You are a concise state tracker. Return only the updated state, no commentary."
                 ),
                 messages=[RavnMessage(role="user", content=prompt)],
                 max_tokens=self._session_summary_max_tokens,
@@ -1106,7 +1122,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
             logger.warning("Session state compression LLM call failed.", exc_info=True)
             combined = f"{current_summary}\n\nLatest: {user_input} → {response_summary}"
             chars_budget = self._session_summary_max_tokens * _CHARS_PER_TOKEN
-            return combined[-int(chars_budget):]
+            return combined[-int(chars_budget) :]
 
 
 # ---------------------------------------------------------------------------

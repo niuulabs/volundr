@@ -419,26 +419,7 @@ def _build_tools(
     if memory is not None:
         tools.append(RavnMemorySearchTool(memory))
         tools.append(SessionSearchTool(memory))
-
-    # -- Búri knowledge tools (buri backend only) --
-    from ravn.ports.memory import BuriMemoryPort
-
-    if isinstance(memory, BuriMemoryPort):
-        from ravn.adapters.tools.buri_tools import (
-            BuriFactsTool,
-            BuriForgetTool,
-            BuriHistoryTool,
-            BuriRecallTool,
-            BuriRememberTool,
-        )
-
-        tools.extend([
-            BuriRecallTool(memory),
-            BuriFactsTool(memory),
-            BuriHistoryTool(memory),
-            BuriRememberTool(memory, session_id=str(session.id)),
-            BuriForgetTool(memory),
-        ])
+        tools.extend(memory.extra_tools(session_id=str(session.id)))
 
     # -- Custom tools from config --
     for ct in settings.tools.custom:
