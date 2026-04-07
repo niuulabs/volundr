@@ -1455,10 +1455,20 @@ async def _run_daemon(
     # Drive loop (initiative tasks)
     trigger_names: list[str] = []
     if settings.initiative.enabled:
+        from ravn.adapters.events.noop_publisher import NoOpEventPublisher
+        from ravn.adapters.events.rabbitmq_publisher import RabbitMQEventPublisher
+        from ravn.ports.event_publisher import EventPublisherPort
+
+        if settings.sleipnir.enabled:
+            event_publisher: EventPublisherPort = RabbitMQEventPublisher(settings.sleipnir)
+        else:
+            event_publisher = NoOpEventPublisher()
+
         drive_loop = DriveLoop(
             agent_factory=_agent_factory,
             config=settings.initiative,
             settings=settings,
+            event_publisher=event_publisher,
         )
         _wire_triggers(drive_loop, settings.initiative)
         trigger_names = [t.name for t in drive_loop._triggers]

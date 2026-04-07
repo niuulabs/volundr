@@ -3,7 +3,7 @@
 Runs as three concurrent asyncio tasks:
 - ``_trigger_watcher``  — polls all registered TriggerPorts
 - ``_task_executor``    — drains PriorityQueue, runs agent turns
-- ``_heartbeat``        — emits TASK_STARTED/TASK_COMPLETE to Sleipnir
+- ``_heartbeat``        — publishes periodic heartbeat events via EventPublisherPort
 
 The queue is persisted to ``queue_journal_path`` on every enqueue/dequeue so
 that pending tasks survive daemon restarts.  A file lock prevents concurrent
@@ -20,10 +20,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ravn.adapters.channels.silent import SilentChannel
+from ravn.adapters.events.noop_publisher import NoOpEventPublisher
 from ravn.config import InitiativeConfig, Settings
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.models import AgentTask, OutputMode
 from ravn.ports.channel import ChannelPort
+from ravn.ports.event_publisher import EventPublisherPort
 from ravn.ports.trigger import TriggerPort
 from ravn.prompt_builder import build_initiative_prompt
 
@@ -48,10 +50,12 @@ class DriveLoop:
         agent_factory: Callable[[ChannelPort, str | None], object],
         config: InitiativeConfig,
         settings: Settings,
+        event_publisher: EventPublisherPort | None = None,
     ) -> None:
         self._agent_factory = agent_factory
         self._config = config
         self._settings = settings
+        self._event_publisher: EventPublisherPort = event_publisher or NoOpEventPublisher()
         self._triggers: list[TriggerPort] = []
         # (priority, counter, AgentTask)
         self._queue: asyncio.PriorityQueue = asyncio.PriorityQueue(maxsize=config.task_queue_max)
@@ -181,14 +185,57 @@ class DriveLoop:
             task.triggered_by,
         )
 
+        await self._event_publisher.publish(
+            RavnEvent(
+                type=RavnEventType.TASK_STARTED,
+                source=self._source_id,
+                payload={
+                    "task_id": task.task_id,
+                    "title": task.title,
+                    "triggered_by": task.triggered_by,
+                },
+                timestamp=datetime.now(UTC),
+                urgency=0.2,
+                correlation_id=task.task_id,
+                session_id=task.session_id,
+                task_id=task.task_id,
+            )
+        )
+
+        success = False
         try:
             await agent.run_turn(prompt)  # type: ignore[attr-defined]
+            success = True
         except asyncio.CancelledError:
             logger.info("drive_loop: task %s cancelled mid-turn", task.task_id)
+            await self._event_publisher.publish(
+                RavnEvent(
+                    type=RavnEventType.TASK_COMPLETE,
+                    source=self._source_id,
+                    payload={"task_id": task.task_id, "success": False},
+                    timestamp=datetime.now(UTC),
+                    urgency=0.7,
+                    correlation_id=task.task_id,
+                    session_id=task.session_id,
+                    task_id=task.task_id,
+                )
+            )
             return
         except Exception as exc:
             logger.error("drive_loop: task %s failed: %s", task.task_id, exc)
-            return
+
+        await self._event_publisher.publish(
+            RavnEvent(
+                type=RavnEventType.TASK_COMPLETE,
+                source=self._source_id,
+                payload={"task_id": task.task_id, "success": success},
+                timestamp=datetime.now(UTC),
+                urgency=0.2 if success else 0.7,
+                correlation_id=task.task_id,
+                session_id=task.session_id,
+                task_id=task.task_id,
+            )
+        )
 
         if channel.surface_triggered:
             await self._re_deliver_surface(task, channel.response_text)
@@ -199,8 +246,6 @@ class DriveLoop:
             "drive_loop: task %s surface escalation — publishing to Sleipnir",
             task.task_id,
         )
-        # Emit a synthetic RESPONSE event with AMBIENT urgency.
-        # Real re-delivery happens via the SleipnirPublisher if wired in.
         event = RavnEvent(
             type=RavnEventType.RESPONSE,
             source=self._source_id,
@@ -211,15 +256,30 @@ class DriveLoop:
             session_id=task.session_id,
             task_id=task.task_id,
         )
-        # Log it; actual channel routing is handled by the gateway
-        logger.info("drive_loop: surface event: %s", event.payload.get("text", "")[:120])
+        await self._event_publisher.publish(event)
 
     async def _heartbeat(self) -> None:
-        """Emit periodic heartbeat logs (low-overhead; Sleipnir publishing is optional)."""
+        """Publish periodic heartbeat events via the event publisher."""
         while True:
             await asyncio.sleep(self._config.heartbeat_interval_seconds)
             active = len(self._active_tasks)
             queued = self._queue.qsize()
+            event = RavnEvent(
+                type=RavnEventType.TASK_STARTED,
+                source=self._source_id,
+                payload={
+                    "active_tasks": active,
+                    "queued_tasks": queued,
+                    "trigger_count": len(self._triggers),
+                    "heartbeat": True,
+                },
+                timestamp=datetime.now(UTC),
+                urgency=0.0,
+                correlation_id="heartbeat",
+                session_id="daemon",
+                task_id=None,
+            )
+            await self._event_publisher.publish(event)
             logger.debug(
                 "drive_loop: heartbeat — active=%d queued=%d triggers=%d",
                 active,
