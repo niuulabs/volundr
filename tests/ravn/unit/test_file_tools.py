@@ -195,35 +195,38 @@ class TestEditFileToolDiffPreview:
 
 
 # ---------------------------------------------------------------------------
-# RavnEvent.tool_start — diff in metadata
+# RavnEvent.tool_start — diff in payload
 # ---------------------------------------------------------------------------
+
+_SRC = "ravn-test"
+_CID = "corr-1"
+_SID = "sess-1"
 
 
 class TestRavnEventToolStart:
     def test_no_diff_key_when_diff_is_none(self) -> None:
-        event = RavnEvent.tool_start("write_file", {"path": "f.py", "content": "x"})
-        assert "diff" not in event.metadata
+        event = RavnEvent.tool_start(_SRC, "write_file", {"path": "f.py", "content": "x"}, _CID, _SID)
+        assert "diff" not in event.payload
 
     def test_diff_key_present_when_diff_provided(self) -> None:
         event = RavnEvent.tool_start(
-            "write_file",
-            {"path": "f.py"},
+            _SRC, "write_file", {"path": "f.py"}, _CID, _SID,
             diff="--- f.py\n+++ f.py\n@@ -1 +1 @@\n-old\n+new\n",
         )
-        assert "diff" in event.metadata
-        assert event.metadata["diff"] == "--- f.py\n+++ f.py\n@@ -1 +1 @@\n-old\n+new\n"
+        assert "diff" in event.payload
+        assert event.payload["diff"] == "--- f.py\n+++ f.py\n@@ -1 +1 @@\n-old\n+new\n"
 
-    def test_input_always_in_metadata(self) -> None:
-        event = RavnEvent.tool_start("read_file", {"path": "x.py"}, diff=None)
-        assert event.metadata["input"] == {"path": "x.py"}
+    def test_input_always_in_payload(self) -> None:
+        event = RavnEvent.tool_start(_SRC, "read_file", {"path": "x.py"}, _CID, _SID)
+        assert event.payload["input"] == {"path": "x.py"}
 
     def test_event_type_is_tool_start(self) -> None:
-        event = RavnEvent.tool_start("t", {})
+        event = RavnEvent.tool_start(_SRC, "t", {}, _CID, _SID)
         assert event.type == RavnEventType.TOOL_START
 
-    def test_data_is_tool_name(self) -> None:
-        event = RavnEvent.tool_start("write_file", {})
-        assert event.data == "write_file"
+    def test_tool_name_in_payload(self) -> None:
+        event = RavnEvent.tool_start(_SRC, "write_file", {}, _CID, _SID)
+        assert event.payload["tool_name"] == "write_file"
 
 
 # ---------------------------------------------------------------------------
@@ -236,8 +239,7 @@ class TestCliChannelDiffRendering:
         buf = io.StringIO()
         cli = CliChannel(file=buf)
         event = RavnEvent.tool_start(
-            "write_file",
-            {"path": "f.py"},
+            _SRC, "write_file", {"path": "f.py"}, _CID, _SID,
             diff="--- f.py\n+++ f.py\n@@ -1 +1 @@\n-old\n+new\n",
         )
         await cli.emit(event)
@@ -249,7 +251,7 @@ class TestCliChannelDiffRendering:
     async def test_no_separator_when_no_diff(self) -> None:
         buf = io.StringIO()
         cli = CliChannel(file=buf)
-        event = RavnEvent.tool_start("read_file", {"path": "f.py"})
+        event = RavnEvent.tool_start(_SRC, "read_file", {"path": "f.py"}, _CID, _SID)
         await cli.emit(event)
         output = buf.getvalue()
         assert "─" not in output
@@ -257,7 +259,7 @@ class TestCliChannelDiffRendering:
     async def test_tool_name_rendered_with_rotation_symbol(self) -> None:
         buf = io.StringIO()
         cli = CliChannel(file=buf)
-        event = RavnEvent.tool_start("write_file", {"path": "f.py"})
+        event = RavnEvent.tool_start(_SRC, "write_file", {"path": "f.py"}, _CID, _SID)
         await cli.emit(event)
         output = buf.getvalue()
         assert "⟳" in output
@@ -267,7 +269,7 @@ class TestCliChannelDiffRendering:
         buf = io.StringIO()
         cli = CliChannel(file=buf)
         diff = "--- f.py\n+++ f.py\n@@ -1 +1 @@\n-a\n+b\n"
-        event = RavnEvent.tool_start("write_file", {}, diff=diff)
+        event = RavnEvent.tool_start(_SRC, "write_file", {}, _CID, _SID, diff=diff)
         await cli.emit(event)
         output = buf.getvalue()
         sep = "─" * 33

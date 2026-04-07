@@ -75,9 +75,21 @@ class GatewayChannel(ChannelPort):
             if event is None:
                 return ""
             if event.type == RavnEventType.RESPONSE:
-                return event.data
+                return event.payload["text"]
             if event.type == RavnEventType.ERROR:
-                return f"[error] {event.data}"
+                return f"[error] {event.payload['message']}"
+
+    def drain(self) -> None:
+        """Discard any leftover items (e.g. sentinel) from the queue.
+
+        Call between turns to prevent stale sentinels from causing the
+        next :meth:`stream` call to return immediately.
+        """
+        while not self._queue.empty():
+            try:
+                self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
 
     async def stream(self) -> AsyncIterator[RavnEvent]:
         """Yield events until :attr:`~RavnEventType.RESPONSE`, ERROR, or sentinel.
@@ -173,6 +185,7 @@ class RavnGateway:
                     yield event
             finally:
                 await run_task
+                session.channel.drain()
 
     async def _run_and_signal(self, session: GatewaySession, text: str) -> None:
         """Run agent turn then push a sentinel so :meth:`stream` unblocks."""

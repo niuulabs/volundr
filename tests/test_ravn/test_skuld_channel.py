@@ -10,6 +10,10 @@ import pytest
 from ravn.adapters.channels.skuld_channel import SkuldChannel
 from ravn.domain.events import RavnEvent, RavnEventType
 
+_SRC = "ravn-test"
+_CID = "corr-1"
+_SID = "sess-1"
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -31,7 +35,7 @@ def _make_channel(broker_url: str = "ws://localhost:9000/ws/ravn/test") -> Skuld
 
 def test_serialise_response_event():
     ch = _make_channel()
-    event = RavnEvent.response("Hello!")
+    event = RavnEvent.response(_SRC, "Hello!", _CID, _SID)
     line = ch._serialise(event)
     data = json.loads(line.strip())
     assert data["type"] == "response"
@@ -42,7 +46,7 @@ def test_serialise_response_event():
 
 def test_serialise_tool_start_event():
     ch = _make_channel()
-    event = RavnEvent.tool_start("BashTool", {"command": "ls"})
+    event = RavnEvent.tool_start(_SRC, "BashTool", {"command": "ls"}, _CID, _SID)
     line = ch._serialise(event)
     data = json.loads(line.strip())
     assert data["type"] == "tool_start"
@@ -52,16 +56,55 @@ def test_serialise_tool_start_event():
 
 def test_serialise_error_event():
     ch = _make_channel()
-    event = RavnEvent.error("boom")
+    event = RavnEvent.error(_SRC, "boom", _CID, _SID)
     line = ch._serialise(event)
     data = json.loads(line.strip())
     assert data["type"] == "error"
     assert data["data"] == "boom"
 
 
+def test_serialise_thought_event():
+    ch = _make_channel()
+    event = RavnEvent.thought(_SRC, "thinking...", _CID, _SID)
+    line = ch._serialise(event)
+    data = json.loads(line.strip())
+    assert data["type"] == "thought"
+    assert data["data"] == "thinking..."
+    assert data["metadata"] == {}
+
+
+def test_serialise_thinking_event():
+    ch = _make_channel()
+    event = RavnEvent.thinking(_SRC, "deep thought", _CID, _SID)
+    line = ch._serialise(event)
+    data = json.loads(line.strip())
+    assert data["type"] == "thought"
+    assert data["data"] == "deep thought"
+    assert data["metadata"]["thinking"] is True
+
+
+def test_serialise_tool_result_event():
+    ch = _make_channel()
+    event = RavnEvent.tool_result(_SRC, "echo", "output", _CID, _SID)
+    line = ch._serialise(event)
+    data = json.loads(line.strip())
+    assert data["type"] == "tool_result"
+    assert data["data"] == "output"
+    assert data["metadata"]["tool_name"] == "echo"
+    assert data["metadata"]["is_error"] is False
+
+
+def test_serialise_tool_start_with_diff():
+    ch = _make_channel()
+    event = RavnEvent.tool_start(_SRC, "Edit", {"file": "a.py"}, _CID, _SID, diff="- old\n+ new")
+    line = ch._serialise(event)
+    data = json.loads(line.strip())
+    assert data["metadata"]["diff"] == "- old\n+ new"
+
+
 def test_serialise_ends_with_newline():
     ch = _make_channel()
-    line = ch._serialise(RavnEvent.response("hi"))
+    line = ch._serialise(RavnEvent.response(_SRC, "hi", _CID, _SID))
     assert line.endswith("\n")
 
 
@@ -77,7 +120,7 @@ async def test_emit_sends_serialised_payload():
     mock_ws.closed = False
     ch._ws = mock_ws
 
-    await ch.emit(RavnEvent.response("test response"))
+    await ch.emit(RavnEvent.response(_SRC, "test response", _CID, _SID))
 
     mock_ws.send.assert_awaited_once()
     sent = mock_ws.send.call_args[0][0]
@@ -95,7 +138,7 @@ async def test_emit_buffers_event_on_failure():
 
     ch._send = _fail  # type: ignore[method-assign]
 
-    await ch.emit(RavnEvent.thought("thinking"))
+    await ch.emit(RavnEvent.thought(_SRC, "thinking", _CID, _SID))
 
     assert len(ch._buffer) == 1
     assert ch._buffer[0].type == RavnEventType.THOUGHT
@@ -109,7 +152,7 @@ async def test_emit_buffers_event_on_failure():
 @pytest.mark.asyncio
 async def test_flush_buffer_sends_buffered_events():
     ch = _make_channel()
-    ch._buffer = [RavnEvent.response("buffered")]
+    ch._buffer = [RavnEvent.response(_SRC, "buffered", _CID, _SID)]
 
     mock_ws = AsyncMock()
     mock_ws.closed = False

@@ -17,6 +17,10 @@ from ravn.config import GatewayConfig
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.ports.channel import ChannelPort
 
+_SRC = "ravn-test"
+_CID = "corr-1"
+_SID = "sess-1"
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -33,7 +37,7 @@ def _make_agent_factory(response: str = "Hello from agent") -> AgentFactory:
         agent = MagicMock()
 
         async def run_turn(text: str):
-            await channel.emit(RavnEvent.response(response))
+            await channel.emit(RavnEvent.response(_SRC, response, _CID, _SID))
 
         agent.run_turn = run_turn
         return agent
@@ -48,8 +52,8 @@ def _make_agent_factory_with_thought(thought: str, response: str) -> AgentFactor
         agent = MagicMock()
 
         async def run_turn(text: str):
-            await channel.emit(RavnEvent.thought(thought))
-            await channel.emit(RavnEvent.response(response))
+            await channel.emit(RavnEvent.thought(_SRC, thought, _CID, _SID))
+            await channel.emit(RavnEvent.response(_SRC, response, _CID, _SID))
 
         agent.run_turn = run_turn
         return agent
@@ -64,7 +68,7 @@ def _make_agent_factory_error(error_msg: str) -> AgentFactory:
         agent = MagicMock()
 
         async def run_turn(text: str):
-            await channel.emit(RavnEvent.error(error_msg))
+            await channel.emit(RavnEvent.error(_SRC, error_msg, _CID, _SID))
 
         agent.run_turn = run_turn
         return agent
@@ -80,7 +84,7 @@ def _make_agent_factory_error(error_msg: str) -> AgentFactory:
 @pytest.mark.asyncio
 async def test_gateway_channel_emit_and_collect_response():
     ch = GatewayChannel()
-    await ch.emit(RavnEvent.response("Hello!"))
+    await ch.emit(RavnEvent.response(_SRC, "Hello!", _CID, _SID))
 
     result = await ch.collect_response()
     assert result == "Hello!"
@@ -89,7 +93,7 @@ async def test_gateway_channel_emit_and_collect_response():
 @pytest.mark.asyncio
 async def test_gateway_channel_collect_response_on_error():
     ch = GatewayChannel()
-    await ch.emit(RavnEvent.error("boom"))
+    await ch.emit(RavnEvent.error(_SRC, "boom", _CID, _SID))
 
     result = await ch.collect_response()
     assert result == "[error] boom"
@@ -108,8 +112,8 @@ async def test_gateway_channel_collect_response_sentinel():
 async def test_gateway_channel_collect_response_skips_thought():
     """THOUGHT events are consumed but the RESPONSE data is used as the final answer."""
     ch = GatewayChannel()
-    await ch.emit(RavnEvent.thought("thinking..."))
-    await ch.emit(RavnEvent.response("Final answer"))
+    await ch.emit(RavnEvent.thought(_SRC, "thinking...", _CID, _SID))
+    await ch.emit(RavnEvent.response(_SRC, "Final answer", _CID, _SID))
 
     result = await ch.collect_response()
     assert result == "Final answer"
@@ -118,9 +122,9 @@ async def test_gateway_channel_collect_response_skips_thought():
 @pytest.mark.asyncio
 async def test_gateway_channel_stream_yields_events_until_response():
     ch = GatewayChannel()
-    await ch.emit(RavnEvent.thought("step 1"))
-    await ch.emit(RavnEvent.thought("step 2"))
-    await ch.emit(RavnEvent.response("Done"))
+    await ch.emit(RavnEvent.thought(_SRC, "step 1", _CID, _SID))
+    await ch.emit(RavnEvent.thought(_SRC, "step 2", _CID, _SID))
+    await ch.emit(RavnEvent.response(_SRC, "Done", _CID, _SID))
 
     events: list[RavnEvent] = []
     async for event in ch.stream():
@@ -135,8 +139,8 @@ async def test_gateway_channel_stream_yields_events_until_response():
 @pytest.mark.asyncio
 async def test_gateway_channel_stream_stops_on_error():
     ch = GatewayChannel()
-    await ch.emit(RavnEvent.error("oops"))
-    await ch.emit(RavnEvent.thought("should not appear"))
+    await ch.emit(RavnEvent.error(_SRC, "oops", _CID, _SID))
+    await ch.emit(RavnEvent.thought(_SRC, "should not appear", _CID, _SID))
 
     events: list[RavnEvent] = []
     async for event in ch.stream():
@@ -149,7 +153,7 @@ async def test_gateway_channel_stream_stops_on_error():
 @pytest.mark.asyncio
 async def test_gateway_channel_stream_stops_on_sentinel():
     ch = GatewayChannel()
-    await ch.emit(RavnEvent.thought("t"))
+    await ch.emit(RavnEvent.thought(_SRC, "t", _CID, _SID))
     await ch.signal_done()
 
     events: list[RavnEvent] = []
@@ -167,7 +171,7 @@ async def test_gateway_channel_broadcast_callback_called():
         received.append(event)
 
     ch = GatewayChannel(broadcast_cb=cb)
-    evt = RavnEvent.response("hi")
+    evt = RavnEvent.response(_SRC, "hi", _CID, _SID)
     await ch.emit(evt)
 
     assert received == [evt]
@@ -177,7 +181,7 @@ async def test_gateway_channel_broadcast_callback_called():
 async def test_gateway_channel_no_broadcast_callback():
     """Channel without callback must not raise."""
     ch = GatewayChannel()
-    await ch.emit(RavnEvent.response("ok"))
+    await ch.emit(RavnEvent.response(_SRC, "ok", _CID, _SID))
     result = await ch.collect_response()
     assert result == "ok"
 
@@ -249,7 +253,7 @@ async def test_gateway_handle_message_serialises_concurrent_calls():
         async def run_turn(text: str):
             order.append(f"start:{text}")
             await asyncio.sleep(0)
-            await channel.emit(RavnEvent.response(f"resp:{text}"))
+            await channel.emit(RavnEvent.response(_SRC, f"resp:{text}", _CID, _SID))
             order.append(f"end:{text}")
 
         agent.run_turn = run_turn

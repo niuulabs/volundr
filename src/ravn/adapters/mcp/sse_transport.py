@@ -63,16 +63,37 @@ class HTTPTransport(MCPTransport):
         self._pending_message = None
 
         try:
-            headers = {"Content-Type": "application/json", **self._auth_headers}
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                **self._auth_headers,
+            }
             response = await self._client.post(
                 self._url,
                 json=message,
                 headers=headers,
             )
             response.raise_for_status()
+
+            content_type = response.headers.get("content-type", "")
+
+            # Streamable HTTP servers may return SSE even on POST.
+            if "text/event-stream" in content_type:
+                return self._parse_sse_response(response.text)
+
             return response.json()  # type: ignore[return-value]
         except Exception as exc:
             raise MCPTransportError(f"HTTP request failed: {exc}") from exc
+
+    @staticmethod
+    def _parse_sse_response(text: str) -> dict[str, Any]:
+        """Extract the first JSON-RPC result from an SSE response body."""
+        for line in text.splitlines():
+            if line.startswith("data:"):
+                data = line[len("data:"):].strip()
+                if data:
+                    return json.loads(data)
+        raise MCPTransportError("No data event found in SSE response")
 
     async def close(self) -> None:
         if self._client is not None:
@@ -152,7 +173,7 @@ class SSETransport(MCPTransport):
         buffer: list[str] = []
 
         try:
-            async with self._client.stream("GET", self._url) as response:
+            async with self._client.stream("GET", self._url, headers=self._auth_headers) as response:
                 async for line in response.aiter_lines():
                     if line.startswith("event:"):
                         event_type = line[len("event:") :].strip()

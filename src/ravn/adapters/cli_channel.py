@@ -32,7 +32,7 @@ class CliChannel(ChannelPort):
         match event.type:
             case RavnEventType.THOUGHT:
                 # Stream text deltas inline without a newline.
-                print(event.data, end="", flush=True, file=self._file)
+                print(event.payload["text"], end="", flush=True, file=self._file)
                 self._in_response = True
 
             case RavnEventType.RESPONSE:
@@ -42,9 +42,9 @@ class CliChannel(ChannelPort):
                     self._in_response = False
 
             case RavnEventType.TOOL_START:
-                tool_name = event.data
-                tool_input = event.metadata.get("input", {})
-                diff = event.metadata.get("diff")
+                tool_name = event.payload["tool_name"]
+                tool_input = event.payload.get("input", {})
+                diff = event.payload.get("diff")
                 if self._in_response:
                     print(file=self._file)
                     self._in_response = False
@@ -59,17 +59,17 @@ class CliChannel(ChannelPort):
                     print(separator, file=self._file)
 
             case RavnEventType.TOOL_RESULT:
-                tool_name = event.metadata.get("tool_name", "")
-                is_error = event.metadata.get("is_error", False)
+                tool_name = event.payload.get("tool_name", "")
+                is_error = event.payload.get("is_error", False)
                 prefix = "✗" if is_error else "✓"
-                content = event.data
+                content = event.payload["result"]
                 # Truncate very long results for readability.
                 if len(content) > self._result_truncation_limit:
                     content = content[: self._result_truncation_limit] + "…"
                 print(f"{prefix} {tool_name}: {content}", file=self._file)
 
             case RavnEventType.ERROR:
-                print(f"\n[error] {event.data}", file=self._file)
+                print(f"\n[error] {event.payload['message']}", file=self._file)
 
     def finish(self) -> None:
         """Ensure the terminal is in a clean state after output."""

@@ -114,16 +114,16 @@ def test_thinking_stream_event():
 
 
 def test_ravn_event_thinking_type():
-    evt = RavnEvent.thinking("some reasoning")
+    evt = RavnEvent.thinking("ravn-test", "some reasoning", "corr-1", "sess-1")
     assert evt.type == RavnEventType.THOUGHT
-    assert evt.data == "some reasoning"
-    assert evt.metadata.get("thinking") is True
+    assert evt.payload["text"] == "some reasoning"
+    assert evt.payload.get("thinking") is True
 
 
 def test_ravn_event_thought_no_thinking_flag():
-    evt = RavnEvent.thought("text delta")
+    evt = RavnEvent.thought("ravn-test", "text delta", "corr-1", "sess-1")
     assert evt.type == RavnEventType.THOUGHT
-    assert evt.metadata.get("thinking") is None
+    assert evt.payload.get("thinking") is None
 
 
 # ---------------------------------------------------------------------------
@@ -751,10 +751,10 @@ async def test_agent_thinking_events_emitted_to_channel():
     await agent.run_turn("think: do something")
 
     thinking_events = [
-        e for e in ch.events if e.type == RavnEventType.THOUGHT and e.metadata.get("thinking")
+        e for e in ch.events if e.type == RavnEventType.THOUGHT and e.payload.get("thinking")
     ]
     assert len(thinking_events) == 1
-    assert thinking_events[0].data == "reasoning step"
+    assert thinking_events[0].payload["text"] == "reasoning step"
 
 
 @pytest.mark.asyncio

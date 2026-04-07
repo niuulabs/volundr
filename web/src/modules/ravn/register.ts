@@ -1,13 +1,17 @@
-import { Bot } from 'lucide-react';
+import { Bird } from 'lucide-react';
 import { registerModuleDefinition } from '@/modules/shared/registry';
 
 registerModuleDefinition({
   key: 'ravn',
   label: 'Ravn',
-  icon: Bot,
+  icon: Bird,
   basePath: '/ravn',
   routes: [
-    { path: '', index: true, redirectTo: 'sessions' },
+    { path: '', index: true, redirectTo: 'chat' },
+    {
+      path: 'chat',
+      load: () => import('./pages/ChatView').then(m => ({ default: m.ChatView })),
+    },
     {
       path: 'sessions',
       load: () => import('./pages/SessionsView').then(m => ({ default: m.SessionsView })),

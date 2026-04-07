@@ -6,6 +6,10 @@ import pytest
 
 from ravn.domain.events import RavnEvent, RavnEventType
 
+_SRC = "ravn-test"
+_CID = "corr-1"
+_SID = "sess-1"
+
 
 class TestRavnEventType:
     def test_values(self) -> None:
@@ -14,50 +18,78 @@ class TestRavnEventType:
         assert RavnEventType.TOOL_RESULT == "tool_result"
         assert RavnEventType.RESPONSE == "response"
         assert RavnEventType.ERROR == "error"
+        assert RavnEventType.DECISION == "decision"
+        assert RavnEventType.TASK_COMPLETE == "task_complete"
 
     def test_member_count(self) -> None:
-        assert len(RavnEventType) == 5
+        assert len(RavnEventType) == 7
 
 
 class TestRavnEvent:
     def test_thought_factory(self) -> None:
-        ev = RavnEvent.thought("thinking...")
+        ev = RavnEvent.thought(_SRC, "thinking...", _CID, _SID)
         assert ev.type == RavnEventType.THOUGHT
-        assert ev.data == "thinking..."
-        assert ev.metadata == {}
+        assert ev.payload["text"] == "thinking..."
+        assert ev.source == _SRC
+        assert ev.session_id == _SID
+
+    def test_thinking_factory(self) -> None:
+        ev = RavnEvent.thinking(_SRC, "deep thought", _CID, _SID)
+        assert ev.type == RavnEventType.THOUGHT
+        assert ev.payload["text"] == "deep thought"
+        assert ev.payload["thinking"] is True
 
     def test_tool_start_factory(self) -> None:
-        ev = RavnEvent.tool_start("echo", {"message": "hi"})
+        ev = RavnEvent.tool_start(_SRC, "echo", {"message": "hi"}, _CID, _SID)
         assert ev.type == RavnEventType.TOOL_START
-        assert ev.data == "echo"
-        assert ev.metadata == {"input": {"message": "hi"}}
+        assert ev.payload["tool_name"] == "echo"
+        assert ev.payload["input"] == {"message": "hi"}
+
+    def test_tool_start_with_diff(self) -> None:
+        ev = RavnEvent.tool_start(_SRC, "edit", {"file": "a.py"}, _CID, _SID, diff="+ new")
+        assert ev.payload["diff"] == "+ new"
 
     def test_tool_result_factory(self) -> None:
-        ev = RavnEvent.tool_result("echo", "pong")
+        ev = RavnEvent.tool_result(_SRC, "echo", "pong", _CID, _SID)
         assert ev.type == RavnEventType.TOOL_RESULT
-        assert ev.data == "pong"
-        assert ev.metadata["is_error"] is False
-        assert ev.metadata["tool_name"] == "echo"
+        assert ev.payload["result"] == "pong"
+        assert ev.payload["is_error"] is False
+        assert ev.payload["tool_name"] == "echo"
 
     def test_tool_result_error(self) -> None:
-        ev = RavnEvent.tool_result("fail", "boom", is_error=True)
-        assert ev.metadata["is_error"] is True
+        ev = RavnEvent.tool_result(_SRC, "fail", "boom", _CID, _SID, is_error=True)
+        assert ev.payload["is_error"] is True
 
     def test_response_factory(self) -> None:
-        ev = RavnEvent.response("Hello there!")
+        ev = RavnEvent.response(_SRC, "Hello there!", _CID, _SID)
         assert ev.type == RavnEventType.RESPONSE
-        assert ev.data == "Hello there!"
+        assert ev.payload["text"] == "Hello there!"
 
     def test_error_factory(self) -> None:
-        ev = RavnEvent.error("something went wrong")
+        ev = RavnEvent.error(_SRC, "something went wrong", _CID, _SID)
         assert ev.type == RavnEventType.ERROR
-        assert ev.data == "something went wrong"
+        assert ev.payload["message"] == "something went wrong"
+
+    def test_decision_required_factory(self) -> None:
+        ev = RavnEvent.decision_required(_SRC, "approve?", _CID, _SID)
+        assert ev.type == RavnEventType.DECISION
+        assert ev.payload["prompt"] == "approve?"
+        assert ev.urgency == 0.9
+
+    def test_task_complete_factory(self) -> None:
+        ev = RavnEvent.task_complete(_SRC, True, _CID, _SID)
+        assert ev.type == RavnEventType.TASK_COMPLETE
+        assert ev.payload["success"] is True
 
     def test_frozen(self) -> None:
-        ev = RavnEvent.thought("test")
+        ev = RavnEvent.thought(_SRC, "test", _CID, _SID)
         with pytest.raises(Exception):
-            ev.data = "other"  # type: ignore[misc]
+            ev.source = "other"  # type: ignore[misc]
 
-    def test_default_metadata(self) -> None:
-        ev = RavnEvent(type=RavnEventType.RESPONSE, data="hi")
-        assert ev.metadata == {}
+    def test_timestamp_present(self) -> None:
+        ev = RavnEvent.response(_SRC, "hi", _CID, _SID)
+        assert ev.timestamp is not None
+
+    def test_task_id_optional(self) -> None:
+        ev = RavnEvent.thought(_SRC, "t", _CID, _SID, task_id="sub-1")
+        assert ev.task_id == "sub-1"

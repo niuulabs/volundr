@@ -202,7 +202,7 @@ class TestRavnAgentToolUse:
         await agent.run_turn("go")
 
         error_events = [e for e in channel.events if e.type == RavnEventType.TOOL_RESULT]
-        assert any(e.metadata.get("is_error") for e in error_events)
+        assert any(e.payload.get("is_error") for e in error_events)
 
     async def test_permission_denied_returns_error(self) -> None:
         tool = EchoTool()
@@ -232,7 +232,7 @@ class TestRavnAgentToolUse:
         await agent.run_turn("go")
 
         tool_result_events = [e for e in channel.events if e.type == RavnEventType.TOOL_RESULT]
-        assert any(e.metadata.get("is_error") for e in tool_result_events)
+        assert any(e.payload.get("is_error") for e in tool_result_events)
 
     async def test_tool_exception_returns_error_result(self) -> None:
         tool = FailingTool()

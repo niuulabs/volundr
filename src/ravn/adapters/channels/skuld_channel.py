@@ -25,7 +25,7 @@ import logging
 import websockets
 import websockets.exceptions
 
-from ravn.domain.events import RavnEvent
+from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.ports.channel import ChannelPort
 
 logger = logging.getLogger(__name__)
@@ -161,11 +161,42 @@ class SkuldChannel(ChannelPort):
                 await self._ws.send(payload)
 
     def _serialise(self, event: RavnEvent) -> str:
-        """Serialise *event* as an NDJSON line (no trailing newline from caller)."""
+        """Serialise *event* as an NDJSON line (no trailing newline from caller).
+
+        Reconstructs the legacy ``data``/``metadata`` envelope from the
+        unified ``payload`` dict so downstream Skuld consumers remain
+        compatible.
+        """
+        payload = event.payload
+        match event.type:
+            case RavnEventType.THOUGHT:
+                data = payload["text"]
+                metadata = {"thinking": True} if payload.get("thinking") else {}
+            case RavnEventType.RESPONSE:
+                data = payload["text"]
+                metadata = {}
+            case RavnEventType.TOOL_START:
+                data = payload["tool_name"]
+                metadata = {"input": payload.get("input", {})}
+                if "diff" in payload:
+                    metadata["diff"] = payload["diff"]
+            case RavnEventType.TOOL_RESULT:
+                data = payload["result"]
+                metadata = {
+                    "tool_name": payload.get("tool_name", ""),
+                    "is_error": payload.get("is_error", False),
+                }
+            case RavnEventType.ERROR:
+                data = payload["message"]
+                metadata = {}
+            case _:
+                data = str(payload)
+                metadata = {}
+
         frame = {
             "session_id": self._session_id,
             "type": str(event.type),
-            "data": event.data,
-            "metadata": event.metadata,
+            "data": data,
+            "metadata": metadata,
         }
         return json.dumps(frame) + "\n"

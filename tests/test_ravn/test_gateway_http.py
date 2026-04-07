@@ -15,6 +15,10 @@ from ravn.adapters.channels.gateway_http import ChatRequest, HttpGateway
 from ravn.config import HttpChannelConfig
 from ravn.domain.events import RavnEvent
 
+_SRC = "ravn-test"
+_CID = "corr-1"
+_SID = "sess-1"
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -30,13 +34,10 @@ def _make_gateway_mock(response: str = "agent reply") -> RavnGateway:
     gw.session_ids.return_value = ["http:default"]
 
     async def handle_stream(session_id: str, message: str) -> AsyncIterator[RavnEvent]:
-        yield RavnEvent.thought("thinking...")
-        yield RavnEvent.response(response)
+        yield RavnEvent.thought(_SRC, "thinking...", _CID, _SID)
+        yield RavnEvent.response(_SRC, response, _CID, _SID)
 
     gw.handle_message_stream = handle_stream
-
-    async def broadcast_stream():
-        yield RavnEvent.response("broadcast")
 
     q: asyncio.Queue = asyncio.Queue()
     gw.subscribe.return_value = q
@@ -107,11 +108,11 @@ def test_chat_endpoint_streams_events():
     lines = [ln for ln in body.splitlines() if ln.startswith("data: ")]
     assert len(lines) >= 1
 
-    # Each line must be valid JSON
+    # Each line must be valid JSON with the new payload format
     for line in lines:
-        payload = json.loads(line[len("data: ") :])
+        payload = json.loads(line[len("data: "):])
         assert "type" in payload
-        assert "data" in payload
+        assert "payload" in payload
 
 
 def test_chat_endpoint_includes_thought_and_response():
@@ -119,7 +120,7 @@ def test_chat_endpoint_includes_thought_and_response():
     resp = client.post("/chat", json={"message": "hi"})
 
     lines = [ln for ln in resp.text.splitlines() if ln.startswith("data: ")]
-    types = [json.loads(ln[len("data: ") :])["type"] for ln in lines]
+    types = [json.loads(ln[len("data: "):])["type"] for ln in lines]
 
     assert "thought" in types
     assert "response" in types
@@ -132,7 +133,7 @@ def test_chat_endpoint_default_session_id():
 
     async def handle_stream(session_id: str, message: str) -> AsyncIterator[RavnEvent]:
         assert session_id == "http:default"
-        yield RavnEvent.response("ok")
+        yield RavnEvent.response(_SRC, "ok", _CID, _SID)
 
     gw.handle_message_stream = handle_stream
 
@@ -156,7 +157,13 @@ def test_events_endpoint_returns_sse():
     # Patch _broadcast_stream to yield one event and return so the
     # TestClient receives a finite response instead of blocking forever.
     async def finite_broadcast():
-        payload = '{"type": "response", "data": "hi", "metadata": {}}'
+        payload = json.dumps({
+            "type": "response",
+            "payload": {"text": "hi"},
+            "source": _SRC,
+            "session_id": _SID,
+            "timestamp": "2026-04-06T00:00:00+00:00",
+        })
         yield f"data: {payload}\n\n"
 
     ht._broadcast_stream = finite_broadcast
@@ -200,15 +207,16 @@ def test_chat_request_custom_session_id():
 # ---------------------------------------------------------------------------
 
 
-def test_sse_payload_contains_metadata():
-    """Verify metadata field is present in streamed events."""
+def test_sse_payload_contains_source_and_timestamp():
+    """Verify source and timestamp fields are present in streamed events."""
     client = _get_test_client()
     resp = client.post("/chat", json={"message": "hi"})
 
     lines = [ln for ln in resp.text.splitlines() if ln.startswith("data: ")]
     for line in lines:
-        payload = json.loads(line[len("data: ") :])
-        assert "metadata" in payload
+        payload = json.loads(line[len("data: "):])
+        assert "source" in payload
+        assert "timestamp" in payload
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +235,7 @@ async def test_broadcast_stream_yields_events_from_queue():
     ht = HttpGateway(_make_http_config(), gw)
 
     # Push one event then the sentinel None.
-    event = RavnEvent.response("broadcast msg")
+    event = RavnEvent.response(_SRC, "broadcast msg", _CID, _SID)
     await q.put(event)
     await q.put(None)
 
@@ -237,8 +245,8 @@ async def test_broadcast_stream_yields_events_from_queue():
 
     gw.unsubscribe.assert_called_once_with(q)
     assert len(lines) == 1
-    payload = json.loads(lines[0][len("data: ") :])
-    assert payload["data"] == "broadcast msg"
+    payload = json.loads(lines[0][len("data: "):])
+    assert payload["payload"]["text"] == "broadcast msg"
 
 
 @pytest.mark.asyncio
@@ -287,3 +295,107 @@ async def test_run_starts_and_cancels_cleanly(monkeypatch):
         await ht.run()
 
     assert served
+
+
+# ---------------------------------------------------------------------------
+# WS /ws — WebSocket chat endpoint
+# ---------------------------------------------------------------------------
+
+
+def test_ws_endpoint_streams_cli_format_events():
+    """WebSocket /ws returns CLI stream-json events translated from RavnEvents."""
+    ht = _make_http_gateway()
+    client = TestClient(ht.app)
+
+    with client.websocket_connect("/ws") as ws:
+        ws.send_text(json.dumps({"type": "user", "content": "hello"}))
+
+        events = []
+        # Read events until we get a result (end of turn).
+        while True:
+            raw = ws.receive_text()
+            evt = json.loads(raw)
+            events.append(evt)
+            if evt["type"] in ("result", "error"):
+                break
+
+    types = [e["type"] for e in events]
+    assert "assistant" in types
+    assert "result" in types
+
+
+def test_ws_endpoint_thought_produces_text_delta():
+    """THOUGHT events arrive as content_block_delta with text_delta type."""
+    ht = _make_http_gateway()
+    client = TestClient(ht.app)
+
+    with client.websocket_connect("/ws") as ws:
+        ws.send_text(json.dumps({"type": "user", "content": "hi"}))
+
+        events = []
+        while True:
+            raw = ws.receive_text()
+            evt = json.loads(raw)
+            events.append(evt)
+            if evt["type"] in ("result", "error"):
+                break
+
+    deltas = [e for e in events if e["type"] == "content_block_delta"]
+    assert any(d["delta"]["type"] == "text_delta" for d in deltas)
+
+
+def test_ws_endpoint_tool_produces_tool_use_block():
+    """TOOL_START events produce content_block_start with type tool_use."""
+    gw = MagicMock(spec=RavnGateway)
+    gw.session_ids.return_value = []
+
+    async def handle_stream(session_id: str, message: str) -> AsyncIterator[RavnEvent]:
+        yield RavnEvent.tool_start(_SRC, "Bash", {"command": "ls"}, _CID, _SID)
+        yield RavnEvent.tool_result(_SRC, "Bash", "file.py", _CID, _SID)
+        yield RavnEvent.response(_SRC, "Done", _CID, _SID)
+
+    gw.handle_message_stream = handle_stream
+
+    ht = HttpGateway(_make_http_config(), gw)
+    client = TestClient(ht.app)
+
+    with client.websocket_connect("/ws") as ws:
+        ws.send_text(json.dumps({"type": "user", "content": "go"}))
+
+        events = []
+        while True:
+            raw = ws.receive_text()
+            evt = json.loads(raw)
+            events.append(evt)
+            if evt["type"] in ("result", "error"):
+                break
+
+    tool_starts = [
+        e for e in events
+        if e["type"] == "content_block_start"
+        and e.get("content_block", {}).get("type") == "tool_use"
+    ]
+    assert len(tool_starts) == 1
+    assert tool_starts[0]["content_block"]["name"] == "Bash"
+
+
+def test_ws_endpoint_ignores_non_user_messages():
+    """Non-user messages should not trigger agent turns."""
+    ht = _make_http_gateway()
+    client = TestClient(ht.app)
+
+    with client.websocket_connect("/ws") as ws:
+        ws.send_text(json.dumps({"type": "interrupt"}))
+        # Send a real message to verify the connection works
+        ws.send_text(json.dumps({"type": "user", "content": "hi"}))
+
+        events = []
+        while True:
+            raw = ws.receive_text()
+            evt = json.loads(raw)
+            events.append(evt)
+            if evt["type"] in ("result", "error"):
+                break
+
+    # Should get events only from the user message
+    assert any(e["type"] == "result" for e in events)

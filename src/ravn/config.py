@@ -896,6 +896,10 @@ class HttpChannelConfig(BaseModel):
         default=7477,
         description="TCP port for the HTTP gateway server.",
     )
+    translator: str = Field(
+        default="ravn.adapters.events.cli_translator.CliFormatTranslator",
+        description="Fully-qualified class path for the EventTranslatorPort implementation.",
+    )
 
 
 class SkuldChannelConfig(BaseModel):

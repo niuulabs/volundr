@@ -131,6 +131,19 @@ class MCPManager:
     async def _start_one(self, cfg: MCPServerConfig) -> None:
         """Connect a single server and register its tools."""
         transport = _build_transport(cfg)
+
+        # Apply auth headers before connecting if auth is configured.
+        if cfg.auth.auth_type:
+            try:
+                headers = await self._resolve_auth_headers(cfg)
+                transport.set_auth_headers(headers)
+            except Exception as exc:
+                logger.warning(
+                    "MCP server %r: auth failed (%s) — connecting without auth",
+                    cfg.name,
+                    exc,
+                )
+
         client = MCPServerClient(name=cfg.name, transport=transport)
         self._clients.append(client)
 
@@ -188,3 +201,24 @@ class MCPManager:
             client.name,
             sum(1 for t in self._tools if t.name.startswith(prefix)),
         )
+
+    @staticmethod
+    async def _resolve_auth_headers(cfg: MCPServerConfig) -> dict[str, str]:
+        """Resolve auth headers from *cfg.auth* config."""
+        from ravn.adapters.mcp.auth import acquire_api_key
+
+        auth = cfg.auth
+        match auth.auth_type:
+            case "api_key":
+                token = await acquire_api_key(
+                    api_key_env=auth.api_key_env,
+                    api_key_header=auth.api_key_header,
+                    api_key_prefix=auth.api_key_prefix,
+                )
+                return {auth.api_key_header: token.auth_header_value()}
+            case _:
+                logger.warning(
+                    "MCP auth type %r not yet supported at startup — skipping",
+                    auth.auth_type,
+                )
+                return {}
