@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from ravn.domain.models import (
     Episode,
@@ -14,6 +15,9 @@ from ravn.domain.models import (
     SessionSummary,
     SharedContext,
 )
+
+if TYPE_CHECKING:
+    from ravn.ports.tool import ToolPort
 
 
 class MemoryPort(ABC):
@@ -77,6 +81,40 @@ class MemoryPort(ABC):
     def get_shared_context(self) -> SharedContext | None:
         """Return the most recently injected shared context, or None."""
         ...
+
+    def extra_tools(self, session_id: str) -> list[ToolPort]:
+        """Return any additional agent tools this memory adapter provides.
+
+        Default implementation returns an empty list. Adapters that offer
+        agent-facing tools (e.g. buri_recall, buri_facts) override this.
+        Called once by _build_tools() alongside all other tool registration.
+        No isinstance checks needed at the call site.
+        """
+        return []
+
+    async def process_inline_facts(self, session_id: str, user_input: str) -> list:
+        """Detect and persist inline fact patterns from *user_input*.
+
+        Default implementation is a no-op returning an empty list.
+        BuriMemoryAdapter overrides this for regex-based fact detection.
+        Called unconditionally at the start of run_turn() — no isinstance
+        check at the call site.
+        """
+        return []
+
+    async def on_turn_complete(
+        self,
+        session_id: str,
+        user_input: str,
+        response_summary: str,
+    ) -> None:
+        """Hook called by the agent after every run_turn() completes.
+
+        Default implementation is a no-op. BuriMemoryAdapter overrides this
+        to update the rolling session summary (proto-RWKV).
+        Called unconditionally on every turn — no isinstance check at the
+        call site.
+        """
 
 
 class BuriMemoryPort(MemoryPort):

@@ -31,7 +31,7 @@ from ravn.domain.models import (
 )
 from ravn.ports.channel import ChannelPort
 from ravn.ports.llm import LLMPort, SystemPrompt
-from ravn.ports.memory import BuriMemoryPort, MemoryPort
+from ravn.ports.memory import MemoryPort
 from ravn.ports.outcome import OutcomePort
 from ravn.ports.permission import PermissionPort
 from ravn.ports.tool import ToolPort
@@ -217,11 +217,11 @@ class RavnAgent:
         # Determine whether explicit thinking was requested for this turn.
         explicit_thinking, user_input = _parse_think_flag(user_input)
 
-        if isinstance(self._memory, BuriMemoryPort):
+        if self._memory is not None:
             try:
                 await self._memory.process_inline_facts(str(self._session.id), user_input)
             except Exception:
-                logger.warning("Buri inline fact detection failed; continuing.", exc_info=True)
+                logger.warning("Inline fact detection failed; continuing.", exc_info=True)
 
         self._session.add_message(Message(role="user", content=user_input))
 
@@ -265,12 +265,14 @@ class RavnAgent:
             cumulative_usage = cumulative_usage + llm_response.usage
 
             if llm_response.content:
-                await self._channel.emit(RavnEvent.response(
-                    source=self._source_id,
-                    text=llm_response.content,
-                    correlation_id=self._session.id,
-                    session_id=self._session.id,
-                ))
+                await self._channel.emit(
+                    RavnEvent.response(
+                        source=self._source_id,
+                        text=llm_response.content,
+                        correlation_id=self._session.id,
+                        session_id=self._session.id,
+                    )
+                )
 
             if llm_response.stop_reason != StopReason.TOOL_USE:
                 final_response = llm_response.content
@@ -343,13 +345,15 @@ class RavnAgent:
             except Exception:
                 logger.warning("Outcome recording failed; continuing.")
 
-        if isinstance(self._memory, BuriMemoryPort):
+        if self._memory is not None:
             try:
-                await self._memory.update_session_state(
-                    str(self._session.id), user_input, final_response
+                await self._memory.on_turn_complete(
+                    session_id=str(self._session.id),
+                    user_input=user_input,
+                    response_summary=final_response,
                 )
             except Exception:
-                logger.warning("Buri session state update failed; continuing.", exc_info=True)
+                logger.warning("Memory on_turn_complete failed; continuing.", exc_info=True)
 
         return result
 
@@ -580,14 +584,24 @@ class RavnAgent:
                 case StreamEventType.TEXT_DELTA:
                     if event.text:
                         accumulated_text += event.text
-                        await self._channel.emit(RavnEvent.thought(
-                            self._source_id, event.text, self._session.id, self._session.id,
-                        ))
+                        await self._channel.emit(
+                            RavnEvent.thought(
+                                self._source_id,
+                                event.text,
+                                self._session.id,
+                                self._session.id,
+                            )
+                        )
                 case StreamEventType.THINKING:
                     if event.text:
-                        await self._channel.emit(RavnEvent.thinking(
-                            self._source_id, event.text, self._session.id, self._session.id,
-                        ))
+                        await self._channel.emit(
+                            RavnEvent.thinking(
+                                self._source_id,
+                                event.text,
+                                self._session.id,
+                                self._session.id,
+                            )
+                        )
                 case StreamEventType.TOOL_CALL:
                     if event.tool_call:
                         tool_calls.append(event.tool_call)
@@ -622,17 +636,29 @@ class RavnAgent:
                 content=f"Unknown tool: {tool_call.name}",
                 is_error=True,
             )
-            await self._channel.emit(RavnEvent.tool_result(
-                self._source_id, tool_call.name, result.content,
-                self._session.id, self._session.id, is_error=True,
-            ))
+            await self._channel.emit(
+                RavnEvent.tool_result(
+                    self._source_id,
+                    tool_call.name,
+                    result.content,
+                    self._session.id,
+                    self._session.id,
+                    is_error=True,
+                )
+            )
             return result
 
         diff = tool.diff_preview(tool_call.input)
-        await self._channel.emit(RavnEvent.tool_start(
-            self._source_id, tool_call.name, tool_call.input,
-            self._session.id, self._session.id, diff=diff,
-        ))
+        await self._channel.emit(
+            RavnEvent.tool_start(
+                self._source_id,
+                tool_call.name,
+                tool_call.input,
+                self._session.id,
+                self._session.id,
+                diff=diff,
+            )
+        )
 
         granted = await self._permission.check(tool.required_permission)
         if not granted:
@@ -642,10 +668,16 @@ class RavnAgent:
                 content=str(error),
                 is_error=True,
             )
-            await self._channel.emit(RavnEvent.tool_result(
-                self._source_id, tool_call.name, result.content,
-                self._session.id, self._session.id, is_error=True,
-            ))
+            await self._channel.emit(
+                RavnEvent.tool_result(
+                    self._source_id,
+                    tool_call.name,
+                    result.content,
+                    self._session.id,
+                    self._session.id,
+                    is_error=True,
+                )
+            )
             return result
 
         for hook in self._pre_tool_hooks:
@@ -670,10 +702,16 @@ class RavnAgent:
             except Exception as exc:
                 logger.warning("Post-tool hook failed for '%s': %s", tool_call.name, exc)
 
-        await self._channel.emit(RavnEvent.tool_result(
-            self._source_id, tool_call.name, result.content,
-            self._session.id, self._session.id, is_error=result.is_error,
-        ))
+        await self._channel.emit(
+            RavnEvent.tool_result(
+                self._source_id,
+                tool_call.name,
+                result.content,
+                self._session.id,
+                self._session.id,
+                is_error=result.is_error,
+            )
+        )
         return result
 
     async def _intercept_ask_user(self, tool_call: ToolCall) -> ToolResult:
@@ -684,10 +722,15 @@ class RavnAgent:
         no input function is available.
         """
         question = tool_call.input.get("question", "")
-        await self._channel.emit(RavnEvent.tool_start(
-            self._source_id, _ASK_USER_TOOL_NAME, tool_call.input,
-            self._session.id, self._session.id,
-        ))
+        await self._channel.emit(
+            RavnEvent.tool_start(
+                self._source_id,
+                _ASK_USER_TOOL_NAME,
+                tool_call.input,
+                self._session.id,
+                self._session.id,
+            )
+        )
 
         if self._user_input_fn is None:
             result = ToolResult(
@@ -695,18 +738,29 @@ class RavnAgent:
                 content="ask_user is not available in this session (no user_input_fn configured)",
                 is_error=True,
             )
-            await self._channel.emit(RavnEvent.tool_result(
-                self._source_id, _ASK_USER_TOOL_NAME, result.content,
-                self._session.id, self._session.id, is_error=True,
-            ))
+            await self._channel.emit(
+                RavnEvent.tool_result(
+                    self._source_id,
+                    _ASK_USER_TOOL_NAME,
+                    result.content,
+                    self._session.id,
+                    self._session.id,
+                    is_error=True,
+                )
+            )
             return result
 
         answer = await self._user_input_fn(question)
         result = ToolResult(tool_call_id=tool_call.id, content=answer)
-        await self._channel.emit(RavnEvent.tool_result(
-            self._source_id, _ASK_USER_TOOL_NAME, answer,
-            self._session.id, self._session.id,
-        ))
+        await self._channel.emit(
+            RavnEvent.tool_result(
+                self._source_id,
+                _ASK_USER_TOOL_NAME,
+                answer,
+                self._session.id,
+                self._session.id,
+            )
+        )
         return result
 
 
