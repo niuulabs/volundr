@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from ravn.adapters.permission.allow_deny import AllowAllPermission, DenyAllPermission
-from ravn.config import InitiativeConfig, Settings
+from ravn.config import InitiativeConfig
 from ravn.domain.models import (
     AgentTask,
     LLMResponse,
