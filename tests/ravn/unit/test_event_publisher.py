@@ -156,8 +156,8 @@ async def test_rabbitmq_publisher_uses_system_routing_key() -> None:
     mock_message_instance = MagicMock()
     mock_pika.Message.return_value = mock_message_instance
 
-    # Patch the module-level aio_pika reference directly
-    with patch("ravn.adapters.events.rabbitmq_publisher.aio_pika", mock_pika):
+    # Patch the module-level aio_pika reference in the shared base
+    with patch("ravn.adapters.channels._rabbitmq_base.aio_pika", mock_pika):
         await pub.publish(_make_event(RavnEventType.TASK_STARTED))
 
     mock_exchange.publish.assert_called_once()
