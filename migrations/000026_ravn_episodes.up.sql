@@ -12,6 +12,17 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+-- Immutable wrapper around to_tsvector for use in generated columns.
+-- to_tsvector is STABLE (not IMMUTABLE) in PostgreSQL, but with a fixed
+-- regconfig the result is deterministic. Declaring IMMUTABLE is the
+-- standard pattern for generated tsvector columns.
+CREATE OR REPLACE FUNCTION ravn_episode_tsv(summary TEXT, task_desc TEXT, tags TEXT[])
+RETURNS tsvector LANGUAGE sql IMMUTABLE AS $$
+    SELECT to_tsvector('english'::regconfig,
+        coalesce(summary, '') || ' ' || coalesce(task_desc, '') || ' ' || array_to_string(tags, ' ')
+    );
+$$;
+
 CREATE TABLE IF NOT EXISTS ravn_episodes (
     episode_id       TEXT PRIMARY KEY,
     session_id       TEXT NOT NULL,
@@ -26,9 +37,7 @@ CREATE TABLE IF NOT EXISTS ravn_episodes (
     -- Cast to vector type when pgvector is available: embedding::vector
     embedding        TEXT,
     search_vector    tsvector GENERATED ALWAYS AS (
-        to_tsvector('english'::regconfig,
-            coalesce(summary, '') || ' ' || coalesce(task_description, '') || ' ' || array_to_string(tags, ' ')
-        )
+        ravn_episode_tsv(summary, task_description, tags)
     ) STORED
 );
 

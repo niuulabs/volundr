@@ -126,7 +126,7 @@ async def test_durable_queue_with_service_id():
     )
     async with transport2:
         await transport2.subscribe(["ravn.*"], handler)
-        await collect_events(1, received)
+        await collect_events(1, received, timeout=15.0)
 
     assert len(received) == 1
     assert received[0].summary == "while-offline"

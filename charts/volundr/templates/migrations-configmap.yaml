@@ -648,6 +648,13 @@ data:
     END;
     $$;
 
+    CREATE OR REPLACE FUNCTION ravn_episode_tsv(summary TEXT, task_desc TEXT, tags TEXT[])
+    RETURNS tsvector LANGUAGE sql IMMUTABLE AS $$
+        SELECT to_tsvector('english'::regconfig,
+            coalesce(summary, '') || ' ' || coalesce(task_desc, '') || ' ' || array_to_string(tags, ' ')
+        );
+    $$;
+
     CREATE TABLE IF NOT EXISTS ravn_episodes (
         episode_id       TEXT PRIMARY KEY,
         session_id       TEXT NOT NULL,
@@ -660,9 +667,7 @@ data:
         tags             TEXT[] NOT NULL DEFAULT '{}',
         embedding        TEXT,
         search_vector    tsvector GENERATED ALWAYS AS (
-            to_tsvector('english'::regconfig,
-                coalesce(summary, '') || ' ' || coalesce(task_description, '') || ' ' || array_to_string(tags, ' ')
-            )
+            ravn_episode_tsv(summary, task_description, tags)
         ) STORED
     );
 
