@@ -333,8 +333,9 @@ class RabbitMQSubscriber(SleipnirSubscriber):
         )
 
         self._running = True
-        self._consumer_tag = await self._queue.consume(self._on_message)
-        logger.debug("RabbitMQSubscriber: consuming from queue=%s", self._queue.name)
+        # Defer AMQP consumption until the first subscribe() call so that
+        # pre-existing messages are not consumed before any handler is registered.
+        logger.debug("RabbitMQSubscriber: ready (queue=%s, consuming deferred)", self._queue.name)
 
     async def stop(self) -> None:
         """Cancel AMQP consumption and close the connection."""
@@ -380,6 +381,11 @@ class RabbitMQSubscriber(SleipnirSubscriber):
                     self._queue.name,
                     amqp_key,
                 )
+        # Start consuming on first subscribe() so pre-existing messages
+        # aren't consumed before any handler is registered.
+        if self._consumer_tag is None:
+            self._consumer_tag = await self._queue.consume(self._on_message)
+            logger.debug("RabbitMQSubscriber: consuming from queue=%s", self._queue.name)
         queue: asyncio.Queue[SleipnirEvent] = asyncio.Queue(maxsize=self._ring_buffer_depth)
         task = asyncio.create_task(consume_queue(queue, handler))
         sub = _BaseSubscription(
