@@ -391,6 +391,41 @@ class TestDriveLoopCaptureIntegration:
 
         assert isinstance(captured_channels[0], SilentChannel)
 
+    @pytest.mark.asyncio
+    async def test_run_task_sets_failed_status_on_exception(self):
+        """When run_turn raises, DriveLoop sets task status to failed in the store."""
+        finished = asyncio.Event()
+
+        async def _mock_run_turn_raises(prompt: str) -> None:
+            finished.set()
+            raise RuntimeError("agent crashed")
+
+        mock_agent = MagicMock()
+        mock_agent.run_turn = _mock_run_turn_raises
+
+        def _agent_factory(channel, task_id=None):  # noqa: ANN001
+            return mock_agent
+
+        cfg = InitiativeConfig(enabled=True, max_concurrent_tasks=1, task_queue_max=10)
+        settings = MagicMock()
+        settings.cascade.enabled = True
+        dl = DriveLoop(agent_factory=_agent_factory, config=cfg, settings=settings)
+
+        task = _make_agent_task("failing-task-1")
+        await dl.enqueue(task)
+
+        loop_task = asyncio.create_task(dl.run())
+        try:
+            await asyncio.wait_for(finished.wait(), timeout=5.0)
+            await asyncio.sleep(0.05)  # let _run_task finish the except block
+        finally:
+            loop_task.cancel()
+            await asyncio.gather(loop_task, return_exceptions=True)
+
+        result = dl.get_result("failing-task-1")
+        assert result is not None
+        assert result.status == "failed"
+
 
 # ---------------------------------------------------------------------------
 # TaskStatusTool with include_progress

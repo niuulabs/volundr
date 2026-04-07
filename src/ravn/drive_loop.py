@@ -310,6 +310,7 @@ class DriveLoop:
             return
         except Exception as exc:
             logger.error("drive_loop: task %s failed: %s", task.task_id, exc)
+            self._result_store.set_status(task.task_id, "failed")
 
         await self._event_publisher.publish(
             RavnEvent(

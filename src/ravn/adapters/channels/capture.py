@@ -26,18 +26,16 @@ Sleipnir streaming extension path (NIU-545, future work):
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
+from ravn.adapters.channels.silent import _SURFACE_PREFIX
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.ports.channel import ChannelPort
 
 logger = logging.getLogger(__name__)
-
-_SURFACE_PREFIX = "[SURFACE]"
 
 # Default store capacity — completed results stay queryable without unbounded growth
 _DEFAULT_STORE_CAPACITY = 200
@@ -68,8 +66,8 @@ class TaskResult:
 class TaskResultStore:
     """Bounded in-memory store of task_id → TaskResult.
 
-    Thread-safe via asyncio lock.  Evicts the oldest entry when capacity is
-    reached so memory usage stays bounded.
+    All callers run on a single asyncio event loop so no locking is needed.
+    Evicts the oldest entry when capacity is reached so memory usage stays bounded.
 
     Capacity defaults to ``_DEFAULT_STORE_CAPACITY`` (200 entries).
     """
@@ -78,7 +76,6 @@ class TaskResultStore:
         self._capacity = capacity
         self._store: dict[str, TaskResult] = {}
         self._insertion_order: list[str] = []
-        self._lock = asyncio.Lock()
 
     def start(self, task_id: str, triggered_by: str) -> None:
         """Register a new running task.  Evicts oldest if at capacity."""
