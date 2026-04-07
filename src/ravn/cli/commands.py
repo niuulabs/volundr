@@ -1615,8 +1615,11 @@ def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
 
         if msg_type == "task_status":
             task_id = message.get("task_id", "")
-            status = drive_loop.task_status(task_id)
-            return {"task_id": task_id, "status": status}
+            include_progress = bool(message.get("include_progress", False))
+            status_result = drive_loop.task_status(task_id, include_progress=include_progress)
+            if include_progress and isinstance(status_result, dict):
+                return {"task_id": task_id, **status_result}
+            return {"task_id": task_id, "status": status_result}
 
         if msg_type == "task_cancel":
             task_id = message.get("task_id", "")
@@ -1624,10 +1627,16 @@ def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
             return {"status": "cancelled", "task_id": task_id}
 
         if msg_type == "task_result":
-            # Basic implementation — actual output collection via channel is future work
             task_id = message.get("task_id", "")
-            status = drive_loop.task_status(task_id)
-            return {"task_id": task_id, "status": status, "output": None}
+            result = drive_loop.get_result(task_id)
+            if result is None:
+                return {"error": "task_result_not_found", "task_id": task_id}
+            return {
+                "task_id": task_id,
+                "status": result.status,
+                "output": result.output,
+                "event_count": len(result.events),
+            }
 
         return {"error": "unknown_message_type", "type": msg_type}
 

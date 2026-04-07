@@ -302,7 +302,14 @@ class TaskStatusTool(ToolPort):
         return {
             "type": "object",
             "properties": {
-                "task_id": {"type": "string", "description": "Task ID returned by task_create."}
+                "task_id": {"type": "string", "description": "Task ID returned by task_create."},
+                "include_progress": {
+                    "type": "boolean",
+                    "description": (
+                        "If true, include accumulated events so far. "
+                        "Useful for polling a running task's progress. Default: false."
+                    ),
+                },
             },
             "required": ["task_id"],
         }
@@ -313,6 +320,7 @@ class TaskStatusTool(ToolPort):
 
     async def execute(self, input: dict) -> ToolResult:  # noqa: A002
         task_id = input.get("task_id", "").strip()
+        include_progress = bool(input.get("include_progress", False))
         if not task_id:
             return ToolResult(tool_call_id="", content="Error: task_id is required.", is_error=True)
 
@@ -321,17 +329,26 @@ class TaskStatusTool(ToolPort):
             try:
                 reply = await self._mesh.send(
                     target_peer_id=peer_id,
-                    message={"type": "task_status", "task_id": task_id},
+                    message={
+                        "type": "task_status",
+                        "task_id": task_id,
+                        "include_progress": include_progress,
+                    },
                     timeout_s=self._mesh_delegation_timeout_s,
                 )
                 return ToolResult(tool_call_id="", content=json.dumps(reply))
             except Exception as exc:
                 logger.warning("task_status: mesh query failed: %s", exc)
 
-        status = self._drive_loop.task_status(task_id)
+        status_result = self._drive_loop.task_status(task_id, include_progress=include_progress)
+        if include_progress and isinstance(status_result, dict):
+            return ToolResult(
+                tool_call_id="",
+                content=json.dumps({"task_id": task_id, **status_result}),
+            )
         return ToolResult(
             tool_call_id="",
-            content=json.dumps({"task_id": task_id, "status": status}),
+            content=json.dumps({"task_id": task_id, "status": status_result}),
         )
 
 
@@ -559,9 +576,24 @@ class TaskCollectTool(ToolPort):
             except Exception as exc:
                 logger.warning("task_collect: failed to fetch remote result: %s", exc)
 
+        # Local task — retrieve output from the TaskResultStore
+        local_result = self._drive_loop.get_result(task_id)
+        if local_result is not None:
+            return ToolResult(
+                tool_call_id="",
+                content=json.dumps(
+                    {
+                        "task_id": task_id,
+                        "status": local_result.status,
+                        "output": local_result.output,
+                        "event_count": len(local_result.events),
+                    }
+                ),
+            )
+
         return ToolResult(
             tool_call_id="",
-            content=json.dumps({"task_id": task_id, "status": "complete"}),
+            content=json.dumps({"task_id": task_id, "status": "complete", "output": ""}),
         )
 
     async def _poll_until_done(self, task_id: str, peer_id: str | None) -> None:
