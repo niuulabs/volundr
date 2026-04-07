@@ -1333,6 +1333,15 @@ class BuriConfig(BaseModel):
     )
 
 
+class CheckpointConfig(BaseModel):
+    """Task-interruption checkpoint configuration (NIU-504)."""
+
+    dir: Path = Field(
+        default=Path.home() / ".ravn" / "checkpoints",
+        description="Directory for disk-based checkpoint files (Pi / local mode).",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Root settings
 # ---------------------------------------------------------------------------
@@ -1404,6 +1413,9 @@ class Settings(BaseSettings):
 
     # NIU-435: cascade coordinator / flock delegation / ephemeral spawn
     cascade: CascadeConfig = Field(default_factory=CascadeConfig)
+
+    # NIU-504: task interruption / resume
+    checkpoint: CheckpointConfig = Field(default_factory=CheckpointConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)

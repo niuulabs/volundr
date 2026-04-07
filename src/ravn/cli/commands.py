@@ -6,6 +6,7 @@ import asyncio
 import importlib
 import logging
 import os
+import signal
 import sys
 from pathlib import Path
 from typing import Any
@@ -14,7 +15,17 @@ import typer
 
 from ravn.agent import PostToolHook, PreToolHook, RavnAgent
 from ravn.config import InitiativeConfig, OutcomeConfig, ProjectConfig, Settings
-from ravn.domain.models import Session, TokenUsage, ToolCall, ToolResult
+from ravn.domain.checkpoint import InterruptReason
+from ravn.domain.models import (
+    Message,
+    Session,
+    TodoItem,
+    TodoStatus,
+    TokenUsage,
+    ToolCall,
+    ToolResult,
+)
+from ravn.ports.checkpoint import CheckpointPort
 
 logger = logging.getLogger(__name__)
 
@@ -750,6 +761,30 @@ def _resolve_persona(
 
 
 # ---------------------------------------------------------------------------
+# Builder: Checkpoint
+# ---------------------------------------------------------------------------
+
+
+def _build_checkpoint(settings: Settings) -> CheckpointPort:
+    """Build the checkpoint adapter from config.
+
+    Defaults to the disk adapter (Pi mode).  Switches to Postgres when
+    a memory DSN is configured and the memory backend is ``postgres``.
+    """
+    from ravn.adapters.checkpoint.disk import DiskCheckpointAdapter
+
+    if settings.memory.backend == "postgres":
+        dsn = os.environ.get(settings.memory.dsn_env, "") if settings.memory.dsn_env else ""
+        dsn = dsn or settings.memory.dsn
+        if dsn:
+            from ravn.adapters.checkpoint.postgres import PostgresCheckpointAdapter
+
+            return PostgresCheckpointAdapter(dsn=dsn)
+
+    return DiskCheckpointAdapter(checkpoint_dir=settings.checkpoint.dir)
+
+
+# ---------------------------------------------------------------------------
 # Agent assembly
 # ---------------------------------------------------------------------------
 
@@ -759,6 +794,8 @@ def _build_agent(
     *,
     no_tools: bool = False,
     persona_config: Any | None = None,
+    session: Session | None = None,
+    task_id: str | None = None,
 ) -> tuple[RavnAgent, Any]:
     api_key = settings.effective_api_key()
     if not api_key:
@@ -775,7 +812,7 @@ def _build_agent(
 
     workspace = _resolve_workspace(settings)
     llm = _build_llm(settings)
-    session = Session()
+    session = session or Session()
     base_channel: CliChannel = CliChannel()
     channel: ChannelPort = base_channel
     if settings.sleipnir.enabled:
@@ -812,6 +849,7 @@ def _build_agent(
     compressor = _build_compressor(settings, llm)
     prompt_builder = _build_prompt_builder(settings)
     pre_hooks, post_hooks = _build_hooks(settings)
+    checkpoint_port = _build_checkpoint(settings)
 
     extended_thinking = (
         settings.llm.extended_thinking if settings.llm.extended_thinking.enabled else None
@@ -848,6 +886,8 @@ def _build_agent(
         outcome_port=outcome_port,
         outcome_config=outcome_config,
         extended_thinking=extended_thinking,
+        checkpoint_port=checkpoint_port,
+        task_id=task_id,
     )
 
     return agent, channel
@@ -880,6 +920,12 @@ def run(
     persona: str = typer.Option(
         "", "--persona", "-p", help="Persona name (built-in or from ~/.ravn/personas/)."
     ),
+    resume: str = typer.Option(
+        "",
+        "--resume",
+        "-r",
+        help="Resume an interrupted task by its task_id.",
+    ),
 ) -> None:
     """Start a Ravn conversation. Pass a prompt for single-turn, or omit for REPL."""
     if config:
@@ -889,9 +935,123 @@ def run(
     _configure_logging(settings)
     project_config = ProjectConfig.discover()
     persona_config = _resolve_persona(persona, project_config)
-    agent, channel = _build_agent(settings, no_tools=no_tools, persona_config=persona_config)
 
-    asyncio.run(_chat(agent, channel, settings=settings, prompt=prompt, show_usage=show_usage))
+    asyncio.run(
+        _run_with_signals(
+            settings=settings,
+            no_tools=no_tools,
+            persona_config=persona_config,
+            prompt=prompt,
+            show_usage=show_usage,
+            resume_task_id=resume.strip() or None,
+        )
+    )
+
+
+async def _run_with_signals(
+    *,
+    settings: Settings,
+    no_tools: bool,
+    persona_config: Any | None,
+    prompt: str,
+    show_usage: bool,
+    resume_task_id: str | None,
+) -> None:
+    """Build the agent, install signal handlers, and run the conversation."""
+    # Optionally load a checkpoint for resume.
+    restored_session: Session | None = None
+    restored_prompt: str = prompt
+    if resume_task_id is not None:
+        restored_session, restored_prompt = await _load_checkpoint_session(
+            settings, resume_task_id, fallback_prompt=prompt
+        )
+
+    agent, channel = _build_agent(
+        settings,
+        no_tools=no_tools,
+        persona_config=persona_config,
+        session=restored_session,
+        task_id=resume_task_id,
+    )
+
+    # Register signal handlers after agent is built so they can call agent.interrupt().
+    def _on_signal(reason: InterruptReason) -> None:
+        agent.interrupt(reason)
+        typer.echo(
+            f"\n[ravn] Interrupt received ({reason}) — finishing current tool call …",
+            err=True,
+        )
+
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(signal.SIGINT, lambda: _on_signal(InterruptReason.SIGINT))
+    loop.add_signal_handler(signal.SIGTERM, lambda: _on_signal(InterruptReason.SIGTERM))
+
+    try:
+        await _chat(
+            agent,
+            channel,
+            settings=settings,
+            prompt=restored_prompt,
+            show_usage=show_usage,
+        )
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # Emit resume hint when an interrupt was received.
+        if agent._interrupt_reason is not None:
+            typer.echo(
+                f"\n[ravn] State saved. Resume with: ravn --resume {agent.task_id}",
+                err=True,
+            )
+
+
+async def _load_checkpoint_session(
+    settings: Settings,
+    task_id: str,
+    *,
+    fallback_prompt: str,
+) -> tuple[Session | None, str]:
+    """Load a checkpoint and reconstruct a Session from it.
+
+    Returns ``(session, user_input)`` where ``user_input`` is the original
+    prompt from the checkpoint (or *fallback_prompt* if no checkpoint exists).
+    """
+    port = _build_checkpoint(settings)
+    checkpoint = await port.load(task_id)
+    if checkpoint is None:
+        typer.echo(f"[ravn] No checkpoint found for task_id={task_id!r}", err=True)
+        return None, fallback_prompt
+
+    # Reconstruct session from checkpoint messages.
+    session = Session()
+    for raw_msg in checkpoint.messages:
+        session.messages.append(Message(role=raw_msg["role"], content=raw_msg["content"]))
+
+    # Restore todo list.
+    for raw_todo in checkpoint.todos:
+        status_raw = raw_todo.get("status", "pending")
+        try:
+            status = TodoStatus(status_raw)
+        except ValueError:
+            status = TodoStatus.PENDING
+        session.upsert_todo(
+            TodoItem(
+                id=raw_todo["id"],
+                content=raw_todo["content"],
+                status=status,
+                priority=raw_todo.get("priority", 0),
+            )
+        )
+
+    typer.echo(
+        f"[ravn] Resuming task {task_id!r} from checkpoint "
+        f"({len(session.messages)} messages, "
+        f"{checkpoint.iteration_budget_consumed}/{checkpoint.iteration_budget_total} "
+        f"iterations consumed)",
+        err=True,
+    )
+
+    return session, checkpoint.user_input
 
 
 async def _chat(
