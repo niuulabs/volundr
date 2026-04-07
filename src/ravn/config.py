@@ -1068,6 +1068,68 @@ class LoggingConfig(BaseModel):
     format: str = Field(default="text")
 
 
+class MimirSearchConfig(BaseModel):
+    """Mímir search backend configuration."""
+
+    backend: Literal["fts", "vector"] = Field(
+        default="fts",
+        description="Search backend: 'fts' (full-text search) or 'vector' (embedding-based).",
+    )
+
+
+class MimirConfig(BaseModel):
+    """Mímir persistent compounding knowledge base configuration (NIU-540).
+
+    Mímir maintains a filesystem-backed wiki under ``path/wiki/`` and stores
+    raw immutable sources under ``path/raw/``.  The schema file ``MIMIR.md``
+    is seeded on first run if it does not exist.
+
+    Auto-distillation fires after sessions that meet the distillation criteria
+    (session duration, web calls made, documents written).  Idle lint fires
+    when the drive loop queue is empty and no human activity for
+    ``idle_lint_threshold_minutes``.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable the Mímir knowledge base.",
+    )
+    path: str = Field(
+        default="~/.ravn/mimir",
+        description="Root directory for the Mímir knowledge base.",
+    )
+    auto_distill: bool = Field(
+        default=True,
+        description=(
+            "Automatically distil session knowledge into the wiki after qualifying sessions."
+        ),
+    )
+    distill_min_session_minutes: int = Field(
+        default=5,
+        description="Minimum session duration (minutes) before auto-distillation is triggered.",
+    )
+    idle_lint_threshold_minutes: int = Field(
+        default=60,
+        description=(
+            "Minutes of drive-loop idle time + no human activity before the lint pass fires."
+        ),
+    )
+    continuation_threshold_minutes: int = Field(
+        default=30,
+        description=(
+            "Minutes since the last human message before an abandoned session is continued."
+        ),
+    )
+    categories: list[str] = Field(
+        default_factory=lambda: ["technical", "projects", "research", "household", "self"],
+        description="Top-level wiki categories.",
+    )
+    search: MimirSearchConfig = Field(
+        default_factory=MimirSearchConfig,
+        description="Search backend configuration.",
+    )
+
+
 class BuriConfig(BaseModel):
     """Búri knowledge memory substrate configuration (NIU-541).
 
@@ -1171,6 +1233,9 @@ class Settings(BaseSettings):
 
     # NIU-541: Búri knowledge memory substrate
     buri: BuriConfig = Field(default_factory=BuriConfig)
+
+    # NIU-540: Mímir persistent knowledge base
+    mimir: MimirConfig = Field(default_factory=MimirConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)

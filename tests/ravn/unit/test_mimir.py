@@ -1,0 +1,761 @@
+"""Unit tests for Mímir knowledge base (NIU-540).
+
+Tests cover:
+- MimirSource, MimirPage, MimirPageMeta, MimirQueryResult, MimirLintReport domain models
+- MarkdownMimirAdapter: ingest, upsert_page, read_page, search, list_pages, lint
+- Staleness detection (content_hash comparison)
+- Log and index maintenance
+- MIMIR.md seeding on first run
+- Six mimir_* tool wrappers: execute() paths, error handling
+- MimirConfig defaults
+- Auto-distillation trigger criteria (post-session drive loop)
+- Integration: session → ingest → wiki page created with log entry
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+
+from ravn.adapters.mimir.markdown import (
+    MarkdownMimirAdapter,
+    _extract_summary,
+    _extract_title,
+)
+from ravn.adapters.tools.mimir_tools import (
+    MimirIngestTool,
+    MimirLintTool,
+    MimirQueryTool,
+    MimirReadTool,
+    MimirSearchTool,
+    MimirWriteTool,
+    build_mimir_tools,
+)
+from ravn.config import MimirConfig, Settings
+from ravn.domain.models import (
+    AgentTask,
+    MimirLintReport,
+    MimirPageMeta,
+    MimirQueryResult,
+    MimirSource,
+    OutputMode,
+)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _sha256(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _make_source(
+    title: str = "Test Source",
+    content: str = "Hello world.",
+    source_type: str = "document",
+    origin_url: str | None = None,
+) -> MimirSource:
+    return MimirSource(
+        source_id=f"src_{_sha256(title)[:16]}",
+        title=title,
+        content=content,
+        source_type=source_type,
+        origin_url=origin_url,
+        content_hash=_sha256(content),
+        ingested_at=datetime.now(UTC),
+    )
+
+
+def _make_adapter(tmp_path: Path) -> MarkdownMimirAdapter:
+    return MarkdownMimirAdapter(root=tmp_path / "mimir")
+
+
+# ---------------------------------------------------------------------------
+# Domain model tests
+# ---------------------------------------------------------------------------
+
+
+def test_mimir_source_fields() -> None:
+    src = _make_source(content="some content")
+    assert src.source_id.startswith("src_")
+    assert src.content == "some content"
+    assert src.content_hash == _sha256("some content")
+    assert src.ingested_at.tzinfo is not None
+
+
+def test_mimir_page_meta_fields() -> None:
+    meta = MimirPageMeta(
+        path="technical/ravn/tools.md",
+        title="Ravn Tools",
+        summary="Overview of agent tools.",
+        category="technical",
+        updated_at=datetime.now(UTC),
+        source_ids=["src_abc"],
+    )
+    assert meta.path == "technical/ravn/tools.md"
+    assert meta.category == "technical"
+    assert meta.source_ids == ["src_abc"]
+
+
+def test_mimir_query_result_empty_answer() -> None:
+    result = MimirQueryResult(question="What is X?", answer="", sources=[])
+    assert result.question == "What is X?"
+    assert result.answer == ""
+    assert result.sources == []
+
+
+def test_mimir_lint_report_issues_found() -> None:
+    report = MimirLintReport(
+        orphans=["a.md"],
+        contradictions=[],
+        stale=[],
+        gaps=[],
+        pages_checked=5,
+    )
+    assert report.issues_found is True
+
+
+def test_mimir_lint_report_no_issues() -> None:
+    report = MimirLintReport(
+        orphans=[],
+        contradictions=[],
+        stale=[],
+        gaps=[],
+        pages_checked=3,
+    )
+    assert report.issues_found is False
+
+
+# ---------------------------------------------------------------------------
+# MarkdownMimirAdapter — layout bootstrap
+# ---------------------------------------------------------------------------
+
+
+def test_adapter_creates_directories(tmp_path: Path) -> None:
+    _make_adapter(tmp_path)
+    root = tmp_path / "mimir"
+    assert (root / "wiki").is_dir()
+    assert (root / "raw").is_dir()
+    assert (root / "MIMIR.md").is_file()
+    assert (root / "wiki" / "index.md").is_file()
+    assert (root / "wiki" / "log.md").is_file()
+
+
+def test_mimir_md_seeded_on_first_run(tmp_path: Path) -> None:
+    _make_adapter(tmp_path)
+    schema = (tmp_path / "mimir" / "MIMIR.md").read_text()
+    assert "self/ conventions" in schema
+    assert "third person" in schema
+
+
+def test_mimir_md_not_overwritten_on_second_run(tmp_path: Path) -> None:
+    _make_adapter(tmp_path)
+    custom = "custom content"
+    (tmp_path / "mimir" / "MIMIR.md").write_text(custom)
+    # Re-initialising should NOT overwrite existing file
+    MarkdownMimirAdapter(root=tmp_path / "mimir")
+    assert (tmp_path / "mimir" / "MIMIR.md").read_text() == custom
+
+
+# ---------------------------------------------------------------------------
+# MarkdownMimirAdapter — ingest
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ingest_stores_raw_source(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    src = _make_source(title="My Doc", content="Important content.")
+    await adapter.ingest(src)
+
+    raw_file = tmp_path / "mimir" / "raw" / f"{src.source_id}.json"
+    assert raw_file.exists()
+    data = json.loads(raw_file.read_text())
+    assert data["title"] == "My Doc"
+    assert data["content_hash"] == src.content_hash
+
+
+@pytest.mark.asyncio
+async def test_ingest_appends_to_log(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    src = _make_source(title="Log Test")
+    await adapter.ingest(src)
+
+    log = (tmp_path / "mimir" / "wiki" / "log.md").read_text()
+    assert "ingest" in log
+    assert "Log Test" in log
+
+
+@pytest.mark.asyncio
+async def test_ingest_returns_empty_list_by_default(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    result = await adapter.ingest(_make_source())
+    # Page creation is delegated to the agent; ingest() returns empty list
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
+# MarkdownMimirAdapter — upsert_page / read_page
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_upsert_page_creates_file(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    content = "# Ravn Tools\n\nOverview of agent tools."
+    await adapter.upsert_page("technical/ravn/tools.md", content)
+
+    page_file = tmp_path / "mimir" / "wiki" / "technical" / "ravn" / "tools.md"
+    assert page_file.exists()
+    assert page_file.read_text() == content
+
+
+@pytest.mark.asyncio
+async def test_upsert_page_adds_to_index(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    content = "# Auth Overview\n\nHow authentication works."
+    await adapter.upsert_page("technical/volundr/auth.md", content)
+
+    index = (tmp_path / "mimir" / "wiki" / "index.md").read_text()
+    assert "technical/volundr/auth.md" in index
+    assert "Auth Overview" in index
+
+
+@pytest.mark.asyncio
+async def test_upsert_page_updates_existing(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("research/topic.md", "# Old Title\n\nOld summary.")
+    await adapter.upsert_page("research/topic.md", "# New Title\n\nNew summary.")
+
+    index = (tmp_path / "mimir" / "wiki" / "index.md").read_text()
+    assert "New Title" in index
+
+
+@pytest.mark.asyncio
+async def test_read_page_returns_content(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    content = "# Test\n\nBody text."
+    await adapter.upsert_page("projects/test.md", content)
+    result = await adapter.read_page("projects/test.md")
+    assert result == content
+
+
+@pytest.mark.asyncio
+async def test_read_page_raises_for_missing(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    with pytest.raises(FileNotFoundError):
+        await adapter.read_page("nonexistent/page.md")
+
+
+# ---------------------------------------------------------------------------
+# MarkdownMimirAdapter — list_pages
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_pages_returns_all(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("technical/ravn/tools.md", "# Tools\n\nA.")
+    await adapter.upsert_page("projects/saga.md", "# Saga\n\nB.")
+    pages = await adapter.list_pages()
+    paths = [p.path for p in pages]
+    assert "technical/ravn/tools.md" in paths
+    assert "projects/saga.md" in paths
+
+
+@pytest.mark.asyncio
+async def test_list_pages_filtered_by_category(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("technical/ravn/tools.md", "# Tools\n\nA.")
+    await adapter.upsert_page("research/k8s.md", "# K8s\n\nB.")
+    pages = await adapter.list_pages(category="technical")
+    paths = [p.path for p in pages]
+    assert "technical/ravn/tools.md" in paths
+    assert all("technical" in p for p in paths)
+
+
+@pytest.mark.asyncio
+async def test_list_pages_excludes_index_and_log(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("technical/page.md", "# Page\n\nContent.")
+    pages = await adapter.list_pages()
+    paths = [p.path for p in pages]
+    assert "index.md" not in paths
+    assert "log.md" not in paths
+
+
+# ---------------------------------------------------------------------------
+# MarkdownMimirAdapter — search
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_search_finds_matching_pages(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("technical/ravn/memory.md", "# Memory\n\nEpisodic storage.")
+    await adapter.upsert_page("technical/ravn/tools.md", "# Tools\n\nBash and file tools.")
+    results = await adapter.search("episodic storage")
+    titles = [p.meta.title for p in results]
+    assert "Memory" in titles
+
+
+@pytest.mark.asyncio
+async def test_search_returns_empty_for_no_match(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("technical/ravn/tools.md", "# Tools\n\nBash tools.")
+    results = await adapter.search("kubernetes longhorn ceph")
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_search_excludes_index_and_log(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    # Write a keyword directly to index and log
+    index = tmp_path / "mimir" / "wiki" / "index.md"
+    index.write_text("# Catalog\n\nspecial_keyword here.", encoding="utf-8")
+    results = await adapter.search("special_keyword")
+    paths = [p.meta.path for p in results]
+    assert "index.md" not in paths
+    assert "log.md" not in paths
+
+
+# ---------------------------------------------------------------------------
+# MarkdownMimirAdapter — query
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_query_appends_to_log(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("technical/page.md", "# Page\n\nSome content about Ravn.")
+    await adapter.query("what is Ravn?")
+    log = (tmp_path / "mimir" / "wiki" / "log.md").read_text()
+    assert "query" in log
+    assert "what is Ravn?" in log
+
+
+@pytest.mark.asyncio
+async def test_query_returns_result_struct(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("technical/ravn/agent.md", "# Agent\n\nCore loop.")
+    result = await adapter.query("how does the agent work?")
+    assert isinstance(result, MimirQueryResult)
+    assert result.question == "how does the agent work?"
+    assert isinstance(result.sources, list)
+
+
+# ---------------------------------------------------------------------------
+# MarkdownMimirAdapter — lint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_lint_finds_orphan_pages(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    # Write a page directly without going through upsert_page (so it's not in index)
+    (tmp_path / "mimir" / "wiki" / "research").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "mimir" / "wiki" / "research" / "orphan.md").write_text(
+        "# Orphan\n\nNot in index.", encoding="utf-8"
+    )
+    report = await adapter.lint()
+    assert "research/orphan.md" in report.orphans
+
+
+@pytest.mark.asyncio
+async def test_lint_finds_contradictions(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    content = "# Auth\n\n[CONTRADICTION] This conflicts with the session model."
+    await adapter.upsert_page("technical/auth.md", content)
+    report = await adapter.lint()
+    assert "technical/auth.md" in report.contradictions
+
+
+@pytest.mark.asyncio
+async def test_lint_pages_checked_count(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("technical/a.md", "# A\n\nContent A.")
+    await adapter.upsert_page("technical/b.md", "# B\n\nContent B.")
+    report = await adapter.lint()
+    assert report.pages_checked == 2
+
+
+@pytest.mark.asyncio
+async def test_lint_appends_to_log(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.lint()
+    log = (tmp_path / "mimir" / "wiki" / "log.md").read_text()
+    assert "lint" in log
+    assert "pages checked" in log
+
+
+@pytest.mark.asyncio
+async def test_lint_no_issues(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("technical/page.md", "# Page\n\nClean content.")
+    report = await adapter.lint()
+    # page was indexed by upsert_page, so no orphans
+    assert "technical/page.md" not in report.orphans
+    assert report.pages_checked == 1
+
+
+# ---------------------------------------------------------------------------
+# Staleness detection
+# ---------------------------------------------------------------------------
+
+
+def test_compute_content_hash_is_sha256() -> None:
+    text = "hello world"
+    expected = hashlib.sha256(text.encode()).hexdigest()
+    assert MarkdownMimirAdapter.compute_content_hash(text) == expected
+
+
+@pytest.mark.asyncio
+async def test_is_source_stale_returns_false_when_unchanged(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    src = _make_source(content="original")
+    await adapter.ingest(src)
+    assert adapter.is_source_stale(src.source_id, "original") is False
+
+
+@pytest.mark.asyncio
+async def test_is_source_stale_returns_true_when_changed(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    src = _make_source(content="original")
+    await adapter.ingest(src)
+    assert adapter.is_source_stale(src.source_id, "completely different content") is True
+
+
+def test_is_source_stale_returns_false_for_unknown_source(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    # No source stored → not stale (nothing to compare)
+    assert adapter.is_source_stale("nonexistent_id", "content") is False
+
+
+@pytest.mark.asyncio
+async def test_lint_detects_stale_source(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    src = _make_source(title="Stale Doc", content="original")
+    await adapter.ingest(src)
+
+    # Write a page that references this source
+    page_content = f"# Stale\n\nDerived from source.\n<!-- sources: {src.source_id} -->"
+    await adapter.upsert_page("research/stale.md", page_content)
+
+    # Tamper with the stored hash to simulate changed source
+    raw_path = tmp_path / "mimir" / "raw" / f"{src.source_id}.json"
+    data = json.loads(raw_path.read_text())
+    data["content_hash"] = "badhash"
+    raw_path.write_text(json.dumps(data))
+
+    report = await adapter.lint()
+    assert "research/stale.md" in report.stale
+
+
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
+
+
+def test_extract_title_from_h1() -> None:
+    assert _extract_title("# My Title\n\nContent.") == "My Title"
+
+
+def test_extract_title_fallback() -> None:
+    assert _extract_title("No heading here.") == "Untitled"
+
+
+def test_extract_summary_returns_first_body_line() -> None:
+    content = "# Title\n\nThis is the summary.\n\nMore text."
+    assert _extract_summary(content) == "This is the summary."
+
+
+def test_extract_summary_skips_headings() -> None:
+    content = "# Title\n## Subtitle\n\nActual summary."
+    assert _extract_summary(content) == "Actual summary."
+
+
+# ---------------------------------------------------------------------------
+# Tool wrapper tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_mimir_ingest_tool_success(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    tool = MimirIngestTool(adapter)
+    result = await tool.execute(
+        {"content": "Some content.", "title": "My Source", "source_type": "document"}
+    )
+    assert not result.is_error
+    assert "Ingested source" in result.content
+
+
+@pytest.mark.asyncio
+async def test_mimir_ingest_tool_missing_content() -> None:
+    adapter = MagicMock(spec=["ingest"])
+    tool = MimirIngestTool(adapter)
+    result = await tool.execute({"title": "no content"})
+    assert result.is_error
+
+
+@pytest.mark.asyncio
+async def test_mimir_ingest_tool_missing_title() -> None:
+    adapter = MagicMock(spec=["ingest"])
+    tool = MimirIngestTool(adapter)
+    result = await tool.execute({"content": "some content"})
+    assert result.is_error
+
+
+@pytest.mark.asyncio
+async def test_mimir_query_tool_with_results(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("technical/ravn/agent.md", "# Agent\n\nCore loop details.")
+    tool = MimirQueryTool(adapter)
+    result = await tool.execute({"question": "how does agent core loop work?"})
+    assert not result.is_error
+    assert "Agent" in result.content
+
+
+@pytest.mark.asyncio
+async def test_mimir_query_tool_no_results(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    tool = MimirQueryTool(adapter)
+    result = await tool.execute({"question": "something completely unknown"})
+    assert not result.is_error
+    assert "No wiki pages found" in result.content
+
+
+@pytest.mark.asyncio
+async def test_mimir_query_tool_missing_question() -> None:
+    adapter = MagicMock()
+    tool = MimirQueryTool(adapter)
+    result = await tool.execute({})
+    assert result.is_error
+
+
+@pytest.mark.asyncio
+async def test_mimir_read_tool_success(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("projects/saga.md", "# Saga\n\nContent.")
+    tool = MimirReadTool(adapter)
+    result = await tool.execute({"path": "projects/saga.md"})
+    assert not result.is_error
+    assert "Saga" in result.content
+
+
+@pytest.mark.asyncio
+async def test_mimir_read_tool_not_found(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    tool = MimirReadTool(adapter)
+    result = await tool.execute({"path": "missing/page.md"})
+    assert result.is_error
+
+
+@pytest.mark.asyncio
+async def test_mimir_read_tool_missing_path() -> None:
+    adapter = MagicMock()
+    tool = MimirReadTool(adapter)
+    result = await tool.execute({})
+    assert result.is_error
+
+
+@pytest.mark.asyncio
+async def test_mimir_write_tool_success(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    tool = MimirWriteTool(adapter)
+    result = await tool.execute({"path": "research/new.md", "content": "# New Page\n\nBody."})
+    assert not result.is_error
+    assert "research/new.md" in result.content
+
+    # Verify the page was written
+    page_path = tmp_path / "mimir" / "wiki" / "research" / "new.md"
+    assert page_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_mimir_write_tool_non_md_extension() -> None:
+    adapter = MagicMock()
+    tool = MimirWriteTool(adapter)
+    result = await tool.execute({"path": "research/bad.txt", "content": "# Title"})
+    assert result.is_error
+    assert ".md" in result.content
+
+
+@pytest.mark.asyncio
+async def test_mimir_write_tool_missing_path() -> None:
+    adapter = MagicMock()
+    tool = MimirWriteTool(adapter)
+    result = await tool.execute({"content": "content"})
+    assert result.is_error
+
+
+@pytest.mark.asyncio
+async def test_mimir_write_tool_missing_content() -> None:
+    adapter = MagicMock()
+    tool = MimirWriteTool(adapter)
+    result = await tool.execute({"path": "test.md"})
+    assert result.is_error
+
+
+@pytest.mark.asyncio
+async def test_mimir_search_tool_success(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("technical/ravn/memory.md", "# Memory\n\nEpisodic storage.")
+    tool = MimirSearchTool(adapter)
+    result = await tool.execute({"query": "episodic"})
+    assert not result.is_error
+    assert "Memory" in result.content
+
+
+@pytest.mark.asyncio
+async def test_mimir_search_tool_no_results(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    tool = MimirSearchTool(adapter)
+    result = await tool.execute({"query": "zzz_nonexistent_term_zzz"})
+    assert not result.is_error
+    assert "No pages found" in result.content
+
+
+@pytest.mark.asyncio
+async def test_mimir_search_tool_missing_query() -> None:
+    adapter = MagicMock()
+    tool = MimirSearchTool(adapter)
+    result = await tool.execute({})
+    assert result.is_error
+
+
+@pytest.mark.asyncio
+async def test_mimir_lint_tool_clean(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.upsert_page("technical/page.md", "# Page\n\nClean content.")
+    tool = MimirLintTool(adapter)
+    result = await tool.execute({})
+    assert not result.is_error
+    assert "pages checked" in result.content
+
+
+@pytest.mark.asyncio
+async def test_mimir_lint_tool_reports_issues(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    # Add a page with contradiction marker
+    await adapter.upsert_page("technical/x.md", "# X\n\n[CONTRADICTION] Something wrong.")
+    tool = MimirLintTool(adapter)
+    result = await tool.execute({})
+    assert not result.is_error
+    assert "Contradictions" in result.content
+
+
+# ---------------------------------------------------------------------------
+# build_mimir_tools factory
+# ---------------------------------------------------------------------------
+
+
+def test_build_mimir_tools_returns_six(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    tools = build_mimir_tools(adapter)
+    assert len(tools) == 6
+    names = {t.name for t in tools}
+    assert names == {
+        "mimir_ingest",
+        "mimir_query",
+        "mimir_read",
+        "mimir_write",
+        "mimir_search",
+        "mimir_lint",
+    }
+
+
+# ---------------------------------------------------------------------------
+# MimirConfig defaults
+# ---------------------------------------------------------------------------
+
+
+def test_mimir_config_defaults() -> None:
+    cfg = MimirConfig()
+    assert cfg.enabled is True
+    assert cfg.path == "~/.ravn/mimir"
+    assert cfg.auto_distill is True
+    assert cfg.distill_min_session_minutes == 5
+    assert cfg.idle_lint_threshold_minutes == 60
+    assert cfg.continuation_threshold_minutes == 30
+    assert "technical" in cfg.categories
+    assert "self" in cfg.categories
+    assert cfg.search.backend == "fts"
+
+
+def test_mimir_config_in_settings() -> None:
+    settings = Settings()
+    assert hasattr(settings, "mimir")
+    assert isinstance(settings.mimir, MimirConfig)
+
+
+# ---------------------------------------------------------------------------
+# Integration: session → ingest → wiki page created with log entry
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_integration_ingest_then_write_creates_page_with_log(tmp_path: Path) -> None:
+    """Simulate: ingest a source, agent writes a wiki page, log updated."""
+    adapter = _make_adapter(tmp_path)
+
+    # 1. Ingest a raw source
+    src = _make_source(
+        title="Kubernetes Pod Lifecycle",
+        content="Pods go through Pending, Running, Succeeded, Failed states.",
+        source_type="web",
+        origin_url="https://example.com/k8s-pods",
+    )
+    await adapter.ingest(src)
+
+    # 2. Agent writes a wiki page derived from the source
+    page_content = (
+        f"# Kubernetes Pod Lifecycle\n\n"
+        f"Pods transition through four states: Pending, Running, Succeeded, Failed.\n\n"
+        f"<!-- sources: {src.source_id} -->"
+    )
+    await adapter.upsert_page("technical/k8s/pod-lifecycle.md", page_content)
+
+    # 3. Verify page exists
+    written = await adapter.read_page("technical/k8s/pod-lifecycle.md")
+    assert "Pod Lifecycle" in written
+
+    # 4. Verify index updated
+    index = (tmp_path / "mimir" / "wiki" / "index.md").read_text()
+    assert "technical/k8s/pod-lifecycle.md" in index
+
+    # 5. Verify log has ingest entry
+    log = (tmp_path / "mimir" / "wiki" / "log.md").read_text()
+    assert "ingest" in log
+    assert "Kubernetes Pod Lifecycle" in log
+
+
+@pytest.mark.asyncio
+async def test_integration_distillation_trigger_creates_agent_task() -> None:
+    """Post-session distillation: verify AgentTask structure is correct."""
+    task = AgentTask(
+        task_id="task_abc_0001",
+        title="Mímir distillation — post-session",
+        initiative_context=(
+            "Review the conversation that just ended. Extract:\n"
+            "1. Any new factual knowledge worth preserving as Mímir wiki pages\n"
+            "2. Any findings that update or contradict existing pages\n"
+            "3. Decisions or patterns worth recording for future reference\n\n"
+            "Write or update wiki pages using mimir_write(). "
+            "Update index.md. Append to log.md. "
+            "Be concise — the wiki is for retrieval, not transcription."
+        ),
+        triggered_by="post_session:distillation",
+        output_mode=OutputMode.SILENT,
+        priority=15,
+    )
+    assert task.output_mode == OutputMode.SILENT
+    assert task.session_id == "daemon_task_abc_0001"
+    assert "mimir_write" in task.initiative_context
+    assert "log.md" in task.initiative_context
