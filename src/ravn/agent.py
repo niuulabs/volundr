@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -13,6 +14,7 @@ from typing import Any
 from ravn.budget import IterationBudget, TokenEstimator
 from ravn.compression import CompressionResult, ContextCompressor
 from ravn.config import ExtendedThinkingConfig, OutcomeConfig
+from ravn.domain.checkpoint import Checkpoint, InterruptReason
 from ravn.domain.events import RavnEvent
 from ravn.domain.exceptions import MaxIterationsError, PermissionDeniedError
 from ravn.domain.models import (
@@ -30,6 +32,7 @@ from ravn.domain.models import (
     TurnResult,
 )
 from ravn.ports.channel import ChannelPort
+from ravn.ports.checkpoint import CheckpointPort
 from ravn.ports.llm import LLMPort, SystemPrompt
 from ravn.ports.memory import MemoryPort
 from ravn.ports.outcome import OutcomePort
@@ -89,6 +92,9 @@ class RavnAgent:
         outcome_config: OutcomeConfig | None = None,
         extended_thinking: ExtendedThinkingConfig | None = None,
         session: Session | None = None,
+        checkpoint_port: CheckpointPort | None = None,
+        task_id: str | None = None,
+        cancel_event: asyncio.Event | None = None,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -119,6 +125,9 @@ class RavnAgent:
         self._session = session or Session()
         self._source_id = f"ravn-{uuid.uuid4().hex[:8]}"
         self._last_compression_result: CompressionResult | None = None
+        self._checkpoint_port = checkpoint_port
+        self._task_id = task_id or str(self._session.id)
+        self._cancel_event = cancel_event
 
     @property
     def session(self) -> Session:
@@ -143,6 +152,21 @@ class RavnAgent:
     def last_compression_result(self) -> CompressionResult | None:
         """Compression result from the most recent turn, or None."""
         return self._last_compression_result
+
+    @property
+    def task_id(self) -> str:
+        """Stable task identifier used for checkpointing."""
+        return self._task_id
+
+    @property
+    def checkpoint_port(self) -> CheckpointPort | None:
+        """The checkpoint port, or None if checkpointing is disabled."""
+        return self._checkpoint_port
+
+    @property
+    def cancel_event(self) -> asyncio.Event | None:
+        """External cancellation event.  Set it to request graceful stop."""
+        return self._cancel_event
 
     @property
     def llm_adapter_name(self) -> str:
@@ -236,8 +260,26 @@ class RavnAgent:
         for iteration in range(self._max_iterations):
             iterations_used = iteration + 1
 
+            # Check external cancellation (Tyr cancel, SIGINT/SIGTERM via event).
+            if self._cancel_event is not None and self._cancel_event.is_set():
+                await self._write_checkpoint(
+                    user_input=user_input,
+                    partial_response=final_response,
+                    last_tool_call=turn_tool_calls[-1] if turn_tool_calls else None,
+                    last_tool_result=turn_tool_results[-1] if turn_tool_results else None,
+                    interrupted_by=InterruptReason.TYR_CANCEL,
+                )
+                raise MaxIterationsError(self._max_iterations)
+
             # Enforce iteration budget.
             if self._iteration_budget is not None and self._iteration_budget.exhausted:
+                await self._write_checkpoint(
+                    user_input=user_input,
+                    partial_response=final_response,
+                    last_tool_call=turn_tool_calls[-1] if turn_tool_calls else None,
+                    last_tool_result=turn_tool_results[-1] if turn_tool_results else None,
+                    interrupted_by=InterruptReason.BUDGET_EXHAUSTED,
+                )
                 raise MaxIterationsError(self._max_iterations)
 
             # Optionally compress context before calling the LLM.
@@ -279,6 +321,10 @@ class RavnAgent:
                 self._session.add_message(Message(role="assistant", content=llm_response.content))
                 break
 
+            # Track partial response for checkpointing during tool-call iterations.
+            if llm_response.content:
+                final_response = llm_response.content
+
             # Append the assistant message (with tool calls) to history.
             assistant_content = _build_assistant_content(llm_response)
             self._session.messages.append(Message(role="assistant", content=assistant_content))
@@ -305,9 +351,25 @@ class RavnAgent:
                     }
                 )
 
+                # Write a crash-safe checkpoint after every tool call.
+                await self._write_checkpoint(
+                    user_input=user_input,
+                    partial_response=final_response,
+                    last_tool_call=tool_call,
+                    last_tool_result=result,
+                    interrupted_by=None,
+                )
+
             # Append tool results as a user message.
             self._session.messages.append(Message(role="user", content=tool_results_content))
         else:
+            await self._write_checkpoint(
+                user_input=user_input,
+                partial_response=final_response,
+                last_tool_call=turn_tool_calls[-1] if turn_tool_calls else None,
+                last_tool_result=turn_tool_results[-1] if turn_tool_results else None,
+                interrupted_by=InterruptReason.BUDGET_EXHAUSTED,
+            )
             raise MaxIterationsError(self._max_iterations)
 
         self._session.record_turn(cumulative_usage)
@@ -433,6 +495,70 @@ class RavnAgent:
                 result.removed_message_count,
             )
         return messages
+
+    async def _write_checkpoint(
+        self,
+        *,
+        user_input: str,
+        partial_response: str,
+        last_tool_call: ToolCall | None,
+        last_tool_result: ToolResult | None,
+        interrupted_by: InterruptReason | None,
+    ) -> None:
+        """Persist a checkpoint for the current session state.
+
+        No-ops when no checkpoint port is configured.  Failures are
+        logged at WARNING level and never propagate — losing a checkpoint
+        is preferable to crashing the task.
+        """
+        if self._checkpoint_port is None:
+            return
+
+        # Serialise messages to plain dicts for storage.
+        messages: list[dict] = [
+            {"role": m.role, "content": m.content} for m in self._session.messages
+        ]
+        todos: list[dict] = [
+            {"id": t.id, "content": t.content, "status": str(t.status), "priority": t.priority}
+            for t in self._session.todos
+        ]
+
+        consumed = self._iteration_budget.consumed if self._iteration_budget is not None else 0
+        total = self._iteration_budget.total if self._iteration_budget is not None else 0
+
+        last_call_dict: dict | None = None
+        if last_tool_call is not None:
+            last_call_dict = {
+                "id": last_tool_call.id,
+                "name": last_tool_call.name,
+                "input": last_tool_call.input,
+            }
+
+        last_result_dict: dict | None = None
+        if last_tool_result is not None:
+            last_result_dict = {
+                "tool_call_id": last_tool_result.tool_call_id,
+                "content": last_tool_result.content,
+                "is_error": last_tool_result.is_error,
+            }
+
+        checkpoint = Checkpoint(
+            task_id=self._task_id,
+            user_input=user_input,
+            messages=messages,
+            todos=todos,
+            iteration_budget_consumed=consumed,
+            iteration_budget_total=total,
+            last_tool_call=last_call_dict,
+            last_tool_result=last_result_dict,
+            partial_response=partial_response,
+            interrupted_by=interrupted_by,
+        )
+
+        try:
+            await self._checkpoint_port.save(checkpoint)
+        except Exception as exc:
+            logger.warning("Checkpoint save failed for task %r: %s", self._task_id, exc)
 
     async def _record_task_outcome(
         self,
