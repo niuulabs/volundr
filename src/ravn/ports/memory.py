@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from ravn.domain.models import Episode, EpisodeMatch, SessionSummary, SharedContext
+from ravn.domain.models import (
+    Episode,
+    EpisodeMatch,
+    FactType,
+    KnowledgeFact,
+    KnowledgeRelationship,
+    SessionState,
+    SessionSummary,
+    SharedContext,
+)
 
 
 class MemoryPort(ABC):
@@ -67,4 +76,103 @@ class MemoryPort(ABC):
     @abstractmethod
     def get_shared_context(self) -> SharedContext | None:
         """Return the most recently injected shared context, or None."""
+        ...
+
+
+class BuriMemoryPort(MemoryPort):
+    """Extended memory port with typed fact graph, proto-RWKV session state,
+    and proto-vMF embedding clusters (NIU-541).
+
+    Builds on MemoryPort; all episodic memory methods are inherited and must
+    still be implemented.  Concrete adapters only need to implement the Búri
+    extensions declared here.
+    """
+
+    @abstractmethod
+    async def ingest_fact(self, fact: KnowledgeFact) -> None:
+        """Persist a typed knowledge fact.
+
+        Supersession check (cosine > 0.85 + type match + entity overlap) is
+        performed before writing; the old fact is invalidated if a match is
+        found.  Cluster assignment is handled internally.
+        """
+        ...
+
+    @abstractmethod
+    async def query_facts(
+        self,
+        query: str,
+        *,
+        fact_type: FactType | None = None,
+        limit: int = 10,
+        include_superseded: bool = False,
+    ) -> list[KnowledgeFact]:
+        """Two-stage semantic retrieval: cluster centroids → within-cluster facts.
+
+        Returns current facts (``valid_until IS NULL``) ordered by type-weighted
+        score.  Pass ``include_superseded=True`` to include historical facts.
+        """
+        ...
+
+    @abstractmethod
+    async def get_facts_for_entity(
+        self,
+        entity: str,
+        *,
+        fact_type: FactType | None = None,
+        include_superseded: bool = False,
+    ) -> list[KnowledgeFact]:
+        """Return all facts that reference *entity* in their entities list."""
+        ...
+
+    @abstractmethod
+    async def supersede_fact(self, old_fact_id: str, new_fact: KnowledgeFact) -> None:
+        """Mark *old_fact_id* as superseded and write *new_fact* as its replacement."""
+        ...
+
+    @abstractmethod
+    async def forget_fact(self, query: str) -> KnowledgeFact | None:
+        """Find the best-matching current fact by semantic search and invalidate it.
+
+        Returns the invalidated fact, or None if no match was found.
+        Takes a natural language description, not a raw ID.
+        """
+        ...
+
+    @abstractmethod
+    async def get_relationships(
+        self,
+        entity: str,
+        *,
+        hops: int = 2,
+    ) -> list[KnowledgeRelationship]:
+        """Return relationships involving *entity*, expanding up to *hops* hops."""
+        ...
+
+    @abstractmethod
+    async def update_session_state(
+        self,
+        session_id: str,
+        user_input: str,
+        response_summary: str,
+    ) -> None:
+        """Update the proto-RWKV rolling summary for *session_id*.
+
+        Called at the end of each ``run_turn()`` call.  Uses a cheap small-model
+        LLM call to produce a concise updated state (≤ summary_max_tokens).
+        """
+        ...
+
+    @abstractmethod
+    async def get_session_state(self, session_id: str) -> SessionState | None:
+        """Return the current session state for *session_id*, or None."""
+        ...
+
+    @abstractmethod
+    async def build_knowledge_context(self, query: str) -> str:
+        """Build the structured context block for system prompt injection.
+
+        Returns a formatted block with sections:
+        [DIRECTIVES], [CURRENT GOALS], [RELEVANT DECISIONS], [SESSION CONTEXT]
+        """
         ...
