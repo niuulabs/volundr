@@ -184,7 +184,7 @@ class SleipnirChannel(ChannelPort):
             if self._exchange is not None:
                 return self._exchange
 
-            now = asyncio.get_event_loop().time()
+            now = asyncio.get_running_loop().time()
             if now - self._last_connect_attempt < self._config.reconnect_delay_s:
                 return None
 

@@ -27,4 +27,7 @@ class CompositeChannel(ChannelPort):
 
     async def emit(self, event: RavnEvent) -> None:
         for channel in self._channels:
-            await channel.emit(event)
+            try:
+                await channel.emit(event)
+            except Exception:
+                pass  # each channel is responsible for its own resilience

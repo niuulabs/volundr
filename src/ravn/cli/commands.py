@@ -134,7 +134,8 @@ def _build_memory(settings: Settings) -> Any:
         try:
             cls = _import_class(settings.embedding.adapter)
             kwargs = _inject_secrets(
-                settings.embedding.kwargs, settings.embedding.secret_kwargs_env,
+                settings.embedding.kwargs,
+                settings.embedding.secret_kwargs_env,
             )
             embedding_port = cls(**kwargs)
         except Exception as exc:
@@ -294,10 +295,14 @@ def _build_tools(
         # -- File tools --
         ReadFileTool(workspace, max_bytes=fc.max_read_bytes),
         WriteFileTool(
-            workspace, max_bytes=fc.max_write_bytes, binary_check_bytes=fc.binary_check_bytes,
+            workspace,
+            max_bytes=fc.max_write_bytes,
+            binary_check_bytes=fc.binary_check_bytes,
         ),
         EditFileTool(
-            workspace, max_bytes=fc.max_write_bytes, binary_check_bytes=fc.binary_check_bytes,
+            workspace,
+            max_bytes=fc.max_write_bytes,
+            binary_check_bytes=fc.binary_check_bytes,
         ),
         GlobSearchTool(workspace),
         GrepSearchTool(workspace),
@@ -407,12 +412,14 @@ def _build_tools(
 
         _purl = settings.gateway.platform.base_url
         _ptimeout = settings.gateway.platform.timeout
-        tools.extend([
-            VolundrSessionTool(base_url=_purl, timeout=_ptimeout),
-            VolundrGitTool(base_url=_purl, timeout=_ptimeout),
-            TyrSagaTool(base_url=_purl, timeout=_ptimeout),
-            TrackerIssueTool(base_url=_purl, timeout=_ptimeout),
-        ])
+        tools.extend(
+            [
+                VolundrSessionTool(base_url=_purl, timeout=_ptimeout),
+                VolundrGitTool(base_url=_purl, timeout=_ptimeout),
+                TyrSagaTool(base_url=_purl, timeout=_ptimeout),
+                TrackerIssueTool(base_url=_purl, timeout=_ptimeout),
+            ]
+        )
 
     # -- Introspection tools (added before filtering so they can be disabled) --
     state_tool = RavnStateTool(
@@ -735,23 +742,27 @@ def _build_agent(
     from ravn.adapters.channels.composite import CompositeChannel
     from ravn.adapters.cli_channel import CliChannel
     from ravn.budget import IterationBudget
+    from ravn.ports.channel import ChannelPort
 
     workspace = _resolve_workspace(settings)
     llm = _build_llm(settings)
     session = Session()
     base_channel: CliChannel = CliChannel()
-    channel: Any = base_channel
+    channel: ChannelPort = base_channel
     if settings.sleipnir.enabled:
         from ravn.adapters.channels.sleipnir import SleipnirChannel
 
         sleipnir_ch = SleipnirChannel(
             settings.sleipnir,
-            session_id=session.id,
+            session_id=str(session.id),
             task_id=None,
         )
         channel = CompositeChannel([base_channel, sleipnir_ch])
     permission = _build_permission(
-        settings, workspace, no_tools=no_tools, persona_config=persona_config,
+        settings,
+        workspace,
+        no_tools=no_tools,
+        persona_config=persona_config,
     )
     memory = _build_memory(settings)
     outcome_port, outcome_config = _build_outcome(settings)
@@ -760,8 +771,14 @@ def _build_agent(
         near_limit_threshold=settings.iteration_budget.near_limit_threshold,
     )
     tools = _build_tools(
-        settings, workspace, session, llm, memory, iteration_budget,
-        no_tools=no_tools, persona_config=persona_config,
+        settings,
+        workspace,
+        session,
+        llm,
+        memory,
+        iteration_budget,
+        no_tools=no_tools,
+        persona_config=persona_config,
     )
     compressor = _build_compressor(settings, llm)
     prompt_builder = _build_prompt_builder(settings)
@@ -1175,10 +1192,18 @@ async def _run_gateway(
             near_limit_threshold=settings.iteration_budget.near_limit_threshold,
         )
         permission = _build_permission(
-            settings, workspace, no_tools=False, persona_config=persona_config,
+            settings,
+            workspace,
+            no_tools=False,
+            persona_config=persona_config,
         )
         tools = _build_tools(
-            settings, workspace, session, llm, memory, budget,
+            settings,
+            workspace,
+            session,
+            llm,
+            memory,
+            budget,
             persona_config=persona_config,
         )
         # Append shared MCP tools to per-session tool list
@@ -1192,7 +1217,7 @@ async def _run_gateway(
 
             sleipnir_ch = SleipnirChannel(
                 settings.sleipnir,
-                session_id=session.id,
+                session_id=str(session.id),
                 task_id=None,
             )
             effective_channel = CompositeChannel([channel, sleipnir_ch])
