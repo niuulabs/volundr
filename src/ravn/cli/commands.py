@@ -1434,12 +1434,21 @@ async def _run_daemon(
             gw_tasks.append("http")
 
     # Drive loop (initiative tasks)
+    from ravn.adapters.events.noop_publisher import NoOpEventPublisher
+    from ravn.adapters.events.rabbitmq_publisher import RabbitMQEventPublisher
+    from ravn.ports.event_publisher import EventPublisherPort
+
+    event_publisher: EventPublisherPort = NoOpEventPublisher()
     trigger_names: list[str] = []
     if settings.initiative.enabled:
+        if settings.sleipnir.enabled:
+            event_publisher = RabbitMQEventPublisher(settings.sleipnir)
+
         drive_loop = DriveLoop(
             agent_factory=_agent_factory,
             config=settings.initiative,
             settings=settings,
+            event_publisher=event_publisher,
         )
         _wire_triggers(drive_loop, settings.initiative)
         trigger_names = [t.name for t in drive_loop._triggers]
@@ -1472,6 +1481,7 @@ async def _run_daemon(
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        await event_publisher.close()
         await _shutdown_mcp(mcp_manager)
 
 
