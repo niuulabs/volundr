@@ -1130,6 +1130,61 @@ class MimirConfig(BaseModel):
     )
 
 
+class NngMeshConfig(BaseModel):
+    """nng transport settings for Pi-mode mesh (NIU-517)."""
+
+    pub_sub_address: str = Field(
+        default="tcp://*:7480",
+        description="nng PUB/SUB listen address (e.g. tcp://*:7480 or ipc:///tmp/ravn-pub.ipc).",
+    )
+    req_rep_address: str = Field(
+        default="tcp://*:7481",
+        description="nng REQ/REP listen address (e.g. tcp://*:7481 or ipc:///tmp/ravn-rep.ipc).",
+    )
+
+
+class MeshSleipnirConfig(BaseModel):
+    """RabbitMQ-specific mesh settings for infra-mode mesh (NIU-517)."""
+
+    exchange: str = Field(
+        default="ravn.mesh",
+        description="Topic exchange used for Ravn mesh pub/sub and RPC.",
+    )
+    rpc_timeout_s: float = Field(
+        default=10.0,
+        description="Default RPC reply timeout in seconds.",
+    )
+
+
+class MeshConfig(BaseModel):
+    """Ravn-to-Ravn mesh transport configuration (NIU-517).
+
+    When enabled, Ravn instances communicate directly with each other for
+    cascade delegation (``send``) and broadcast (``publish``/``subscribe``).
+
+    ``adapter`` selects the transport backend:
+    - ``nng``       — Pi mode, no broker required (uses ``nng:`` sub-section)
+    - ``sleipnir``  — infra mode, RabbitMQ (re-uses ``sleipnir:`` config block)
+    - ``composite`` — tries Sleipnir first, falls back to nng
+    """
+
+    enabled: bool = Field(default=False)
+    adapter: str = Field(
+        default="nng",
+        description="Mesh transport backend: 'nng', 'sleipnir', or 'composite'.",
+    )
+    rpc_timeout_s: float = Field(
+        default=10.0,
+        description="Default RPC reply timeout in seconds.",
+    )
+    own_peer_id: str = Field(
+        default="",
+        description="This Ravn's unique mesh peer identifier (auto: hostname when empty).",
+    )
+    nng: NngMeshConfig = Field(default_factory=NngMeshConfig)
+    sleipnir: MeshSleipnirConfig = Field(default_factory=MeshSleipnirConfig)
+
+
 class BuriConfig(BaseModel):
     """Búri knowledge memory substrate configuration (NIU-541).
 
@@ -1236,6 +1291,9 @@ class Settings(BaseSettings):
 
     # NIU-540: Mímir persistent knowledge base
     mimir: MimirConfig = Field(default_factory=MimirConfig)
+
+    # NIU-517: Ravn-to-Ravn mesh transport
+    mesh: MeshConfig = Field(default_factory=MeshConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)
