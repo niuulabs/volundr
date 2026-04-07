@@ -1326,10 +1326,42 @@ def daemon(
     asyncio.run(_run_daemon(settings, persona_config=persona_config))
 
 
+@app.command()
+def listen(
+    config: str = typer.Option("", "--config", "-c", help="Path to ravn config YAML."),
+    persona: str = typer.Option(
+        "", "--persona", "-p", help="Default persona for dispatched tasks."
+    ),
+) -> None:
+    """Listen for remotely dispatched tasks via Sleipnir (NIU-505).
+
+    Subscribes to ``ravn.task.dispatch`` on the configured RabbitMQ exchange
+    and executes each incoming task autonomously.  Requires Sleipnir to be
+    enabled: set ``sleipnir.enabled: true`` in ravn.yaml and provide the
+    ``SLEIPNIR_AMQP_URL`` environment variable.
+
+    The persona requested in each dispatch event is validated; tasks with
+    unknown personas are rejected and a ``ravn.task.rejected`` event is
+    published back to the exchange.
+    """
+    if config:
+        os.environ["RAVN_CONFIG"] = config
+
+    settings = Settings()
+    _configure_logging(settings)
+    project_config = ProjectConfig.discover()
+    persona_config = _resolve_persona(persona, project_config)
+
+    asyncio.run(
+        _run_daemon(settings, persona_config=persona_config, task_dispatch=True)
+    )
+
+
 async def _run_daemon(
     settings: Settings,
     *,
     persona_config: Any | None = None,
+    task_dispatch: bool = False,
 ) -> None:
     """Build and run the gateway + drive loop until interrupted."""
     from ravn.adapters.channels.gateway import RavnGateway
@@ -1441,7 +1473,7 @@ async def _run_daemon(
     event_publisher: EventPublisherPort = NoOpEventPublisher()
     trigger_names: list[str] = []
     drive_loop: Any = None
-    if settings.initiative.enabled:
+    if settings.initiative.enabled or task_dispatch:
         if settings.sleipnir.enabled:
             event_publisher = RabbitMQEventPublisher(settings.sleipnir)
 
@@ -1452,6 +1484,16 @@ async def _run_daemon(
             event_publisher=event_publisher,
         )
         _wire_triggers(drive_loop, settings.initiative)
+
+        # Wire task dispatch subscription when requested (--listen / --daemon)
+        if task_dispatch and settings.sleipnir.enabled:
+            _wire_task_dispatch(drive_loop, settings.sleipnir)
+        elif task_dispatch:
+            logger.warning(
+                "task_dispatch: Sleipnir not enabled — ravn.task.dispatch subscription"
+                " requires sleipnir.enabled: true and %s to be set",
+                settings.sleipnir.amqp_url_env,
+            )
 
         # Wire cascade tools when enabled (Mode 1 local + optional mesh/spawn)
         if settings.cascade.enabled:
@@ -1536,6 +1578,15 @@ def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> None:
 
         except Exception as exc:
             logger.error("Failed to wire trigger %r: %s", tc.name, exc)
+
+
+def _wire_task_dispatch(drive_loop: Any, sleipnir_config: Any) -> None:
+    """Register a TaskDispatchChannel as a drive-loop trigger (NIU-505)."""
+    from ravn.adapters.channels.event import TaskDispatchChannel
+
+    channel = TaskDispatchChannel(sleipnir_config)
+    drive_loop.register_trigger(channel)
+    logger.info("task_dispatch: registered ravn.task.dispatch subscription")
 
 
 def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
