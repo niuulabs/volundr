@@ -20,9 +20,9 @@ import logging
 import re
 import time
 from collections.abc import Awaitable, Callable
-from typing import IO
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import IO
 
 from ravn.domain.models import AgentTask, OutputMode
 
