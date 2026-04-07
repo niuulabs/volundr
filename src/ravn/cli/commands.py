@@ -1532,6 +1532,142 @@ def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> None:
             logger.error("Failed to wire trigger %r: %s", tc.name, exc)
 
 
+@app.command()
+def peers(
+    config: str = typer.Option("", "--config", "-c", help="Path to ravn config YAML."),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show address, latency, task_count, last_seen."
+    ),
+    scan: bool = typer.Option(
+        False, "--scan", help="Force a fresh mDNS/K8s scan before displaying."
+    ),
+) -> None:
+    """List verified flock members with persona, capabilities, and status.
+
+    \b
+    Examples:
+      ravn peers               — list verified peers
+      ravn peers --verbose     — include address, latency, task_count
+      ravn peers --scan        — force a fresh network scan first
+    """
+    if config:
+        os.environ["RAVN_CONFIG"] = config
+
+    settings = Settings()
+    _configure_logging(settings)
+    asyncio.run(_run_peers(settings, verbose=verbose, force_scan=scan))
+
+
+async def _run_peers(settings: Settings, *, verbose: bool, force_scan: bool) -> None:
+    """Build a discovery adapter, optionally scan, and print the peer table."""
+    import importlib
+
+    from ravn.adapters.discovery._identity import (
+        load_or_create_peer_id,
+        load_or_create_realm_key,
+        realm_id_from_key,
+    )
+    from ravn.domain.models import RavnIdentity
+
+    peer_id = load_or_create_peer_id()
+    realm_key = load_or_create_realm_key()
+    realm_id = realm_id_from_key(realm_key)
+
+    import importlib.metadata
+
+    try:
+        version = importlib.metadata.version("ravn")
+    except Exception:
+        version = "0.0.0"
+
+    identity = RavnIdentity(
+        peer_id=peer_id,
+        realm_id=realm_id,
+        persona=settings.agent.system_prompt[:30] if settings.agent.system_prompt else "ravn",
+        capabilities=[],
+        permission_mode=settings.permission.mode,
+        version=version,
+    )
+
+    adapter_name = settings.discovery.adapter
+    discovery = _build_discovery_adapter(adapter_name, settings, identity)
+    if discovery is None:
+        typer.echo("No discovery adapter configured.", err=True)
+        return
+
+    await discovery.start()
+
+    if force_scan:
+        candidates = await discovery.scan()
+        typer.echo(f"Scan found {len(candidates)} candidate(s).")
+        for c in candidates:
+            if c.peer_id not in discovery.peers():
+                peer = await discovery.handshake(c)
+                if peer is not None:
+                    typer.echo(f"  Handshook with {c.peer_id}")
+
+    verified = discovery.peers()
+    if not verified:
+        typer.echo("No verified flock members found.")
+        await discovery.stop()
+        return
+
+    typer.echo(f"Flock members ({len(verified)}):")
+    for pid, peer in sorted(verified.items()):
+        caps = ", ".join(peer.capabilities) if peer.capabilities else "—"
+        line = f"  {pid[:8]}  {peer.persona:<20} [{peer.status}]  caps={caps}"
+        if verbose:
+            rep = peer.rep_address or "—"
+            pub = peer.pub_address or "—"
+            latency = f"{peer.latency_ms:.1f}ms" if peer.latency_ms is not None else "—"
+            line += f"\n    rep={rep}  pub={pub}  latency={latency}  tasks={peer.task_count}"
+            line += f"  last_seen={peer.last_seen.isoformat()}"
+        typer.echo(line)
+
+    await discovery.stop()
+
+
+_DISCOVERY_ALIASES: dict[str, str] = {
+    "mdns": "ravn.adapters.discovery.mdns.MdnsDiscoveryAdapter",
+    "sleipnir": "ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter",
+    "k8s": "ravn.adapters.discovery.k8s.K8sDiscoveryAdapter",
+    "composite": "ravn.adapters.discovery.composite.CompositeDiscoveryAdapter",
+}
+
+# Adapters that need sleipnir_config injected in addition to config + own_identity.
+_SLEIPNIR_KWARGS_ADAPTERS = {"ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter"}
+
+
+def _build_discovery_adapter(name: str, settings: Settings, identity: Any) -> Any:
+    """Instantiate a discovery adapter by short name or fully-qualified class path.
+
+    Single-backend adapters are resolved via dynamic import (dynamic-adapters pattern).
+    The composite case is special: its sub-backends are wired explicitly.
+    """
+    fq_class = _DISCOVERY_ALIASES.get(name, name)
+
+    if fq_class == _DISCOVERY_ALIASES["composite"]:
+        from ravn.adapters.discovery.composite import CompositeDiscoveryAdapter
+
+        mdns_cls = _import_class(_DISCOVERY_ALIASES["mdns"])
+        sleipnir_cls = _import_class(_DISCOVERY_ALIASES["sleipnir"])
+        backends: list[Any] = [
+            mdns_cls(config=settings.discovery, own_identity=identity),
+            sleipnir_cls(
+                config=settings.discovery,
+                sleipnir_config=settings.sleipnir,
+                own_identity=identity,
+            ),
+        ]
+        return CompositeDiscoveryAdapter(backends=backends)
+
+    cls = _import_class(fq_class)
+    kwargs: dict[str, Any] = {"config": settings.discovery, "own_identity": identity}
+    if fq_class in _SLEIPNIR_KWARGS_ADAPTERS:
+        kwargs["sleipnir_config"] = settings.sleipnir
+    return cls(**kwargs)
+
+
 def main() -> None:
     app()
 
