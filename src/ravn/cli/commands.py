@@ -25,6 +25,7 @@ from ravn.domain.models import (
     ToolCall,
     ToolResult,
 )
+from ravn.ports.checkpoint import CheckpointPort
 
 logger = logging.getLogger(__name__)
 
@@ -764,7 +765,7 @@ def _resolve_persona(
 # ---------------------------------------------------------------------------
 
 
-def _build_checkpoint(settings: Settings) -> Any:
+def _build_checkpoint(settings: Settings) -> CheckpointPort:
     """Build the checkpoint adapter from config.
 
     Defaults to the disk adapter (Pi mode).  Switches to Postgres when
@@ -780,7 +781,7 @@ def _build_checkpoint(settings: Settings) -> Any:
 
             return PostgresCheckpointAdapter(dsn=dsn)
 
-    return DiskCheckpointAdapter()
+    return DiskCheckpointAdapter(checkpoint_dir=settings.checkpoint.dir)
 
 
 # ---------------------------------------------------------------------------
@@ -795,7 +796,6 @@ def _build_agent(
     persona_config: Any | None = None,
     session: Session | None = None,
     task_id: str | None = None,
-    cancel_event: asyncio.Event | None = None,
 ) -> tuple[RavnAgent, Any]:
     api_key = settings.effective_api_key()
     if not api_key:
@@ -888,7 +888,6 @@ def _build_agent(
         extended_thinking=extended_thinking,
         checkpoint_port=checkpoint_port,
         task_id=task_id,
-        cancel_event=cancel_event,
     )
 
     return agent, channel
@@ -959,19 +958,6 @@ async def _run_with_signals(
     resume_task_id: str | None,
 ) -> None:
     """Build the agent, install signal handlers, and run the conversation."""
-    cancel_event = asyncio.Event()
-
-    def _set_cancel(reason: InterruptReason) -> None:
-        cancel_event.set()
-        typer.echo(
-            f"\n[ravn] Interrupt received ({reason}) — finishing current tool call …",
-            err=True,
-        )
-
-    loop = asyncio.get_running_loop()
-    loop.add_signal_handler(signal.SIGINT, lambda: _set_cancel(InterruptReason.SIGINT))
-    loop.add_signal_handler(signal.SIGTERM, lambda: _set_cancel(InterruptReason.SIGTERM))
-
     # Optionally load a checkpoint for resume.
     restored_session: Session | None = None
     restored_prompt: str = prompt
@@ -986,8 +972,19 @@ async def _run_with_signals(
         persona_config=persona_config,
         session=restored_session,
         task_id=resume_task_id,
-        cancel_event=cancel_event,
     )
+
+    # Register signal handlers after agent is built so they can call agent.interrupt().
+    def _on_signal(reason: InterruptReason) -> None:
+        agent.interrupt(reason)
+        typer.echo(
+            f"\n[ravn] Interrupt received ({reason}) — finishing current tool call …",
+            err=True,
+        )
+
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(signal.SIGINT, lambda: _on_signal(InterruptReason.SIGINT))
+    loop.add_signal_handler(signal.SIGTERM, lambda: _on_signal(InterruptReason.SIGTERM))
 
     try:
         await _chat(
@@ -1000,8 +997,8 @@ async def _run_with_signals(
     except KeyboardInterrupt:
         pass
     finally:
-        # Emit resume hint when cancelled mid-run.
-        if cancel_event.is_set():
+        # Emit resume hint when an interrupt was received.
+        if agent._interrupt_reason is not None:
             typer.echo(
                 f"\n[ravn] State saved. Resume with: ravn --resume {agent.task_id}",
                 err=True,
@@ -1019,20 +1016,7 @@ async def _load_checkpoint_session(
     Returns ``(session, user_input)`` where ``user_input`` is the original
     prompt from the checkpoint (or *fallback_prompt* if no checkpoint exists).
     """
-    from ravn.adapters.checkpoint.disk import DiskCheckpointAdapter
-
-    if settings.memory.backend == "postgres":
-        dsn = os.environ.get(settings.memory.dsn_env, "") if settings.memory.dsn_env else ""
-        dsn = dsn or settings.memory.dsn
-        if dsn:
-            from ravn.adapters.checkpoint.postgres import PostgresCheckpointAdapter
-
-            port = PostgresCheckpointAdapter(dsn=dsn)
-        else:
-            port = DiskCheckpointAdapter()
-    else:
-        port = DiskCheckpointAdapter()
-
+    port = _build_checkpoint(settings)
     checkpoint = await port.load(task_id)
     if checkpoint is None:
         typer.echo(f"[ravn] No checkpoint found for task_id={task_id!r}", err=True)

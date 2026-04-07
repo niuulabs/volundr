@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 import time
@@ -94,7 +93,6 @@ class RavnAgent:
         session: Session | None = None,
         checkpoint_port: CheckpointPort | None = None,
         task_id: str | None = None,
-        cancel_event: asyncio.Event | None = None,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -127,7 +125,7 @@ class RavnAgent:
         self._last_compression_result: CompressionResult | None = None
         self._checkpoint_port = checkpoint_port
         self._task_id = task_id or str(self._session.id)
-        self._cancel_event = cancel_event
+        self._interrupt_reason: InterruptReason | None = None
 
     @property
     def session(self) -> Session:
@@ -163,10 +161,14 @@ class RavnAgent:
         """The checkpoint port, or None if checkpointing is disabled."""
         return self._checkpoint_port
 
-    @property
-    def cancel_event(self) -> asyncio.Event | None:
-        """External cancellation event.  Set it to request graceful stop."""
-        return self._cancel_event
+    def interrupt(self, reason: InterruptReason) -> None:
+        """Signal the agent to stop at the next iteration boundary.
+
+        Thread-safe: may be called from a signal handler or another coroutine.
+        Subsequent calls are ignored (first reason wins).
+        """
+        if self._interrupt_reason is None:
+            self._interrupt_reason = reason
 
     @property
     def llm_adapter_name(self) -> str:
@@ -260,14 +262,14 @@ class RavnAgent:
         for iteration in range(self._max_iterations):
             iterations_used = iteration + 1
 
-            # Check external cancellation (Tyr cancel, SIGINT/SIGTERM via event).
-            if self._cancel_event is not None and self._cancel_event.is_set():
+            # Check external interruption (SIGINT/SIGTERM/Tyr cancel via interrupt()).
+            if self._interrupt_reason is not None:
                 await self._write_checkpoint(
                     user_input=user_input,
                     partial_response=final_response,
                     last_tool_call=turn_tool_calls[-1] if turn_tool_calls else None,
                     last_tool_result=turn_tool_results[-1] if turn_tool_results else None,
-                    interrupted_by=InterruptReason.TYR_CANCEL,
+                    interrupted_by=self._interrupt_reason,
                 )
                 raise MaxIterationsError(self._max_iterations)
 

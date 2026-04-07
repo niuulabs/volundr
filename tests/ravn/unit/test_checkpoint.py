@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -401,11 +400,10 @@ async def test_checkpoint_written_on_budget_exhausted() -> None:
 
 @pytest.mark.asyncio
 async def test_cancel_event_stops_loop_and_checkpoints() -> None:
-    """When cancel_event is set, the loop stops with TYR_CANCEL reason."""
+    """When agent.interrupt() is called, the loop stops with TYR_CANCEL reason."""
     store = InMemoryCheckpointAdapter()
-    cancel_event = asyncio.Event()
 
-    # Tool call triggers first iteration; we set cancel before the second.
+    # Tool call triggers first iteration; we call interrupt before the second.
     call_count = 0
 
     class CancellingLLM(MockLLM):
@@ -424,7 +422,7 @@ async def test_cancel_event_stops_loop_and_checkpoints() -> None:
                     usage=TokenUsage(input_tokens=5, output_tokens=2),
                 )
             else:
-                # Second LLM call: cancel was set before entering this iteration.
+                # Second LLM call: interrupt was called before entering this iteration.
                 yield StreamEvent(type=StreamEventType.TEXT_DELTA, text="cancelled")
                 yield StreamEvent(
                     type=StreamEventType.MESSAGE_DONE,
@@ -443,11 +441,10 @@ async def test_cancel_event_stops_loop_and_checkpoints() -> None:
         max_iterations=10,
         checkpoint_port=store,
         task_id="cancel_task",
-        cancel_event=cancel_event,
     )
 
-    # Set the cancel event before the second iteration fires.
-    cancel_event.set()
+    # Signal cancellation before the second iteration fires.
+    agent.interrupt(InterruptReason.TYR_CANCEL)
     with pytest.raises(MaxIterationsError):
         await agent.run_turn("do work")
 
