@@ -209,9 +209,9 @@ class TestFullTurnSequence:
         all_events: list[dict] = []
 
         all_events.extend(t.translate(RavnEvent.thinking(_SRC, "let me think", _CID, _SID)))
-        all_events.extend(t.translate(
-            RavnEvent.tool_start(_SRC, "Bash", {"command": "ls"}, _CID, _SID)
-        ))
+        all_events.extend(
+            t.translate(RavnEvent.tool_start(_SRC, "Bash", {"command": "ls"}, _CID, _SID))
+        )
         all_events.extend(t.translate(RavnEvent.tool_result(_SRC, "Bash", "file.py", _CID, _SID)))
         all_events.extend(t.translate(RavnEvent.thought(_SRC, "I see ", _CID, _SID)))
         all_events.extend(t.translate(RavnEvent.thought(_SRC, "the file", _CID, _SID)))

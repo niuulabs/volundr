@@ -134,8 +134,7 @@ class TestAgentInterceptsAskUser:
         result_events = [
             e
             for e in channel.events
-            if e.type == RavnEventType.TOOL_RESULT
-            and e.payload.get("tool_name") == "ask_user"
+            if e.type == RavnEventType.TOOL_RESULT and e.payload.get("tool_name") == "ask_user"
         ]
         assert result_events
         assert result_events[0].payload["is_error"] is True

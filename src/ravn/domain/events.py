@@ -21,7 +21,8 @@ class RavnEventType(StrEnum):
 class RavnEvent:
     """An event emitted by the Ravn agent to its output channel."""
 
-    type: RavnEventType       # See RavnEventType enum for valid values
+    # THOUGHT, TOOL_START, TOOL_RESULT, RESPONSE, ERROR, DECISION, TASK_COMPLETE
+    type: RavnEventType
     source: str               # Agent instance ID
     payload: dict             # Event-specific data
     timestamp: datetime       # ISO8601 timestamp
