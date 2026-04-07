@@ -13,7 +13,7 @@ from typing import Any
 from ravn.budget import IterationBudget, TokenEstimator
 from ravn.compression import CompressionResult, ContextCompressor
 from ravn.config import ExtendedThinkingConfig, OutcomeConfig
-from ravn.domain.events import RavnEvent, RavnEventType
+from ravn.domain.events import RavnEvent
 from ravn.domain.exceptions import MaxIterationsError, PermissionDeniedError
 from ravn.domain.models import (
     Episode,
@@ -200,7 +200,9 @@ class RavnAgent:
                     if memory_ctx:
                         effective_system = f"{effective_system}\n\n{memory_ctx}"
                 except Exception:
-                    logger.warning("Memory prefetch failed; continuing without context.", exc_info=True)
+                    logger.warning(
+                        "Memory prefetch failed; continuing without context.", exc_info=True
+                    )
 
         if self._outcome_port is not None:
             try:
@@ -350,7 +352,9 @@ class RavnAgent:
                     memory_ctx = await self._memory.prefetch(user_input)
                     self._prompt_builder.set_memory_context(memory_ctx or "")
                 except Exception:
-                    logger.warning("Memory prefetch failed; continuing without context.", exc_info=True)
+                    logger.warning(
+                        "Memory prefetch failed; continuing without context.", exc_info=True
+                    )
             return self._prompt_builder.render_blocks()
 
         # Legacy: plain-string system prompt with optional memory suffix.
