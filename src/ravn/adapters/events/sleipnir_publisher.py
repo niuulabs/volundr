@@ -33,17 +33,16 @@ class EventPublisher(abc.ABC):
 
 
 class SleipnirPublisher(EventPublisher):
-    """
-    Publishes RavnEvents to Sleipnir using nng PUB socket.
+    """Publishes RavnEvents to Sleipnir using nng PUB socket.
+
     Uses msgpack serialization.
     """
 
     def __init__(self, address: str, fallback_logger: logging.Logger | None = None):
-        """
-        Initialize the Sleipnir publisher.
+        """Initialize the Sleipnir publisher.
 
         Args:
-            address: IPC or TCP address (e.g., 'ipc:///tmp/sleipnir.ipc' or 'tcp://127.0.0.1:5555').
+            address: IPC or TCP address (e.g., 'ipc:///tmp/sleipnir.ipc').
             fallback_logger: Logger to use if Sleipnir is unavailable.
         """
         self.address = address
@@ -76,8 +75,6 @@ class SleipnirPublisher(EventPublisher):
         Args:
             event: A RavnEvent instance.
         """
-        # Prepare data for msgpack
-        # We convert datetime to timestamp for easier serialization
         data = {
             "type": event.type,
             "source": event.source,
