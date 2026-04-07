@@ -119,7 +119,7 @@
     "@codingame/monaco-vscode-preferences-service-override": "^28.4.1",
     "@codingame/monaco-vscode-python-default-extension": "^28.4.1",
     "@codingame/monaco-vscode-r-default-extension": "^28.4.1",
-    "@codingame/monaco-vscode-references-view-default-extension": "^28.4.1",
+    "@codingame/monaco-vscode-references-view-default-extension": "^30.0.0",
     "@codingame/monaco-vscode-relauncher-service-override": "^28.4.1",
     "@codingame/monaco-vscode-remote-agent-service-override": "^28.4.1",
     "@codingame/monaco-vscode-ruby-default-extension": "^28.4.1",
