@@ -1099,7 +1099,7 @@ class CascadeConfig(BaseModel):
     )
     on_stuck: str = Field(
         default="replan",
-        description="Strategy when a stuck sub-agent is detected: retry | replan | escalate | abort.",
+        description="Strategy on stuck detection: retry | replan | escalate | abort.",
     )
     max_retries: int = Field(
         default=2,
