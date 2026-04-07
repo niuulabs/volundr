@@ -39,7 +39,6 @@ import json
 import logging
 import secrets
 import socket
-from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -48,6 +47,7 @@ from ravn.adapters.discovery._identity import (
     realm_id_hash,
 )
 from ravn.domain.models import RavnCandidate, RavnIdentity, RavnPeer
+from ravn.ports.discovery import PeerCallback
 
 if TYPE_CHECKING:
     from ravn.config import DiscoveryConfig
@@ -68,8 +68,6 @@ except ImportError:  # pragma: no cover
     pynng = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
-
-PeerCallback = Callable[[RavnPeer], None]
 
 _HANDSHAKE_PREFIX = "ravn-handshake"
 
@@ -300,7 +298,7 @@ class MdnsDiscoveryAdapter:
         state_change: object,
     ) -> None:
         """mDNS browse callback — fires on add/remove/update."""
-        asyncio.get_event_loop().call_soon_threadsafe(
+        asyncio.get_running_loop().call_soon_threadsafe(
             asyncio.ensure_future,
             self._handle_service_event(zeroconf, service_type, name, state_change),
         )
@@ -344,7 +342,8 @@ class MdnsDiscoveryAdapter:
             )
             return
 
-        host = info.parsed_addresses()[0] if info.parsed_addresses() else ""  # type: ignore[attr-defined]
+        addresses = info.parsed_addresses()  # type: ignore[attr-defined]
+        host = addresses[0] if addresses else ""
         port = info.port  # type: ignore[attr-defined]
         candidate = RavnCandidate(
             peer_id=peer_id,
@@ -522,7 +521,7 @@ class MdnsDiscoveryAdapter:
 
             candidate = self._candidates.get(peer_id_a)
             peer = self._peer_from_identity_dict(peer_identity_raw, candidate)
-            asyncio.get_event_loop().call_soon_threadsafe(self._add_peer, peer)
+            asyncio.get_running_loop().call_soon_threadsafe(self._add_peer, peer)
         except Exception as exc:
             logger.debug("mdns_discovery: responder error: %s", exc)
 

@@ -29,11 +29,11 @@ import asyncio
 import json
 import logging
 import os
-from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from ravn.domain.models import RavnCandidate, RavnIdentity, RavnPeer
+from ravn.ports.discovery import PeerCallback
 
 if TYPE_CHECKING:
     from ravn.config import DiscoveryConfig, SleipnirConfig
@@ -44,8 +44,6 @@ except ImportError:  # pragma: no cover
     aio_pika = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
-
-PeerCallback = Callable[[RavnPeer], None]
 
 _ANNOUNCE_ROUTING_KEY = "ravn.mesh.announce"
 _EXCHANGE_NAME = "ravn.mesh"

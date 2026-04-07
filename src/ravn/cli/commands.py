@@ -1627,35 +1627,33 @@ async def _run_peers(settings: Settings, *, verbose: bool, force_scan: bool) -> 
     await discovery.stop()
 
 
+_DISCOVERY_ALIASES: dict[str, str] = {
+    "mdns": "ravn.adapters.discovery.mdns.MdnsDiscoveryAdapter",
+    "sleipnir": "ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter",
+    "k8s": "ravn.adapters.discovery.k8s.K8sDiscoveryAdapter",
+    "composite": "ravn.adapters.discovery.composite.CompositeDiscoveryAdapter",
+}
+
+# Adapters that need sleipnir_config injected in addition to config + own_identity.
+_SLEIPNIR_KWARGS_ADAPTERS = {"ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter"}
+
+
 def _build_discovery_adapter(name: str, settings: Settings, identity: Any) -> Any:
-    """Instantiate a discovery adapter by name."""
-    if name == "mdns":
-        from ravn.adapters.discovery.mdns import MdnsDiscoveryAdapter
+    """Instantiate a discovery adapter by short name or fully-qualified class path.
 
-        return MdnsDiscoveryAdapter(config=settings.discovery, own_identity=identity)
+    Single-backend adapters are resolved via dynamic import (dynamic-adapters pattern).
+    The composite case is special: its sub-backends are wired explicitly.
+    """
+    fq_class = _DISCOVERY_ALIASES.get(name, name)
 
-    if name == "sleipnir":
-        from ravn.adapters.discovery.sleipnir import SleipnirDiscoveryAdapter
-
-        return SleipnirDiscoveryAdapter(
-            config=settings.discovery,
-            sleipnir_config=settings.sleipnir,
-            own_identity=identity,
-        )
-
-    if name == "k8s":
-        from ravn.adapters.discovery.k8s import K8sDiscoveryAdapter
-
-        return K8sDiscoveryAdapter(config=settings.discovery, own_identity=identity)
-
-    if name == "composite":
+    if fq_class == _DISCOVERY_ALIASES["composite"]:
         from ravn.adapters.discovery.composite import CompositeDiscoveryAdapter
-        from ravn.adapters.discovery.mdns import MdnsDiscoveryAdapter
-        from ravn.adapters.discovery.sleipnir import SleipnirDiscoveryAdapter
 
+        mdns_cls = _import_class(_DISCOVERY_ALIASES["mdns"])
+        sleipnir_cls = _import_class(_DISCOVERY_ALIASES["sleipnir"])
         backends: list[Any] = [
-            MdnsDiscoveryAdapter(config=settings.discovery, own_identity=identity),
-            SleipnirDiscoveryAdapter(
+            mdns_cls(config=settings.discovery, own_identity=identity),
+            sleipnir_cls(
                 config=settings.discovery,
                 sleipnir_config=settings.sleipnir,
                 own_identity=identity,
@@ -1663,10 +1661,11 @@ def _build_discovery_adapter(name: str, settings: Settings, identity: Any) -> An
         ]
         return CompositeDiscoveryAdapter(backends=backends)
 
-    logger.warning("Unknown discovery adapter %r — defaulting to mdns", name)
-    from ravn.adapters.discovery.mdns import MdnsDiscoveryAdapter
-
-    return MdnsDiscoveryAdapter(config=settings.discovery, own_identity=identity)
+    cls = _import_class(fq_class)
+    kwargs: dict[str, Any] = {"config": settings.discovery, "own_identity": identity}
+    if fq_class in _SLEIPNIR_KWARGS_ADAPTERS:
+        kwargs["sleipnir_config"] = settings.sleipnir
+    return cls(**kwargs)
 
 
 def main() -> None:

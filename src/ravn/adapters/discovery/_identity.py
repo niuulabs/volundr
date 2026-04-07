@@ -26,6 +26,7 @@ def load_or_create_peer_id() -> str:
         return path.read_text().strip()
     peer_id = str(uuid.uuid4())
     path.write_text(peer_id)
+    path.chmod(0o600)
     return peer_id
 
 
@@ -38,6 +39,7 @@ def load_or_create_realm_key() -> bytes:
         return path.read_bytes()
     key = os.urandom(32)
     path.write_bytes(key)
+    path.chmod(0o600)
     return key
 
 

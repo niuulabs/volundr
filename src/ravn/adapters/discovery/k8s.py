@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from ravn.domain.models import RavnCandidate, RavnIdentity, RavnPeer
+from ravn.ports.discovery import PeerCallback
 
 if TYPE_CHECKING:
     from ravn.config import DiscoveryConfig
@@ -33,8 +33,6 @@ except ImportError:  # pragma: no cover
     k8s_config = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
-
-PeerCallback = Callable[[RavnPeer], None]
 
 _ANN_PEER_ID = "ravn.niuu.world/peer-id"
 _ANN_PERSONA = "ravn.niuu.world/persona"

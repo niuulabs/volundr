@@ -13,13 +13,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
 
 from ravn.domain.models import RavnCandidate, RavnIdentity, RavnPeer
+from ravn.ports.discovery import PeerCallback
 
 logger = logging.getLogger(__name__)
-
-PeerCallback = Callable[[RavnPeer], None]
 
 
 class CompositeDiscoveryAdapter:
