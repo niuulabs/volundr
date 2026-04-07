@@ -39,65 +39,13 @@ from ravn.config import InitiativeConfig, Settings
 from ravn.domain.models import AgentTask, OutputMode
 from ravn.drive_loop import DriveLoop
 from ravn.ports.spawn import SpawnConfig
-
-# ---------------------------------------------------------------------------
-# Fixtures and stubs
-# ---------------------------------------------------------------------------
-
-
-def _make_agent_task(task_id: str = "task_001") -> AgentTask:
-    return AgentTask(
-        task_id=task_id,
-        title="test task",
-        initiative_context="do something",
-        triggered_by="test",
-        output_mode=OutputMode.SILENT,
-    )
-
-
-def _make_drive_loop() -> DriveLoop:
-    """Build a minimal DriveLoop with a mock agent_factory."""
-    agent_factory = MagicMock(return_value=AsyncMock())
-    cfg = InitiativeConfig(enabled=True, max_concurrent_tasks=3, task_queue_max=50)
-    settings = MagicMock(spec=Settings)
-    return DriveLoop(agent_factory=agent_factory, config=cfg, settings=settings)
-
-
-class _FakePeer:
-    def __init__(self, peer_id: str, status: str = "idle", capabilities: list | None = None):
-        self.peer_id = peer_id
-        self.status = status
-        self.capabilities = capabilities or []
-        self.persona = "default"
-        self.host = "localhost"
-        self.task_count = 0
-
-
-class _FakeDiscovery:
-    def __init__(self, peers: dict | None = None):
-        self._peers = peers or {}
-
-    def peers(self) -> dict:
-        return self._peers
-
-
-class _FakeSpawnAdapter:
-    def __init__(self, peer_ids: list[str] | None = None):
-        self._peer_ids = peer_ids or ["spawned-peer-1"]
-        self.spawned_configs: list[SpawnConfig] = []
-        self.terminated: list[str] = []
-        self.all_terminated = False
-
-    async def spawn(self, count: int, config: SpawnConfig) -> list[str]:
-        self.spawned_configs.append(config)
-        return self._peer_ids[:count]
-
-    async def terminate(self, peer_id: str) -> None:
-        self.terminated.append(peer_id)
-
-    async def terminate_all(self) -> None:
-        self.all_terminated = True
-
+from tests.test_ravn.conftest import (
+    _FakeDiscovery,
+    _FakePeer,
+    _FakeSpawnAdapter,
+    _make_agent_task,
+    _make_drive_loop,
+)
 
 # ---------------------------------------------------------------------------
 # DriveLoop.task_status tests
@@ -187,17 +135,19 @@ async def test_mesh_rpc_task_dispatch():
         with patch("ravn.cli.commands._build_discovery", side_effect=RuntimeError("disabled")):
             _wire_cascade(dl, settings)
 
-    reply = await dl.handle_rpc({
-        "type": "task_dispatch",
-        "task": {
-            "task_id": "rpc-task-1",
-            "title": "RPC dispatched task",
-            "initiative_context": "run something",
-            "triggered_by": "cascade:test",
-            "output_mode": "silent",
-            "priority": 5,
-        },
-    })
+    reply = await dl.handle_rpc(
+        {
+            "type": "task_dispatch",
+            "task": {
+                "task_id": "rpc-task-1",
+                "title": "RPC dispatched task",
+                "initiative_context": "run something",
+                "triggered_by": "cascade:test",
+                "output_mode": "silent",
+                "priority": 5,
+            },
+        }
+    )
     assert reply["status"] == "accepted"
     assert reply["task_id"] == "rpc-task-1"
     assert dl.task_status("rpc-task-1") == "queued"
@@ -396,11 +346,13 @@ class TestTaskCreateTool:
         mesh = AsyncMock()
 
         tool = TaskCreateTool(drive_loop=dl, mesh=mesh, discovery=discovery)
-        result = await tool.execute({
-            "prompt": "work",
-            "title": "task",
-            "required_caps": ["gpu"],
-        })
+        result = await tool.execute(
+            {
+                "prompt": "work",
+                "title": "task",
+                "required_caps": ["gpu"],
+            }
+        )
         data = json.loads(result.content)
         # No peer with gpu capability → local
         assert data["location"] == "local"

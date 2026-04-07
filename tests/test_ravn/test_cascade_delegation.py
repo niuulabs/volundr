@@ -42,98 +42,22 @@ from ravn.adapters.tools.cascade_tools import (
     build_cascade_tools,
 )
 from ravn.budget import IterationBudget
-from ravn.config import InitiativeConfig, Settings
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.models import AgentTask, OutputMode, SharedContext
-from ravn.drive_loop import DriveLoop
 from ravn.ports.spawn import SpawnConfig
+from tests.test_ravn.conftest import (
+    _FakeDiscovery,
+    _FakePeer,
+    _FakeSpawnAdapter,
+    _make_agent_task,
+    _make_drive_loop,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 _TASK_ID_PATTERN = re.compile(r"^task_\d{14}_[0-9a-f]{6}$")
-
-# Use a path that DriveLoop will silently fail to write (permission error) so
-# journal persistence does not cause duplicate task restoration in tests.
-_NO_JOURNAL_PATH = "/proc/no_such_dir/queue.json"
-
-
-def _make_drive_loop(
-    max_concurrent: int = 3,
-    queue_max: int = 50,
-    event_publisher: object | None = None,
-    agent_factory: object | None = None,
-    heartbeat_seconds: int = 60,
-    journal_path: str = _NO_JOURNAL_PATH,
-) -> DriveLoop:
-    if agent_factory is None:
-        agent_factory = MagicMock(return_value=AsyncMock())
-    cfg = InitiativeConfig(
-        enabled=True,
-        max_concurrent_tasks=max_concurrent,
-        task_queue_max=queue_max,
-        queue_journal_path=journal_path,
-        heartbeat_interval_seconds=heartbeat_seconds,
-    )
-    settings = MagicMock(spec=Settings)
-    kwargs: dict = {"agent_factory": agent_factory, "config": cfg, "settings": settings}
-    if event_publisher is not None:
-        kwargs["event_publisher"] = event_publisher
-    return DriveLoop(**kwargs)
-
-
-def _make_agent_task(
-    task_id: str = "task_001",
-    output_mode: OutputMode = OutputMode.SILENT,
-    priority: int = 10,
-    deadline: datetime | None = None,
-) -> AgentTask:
-    return AgentTask(
-        task_id=task_id,
-        title="test task",
-        initiative_context="do something",
-        triggered_by="test",
-        output_mode=output_mode,
-        priority=priority,
-        deadline=deadline,
-    )
-
-
-class _FakePeer:
-    def __init__(self, peer_id: str, status: str = "idle", capabilities: list | None = None):
-        self.peer_id = peer_id
-        self.status = status
-        self.capabilities = capabilities or []
-        self.persona = "default"
-        self.host = "localhost"
-        self.task_count = 0
-
-
-class _FakeDiscovery:
-    def __init__(self, peers: dict | None = None):
-        self._peers = peers or {}
-
-    def peers(self) -> dict:
-        return self._peers
-
-
-class _FakeSpawnAdapter:
-    def __init__(self, peer_ids: list[str] | None = None):
-        self._peer_ids = peer_ids or ["spawned-peer-1"]
-        self.spawned_configs: list[SpawnConfig] = []
-        self.terminated: list[str] = []
-        self.all_terminated = False
-
-    async def spawn(self, count: int, config: SpawnConfig) -> list[str]:
-        self.spawned_configs.append(config)
-        return self._peer_ids[:count]
-
-    async def terminate(self, peer_id: str) -> None:
-        self.terminated.append(peer_id)
-
-    async def terminate_all(self) -> None:
-        self.all_terminated = True
 
 
 class _RecordingPublisher:
@@ -623,21 +547,7 @@ class TestDriveLoopHeartbeat:
     async def test_heartbeat_publishes_event(self):
         """Heartbeat publishes events with heartbeat=True in the payload."""
         publisher = _RecordingPublisher()
-
-        cfg = InitiativeConfig(
-            enabled=True,
-            max_concurrent_tasks=1,
-            task_queue_max=10,
-            heartbeat_interval_seconds=1,
-            queue_journal_path=_NO_JOURNAL_PATH,
-        )
-        settings = MagicMock(spec=Settings)
-        dl = DriveLoop(
-            agent_factory=MagicMock(return_value=AsyncMock()),
-            config=cfg,
-            settings=settings,
-            event_publisher=publisher,
-        )
+        dl = _make_drive_loop(heartbeat_seconds=1, event_publisher=publisher)
 
         loop_task = asyncio.create_task(dl.run())
         await asyncio.sleep(1.1)  # wait for at least one heartbeat tick
