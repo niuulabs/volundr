@@ -43,7 +43,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import socket
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable
@@ -58,6 +57,12 @@ from ravn.ports.channel import ChannelPort
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# Strategy type — defined before constants so the annotation is valid
+# ---------------------------------------------------------------------------
+
+OnStuckStrategy = Literal["retry", "replan", "escalate", "abort"]
+
+# ---------------------------------------------------------------------------
 # Constants — overridden by CascadeConfig when wired through build_cascade_tools
 # ---------------------------------------------------------------------------
 
@@ -66,8 +71,6 @@ _DEFAULT_LOOP_THRESHOLD: int = 3
 _DEFAULT_ON_STUCK: OnStuckStrategy = "replan"
 _DEFAULT_MAX_RETRIES: int = 2
 _DEFAULT_POLL_INTERVAL_S: float = 5.0
-
-OnStuckStrategy = Literal["retry", "replan", "escalate", "abort"]
 
 
 # ---------------------------------------------------------------------------
@@ -317,11 +320,21 @@ async def _emit_task_stuck_event(
     task_id: str,
     reason: StuckReason,
     channel: ChannelPort,
+    *,
+    source: str,
 ) -> None:
-    """Emit a ``ravn.task.stuck`` event to *channel*."""
+    """Emit a ``ravn.task.stuck`` event to *channel*.
+
+    Parameters
+    ----------
+    source:
+        Agent identifier forwarded to :attr:`RavnEvent.source`.  Callers
+        should pass a stable agent ID rather than resolving the hostname here
+        so the value stays consistent across the lifetime of the agent.
+    """
     event = RavnEvent(
         type=RavnEventType.TASK_STUCK,
-        source=socket.gethostname(),
+        source=source,
         payload={"task_id": task_id, "reason": str(reason)},
         timestamp=datetime.now(UTC),
         urgency=0.9,
@@ -335,6 +348,7 @@ async def _emit_task_stuck_event(
 def build_stuck_handler(
     config: WatchdogConfig,
     *,
+    source: str = "watchdog",
     cancel_fn: Callable[[], Awaitable[None]] | None = None,
     escalate_channel: ChannelPort | None = None,
     replan_callback: Callable[[str, StuckReason], Awaitable[None]] | None = None,
@@ -354,6 +368,10 @@ def build_stuck_handler(
     ----------
     config:
         Watchdog configuration (determines the active strategy).
+    source:
+        Agent identifier forwarded to the ``ravn.task.stuck`` event's
+        ``source`` field.  Defaults to ``"watchdog"``; callers should pass
+        the agent's stable ID (e.g. hostname or peer_id).
     cancel_fn:
         Async callable that stops/cancels the monitored task.  All strategies
         call this; pass ``None`` only in tests where cancellation is a no-op.
@@ -370,7 +388,7 @@ def build_stuck_handler(
 
         if strategy == "escalate":
             if escalate_channel is not None:
-                await _emit_task_stuck_event(task_id, reason, escalate_channel)
+                await _emit_task_stuck_event(task_id, reason, escalate_channel, source=source)
             else:
                 logger.warning(
                     "watchdog: escalate strategy but no escalate_channel configured"

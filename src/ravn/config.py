@@ -1097,7 +1097,7 @@ class CascadeConfig(BaseModel):
         default=3,
         description="Number of consecutive identical tool calls that trigger loop detection.",
     )
-    on_stuck: str = Field(
+    on_stuck: Literal["retry", "replan", "escalate", "abort"] = Field(
         default="replan",
         description="Strategy on stuck detection: retry | replan | escalate | abort.",
     )
