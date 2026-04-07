@@ -205,7 +205,9 @@ _SID = "sess-1"
 
 class TestRavnEventToolStart:
     def test_no_diff_key_when_diff_is_none(self) -> None:
-        event = RavnEvent.tool_start(_SRC, "write_file", {"path": "f.py", "content": "x"}, _CID, _SID)
+        event = RavnEvent.tool_start(
+            _SRC, "write_file", {"path": "f.py", "content": "x"}, _CID, _SID
+        )
         assert "diff" not in event.payload
 
     def test_diff_key_present_when_diff_provided(self) -> None:
