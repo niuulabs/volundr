@@ -1049,7 +1049,7 @@ class Settings(BaseSettings):
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
 
     # NIU-541: Búri knowledge memory substrate
-    buri: BuriConfig = Field(default_factory=lambda: BuriConfig())
+    buri: BuriConfig = Field(default_factory=BuriConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)

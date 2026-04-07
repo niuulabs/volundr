@@ -125,7 +125,7 @@ def _build_llm(settings: Settings) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def _build_memory(settings: Settings) -> Any:
+def _build_memory(settings: Settings, llm: Any = None) -> Any:
     """Build the memory adapter (SQLite or Postgres), or None."""
     backend = settings.memory.backend
 
@@ -196,6 +196,7 @@ def _build_memory(settings: Settings) -> Any:
             min_confidence=bc.min_confidence,
             session_summary_max_tokens=bc.session_summary_max_tokens,
             supersession_cosine_threshold=bc.supersession_cosine_threshold,
+            llm=llm,
         )
 
     # Custom backend via fully-qualified class path
@@ -413,6 +414,26 @@ def _build_tools(
     if memory is not None:
         tools.append(RavnMemorySearchTool(memory))
         tools.append(SessionSearchTool(memory))
+
+    # -- Búri knowledge tools (buri backend only) --
+    from ravn.ports.memory import BuriMemoryPort
+
+    if isinstance(memory, BuriMemoryPort):
+        from ravn.adapters.tools.buri_tools import (
+            BuriFactsTool,
+            BuriForgetTool,
+            BuriHistoryTool,
+            BuriRecallTool,
+            BuriRememberTool,
+        )
+
+        tools.extend([
+            BuriRecallTool(memory),
+            BuriFactsTool(memory),
+            BuriHistoryTool(memory),
+            BuriRememberTool(memory, session_id=str(session.id)),
+            BuriForgetTool(memory),
+        ])
 
     # -- Custom tools from config --
     for ct in settings.tools.custom:
@@ -768,7 +789,7 @@ def _build_agent(
     permission = _build_permission(
         settings, workspace, no_tools=no_tools, persona_config=persona_config,
     )
-    memory = _build_memory(settings)
+    memory = _build_memory(settings, llm=llm)
     outcome_port, outcome_config = _build_outcome(settings)
     iteration_budget = IterationBudget(
         total=settings.iteration_budget.total,
@@ -1162,7 +1183,7 @@ async def _run_gateway(
     # Shared resources (safe to reuse across sessions)
     workspace = _resolve_workspace(settings)
     llm = _build_llm(settings)
-    memory = _build_memory(settings)
+    memory = _build_memory(settings, llm=llm)
     outcome_port, outcome_config = _build_outcome(settings)
     compressor = _build_compressor(settings, llm)
     prompt_builder = _build_prompt_builder(settings)

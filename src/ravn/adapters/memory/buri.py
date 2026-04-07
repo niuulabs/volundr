@@ -20,11 +20,13 @@ import math
 import os
 import re
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
 import asyncpg
 
+from ravn.adapters.memory.postgres import _row_to_episode
 from ravn.adapters.memory.scoring import (
     _AVG_EPISODE_CHARS,
     _CHARS_PER_TOKEN,
@@ -32,6 +34,7 @@ from ravn.adapters.memory.scoring import (
     _recency_score,
     build_prefetch_context,
     build_session_summaries,
+    cosine_similarity,
 )
 from ravn.domain.models import (
     Episode,
@@ -40,7 +43,6 @@ from ravn.domain.models import (
     KnowledgeFact,
     KnowledgeRelationship,
     MemoryCluster,
-    Outcome,
     SessionState,
     SessionSummary,
     SharedContext,
@@ -85,18 +87,6 @@ _MAX_EXTRACTION_INPUT_CHARS = 8_000
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Compute cosine similarity between two equal-length vectors."""
-    if len(a) != len(b) or not a:
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(y * y for y in b))
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot / (norm_a * norm_b)
 
 
 def _unit_normalise(vec: list[float]) -> list[float]:
@@ -395,31 +385,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
 
         matches: list[EpisodeMatch] = []
         for row in rows:
-            ts = row["timestamp"]
-            if isinstance(ts, str):
-                ts = datetime.fromisoformat(ts)
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=UTC)
-
-            tools_used = row["tools_used"]
-            if isinstance(tools_used, str):
-                tools_used = json.loads(tools_used)
-
-            tags = row["tags"]
-            if isinstance(tags, str):
-                tags = json.loads(tags)
-
-            episode = Episode(
-                episode_id=row["episode_id"],
-                session_id=row["session_id"],
-                timestamp=ts,
-                summary=row["summary"],
-                task_description=row["task_description"],
-                tools_used=list(tools_used),
-                outcome=Outcome(row["outcome"]),
-                tags=list(tags),
-                embedding=None,
-            )
+            episode = _row_to_episode(row)
             ts_rank_val = float(row["rank_score"])
             recency = _recency_score(episode.timestamp, self._recency_half_life_days)
             weight = _OUTCOME_WEIGHTS.get(episode.outcome, 0.5)
@@ -480,28 +446,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
 
         episodes: list[Episode] = []
         for row in rows:
-            ts = row["timestamp"]
-            if isinstance(ts, str):
-                ts = datetime.fromisoformat(ts)
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=UTC)
-            tools_used = row["tools_used"]
-            if isinstance(tools_used, str):
-                tools_used = json.loads(tools_used)
-            tags = row["tags"]
-            if isinstance(tags, str):
-                tags = json.loads(tags)
-            episodes.append(Episode(
-                episode_id=row["episode_id"],
-                session_id=row["session_id"],
-                timestamp=ts,
-                summary=row["summary"],
-                task_description=row["task_description"],
-                tools_used=list(tools_used),
-                outcome=Outcome(row["outcome"]),
-                tags=list(tags),
-                embedding=None,
-            ))
+            episodes.append(_row_to_episode(row))
 
         return build_session_summaries(episodes, limit, self._session_search_truncate_chars)
 
@@ -937,7 +882,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
         for candidate in candidates:
             if candidate.embedding is None:
                 continue
-            sim = _cosine_similarity(new_fact.embedding, candidate.embedding)
+            sim = cosine_similarity(new_fact.embedding, candidate.embedding)
             if sim > best_score:
                 best_score = sim
                 best = candidate
@@ -967,7 +912,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
         best_cluster: MemoryCluster | None = None
         best_distance = float("inf")
         for cluster in clusters:
-            sim = _cosine_similarity(unit_vec, cluster.centroid)
+            sim = cosine_similarity(unit_vec, cluster.centroid)
             distance = 1.0 - sim
             if distance < best_distance:
                 best_distance = distance
@@ -1171,5 +1116,4 @@ class BuriMemoryAdapter(BuriMemoryPort):
 
 def _with_cluster(fact: KnowledgeFact, cluster_id: str | None) -> KnowledgeFact:
     """Return a copy of *fact* with *cluster_id* set."""
-    from dataclasses import replace
     return replace(fact, cluster_id=cluster_id)

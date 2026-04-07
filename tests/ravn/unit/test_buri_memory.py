@@ -26,13 +26,13 @@ import pytest
 from ravn.adapters.memory.buri import (
     _TYPE_WEIGHTS,
     BuriMemoryAdapter,
-    _cosine_similarity,
     _detect_inline_fact_type,
     _extract_entities_from_content,
     _running_mean,
     _unit_normalise,
     _with_cluster,
 )
+from ravn.adapters.memory.scoring import cosine_similarity as _cosine_similarity
 from ravn.adapters.tools.buri_tools import (
     BuriFactsTool,
     BuriForgetTool,

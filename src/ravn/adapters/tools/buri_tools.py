@@ -13,6 +13,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
+from ravn.adapters.memory.buri import _detect_inline_fact_type, _extract_entities_from_content
 from ravn.domain.models import FactType, KnowledgeFact, ToolResult
 from ravn.ports.memory import BuriMemoryPort
 from ravn.ports.tool import ToolPort
@@ -316,13 +317,11 @@ class BuriRememberTool(ToolPort):
                 )
         else:
             # Auto-classify from content using simple heuristics
-            from ravn.adapters.memory.buri import _detect_inline_fact_type
             detected = _detect_inline_fact_type(content)
             fact_type = detected if detected is not None else FactType.OBSERVATION
 
         entities_raw = input.get("entities", [])
         if not entities_raw:
-            from ravn.adapters.memory.buri import _extract_entities_from_content
             entities_raw = _extract_entities_from_content(content)
 
         fact = KnowledgeFact(

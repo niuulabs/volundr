@@ -31,7 +31,7 @@ from ravn.domain.models import (
 )
 from ravn.ports.channel import ChannelPort
 from ravn.ports.llm import LLMPort, SystemPrompt
-from ravn.ports.memory import MemoryPort
+from ravn.ports.memory import BuriMemoryPort, MemoryPort
 from ravn.ports.outcome import OutcomePort
 from ravn.ports.permission import PermissionPort
 from ravn.ports.tool import ToolPort
@@ -217,6 +217,12 @@ class RavnAgent:
         # Determine whether explicit thinking was requested for this turn.
         explicit_thinking, user_input = _parse_think_flag(user_input)
 
+        if isinstance(self._memory, BuriMemoryPort):
+            try:
+                await self._memory.process_inline_facts(str(self._session.id), user_input)
+            except Exception:
+                logger.warning("Buri inline fact detection failed; continuing.", exc_info=True)
+
         self._session.add_message(Message(role="user", content=user_input))
 
         turn_tool_calls: list[ToolCall] = []
@@ -336,6 +342,14 @@ class RavnAgent:
                 )
             except Exception:
                 logger.warning("Outcome recording failed; continuing.")
+
+        if isinstance(self._memory, BuriMemoryPort):
+            try:
+                await self._memory.update_session_state(
+                    str(self._session.id), user_input, final_response
+                )
+            except Exception:
+                logger.warning("Buri session state update failed; continuing.", exc_info=True)
 
         return result
 
