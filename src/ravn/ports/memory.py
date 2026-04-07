@@ -92,6 +92,16 @@ class MemoryPort(ABC):
         """
         return []
 
+    async def process_inline_facts(self, session_id: str, user_input: str) -> list:
+        """Detect and persist inline fact patterns from *user_input*.
+
+        Default implementation is a no-op returning an empty list.
+        BuriMemoryAdapter overrides this for regex-based fact detection.
+        Called unconditionally at the start of run_turn() — no isinstance
+        check at the call site.
+        """
+        return []
+
     async def on_turn_complete(
         self,
         session_id: str,

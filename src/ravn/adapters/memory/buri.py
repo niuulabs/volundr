@@ -22,7 +22,10 @@ import re
 import uuid
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ravn.ports.tool import ToolPort
 
 import asyncpg
 
@@ -829,7 +832,7 @@ class BuriMemoryAdapter(BuriMemoryPort):
     # MemoryPort hook overrides
     # ------------------------------------------------------------------
 
-    def extra_tools(self, session_id: str) -> list:
+    def extra_tools(self, session_id: str) -> list[ToolPort]:
         """Return the five Búri agent tools for this adapter."""
         from ravn.adapters.tools.buri_tools import (
             BuriFactsTool,

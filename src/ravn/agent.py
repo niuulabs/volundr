@@ -217,11 +217,11 @@ class RavnAgent:
         # Determine whether explicit thinking was requested for this turn.
         explicit_thinking, user_input = _parse_think_flag(user_input)
 
-        if self._memory is not None and hasattr(self._memory, "process_inline_facts"):
+        if self._memory is not None:
             try:
                 await self._memory.process_inline_facts(str(self._session.id), user_input)
             except Exception:
-                logger.warning("Buri inline fact detection failed; continuing.", exc_info=True)
+                logger.warning("Inline fact detection failed; continuing.", exc_info=True)
 
         self._session.add_message(Message(role="user", content=user_input))
 
