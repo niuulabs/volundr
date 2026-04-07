@@ -438,23 +438,27 @@ def test_is_source_stale_returns_false_for_unknown_source(tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_lint_detects_stale_source(tmp_path: Path) -> None:
+async def test_lint_stale_always_empty(tmp_path: Path) -> None:
+    """Lint never populates the stale field.
+
+    Staleness requires re-fetching source URLs, which the lint pass does not do.
+    Use is_source_stale() before re-ingesting a source to detect changes.
+    """
     adapter = _make_adapter(tmp_path)
     src = _make_source(title="Stale Doc", content="original")
     await adapter.ingest(src)
 
-    # Write a page that references this source
     page_content = f"# Stale\n\nDerived from source.\n<!-- sources: {src.source_id} -->"
     await adapter.upsert_page("research/stale.md", page_content)
 
-    # Tamper with the stored hash to simulate changed source
+    # Even if the raw JSON hash is tampered with, lint always returns stale=[]
     raw_path = tmp_path / "mimir" / "raw" / f"{src.source_id}.json"
     data = json.loads(raw_path.read_text())
     data["content_hash"] = "badhash"
     raw_path.write_text(json.dumps(data))
 
     report = await adapter.lint()
-    assert "research/stale.md" in report.stale
+    assert report.stale == []
 
 
 # ---------------------------------------------------------------------------

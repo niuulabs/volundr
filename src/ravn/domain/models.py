@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
@@ -467,7 +467,7 @@ class MimirSource:
     source_id: str
     title: str
     content: str
-    source_type: str  # "web" | "document" | "conversation" | "tool_output" | "research"
+    source_type: Literal["web", "document", "conversation", "tool_output", "research"]
     ingested_at: datetime
     content_hash: str  # SHA-256 hex — used for staleness detection
     origin_url: str | None = None

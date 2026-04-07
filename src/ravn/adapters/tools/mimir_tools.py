@@ -11,10 +11,10 @@ Tools:
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from datetime import UTC, datetime
 
+from ravn.adapters.mimir.markdown import MarkdownMimirAdapter
 from ravn.domain.models import MimirSource, ToolResult
 from ravn.ports.mimir import MimirPort
 from ravn.ports.tool import ToolPort
@@ -25,12 +25,8 @@ _PERMISSION = "mimir:write"
 _PERMISSION_READ = "mimir:read"
 
 
-def _sha256(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
-
-
-def _source_id_from_title(title: str) -> str:
-    return "src_" + _sha256(title)[:16]
+def _source_id_from_content(title: str, content: str) -> str:
+    return "src_" + MarkdownMimirAdapter.compute_content_hash(f"{title}:{content}")[:16]
 
 
 # ---------------------------------------------------------------------------
@@ -98,12 +94,12 @@ class MimirIngestTool(ToolPort):
             return ToolResult(tool_call_id="", content="title is required", is_error=True)
 
         source = MimirSource(
-            source_id=_source_id_from_title(title),
+            source_id=_source_id_from_content(title, content),
             title=title,
             content=content,
             source_type=source_type,
             origin_url=origin_url,
-            content_hash=_sha256(content),
+            content_hash=MarkdownMimirAdapter.compute_content_hash(content),
             ingested_at=datetime.now(UTC),
         )
 
@@ -399,9 +395,12 @@ class MimirLintTool(ToolPort):
     async def execute(self, input: dict) -> ToolResult:
         report = await self._adapter.lint()
 
+        issue_count = (
+            len(report.orphans) + len(report.contradictions) + len(report.stale) + len(report.gaps)
+        )
         lines = [
             f"## Mímir lint — {report.pages_checked} pages checked\n",
-            f"Issues found: {report.issues_found}",
+            f"Issues found: {issue_count}",
             "",
         ]
 

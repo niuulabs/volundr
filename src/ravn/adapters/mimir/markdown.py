@@ -14,6 +14,15 @@ Directory layout (all paths relative to the configured ``root``):
 The adapter is intentionally LLM-free: it manages the *filesystem layer* only.
 All synthesis (writing page content, answering queries) is performed by the
 Ravn agent using the six mimir_* tool wrappers.
+
+Staleness detection note
+------------------------
+Lint-level staleness detection (checking whether a wiki page's source has
+changed) cannot re-fetch remote URLs, so the lint pass never populates the
+``stale`` field of ``MimirLintReport``.  Real staleness detection is triggered
+during re-ingest: call ``is_source_stale(source_id, current_content)`` *before*
+calling ``ingest()`` — if it returns True, the source has changed and the
+derived wiki pages should be reviewed and updated.
 """
 
 from __future__ import annotations
@@ -25,6 +34,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ravn.adapters.tools.file_security import PathSecurityError
 from ravn.domain.models import (
     MimirLintReport,
     MimirPage,
@@ -75,8 +85,14 @@ MIMIR.md            — this file
   update `index.md` → append to `log.md`
 - **Query**: read `index.md` → read relevant pages → synthesise answer →
   optionally write answer as new page → append to `log.md`
-- **Lint**: scan for orphans, contradictions, staleness, gaps →
+- **Lint**: scan for orphans, contradictions, gaps →
   fix or flag → update `index.md` and `log.md`
+
+## Staleness detection
+
+Lint cannot re-fetch remote URLs so it does not populate the `stale` report
+field.  Call `is_source_stale(source_id, current_content)` before re-ingesting
+a source to detect whether the original content has changed.
 
 ## Log entry format
 
@@ -149,6 +165,26 @@ class MarkdownMimirAdapter(MimirPort):
             self._log.write_text("# Mímir — activity log\n\n", encoding="utf-8")
 
     # ------------------------------------------------------------------
+    # Path security
+    # ------------------------------------------------------------------
+
+    def _safe_wiki_path(self, path: str) -> Path:
+        """Resolve *path* to an absolute path that lies within the wiki root.
+
+        Raises ``PathSecurityError`` if the resolved path escapes the wiki
+        directory (e.g. due to ``../`` traversal components).
+        """
+        wiki_root = self._wiki.resolve()
+        resolved = (self._wiki / path).resolve()
+        try:
+            resolved.relative_to(wiki_root)
+        except ValueError:
+            raise PathSecurityError(
+                f"Path '{path}' resolves outside the wiki directory '{wiki_root}'"
+            )
+        return resolved
+
+    # ------------------------------------------------------------------
     # MimirPort implementation
     # ------------------------------------------------------------------
 
@@ -182,24 +218,30 @@ class MarkdownMimirAdapter(MimirPort):
         )
 
     async def lint(self) -> MimirLintReport:
-        """Scan the wiki and return a health-check report."""
-        all_pages = await self.list_pages()
+        """Scan the wiki and return a health-check report.
+
+        The ``stale`` field of the returned report is always empty — staleness
+        detection requires re-fetching source URLs, which the lint pass does
+        not do.  Use ``is_source_stale()`` during re-ingest instead.
+        """
+        pages_with_content = self._list_pages_with_content()
+        all_pages = [meta for meta, _ in pages_with_content]
+        content_map = {meta.path: content for meta, content in pages_with_content}
         indexed = self._read_indexed_paths()
 
         orphans = self._find_orphans(all_pages, indexed)
-        stale = self._find_stale(all_pages)
-        contradictions = self._find_contradictions(all_pages)
-        gaps = self._find_gaps(all_pages)
+        contradictions = self._find_contradictions(content_map)
+        gaps = self._find_gaps(all_pages, content_map)
 
         report = MimirLintReport(
             orphans=orphans,
             contradictions=contradictions,
-            stale=stale,
+            stale=[],  # populated by re-ingest flow, not lint pass
             gaps=gaps,
             pages_checked=len(all_pages),
         )
 
-        issues = len(orphans) + len(contradictions) + len(stale) + len(gaps)
+        issues = len(orphans) + len(contradictions) + len(gaps)
         self._append_log(
             _LOG_LINT_PREFIX,
             f"{len(all_pages)} pages checked, {issues} issues found",
@@ -227,7 +269,8 @@ class MarkdownMimirAdapter(MimirPort):
             score = sum(lower.count(kw) for kw in keywords)
             if score == 0:
                 continue
-            meta = self._page_meta_from_path(md_path)
+            # Pass pre-read content to avoid a second file read inside _build_page_meta.
+            meta = self._build_page_meta(md_path, content)
             results.append((score, MimirPage(meta=meta, content=content)))
 
         results.sort(key=lambda t: t[0], reverse=True)
@@ -235,7 +278,7 @@ class MarkdownMimirAdapter(MimirPort):
 
     async def upsert_page(self, path: str, content: str) -> None:
         """Create or replace a wiki page and update index.md."""
-        page_path = self._wiki / path
+        page_path = self._safe_wiki_path(path)
         page_path.parent.mkdir(parents=True, exist_ok=True)
 
         is_new = not page_path.exists()
@@ -250,7 +293,7 @@ class MarkdownMimirAdapter(MimirPort):
 
     async def read_page(self, path: str) -> str:
         """Return the raw Markdown content of the page at *path*."""
-        page_path = self._wiki / path
+        page_path = self._safe_wiki_path(path)
         if not page_path.exists():
             raise FileNotFoundError(f"Mímir page not found: {path}")
         return page_path.read_text(encoding="utf-8")
@@ -260,18 +303,7 @@ class MarkdownMimirAdapter(MimirPort):
         category: str | None = None,
     ) -> list[MimirPageMeta]:
         """List all wiki pages, optionally filtered by category."""
-        results: list[MimirPageMeta] = []
-        search_root = self._wiki / category if category else self._wiki
-
-        if not search_root.exists():
-            return results
-
-        for md_path in search_root.rglob("*.md"):
-            if md_path.name in {"index.md", "log.md"}:
-                continue
-            results.append(self._page_meta_from_path(md_path))
-
-        return results
+        return [meta for meta, _ in self._list_pages_with_content(category)]
 
     # ------------------------------------------------------------------
     # Raw source storage
@@ -313,7 +345,11 @@ class MarkdownMimirAdapter(MimirPort):
         return hashlib.sha256(content.encode()).hexdigest()
 
     def is_source_stale(self, source_id: str, current_content: str) -> bool:
-        """Return True if the stored hash differs from the hash of *current_content*."""
+        """Return True if the stored hash differs from the hash of *current_content*.
+
+        This is the correct staleness check: call it before re-ingesting a
+        source to see whether the content has changed since the last ingest.
+        """
         existing = self.read_raw_source(source_id)
         if existing is None:
             return False
@@ -381,35 +417,17 @@ class MarkdownMimirAdapter(MimirPort):
         """Return paths of pages not linked in index.md."""
         return [p.path for p in pages if p.path not in indexed]
 
-    def _find_stale(self, pages: list[MimirPageMeta]) -> list[str]:
-        """Return paths of pages whose source content hash has changed."""
-        stale = []
-        for page_meta in pages:
-            for source_id in page_meta.source_ids:
-                raw_path = self._raw / f"{source_id}.json"
-                if not raw_path.exists():
-                    continue
-                data = json.loads(raw_path.read_text(encoding="utf-8"))
-                stored_hash = data.get("content_hash", "")
-                current_hash = self.compute_content_hash(data.get("content", ""))
-                if stored_hash and stored_hash != current_hash:
-                    stale.append(page_meta.path)
-                    break
-        return stale
-
-    def _find_contradictions(self, pages: list[MimirPageMeta]) -> list[str]:
+    def _find_contradictions(self, content_map: dict[str, str]) -> list[str]:
         """Return paths of pages that contain a contradiction flag marker."""
-        contradictions = []
-        for page_meta in pages:
-            page_path = self._wiki / page_meta.path
-            if not page_path.exists():
-                continue
-            content = page_path.read_text(encoding="utf-8")
-            if "[CONTRADICTION]" in content or "⚠️ contradiction" in content.lower():
-                contradictions.append(page_meta.path)
-        return contradictions
+        return [
+            path
+            for path, content in content_map.items()
+            if "[CONTRADICTION]" in content or "⚠️ contradiction" in content.lower()
+        ]
 
-    def _find_gaps(self, pages: list[MimirPageMeta]) -> list[str]:
+    def _find_gaps(
+        self, pages: list[MimirPageMeta], content_map: dict[str, str]
+    ) -> list[str]:
         """Return concept names mentioned ≥ N times across wiki but without a page.
 
         A concept without a page means the wiki text mentions it frequently but
@@ -418,12 +436,7 @@ class MarkdownMimirAdapter(MimirPort):
         existing_titles = {p.title.lower() for p in pages}
         mention_counts: dict[str, int] = {}
 
-        for page_meta in pages:
-            page_path = self._wiki / page_meta.path
-            if not page_path.exists():
-                continue
-            content = page_path.read_text(encoding="utf-8")
-            # Extract wiki-link style references: [[Concept Name]]
+        for content in content_map.values():
             for concept in re.findall(r"\[\[([^\]]+)\]\]", content):
                 key = concept.lower().strip()
                 if key not in existing_titles:
@@ -437,9 +450,32 @@ class MarkdownMimirAdapter(MimirPort):
     # Metadata helpers
     # ------------------------------------------------------------------
 
-    def _page_meta_from_path(self, md_path: Path) -> MimirPageMeta:
-        """Build a MimirPageMeta from a wiki page path."""
-        content = md_path.read_text(encoding="utf-8")
+    def _list_pages_with_content(
+        self,
+        category: str | None = None,
+    ) -> list[tuple[MimirPageMeta, str]]:
+        """Return all wiki pages with their content, optionally filtered by category.
+
+        Each file is read exactly once; the content is returned alongside the
+        metadata so callers can avoid redundant I/O.
+        """
+        results: list[tuple[MimirPageMeta, str]] = []
+        search_root = self._wiki / category if category else self._wiki
+
+        if not search_root.exists():
+            return results
+
+        for md_path in search_root.rglob("*.md"):
+            if md_path.name in {"index.md", "log.md"}:
+                continue
+            content = md_path.read_text(encoding="utf-8")
+            meta = self._build_page_meta(md_path, content)
+            results.append((meta, content))
+
+        return results
+
+    def _build_page_meta(self, md_path: Path, content: str) -> MimirPageMeta:
+        """Build a MimirPageMeta from a path and its already-read content."""
         rel = md_path.relative_to(self._wiki)
         path_str = str(rel)
         parts = path_str.split("/")
@@ -455,6 +491,11 @@ class MarkdownMimirAdapter(MimirPort):
             updated_at=updated_at,
             source_ids=source_ids,
         )
+
+    def _page_meta_from_path(self, md_path: Path) -> MimirPageMeta:
+        """Build a MimirPageMeta from a wiki page path (reads the file)."""
+        content = md_path.read_text(encoding="utf-8")
+        return self._build_page_meta(md_path, content)
 
     @staticmethod
     def _extract_source_ids(content: str) -> list[str]:
