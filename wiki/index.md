@@ -12,5 +12,7 @@
 
 ## Sources
 - [[sources/karpathy_llm_wiki|Karpathy LLM Wiki]]
+- [[sources/karpathy_llm_wiki_v2|Karpathy LLM Wiki (v2 Synthesis)]]
+
 - [[MIMIR|MIMIR Schema]]
 - [[WIKI|WIKI Schema]]

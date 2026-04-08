@@ -1,39 +1,38 @@
-# Karpathy LLM Wiki (Source Synthesis)
+# Karpathy LLM Wiki
 
-This page documents the synthesis of the source material: **Karpathy Llm Wiki** (Source ID: `src_26dea40bd79130a3`).
+This page summarizes the source material regarding Andrej Karpathy's proposal for the **[[patterns/llm_wiki_pattern|LLM Wiki Pattern]]**.
 
 ## Overview
 
-The source describes the **[[patterns/llm_wiki_pattern|LLM Wiki Pattern]]** proposed by Andrej Karpathy in April 2025. This pattern transitions personal knowledge management (PKM) from a passive RAG-based approach to an active, LLM-driven synthesis approach.
+In April 2025, Andrej Karpathy proposed a new pattern for personal knowledge management (PKM) that utilizes LLMs as active authors of a structured wiki rather than passive retrieval tools.
 
-## Key Details
+## Core Principles
 
-### The Three-Layer Architecture
-The pattern is built upon three distinct layers:
-1.  **Raw Sources**: Immutable documents (URLs, PDFs, logs) used as the ground truth and for staleness detection.
-2.  **Wiki**: The knowledge base consisting of structured, cross-linked Markdown pages authored and maintained by the LLM.
-3.  **Schema Document**: The governing rules (e.g., `MIMIR.md`) defining layout, format, and synthesis criteria.
+The pattern revolves around a three-layer architecture:
 
-### Core Operations
-- **Ingest**: The LLM reads raw sources, identifies claims, updates existing pages, and cross-links.
-- **Query**: Fast retrieval of pre-synthesized knowledge.
-- **Lint**: Periodic health checks to identify gaps, contradictions, or stale information.
+1.  **Raw Sources**: Immutable ingested documents (URLs, PDFs, logs) used for staleness detection.
+2.  **Wiki**: LLM-owned Markdown pages that are organized, cross-linked, and continuously updated as understanding improves.
+3.  **Schema Document**: A governing file (e.g., `WIKI.md` or `MIMIR.md`) that defines the rules for maintenance, directory layout, and synthesis.
 
-### Comparison to RAG
-Unlike standard RAG, which retrieves raw chunks at query-time, the Wiki pattern performs reasoning **upfront at ingest-time**. This results in faster queries and higher-quality, deduplicated knowledge, though it requires more disciplined synthesis.
+## Key Differences from RAG
 
-### ODIN Implementation: Mímir
-The **[[implementations/odin/mimir|Mímir]]** implementation in ODIN extends the original pattern with:
-- **Research Flow**: Integrating web searches during ingestion for better recency.
-- **Staleness Scheduling**: Using usage metrics to prioritize page refreshes.
+Unlike standard Retrieval-Augmented Generation (RAG), which performs reasoning at query-time on raw chunks, the LLM Wiki pattern performs reasoning **upfront during ingestion**. This results in:
+- Faster query times.
+- Higher quality, deduplicated, and pre-synthesized knowledge.
+- A graph-like knowledge structure through cross-linking.
 
-## Source Metadata
-- **Title**: Karpathy Llm Wiki
+## ODIN Implementation: Mímir
+
+ODIN implements this as **[[implementations/odin/mimir/mimir|Mímir]]**, utilizing tools like `mimir_ingest` and `mimir_lint` to automate the lifecycle of knowledge.
+
+### Mímir Extensions
+
+Mímir expands on the original concept with:
+- **Research Flow**: Targeted web searches during ingestion to maintain recency.
+- **Staleness Scheduling**: Prioritizing updates for frequently accessed pages when sources change.
+
+## Metadata
+
+- **Source ID**: `src_2d7c0b059d2d9bd0`
+- **Ingested**: 2026-04-08
 - **Type**: research
-- **Ingested**: 2026-04-08T21:01:44.719575+00:00
-- **Source ID**: `src_26dea40bd79130a3`
-
-## Related Pages
-- [[patterns/llm_wiki_pattern|LLM Wiki Pattern]]
-- [[implementations/odin/mimir|Mímir]]
-- [[concepts/llm_wiki_architecture|LLM Wiki Architecture]]
