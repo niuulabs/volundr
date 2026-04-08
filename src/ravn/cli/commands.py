@@ -1468,6 +1468,9 @@ def daemon(
     persona: str = typer.Option(
         "", "--persona", "-p", help="Persona name applied to all daemon sessions."
     ),
+    resume: bool = typer.Option(
+        False, "--resume", help="Resume unfinished tasks from the journal."
+    ),
 ) -> None:
     """Start gateway channels AND drive loop simultaneously.  Never exits.
 
@@ -1483,7 +1486,7 @@ def daemon(
     project_config = ProjectConfig.discover()
     persona_config = _resolve_persona(persona, project_config)
 
-    asyncio.run(_run_daemon(settings, persona_config=persona_config))
+    asyncio.run(_run_daemon(settings, persona_config=persona_config, resume=resume))
 
 
 @app.command()
@@ -1522,6 +1525,7 @@ async def _run_daemon(
     *,
     persona_config: Any | None = None,
     task_dispatch: bool = False,
+    resume: bool = False,
 ) -> None:
     """Build and run the gateway + drive loop until interrupted."""
     from ravn.adapters.channels.gateway import RavnGateway
@@ -1573,6 +1577,11 @@ async def _run_daemon(
             no_tools=False,
             persona_config=persona_config,
         )
+
+        # Sub-tasks (cascade workers) get only base tools — no cascade/MCP to
+        # prevent tool-looping on small models.  The coordinator (task_id=None)
+        # gets the full set.
+        is_subtask = task_id is not None
         tools = _build_tools(
             settings,
             workspace,
@@ -1582,7 +1591,13 @@ async def _run_daemon(
             budget,
             persona_config=persona_config,
         )
-        tools.extend(mcp_tools)
+        if not is_subtask:
+            tools.extend(mcp_tools)
+
+            # Add cascade tools (parallel task execution) if wired
+            cascade_tools = getattr(drive_loop, "_cascade_tools", [])
+            if cascade_tools:
+                tools.extend(cascade_tools)
 
         return RavnAgent(
             llm=llm,
@@ -1642,6 +1657,7 @@ async def _run_daemon(
             config=settings.initiative,
             settings=settings,
             event_publisher=event_publisher,
+            resume=resume,
         )
         _wire_triggers(drive_loop, settings.initiative)
 

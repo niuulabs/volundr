@@ -308,17 +308,16 @@ class RavnAgent:
 
             cumulative_usage = cumulative_usage + llm_response.usage
 
-            if llm_response.content:
-                await self._channel.emit(
-                    RavnEvent.response(
-                        source=self._source_id,
-                        text=llm_response.content,
-                        correlation_id=self._session.id,
-                        session_id=self._session.id,
-                    )
-                )
-
             if llm_response.stop_reason != StopReason.TOOL_USE:
+                if llm_response.content:
+                    await self._channel.emit(
+                        RavnEvent.response(
+                            source=self._source_id,
+                            text=llm_response.content,
+                            correlation_id=self._session.id,
+                            session_id=self._session.id,
+                        )
+                    )
                 final_response = llm_response.content
                 self._session.add_message(Message(role="assistant", content=llm_response.content))
                 break

@@ -55,11 +55,13 @@ class DriveLoop:
         config: InitiativeConfig,
         settings: Settings,
         event_publisher: EventPublisherPort | None = None,
+        resume: bool = False,
     ) -> None:
         self._agent_factory = agent_factory
         self._config = config
         self._settings = settings
         self._event_publisher: EventPublisherPort = event_publisher or NoOpEventPublisher()
+        self._resume = resume
         self._triggers: list[TriggerPort] = []
         # (priority, counter, AgentTask)
         self._queue: asyncio.PriorityQueue = asyncio.PriorityQueue(maxsize=config.task_queue_max)
@@ -194,7 +196,14 @@ class DriveLoop:
 
     async def run(self) -> None:
         """Start all three internal loops and run until cancelled."""
-        self._load_journal()
+        if self._resume:
+            self._load_journal()
+        elif self._journal_path.exists():
+            logger.info("drive_loop: discarding stale journal (use --resume to restore)")
+            try:
+                self._journal_path.unlink()
+            except OSError:
+                pass
 
         coros: list[Awaitable] = [
             self._task_executor(),
