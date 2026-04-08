@@ -14,8 +14,8 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from ravn.adapters.mimir.markdown import MarkdownMimirAdapter
-from ravn.domain.models import MimirSource, ToolResult
+from niuu.domain.mimir import MimirSource, compute_content_hash
+from ravn.domain.models import ToolResult
 from ravn.ports.mimir import MimirPort
 from ravn.ports.tool import ToolPort
 
@@ -26,7 +26,7 @@ _PERMISSION_READ = "mimir:read"
 
 
 def _source_id_from_content(title: str, content: str) -> str:
-    return "src_" + MarkdownMimirAdapter.compute_content_hash(f"{title}:{content}")[:16]
+    return "src_" + compute_content_hash(f"{title}:{content}")[:16]
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +99,7 @@ class MimirIngestTool(ToolPort):
             content=content,
             source_type=source_type,
             origin_url=origin_url,
-            content_hash=MarkdownMimirAdapter.compute_content_hash(content),
+            content_hash=compute_content_hash(content),
             ingested_at=datetime.now(UTC),
         )
 
@@ -251,7 +251,9 @@ class MimirWriteTool(ToolPort):
         return (
             "Create or update a Mímir wiki page. "
             "Write synthesised, concise markdown — the wiki is for retrieval, not transcription. "
-            "Always start with a # Title heading."
+            "Always start with a # Title heading. "
+            "Use the optional 'mimir' parameter to route the write to a specific instance "
+            "(e.g. 'shared' to promote to the shared Mímir), bypassing category routing."
         )
 
     @property
@@ -269,6 +271,15 @@ class MimirWriteTool(ToolPort):
                     "type": "string",
                     "description": "Full Markdown content for the page.",
                 },
+                "mimir": {
+                    "type": "string",
+                    "description": (
+                        "Optional: name of the Mímir instance to write to "
+                        "(e.g. 'local', 'shared', 'kanuck'). "
+                        "Overrides category-based write routing. "
+                        "Omit to use the default routing rules."
+                    ),
+                },
             },
             "required": ["path", "content"],
         }
@@ -280,6 +291,7 @@ class MimirWriteTool(ToolPort):
     async def execute(self, input: dict) -> ToolResult:
         path = input.get("path", "").strip()
         content = input.get("content", "").strip()
+        mimir = input.get("mimir")
 
         if not path:
             return ToolResult(tool_call_id="", content="path is required", is_error=True)
@@ -292,8 +304,9 @@ class MimirWriteTool(ToolPort):
                 is_error=True,
             )
 
-        await self._adapter.upsert_page(path, content)
-        return ToolResult(tool_call_id="", content=f"Page written: {path}")
+        await self._adapter.upsert_page(path, content, mimir=mimir)
+        suffix = f" (routed to: {mimir})" if mimir else ""
+        return ToolResult(tool_call_id="", content=f"Page written: {path}{suffix}")
 
 
 # ---------------------------------------------------------------------------

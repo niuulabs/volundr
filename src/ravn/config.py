@@ -1306,6 +1306,82 @@ class MimirSearchConfig(BaseModel):
     )
 
 
+class MimirAuthConfig(BaseModel):
+    """Auth configuration for a remote Mímir instance."""
+
+    type: Literal["bearer", "spiffe"] = Field(
+        default="bearer",
+        description="Auth mechanism: 'bearer' (dev) or 'spiffe' (production mTLS).",
+    )
+    token: str | None = Field(
+        default=None,
+        description="Bearer token value (when type=bearer).",
+    )
+    trust_domain: str | None = Field(
+        default=None,
+        description="SPIFFE trust domain (when type=spiffe), e.g. 'niuu.world'.",
+    )
+
+
+class MimirInstanceConfig(BaseModel):
+    """Configuration for a single Mímir instance in the composite adapter.
+
+    Either ``path`` (local filesystem) or ``url`` (HTTP service) must be set.
+    """
+
+    name: str = Field(description="Logical name, e.g. 'local', 'shared', 'kanuck'.")
+    role: Literal["shared", "local", "domain"] = Field(
+        default="local",
+        description="Instance role.",
+    )
+    path: str | None = Field(
+        default=None,
+        description="Filesystem root for a local MarkdownMimirAdapter.",
+    )
+    url: str | None = Field(
+        default=None,
+        description="Base URL for a remote HttpMimirAdapter.",
+    )
+    auth: MimirAuthConfig | None = Field(
+        default=None,
+        description="Auth config for remote instances.",
+    )
+    categories: list[str] | None = Field(
+        default=None,
+        description="Category filter for domain-scoped Mímirs. None means all categories.",
+    )
+    read_priority: int = Field(
+        default=0,
+        description="Read order — lower value is queried first (local=0, shared=1, domain=2).",
+    )
+
+
+class MimirWriteRoutingConfig(BaseModel):
+    """Config-driven write routing for the CompositeMimirAdapter.
+
+    Example YAML::
+
+        write_routing:
+          rules:
+            - prefix: "self/"
+              mounts: ["local"]
+            - prefix: "technical/"
+              mounts: ["local", "shared"]
+            - prefix: "household/"
+              mounts: ["shared"]
+          default: ["local"]
+    """
+
+    rules: list[dict] = Field(
+        default_factory=list,
+        description="Ordered list of {prefix, mounts} routing rules.",
+    )
+    default: list[str] = Field(
+        default_factory=lambda: ["local"],
+        description="Default mount(s) when no prefix matches.",
+    )
+
+
 class MimirConfig(BaseModel):
     """Mímir persistent compounding knowledge base configuration (NIU-540).
 
@@ -1356,6 +1432,19 @@ class MimirConfig(BaseModel):
     search: MimirSearchConfig = Field(
         default_factory=MimirSearchConfig,
         description="Search backend configuration.",
+    )
+    instances: list[MimirInstanceConfig] = Field(
+        default_factory=list,
+        description=(
+            "Multi-Mímir instances for CompositeMimirAdapter. "
+            "When empty, a single local MarkdownMimirAdapter is used (path=mimir.path). "
+            "Each entry is either a local filesystem adapter (path=) "
+            "or a remote HTTP adapter (url=)."
+        ),
+    )
+    write_routing: MimirWriteRoutingConfig = Field(
+        default_factory=MimirWriteRoutingConfig,
+        description="Write routing rules for the CompositeMimirAdapter.",
     )
 
 
