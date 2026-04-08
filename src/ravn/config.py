@@ -955,6 +955,10 @@ class DiscordChannelConfig(BaseModel):
         default="https://discord.com/api/v10",
         description="Discord REST API base URL.",
     )
+    max_pending_approvals: int = Field(
+        default=1000,
+        description="Maximum number of approval-requested messages tracked in memory.",
+    )
 
 
 class SlackChannelConfig(BaseModel):
@@ -1040,6 +1044,13 @@ class WhatsAppChannelConfig(BaseModel):
     webhook_verify_token_env: str = Field(
         default="WA_WEBHOOK_VERIFY_TOKEN",
         description="Environment variable name for Meta webhook verification token.",
+    )
+    webhook_secret_env: str = Field(
+        default="WA_WEBHOOK_SECRET",
+        description=(
+            "Environment variable name for Meta webhook HMAC secret "
+            "(X-Hub-Signature-256). Leave unset to skip signature verification."
+        ),
     )
     webhook_host: str = Field(
         default="0.0.0.0",

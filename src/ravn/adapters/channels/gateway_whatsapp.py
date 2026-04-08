@@ -14,12 +14,16 @@ Design principles:
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
+import json
 import logging
 import os
 from typing import Any
 
 import httpx
 
+from ravn.adapters.channels._http_mixin import GatewayHttpMixin
 from ravn.adapters.channels.gateway import RavnGateway
 from ravn.config import WhatsAppChannelConfig
 from ravn.ports.gateway_channel import GatewayChannelPort, MessageHandler
@@ -27,7 +31,7 @@ from ravn.ports.gateway_channel import GatewayChannelPort, MessageHandler
 logger = logging.getLogger(__name__)
 
 
-class WhatsAppGateway(GatewayChannelPort):
+class WhatsAppGateway(GatewayHttpMixin, GatewayChannelPort):
     """Routes WhatsApp messages to :class:`RavnGateway` via the Meta Cloud API.
 
     Start this adapter alongside the HTTP gateway to expose a webhook endpoint
@@ -59,6 +63,7 @@ class WhatsAppGateway(GatewayChannelPort):
         self._api_key: str = os.environ.get(config.api_key_env, "")
         self._phone_number_id: str = os.environ.get(config.phone_number_id_env, "")
         self._verify_token: str = os.environ.get(config.webhook_verify_token_env, "")
+        self._webhook_secret: str = os.environ.get(config.webhook_secret_env, "")
         self._handler: MessageHandler | None = None
         self._http_client = http_client
         self._server_task: asyncio.Task[None] | None = None
@@ -156,9 +161,13 @@ class WhatsAppGateway(GatewayChannelPort):
             return Response(status_code=403)
 
         @app.post("/webhook")
-        async def receive(request: Request) -> dict[str, str]:
+        async def receive(request: Request) -> Response | dict[str, str]:
             """Handle inbound message events from Meta."""
-            body: dict[str, Any] = await request.json()
+            body_bytes = await request.body()
+            signature = request.headers.get("X-Hub-Signature-256", "")
+            if not self._verify_signature(body_bytes, signature):
+                return Response(status_code=403)
+            body: dict[str, Any] = json.loads(body_bytes)
             await self._handle_webhook_body(body)
             return {"status": "ok"}
 
@@ -227,7 +236,7 @@ class WhatsAppGateway(GatewayChannelPort):
     # HTTP helpers
     # ------------------------------------------------------------------
 
-    def _headers(self) -> dict[str, str]:
+    def _graph_headers(self) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
@@ -236,38 +245,29 @@ class WhatsAppGateway(GatewayChannelPort):
     async def _graph_post(self, path: str, json: dict[str, Any]) -> dict[str, Any]:
         """POST to the Meta Graph API."""
         url = f"{self._config.api_base}{path}"
-        client = self._http_client
-        if client is not None:
-            resp = await client.post(url, headers=self._headers(), json=json)
-            resp.raise_for_status()
-            return resp.json()
-
-        async with httpx.AsyncClient() as c:  # pragma: no cover
-            resp = await c.post(url, headers=self._headers(), json=json)  # pragma: no cover
-            resp.raise_for_status()  # pragma: no cover
-            return resp.json()  # pragma: no cover
+        return await self._http_post(url, headers=self._graph_headers(), json=json)
 
     async def _upload_media(self, data: bytes, *, mime_type: str) -> str:
         """Upload *data* to Meta's media endpoint; returns the media ID."""
         url = f"{self._config.api_base}/{self._phone_number_id}/media"
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        client = self._http_client
-        if client is not None:
-            resp = await client.post(
-                url,
-                headers=headers,
-                files={"file": ("media", data, mime_type)},
-                data={"messaging_product": "whatsapp"},
-            )
-            resp.raise_for_status()
-            return resp.json()["id"]
+        result = await self._http_post(
+            url,
+            headers=headers,
+            files={"file": ("media", data, mime_type)},
+            data={"messaging_product": "whatsapp"},
+        )
+        return result["id"]
 
-        async with httpx.AsyncClient() as c:  # pragma: no cover
-            resp = await c.post(  # pragma: no cover
-                url,
-                headers=headers,
-                files={"file": ("media", data, mime_type)},
-                data={"messaging_product": "whatsapp"},
-            )
-            resp.raise_for_status()  # pragma: no cover
-            return resp.json()["id"]  # pragma: no cover
+    def _verify_signature(self, body: bytes, signature: str) -> bool:
+        """Verify the Meta X-Hub-Signature-256 header.
+
+        Returns ``True`` when no secret is configured (verification disabled)
+        or when the HMAC digest matches.  Returns ``False`` on mismatch.
+        """
+        if not self._webhook_secret:
+            return True
+        expected = "sha256=" + hmac.new(
+            self._webhook_secret.encode(), body, hashlib.sha256
+        ).hexdigest()
+        return hmac.compare_digest(expected, signature)

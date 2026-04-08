@@ -1329,6 +1329,44 @@ def gateway(
     asyncio.run(_run_gateway(settings, persona_config=persona_config))
 
 
+def _make_channel_tasks(
+    channels_cfg: Any,
+    gw: Any,
+) -> list[tuple[Any, str]]:
+    """Create asyncio tasks for the four extended gateway channel adapters.
+
+    Returns a list of ``(task, name)`` pairs so callers can populate both
+    a task list and a display list without duplicating the if-chain.
+    """
+    from ravn.adapters.channels.gateway_discord import DiscordGateway
+    from ravn.adapters.channels.gateway_matrix import MatrixGateway
+    from ravn.adapters.channels.gateway_slack import SlackGateway
+    from ravn.adapters.channels.gateway_whatsapp import WhatsAppGateway
+
+    pairs: list[tuple[Any, str]] = []
+    if channels_cfg.discord.enabled:
+        task = asyncio.create_task(
+            DiscordGateway(channels_cfg.discord, gw).run(), name="discord"
+        )
+        pairs.append((task, "discord"))
+    if channels_cfg.slack.enabled:
+        task = asyncio.create_task(
+            SlackGateway(channels_cfg.slack, gw).run(), name="slack"
+        )
+        pairs.append((task, "slack"))
+    if channels_cfg.matrix.enabled:
+        task = asyncio.create_task(
+            MatrixGateway(channels_cfg.matrix, gw).run(), name="matrix"
+        )
+        pairs.append((task, "matrix"))
+    if channels_cfg.whatsapp.enabled:
+        task = asyncio.create_task(
+            WhatsAppGateway(channels_cfg.whatsapp, gw).run(), name="whatsapp"
+        )
+        pairs.append((task, "whatsapp"))
+    return pairs
+
+
 async def _run_gateway(
     settings: Settings,
     *,
@@ -1336,12 +1374,8 @@ async def _run_gateway(
 ) -> None:
     """Build and run the gateway until interrupted."""
     from ravn.adapters.channels.gateway import RavnGateway
-    from ravn.adapters.channels.gateway_discord import DiscordGateway
     from ravn.adapters.channels.gateway_http import HttpGateway
-    from ravn.adapters.channels.gateway_matrix import MatrixGateway
-    from ravn.adapters.channels.gateway_slack import SlackGateway
     from ravn.adapters.channels.gateway_telegram import TelegramGateway
-    from ravn.adapters.channels.gateway_whatsapp import WhatsAppGateway
     from ravn.budget import IterationBudget
     from ravn.ports.channel import ChannelPort
 
@@ -1451,21 +1485,8 @@ async def _run_gateway(
         ht = HttpGateway(settings.gateway.channels.http, gw)
         tasks.append(asyncio.create_task(ht.run(), name="http"))
 
-    if settings.gateway.channels.discord.enabled:
-        dc = DiscordGateway(settings.gateway.channels.discord, gw)
-        tasks.append(asyncio.create_task(dc.run(), name="discord"))
-
-    if settings.gateway.channels.slack.enabled:
-        sl = SlackGateway(settings.gateway.channels.slack, gw)
-        tasks.append(asyncio.create_task(sl.run(), name="slack"))
-
-    if settings.gateway.channels.matrix.enabled:
-        mx = MatrixGateway(settings.gateway.channels.matrix, gw)
-        tasks.append(asyncio.create_task(mx.run(), name="matrix"))
-
-    if settings.gateway.channels.whatsapp.enabled:
-        wa = WhatsAppGateway(settings.gateway.channels.whatsapp, gw)
-        tasks.append(asyncio.create_task(wa.run(), name="whatsapp"))
+    for task, _ in _make_channel_tasks(settings.gateway.channels, gw):
+        tasks.append(task)
 
     typer.echo(f"Gateway started ({len(tasks)} channel(s) active). Press Ctrl+C to stop.")
 
@@ -1549,12 +1570,8 @@ async def _run_daemon(
 ) -> None:
     """Build and run the gateway + drive loop until interrupted."""
     from ravn.adapters.channels.gateway import RavnGateway
-    from ravn.adapters.channels.gateway_discord import DiscordGateway
     from ravn.adapters.channels.gateway_http import HttpGateway
-    from ravn.adapters.channels.gateway_matrix import MatrixGateway
-    from ravn.adapters.channels.gateway_slack import SlackGateway
     from ravn.adapters.channels.gateway_telegram import TelegramGateway
-    from ravn.adapters.channels.gateway_whatsapp import WhatsAppGateway
     from ravn.budget import IterationBudget
     from ravn.drive_loop import DriveLoop
     from ravn.ports.channel import ChannelPort
@@ -1673,25 +1690,9 @@ async def _run_daemon(
             tasks.append(asyncio.create_task(ht.run(), name="http"))
             gw_tasks.append("http")
 
-        if channels_cfg.discord.enabled:
-            dc = DiscordGateway(channels_cfg.discord, gw)
-            tasks.append(asyncio.create_task(dc.run(), name="discord"))
-            gw_tasks.append("discord")
-
-        if channels_cfg.slack.enabled:
-            sl = SlackGateway(channels_cfg.slack, gw)
-            tasks.append(asyncio.create_task(sl.run(), name="slack"))
-            gw_tasks.append("slack")
-
-        if channels_cfg.matrix.enabled:
-            mx = MatrixGateway(channels_cfg.matrix, gw)
-            tasks.append(asyncio.create_task(mx.run(), name="matrix"))
-            gw_tasks.append("matrix")
-
-        if channels_cfg.whatsapp.enabled:
-            wa = WhatsAppGateway(channels_cfg.whatsapp, gw)
-            tasks.append(asyncio.create_task(wa.run(), name="whatsapp"))
-            gw_tasks.append("whatsapp")
+        for task, name in _make_channel_tasks(channels_cfg, gw):
+            tasks.append(task)
+            gw_tasks.append(name)
 
     # Drive loop (initiative tasks)
     from ravn.adapters.events.noop_publisher import NoOpEventPublisher

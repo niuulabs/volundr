@@ -24,27 +24,26 @@ from typing import Any
 
 import httpx
 
+from ravn.adapters.channels._http_mixin import GatewayHttpMixin
+from ravn.adapters.channels._slash_commands import GATEWAY_SLASH_PROMPTS
 from ravn.adapters.channels.gateway import RavnGateway
 from ravn.config import SlackChannelConfig
 from ravn.ports.gateway_channel import GatewayChannelPort, MessageHandler
 
 logger = logging.getLogger(__name__)
 
-# Slack slash commands → agent prompts
+# Slack slash commands → agent prompts.
+# Uses ravn- prefixed variants to avoid collisions with other Slack apps.
 _SLASH_PROMPTS: dict[str, str] = {
-    "/ravn-stop": (
-        "Please acknowledge that you are stopping and summarise what you were working on."
-    ),
-    "/ravn-status": "What is your current task status? Summarise briefly.",
-    "/ravn-todo": "List your current todo items.",
-    "/ravn-budget": "How many iterations have you used and how many remain in your budget?",
+    f"/ravn-{cmd.lstrip('/')}": prompt
+    for cmd, prompt in GATEWAY_SLASH_PROMPTS.items()
 }
 
 # Mention pattern prefix that triggers the agent (e.g. "<@UBOT123> hello")
 _MENTION_PREFIX = "<@"
 
 
-class SlackGateway(GatewayChannelPort):
+class SlackGateway(GatewayHttpMixin, GatewayChannelPort):
     """Polls Slack channels and routes messages through :class:`RavnGateway`.
 
     Each call to :meth:`watch_channel` registers a channel to monitor.  On
@@ -279,32 +278,17 @@ class SlackGateway(GatewayChannelPort):
         command = text.split()[0].lower()
         return _SLASH_PROMPTS.get(command, text)
 
+    def _slack_headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self._bot_token}"}
+
     async def _api_post(self, method: str, **kwargs: Any) -> dict[str, Any]:
         """POST to the Slack Web API; raises on error."""
         url = f"{self._config.api_base}/{method}"
-        headers = {"Authorization": f"Bearer {self._bot_token}"}
-        client = self._http_client
-        if client is not None:
-            resp = await client.post(url, headers=headers, **kwargs)
-            resp.raise_for_status()
-            return resp.json()
+        return await self._http_post(url, headers=self._slack_headers(), **kwargs)
 
-        async with httpx.AsyncClient() as c:
-            resp = await c.post(url, headers=headers, **kwargs)
-            resp.raise_for_status()
-            return resp.json()
-
-    async def _api_get(self, method: str, params: dict[str, str] | None = None) -> dict[str, Any]:
+    async def _api_get(
+        self, method: str, params: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         """GET from the Slack Web API."""
         url = f"{self._config.api_base}/{method}"
-        headers = {"Authorization": f"Bearer {self._bot_token}"}
-        client = self._http_client
-        if client is not None:
-            resp = await client.get(url, headers=headers, params=params)
-            resp.raise_for_status()
-            return resp.json()
-
-        async with httpx.AsyncClient() as c:
-            resp = await c.get(url, headers=headers, params=params)
-            resp.raise_for_status()
-            return resp.json()
+        return await self._http_get(url, headers=self._slack_headers(), params=params)

@@ -124,7 +124,7 @@ async def test_send_text_bare_channel_id(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_send_image_posts_with_attachment(monkeypatch):
+async def test_send_image_posts_multipart(monkeypatch):
     monkeypatch.setenv("DC_TOKEN", "tok")
     client = _make_http_client()
     cfg = _make_config()
@@ -134,13 +134,21 @@ async def test_send_image_posts_with_attachment(monkeypatch):
     await adapter.send_image("111/999", b"\x89PNG", caption="test cap")
 
     assert client.post.called
-    payload = client.post.call_args[1]["json"]
-    assert payload["content"] == "test cap"
-    assert "attachments" in payload
+    # Multipart upload: files= kwarg contains the image, data= has payload_json
+    call_kwargs = client.post.call_args[1]
+    assert "files" in call_kwargs
+    assert "files[0]" in call_kwargs["files"]
+    filename, data, mime = call_kwargs["files"]["files[0]"]
+    assert filename == "image.png"
+    assert data == b"\x89PNG"
+    assert mime == "image/png"
+    import json as _json
+    payload_json = _json.loads(call_kwargs["data"]["payload_json"])
+    assert payload_json["content"] == "test cap"
 
 
 @pytest.mark.asyncio
-async def test_send_audio_posts_with_attachment(monkeypatch):
+async def test_send_audio_posts_multipart(monkeypatch):
     monkeypatch.setenv("DC_TOKEN", "tok")
     client = _make_http_client()
     cfg = _make_config()
@@ -150,9 +158,12 @@ async def test_send_audio_posts_with_attachment(monkeypatch):
     await adapter.send_audio("111/999", b"OGG_DATA")
 
     assert client.post.called
-    payload = client.post.call_args[1]["json"]
-    assert "attachments" in payload
-    assert payload["attachments"][0]["filename"] == "audio.ogg"
+    call_kwargs = client.post.call_args[1]
+    assert "files" in call_kwargs
+    filename, data, mime = call_kwargs["files"]["files[0]"]
+    assert filename == "audio.ogg"
+    assert data == b"OGG_DATA"
+    assert mime == "audio/ogg"
 
 
 # ---------------------------------------------------------------------------
@@ -590,3 +601,45 @@ async def test_run_convenience_wrapper(monkeypatch):
 
     # Should complete without raising
     await asyncio.wait_for(adapter.run(), timeout=1.0)
+
+
+# ---------------------------------------------------------------------------
+# _pending_approvals cap
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_pending_approvals_cap_evicts_oldest(monkeypatch):
+    """When max_pending_approvals is reached, the oldest entry is evicted."""
+    monkeypatch.setenv("DC_TOKEN", "tok")
+    client = _make_http_client()
+    cfg = DiscordChannelConfig(
+        enabled=True,
+        token_env="DC_TOKEN",
+        guild_id="",
+        message_max_chars=2000,
+        retry_delay=0.01,
+        gateway_url="wss://fake",
+        api_base="https://discord.example.com/api/v10",
+        max_pending_approvals=2,
+    )
+    gw = _make_gateway_mock("ok")
+    adapter = DiscordGateway(cfg, gw, http_client=client)
+    adapter._token = "tok"
+
+    # Seed the dict to capacity
+    adapter._pending_approvals["old1"] = ("ch", "discord:ch")
+    adapter._pending_approvals["old2"] = ("ch", "discord:ch")
+
+    # A new approval message should evict the oldest ("old1")
+    msg: dict[str, Any] = {
+        "channel_id": "C1",
+        "content": "task done [APPROVAL_REQUESTED]",
+        "id": "new_msg",
+        "author": {},
+    }
+    await adapter._on_message_create(msg)
+
+    assert "old1" not in adapter._pending_approvals
+    assert "old2" in adapter._pending_approvals
+    assert "new_msg" in adapter._pending_approvals

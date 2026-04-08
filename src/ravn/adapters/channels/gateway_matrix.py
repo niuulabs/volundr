@@ -15,10 +15,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import uuid
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
+from ravn.adapters.channels._http_mixin import GatewayHttpMixin
 from ravn.adapters.channels.gateway import RavnGateway
 from ravn.config import MatrixChannelConfig
 from ravn.ports.gateway_channel import GatewayChannelPort, MessageHandler
@@ -30,7 +33,7 @@ _MSGTYPE_TEXT = "m.text"
 _EVENT_TYPE_MESSAGE = "m.room.message"
 
 
-class MatrixGateway(GatewayChannelPort):
+class MatrixGateway(GatewayHttpMixin, GatewayChannelPort):
     """Polls a Matrix homeserver via /sync and routes messages to :class:`RavnGateway`.
 
     Uses long-poll sync (``timeout`` query parameter) so events arrive quickly
@@ -100,7 +103,6 @@ class MatrixGateway(GatewayChannelPort):
         limit = self._config.message_max_chars
         if len(text) > limit:
             text = text[: limit - 3] + "..."
-        import uuid
         txn_id = uuid.uuid4().hex
         await self._cs_put(
             f"/rooms/{_quote(chat_id)}/send/{_EVENT_TYPE_MESSAGE}/{txn_id}",
@@ -113,7 +115,6 @@ class MatrixGateway(GatewayChannelPort):
     async def send_image(self, chat_id: str, image: bytes, caption: str = "") -> None:
         """Upload *image* to the homeserver and send an m.image event."""
         mxc_url = await self._upload_media(image, content_type="image/png", filename="image.png")
-        import uuid
         txn_id = uuid.uuid4().hex
         await self._cs_put(
             f"/rooms/{_quote(chat_id)}/send/m.room.message/{txn_id}",
@@ -127,7 +128,6 @@ class MatrixGateway(GatewayChannelPort):
     async def send_audio(self, chat_id: str, audio: bytes) -> None:
         """Upload *audio* to the homeserver and send an m.audio event."""
         mxc_url = await self._upload_media(audio, content_type="audio/ogg", filename="audio.ogg")
-        import uuid
         txn_id = uuid.uuid4().hex
         await self._cs_put(
             f"/rooms/{_quote(chat_id)}/send/m.room.message/{txn_id}",
@@ -212,7 +212,7 @@ class MatrixGateway(GatewayChannelPort):
     # HTTP helpers
     # ------------------------------------------------------------------
 
-    def _headers(self) -> dict[str, str]:
+    def _cs_headers(self) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {self._access_token}",
             "Content-Type": "application/json",
@@ -222,29 +222,14 @@ class MatrixGateway(GatewayChannelPort):
         self, path: str, params: dict[str, str | int] | None = None
     ) -> dict[str, Any]:
         url = f"{self._config.homeserver}{path}"
-        client = self._http_client
-        if client is not None:
-            resp = await client.get(url, headers=self._headers(), params=params)
-            resp.raise_for_status()
-            return resp.json()
-
-        async with httpx.AsyncClient(timeout=self._config.sync_timeout_ms / 1000.0 + 10.0) as c:
-            resp = await c.get(url, headers=self._headers(), params=params)
-            resp.raise_for_status()
-            return resp.json()
+        timeout = self._config.sync_timeout_ms / 1000.0 + 10.0
+        return await self._http_get(
+            url, headers=self._cs_headers(), params=params, timeout=timeout
+        )
 
     async def _cs_put(self, path: str, json: dict[str, Any]) -> dict[str, Any]:
         url = f"{self._config.homeserver}{path}"
-        client = self._http_client
-        if client is not None:
-            resp = await client.put(url, headers=self._headers(), json=json)
-            resp.raise_for_status()
-            return resp.json()
-
-        async with httpx.AsyncClient() as c:
-            resp = await c.put(url, headers=self._headers(), json=json)
-            resp.raise_for_status()
-            return resp.json()
+        return await self._http_put(url, headers=self._cs_headers(), json=json)
 
     async def _upload_media(
         self,
@@ -254,24 +239,18 @@ class MatrixGateway(GatewayChannelPort):
         filename: str,
     ) -> str:
         """Upload *data* to the homeserver media repo; returns the mxc:// URL."""
-        url = f"{self._config.homeserver}/_matrix/media/v3/upload?filename={filename}"
+        url = (
+            f"{self._config.homeserver}/_matrix/media/v3/upload"
+            f"?filename={quote(filename, safe='')}"
+        )
         headers = {
             "Authorization": f"Bearer {self._access_token}",
             "Content-Type": content_type,
         }
-        client = self._http_client
-        if client is not None:
-            resp = await client.post(url, headers=headers, content=data)
-            resp.raise_for_status()
-            return resp.json()["content_uri"]
-
-        async with httpx.AsyncClient() as c:
-            resp = await c.post(url, headers=headers, content=data)
-            resp.raise_for_status()
-            return resp.json()["content_uri"]
+        result = await self._http_post(url, headers=headers, content=data)
+        return result["content_uri"]
 
 
 def _quote(room_id: str) -> str:
     """URL-encode a Matrix room ID for use in path segments."""
-    from urllib.parse import quote
     return quote(room_id, safe="")

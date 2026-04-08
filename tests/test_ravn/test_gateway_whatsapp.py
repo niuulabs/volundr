@@ -494,3 +494,36 @@ async def test_run_with_task_handles_cancel(monkeypatch):
     adapter._run_webhook_server = immediate_cancel
 
     await asyncio.wait_for(adapter.run(), timeout=1.0)
+
+
+# ---------------------------------------------------------------------------
+# _verify_signature
+# ---------------------------------------------------------------------------
+
+
+def test_verify_signature_no_secret_always_passes():
+    """Without a webhook secret, all requests are allowed."""
+    adapter = WhatsAppGateway(_make_config(), _make_gateway_mock())
+    assert adapter._verify_signature(b"body", "") is True
+    assert adapter._verify_signature(b"body", "sha256=wrong") is True
+
+
+def test_verify_signature_correct_hmac():
+    """Correct HMAC digest passes verification."""
+    import hashlib
+    import hmac as _hmac
+
+    secret = "mysecret"
+    adapter = WhatsAppGateway(_make_config(), _make_gateway_mock())
+    adapter._webhook_secret = secret
+
+    body = b'{"entry": []}'
+    digest = "sha256=" + _hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    assert adapter._verify_signature(body, digest) is True
+
+
+def test_verify_signature_wrong_hmac():
+    """Wrong HMAC digest fails verification."""
+    adapter = WhatsAppGateway(_make_config(), _make_gateway_mock())
+    adapter._webhook_secret = "mysecret"
+    assert adapter._verify_signature(b"body", "sha256=deadbeef") is False

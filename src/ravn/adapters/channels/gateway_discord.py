@@ -16,7 +16,6 @@ Design principles:
 from __future__ import annotations
 
 import asyncio
-import base64
 import json
 import logging
 import os
@@ -25,6 +24,8 @@ from typing import Any
 import httpx
 import websockets
 
+from ravn.adapters.channels._http_mixin import GatewayHttpMixin
+from ravn.adapters.channels._slash_commands import GATEWAY_SLASH_PROMPTS
 from ravn.adapters.channels.gateway import RavnGateway
 from ravn.config import DiscordChannelConfig
 from ravn.ports.gateway_channel import GatewayChannelPort, MessageHandler
@@ -44,13 +45,7 @@ _OP_HEARTBEAT_ACK = 11
 _RESUMABLE_CLOSE_CODES = {4000, 4001, 4002, 4003, 4005, 4007, 4008, 4009}
 
 # Slash commands recognised by the gateway; translated to agent prompts.
-_SLASH_PROMPTS: dict[str, str] = {
-    "/compact": "Please compact and summarise the current context.",
-    "/budget": "How many iterations have you used and how many remain in your budget?",
-    "/status": "What is your current task status? Summarise briefly.",
-    "/stop": "Please acknowledge that you are stopping and summarise what you were working on.",
-    "/todo": "List your current todo items.",
-}
+_SLASH_PROMPTS: dict[str, str] = GATEWAY_SLASH_PROMPTS
 
 # Approval marker embedded in messages that need human confirmation.
 _APPROVAL_MARKER = "[APPROVAL_REQUESTED]"
@@ -61,7 +56,7 @@ _REJECT_EMOJI = "👎"
 _INTENTS = (1 << 9) | (1 << 15)
 
 
-class DiscordGateway(GatewayChannelPort):
+class DiscordGateway(GatewayHttpMixin, GatewayChannelPort):
     """Connects to Discord Gateway and routes messages through :class:`RavnGateway`.
 
     WebSocket lifecycle:
@@ -88,6 +83,7 @@ class DiscordGateway(GatewayChannelPort):
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         # Per-message approval tracking: message_id → (chat_id, session_id)
+        # Capped at max_pending_approvals to prevent unbounded growth.
         self._pending_approvals: dict[str, tuple[str, str]] = {}
 
     # ------------------------------------------------------------------
@@ -137,36 +133,25 @@ class DiscordGateway(GatewayChannelPort):
         )
 
     async def send_image(self, chat_id: str, image: bytes, caption: str = "") -> None:
-        """Send *image* bytes to *chat_id* as an attachment."""
+        """Send *image* bytes to *chat_id* as a multipart attachment."""
         channel_id = self._channel_id(chat_id)
-        # Encode as base64 data URI for the Discord attachment upload
-        b64 = base64.b64encode(image).decode()
-        payload: dict[str, Any] = {
-            "content": caption,
-            "attachments": [
-                {
-                    "id": 0,
-                    "filename": "image.png",
-                    "data_uri": f"data:image/png;base64,{b64}",
-                }
-            ],
-        }
-        await self._rest_post(f"/channels/{channel_id}/messages", json=payload)
+        limit = self._config.message_max_chars
+        if caption and len(caption) > limit:
+            caption = caption[: limit - 3] + "..."
+        await self._rest_post_multipart(
+            f"/channels/{channel_id}/messages",
+            payload_json={"content": caption},
+            files={"files[0]": ("image.png", image, "image/png")},
+        )
 
     async def send_audio(self, chat_id: str, audio: bytes) -> None:
-        """Send *audio* bytes to *chat_id* as a file attachment."""
+        """Send *audio* bytes to *chat_id* as a multipart attachment."""
         channel_id = self._channel_id(chat_id)
-        b64 = base64.b64encode(audio).decode()
-        payload: dict[str, Any] = {
-            "attachments": [
-                {
-                    "id": 0,
-                    "filename": "audio.ogg",
-                    "data_uri": f"data:audio/ogg;base64,{b64}",
-                }
-            ],
-        }
-        await self._rest_post(f"/channels/{channel_id}/messages", json=payload)
+        await self._rest_post_multipart(
+            f"/channels/{channel_id}/messages",
+            payload_json={},
+            files={"files[0]": ("audio.ogg", audio, "audio/ogg")},
+        )
 
     # ------------------------------------------------------------------
     # WebSocket receive loop
@@ -280,10 +265,14 @@ class DiscordGateway(GatewayChannelPort):
         if not text:
             return
 
-        # Track messages with approval markers so we can handle reactions
+        # Track messages with approval markers so we can handle reactions.
+        # Evict the oldest entry when the cap is reached to keep memory bounded.
         message_id: str = data.get("id", "")
         if _APPROVAL_MARKER in text and message_id:
             session_id = f"discord:{chat_id}"
+            if len(self._pending_approvals) >= self._config.max_pending_approvals:
+                oldest_key = next(iter(self._pending_approvals))
+                del self._pending_approvals[oldest_key]
             self._pending_approvals[message_id] = (chat_id, session_id)
 
         prompt = self._translate_slash(text)
@@ -341,19 +330,27 @@ class DiscordGateway(GatewayChannelPort):
         command = text.split()[0].lower()
         return _SLASH_PROMPTS.get(command, text)
 
-    async def _rest_post(self, path: str, **kwargs: Any) -> dict[str, Any]:
-        """POST to the Discord REST API; returns parsed JSON."""
-        url = f"{self._config.api_base}{path}"
-        headers = {
-            "Authorization": f"Bot {self._token}",
-            "Content-Type": "application/json",
-        }
-        if self._http_client is not None:
-            resp = await self._http_client.post(url, headers=headers, **kwargs)
-            resp.raise_for_status()
-            return resp.json()
+    def _auth_headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bot {self._token}"}
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, headers=headers, **kwargs)
-            resp.raise_for_status()
-            return resp.json()
+    async def _rest_post(self, path: str, **kwargs: Any) -> dict[str, Any]:
+        """POST JSON to the Discord REST API; returns parsed JSON."""
+        url = f"{self._config.api_base}{path}"
+        headers = {**self._auth_headers(), "Content-Type": "application/json"}
+        return await self._http_post(url, headers=headers, **kwargs)
+
+    async def _rest_post_multipart(
+        self,
+        path: str,
+        *,
+        payload_json: dict[str, Any],
+        files: dict[str, tuple[str, bytes, str]],
+    ) -> dict[str, Any]:
+        """POST multipart/form-data to the Discord REST API (for file uploads)."""
+        url = f"{self._config.api_base}{path}"
+        return await self._http_post(
+            url,
+            headers=self._auth_headers(),
+            data={"payload_json": json.dumps(payload_json)},
+            files=files,
+        )
