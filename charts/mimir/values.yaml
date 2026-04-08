@@ -12,7 +12,7 @@ image:
   # -- Container image registry (leave blank to use Docker Hub).
   registry: ""
   # -- Container image repository.
-  repository: ghcr.io/niuulabs/mimir
+  repository: mimir
   # -- Image tag. Defaults to Chart.appVersion.
   tag: ""
   # -- Image pull policy.

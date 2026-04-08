@@ -11,7 +11,7 @@ image:
   # -- Container image registry (leave blank to use Docker Hub).
   registry: ""
   # -- Container image repository.
-  repository: ghcr.io/niuulabs/bifrost
+  repository: bifrost
   # -- Image tag. Defaults to Chart.appVersion.
   tag: ""
   # -- Image pull policy.
