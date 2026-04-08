@@ -18,6 +18,7 @@ from typing import Any
 
 import httpx
 
+from ravn.adapters.channels._slash_commands import GATEWAY_SLASH_PROMPTS
 from ravn.adapters.channels.gateway import RavnGateway
 from ravn.config import TelegramChannelConfig
 
@@ -26,12 +27,7 @@ logger = logging.getLogger(__name__)
 _TELEGRAM_API_BASE = "https://api.telegram.org/bot{token}/{method}"
 
 # Slash commands recognised by the gateway; translated to agent prompts.
-_SLASH_PROMPTS: dict[str, str] = {
-    "/stop": "Please acknowledge that you are stopping and summarise what you were working on.",
-    "/status": "What is your current task status? Summarise briefly.",
-    "/todo": "List your current todo items.",
-    "/budget": "How many iterations have you used and how many remain in your budget?",
-}
+_SLASH_PROMPTS: dict[str, str] = GATEWAY_SLASH_PROMPTS
 
 # Bot command definitions registered with Telegram via setMyCommands.
 _BOT_COMMANDS: list[dict[str, str]] = [
