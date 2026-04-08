@@ -80,25 +80,18 @@ def _build_skill_port(settings: Settings, workspace: Any) -> Any:
 
 def _build_web_search_kwargs(settings: Settings, _ctx: dict[str, Any]) -> dict[str, Any]:
     """Construct kwargs for WebSearchTool, including the dynamic provider."""
+    from ravn.cli.commands import _import_class, _inject_secrets  # noqa: PLC0415
+
     ws_cfg = settings.tools.web.search
     provider = None
     mock_path = "ravn.adapters.tools.web_search.MockWebSearchProvider"
     if ws_cfg.provider.adapter != mock_path:
-        import importlib  # noqa: PLC0415
         import logging  # noqa: PLC0415
 
         logger = logging.getLogger(__name__)
         try:
-            module_path, class_name = ws_cfg.provider.adapter.rsplit(".", 1)
-            module = importlib.import_module(module_path)
-            cls = getattr(module, class_name)
-            import os  # noqa: PLC0415
-
-            merged = dict(ws_cfg.provider.kwargs)
-            for kwarg_name, env_var in ws_cfg.provider.secret_kwargs_env.items():
-                value = os.environ.get(env_var, "")
-                if value:
-                    merged[kwarg_name] = value
+            cls = _import_class(ws_cfg.provider.adapter)
+            merged = _inject_secrets(dict(ws_cfg.provider.kwargs), ws_cfg.provider.secret_kwargs_env)
             provider = cls(**merged)
         except Exception as exc:
             logger.warning("Failed to load web search provider: %s — using mock", exc)
@@ -286,13 +279,15 @@ BUILTIN_TOOLS: dict[str, BuiltinToolDef] = {
         adapter="ravn.adapters.tools.skill_tools.SkillListTool",
         groups=frozenset({"skill"}),
         condition=lambda s: s.skill.enabled,
-        kwargs_fn=lambda s, ctx: {"skill_port": _build_skill_port(s, ctx["workspace"])},
+        required_context=frozenset({"skill_port"}),
+        kwargs_fn=lambda s, ctx: {"skill_port": ctx["skill_port"]},
     ),
     "skill_run": BuiltinToolDef(
         adapter="ravn.adapters.tools.skill_tools.SkillRunTool",
         groups=frozenset({"skill"}),
         condition=lambda s: s.skill.enabled,
-        kwargs_fn=lambda s, ctx: {"skill_port": _build_skill_port(s, ctx["workspace"])},
+        required_context=frozenset({"skill_port"}),
+        kwargs_fn=lambda s, ctx: {"skill_port": ctx["skill_port"]},
     ),
     # =========================================================================
     # platform — Niuu platform integration (conditional on gateway.platform.enabled)

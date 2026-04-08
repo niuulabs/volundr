@@ -355,6 +355,12 @@ def _build_tools(
         "persona_prefix": persona_prefix,
     }
 
+    # Pre-build shared skill port so both skill_list and skill_run reuse one instance
+    if "skill" in include_groups and settings.skill.enabled:
+        from ravn.adapters.tools.builtin_registry import _build_skill_port  # noqa: PLC0415
+
+        runtime_ctx["skill_port"] = _build_skill_port(settings, workspace)
+
     tools: list[ToolPort] = []
     state_tool: Any = None
 
@@ -1482,9 +1488,6 @@ async def _run_daemon(
             persona_config=persona_config,
         )
 
-        # Sub-tasks (cascade workers) get only base tools — no cascade/MCP to
-        # prevent tool-looping on small models.  The coordinator (task_id=None)
-        # gets the full set.
         # Sub-tasks (cascade workers) use the 'worker' profile: core tools only,
         # no MCP, no cascade.  The coordinator uses 'default': full tool set.
         profile = "worker" if task_id is not None else "default"
