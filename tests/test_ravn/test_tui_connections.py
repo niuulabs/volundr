@@ -305,6 +305,7 @@ async def test_fetch_info_non_200_doesnt_set_info() -> None:
         await manager._fetch_info(conn)
 
     assert conn.ravn_info == {}
+    assert conn.status == "error"
 
 
 @pytest.mark.asyncio
@@ -350,8 +351,10 @@ async def test_maintain_sse_reconnects_on_error() -> None:
             raise ConnectionError("network error")
         raise asyncio.CancelledError()
 
-    with patch.object(manager, "_sse_loop", side_effect=fail_then_cancel), \
-         patch("ravn.tui.connections.asyncio.sleep", new=AsyncMock()):
+    with (
+        patch.object(manager, "_sse_loop", side_effect=fail_then_cancel),
+        patch("ravn.tui.connections.asyncio.sleep", new=AsyncMock()),
+    ):
         await manager._maintain_sse(conn)
 
     assert call_count == 2
@@ -438,8 +441,10 @@ async def test_global_event_callback_error_doesnt_crash() -> None:
 
     manager.on_event(bad_global_cb)
 
-    with patch.object(manager, "_maintain_sse", new=AsyncMock()), \
-         patch.object(manager, "_fetch_info", new=AsyncMock()):
+    with (
+        patch.object(manager, "_maintain_sse", new=AsyncMock()),
+        patch.object(manager, "_fetch_info", new=AsyncMock()),
+    ):
         await manager.connect("localhost", 7477)
 
     # Should not raise

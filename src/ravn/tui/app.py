@@ -354,8 +354,7 @@ class RavnTUI(App[None]):
         self._focus_pane(self._focused_pane_id)
 
     async def _resize_current_height(self, delta: float) -> None:
-        # Use negative delta for vertical splits
-        await self._resize_current(-delta)
+        await self._resize_current(delta)
 
     async def _rotate_current(self) -> None:
         if not self._focused_pane_id:

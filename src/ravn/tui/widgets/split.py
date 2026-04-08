@@ -18,7 +18,6 @@ Direction = Literal["horizontal", "vertical"]
 _DEFAULT_RATIO = 0.5
 _MIN_RATIO = 0.1
 _MAX_RATIO = 0.9
-_RESIZE_STEP = 0.05
 
 
 # ---------------------------------------------------------------------------

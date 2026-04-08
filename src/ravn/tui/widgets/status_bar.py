@@ -10,6 +10,8 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Label, Static
 
+_URGENCY_THRESHOLD = 0.8
+
 
 class StatusBar(Widget):
     """Top status bar: ᚠ Flokk name · Ravn count · active task count · clock."""
@@ -89,7 +91,7 @@ class StatusBar(Widget):
         if not isinstance(data, dict):
             return
         urgency = data.get("urgency", 0.0)
-        if urgency >= 0.8:
+        if urgency >= _URGENCY_THRESHOLD:
             self._flash_notification(str(data.get("payload", {}).get("text", "")))
 
     def _flash_notification(self, text: str) -> None:

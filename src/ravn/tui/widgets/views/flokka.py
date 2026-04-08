@@ -9,6 +9,8 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import DataTable, Static
 
+from ravn.tui.utils import iter_bar
+
 if TYPE_CHECKING:
     pass
 
@@ -86,7 +88,7 @@ class FlokkaView(Widget):
             label = _STATUS_LABEL.get(status, status)
             style = _STATUS_STYLE.get(status, "")
             info = conn.ravn_info
-            iter_str = _iter_bar(info.get("iteration"), info.get("max_iterations"))
+            iter_str = iter_bar(info.get("iteration"), info.get("max_iterations"), prefix="iter ")
             uptime = info.get("uptime", "—")
             task = _truncate(info.get("task_title", "—"), 30)
             ghost_marker = " ⊙" if conn.ghost else ""
@@ -120,21 +122,6 @@ class FlokkaView(Widget):
 
     def action_notifications(self) -> None:
         self.app.action_notifications() if hasattr(self.app, "action_notifications") else None
-
-
-def _iter_bar(current: Any, maximum: Any) -> str:
-    if current is None or maximum is None:
-        return "—"
-    try:
-        cur = int(current)
-        mx = int(maximum)
-        if mx == 0:
-            return "—"
-        filled = int((cur / mx) * 8)
-        bar = "▓" * filled + "░" * (8 - filled)
-        return f"iter {cur}/{mx} {bar}"
-    except (ValueError, TypeError):
-        return "—"
 
 
 def _truncate(text: str, max_len: int) -> str:

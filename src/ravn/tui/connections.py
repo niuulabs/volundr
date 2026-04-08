@@ -140,13 +140,10 @@ class FlokkaManager:
     async def broadcast(self, message: str) -> dict[str, str]:
         """Send message to all idle Ravens. Returns {name: task_id}."""
         results: dict[str, str] = {}
-        tasks = []
-        for conn in self.connections():
-            if conn.status == "connected" and not conn.ghost:
-                tasks.append(self._send_message(conn, message))
+        eligible = [c for c in self.connections() if c.status == "connected" and not c.ghost]
+        tasks = [self._send_message(conn, message) for conn in eligible]
         responses = await asyncio.gather(*tasks, return_exceptions=True)
-        conns = [c for c in self.connections() if c.status == "connected" and not c.ghost]
-        for conn, resp in zip(conns, responses):
+        for conn, resp in zip(eligible, responses):
             if isinstance(resp, str):
                 results[conn.name] = resp
         return results
@@ -177,6 +174,9 @@ class FlokkaManager:
                 if resp.status_code == 200:
                     conn.ravn_info = resp.json()
                     conn.status = "connected"
+                else:
+                    conn.status = "error"
+                    logger.debug("non-200 from %s: %s", conn.name, resp.status_code)
         except Exception:
             conn.status = "error"
             logger.debug("failed to fetch info from %s", conn.name)

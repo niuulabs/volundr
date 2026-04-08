@@ -9,6 +9,8 @@ from textual.binding import Binding
 from textual.widget import Widget
 from textual.widgets import DataTable, Label
 
+from ravn.tui.utils import iter_bar
+
 _STATUS_STYLE: dict[str, str] = {
     "running": "#f59e0b",
     "queued": "#06b6d4",
@@ -76,7 +78,7 @@ class TaskBoardView(Widget):
             ravn = task.get("ravn", "—")
             status = task.get("status", "?")
             style = _STATUS_STYLE.get(status, "#a1a1aa")
-            progress = _iter_bar(task.get("iteration"), task.get("max_iterations"))
+            progress = iter_bar(task.get("iteration"), task.get("max_iterations"))
             elapsed = task.get("elapsed", "—")
             table.add_row(
                 tid,
@@ -103,18 +105,3 @@ class TaskBoardView(Widget):
 
     def action_expand_task(self) -> None:
         pass
-
-
-def _iter_bar(current: Any, maximum: Any) -> str:
-    if current is None or maximum is None:
-        return "—"
-    try:
-        cur = int(current)
-        mx = int(maximum)
-        if mx == 0:
-            return "—"
-        filled = int((cur / mx) * 8)
-        bar = "▓" * filled + "░" * (8 - filled)
-        return f"{cur}/{mx} {bar}"
-    except (ValueError, TypeError):
-        return "—"
