@@ -1349,6 +1349,59 @@ class BuriConfig(BaseModel):
     )
 
 
+class BrowserbaseConfig(BaseModel):
+    """Browserbase cloud browser configuration."""
+
+    api_key_env: str = Field(
+        default="BROWSERBASE_API_KEY",
+        description="Environment variable name holding the Browserbase API key.",
+    )
+    project_id_env: str = Field(
+        default="BROWSERBASE_PROJECT_ID",
+        description="Environment variable name holding the Browserbase project ID.",
+    )
+    stealth: bool = Field(
+        default=False,
+        description="Enable stealth mode (anti-bot fingerprint masking).",
+    )
+
+
+class BrowserConfig(BaseModel):
+    """Browser automation tool configuration (NIU-532)."""
+
+    backend: Literal["local", "browserbase"] = Field(
+        default="local",
+        description=(
+            "Browser backend: 'local' (headless Chromium via Playwright) "
+            "or 'browserbase' (cloud execution with stealth / CAPTCHA support). "
+            "Browserbase is activated automatically when BROWSERBASE_API_KEY is set."
+        ),
+    )
+    headless: bool = Field(
+        default=True,
+        description="Launch browser headlessly (local backend only).",
+    )
+    timeout_ms: int = Field(
+        default=30_000,
+        description="Default navigation and action timeout in milliseconds.",
+    )
+    allowed_origins: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Glob patterns for hostnames the agent is allowed to navigate to. "
+            "Empty list means all origins are allowed (subject to blocked_origins)."
+        ),
+    )
+    blocked_origins: list[str] = Field(
+        default_factory=list,
+        description="Glob patterns for hostnames that are always blocked.",
+    )
+    browserbase: BrowserbaseConfig = Field(
+        default_factory=BrowserbaseConfig,
+        description="Browserbase cloud backend configuration.",
+    )
+
+
 class CheckpointConfig(BaseModel):
     """Task-interruption checkpoint configuration (NIU-504)."""
 
@@ -1432,6 +1485,9 @@ class Settings(BaseSettings):
 
     # NIU-504: task interruption / resume
     checkpoint: CheckpointConfig = Field(default_factory=CheckpointConfig)
+
+    # NIU-532: browser automation
+    browser: BrowserConfig = Field(default_factory=BrowserConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)
