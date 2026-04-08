@@ -1516,6 +1516,9 @@ async def _run_daemon(
 
     mcp_manager, mcp_tools = await _start_mcp_shared(settings)
 
+    # Populated by _wire_cron after drive_loop is created; captured by _agent_factory.
+    cron_tools: list[Any] = []
+
     def _agent_factory(channel: ChannelPort, task_id: str | None = None) -> Any:
         session = Session()
         budget = IterationBudget(
@@ -1547,8 +1550,14 @@ async def _run_daemon(
             tools.extend(mcp_tools)
         if "cascade" in profile_cfg.include_groups:
             # Add cascade tools (parallel task execution) if wired
+            # NOTE: cascade_tools uses the same monkey-patch pattern as before —
+            # tracked as tech debt to align with the cron pattern.
             cascade_tools = getattr(drive_loop, "_cascade_tools", [])
             tools.extend(cascade_tools)
+
+            # Add cron scheduling tools
+            if cron_tools:
+                tools.extend(cron_tools)
 
         return RavnAgent(
             llm=llm,
@@ -1623,7 +1632,8 @@ async def _run_daemon(
             event_publisher=event_publisher,
             resume=resume,
         )
-        _wire_triggers(drive_loop, settings.initiative)
+        _cron_jobs = _wire_triggers(drive_loop, settings.initiative)
+        cron_tools[:] = _wire_cron(drive_loop, _cron_jobs, settings.initiative)
 
         # Wire task dispatch subscription when requested (--listen / --daemon)
         if task_dispatch and settings.sleipnir.enabled:
@@ -1673,15 +1683,24 @@ async def _run_daemon(
         await _shutdown_mcp(mcp_manager)
 
 
-def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> None:
-    """Instantiate trigger adapters from config and register them on drive_loop."""
+def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> list[Any]:
+    """Instantiate trigger adapters from config and register them on drive_loop.
+
+    Config-defined cron jobs are collected and returned so that ``_wire_cron``
+    can create a single ``CronTrigger`` (one lock) that also services runtime
+    jobs from the ``CronJobStore``.
+
+    Returns a list of ``CronJob`` objects for the caller to pass to ``_wire_cron``.
+    """
     from ravn.domain.models import OutputMode
+
+    cron_jobs: list[Any] = []
 
     for tc in initiative.triggers:
         output_mode = OutputMode(tc.output_mode) if tc.output_mode else OutputMode.SILENT
         try:
             if tc.type == "cron":
-                from ravn.adapters.triggers.cron import CronJob, CronTrigger
+                from ravn.adapters.triggers.cron import CronJob
 
                 job = CronJob(
                     name=tc.name,
@@ -1691,7 +1710,7 @@ def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> None:
                     persona=tc.persona or None,
                     priority=tc.priority,
                 )
-                drive_loop.register_trigger(CronTrigger(jobs=[job]))
+                cron_jobs.append(job)
 
             elif tc.type == "sleipnir_event":
                 from ravn.adapters.triggers.sleipnir import SleipnirEventTrigger
@@ -1718,6 +1737,39 @@ def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> None:
 
         except Exception as exc:
             logger.error("Failed to wire trigger %r: %s", tc.name, exc)
+
+    return cron_jobs
+
+
+def _wire_cron(
+    drive_loop: Any,
+    cron_jobs: list[Any],
+    initiative: InitiativeConfig,
+) -> list[Any]:
+    """Create a single CronTrigger + CronJobStore and wire cron tools (NIU-437).
+
+    A single CronTrigger is always registered so runtime jobs created via
+    ``cron_create`` are serviced even when no config-defined cron triggers exist.
+    The store is backed by ``~/.ravn/cron/jobs.json`` (0600).
+
+    Returns the list of cron tool instances for the caller to pass to the agent
+    factory — avoids monkey-patching drive_loop with private attributes.
+    """
+    from ravn.adapters.tools.cron_tools import build_cron_tools
+    from ravn.adapters.triggers.cron import make_cron_trigger
+
+    trigger, store = make_cron_trigger(
+        jobs=cron_jobs,
+        tick_seconds=initiative.cron_tick_seconds,
+    )
+    drive_loop.register_trigger(trigger)
+    tools = build_cron_tools(store)
+    logger.info(
+        "cron: wired %d config job(s); store at %s",
+        len(cron_jobs),
+        store._path,
+    )
+    return tools
 
 
 def _wire_task_dispatch(drive_loop: Any, sleipnir_config: Any) -> None:
