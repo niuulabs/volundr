@@ -1055,6 +1055,10 @@ class InitiativeConfig(BaseModel):
         default=60,
         description="Seconds between drive-loop heartbeat log entries.",
     )
+    cron_tick_seconds: float = Field(
+        default=30.0,
+        description="Seconds between cron trigger ticks (scheduler wake interval).",
+    )
     triggers: list[TriggerConfig] = Field(
         default_factory=list,
         description="Ordered list of trigger configurations.",

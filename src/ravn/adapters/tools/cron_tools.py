@@ -26,7 +26,7 @@ from __future__ import annotations
 import logging
 from uuid import uuid4
 
-from ravn.adapters.triggers.cron import CronJobRecord, CronJobStore, _parse_schedule
+from ravn.adapters.triggers.cron import CronJobRecord, CronJobStore, parse_schedule
 from ravn.domain.models import ToolResult
 from ravn.ports.tool import ToolPort
 
@@ -159,7 +159,7 @@ class CronCreateTool(ToolPort):
             )
 
         # Validate schedule by parsing it
-        canonical = _parse_schedule(schedule)
+        canonical = parse_schedule(schedule)
         if not (
             canonical.startswith("every:")
             or canonical.startswith("once:")

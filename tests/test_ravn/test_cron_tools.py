@@ -26,8 +26,8 @@ from ravn.adapters.triggers.cron import (
     CronTrigger,
     _cron_matches,
     _field_matches,
-    _parse_schedule,
     make_cron_trigger,
+    parse_schedule,
 )
 from ravn.domain.models import AgentTask, OutputMode
 
@@ -55,46 +55,46 @@ def _make_record(**kwargs) -> CronJobRecord:
 
 
 # ---------------------------------------------------------------------------
-# _parse_schedule
+# parse_schedule
 # ---------------------------------------------------------------------------
 
 
 class TestParseSchedule:
     def test_every_minutes(self):
-        assert _parse_schedule("every 30m") == "every:1800"
+        assert parse_schedule("every 30m") == "every:1800"
 
     def test_every_seconds(self):
-        assert _parse_schedule("every 5s") == "every:5"
+        assert parse_schedule("every 5s") == "every:5"
 
     def test_every_hours(self):
-        assert _parse_schedule("every 2h") == "every:7200"
+        assert parse_schedule("every 2h") == "every:7200"
 
     def test_bare_interval_minutes(self):
-        assert _parse_schedule("30m") == "every:1800"
+        assert parse_schedule("30m") == "every:1800"
 
     def test_bare_interval_hours(self):
-        assert _parse_schedule("2h") == "every:7200"
+        assert parse_schedule("2h") == "every:7200"
 
     def test_bare_interval_seconds(self):
-        assert _parse_schedule("45s") == "every:45"
+        assert parse_schedule("45s") == "every:45"
 
     def test_daily_at(self):
-        result = _parse_schedule("daily at 09:00")
+        result = parse_schedule("daily at 09:00")
         assert result == "0 9 * * *"
 
     def test_daily_at_midnight(self):
-        result = _parse_schedule("daily at 00:30")
+        result = parse_schedule("daily at 00:30")
         assert result == "30 0 * * *"
 
     def test_cron_passthrough(self):
-        assert _parse_schedule("0 8 * * *") == "0 8 * * *"
+        assert parse_schedule("0 8 * * *") == "0 8 * * *"
 
     def test_iso_timestamp(self):
-        result = _parse_schedule("2026-04-08T09:00:00")
+        result = parse_schedule("2026-04-08T09:00:00")
         assert result.startswith("once:")
 
     def test_unknown_passthrough(self):
-        result = _parse_schedule("*/5 * * * *")
+        result = parse_schedule("*/5 * * * *")
         assert result == "*/5 * * * *"
 
 
@@ -322,7 +322,7 @@ async def test_cron_trigger_fires_store_job(tmp_path):
     for record in store.list():
         if not record.enabled:
             continue
-        canonical = _parse_schedule(record.schedule)
+        canonical = parse_schedule(record.schedule)
         if not trigger._is_due_canonical(canonical, record.job_id, now, state):
             continue
         context = record.context
@@ -370,7 +370,7 @@ async def test_cron_trigger_silent_marker(tmp_path):
     state: dict = {}
 
     for record in store.list():
-        canonical = _parse_schedule(record.schedule)
+        canonical = parse_schedule(record.schedule)
         if not trigger._is_due_canonical(canonical, record.job_id, now, state):
             continue
         context = record.context

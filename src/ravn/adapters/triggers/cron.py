@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import re
+import tempfile
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
@@ -116,7 +117,7 @@ def _cron_matches(expr: str, dt: datetime) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _parse_schedule(schedule: str) -> str:
+def parse_schedule(schedule: str) -> str:
     """Normalise *schedule* to a canonical cron expression or special form.
 
     Returns one of:
@@ -180,7 +181,7 @@ class CronJob:
     ) -> None:
         self.name = name
         self.raw_schedule = schedule
-        self.canonical = _parse_schedule(schedule)
+        self.canonical = parse_schedule(schedule)
         self.context = context
         self.output_mode = output_mode
         self.persona = persona
@@ -295,9 +296,19 @@ class CronJobStore:
 
     def _save(self, records: list[dict]) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps(records, indent=2))
-        # Restrict to owner read/write only
-        os.chmod(self._path, 0o600)
+        data = json.dumps(records, indent=2)
+        fd, tmp_path = tempfile.mkstemp(dir=self._path.parent, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(data)
+            os.chmod(tmp_path, 0o600)
+            os.replace(tmp_path, self._path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
 
 # ---------------------------------------------------------------------------
@@ -456,7 +467,7 @@ class CronTrigger:
                     for record in self._store.list():
                         if not record.enabled:
                             continue
-                        canonical = _parse_schedule(record.schedule)
+                        canonical = parse_schedule(record.schedule)
                         if not self._is_due_canonical(canonical, record.job_id, now, state):
                             continue
 
