@@ -25,10 +25,9 @@ export const MODULE_PROXIES: ProxyEntry[] = [
     targetEnvVar: 'VITE_TYR_API_TARGET',
     defaultTarget: 'http://localhost:8081',
   },
-  // Add new module proxy entries here:
-  // {
-  //   path: '/api/v1/heimdall',
-  //   targetEnvVar: 'VITE_HEIMDALL_API_TARGET',
-  //   defaultTarget: 'http://localhost:8082',
-  // },
+  {
+    path: '/mimir',
+    targetEnvVar: 'VITE_MIMIR_API_TARGET',
+    defaultTarget: 'http://localhost:7477',
+  },
 ];

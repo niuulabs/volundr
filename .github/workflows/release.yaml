@@ -43,7 +43,7 @@ jobs:
     strategy:
       matrix:
         platform: [amd64, arm64]
-        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu]
+        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu, mimir]
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
@@ -102,7 +102,7 @@ jobs:
       id-token: write
     strategy:
       matrix:
-        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu]
+        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu, mimir]
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
@@ -183,7 +183,7 @@ jobs:
       packages: read
     strategy:
       matrix:
-        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu]
+        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu, mimir]
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1

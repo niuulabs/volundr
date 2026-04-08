@@ -139,7 +139,9 @@ ingress:
   className: ""
   # -- Hostname for the Ingress rule.
   host: ""
-  # -- Enable TLS (creates a TLS secret named <fullname>-tls).
+  # -- Enable TLS. Set to `true` for auto-generated secret name (<fullname>-tls),
+  # or use an object `{ enabled: true, secretName: "existing-secret" }` to reuse
+  # an existing TLS secret.
   tls: false
   # -- Additional annotations for the Ingress resource.
   annotations: {}

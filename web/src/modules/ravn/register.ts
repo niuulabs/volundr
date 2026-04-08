@@ -1,10 +1,10 @@
-import { Bird } from 'lucide-react';
 import { registerModuleDefinition } from '@/modules/shared/registry';
+import { RaidhoRune } from '@/modules/shared/registry/rune-icons';
 
 registerModuleDefinition({
   key: 'ravn',
   label: 'Ravn',
-  icon: Bird,
+  icon: RaidhoRune,
   basePath: '/ravn',
   routes: [
     { path: '', index: true, redirectTo: 'chat' },

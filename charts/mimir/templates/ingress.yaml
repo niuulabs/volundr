@@ -13,11 +13,11 @@ spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}
   {{- end }}
-  {{- if .Values.ingress.tls }}
+  {{- if or (and (kindIs "bool" .Values.ingress.tls) .Values.ingress.tls) (and (kindIs "map" .Values.ingress.tls) .Values.ingress.tls.enabled) }}
   tls:
     - hosts:
         - {{ .Values.ingress.host | quote }}
-      secretName: {{ include "mimir.fullname" . }}-tls
+      secretName: {{ if and (kindIs "map" .Values.ingress.tls) .Values.ingress.tls.secretName }}{{ .Values.ingress.tls.secretName }}{{ else }}{{ include "mimir.fullname" . }}-tls{{ end }}
   {{- end }}
   rules:
     - host: {{ .Values.ingress.host | quote }}
