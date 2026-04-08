@@ -1438,7 +1438,8 @@ class MimirConfig(BaseModel):
         description=(
             "Multi-Mímir instances for CompositeMimirAdapter. "
             "When empty, a single local MarkdownMimirAdapter is used (path=mimir.path). "
-            "Each entry is either a local filesystem adapter (path=) or a remote HTTP adapter (url=)."
+            "Each entry is either a local filesystem adapter (path=) "
+            "or a remote HTTP adapter (url=)."
         ),
     )
     write_routing: MimirWriteRoutingConfig = Field(
