@@ -13,7 +13,11 @@ from typing import Any
 from ravn.budget import IterationBudget, TokenEstimator
 from ravn.compression import CompressionResult, ContextCompressor
 from ravn.config import ExtendedThinkingConfig, OutcomeConfig
-from ravn.domain.checkpoint import Checkpoint, InterruptReason
+from ravn.domain.checkpoint import (
+    DESTRUCTIVE_TOOL_NAMES,
+    Checkpoint,
+    InterruptReason,
+)
 from ravn.domain.events import RavnEvent
 from ravn.domain.exceptions import MaxIterationsError, PermissionDeniedError
 from ravn.domain.models import (
@@ -49,9 +53,6 @@ PostToolHook = Callable[[ToolCall, ToolResult], Coroutine[Any, Any, None]]
 UserInputFn = Callable[[str], Coroutine[Any, Any, str]]
 
 _ASK_USER_TOOL_NAME = "ask_user"
-
-# NIU-537: tool names that trigger an automatic pre-execution snapshot.
-_DESTRUCTIVE_TOOL_NAMES = frozenset({"write_file", "edit_file", "bash", "terminal"})
 
 
 class RavnAgent:
@@ -352,7 +353,7 @@ class RavnAgent:
                 # NIU-537: auto-snapshot before destructive operations.
                 if (
                     self._auto_checkpoint_before_destructive
-                    and tool_call.name in _DESTRUCTIVE_TOOL_NAMES
+                    and tool_call.name in DESTRUCTIVE_TOOL_NAMES
                 ):
                     await self._maybe_save_snapshot(label=f"auto: before {tool_call.name}")
 

@@ -259,35 +259,37 @@ class PostgresCheckpointAdapter(CheckpointPort):
     async def save_snapshot(self, checkpoint: Checkpoint) -> str:
         pool = await self._ensure_pool()
         async with pool.acquire() as conn:
-            row = await conn.fetchrow(_NEXT_SEQ_SQL, checkpoint.task_id)
-            seq = row["next_seq"]
+            async with conn.transaction():
+                row = await conn.fetchrow(_NEXT_SEQ_SQL, checkpoint.task_id)
+                seq = row["next_seq"]
 
-        checkpoint_id = Checkpoint.make_snapshot_id(checkpoint.task_id, seq)
-        checkpoint.checkpoint_id = checkpoint_id
-        checkpoint.seq = seq
+                checkpoint_id = Checkpoint.make_snapshot_id(checkpoint.task_id, seq)
+                checkpoint.checkpoint_id = checkpoint_id
+                checkpoint.seq = seq
 
-        async with pool.acquire() as conn:
-            await conn.execute(
-                _INSERT_SNAPSHOT_SQL,
-                checkpoint_id,
-                checkpoint.task_id,
-                seq,
-                checkpoint.label,
-                json.dumps(checkpoint.tags),
-                checkpoint.memory_context,
-                checkpoint.user_input,
-                json.dumps(checkpoint.messages),
-                json.dumps(checkpoint.todos),
-                checkpoint.iteration_budget_consumed,
-                checkpoint.iteration_budget_total,
-                json.dumps(checkpoint.last_tool_call) if checkpoint.last_tool_call else None,
-                json.dumps(checkpoint.last_tool_result) if checkpoint.last_tool_result else None,
-                checkpoint.partial_response,
-                checkpoint.interrupted_by,
-                checkpoint.created_at,
-            )
-            # Prune oldest snapshots if limit exceeded
-            await conn.execute(_PRUNE_SNAPSHOTS_SQL, checkpoint.task_id, self._max_snapshots)
+                await conn.execute(
+                    _INSERT_SNAPSHOT_SQL,
+                    checkpoint_id,
+                    checkpoint.task_id,
+                    seq,
+                    checkpoint.label,
+                    json.dumps(checkpoint.tags),
+                    checkpoint.memory_context,
+                    checkpoint.user_input,
+                    json.dumps(checkpoint.messages),
+                    json.dumps(checkpoint.todos),
+                    checkpoint.iteration_budget_consumed,
+                    checkpoint.iteration_budget_total,
+                    json.dumps(checkpoint.last_tool_call) if checkpoint.last_tool_call else None,
+                    json.dumps(checkpoint.last_tool_result)
+                    if checkpoint.last_tool_result
+                    else None,
+                    checkpoint.partial_response,
+                    checkpoint.interrupted_by,
+                    checkpoint.created_at,
+                )
+                # Prune oldest snapshots if limit exceeded
+                await conn.execute(_PRUNE_SNAPSHOTS_SQL, checkpoint.task_id, self._max_snapshots)
 
         logger.debug("Snapshot saved to postgres: %s", checkpoint_id)
         return checkpoint_id

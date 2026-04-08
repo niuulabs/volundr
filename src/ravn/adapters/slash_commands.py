@@ -27,6 +27,7 @@ import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ravn.domain.checkpoint import restore_session_from_checkpoint
 from ravn.domain.models import Session
 from ravn.ports.checkpoint import CheckpointPort
 from ravn.ports.tool import ToolPort
@@ -456,27 +457,7 @@ def _checkpoint_restore(ctx: SlashCommandContext, checkpoint_id: str) -> str:
     if cp is None:
         return f"Checkpoint {checkpoint_id!r} not found."
 
-    from ravn.domain.models import Message, TodoItem, TodoStatus
-
-    ctx.session.messages.clear()
-    for raw in cp.messages:
-        ctx.session.messages.append(Message(role=raw["role"], content=raw["content"]))
-
-    ctx.session.todos.clear()
-    for raw in cp.todos:
-        status_raw = raw.get("status", "pending")
-        try:
-            status = TodoStatus(status_raw)
-        except ValueError:
-            status = TodoStatus.PENDING
-        ctx.session.upsert_todo(
-            TodoItem(
-                id=raw["id"],
-                content=raw["content"],
-                status=status,
-                priority=raw.get("priority", 0),
-            )
-        )
+    restore_session_from_checkpoint(ctx.session, cp)
 
     return (
         f"Restored from {checkpoint_id!r}.\n"

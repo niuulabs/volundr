@@ -1614,10 +1614,6 @@ class CheckpointConfig(BaseModel):
             "(write_file, edit_file, bash with write flags)."
         ),
     )
-    compress: bool = Field(
-        default=True,
-        description="Compress checkpoint files with gzip (disk backend only).",
-    )
     budget_milestone_fractions: list[float] = Field(
         default_factory=lambda: [0.5, 0.75, 0.9],
         description=(

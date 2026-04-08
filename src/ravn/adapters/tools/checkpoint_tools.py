@@ -16,7 +16,10 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from ravn.domain.checkpoint import Checkpoint
+from ravn.domain.checkpoint import (
+    Checkpoint,
+    restore_session_from_checkpoint,
+)
 from ravn.domain.models import Session, ToolResult
 from ravn.ports.checkpoint import CheckpointPort
 from ravn.ports.tool import ToolPort
@@ -25,16 +28,6 @@ logger = logging.getLogger(__name__)
 
 _PERMISSION = "checkpoint:write"
 _PERMISSION_READ = "checkpoint:read"
-
-# Destructive tool names that auto-trigger a pre-op snapshot.
-DESTRUCTIVE_TOOL_NAMES = frozenset(
-    {
-        "write_file",
-        "edit_file",
-        "bash",
-        "terminal",
-    }
-)
 
 
 def _format_snapshot_summary(cp: Checkpoint) -> str:
@@ -268,29 +261,7 @@ class CheckpointRestoreTool(ToolPort):
                 is_error=True,
             )
 
-        # Restore message history in-place
-        from ravn.domain.models import Message, TodoItem, TodoStatus
-
-        self._session.messages.clear()
-        for raw in cp.messages:
-            self._session.messages.append(Message(role=raw["role"], content=raw["content"]))
-
-        # Restore todos
-        self._session.todos.clear()
-        for raw in cp.todos:
-            status_raw = raw.get("status", "pending")
-            try:
-                status = TodoStatus(status_raw)
-            except ValueError:
-                status = TodoStatus.PENDING
-            self._session.upsert_todo(
-                TodoItem(
-                    id=raw["id"],
-                    content=raw["content"],
-                    status=status,
-                    priority=raw.get("priority", 0),
-                )
-            )
+        restore_session_from_checkpoint(self._session, cp)
 
         return ToolResult(
             tool_call_id="",

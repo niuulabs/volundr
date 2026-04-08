@@ -5,7 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ravn.domain.models import Session
+
+# Tool names that trigger an automatic pre-execution named snapshot.
+# Defined here (domain layer) so both the agent loop and the checkpoint tools
+# can import from a single authoritative location.
+DESTRUCTIVE_TOOL_NAMES: frozenset[str] = frozenset({"write_file", "edit_file", "bash", "terminal"})
 
 
 class InterruptReason(StrEnum):
@@ -80,3 +88,32 @@ class Checkpoint:
     def make_snapshot_id(cls, task_id: str, seq: int) -> str:
         """Return a canonical checkpoint_id for the given task and sequence."""
         return f"ckpt_{task_id}_{seq}"
+
+
+def restore_session_from_checkpoint(session: Session, checkpoint: Checkpoint) -> None:
+    """Restore session messages and todos in-place from a named checkpoint.
+
+    Mutates *session* directly — clears existing messages and todos then
+    repopulates them from the serialised dicts stored in *checkpoint*.
+    """
+    from ravn.domain.models import Message, TodoItem, TodoStatus
+
+    session.messages.clear()
+    for raw in checkpoint.messages:
+        session.messages.append(Message(role=raw["role"], content=raw["content"]))
+
+    session.todos.clear()
+    for raw in checkpoint.todos:
+        status_raw = raw.get("status", "pending")
+        try:
+            status = TodoStatus(status_raw)
+        except ValueError:
+            status = TodoStatus.PENDING
+        session.upsert_todo(
+            TodoItem(
+                id=raw["id"],
+                content=raw["content"],
+                status=status,
+                priority=raw.get("priority", 0),
+            )
+        )
