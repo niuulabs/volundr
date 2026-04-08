@@ -143,46 +143,6 @@ uv sync --extra k8s        # Kubernetes client
 uv sync --extra otel       # OpenTelemetry export
 ```
 
-## Bifröst Gateway
-
-Bifröst is a lightweight multi-provider LLM gateway bundled with this repo. It
-presents an OpenAI-compatible API (`POST /v1/chat/completions`, `GET /v1/models`)
-and can route requests across Anthropic, OpenAI, and Ollama backends with
-failover, cost optimisation, round-robin, and latency-optimised strategies.
-
-### Pi mode (local-only, no auth)
-
-Run Bifröst entirely offline on a Raspberry Pi or any low-power device using
-[Ollama](https://ollama.com) as the sole provider — no cloud API keys, no
-authentication proxy.
-
-```bash
-# 1. Install Ollama and pull models
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull llama3.2:1b      # fast   — 1.3 GB
-ollama pull llama3.2:3b      # balanced — 2.0 GB
-ollama pull llama3.1:8b      # best   — 4.7 GB (Pi 5 + 8 GB RAM recommended)
-
-# 2. Start the gateway with the Pi-mode example config
-bifrost --config bifrost.pi.example.yaml
-```
-
-The gateway starts at `http://localhost:8088`. Standard aliases resolve
-automatically:
-
-| Alias      | Model        | Notes                       |
-|------------|--------------|-----------------------------|
-| `fast`     | llama3.2:1b  | ~30 tok/s on Pi 5           |
-| `balanced` | llama3.2:3b  | ~15 tok/s on Pi 5           |
-| `best`     | llama3.1:8b  | ~6 tok/s on Pi 5, 8 GB RAM  |
-
-Usage logs are persisted to `./bifrost_usage.db` (SQLite). Auth is `open` —
-headers are trusted verbatim. If you expose the gateway beyond localhost,
-switch to `auth_mode: pat` and issue tokens for each client.
-
-See `bifrost.pi.example.yaml` for the full annotated configuration and
-`bifrost.yaml.example` for the complete multi-provider reference config.
-
 ## Documentation
 
 Full documentation at [niuulabs.github.io/volundr](https://niuulabs.github.io/volundr/).

@@ -57,7 +57,6 @@ export function SessionChat({
     sendSetMaxThinkingTokens,
     sendRewindFiles,
     availableCommands,
-    capabilities,
   } = useSkuldChat(url);
 
   const [modelInput, setModelInput] = useState('');
@@ -310,64 +309,58 @@ export function SessionChat({
         {connected && (
           <div className={styles.toolbarRight}>
             <div className={styles.controlGroup}>
-              {capabilities.set_model && (
+              <button
+                type="button"
+                className={styles.controlBtn}
+                onClick={() => setShowModelInput(prev => !prev)}
+                title="Switch model"
+                data-testid="model-switch-toggle"
+              >
+                <BrainCircuitIcon className={styles.controlIcon} />
+              </button>
+
+              <div className={styles.thinkingWrapper}>
                 <button
                   type="button"
                   className={styles.controlBtn}
-                  onClick={() => setShowModelInput(prev => !prev)}
-                  title="Switch model"
-                  data-testid="model-switch-toggle"
+                  onClick={() => setShowThinkingMenu(prev => !prev)}
+                  title="Set thinking budget"
+                  data-testid="thinking-budget-toggle"
                 >
-                  <BrainCircuitIcon className={styles.controlIcon} />
+                  <span className={styles.controlLabel}>Thinking</span>
                 </button>
-              )}
+                {showThinkingMenu && (
+                  <div className={styles.thinkingMenu} data-testid="thinking-menu">
+                    {THINKING_PRESETS.map(preset => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        className={styles.thinkingOption}
+                        onClick={() => handleThinkingSelect(preset.value)}
+                        data-testid={`thinking-${preset.label}`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-              {capabilities.set_thinking_tokens && (
-                <div className={styles.thinkingWrapper}>
-                  <button
-                    type="button"
-                    className={styles.controlBtn}
-                    onClick={() => setShowThinkingMenu(prev => !prev)}
-                    title="Set thinking budget"
-                    data-testid="thinking-budget-toggle"
-                  >
-                    <span className={styles.controlLabel}>Thinking</span>
-                  </button>
-                  {showThinkingMenu && (
-                    <div className={styles.thinkingMenu} data-testid="thinking-menu">
-                      {THINKING_PRESETS.map(preset => (
-                        <button
-                          key={preset.value}
-                          type="button"
-                          className={styles.thinkingOption}
-                          onClick={() => handleThinkingSelect(preset.value)}
-                          data-testid={`thinking-${preset.label}`}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {capabilities.rewind_files && (
-                <button
-                  type="button"
-                  className={styles.controlBtn}
-                  onClick={sendRewindFiles}
-                  title="Rewind files"
-                  data-testid="rewind-files"
-                >
-                  <RotateCcwIcon className={styles.controlIcon} />
-                </button>
-              )}
+              <button
+                type="button"
+                className={styles.controlBtn}
+                onClick={sendRewindFiles}
+                title="Rewind files"
+                data-testid="rewind-files"
+              >
+                <RotateCcwIcon className={styles.controlIcon} />
+              </button>
             </div>
           </div>
         )}
       </div>
 
-      {showModelInput && connected && capabilities.set_model && (
+      {showModelInput && connected && (
         <div className={styles.modelInputBar} data-testid="model-input-bar">
           <input
             type="text"
@@ -474,7 +467,6 @@ export function SessionChat({
             isLoading={isRunning}
             onStop={handleStop}
             disabled={!connected}
-            stopDisabled={!capabilities.interrupt}
             sessionHost={sessionHost}
             chatEndpoint={chatEndpoint}
             availableCommands={availableCommands}

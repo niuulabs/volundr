@@ -23,7 +23,6 @@ class DispatcherStateResponse(BaseModel):
     running: bool
     threshold: float
     max_concurrent_raids: int
-    auto_continue: bool
     updated_at: datetime
 
 
@@ -31,7 +30,6 @@ class PatchDispatcherRequest(BaseModel):
     running: bool | None = None
     threshold: float | None = Field(None, ge=0.0, le=1.0)
     max_concurrent_raids: int | None = Field(None, ge=1, le=20)
-    auto_continue: bool | None = None
 
 
 class ActivityEventResponse(BaseModel):
@@ -86,7 +84,6 @@ def create_dispatcher_router() -> APIRouter:
             running=state.running,
             threshold=state.threshold,
             max_concurrent_raids=state.max_concurrent_raids,
-            auto_continue=state.auto_continue,
             updated_at=state.updated_at,
         )
 
@@ -104,7 +101,6 @@ def create_dispatcher_router() -> APIRouter:
             running=state.running,
             threshold=state.threshold,
             max_concurrent_raids=state.max_concurrent_raids,
-            auto_continue=state.auto_continue,
             updated_at=state.updated_at,
         )
 

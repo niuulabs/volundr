@@ -103,10 +103,6 @@ class DecomposeRequest(BaseModel):
     model: str = Field(default="")
 
 
-class UpdateSagaRequest(BaseModel):
-    status: str
-
-
 class RaidSpecResponse(BaseModel):
     name: str
     description: str
@@ -562,49 +558,6 @@ def create_sagas_router() -> APIRouter:
                     for phase in result.phases
                 ],
             ),
-        )
-
-    @router.patch("/{saga_id}", response_model=SagaListItem)
-    async def update_saga(
-        saga_id: str,
-        body: UpdateSagaRequest,
-        principal: Principal = Depends(extract_principal),
-        repo: SagaRepository = Depends(resolve_saga_repo),
-        adapters: list[TrackerPort] = Depends(resolve_trackers),
-    ) -> SagaListItem:
-        """Update a saga's status (e.g. archive a completed project)."""
-        try:
-            parsed_id = UUID(saga_id)
-            new_status = SagaStatus(body.status.upper())
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Invalid saga_id or status: {saga_id!r} / {body.status!r}",
-            )
-
-        saga = await repo.get_saga(parsed_id, owner_id=principal.user_id)
-        if saga is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Saga not found: {saga_id}",
-            )
-
-        await repo.update_saga_status(parsed_id, new_status)
-
-        project = await _find_project(saga.tracker_id, adapters)
-        return SagaListItem(
-            id=str(saga.id),
-            tracker_id=saga.tracker_id,
-            tracker_type=saga.tracker_type,
-            slug=saga.slug,
-            name=project.name if project else saga.name,
-            repos=saga.repos,
-            feature_branch=saga.feature_branch,
-            status=project.status if project else new_status.value,
-            progress=project.progress if project else 0.0,
-            milestone_count=project.milestone_count if project else 0,
-            issue_count=project.issue_count if project else 0,
-            url=project.url if project else "",
         )
 
     @router.delete("/{saga_id}", status_code=204)

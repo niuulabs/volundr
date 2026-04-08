@@ -9,18 +9,14 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from niuu.domain.models import (  # noqa: F401
-    CIStatus,
     GitProviderType,
     IntegrationConnection,
     IntegrationType,
     Principal,
-    PullRequest,
-    PullRequestStatus,
     RepoInfo,
-    ReviewStatus,
     SecretType,
     StoredCredential,
 )
@@ -253,32 +249,17 @@ class MountMapping(BaseModel):
 
 
 class LocalMountSource(BaseModel):
-    """Local filesystem mount workspace source.
-
-    In mini/local mode, only ``local_path`` is needed — the CLI runs
-    Claude directly in that directory.  In cluster mode, ``paths``
-    provides host-to-container volume mappings.
-    """
+    """Local filesystem mount workspace source."""
 
     type: Literal["local_mount"] = "local_mount"
-    local_path: str = Field(
-        default="",
-        description="Absolute path to use as workspace directly (mini/local mode)",
-    )
     paths: list[MountMapping] = Field(
-        default_factory=list,
-        description="Host-to-container path mappings for the workspace (cluster mode)",
+        min_length=1,
+        description="Host-to-container path mappings for the workspace",
     )
     node_selector: dict[str, str] = Field(
         default_factory=dict,
         description="Kubernetes node selector labels to schedule on a specific node",
     )
-
-    @model_validator(mode="after")
-    def _require_path_or_paths(self) -> LocalMountSource:
-        if not self.local_path and not self.paths:
-            raise ValueError("Either local_path or paths must be provided")
-        return self
 
     model_config = {"frozen": False}
 
@@ -417,11 +398,7 @@ class Session(BaseModel):
 
     def can_stop(self) -> bool:
         """Check if session can be stopped."""
-        return self.status in (
-            SessionStatus.STARTING,
-            SessionStatus.RUNNING,
-            SessionStatus.PROVISIONING,
-        )
+        return self.status in (SessionStatus.RUNNING, SessionStatus.PROVISIONING)
 
     def with_status(self, status: SessionStatus) -> Session:
         """Return a copy with updated status and timestamp."""
@@ -631,6 +608,51 @@ class Chronicle(BaseModel):
     )
 
     model_config = {"frozen": False}
+
+
+class PullRequestStatus(StrEnum):
+    """Status of a pull request."""
+
+    OPEN = "open"
+    MERGED = "merged"
+    CLOSED = "closed"
+
+
+class CIStatus(StrEnum):
+    """CI pipeline status."""
+
+    PASSING = "passing"
+    FAILING = "failing"
+    PENDING = "pending"
+    UNKNOWN = "unknown"
+
+
+class ReviewStatus(StrEnum):
+    """Code review status."""
+
+    APPROVED = "approved"
+    CHANGES_REQUESTED = "changes_requested"
+    PENDING = "pending"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class PullRequest:
+    """A pull request / merge request from a git provider."""
+
+    number: int
+    title: str
+    url: str
+    repo_url: str
+    provider: GitProviderType
+    source_branch: str
+    target_branch: str
+    status: PullRequestStatus
+    description: str | None = None
+    ci_status: CIStatus | None = None
+    review_status: ReviewStatus | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 @dataclass(frozen=True)

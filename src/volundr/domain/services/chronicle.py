@@ -35,32 +35,6 @@ class ChronicleNotFoundError(Exception):
         super().__init__(f"Chronicle not found: {chronicle_id}")
 
 
-def _detect_git_info(path: str) -> dict[str, str]:
-    """Detect git remote, branch, and project name from a local path.
-
-    Uses GitPython to inspect the repo. Returns empty dict if not a git repo.
-    """
-    result: dict[str, str] = {}
-    try:
-        from git import InvalidGitRepositoryError, Repo
-
-        repo = Repo(path, search_parent_directories=True)
-
-        try:
-            result["branch"] = repo.active_branch.name
-        except TypeError:
-            # Detached HEAD
-            pass
-
-        if repo.remotes:
-            url = repo.remotes[0].url
-            result["remote"] = url
-            result["project"] = url.rstrip("/").split("/")[-1].replace(".git", "")
-    except (InvalidGitRepositoryError, Exception):
-        pass
-    return result
-
-
 class ChronicleService:
     """Service for managing session chronicles."""
 
@@ -85,34 +59,22 @@ class ChronicleService:
         if session is None:
             raise SessionNotFoundError(session_id)
 
-        # Derive project/repo/branch from source type
-        from volundr.domain.models import LocalMountSource
-
-        if isinstance(session.source, LocalMountSource) and session.source.local_path:
-            local_path = session.source.local_path
-            git_info = _detect_git_info(local_path)
-            dir_name = local_path.rstrip("/").split("/")[-1]
-            project = git_info.get("project") or dir_name or session.name
-            repo = git_info.get("remote") or local_path
-            branch = git_info.get("branch") or "local"
-        else:
-            repo = session.repo or session.name
-            branch = session.branch or "main"
-            project = repo.rstrip("/").split("/")[-1].replace(".git", "") or session.name
+        # Derive project name from repo URL
+        project = session.repo.rstrip("/").split("/")[-1].replace(".git", "")
 
         config_snapshot = {
             "name": session.name,
             "model": session.model,
-            "repo": repo,
-            "branch": branch,
+            "repo": session.repo,
+            "branch": session.branch,
         }
 
         chronicle = Chronicle(
             session_id=session_id,
             status=ChronicleStatus.DRAFT,
             project=project,
-            repo=repo,
-            branch=branch,
+            repo=session.repo,
+            branch=session.branch,
             model=session.model,
             config_snapshot=config_snapshot,
             token_usage=session.tokens_used,

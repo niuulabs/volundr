@@ -1,18 +1,21 @@
-"""Port interfaces for git provider operations."""
+"""Port interface for read-only git provider operations."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from niuu.domain.models import CIStatus, GitProviderType, PullRequest, RepoInfo
+from niuu.domain.models import GitProviderType, RepoInfo
 
 
 class GitProvider(ABC):
-    """Port for git repository operations.
+    """Port for read-only git repository operations.
 
     Each instance represents a single git provider endpoint (e.g., github.com,
     gitlab.com, or a self-hosted GitLab instance). Multiple instances can be
     registered to support multiple providers/instances simultaneously.
+
+    Write operations (create_branch, merge, PRs) live in the extended
+    GitWorkflowProvider port in Volundr.
     """
 
     @property
@@ -23,61 +26,15 @@ class GitProvider(ABC):
     @property
     @abstractmethod
     def name(self) -> str:
-        """Return a human-readable name for this provider instance."""
+        """Return a human-readable name for this provider instance.
+
+        Examples: 'GitHub', 'GitLab', 'GitLab (self-hosted)'
+        """
 
     @property
     @abstractmethod
     def base_url(self) -> str:
         """Return the base URL for this provider instance."""
-
-    @property
-    @abstractmethod
-    def orgs(self) -> tuple[str, ...]:
-        """Return the configured organizations/groups for this provider."""
-
-    @abstractmethod
-    def supports(self, repo_url: str) -> bool:
-        """Check if this provider can handle the given repository URL.
-
-        Args:
-            repo_url: Repository URL or shorthand (e.g., 'github.com/org/repo').
-
-        Returns:
-            True if this provider can handle the URL.
-        """
-
-    @abstractmethod
-    async def validate_repo(self, repo_url: str) -> bool:
-        """Validate that a repository exists and is accessible.
-
-        Args:
-            repo_url: Repository URL or shorthand.
-
-        Returns:
-            True if the repository exists and is accessible.
-        """
-
-    @abstractmethod
-    def parse_repo(self, repo_url: str) -> RepoInfo | None:
-        """Parse a repository URL into structured information.
-
-        Args:
-            repo_url: Repository URL or shorthand.
-
-        Returns:
-            RepoInfo if the URL can be parsed, None otherwise.
-        """
-
-    @abstractmethod
-    def get_clone_url(self, repo_url: str) -> str | None:
-        """Get an authenticated clone URL for a repository.
-
-        Args:
-            repo_url: Repository URL or shorthand.
-
-        Returns:
-            Authenticated clone URL, or None if not supported.
-        """
 
     @abstractmethod
     async def list_repos(self, org: str) -> list[RepoInfo]:
@@ -100,61 +57,3 @@ class GitProvider(ABC):
         Returns:
             List of branch names.
         """
-
-
-class GitWorkflowProvider(ABC):
-    """Port for git workflow operations (branches, PRs, CI status).
-
-    Extends the basic GitProvider with write operations for PR-based
-    workflows. GitHub/GitLab are the source of truth — no local state.
-    """
-
-    @abstractmethod
-    async def create_branch(
-        self,
-        repo_url: str,
-        branch_name: str,
-        from_branch: str = "main",
-    ) -> bool:
-        """Create a new branch from an existing branch."""
-
-    @abstractmethod
-    async def create_pull_request(
-        self,
-        repo_url: str,
-        title: str,
-        description: str,
-        source_branch: str,
-        target_branch: str,
-        labels: list[str] | None = None,
-    ) -> PullRequest:
-        """Create a pull request / merge request."""
-
-    @abstractmethod
-    async def get_pull_request(self, repo_url: str, pr_number: int) -> PullRequest | None:
-        """Get a pull request by number."""
-
-    @abstractmethod
-    async def list_pull_requests(self, repo_url: str, status: str = "open") -> list[PullRequest]:
-        """List pull requests for a repository."""
-
-    @abstractmethod
-    async def merge_pull_request(
-        self,
-        repo_url: str,
-        pr_number: int,
-        merge_method: str = "squash",
-    ) -> bool:
-        """Merge a pull request."""
-
-    @abstractmethod
-    async def get_ci_status(self, repo_url: str, branch: str) -> CIStatus:
-        """Get the CI status for a branch."""
-
-
-class GitAuthError(Exception):
-    """Raised when git provider authentication fails."""
-
-
-class GitRepoNotFoundError(Exception):
-    """Raised when a git repository is not found."""

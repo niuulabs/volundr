@@ -79,9 +79,9 @@ class TestValuesDefaults:
         assert defaults["image"]["repository"] == "ghcr.io/niuulabs/skuld"
 
     def test_skuld_codex_defaults_image_repository(self, values_yaml):
-        """Test skuld-codex uses the merged skuld image."""
+        """Test skuld-codex uses a separate skuld-codex image."""
         defaults = values_yaml["sessionDefinitions"]["skuldCodex"]["defaults"]
-        assert defaults["image"]["repository"] == "ghcr.io/niuulabs/skuld"
+        assert defaults["image"]["repository"] == "ghcr.io/niuulabs/skuld-codex"
 
     def test_skuld_claude_helm_repo_configured(self, values_yaml):
         """Test skuld-claude helm repo is configured for OCI."""
@@ -135,7 +135,7 @@ class TestValuesDefaults:
         assert broker["cliType"] == "claude"
 
     def test_skuld_codex_broker_cli_type(self, values_yaml):
-        """Test skuld-codex broker cliType is codex (backward compat)."""
+        """Test skuld-codex broker cliType is codex."""
         broker = values_yaml["sessionDefinitions"]["skuldCodex"]["defaults"]["broker"]
         assert broker["cliType"] == "codex"
 
@@ -143,20 +143,6 @@ class TestValuesDefaults:
         """Test skuld-codex broker uses subprocess transport."""
         broker = values_yaml["sessionDefinitions"]["skuldCodex"]["defaults"]["broker"]
         assert broker["transport"] == "subprocess"
-
-    def test_skuld_codex_broker_transport_adapter(self, values_yaml):
-        """Test skuld-codex broker has correct transportAdapter class path."""
-        broker = values_yaml["sessionDefinitions"]["skuldCodex"]["defaults"]["broker"]
-        assert broker["transportAdapter"] == (
-            "skuld.transports.codex.CodexSubprocessTransport"
-        )
-
-    def test_both_session_defs_use_same_image_repo(self, values_yaml):
-        """Test skuld-claude and skuld-codex reference the same image repo."""
-        defs = values_yaml["sessionDefinitions"]
-        claude_repo = defs["skuldClaude"]["defaults"]["image"]["repository"]
-        codex_repo = defs["skuldCodex"]["defaults"]["image"]["repository"]
-        assert claude_repo == codex_repo == "ghcr.io/niuulabs/skuld"
 
     def test_pod_manager_default_chart_name_is_skuld(self, values_yaml):
         """Test podManager default chart_name is skuld."""

@@ -1,12 +1,10 @@
 import { defineConfig, loadEnv } from 'vite';
-import type { ProxyOptions } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import dts from 'vite-plugin-dts';
 import importMetaUrlPlugin from '@codingame/esbuild-import-meta-url-plugin';
 import path from 'path';
 import fs from 'fs';
-import { MODULE_PROXIES } from './src/modules/proxy-manifest';
 
 // Discover all @codingame/monaco-vscode-* packages for optimizeDeps.include.
 // Matching the demo: pre-bundle ALL @codingame packages (including default extensions).
@@ -110,21 +108,14 @@ export default defineConfig(({ mode }) => {
     port: 5174,
     host: true,
     proxy: {
-      // Module-specific proxies (from proxy-manifest.ts)
-      ...MODULE_PROXIES.reduce<Record<string, ProxyOptions>>((acc, p) => {
-        acc[p.path] = {
-          target: env[p.targetEnvVar] || p.defaultTarget,
-          changeOrigin: true,
-          ...(p.ws ? { ws: true } : {}),
-        };
-        return acc;
-      }, {}),
-      // Default Volundr API proxy
+      '/api/v1/tyr': {
+        target: env.VITE_TYR_API_TARGET || 'http://localhost:8081',
+        changeOrigin: true,
+      },
       '/api': {
         target: env.VITE_API_TARGET || 'http://localhost:8080',
         changeOrigin: true,
       },
-      // WebSocket proxy for session connections
       '/s/': {
         target: env.VITE_API_TARGET || 'http://localhost:8080',
         changeOrigin: true,

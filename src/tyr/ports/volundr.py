@@ -61,11 +61,6 @@ class ActivityEvent:
 class VolundrPort(ABC):
     """Abstract interface for Volundr session management."""
 
-    @property
-    def name(self) -> str:
-        """Human-readable adapter name (used for connection_id targeting)."""
-        return ""
-
     @abstractmethod
     async def spawn_session(
         self,

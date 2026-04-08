@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { HardDrive } from 'lucide-react';
 import type { VolundrWorkspace } from '@/modules/volundr/models';
-import { volundrService } from '@/modules/volundr/adapters';
+import type { IVolundrService } from '@/modules/volundr/ports';
 import { cn } from '@/utils/classnames';
 import styles from './WorkspacesSection.module.css';
 
@@ -23,7 +23,11 @@ function workspaceLabel(ws: VolundrWorkspace): string {
   return ws.pvcName;
 }
 
-export function WorkspacesSection() {
+interface WorkspacesSectionProps {
+  service: IVolundrService;
+}
+
+export function WorkspacesSection({ service }: WorkspacesSectionProps) {
   const [workspaces, setWorkspaces] = useState<VolundrWorkspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<VolundrWorkspace | null>(null);
@@ -33,12 +37,12 @@ export function WorkspacesSection() {
   const loadWorkspaces = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await volundrService.listWorkspaces();
+      const data = await service.listWorkspaces();
       setWorkspaces(data);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [service]);
 
   useEffect(() => {
     loadWorkspaces();
@@ -46,20 +50,20 @@ export function WorkspacesSection() {
 
   const handleRestore = useCallback(
     async (id: string) => {
-      await volundrService.restoreWorkspace(id);
+      await service.restoreWorkspace(id);
       await loadWorkspaces();
     },
-    [loadWorkspaces]
+    [service, loadWorkspaces]
   );
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget) {
       return;
     }
-    await volundrService.deleteWorkspace(deleteTarget.sessionId);
+    await service.deleteWorkspace(deleteTarget.sessionId);
     setDeleteTarget(null);
     await loadWorkspaces();
-  }, [deleteTarget, loadWorkspaces]);
+  }, [deleteTarget, service, loadWorkspaces]);
 
   const handleToggleSelectAll = useCallback(() => {
     if (selectedIds.size === workspaces.length) {
@@ -85,13 +89,13 @@ export function WorkspacesSection() {
     if (selectedIds.size === 0) return;
     setBulkDeleting(true);
     try {
-      await volundrService.bulkDeleteWorkspaces(Array.from(selectedIds));
+      await service.bulkDeleteWorkspaces(Array.from(selectedIds));
       setSelectedIds(new Set());
       await loadWorkspaces();
     } finally {
       setBulkDeleting(false);
     }
-  }, [selectedIds, loadWorkspaces]);
+  }, [selectedIds, service, loadWorkspaces]);
 
   const totalStorageGb = workspaces
     .filter(w => w.status !== 'deleted')

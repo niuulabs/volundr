@@ -16,11 +16,10 @@ from skuld.broker import (
     broker,
 )
 from skuld.config import SkuldSettings
-from skuld.transports import (
+from skuld.transport import (
     CodexSubprocessTransport,
     SdkWebSocketTransport,
     SubprocessTransport,
-    TransportCapabilities,
 )
 
 
@@ -105,44 +104,6 @@ class TestBroker:
         transport = b._create_transport()
         assert isinstance(transport, SdkWebSocketTransport)
         assert transport._model == "claude-opus-4-20250514"
-
-    def test_create_transport_dynamic_import(self, tmp_path):
-        """Dynamic transport factory uses importlib to load the configured adapter."""
-        settings = SkuldSettings(
-            transport_adapter="skuld.transports.subprocess.SubprocessTransport",
-            session={"id": "s1", "workspace_dir": str(tmp_path)},
-        )
-        b = Broker(settings=settings)
-
-        with patch("skuld.broker.import_class") as mock_import:
-            mock_import.return_value = SubprocessTransport
-            transport = b._create_transport()
-
-        mock_import.assert_called_once_with("skuld.transports.subprocess.SubprocessTransport")
-        assert isinstance(transport, SubprocessTransport)
-
-    def test_create_transport_invalid_adapter_path(self, tmp_path):
-        """Invalid adapter path (no dot) raises ValueError."""
-        settings = SkuldSettings(
-            transport_adapter="BadPath",
-            session={"id": "s1", "workspace_dir": str(tmp_path)},
-        )
-        b = Broker(settings=settings)
-
-        with pytest.raises(ValueError, match="must be a fully-qualified"):
-            b._create_transport()
-
-    def test_create_transport_import_error(self, tmp_path):
-        """ImportError from dynamic import is wrapped in ValueError."""
-        settings = SkuldSettings(
-            transport_adapter="nonexistent.module.Transport",
-            session={"id": "s1", "workspace_dir": str(tmp_path)},
-        )
-        b = Broker(settings=settings)
-
-        with patch("skuld.broker.import_class", side_effect=ImportError("no module")):
-            with pytest.raises(ValueError, match="Cannot load transport adapter"):
-                b._create_transport()
 
     @pytest.mark.asyncio
     async def test_startup_creates_workspace(self, test_broker, tmp_path):
@@ -291,85 +252,6 @@ class TestBroker:
         transport = b._create_transport()
         assert isinstance(transport, SdkWebSocketTransport)
         assert transport._agent_teams is True
-
-    # --- Dynamic transport adapter tests ---
-
-    def test_create_transport_explicit_adapter(self, tmp_path):
-        """Direct transport_adapter bypasses legacy field resolution."""
-        settings = SkuldSettings(
-            transport_adapter="skuld.transports.codex.CodexSubprocessTransport",
-            session={"id": "s1", "workspace_dir": str(tmp_path), "model": "o4-mini"},
-        )
-        b = Broker(settings=settings)
-        transport = b._create_transport()
-        assert isinstance(transport, CodexSubprocessTransport)
-
-    def test_create_transport_invalid_module(self, tmp_path):
-        """Non-existent module raises ValueError via ImportError."""
-        settings = SkuldSettings(
-            session={"id": "s1", "workspace_dir": str(tmp_path)},
-        )
-        settings.transport_adapter = "skuld.transports.nonexistent.FakeTransport"
-        b = Broker(settings=settings)
-        with pytest.raises(ValueError, match="Cannot load transport adapter"):
-            b._create_transport()
-
-    def test_create_transport_invalid_class(self, tmp_path):
-        """Valid module but missing class raises ValueError via AttributeError."""
-        settings = SkuldSettings(
-            session={"id": "s1", "workspace_dir": str(tmp_path)},
-        )
-        settings.transport_adapter = "skuld.transports.codex.NonexistentTransport"
-        b = Broker(settings=settings)
-        with pytest.raises(ValueError, match="Cannot load transport adapter"):
-            b._create_transport()
-
-    def test_create_transport_invalid_path_no_dot(self, tmp_path):
-        """Adapter path without a dot raises ValueError."""
-        settings = SkuldSettings(
-            session={"id": "s1", "workspace_dir": str(tmp_path)},
-        )
-        settings.transport_adapter = "NotAFullyQualifiedPath"
-        b = Broker(settings=settings)
-        with pytest.raises(ValueError, match="must be a fully-qualified class path"):
-            b._create_transport()
-
-    def test_build_transport_kwargs(self, tmp_path):
-        """_build_transport_kwargs returns expected superset of settings."""
-        settings = SkuldSettings(
-            session={
-                "id": "s1",
-                "workspace_dir": str(tmp_path),
-                "model": "opus",
-                "system_prompt": "be helpful",
-                "initial_prompt": "hello",
-            },
-            port=9999,
-            skip_permissions=False,
-            agent_teams=True,
-        )
-        b = Broker(settings=settings)
-        kwargs = b._build_transport_kwargs()
-        assert kwargs["workspace_dir"] == str(tmp_path)
-        assert kwargs["model"] == "opus"
-        assert kwargs["sdk_port"] == 9999
-        assert kwargs["session_id"] == "s1"
-        assert kwargs["skip_permissions"] is False
-        assert kwargs["agent_teams"] is True
-        assert kwargs["system_prompt"] == "be helpful"
-        assert kwargs["initial_prompt"] == "hello"
-
-    def test_create_transport_filters_kwargs(self, tmp_path):
-        """Only kwargs matching the constructor signature are passed."""
-        settings = SkuldSettings(
-            transport="subprocess",
-            session={"id": "s1", "workspace_dir": str(tmp_path)},
-        )
-        b = Broker(settings=settings)
-        transport = b._create_transport()
-        # SubprocessTransport only accepts workspace_dir
-        assert isinstance(transport, SubprocessTransport)
-        assert transport.workspace_dir == str(tmp_path)
 
 
 class TestDispatchBrowserMessage:
@@ -523,78 +405,6 @@ class TestDispatchBrowserMessage:
         # Should not raise
         await test_broker._dispatch_browser_message({"content": "hello"})
 
-    @pytest.mark.asyncio
-    async def test_dispatch_guard_blocks_unsupported_control(self, test_broker):
-        """Unsupported control messages are rejected with an error to sender_ws."""
-        test_broker._transport.capabilities = TransportCapabilities()  # all False
-        sender_ws = AsyncMock()
-
-        await test_broker._dispatch_browser_message({"type": "interrupt"}, sender_ws=sender_ws)
-
-        # Control should NOT be forwarded
-        test_broker._transport.send_control.assert_not_called()
-        # Error should be sent back to the sender
-        sender_ws.send_json.assert_called_once()
-        sent = sender_ws.send_json.call_args[0][0]
-        assert sent["type"] == "error"
-        assert "interrupt" in sent["content"]
-        assert "not supported" in sent["content"]
-
-    @pytest.mark.asyncio
-    async def test_dispatch_guard_blocks_all_guarded_controls(self, test_broker):
-        """All six guarded control types are blocked when capabilities are False."""
-        test_broker._transport.capabilities = TransportCapabilities()  # all False
-        guarded = [
-            "interrupt",
-            "set_model",
-            "set_max_thinking_tokens",
-            "set_permission_mode",
-            "rewind_files",
-            "mcp_set_servers",
-        ]
-        for msg_type in guarded:
-            sender_ws = AsyncMock()
-            await test_broker._dispatch_browser_message({"type": msg_type}, sender_ws=sender_ws)
-            sender_ws.send_json.assert_called_once()
-            sent = sender_ws.send_json.call_args[0][0]
-            assert sent["type"] == "error"
-            assert msg_type in sent["content"]
-
-        test_broker._transport.send_control.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_dispatch_guard_allows_supported_control(self, test_broker):
-        """Supported control messages pass through the guard."""
-        test_broker._transport.capabilities = TransportCapabilities(interrupt=True)
-
-        await test_broker._dispatch_browser_message({"type": "interrupt"})
-
-        test_broker._transport.send_control.assert_called_once_with("interrupt")
-
-    @pytest.mark.asyncio
-    async def test_dispatch_guard_no_sender_ws_still_blocks(self, test_broker):
-        """Unsupported control is blocked even without sender_ws (no crash)."""
-        test_broker._transport.capabilities = TransportCapabilities()  # all False
-
-        await test_broker._dispatch_browser_message({"type": "interrupt"})
-
-        test_broker._transport.send_control.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_dispatch_permission_response_not_guarded(self, test_broker):
-        """permission_response is not in the guard map and always passes."""
-        test_broker._transport.capabilities = TransportCapabilities()  # all False
-
-        await test_broker._dispatch_browser_message(
-            {
-                "type": "permission_response",
-                "request_id": "req-1",
-                "behavior": "allow",
-                "updated_input": {},
-            }
-        )
-        test_broker._transport.send_control_response.assert_called_once()
-
 
 class TestFastAPIEndpoints:
     """Tests for FastAPI endpoints."""
@@ -645,29 +455,6 @@ class TestFastAPIEndpoints:
         assert data["returned"] >= 1
         msgs = [e["message"] for e in data["lines"]]
         assert "hello from test" in msgs
-
-    def test_capabilities_endpoint_returns_transport_caps(self, client):
-        """GET /api/capabilities returns transport capabilities as JSON."""
-        mock_transport = MagicMock()
-        mock_transport.capabilities = TransportCapabilities(
-            interrupt=True, set_model=True, cli_websocket=True
-        )
-        broker._transport = mock_transport
-
-        response = client.get("/api/capabilities")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["interrupt"] is True
-        assert data["set_model"] is True
-        assert data["cli_websocket"] is True
-        assert data["rewind_files"] is False
-        broker._transport = None
-
-    def test_capabilities_endpoint_503_no_transport(self, client):
-        """GET /api/capabilities returns 503 when transport not initialized."""
-        broker._transport = None
-        response = client.get("/api/capabilities")
-        assert response.status_code == 503
 
     def test_logs_endpoint_level_filter(self, client):
         _log_buffer.clear()
@@ -1201,7 +988,6 @@ class TestHandleWebSocket:
         """Browser connects, receives welcome, sends message, then disconnects."""
         mock_transport = AsyncMock()
         mock_transport.is_alive = True
-        mock_transport.capabilities = TransportCapabilities()
         test_broker._transport = mock_transport
 
         mock_ws = AsyncMock()
@@ -1217,40 +1003,10 @@ class TestHandleWebSocket:
         mock_transport.send_message.assert_called_once_with("hello")
 
     @pytest.mark.asyncio
-    async def test_handle_websocket_sends_capabilities(self, test_broker):
-        """Browser receives a capabilities message after welcome, before history."""
-        mock_transport = AsyncMock()
-        mock_transport.is_alive = True
-        mock_transport.capabilities = TransportCapabilities(interrupt=True, set_model=True)
-        test_broker._transport = mock_transport
-
-        mock_ws = AsyncMock()
-        mock_ws.receive_json = AsyncMock(side_effect=WebSocketDisconnect())
-
-        await test_broker.handle_websocket(mock_ws)
-
-        # Collect all sent messages
-        calls = [c[0][0] for c in mock_ws.send_json.call_args_list]
-        # Find capabilities message
-        caps_msgs = [c for c in calls if c.get("type") == "capabilities"]
-        assert len(caps_msgs) == 1
-        caps = caps_msgs[0]
-        assert caps["interrupt"] is True
-        assert caps["set_model"] is True
-        assert caps["rewind_files"] is False
-
-        # Capabilities should come after welcome (system) message
-        types = [c.get("type") for c in calls]
-        system_idx = types.index("system")
-        caps_idx = types.index("capabilities")
-        assert caps_idx > system_idx
-
-    @pytest.mark.asyncio
     async def test_handle_websocket_starts_transport(self, test_broker):
         """Transport.start() is called when transport is not alive."""
         mock_transport = AsyncMock()
         mock_transport.is_alive = False
-        mock_transport.capabilities = TransportCapabilities()
         test_broker._transport = mock_transport
 
         mock_ws = AsyncMock()
@@ -1265,7 +1021,6 @@ class TestHandleWebSocket:
         """Errors during dispatch are sent as error events to the browser."""
         mock_transport = AsyncMock()
         mock_transport.is_alive = True
-        mock_transport.capabilities = TransportCapabilities()
         mock_transport.send_message.side_effect = RuntimeError("CLI error")
         test_broker._transport = mock_transport
 
@@ -1286,7 +1041,6 @@ class TestHandleWebSocket:
         """Unexpected exceptions are caught and cleaned up."""
         mock_transport = AsyncMock()
         mock_transport.is_alive = True
-        mock_transport.capabilities = TransportCapabilities()
         test_broker._transport = mock_transport
 
         mock_ws = AsyncMock()
@@ -1301,7 +1055,7 @@ class TestHandleWebSocket:
     async def test_handle_cli_websocket_wrong_transport(self, test_broker):
         """Rejects CLI WS when transport does not support SDK WebSocket."""
         mock_transport = AsyncMock(spec=SubprocessTransport)
-        mock_transport.capabilities = TransportCapabilities(session_resume=True)
+        mock_transport.supports_cli_websocket = False
         test_broker._transport = mock_transport
         mock_ws = AsyncMock()
 
@@ -1314,7 +1068,7 @@ class TestHandleWebSocket:
     async def test_handle_cli_websocket_codex_rejected(self, test_broker):
         """Rejects CLI WS for Codex transport (subprocess only)."""
         mock_transport = AsyncMock(spec=CodexSubprocessTransport)
-        mock_transport.capabilities = TransportCapabilities()
+        mock_transport.supports_cli_websocket = False
         test_broker._transport = mock_transport
         mock_ws = AsyncMock()
 
@@ -1327,7 +1081,7 @@ class TestHandleWebSocket:
     async def test_handle_cli_websocket_session_mismatch(self, test_broker):
         """Rejects CLI WS when session ID doesn't match."""
         mock_transport = AsyncMock(spec=SdkWebSocketTransport)
-        mock_transport.capabilities = TransportCapabilities(cli_websocket=True)
+        mock_transport.supports_cli_websocket = True
         test_broker._transport = mock_transport
         mock_ws = AsyncMock()
 
@@ -1340,7 +1094,7 @@ class TestHandleWebSocket:
     async def test_handle_cli_websocket_success(self, test_broker):
         """CLI WS attaches to transport and waits for disconnect."""
         mock_transport = AsyncMock(spec=SdkWebSocketTransport)
-        mock_transport.capabilities = TransportCapabilities(cli_websocket=True)
+        mock_transport.supports_cli_websocket = True
         test_broker._transport = mock_transport
         mock_ws = AsyncMock()
 

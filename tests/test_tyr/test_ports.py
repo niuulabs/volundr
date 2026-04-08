@@ -49,7 +49,6 @@ class TestTrackerPort:
             "attach_document",
             "add_comment",
             "attach_issue_document",
-            "get_blocked_identifiers",
         }
         abstract_methods = {
             name

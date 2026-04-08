@@ -6,7 +6,7 @@ import type {
   StoredCredential,
 } from '@/modules/volundr/models';
 import { useCredentials as useCredentialsStore } from '@/modules/volundr/hooks/useCredentials';
-import { volundrService } from '@/modules/volundr/adapters';
+import type { IVolundrService } from '@/modules/volundr/ports';
 import styles from '../Settings.module.css';
 
 /* ------------------------------------------------------------------ */
@@ -246,7 +246,11 @@ function CredentialForm({ types, onSubmit, onClose }: CredentialFormProps) {
 /* CredentialsSection                                                   */
 /* ------------------------------------------------------------------ */
 
-export function CredentialsSection() {
+interface CredentialsSectionProps {
+  service: IVolundrService;
+}
+
+export function CredentialsSection({ service }: CredentialsSectionProps) {
   const {
     credentials,
     types,
@@ -257,7 +261,7 @@ export function CredentialsSection() {
     activeFilter,
     searchQuery,
     setSearchQuery,
-  } = useCredentialsStore(volundrService);
+  } = useCredentialsStore(service);
 
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<StoredCredential | null>(null);

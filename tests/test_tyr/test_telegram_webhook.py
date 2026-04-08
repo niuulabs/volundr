@@ -93,9 +93,6 @@ class StubSagaRepo(SagaRepository):
     async def delete_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> bool:
         return False
 
-    async def update_saga_status(self, saga_id: UUID, status: SagaStatus) -> None:
-        pass
-
 
 class StubTracker(TrackerPort):
     """In-memory TrackerPort implementation for tests."""
@@ -287,7 +284,6 @@ class StubDispatcherRepo(DispatcherRepository):
             running=running,
             threshold=0.7,
             max_concurrent_raids=3,
-            auto_continue=False,
             updated_at=datetime.now(UTC),
         )
 
@@ -302,7 +298,6 @@ class StubDispatcherRepo(DispatcherRepository):
             running=running,
             threshold=self._state.threshold,
             max_concurrent_raids=self._state.max_concurrent_raids,
-            auto_continue=self._state.auto_continue,
             updated_at=datetime.now(UTC),
         )
         return self._state
@@ -915,7 +910,6 @@ class TestPauseResumeCommands:
             running=False,
             threshold=0.7,
             max_concurrent_raids=3,
-            auto_continue=False,
             updated_at=datetime.now(UTC),
         )
         resp = _post_webhook(client, "/pause")
@@ -934,7 +928,6 @@ class TestPauseResumeCommands:
             running=False,
             threshold=0.7,
             max_concurrent_raids=3,
-            auto_continue=False,
             updated_at=datetime.now(UTC),
         )
         resp = _post_webhook(client, "/resume")

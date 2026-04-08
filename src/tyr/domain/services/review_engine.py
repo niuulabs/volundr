@@ -35,15 +35,12 @@ from tyr.domain.models import (
     PRStatus,
     Raid,
     RaidStatus,
-    Saga,
     validate_transition,
 )
-from tyr.domain.services.dispatch_service import DispatchService
 from tyr.domain.services.reviewer_session import (
     ReviewerSessionService,
     parse_reviewer_response,
 )
-from tyr.domain.services.session_transcript import attach_session_transcript
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.git import GitPort
@@ -133,7 +130,6 @@ class ReviewEngine:
         reviewer_service: ReviewerSessionService | None = None,
         integration_repo: IntegrationRepository | None = None,
         dispatcher_repo: DispatcherRepository | None = None,
-        dispatch_service: DispatchService | None = None,
     ) -> None:
         self._tracker_factory = tracker_factory
         self._volundr_factory = volundr_factory
@@ -143,7 +139,6 @@ class ReviewEngine:
         self._reviewer = reviewer_service
         self._integration_repo = integration_repo
         self._dispatcher_repo = dispatcher_repo
-        self._dispatch_service = dispatch_service
         self._task: asyncio.Task[None] | None = None
         self._processed: set[str] = set()
         # Maps reviewer_session_id → (raid_tracker_id, owner_id)
@@ -225,7 +220,9 @@ class ReviewEngine:
                     tracker, tracker_id, owner_id, raid, score
                 )
             elif raid.review_round >= self._cfg.max_review_rounds:
-                decision = await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
+                decision = await self._handle_escalation(
+                    tracker, tracker_id, owner_id, raid, score
+                )
             else:
                 # Low confidence but approved — let the loop continue
                 new_round = raid.review_round + 1
@@ -233,17 +230,13 @@ class ReviewEngine:
                 self._reviewer_sessions[session_id] = (tracker_id, owner_id)
                 logger.info(
                     "Reviewer approved but low confidence (%.2f < %.2f) — round %d/%d, continuing",
-                    result.confidence,
-                    self._cfg.auto_approve_threshold,
-                    new_round,
-                    self._cfg.max_review_rounds,
+                    result.confidence, self._cfg.auto_approve_threshold,
+                    new_round, self._cfg.max_review_rounds,
                 )
                 return
             logger.info(
                 "Post-reviewer decision for %s: %s (reason=%s)",
-                tracker_id,
-                decision.action,
-                decision.reason,
+                tracker_id, decision.action, decision.reason,
             )
             return
 
@@ -256,22 +249,18 @@ class ReviewEngine:
         if new_round >= self._cfg.max_review_rounds:
             # Max rounds exhausted — escalate
             self._reviewer_sessions.pop(session_id, None)
-            decision = await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
+            decision = await self._handle_escalation(
+                tracker, tracker_id, owner_id, raid, score
+            )
             logger.info(
                 "Max review rounds (%d) reached for %s — %s (reason=%s)",
-                self._cfg.max_review_rounds,
-                tracker_id,
-                decision.action,
-                decision.reason,
+                self._cfg.max_review_rounds, tracker_id, decision.action, decision.reason,
             )
             return
 
         logger.info(
             "Review round %d/%d for %s: %d issues, reviewer driving loop",
-            new_round,
-            self._cfg.max_review_rounds,
-            tracker_id,
-            len(result.findings),
+            new_round, self._cfg.max_review_rounds, tracker_id, len(result.findings),
         )
 
     async def start(self) -> None:
@@ -690,30 +679,19 @@ class ReviewEngine:
             await tracker.close_raid(tracker_id)
             logger.info("Closed tracker issue %s (Done)", tracker_id)
         except Exception:
-            logger.error("FAILED to close tracker issue %s after merge", tracker_id, exc_info=True)
+            logger.error(
+                "FAILED to close tracker issue %s after merge", tracker_id, exc_info=True
+            )
 
-        # Attach transcripts and stop sessions
-        if raid.session_id:
-            await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
-            await self._stop_session(owner_id, raid.session_id, "working session")
+        # Attach review transcript as a comment on the Linear issue
         if raid.reviewer_session_id:
             await self._attach_review_transcript(tracker, tracker_id, owner_id, raid)
-            await self._stop_session(owner_id, raid.reviewer_session_id, "reviewer session")
-
-        # Look up saga once — used by both phase gate and event emission
-        saga = await tracker.get_saga_for_raid(tracker_id)
+            await self._stop_reviewer_session(owner_id, raid.reviewer_session_id)
 
         # Phase gate check
-        phase_gate_unlocked = await self._check_phase_gate(tracker, tracker_id, owner_id, saga=saga)
+        phase_gate_unlocked = await self._check_phase_gate(tracker, tracker_id, owner_id)
 
-        saga_tid = saga.tracker_id if saga else None
-        await self._emit_state_changed(
-            updated, owner_id=owner_id, action="auto_approved", saga_tracker_id=saga_tid
-        )
-
-        # Trigger auto-continue after merge (and after phase unlock)
-        if saga_tid:
-            await self._try_auto_continue(owner_id, saga_tid)
+        await self._emit_state_changed(updated, owner_id=owner_id, action="auto_approved")
 
         return ReviewDecision(
             raid=updated,
@@ -730,44 +708,50 @@ class ReviewEngine:
         raid: Raid,
     ) -> None:
         """Fetch the reviewer's full conversation and attach as a document."""
-        await attach_session_transcript(
-            volundr_factory=self._volundr_factory,
-            tracker=tracker,
-            tracker_id=tracker_id,
-            owner_id=owner_id,
-            session_id=raid.reviewer_session_id,
-            title_prefix="Review Transcript",
-            raid_name=raid.name,
-        )
+        try:
+            adapters = await self._volundr_factory.for_owner(owner_id)
+            if not adapters:
+                logger.warning(
+                    "No Volundr adapter for owner %s — cannot fetch transcript",
+                    owner_id[:8],
+                )
+                return
+            conversation = await adapters[0].get_conversation(raid.reviewer_session_id)
+            turns = conversation.get("turns", [])
+            lines = ["# Review Transcript", ""]
+            for turn in turns:
+                role = turn.get("role", "unknown").capitalize()
+                content = turn.get("content", "")
+                lines.append(f"### {role}")
+                lines.append(content)
+                lines.append("")
+                lines.append("---")
+                lines.append("")
+            title = f"Review Transcript — {raid.name}"
+            await tracker.attach_issue_document(
+                tracker_id, title, "\n".join(lines)
+            )
+            logger.info(
+                "Attached review transcript (%d turns) to %s",
+                len(turns), tracker_id,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to attach review transcript for raid %s", tracker_id, exc_info=True
+            )
 
-    async def _stop_session(self, owner_id: str, session_id: str, label: str = "session") -> None:
-        """Stop a Volundr session after terminal state."""
+    async def _stop_reviewer_session(self, owner_id: str, reviewer_session_id: str) -> None:
+        """Stop the reviewer session after review is complete."""
         try:
             adapters = await self._volundr_factory.for_owner(owner_id)
             if not adapters:
                 return
-            await adapters[0].stop_session(session_id)
-            logger.info("Stopped %s %s", label, session_id)
+            await adapters[0].stop_session(reviewer_session_id)
+            logger.info("Stopped reviewer session %s", reviewer_session_id)
         except Exception:
-            logger.warning("Failed to stop %s %s", label, session_id, exc_info=True)
-
-    async def _attach_working_transcript(
-        self,
-        tracker: TrackerPort,
-        tracker_id: str,
-        owner_id: str,
-        raid: Raid,
-    ) -> None:
-        """Fetch the working session conversation and attach as a document."""
-        await attach_session_transcript(
-            volundr_factory=self._volundr_factory,
-            tracker=tracker,
-            tracker_id=tracker_id,
-            owner_id=owner_id,
-            session_id=raid.session_id,
-            title_prefix="Working Session Transcript",
-            raid_name=raid.name,
-        )
+            logger.warning(
+                "Failed to stop reviewer session %s", reviewer_session_id, exc_info=True
+            )
 
     async def _handle_ci_failure(
         self,
@@ -793,10 +777,6 @@ class ReviewEngine:
         updated = await tracker.update_raid_progress(
             tracker_id, status=RaidStatus.FAILED, reason="CI failed, retries exhausted"
         )
-
-        if raid.session_id:
-            await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
-            await self._stop_session(owner_id, raid.session_id, "working session")
 
         await self._emit_state_changed(updated, owner_id=owner_id, action="failed")
         return ReviewDecision(
@@ -828,10 +808,6 @@ class ReviewEngine:
             tracker_id, status=RaidStatus.FAILED, reason="PR conflicts, retries exhausted"
         )
 
-        if raid.session_id:
-            await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
-            await self._stop_session(owner_id, raid.session_id, "working session")
-
         await self._emit_state_changed(updated, owner_id=owner_id, action="failed")
         return ReviewDecision(
             raid=updated,
@@ -850,11 +826,6 @@ class ReviewEngine:
         """Confidence too low or conditions not met — escalate to human review."""
         validate_transition(raid.status, RaidStatus.ESCALATED)
         updated = await tracker.update_raid_progress(tracker_id, status=RaidStatus.ESCALATED)
-
-        # Snapshot the working transcript but keep the session alive for human review
-        if raid.session_id:
-            await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
-
         await self._emit_state_changed(updated, owner_id=owner_id, action="escalated")
         return ReviewDecision(
             raid=updated,
@@ -922,14 +893,7 @@ class ReviewEngine:
 
     # -- Phase gate --
 
-    async def _check_phase_gate(
-        self,
-        tracker: TrackerPort,
-        tracker_id: str,
-        owner_id: str,
-        *,
-        saga: Saga | None = None,
-    ) -> bool:
+    async def _check_phase_gate(self, tracker: TrackerPort, tracker_id: str, owner_id: str) -> bool:
         """Check if all raids in the phase are merged, and unlock next phase if so."""
         phase = await tracker.get_phase_for_raid(tracker_id)
         if phase is None:
@@ -941,8 +905,7 @@ class ReviewEngine:
         logger.info("Phase gate unlocked — all raids merged in phase %s", phase.tracker_id)
 
         # Unlock the next phase
-        if saga is None:
-            saga = await tracker.get_saga_for_raid(tracker_id)
+        saga = await tracker.get_saga_for_raid(tracker_id)
         if saga is None:
             return True
 
@@ -973,53 +936,24 @@ class ReviewEngine:
                     )
                 )
 
-            # Phase unlock may unblock new issues — trigger auto-continue
-            await self._try_auto_continue(owner_id, saga.tracker_id)
-
         return True
-
-    # -- Auto-continue --
-
-    async def _try_auto_continue(self, owner_id: str, saga_tracker_id: str) -> None:
-        """Delegate auto-continue to DispatchService if available."""
-        if self._dispatch_service is None:
-            return
-        try:
-            await self._dispatch_service.try_auto_continue(owner_id, saga_tracker_id)
-        except Exception:
-            logger.warning(
-                "Auto-continue failed for owner %s (saga=%s)",
-                owner_id[:8],
-                saga_tracker_id,
-                exc_info=True,
-            )
 
     # -- Event emission --
 
-    async def _emit_state_changed(
-        self,
-        raid: Raid,
-        *,
-        owner_id: str,
-        action: str,
-        saga_tracker_id: str | None = None,
-    ) -> None:
+    async def _emit_state_changed(self, raid: Raid, *, owner_id: str, action: str) -> None:
         if self._event_bus is None:
             return
-        data: dict[str, object] = {
-            "raid_id": str(raid.id),
-            "status": raid.status.value,
-            "confidence": raid.confidence,
-            "action": action,
-            "tracker_id": raid.tracker_id,
-        }
-        if saga_tracker_id is not None:
-            data["saga_tracker_id"] = saga_tracker_id
         await self._event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
                 owner_id=owner_id,
-                data=data,
+                data={
+                    "raid_id": str(raid.id),
+                    "status": raid.status.value,
+                    "confidence": raid.confidence,
+                    "action": action,
+                    "tracker_id": raid.tracker_id,
+                },
             )
         )
 

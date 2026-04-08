@@ -1,13 +1,15 @@
 import { Navigate } from 'react-router-dom';
-import { useAppIdentity } from '@/contexts/useAppIdentity';
+import { useIdentity } from '@/hooks/useIdentity';
+import type { IVolundrService } from '@/modules/volundr/ports';
 import styles from './AdminGuard.module.css';
 
 interface AdminGuardProps {
+  service: IVolundrService;
   children: React.ReactNode;
 }
 
-export function AdminGuard({ children }: AdminGuardProps) {
-  const { isAdmin, loading } = useAppIdentity();
+export function AdminGuard({ service, children }: AdminGuardProps) {
+  const { isAdmin, loading } = useIdentity(service);
 
   if (loading) {
     return <div className={styles.loading}>Loading...</div>;

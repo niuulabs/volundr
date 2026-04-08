@@ -20,25 +20,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_VOLUNDR_URL = "http://volundr:8000"
 
 
-class LocalVolundrAdapterFactory:
-    """Volundr adapter factory for mini/local mode.
-
-    Always returns a single VolundrHTTPAdapter pointing at the local
-    server with no PAT required.  Same interface as VolundrAdapterFactory
-    so all callers (dispatch, activity subscriber, review engine) work
-    without fallback logic.
-    """
-
-    def __init__(self, url: str) -> None:
-        self._adapter = VolundrHTTPAdapter(base_url=url, name="local")
-
-    async def for_owner(self, owner_id: str) -> list[VolundrPort]:
-        return [self._adapter]
-
-    async def primary_for_owner(self, owner_id: str) -> VolundrPort | None:
-        return self._adapter
-
-
 class VolundrAdapterFactory:
     """Resolves VolundrHTTPAdapter instances for a specific owner.
 

@@ -45,14 +45,8 @@ class TestValuesDefaults:
         values_path = CHART_DIR / "values.yaml"
         return yaml.safe_load(values_path.read_text())
 
-    def test_transport_adapter_defaults_to_sdk_websocket(self, values_yaml):
-        """Test broker transportAdapter defaults to SdkWebSocketTransport."""
-        assert values_yaml["broker"]["transportAdapter"] == (
-            "skuld.transports.sdk_websocket.SdkWebSocketTransport"
-        )
-
     def test_broker_cli_type_defaults_to_claude(self, values_yaml):
-        """Test legacy broker cliType defaults to claude (backward compat)."""
+        """Test broker cliType defaults to claude."""
         assert values_yaml["broker"]["cliType"] == "claude"
 
     def test_env_secrets_default_has_anthropic_key(self, values_yaml):
@@ -150,25 +144,13 @@ class TestConfigMapTemplate:
         template_path = CHART_DIR / "templates" / "skuld-configmap.yaml"
         return template_path.read_text()
 
-    def test_configmap_has_transport_adapter(self, configmap_yaml):
-        """Test configmap includes transport_adapter field."""
-        assert "transport_adapter" in configmap_yaml
-
-    def test_configmap_transport_adapter_driven_by_values(self, configmap_yaml):
-        """Test configmap transport_adapter reads from broker.transportAdapter."""
-        assert ".Values.broker.transportAdapter" in configmap_yaml
-
     def test_configmap_has_cli_type(self, configmap_yaml):
-        """Test configmap includes legacy cli_type field for backward compat."""
+        """Test configmap includes cli_type field."""
         assert "cli_type" in configmap_yaml
 
     def test_configmap_cli_type_driven_by_values(self, configmap_yaml):
-        """Test configmap legacy cli_type reads from broker.cliType."""
+        """Test configmap cli_type reads from broker.cliType."""
         assert ".Values.broker.cliType" in configmap_yaml
-
-    def test_configmap_cli_type_has_default_fallback(self, configmap_yaml):
-        """Test configmap cli_type template has a default fallback value."""
-        assert 'default "claude"' in configmap_yaml
 
     def test_configmap_has_service_auth_fields(self, configmap_yaml):
         """Test configmap includes service auth identity fields."""

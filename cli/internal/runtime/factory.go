@@ -1,0 +1,12 @@
+package runtime
+
+// NewRuntime creates a Runtime for the given runtime type.
+// Valid types: "local" (default), "k3s".
+func NewRuntime(runtimeType string) Runtime {
+	switch runtimeType {
+	case "k3s":
+		return NewK3sRuntime()
+	default:
+		return NewLocalRuntime()
+	}
+}
