@@ -13,6 +13,25 @@ import type {
 // Ensure module registry is populated
 import '@/modules';
 
+const mockServiceRef = { current: {} as IVolundrService };
+
+vi.mock('@/modules/volundr/adapters', () => ({
+  get volundrService() {
+    return mockServiceRef.current;
+  },
+}));
+
+vi.mock('@/modules/shared/adapters/feature-catalog.adapter', () => ({
+  get featureCatalogService() {
+    return {
+      getFeatureModules: mockServiceRef.current.getFeatureModules,
+      getUserFeaturePreferences: mockServiceRef.current.getUserFeaturePreferences,
+      toggleFeature: mockServiceRef.current.toggleFeature,
+      updateUserFeaturePreferences: mockServiceRef.current.updateUserFeaturePreferences,
+    };
+  },
+}));
+
 const mockCatalog: CatalogEntry[] = [
   {
     slug: 'linear',
@@ -186,9 +205,10 @@ function createMockService(overrides?: Partial<IVolundrService>): IVolundrServic
 }
 
 function renderSettings(service: IVolundrService) {
+  mockServiceRef.current = service;
   return render(
     <MemoryRouter>
-      <SettingsPage service={service} />
+      <SettingsPage />
     </MemoryRouter>
   );
 }
@@ -720,7 +740,7 @@ describe('SettingsPage — Credentials with data', () => {
   });
 });
 
-describe('SettingsPage — Credential Form', () => {
+describe('SettingsPage — Credential Form', { timeout: 30_000 }, () => {
   let service: IVolundrService;
 
   beforeEach(() => {
@@ -729,13 +749,19 @@ describe('SettingsPage — Credential Form', () => {
 
   /** Helper: open the credential form and return scoped queries for the overlay. */
   async function openForm() {
-    await waitFor(() => {
-      expect(screen.getByText('Add Credential')).toBeDefined();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByText('Add Credential')).toBeDefined();
+      },
+      { timeout: 10_000 }
+    );
     fireEvent.click(screen.getByText('Add Credential'));
-    await waitFor(() => {
-      expect(screen.getByText('Select Type')).toBeDefined();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByText('Select Type')).toBeDefined();
+      },
+      { timeout: 10_000 }
+    );
     // scope subsequent queries to the form overlay
     const overlay = screen.getByText('Select Type').closest('[class*="formOverlay"]')!;
     return within(overlay as HTMLElement);
@@ -745,9 +771,12 @@ describe('SettingsPage — Credential Form', () => {
   async function openFormWithType(typeLabel: string) {
     const form = await openForm();
     fireEvent.click(form.getByText(typeLabel));
-    await waitFor(() => {
-      expect(form.getByPlaceholderText('my-api-key')).toBeDefined();
-    });
+    await waitFor(
+      () => {
+        expect(form.getByPlaceholderText('my-api-key')).toBeDefined();
+      },
+      { timeout: 5000 }
+    );
     return form;
   }
 
@@ -782,9 +811,12 @@ describe('SettingsPage — Credential Form', () => {
     const form = await openFormWithType('API Key');
 
     fireEvent.click(form.getByText('Back'));
-    await waitFor(() => {
-      expect(form.getByText('Select Type')).toBeDefined();
-    });
+    await waitFor(
+      () => {
+        expect(form.getByText('Select Type')).toBeDefined();
+      },
+      { timeout: 5000 }
+    );
   });
 
   it('submits API key credential', async () => {

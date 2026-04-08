@@ -12,9 +12,9 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from niuu.adapters.inbound.rest_repos import create_repos_router
 from volundr.adapters.inbound.rest import create_router
 from volundr.adapters.inbound.rest_admin_settings import create_admin_settings_router
+from volundr.adapters.inbound.rest_audit import create_audit_router
 from volundr.adapters.inbound.rest_credentials import create_credentials_router
 from volundr.adapters.inbound.rest_events import create_events_router
 from volundr.adapters.inbound.rest_features import create_features_router
@@ -28,7 +28,6 @@ from volundr.adapters.inbound.rest_prompts import create_prompts_router
 from volundr.adapters.inbound.rest_resources import create_resources_router
 from volundr.adapters.inbound.rest_secrets import create_secrets_router
 from volundr.adapters.inbound.rest_tenants import create_tenants_router
-from volundr.adapters.inbound.rest_tracker import create_tracker_router
 from volundr.adapters.outbound.broadcaster import InMemoryEventBroadcaster
 from volundr.adapters.outbound.config_mcp_servers import ConfigMCPServerProvider
 from volundr.adapters.outbound.config_profiles import ConfigProfileProvider
@@ -59,7 +58,6 @@ from volundr.domain.services import (
     StatsService,
     TenantService,
     TokenService,
-    TrackerService,
 )
 from volundr.domain.services.event_ingestion import EventIngestionService
 from volundr.domain.services.feature import FeatureService
@@ -262,6 +260,12 @@ def _create_contributors(
     if lm.enabled:
         logger.info("Session contributor: local_mount (enabled)")
 
+    # Always wire the prompt contributor so system_prompt/initial_prompt
+    # from the launch request (or dispatch) are injected into the spec.
+    from volundr.adapters.outbound.contributors.prompt import PromptContributor
+
+    contributors.append(PromptContributor())
+
     return contributors
 
 
@@ -348,6 +352,47 @@ def _create_otel_providers(otel_cfg):  # pragma: no cover
     )
 
     return tracer_provider, meter_provider
+
+
+async def _seed_linear_integration(
+    integration_repo: object,
+    credential_store: object,
+    api_key: str,
+) -> None:
+    """Seed Linear integration from config into the DB.
+
+    Idempotent — uses a fixed ID so repeated calls update the same row.
+    This lets the integration-based /issues/search endpoint find Linear
+    without manual UI setup.
+    """
+    from datetime import UTC, datetime
+
+    from niuu.domain.models import IntegrationConnection, IntegrationType, SecretType
+
+    owner_id = "dev-user"
+    cred_name = "linear-config"
+
+    await credential_store.store(
+        owner_type="user",
+        owner_id=owner_id,
+        name=cred_name,
+        secret_type=SecretType.API_KEY,
+        data={"api_key": api_key},
+    )
+
+    connection = IntegrationConnection(
+        id="f976d725-2a19-558a-a2d0-99258577f615",
+        owner_id=owner_id,
+        integration_type=IntegrationType.ISSUE_TRACKER,
+        adapter="volundr.adapters.outbound.linear.LinearAdapter",
+        credential_name=cred_name,
+        config={},
+        enabled=True,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        slug="linear",
+    )
+    await integration_repo.save_connection(connection)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -468,10 +513,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             stats_repository = PostgresStatsRepository(pool)
             token_tracker = PostgresTokenTracker(pool)
             pod_manager = _create_pod_manager(settings)
+
+            # Inject Skuld port registry for mini mode proxy routing
+            try:
+                from cli.server import get_skuld_registry
+
+                skuld_reg = get_skuld_registry()
+                if skuld_reg is not None and hasattr(pod_manager, "set_skuld_registry"):
+                    pod_manager.set_skuld_registry(skuld_reg)
+            except ImportError:
+                pass  # Not running via CLI
+
             gateway_adapter = _create_gateway_adapter(settings)
             pricing_provider = HardcodedPricingProvider(settings.models or None)
             git_registry = create_git_registry(settings.git)
-            broadcaster = InMemoryEventBroadcaster()
+
+            # Sleipnir integration (optional — enabled via sleipnir.enabled config)
+            sleipnir_bus = None
+            if settings.sleipnir.enabled:
+                try:
+                    sl_cls = import_class(settings.sleipnir.adapter)
+                    sleipnir_bus = sl_cls(**settings.sleipnir.kwargs)
+                    logger.info(
+                        "Sleipnir integration enabled: adapter=%s",
+                        settings.sleipnir.adapter.rsplit(".", 1)[-1],
+                    )
+                except Exception:
+                    logger.exception("Failed to initialise Sleipnir integration")
+                    sleipnir_bus = None
+
+            broadcaster = InMemoryEventBroadcaster(
+                sleipnir_publisher=sleipnir_bus,
+            )
 
             # Create services with broadcaster for real-time updates
             # Create profile and template adapters (config-driven)
@@ -504,8 +577,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             integration_repo = PostgresIntegrationRepository(pool)
 
             # User integration service — ephemeral per-user provider factory.
-            # Created early so session contributors can use it.
-            # Issue providers are wired later when linear_adapter is available.
             from volundr.domain.services.user_integration import UserIntegrationService
 
             user_integration_service = UserIntegrationService(
@@ -555,11 +626,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 git_registry,
                 user_integration=user_integration_service,
             )
-
-            # TODO: extract niuu shared service to its own process — for now
-            # volundr hosts the /api/v1/niuu endpoints alongside its own.
-            niuu_repos_router = create_repos_router(repo_service)
-            app.include_router(niuu_repos_router)
 
             chronicle_repository = PostgresChronicleRepository(pool)
             timeline_repository = PostgresTimelineRepository(pool)
@@ -657,6 +723,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             git_router = create_git_router(git_workflow_service)
             app.include_router(git_router)
 
+            # Local git workspace endpoints (mini/local mode)
+            from volundr.adapters.inbound.rest_local_git import create_local_git_router
+            from volundr.adapters.outbound.local_git import LocalGitService
+
+            local_git_service = LocalGitService(
+                subprocess_timeout=settings.local_git.subprocess_timeout,
+            )
+            local_git_router = create_local_git_router(
+                local_git_service,
+                session_repository=repository,
+            )
+            app.include_router(local_git_router)
+            app.state.local_git_service = local_git_service
+
             # Tenant and identity management
             tenants_router = create_tenants_router(tenant_service)
             app.include_router(tenants_router)
@@ -666,7 +746,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.include_router(admin_settings_router)
 
             # Feature module system (config-driven, DB-persisted toggles)
-            feature_service = FeatureService(pool, settings.features)
+            # In mini mode, disable modules that require container infrastructure
+            feature_configs = list(settings.features)
+            if settings.local_mounts.mini_mode:
+                _mini_disabled = {"terminal", "code"}
+                for fc in feature_configs:
+                    if fc.key in _mini_disabled:
+                        fc.default_enabled = False
+            feature_service = FeatureService(pool, feature_configs)
             features_router = create_features_router(feature_service)
             app.include_router(features_router)
             app.state.feature_service = feature_service
@@ -690,26 +777,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             tracker_factory = TrackerFactory(credential_store)
 
-            # Issue tracker integration (Linear, Jira, etc.)
-            tracker_service = None
-            linear_adapter = None
+            # Seed Linear integration from config so the integration-based
+            # endpoints (/issues/search) find it in the DB.
             if settings.linear.enabled and settings.linear.api_key:
-                from volundr.adapters.outbound.linear import LinearAdapter
-                from volundr.adapters.outbound.postgres_mappings import (
-                    PostgresMappingRepository,
+                await _seed_linear_integration(
+                    integration_repo, credential_store,
+                    api_key=settings.linear.api_key,
                 )
-
-                linear_adapter = LinearAdapter(api_key=settings.linear.api_key)
-                mapping_repository = PostgresMappingRepository(pool)
-                tracker_service = TrackerService(
-                    linear_adapter,
-                    mapping_repository,
-                    integration_repo=integration_repo,
-                    tracker_factory=tracker_factory,
-                )
-                tracker_router = create_tracker_router(tracker_service)
-                app.include_router(tracker_router)
-                logger.info("Issue tracker integration enabled (provider=linear)")
+                logger.info("Linear integration seeded from config")
 
             # Integration management endpoints
             integrations_router = create_integrations_router(
@@ -736,9 +811,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.include_router(issues_router)
 
-            # Wire shared issue providers now that linear_adapter is available
-            if linear_adapter:
-                user_integration_service.add_shared_issue_provider(linear_adapter)
             app.state.user_integration_service = user_integration_service
 
             # Event pipeline: sinks + ingestion service + REST endpoints
@@ -801,6 +873,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 except Exception:
                     logger.exception("Failed to initialize OTel event sink")
 
+            # Register Sleipnir event sink when integration is active
+            audit_subscriber = None
+            if sleipnir_bus is not None:
+                from volundr.adapters.outbound.sleipnir_event_sink import (  # noqa: PLC0415
+                    SleipnirEventSink,
+                )
+
+                event_sinks.append(SleipnirEventSink(sleipnir_bus))
+                logger.info("Sleipnir event sink registered in pipeline")
+
+                # Audit log subscriber — persistent record of every event
+                from sleipnir.adapters.audit_postgres import PostgresAuditRepository
+                from sleipnir.adapters.audit_subscriber import AuditSubscriber
+
+                audit_repository = PostgresAuditRepository(pool)
+                audit_subscriber = AuditSubscriber(sleipnir_bus, audit_repository)
+                await audit_subscriber.start()
+
+                audit_router = create_audit_router(audit_repository)
+                app.include_router(audit_router)
+                logger.info("Audit log subscriber started")
+
             event_ingestion = EventIngestionService(sinks=event_sinks)
             events_router = create_events_router(
                 event_ingestion, pg_event_sink, session_service=session_service
@@ -820,7 +914,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.template_service = template_service
             app.state.git_workflow_service = git_workflow_service
             app.state.event_ingestion = event_ingestion
-            app.state.tracker_service = tracker_service
+            app.state.tracker_service = None  # Deprecated: use integration-based /issues/
             app.state.tenant_service = tenant_service
             app.state.gateway = gateway_adapter
             app.state.user_repository = user_repository
@@ -844,9 +938,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     await background_task
                 except asyncio.CancelledError:
                     pass  # Expected: task cancellation during shutdown
+                if audit_subscriber is not None:
+                    await audit_subscriber.stop()
                 await event_ingestion.close_all()
-                if linear_adapter is not None:
-                    await linear_adapter.close()
                 await pod_manager.close()
                 if hasattr(gateway_adapter, "close"):
                     await gateway_adapter.close()

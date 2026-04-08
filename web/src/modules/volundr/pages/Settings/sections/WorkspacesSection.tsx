@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { HardDrive } from 'lucide-react';
 import type { VolundrWorkspace } from '@/modules/volundr/models';
-import type { IVolundrService } from '@/modules/volundr/ports';
+import { volundrService } from '@/modules/volundr/adapters';
 import { cn } from '@/utils/classnames';
 import styles from './WorkspacesSection.module.css';
 
@@ -23,11 +23,7 @@ function workspaceLabel(ws: VolundrWorkspace): string {
   return ws.pvcName;
 }
 
-interface WorkspacesSectionProps {
-  service: IVolundrService;
-}
-
-export function WorkspacesSection({ service }: WorkspacesSectionProps) {
+export function WorkspacesSection() {
   const [workspaces, setWorkspaces] = useState<VolundrWorkspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<VolundrWorkspace | null>(null);
@@ -37,12 +33,12 @@ export function WorkspacesSection({ service }: WorkspacesSectionProps) {
   const loadWorkspaces = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await service.listWorkspaces();
+      const data = await volundrService.listWorkspaces();
       setWorkspaces(data);
     } finally {
       setLoading(false);
     }
-  }, [service]);
+  }, []);
 
   useEffect(() => {
     loadWorkspaces();
@@ -50,20 +46,20 @@ export function WorkspacesSection({ service }: WorkspacesSectionProps) {
 
   const handleRestore = useCallback(
     async (id: string) => {
-      await service.restoreWorkspace(id);
+      await volundrService.restoreWorkspace(id);
       await loadWorkspaces();
     },
-    [service, loadWorkspaces]
+    [loadWorkspaces]
   );
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget) {
       return;
     }
-    await service.deleteWorkspace(deleteTarget.sessionId);
+    await volundrService.deleteWorkspace(deleteTarget.sessionId);
     setDeleteTarget(null);
     await loadWorkspaces();
-  }, [deleteTarget, service, loadWorkspaces]);
+  }, [deleteTarget, loadWorkspaces]);
 
   const handleToggleSelectAll = useCallback(() => {
     if (selectedIds.size === workspaces.length) {
@@ -89,13 +85,13 @@ export function WorkspacesSection({ service }: WorkspacesSectionProps) {
     if (selectedIds.size === 0) return;
     setBulkDeleting(true);
     try {
-      await service.bulkDeleteWorkspaces(Array.from(selectedIds));
+      await volundrService.bulkDeleteWorkspaces(Array.from(selectedIds));
       setSelectedIds(new Set());
       await loadWorkspaces();
     } finally {
       setBulkDeleting(false);
     }
-  }, [selectedIds, service, loadWorkspaces]);
+  }, [selectedIds, loadWorkspaces]);
 
   const totalStorageGb = workspaces
     .filter(w => w.status !== 'deleted')

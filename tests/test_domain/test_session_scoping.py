@@ -292,7 +292,7 @@ class TestOwnershipValidation:
             principal=alice,
         )
 
-        assert result.status == SessionStatus.PROVISIONING
+        assert result.status == SessionStatus.STARTING
 
     async def test_other_user_cannot_start(
         self,

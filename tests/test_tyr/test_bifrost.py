@@ -8,12 +8,22 @@ import httpx
 import pytest
 import respx
 
+from sleipnir.adapters.in_process import InProcessBus
+from sleipnir.domain.registry import (
+    BIFROST_PROVIDER_DOWN,
+    BIFROST_PROVIDER_RECOVERED,
+    BIFROST_QUOTA_EXCEEDED,
+    BIFROST_QUOTA_WARNING,
+    BIFROST_REQUEST_COMPLETE,
+)
+from sleipnir.testing import EventCapture
 from tyr.adapters.bifrost import (
     ANTHROPIC_API_VERSION,
     DECOMPOSITION_PROMPT,
     BifrostAdapter,
     DecompositionError,
 )
+from tyr.adapters.bifrost_publisher import BifrostPublisher
 from tyr.domain.models import RaidSpec, SagaStructure
 from tyr.domain.validation import ValidationError, parse_and_validate, validate_raid
 
@@ -509,3 +519,321 @@ class TestDecompositionPrompt:
     def test_default_max_tokens(self) -> None:
         adapter = BifrostAdapter()
         assert adapter._max_tokens == 8192
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared by Sleipnir emission tests
+# ---------------------------------------------------------------------------
+
+_API_URL = "http://bifrost.test/v1/messages"
+
+
+def _ok_response_with_usage(
+    payload: dict, input_tokens: int = 50, output_tokens: int = 150
+) -> dict:
+    """Wrap payload as an Anthropic-style response with usage data."""
+    return {
+        "content": [{"type": "text", "text": json.dumps(payload)}],
+        "usage": {"input_tokens": input_tokens, "output_tokens": output_tokens},
+    }
+
+
+def _make_adapter_with_bus(bus: InProcessBus, **kwargs) -> BifrostAdapter:
+    adapter = BifrostAdapter(base_url="http://bifrost.test", **kwargs)
+    adapter.set_publisher(BifrostPublisher(bus, agent_id=kwargs.get("agent_id", "")))
+    return adapter
+
+
+# ---------------------------------------------------------------------------
+# Sleipnir event emission — bifrost.request.complete
+# ---------------------------------------------------------------------------
+
+
+class TestBifrostAdapterRequestCompleteEvent:
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_emits_request_complete_on_success(self) -> None:
+        bus = InProcessBus()
+        adapter = _make_adapter_with_bus(bus)
+        respx.post(_API_URL).mock(
+            return_value=httpx.Response(200, json=_ok_response_with_usage(VALID_RESPONSE))
+        )
+
+        async with EventCapture(bus, [BIFROST_REQUEST_COMPLETE]) as capture:
+            await adapter.decompose_spec("spec", "repo", model="m")
+            await bus.flush()
+
+        assert len(capture.events) == 1
+        assert capture.events[0].event_type == BIFROST_REQUEST_COMPLETE
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_request_complete_urgency_is_zero(self) -> None:
+        bus = InProcessBus()
+        adapter = _make_adapter_with_bus(bus)
+        respx.post(_API_URL).mock(
+            return_value=httpx.Response(200, json=_ok_response_with_usage(VALID_RESPONSE))
+        )
+
+        async with EventCapture(bus, [BIFROST_REQUEST_COMPLETE]) as capture:
+            await adapter.decompose_spec("spec", "repo", model="m")
+            await bus.flush()
+
+        assert capture.events[0].urgency == 0.0
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_request_complete_token_counts_in_payload(self) -> None:
+        bus = InProcessBus()
+        adapter = _make_adapter_with_bus(bus)
+        respx.post(_API_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json=_ok_response_with_usage(VALID_RESPONSE, input_tokens=100, output_tokens=200),
+            )
+        )
+
+        async with EventCapture(bus, [BIFROST_REQUEST_COMPLETE]) as capture:
+            await adapter.decompose_spec("spec", "repo", model="claude-opus-4-6")
+            await bus.flush()
+
+        p = capture.events[0].payload
+        assert p["model"] == "claude-opus-4-6"
+        assert p["input_tokens"] == 100
+        assert p["output_tokens"] == 200
+        assert p["total_tokens"] == 300
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_no_event_when_no_publisher(self) -> None:
+        """BifrostAdapter without a publisher emits nothing."""
+        bus = InProcessBus()
+        adapter = BifrostAdapter(base_url="http://bifrost.test")
+        respx.post(_API_URL).mock(
+            return_value=httpx.Response(200, json=_ok_response_with_usage(VALID_RESPONSE))
+        )
+
+        async with EventCapture(bus, ["bifrost.*"]) as capture:
+            await adapter.decompose_spec("spec", "repo", model="m")
+            await bus.flush()
+
+        assert len(capture.events) == 0
+
+
+# ---------------------------------------------------------------------------
+# Sleipnir event emission — bifrost.provider.down / recovered
+# ---------------------------------------------------------------------------
+
+
+class TestBifrostAdapterProviderEvents:
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_emits_provider_down_on_5xx(self) -> None:
+        """Sköll receives bifrost.provider.down when the provider returns 5xx."""
+        bus = InProcessBus()
+        adapter = _make_adapter_with_bus(bus, max_retries=1)
+        respx.post(_API_URL).mock(return_value=httpx.Response(503))
+
+        async with EventCapture(bus, [BIFROST_PROVIDER_DOWN]) as capture:
+            with pytest.raises(DecompositionError):
+                await adapter.decompose_spec("spec", "repo", model="m")
+            await bus.flush()
+
+        assert len(capture.events) == 1
+        evt = capture.events[0]
+        assert evt.urgency == 0.8
+        assert evt.payload["status_code"] == 503
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_provider_down_emitted_only_once_per_outage(self) -> None:
+        bus = InProcessBus()
+        adapter = _make_adapter_with_bus(bus, max_retries=2)
+        respx.post(_API_URL).mock(return_value=httpx.Response(500))
+
+        async with EventCapture(bus, [BIFROST_PROVIDER_DOWN]) as capture:
+            with pytest.raises(DecompositionError):
+                await adapter.decompose_spec("spec", "repo", model="m")
+            await bus.flush()
+
+        # Both retries hit 500, but provider_down emitted only once.
+        assert len(capture.events) == 1
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_provider_recovered_emitted_after_5xx_then_success(self) -> None:
+        bus = InProcessBus()
+        adapter = _make_adapter_with_bus(bus, max_retries=2)
+        route = respx.post(_API_URL)
+        route.side_effect = [
+            httpx.Response(503),
+            httpx.Response(200, json=_ok_response_with_usage(VALID_RESPONSE)),
+        ]
+
+        async with EventCapture(
+            bus, [BIFROST_PROVIDER_DOWN, BIFROST_PROVIDER_RECOVERED]
+        ) as capture:
+            await adapter.decompose_spec("spec", "repo", model="m")
+            await bus.flush()
+
+        types = {e.event_type for e in capture.events}
+        assert BIFROST_PROVIDER_DOWN in types
+        assert BIFROST_PROVIDER_RECOVERED in types
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_provider_down_not_emitted_for_non_5xx(self) -> None:
+        """A 429 (rate limit) should NOT trigger provider.down."""
+        bus = InProcessBus()
+        adapter = _make_adapter_with_bus(bus, max_retries=1)
+        respx.post(_API_URL).mock(return_value=httpx.Response(429))
+
+        async with EventCapture(bus, [BIFROST_PROVIDER_DOWN]) as capture:
+            with pytest.raises(DecompositionError):
+                await adapter.decompose_spec("spec", "repo", model="m")
+            await bus.flush()
+
+        assert len(capture.events) == 0
+
+
+# ---------------------------------------------------------------------------
+# Sleipnir event emission — quota
+# ---------------------------------------------------------------------------
+
+
+class TestBifrostAdapterQuotaEvents:
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_quota_warning_emitted_at_threshold(self) -> None:
+        """Valkyries receive bifrost.quota.warning at the correct urgency (0.5)."""
+        bus = InProcessBus()
+        # Budget: 1000 tokens, threshold: 0.8 → warning at 800 tokens used.
+        adapter = _make_adapter_with_bus(bus, budget_tokens=1000, quota_warning_threshold=0.8)
+        # Each call uses 500 tokens (input=200, output=300).
+        respx.post(_API_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json=_ok_response_with_usage(VALID_RESPONSE, input_tokens=200, output_tokens=300),
+            )
+        )
+
+        async with EventCapture(bus, [BIFROST_QUOTA_WARNING]) as capture:
+            # First call: 500 tokens (50% — no warning)
+            await adapter.decompose_spec("spec", "repo", model="m")
+            # Second call: 1000 total (100% — warning triggers at 80%)
+            await adapter.decompose_spec("spec", "repo", model="m")
+            await bus.flush()
+
+        assert len(capture.events) == 1
+        evt = capture.events[0]
+        assert evt.urgency == 0.5
+        assert evt.payload["budget_tokens"] == 1000
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_quota_warning_emitted_only_once(self) -> None:
+        bus = InProcessBus()
+        adapter = _make_adapter_with_bus(bus, budget_tokens=100, quota_warning_threshold=0.1)
+        respx.post(_API_URL).mock(
+            return_value=httpx.Response(
+                200, json=_ok_response_with_usage(VALID_RESPONSE, input_tokens=20, output_tokens=5)
+            )
+        )
+
+        async with EventCapture(bus, [BIFROST_QUOTA_WARNING]) as capture:
+            for _ in range(3):
+                await adapter.decompose_spec("spec", "repo", model="m")
+            await bus.flush()
+
+        assert len(capture.events) == 1
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_quota_exceeded_emitted_at_budget(self) -> None:
+        bus = InProcessBus()
+        adapter = _make_adapter_with_bus(bus, budget_tokens=100, quota_warning_threshold=0.8)
+        respx.post(_API_URL).mock(
+            return_value=httpx.Response(
+                200, json=_ok_response_with_usage(VALID_RESPONSE, input_tokens=60, output_tokens=60)
+            )
+        )
+
+        async with EventCapture(bus, [BIFROST_QUOTA_EXCEEDED]) as capture:
+            await adapter.decompose_spec("spec", "repo", model="m")
+            await adapter.decompose_spec("spec", "repo", model="m")
+            await bus.flush()
+
+        assert len(capture.events) == 1
+        assert capture.events[0].urgency == 0.7
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_quota_exceeded_emitted_only_once(self) -> None:
+        bus = InProcessBus()
+        adapter = _make_adapter_with_bus(bus, budget_tokens=50, quota_warning_threshold=0.1)
+        respx.post(_API_URL).mock(
+            return_value=httpx.Response(
+                200, json=_ok_response_with_usage(VALID_RESPONSE, input_tokens=30, output_tokens=30)
+            )
+        )
+
+        async with EventCapture(bus, [BIFROST_QUOTA_EXCEEDED]) as capture:
+            for _ in range(3):
+                await adapter.decompose_spec("spec", "repo", model="m")
+            await bus.flush()
+
+        assert len(capture.events) == 1
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_no_quota_events_when_budget_is_zero(self) -> None:
+        """budget_tokens=0 means unlimited — no quota events."""
+        bus = InProcessBus()
+        adapter = _make_adapter_with_bus(bus, budget_tokens=0)
+        respx.post(_API_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json=_ok_response_with_usage(VALID_RESPONSE, input_tokens=9999, output_tokens=9999),
+            )
+        )
+
+        async with EventCapture(bus, [BIFROST_QUOTA_WARNING, BIFROST_QUOTA_EXCEEDED]) as capture:
+            await adapter.decompose_spec("spec", "repo", model="m")
+            await bus.flush()
+
+        assert len(capture.events) == 0
+
+
+# ---------------------------------------------------------------------------
+# New config fields
+# ---------------------------------------------------------------------------
+
+
+class TestBifrostAdapterNewConfig:
+    def test_default_budget_tokens_is_zero(self) -> None:
+        adapter = BifrostAdapter()
+        assert adapter._budget_tokens == 0
+
+    def test_default_quota_warning_threshold(self) -> None:
+        adapter = BifrostAdapter()
+        assert adapter._quota_warning_threshold == 0.8
+
+    def test_custom_budget_and_threshold(self) -> None:
+        adapter = BifrostAdapter(budget_tokens=5000, quota_warning_threshold=0.9)
+        assert adapter._budget_tokens == 5000
+        assert adapter._quota_warning_threshold == 0.9
+
+    def test_set_publisher_assigns_publisher(self) -> None:
+        adapter = BifrostAdapter()
+        bus = InProcessBus()
+        pub = BifrostPublisher(bus)
+        adapter.set_publisher(pub)
+        assert adapter._publisher is pub
+
+    def test_provider_starts_healthy(self) -> None:
+        adapter = BifrostAdapter()
+        assert adapter._provider_healthy is True
+
+    def test_total_tokens_starts_at_zero(self) -> None:
+        adapter = BifrostAdapter()
+        assert adapter._total_tokens == 0

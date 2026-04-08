@@ -4,6 +4,14 @@ import { AccessTokensSection } from './AccessTokensSection';
 import type { IVolundrService } from '@/modules/volundr/ports';
 import type { PersonalAccessToken } from '@/modules/volundr/models';
 
+const mockServiceRef = { current: {} as IVolundrService };
+
+vi.mock('@/modules/volundr/adapters', () => ({
+  get volundrService() {
+    return mockServiceRef.current;
+  },
+}));
+
 const mockTokens: PersonalAccessToken[] = [
   {
     id: 'tok-1',
@@ -50,7 +58,8 @@ describe('AccessTokensSection', () => {
     service = createMockService({
       listTokens: vi.fn().mockReturnValue(new Promise(() => {})),
     });
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
     expect(screen.getByText('Loading tokens...')).toBeDefined();
   });
 
@@ -58,7 +67,8 @@ describe('AccessTokensSection', () => {
     service = createMockService({
       listTokens: vi.fn().mockResolvedValue([]),
     });
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(
@@ -70,7 +80,8 @@ describe('AccessTokensSection', () => {
   });
 
   it('renders token list from API', async () => {
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -79,7 +90,8 @@ describe('AccessTokensSection', () => {
   });
 
   it('shows creation date and last used for tokens', async () => {
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -92,7 +104,8 @@ describe('AccessTokensSection', () => {
   });
 
   it('shows create form when New Token is clicked', async () => {
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -103,7 +116,8 @@ describe('AccessTokensSection', () => {
   });
 
   it('disables Create button when name is empty', async () => {
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -115,7 +129,8 @@ describe('AccessTokensSection', () => {
   });
 
   it('enables Create button when name is entered', async () => {
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -130,7 +145,8 @@ describe('AccessTokensSection', () => {
   });
 
   it('create flow: form submit shows overlay, done closes and refreshes', async () => {
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -163,7 +179,8 @@ describe('AccessTokensSection', () => {
     service = createMockService({
       createToken: vi.fn().mockRejectedValue(new Error('Duplicate name')),
     });
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -191,7 +208,8 @@ describe('AccessTokensSection', () => {
       listTokens: listTokensFn,
     });
 
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -210,7 +228,8 @@ describe('AccessTokensSection', () => {
       revokeToken: vi.fn().mockRejectedValue(new Error('Not authorized')),
     });
 
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -226,7 +245,8 @@ describe('AccessTokensSection', () => {
   });
 
   it('hides form on Cancel click', async () => {
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -240,7 +260,8 @@ describe('AccessTokensSection', () => {
   });
 
   it('submits create form on Enter key', async () => {
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -258,7 +279,8 @@ describe('AccessTokensSection', () => {
   });
 
   it('does not submit on Enter when name is empty', async () => {
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -277,7 +299,8 @@ describe('AccessTokensSection', () => {
     service = createMockService({
       createToken: vi.fn().mockRejectedValue('string error'),
     });
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -299,7 +322,8 @@ describe('AccessTokensSection', () => {
       revokeToken: vi.fn().mockRejectedValue('revoke failed'),
     });
 
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();
@@ -317,7 +341,8 @@ describe('AccessTokensSection', () => {
     service = createMockService({
       listTokens: vi.fn().mockRejectedValue(new Error('Network error')),
     });
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     // Loading should eventually resolve (error state doesn't show loading)
     await waitFor(() => {
@@ -326,7 +351,8 @@ describe('AccessTokensSection', () => {
   });
 
   it('does not ignore non-Enter key presses', async () => {
-    render(<AccessTokensSection service={service} />);
+    mockServiceRef.current = service;
+    render(<AccessTokensSection />);
 
     await waitFor(() => {
       expect(screen.getByText('CI Pipeline')).toBeDefined();

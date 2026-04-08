@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 from uuid import UUID
 
-from tyr.domain.models import Phase, Raid, Saga
+from tyr.domain.models import Phase, Raid, Saga, SagaStatus
 
 
 class SagaRepository(ABC):
@@ -52,6 +52,11 @@ class SagaRepository(ABC):
     @abstractmethod
     async def delete_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> bool:
         """Delete a saga, optionally scoped to an owner. Returns True if deleted."""
+        ...
+
+    @abstractmethod
+    async def update_saga_status(self, saga_id: UUID, status: SagaStatus) -> None:
+        """Update the status of a saga."""
         ...
 
     @abstractmethod

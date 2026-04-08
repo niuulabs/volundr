@@ -3,8 +3,29 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AppShell } from './AppShell';
 
+vi.mock('@/contexts/useAppIdentity', () => ({
+  useAppIdentity: () => ({
+    identity: null,
+    isAdmin: false,
+    hasRole: () => false,
+    loading: false,
+    error: null,
+  }),
+}));
+
+vi.mock('@/auth', () => ({
+  useAuth: vi.fn(() => ({
+    enabled: false,
+    authenticated: false,
+    loading: false,
+    user: null,
+    logout: vi.fn(),
+  })),
+}));
+
 vi.mock('@/modules/shared/registry', () => ({
   getProductModules: vi.fn(() => []),
+  getModuleDefinitions: vi.fn(() => []),
 }));
 
 function renderShell(children: React.ReactNode, isAdmin = false) {

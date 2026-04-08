@@ -1,8 +1,9 @@
 # Runs on every push to dev:
-# 1. Builds all container images with "dev" + "dev-<sha>" tags
-# 2. Determines next version from conventional commits and creates a v*-dev.N prerelease tag
-# 3. Packages Helm charts with the dev version
-# 4. Builds CLI binaries (uploaded as artifacts, no GitHub Release)
+# 1. Full test suite (lint, unit tests, integration tests, e2e, web tests, helm lint)
+# 2. Builds all container images with "dev" + "dev-<sha>" tags
+# 3. Determines next version from conventional commits and creates a v*-dev.N prerelease tag
+# 4. Packages Helm charts with the dev version
+# 5. Builds CLI binaries (uploaded as artifacts, no GitHub Release)
 #
 # The dev prerelease tags (v*-dev.N) are skipped by release.yaml so they
 # never create a production GitHub Release.
@@ -24,6 +25,421 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # Python — lint + unit tests
+  # ---------------------------------------------------------------------------
+  python-lint:
+    name: "Python: Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run ruff linting
+        run: uv run ruff check src/ tests/
+
+      - name: Check ruff formatting
+        run: uv run ruff format --check src/ tests/ || echo "::warning::Formatting issues found - consider running 'ruff format src/ tests/'"
+        continue-on-error: true
+
+  python-test-volundr:
+    name: "Python: Test Volundr"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest tests/ --ignore=tests/test_tyr --ignore=tests/integration -v --tb=short \
+            --override-ini="addopts=" \
+            --cov=src/volundr --cov=src/cli --cov=src/niuu --cov=src/skuld \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=85
+
+      - name: Upload coverage to Codecov
+        if: always() && hashFiles('coverage.xml') != ''
+        uses: codecov/codecov-action@aa56896cf108bd10b5eb883cd1d24196da57f695 # v5.5.4
+        with:
+          files: coverage.xml
+          flags: backend-volundr
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  python-test-tyr:
+    name: "Python: Test Tyr"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest tests/test_tyr -v --tb=short \
+            --override-ini="addopts=" \
+            --cov=src/tyr \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=85
+
+      - name: Upload coverage to Codecov
+        if: always() && hashFiles('coverage.xml') != ''
+        uses: codecov/codecov-action@aa56896cf108bd10b5eb883cd1d24196da57f695 # v5.5.4
+        with:
+          files: coverage.xml
+          flags: backend-tyr
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Python integration tests (real PostgreSQL)
+  # ---------------------------------------------------------------------------
+  python-integration-test-volundr:
+    name: "Python: Integration Test Volundr"
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: volundr_test
+          POSTGRES_PASSWORD: volundr_test
+          POSTGRES_DB: volundr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run integration tests
+        env:
+          TEST_DATABASE_HOST: localhost
+          TEST_DATABASE_PORT: "5432"
+          TEST_DATABASE_USER: volundr_test
+          TEST_DATABASE_PASSWORD: volundr_test
+          TEST_DATABASE_NAME: volundr_test
+        run: |
+          uv run pytest tests/integration/volundr/ -v --tb=short -m integration \
+            --override-ini="addopts="
+
+  python-integration-test-tyr:
+    name: "Python: Integration Test Tyr"
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: volundr_test
+          POSTGRES_PASSWORD: volundr_test
+          POSTGRES_DB: volundr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run integration tests
+        env:
+          TEST_DATABASE_HOST: localhost
+          TEST_DATABASE_PORT: "5432"
+          TEST_DATABASE_USER: volundr_test
+          TEST_DATABASE_PASSWORD: volundr_test
+          TEST_DATABASE_NAME: volundr_test
+        run: |
+          uv run pytest tests/integration/tyr/ -v --tb=short -m integration \
+            --override-ini="addopts="
+
+  # ---------------------------------------------------------------------------
+  # End-to-end tests (Playwright against real backend + frontend)
+  # ---------------------------------------------------------------------------
+  e2e-test:
+    name: "E2E: Playwright"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: volundr_test
+          POSTGRES_PASSWORD: volundr_test
+          POSTGRES_DB: volundr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install Python dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: web
+
+      - name: Start backend
+        env:
+          DATABASE__HOST: localhost
+          DATABASE__PORT: "5432"
+          DATABASE__USER: volundr_test
+          DATABASE__PASSWORD: volundr_test
+          DATABASE__NAME: volundr_test
+        run: |
+          uv run uvicorn volundr.main:app --port 8080 &
+
+      - name: Start frontend
+        run: |
+          npm run dev -- --port 5174 &
+        working-directory: web
+
+      - name: Wait for servers
+        run: |
+          timeout 30 bash -c '
+            until curl -sf http://localhost:8080/health > /dev/null 2>&1; do
+              sleep 1
+            done
+          '
+          timeout 30 bash -c '
+            until curl -sf http://localhost:5174 > /dev/null 2>&1; do
+              sleep 1
+            done
+          '
+          echo "Both servers are ready"
+
+      - name: Run Playwright tests
+        run: npx playwright test
+        working-directory: web
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Web — lint + unit tests
+  # ---------------------------------------------------------------------------
+  web-lint:
+    name: "Web: Lint"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+  web-test:
+    name: "Web: Test"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        if: always() && hashFiles('web/coverage/lcov.info') != ''
+        uses: codecov/codecov-action@aa56896cf108bd10b5eb883cd1d24196da57f695 # v5.5.4
+        with:
+          files: web/coverage/lcov.info
+          flags: web
+          token: ${{ secrets.CODECOV_TOKEN }}
+          working-directory: web
+
+  # ---------------------------------------------------------------------------
+  # Helm — lint
+  # ---------------------------------------------------------------------------
+  helm-lint:
+    name: "Helm: Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install Helm
+        run: |
+          HELM_VERSION="3.14.0"
+          curl -sSfL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz
+          echo "f43e1c3387de24547506ab05d24e5309c0ce0b228c23bd8aa64e9ec4b8206651  /tmp/helm.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/helm.tar.gz -C /tmp
+          mv /tmp/linux-amd64/helm /usr/local/bin/helm
+          helm version
+
+      - name: Lint skuld chart
+        run: helm lint charts/skuld/
+
+      - name: Lint volundr chart
+        run: helm lint charts/volundr/
+
+      - name: Lint tyr chart
+        run: helm lint charts/tyr/
+
+      - name: Lint skuld-planner chart
+        run: helm lint charts/skuld-planner/
+
+      - name: Lint niuu-shared chart
+        run: helm lint charts/niuu-shared/
+
+      - name: Lint niuu umbrella chart
+        run: |
+          helm dependency build charts/niuu
+          helm lint charts/niuu/
+
+  # ---------------------------------------------------------------------------
   # Containers — build per platform natively, then merge manifests
   # ---------------------------------------------------------------------------
   build-container-image:
@@ -35,7 +451,7 @@ jobs:
     strategy:
       matrix:
         platform: [amd64, arm64]
-        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh, tyr]
+        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -43,7 +459,7 @@ jobs:
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -76,10 +492,10 @@ jobs:
       packages: write
     strategy:
       matrix:
-        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh, tyr]
+        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu]
     steps:
       - name: Log in to Container Registry
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -219,6 +635,9 @@ jobs:
           sed -i "s/^version:.*/version: $VERSION/" charts/tyr/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/tyr/Chart.yaml
 
+          sed -i "s/^version:.*/version: $VERSION/" charts/niuu-shared/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/niuu-shared/Chart.yaml
+
           sed -i "s/^version:.*/version: $VERSION/" charts/niuu/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/niuu/Chart.yaml
 
@@ -231,11 +650,12 @@ jobs:
           helm package charts/skuld-planner -d .helm-packages/
           helm package charts/volundr -d .helm-packages/
           helm package charts/tyr -d .helm-packages/
+          helm package charts/niuu-shared -d .helm-packages/
           helm dependency build charts/niuu
           helm package charts/niuu -d .helm-packages/
 
       - name: Log in to Container Registry
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -247,37 +667,48 @@ jobs:
           helm push .helm-packages/skuld-planner-*.tgz ${{ env.CHART_REPO }}
           helm push .helm-packages/volundr-*.tgz ${{ env.CHART_REPO }}
           helm push .helm-packages/tyr-*.tgz ${{ env.CHART_REPO }}
-          helm push .helm-packages/niuu-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/niuu-shared-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/niuu-0*.tgz ${{ env.CHART_REPO }}
 
   # ---------------------------------------------------------------------------
-  # CLI binaries — build only, no GitHub Release
+  # CLI binaries (Python/Nuitka) — build only, no GitHub Release
   # ---------------------------------------------------------------------------
   build-cli:
-    name: Build CLI (${{ matrix.goos }}/${{ matrix.goarch }})
+    name: "Build CLI (${{ matrix.os }}/${{ matrix.arch }})"
     needs: [tag]
     if: needs.tag.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
+          - os: darwin
+            arch: arm64
+            runner: macos-15
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+          - os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
+      - name: Cache PostgreSQL build
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
         with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: cli/go.sum
+          path: build/pginstall
+          key: pginstall-${{ runner.os }}-${{ runner.arch }}-pg17.9-vec0.8.2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v6
+        with:
+          version: "latest"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
 
       - name: Set up Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
@@ -286,29 +717,17 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Build frontend
-        run: |
-          cd web && npm ci --ignore-scripts && npm run build
-          cd ..
-          rm -rf cli/internal/web/dist
-          cp -r web/dist cli/internal/web/dist
+      - name: Install dependencies
+        run: uv sync --python 3.12 --extra cli --extra dev
 
-      - name: Build CLI
-        working-directory: cli
+      - name: Build
+        run: make build
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: "0"
-        run: |
-          VERSION="${{ needs.tag.outputs.version }}"
-          BINARY="niuu-${{ matrix.goos }}-${{ matrix.goarch }}"
-          go build -tags embed_web \
-            -ldflags "-s -w -X github.com/niuulabs/volundr/cli/internal/cli.Version=${VERSION}" \
-            -o "dist/${BINARY}" ./cmd/niuu
+          NODE_OPTIONS: "--max-old-space-size=4096"
 
       - name: Upload artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
-          name: niuu-dev-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: cli/dist/niuu-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: niuu-dev-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/niuu-${{ matrix.os }}-${{ matrix.arch }}
           retention-days: 14

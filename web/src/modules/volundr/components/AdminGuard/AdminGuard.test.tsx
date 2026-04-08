@@ -2,28 +2,26 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AdminGuard } from './AdminGuard';
-import type { IVolundrService } from '@/modules/volundr/ports';
 
-vi.mock('@/hooks/useIdentity', () => ({
-  useIdentity: vi.fn(),
+vi.mock('@/contexts/useAppIdentity', () => ({
+  useAppIdentity: vi.fn(),
 }));
 
-import { useIdentity } from '@/hooks/useIdentity';
-
-const mockService = {} as IVolundrService;
+import { useAppIdentity } from '@/contexts/useAppIdentity';
 
 describe('AdminGuard', () => {
   it('shows loading state', () => {
-    vi.mocked(useIdentity).mockReturnValue({
+    vi.mocked(useAppIdentity).mockReturnValue({
       identity: null,
       isAdmin: false,
+      hasRole: () => false,
       loading: true,
       error: null,
     });
 
     render(
       <MemoryRouter>
-        <AdminGuard service={mockService}>
+        <AdminGuard>
           <div>Protected</div>
         </AdminGuard>
       </MemoryRouter>
@@ -34,16 +32,17 @@ describe('AdminGuard', () => {
   });
 
   it('redirects non-admin users', () => {
-    vi.mocked(useIdentity).mockReturnValue({
+    vi.mocked(useAppIdentity).mockReturnValue({
       identity: null,
       isAdmin: false,
+      hasRole: () => false,
       loading: false,
       error: null,
     });
 
     render(
       <MemoryRouter>
-        <AdminGuard service={mockService}>
+        <AdminGuard>
           <div>Protected</div>
         </AdminGuard>
       </MemoryRouter>
@@ -53,7 +52,7 @@ describe('AdminGuard', () => {
   });
 
   it('renders children for admin users', () => {
-    vi.mocked(useIdentity).mockReturnValue({
+    vi.mocked(useAppIdentity).mockReturnValue({
       identity: {
         userId: 'u-1',
         email: 'admin@test.com',
@@ -63,13 +62,14 @@ describe('AdminGuard', () => {
         status: 'active',
       },
       isAdmin: true,
+      hasRole: () => false,
       loading: false,
       error: null,
     });
 
     render(
       <MemoryRouter>
-        <AdminGuard service={mockService}>
+        <AdminGuard>
           <div>Protected</div>
         </AdminGuard>
       </MemoryRouter>

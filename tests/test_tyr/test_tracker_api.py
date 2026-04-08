@@ -337,6 +337,9 @@ class MockSagaRepo(SagaRepository):
         ]
         return len(self.sagas) < before
 
+    async def update_saga_status(self, saga_id: UUID, status: SagaStatus) -> None:
+        pass
+
 
 @pytest.fixture
 def client(mock_tracker: MockTracker) -> TestClient:

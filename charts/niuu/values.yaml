@@ -28,3 +28,9 @@ volundr:
 
 tyr:
   enabled: true
+
+niuu-shared:
+  enabled: true
+
+bifrost:
+  enabled: true

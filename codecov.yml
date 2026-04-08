@@ -20,7 +20,3 @@ flags:
     paths:
       - web/src/
     carryforward: true
-  cli:
-    paths:
-      - cli/
-    carryforward: true

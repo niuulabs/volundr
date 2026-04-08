@@ -1,8 +1,9 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { Settings, Shield, LogOut } from 'lucide-react';
-import { getProductModules } from '@/modules/shared/registry';
+import { getModuleDefinitions } from '@/modules/shared/registry';
 import { cn } from '@/modules/shared/utils/classnames';
 import { useAuth } from '@/auth';
+import { useAppIdentity } from '@/contexts/useAppIdentity';
 import styles from './Sidebar.module.css';
 
 export interface SidebarProps {
@@ -11,13 +12,18 @@ export interface SidebarProps {
 
 export function Sidebar({ isAdmin = false }: SidebarProps) {
   const location = useLocation();
-  const productModules = getProductModules();
+  const { hasRole } = useAppIdentity();
   const { enabled: authEnabled, logout } = useAuth();
+
+  const visibleModules = getModuleDefinitions().filter(mod => {
+    if (!mod.requiredRoles || mod.requiredRoles.length === 0) return true;
+    return mod.requiredRoles.some(role => hasRole(role));
+  });
 
   return (
     <nav className={styles.sidebar} aria-label="Main navigation">
       <div className={styles.topSection}>
-        {productModules.map(mod => {
+        {visibleModules.map(mod => {
           const Icon = mod.icon;
           const isActive = location.pathname.startsWith(mod.basePath);
 

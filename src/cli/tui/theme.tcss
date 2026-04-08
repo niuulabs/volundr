@@ -1,0 +1,35 @@
+/* Niuu TUI — Zinc dark theme.
+ *
+ * Exact color parity with the Go Bubble Tea TUI and the web UI.
+ * All widgets reference these variables — never hardcode colors.
+ */
+
+/* ── Backgrounds ─────────────────────────────────────────────── */
+$bg-primary: #09090b;
+$bg-secondary: #18181b;
+$bg-tertiary: #27272a;
+$bg-elevated: #3f3f46;
+
+/* ── Text ────────────────────────────────────────────────────── */
+$text-primary: #fafafa;
+$text-secondary: #a1a1aa;
+$text-muted: #71717a;
+
+/* ── Borders ─────────────────────────────────────────────────── */
+$border: #3f3f46;
+$border-subtle: #27272a;
+
+/* ── Accents ─────────────────────────────────────────────────── */
+$accent-amber: #f59e0b;
+$accent-cyan: #06b6d4;
+$accent-emerald: #10b981;
+$accent-purple: #a855f7;
+$accent-red: #ef4444;
+$accent-indigo: #6366f1;
+$accent-orange: #f97316;
+
+/* ── Global Screen ───────────────────────────────────────────── */
+Screen {
+    background: $bg-primary;
+    color: $text-primary;
+}

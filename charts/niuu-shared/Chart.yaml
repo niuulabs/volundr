@@ -1,0 +1,18 @@
+apiVersion: v2
+name: niuu-shared
+description: "Niuu — shared platform services (repos, integrations)"
+type: application
+version: 0.0.0-tyr.243
+appVersion: "0.0.0-tyr.243"
+keywords:
+  - niuu
+  - shared
+  - repos
+  - integrations
+maintainers:
+  - name: Niuu Labs
+    url: https://github.com/niuulabs
+home: https://github.com/niuulabs/volundr
+sources:
+  - https://github.com/niuulabs/volundr
+dependencies: []
