@@ -1,0 +1,133 @@
+/* Ravn TUI — Textual CSS
+ * Zinc-950 base, amber brand, JetBrains Mono throughout.
+ */
+
+/* ------------------------------------------------------------------ */
+/* Global reset */
+/* ------------------------------------------------------------------ */
+
+Screen {
+    background: #09090b;
+    color: #fafafa;
+}
+
+/* ------------------------------------------------------------------ */
+/* Command input overlay */
+/* ------------------------------------------------------------------ */
+
+#cmd-input-container {
+    height: 1;
+    background: #18181b;
+    border-top: solid #f59e0b;
+    display: none;
+    dock: bottom;
+}
+
+#cmd-input-container.visible {
+    display: block;
+}
+
+#cmd-input {
+    background: #18181b;
+    color: #fafafa;
+    border: none;
+    width: 1fr;
+}
+
+/* ------------------------------------------------------------------ */
+/* Zoom overlay */
+/* ------------------------------------------------------------------ */
+
+#zoom-overlay {
+    layer: overlay;
+    display: none;
+    height: 1fr;
+    width: 1fr;
+    background: #09090b;
+}
+
+#zoom-overlay.visible {
+    display: block;
+}
+
+/* ------------------------------------------------------------------ */
+/* Split pane containers */
+/* ------------------------------------------------------------------ */
+
+.split-h {
+    layout: horizontal;
+    height: 1fr;
+    width: 1fr;
+}
+
+.split-v {
+    layout: vertical;
+    height: 1fr;
+    width: 1fr;
+}
+
+/* ------------------------------------------------------------------ */
+/* Notification flash */
+/* ------------------------------------------------------------------ */
+
+#sb-notification.-urgent {
+    color: #f59e0b;
+    background: color-mix(in srgb, #f59e0b 15%, transparent);
+}
+
+/* ------------------------------------------------------------------ */
+/* DataTable theming */
+/* ------------------------------------------------------------------ */
+
+DataTable {
+    background: #09090b;
+    color: #fafafa;
+}
+
+DataTable > .datatable--header {
+    background: #18181b;
+    color: #a1a1aa;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: #27272a;
+    color: #fafafa;
+}
+
+DataTable > .datatable--fixed {
+    background: #18181b;
+}
+
+/* ------------------------------------------------------------------ */
+/* Input theming */
+/* ------------------------------------------------------------------ */
+
+Input {
+    background: #18181b;
+    color: #fafafa;
+    border: solid #3f3f46;
+}
+
+Input:focus {
+    border: solid #f59e0b;
+}
+
+/* ------------------------------------------------------------------ */
+/* RichLog */
+/* ------------------------------------------------------------------ */
+
+RichLog {
+    background: #09090b;
+    color: #fafafa;
+    scrollbar-color: #3f3f46;
+    scrollbar-color-hover: #f59e0b;
+}
+
+/* ------------------------------------------------------------------ */
+/* Label */
+/* ------------------------------------------------------------------ */
+
+Label {
+    color: #a1a1aa;
+}
