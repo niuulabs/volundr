@@ -91,7 +91,9 @@ def _build_web_search_kwargs(settings: Settings, _ctx: dict[str, Any]) -> dict[s
         logger = logging.getLogger(__name__)
         try:
             cls = _import_class(ws_cfg.provider.adapter)
-            merged = _inject_secrets(dict(ws_cfg.provider.kwargs), ws_cfg.provider.secret_kwargs_env)
+            merged = _inject_secrets(
+                dict(ws_cfg.provider.kwargs), ws_cfg.provider.secret_kwargs_env,
+            )
             provider = cls(**merged)
         except Exception as exc:
             logger.warning("Failed to load web search provider: %s — using mock", exc)
