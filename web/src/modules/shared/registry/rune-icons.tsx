@@ -5,7 +5,7 @@
  * Canonical rune assignments from NIU-549:
  *   Hliðskjálf → ᛞ Dagaz    Bifrost → ᚨ Ansuz     Ravn → ᚱ Raidho
  *   Sleipnir   → ᛖ Ehwaz    Tyr    → ᛃ Jera      Mímir → ᛗ Mannaz
- *   Búri       → ᛜ Ingwaz
+ *   Búri       → ᛜ Ingwaz   Völundr → ᚲ Kenaz
  *
  * Runes to AVOID (political associations): ᛋ Sowilō, ᛟ Othala, ᛏ Tiwaz, ᛉ Algiz
  */
@@ -69,3 +69,6 @@ export const MannazRune = createRuneIcon('\u16D7', 'MannazRune');
 
 /** ᛜ Ingwaz — Búri (inner growth, gestation) */
 export const IngwazRune = createRuneIcon('\u16DC', 'IngwazRune');
+
+/** ᚲ Kenaz — Völundr (torch, forge-fire, craft and skill) */
+export const KenazRune = createRuneIcon('\u16B2', 'KenazRune');
