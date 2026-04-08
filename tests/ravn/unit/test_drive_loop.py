@@ -296,32 +296,32 @@ async def test_drive_loop_surface_escalation_logged(
 # ---------------------------------------------------------------------------
 
 
-def testparse_schedule_cron_expression() -> None:
+def test_parse_schedule_cron_expression() -> None:
     result = parse_schedule("0 8 * * *")
     assert result == "0 8 * * *"
 
 
-def testparse_schedule_natural_every_minutes() -> None:
+def test_parse_schedule_natural_every_minutes() -> None:
     result = parse_schedule("every 30m")
     assert result == "every:1800"
 
 
-def testparse_schedule_natural_every_hours() -> None:
+def test_parse_schedule_natural_every_hours() -> None:
     result = parse_schedule("every 2h")
     assert result == "every:7200"
 
 
-def testparse_schedule_natural_every_seconds() -> None:
+def test_parse_schedule_natural_every_seconds() -> None:
     result = parse_schedule("every 5s")
     assert result == "every:5"
 
 
-def testparse_schedule_daily_at() -> None:
+def test_parse_schedule_daily_at() -> None:
     result = parse_schedule("daily at 08:00")
     assert result == "0 8 * * *"
 
 
-def testparse_schedule_iso_timestamp() -> None:
+def test_parse_schedule_iso_timestamp() -> None:
     result = parse_schedule("2026-04-07T08:00:00")
     assert result.startswith("once:")
 
