@@ -45,6 +45,7 @@ from niuu.domain.mimir import (
     MimirPageMeta,
     MimirQueryResult,
     MimirSource,
+    MimirSourceMeta,
 )
 from niuu.ports.mimir import MimirPort
 from ravn.domain.mimir import MimirMount, WriteRouting
@@ -158,6 +159,29 @@ class CompositeMimirAdapter(MimirPort):
                         results.append(meta)
             except Exception as exc:
                 logger.warning("composite mimir: list_pages failed on %r: %s", mount.name, exc)
+
+        return results
+
+    async def list_sources(self, *, unprocessed_only: bool = False) -> list[MimirSourceMeta]:
+        """List sources from all mounts, de-duplicated by source_id.
+
+        When *unprocessed_only* is True, only sources not referenced by any page
+        across all mounts are returned.
+        """
+        seen_ids: set[str] = set()
+        results: list[MimirSourceMeta] = []
+
+        for mount in self._mounts:
+            try:
+                sources = await mount.port.list_sources(unprocessed_only=unprocessed_only)
+                for meta in sources:
+                    if meta.source_id not in seen_ids:
+                        seen_ids.add(meta.source_id)
+                        results.append(meta)
+            except Exception as exc:
+                logger.debug(
+                    "composite mimir: list_sources failed on %r: %s", mount.name, exc
+                )
 
         return results
 

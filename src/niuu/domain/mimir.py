@@ -66,6 +66,16 @@ class MimirQueryResult:
 
 
 @dataclass
+class MimirSourceMeta:
+    """Lightweight metadata for a raw source — used by list_sources()."""
+
+    source_id: str
+    title: str
+    ingested_at: datetime
+    source_type: str
+
+
+@dataclass
 class MimirLintReport:
     """Health-check report produced by MimirPort.lint().
 

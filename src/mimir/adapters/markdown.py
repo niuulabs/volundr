@@ -39,6 +39,7 @@ from niuu.domain.mimir import (
     MimirPageMeta,
     MimirQueryResult,
     MimirSource,
+    MimirSourceMeta,
     compute_content_hash,
 )
 from niuu.ports.mimir import MimirPort
@@ -114,6 +115,42 @@ a source to detect whether the original content has changed.
 - Written in third person ("Jozef typically...", "Prefers...")
 - Only concrete observations, not inferences
 - Updated when a pattern is observed at least twice
+
+## Synthesis workflow
+
+When processing a raw source, follow these steps in order:
+
+1. Call `mimir_query` with the source's main topic — check for existing pages that overlap.
+2. Call `mimir_ingest` to persist the raw source (assigns a `source_id`).
+3. Read the source content and identify 3-7 distinct key claims worth preserving.
+4. For each claim, decide: does it belong on an existing page, or does it warrant a new one?
+5. Optionally run 1-2 targeted `web_search` calls if recency matters (versioned tools,
+   dated facts, ongoing events). Do not research for research's sake.
+6. Write or update wiki pages with `mimir_write`. Each page: concise synthesis, not
+   transcription. One claim per section. Relative cross-links. `<!-- sources: id -->` footer.
+7. Call `mimir_search` to find related pages — add cross-links where relevant.
+8. Append to `wiki/log.md` via `mimir_write`.
+
+## Page quality criteria
+
+A well-formed Mímir wiki page:
+- Opens with a `# Title` heading and a one-sentence summary on the second line.
+- Uses `##` sections for each distinct claim or concept.
+- States facts concisely — never transcribes source text verbatim.
+- Links to related pages with relative markdown paths: `[auth](../volundr/auth.md)`.
+- Closes with a `<!-- sources: source_id1,source_id2 -->` HTML comment.
+- Does NOT contain speculation, personal opinions, or unverified claims.
+
+## Staleness criteria
+
+A page is considered stale when:
+- Its `<!-- sources: ... -->` source_ids reference a raw source whose `content_hash`
+  has changed (re-ingest detected a difference).
+- It references facts that are time-sensitive (software versions, statuses, dates)
+  and has not been updated in more than 30 days.
+
+When `mimir_lint` flags a page as stale, re-read the raw source and update the page
+with any changed facts before removing the stale flag.
 """
 
 _LOG_INGEST_PREFIX = "ingest"
@@ -330,6 +367,40 @@ class MarkdownMimirAdapter(MimirPort):
     ) -> list[MimirPageMeta]:
         """List all wiki pages, optionally filtered by category."""
         return [meta for meta, _ in self._list_pages_with_content(category)]
+
+    async def list_sources(self, *, unprocessed_only: bool = False) -> list[MimirSourceMeta]:
+        """List all ingested raw sources.
+
+        When *unprocessed_only* is True, returns only sources not yet referenced
+        by any wiki page (cross-referenced via ``<!-- sources: ... -->`` footers).
+        """
+        if not self._raw.exists():
+            return []
+
+        all_sources: list[MimirSourceMeta] = []
+        for json_path in self._raw.glob("*.json"):
+            try:
+                data = json.loads(json_path.read_text(encoding="utf-8"))
+                all_sources.append(
+                    MimirSourceMeta(
+                        source_id=data["source_id"],
+                        title=data["title"],
+                        ingested_at=datetime.fromisoformat(data["ingested_at"]),
+                        source_type=data["source_type"],
+                    )
+                )
+            except Exception as exc:
+                logger.warning("Mímir: failed to read raw source %s: %s", json_path.name, exc)
+
+        if not unprocessed_only:
+            return all_sources
+
+        # Collect all source_ids referenced across wiki pages
+        referenced: set[str] = set()
+        for _, content in self._list_pages_with_content():
+            referenced.update(self._extract_source_ids(content))
+
+        return [s for s in all_sources if s.source_id not in referenced]
 
     # ------------------------------------------------------------------
     # Raw source storage

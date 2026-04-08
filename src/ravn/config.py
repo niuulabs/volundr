@@ -275,11 +275,12 @@ class ToolProfileConfig(BaseModel):
     """Named tool profile — controls which tool groups are active."""
 
     include_groups: list[str] = Field(
-        default=["core", "extended", "skill", "platform", "cascade"],
+        default=["core", "extended", "skill", "platform", "cascade", "mimir"],
         description=(
-            "Tool groups to include. Built-in groups: core, extended, skill, platform. "
+            "Tool groups to include. Built-in groups: core, extended, skill, platform, mimir. "
             "The 'cascade' group signals that cascade tools (wired via build_cascade_tools) "
-            "should be appended when the profile is selected by the coordinator."
+            "should be appended when the profile is selected by the coordinator. "
+            "The 'mimir' group enables the six mimir_* knowledge-base tools."
         ),
     )
     include_mcp: bool = Field(
@@ -1382,6 +1383,44 @@ class MimirWriteRoutingConfig(BaseModel):
     )
 
 
+class MimirSourceTriggerConfig(BaseModel):
+    """Config for the source-ingest synthesis trigger."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable automatic synthesis when unprocessed sources are detected.",
+    )
+    poll_interval_seconds: int = Field(
+        default=60,
+        description="How often (seconds) to poll for unprocessed raw sources.",
+    )
+    persona: str = Field(
+        default="mimir-curator",
+        description="Persona to use for synthesis tasks.",
+    )
+
+
+class MimirStalenessTriggerConfig(BaseModel):
+    """Config for the staleness refresh trigger."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable periodic staleness checks on frequently-used pages.",
+    )
+    schedule_hours: int = Field(
+        default=6,
+        description="How often (hours) to run the staleness check.",
+    )
+    top_n: int = Field(
+        default=20,
+        description="Number of most-frequently-accessed pages to check for staleness.",
+    )
+    persona: str = Field(
+        default="mimir-curator",
+        description="Persona to use for refresh tasks.",
+    )
+
+
 class MimirConfig(BaseModel):
     """Mímir persistent compounding knowledge base configuration (NIU-540).
 
@@ -1445,6 +1484,14 @@ class MimirConfig(BaseModel):
     write_routing: MimirWriteRoutingConfig = Field(
         default_factory=MimirWriteRoutingConfig,
         description="Write routing rules for the CompositeMimirAdapter.",
+    )
+    source_trigger: MimirSourceTriggerConfig = Field(
+        default_factory=MimirSourceTriggerConfig,
+        description="Automatic synthesis trigger for unprocessed raw sources.",
+    )
+    staleness_trigger: MimirStalenessTriggerConfig = Field(
+        default_factory=MimirStalenessTriggerConfig,
+        description="Scheduled staleness refresh for frequently-used pages.",
     )
 
 

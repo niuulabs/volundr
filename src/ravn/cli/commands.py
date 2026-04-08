@@ -36,10 +36,11 @@ app = typer.Typer(
 )
 
 approvals_app = typer.Typer(
-    name="ravn-approvals",
+    name="approvals",
     help="Manage per-project command approval patterns.",
     add_completion=False,
 )
+app.add_typer(approvals_app, name="approvals")
 
 
 def approvals_main() -> None:
@@ -286,7 +287,7 @@ def _build_permission(
 
 _DEFAULT_PROFILES: dict[str, ToolProfileConfig] = {
     "default": ToolProfileConfig(
-        include_groups=["core", "extended", "skill", "platform", "cascade"],
+        include_groups=["core", "extended", "skill", "platform", "cascade", "mimir"],
         include_mcp=True,
     ),
     "worker": ToolProfileConfig(
@@ -311,6 +312,59 @@ def _get_profile(settings: Settings, name: str) -> ToolProfileConfig:
 # ---------------------------------------------------------------------------
 
 
+def _build_mimir(settings: Settings) -> Any:
+    """Build the Mímir adapter from config, or None if disabled."""
+    if not settings.mimir.enabled:
+        return None
+
+    if settings.mimir.instances:
+        from mimir.adapters.markdown import MarkdownMimirAdapter
+        from ravn.adapters.mimir.composite import CompositeMimirAdapter
+        from ravn.adapters.mimir.http import HttpMimirAdapter
+        from ravn.domain.mimir import MimirAuth, MimirMount, WriteRouting
+
+        mounts: list[Any] = []
+        for inst in settings.mimir.instances:
+            if inst.path:
+                port: Any = MarkdownMimirAdapter(root=inst.path)
+            elif inst.url:
+                auth = None
+                if inst.auth is not None:
+                    auth = MimirAuth(
+                        type=inst.auth.type,
+                        token=inst.auth.token,
+                        trust_domain=inst.auth.trust_domain,
+                    )
+                port = HttpMimirAdapter(base_url=inst.url, auth=auth)
+            else:
+                logger.warning("Mímir instance %r has neither path nor url — skipping", inst.name)
+                continue
+            mounts.append(
+                MimirMount(
+                    name=inst.name,
+                    port=port,
+                    role=inst.role,
+                    read_priority=inst.read_priority,
+                    categories=inst.categories,
+                )
+            )
+
+        if not mounts:
+            return None
+
+        wr = settings.mimir.write_routing
+        routing = WriteRouting(
+            rules=[(r["prefix"], r["mounts"]) for r in wr.rules],
+            default=wr.default,
+        )
+        return CompositeMimirAdapter(mounts=mounts, write_routing=routing)
+
+    # Single local instance
+    from mimir.adapters.markdown import MarkdownMimirAdapter
+
+    return MarkdownMimirAdapter(root=settings.mimir.path)
+
+
 def _build_tools(
     settings: Settings,
     workspace: Path,
@@ -318,6 +372,7 @@ def _build_tools(
     llm: Any,
     memory: Any | None,
     iteration_budget: Any | None,
+    mimir: Any | None = None,
     *,
     no_tools: bool = False,
     persona_config: Any | None = None,
@@ -385,6 +440,12 @@ def _build_tools(
     # -- Memory extra tools (dynamic, injected by the memory adapter) --
     if memory is not None:
         tools.extend(memory.extra_tools(session_id=str(session.id)))
+
+    # -- Mímir tools (injected when adapter is wired and "mimir" group is active) --
+    if mimir is not None and "mimir" in include_groups:
+        from ravn.adapters.tools.mimir_tools import build_mimir_tools
+
+        tools.extend(build_mimir_tools(mimir))
 
     # -- Custom tools from config --
     for ct in settings.tools.custom:
@@ -753,6 +814,7 @@ def _build_agent(
         persona_config=persona_config,
     )
     memory = _build_memory(settings, llm=llm)
+    mimir = _build_mimir(settings)
     outcome_port, outcome_config = _build_outcome(settings)
     iteration_budget = IterationBudget(
         total=settings.iteration_budget.total,
@@ -765,6 +827,7 @@ def _build_agent(
         llm,
         memory,
         iteration_budget,
+        mimir,
         no_tools=no_tools,
         persona_config=persona_config,
     )
@@ -1255,10 +1318,11 @@ async def _run_evolve(settings: Settings) -> None:
 
 
 gateway_app = typer.Typer(
-    name="ravn-gateway",
+    name="gateway",
     help="Start the Ravn Pi-mode gateway (Telegram polling + local HTTP).",
     add_completion=False,
 )
+app.add_typer(gateway_app, name="gateway")
 
 
 @gateway_app.command()
@@ -1710,6 +1774,11 @@ async def _run_daemon(
         _cron_jobs = _wire_triggers(drive_loop, settings.initiative)
         cron_tools[:] = _wire_cron(drive_loop, _cron_jobs, settings.initiative)
 
+        # Wire Mímir triggers (source synthesis + staleness refresh)
+        _mimir_daemon = _build_mimir(settings)
+        if _mimir_daemon is not None:
+            _wire_mimir_triggers(drive_loop, _mimir_daemon, settings)
+
         # Wire task dispatch subscription when requested (--listen / --daemon)
         if task_dispatch and settings.sleipnir.enabled:
             _wire_task_dispatch(drive_loop, settings.sleipnir)
@@ -1814,6 +1883,40 @@ def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> list[Any]:
             logger.error("Failed to wire trigger %r: %s", tc.name, exc)
 
     return cron_jobs
+
+
+def _wire_mimir_triggers(drive_loop: Any, mimir: Any, settings: Settings) -> None:
+    """Register Mímir source and staleness triggers on the drive loop.
+
+    Both triggers are gated by their individual ``enabled`` flags in
+    ``settings.mimir.source_trigger`` and ``settings.mimir.staleness_trigger``.
+    """
+    mc = settings.mimir
+
+    if mc.source_trigger.enabled:
+        from ravn.adapters.triggers.mimir_source import MimirSourceTrigger
+
+        drive_loop.register_trigger(MimirSourceTrigger(mimir=mimir, config=mc.source_trigger))
+        logger.info(
+            "mimir: source trigger registered (poll=%ds, persona=%s)",
+            mc.source_trigger.poll_interval_seconds,
+            mc.source_trigger.persona,
+        )
+
+    if mc.staleness_trigger.enabled:
+        from ravn.adapters.mimir.usage_log import LogBasedUsageAdapter
+        from ravn.adapters.triggers.mimir_staleness import MimirStalenessTrigger
+
+        usage = LogBasedUsageAdapter(mimir_root=mc.path)
+        drive_loop.register_trigger(
+            MimirStalenessTrigger(mimir=mimir, usage=usage, config=mc.staleness_trigger)
+        )
+        logger.info(
+            "mimir: staleness trigger registered (schedule=%dh, top_n=%d, persona=%s)",
+            mc.staleness_trigger.schedule_hours,
+            mc.staleness_trigger.top_n,
+            mc.staleness_trigger.persona,
+        )
 
 
 def _wire_cron(
@@ -2200,3 +2303,165 @@ def gateway_main() -> None:
 
 def evolve_main() -> None:
     evolve_app()
+
+
+# ---------------------------------------------------------------------------
+# Mímir CLI
+# ---------------------------------------------------------------------------
+
+mimir_app = typer.Typer(
+    name="mimir",
+    help="Mímir knowledge-base utilities.",
+    add_completion=False,
+)
+app.add_typer(mimir_app, name="mimir")
+
+
+@mimir_app.command("ingest")
+def mimir_ingest_cmd(
+    path: str = typer.Argument(..., help="Path to a file to ingest, or '-' to read from stdin."),
+    title: str = typer.Option("", "--title", "-t", help="Title override (defaults to filename)."),
+    source_type: str = typer.Option(
+        "document",
+        "--type",
+        help="Source type: document, web, research, conversation, tool_output.",
+    ),
+    origin_url: str = typer.Option("", "--url", "-u", help="Original URL (optional metadata)."),
+    target: str = typer.Option(
+        "",
+        "--mimir",
+        "-m",
+        help=(
+            "Named Mímir instance to ingest into (e.g. 'local', 'shared'). "
+            "Defaults to all configured instances."
+        ),
+    ),
+    config: str = typer.Option("", "--config", "-c", help="Path to ravn config YAML."),
+) -> None:
+    """Ingest a file or stdin into the Mímir knowledge base.
+
+    Works with both local (filesystem) and remote (HTTP) Mímir adapters —
+    the adapter is selected from ravn config, no explicit URL needed.
+
+    Examples::
+
+        ravn mimir ingest ./architecture.md
+        ravn mimir ingest ./notes.txt --title "Sprint retro notes" --type research
+        ravn mimir ingest ./doc.md --mimir local
+        ravn mimir ingest ./doc.md --mimir shared
+        cat doc.md | ravn mimir ingest -
+    """
+    if config:
+        os.environ["RAVN_CONFIG"] = config
+
+    settings = Settings()
+    _configure_logging(settings)
+
+    if not settings.mimir.enabled:
+        typer.echo("Mímir is disabled in config (mimir.enabled = false).", err=True)
+        raise typer.Exit(1)
+
+    asyncio.run(
+        _run_mimir_ingest(settings, path, title, source_type, origin_url or None, target or None)
+    )
+
+
+def _build_single_mimir(settings: Settings, name: str) -> Any:
+    """Build a single named Mímir adapter by instance name.
+
+    Searches ``settings.mimir.instances`` for *name*.  Falls back to the
+    single-path local adapter when instances are not configured and *name*
+    is ``'local'``.
+    """
+    for inst in settings.mimir.instances:
+        if inst.name != name:
+            continue
+        if inst.path:
+            from mimir.adapters.markdown import MarkdownMimirAdapter
+
+            return MarkdownMimirAdapter(root=inst.path)
+        if inst.url:
+            from ravn.adapters.mimir.http import HttpMimirAdapter
+            from ravn.domain.mimir import MimirAuth
+
+            auth = None
+            if inst.auth is not None:
+                auth = MimirAuth(
+                    type=inst.auth.type,
+                    token=inst.auth.token,
+                    trust_domain=inst.auth.trust_domain,
+                )
+            return HttpMimirAdapter(base_url=inst.url, auth=auth)
+
+    # No instances configured — accept "local" as alias for the single path adapter
+    if not settings.mimir.instances and name == "local":
+        from mimir.adapters.markdown import MarkdownMimirAdapter
+
+        return MarkdownMimirAdapter(root=settings.mimir.path)
+
+    available = [inst.name for inst in settings.mimir.instances] or ["local"]
+    typer.echo(
+        f"Unknown Mímir instance {name!r}. Available: {', '.join(available)}", err=True
+    )
+    raise typer.Exit(1)
+
+
+async def _run_mimir_ingest(
+    settings: Settings,
+    path: str,
+    title: str,
+    source_type: str,
+    origin_url: str | None,
+    target: str | None = None,
+) -> None:
+    import sys
+
+    from niuu.domain.mimir import MimirSource, compute_content_hash
+
+    mimir = _build_single_mimir(settings, target) if target else _build_mimir(settings)
+    if mimir is None:
+        typer.echo("Failed to build Mímir adapter — check config.", err=True)
+        raise typer.Exit(1)
+
+    if path == "-":
+        content = sys.stdin.read()
+        resolved_title = title or "stdin"
+        resolved_path = "stdin"
+    else:
+        file_path = Path(path).expanduser()
+        if not file_path.exists():
+            typer.echo(f"File not found: {file_path}", err=True)
+            raise typer.Exit(1)
+        content = file_path.read_text(encoding="utf-8", errors="replace")
+        resolved_title = title or file_path.stem.replace("-", " ").replace("_", " ").title()
+        resolved_path = str(file_path)
+
+    if not content.strip():
+        typer.echo("Content is empty — nothing to ingest.", err=True)
+        raise typer.Exit(1)
+
+    content_hash = compute_content_hash(content)
+    source_id = "src_" + content_hash[:16]
+
+    from datetime import UTC, datetime
+
+    source = MimirSource(
+        source_id=source_id,
+        title=resolved_title,
+        content=content,
+        source_type=source_type,  # type: ignore[arg-type]
+        origin_url=origin_url,
+        content_hash=content_hash,
+        ingested_at=datetime.now(UTC),
+    )
+
+    await mimir.ingest(source)
+    typer.echo(f"Ingested: {resolved_title!r}")
+    typer.echo(f"source_id: {source_id}")
+    typer.echo(f"file:      {resolved_path}")
+    typer.echo(f"target:    {target or 'all'}")
+    typer.echo("Synthesis will be triggered automatically by the daemon (or run ravn chat).")
+
+
+def mimir_main() -> None:
+    mimir_app()

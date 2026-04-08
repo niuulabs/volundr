@@ -14,6 +14,7 @@ from niuu.domain.mimir import (
     MimirPageMeta,
     MimirQueryResult,
     MimirSource,
+    MimirSourceMeta,
 )
 
 
@@ -100,5 +101,14 @@ class MimirPort(ABC):
         """List all wiki pages, optionally filtered to *category*.
 
         Returns lightweight metadata records — does not read full page content.
+        """
+        ...
+
+    @abstractmethod
+    async def list_sources(self, *, unprocessed_only: bool = False) -> list[MimirSourceMeta]:
+        """List ingested raw sources.
+
+        When *unprocessed_only* is True, returns only sources that are not yet
+        referenced in any wiki page (i.e. no page carries a matching source_id).
         """
         ...

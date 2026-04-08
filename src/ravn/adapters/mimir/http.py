@@ -29,6 +29,7 @@ from niuu.domain.mimir import (
     MimirPageMeta,
     MimirQueryResult,
     MimirSource,
+    MimirSourceMeta,
 )
 from niuu.ports.mimir import MimirPort
 from ravn.domain.mimir import MimirAuth
@@ -172,6 +173,31 @@ class HttpMimirAdapter(MimirPort):
             gaps=data.get("gaps", []),
             pages_checked=data.get("pages_checked", 0),
         )
+
+    async def list_sources(self, *, unprocessed_only: bool = False) -> list[MimirSourceMeta]:
+        """GET /mimir/sources — list raw sources, optionally unprocessed only."""
+        client = self._get_client()
+        params: dict[str, Any] = {}
+        if unprocessed_only:
+            params["unprocessed"] = "true"
+        response = await client.get("/mimir/sources", params=params)
+        if response.status_code == 404:
+            # Endpoint not yet available on older Mímir deployments — treat as empty.
+            logger.debug(
+                "HttpMimirAdapter: /mimir/sources returned 404 — "
+                "remote may be running an older image without this endpoint"
+            )
+            return []
+        response.raise_for_status()
+        return [
+            MimirSourceMeta(
+                source_id=item["source_id"],
+                title=item["title"],
+                ingested_at=datetime.fromisoformat(item["ingested_at"]),
+                source_type=item["source_type"],
+            )
+            for item in response.json()
+        ]
 
 
 # ---------------------------------------------------------------------------

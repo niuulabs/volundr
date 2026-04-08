@@ -121,6 +121,13 @@ class IngestResponse(BaseModel):
     pages_updated: list[str]
 
 
+class SourceMetaResponse(BaseModel):
+    source_id: str
+    title: str
+    ingested_at: str
+    source_type: str
+
+
 # ---------------------------------------------------------------------------
 # Auth dependency (bearer token or SPIFFE — pass-through for now)
 # ---------------------------------------------------------------------------
@@ -244,6 +251,21 @@ class MimirRouter:
                             edges.append(GraphEdge(source=src, target=tgt))
 
             return GraphResponse(nodes=nodes, edges=edges)
+
+        @router.get("/sources", response_model=list[SourceMetaResponse])
+        async def list_sources(
+            unprocessed: bool = Query(default=False),
+        ) -> list[SourceMetaResponse]:
+            sources = await adapter.list_sources(unprocessed_only=unprocessed)
+            return [
+                SourceMetaResponse(
+                    source_id=s.source_id,
+                    title=s.title,
+                    ingested_at=s.ingested_at.isoformat(),
+                    source_type=s.source_type,
+                )
+                for s in sources
+            ]
 
         @router.put("/page", status_code=204)
         async def upsert_page(
