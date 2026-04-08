@@ -130,6 +130,21 @@ persistence:
   annotations: {}
 
 # ---------------------------------------------------------------------------
+# Ingress
+# ---------------------------------------------------------------------------
+ingress:
+  # -- Enable an Ingress resource.
+  enabled: false
+  # -- Ingress class name (e.g. "nginx", "traefik").
+  className: ""
+  # -- Hostname for the Ingress rule.
+  host: ""
+  # -- Enable TLS (creates a TLS secret named <fullname>-tls).
+  tls: false
+  # -- Additional annotations for the Ingress resource.
+  annotations: {}
+
+# ---------------------------------------------------------------------------
 # Mímir service configuration
 # ---------------------------------------------------------------------------
 config:

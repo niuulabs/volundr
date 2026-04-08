@@ -18,6 +18,8 @@ Usage (standalone)::
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -41,22 +43,8 @@ def create_app(config: MimirServiceConfig) -> FastAPI:
     adapter = MarkdownMimirAdapter(root=config.path)
     mimir_router = MimirRouter(adapter=adapter, name=config.name, role=config.role)
 
-    app = FastAPI(
-        title=f"Mímir — {config.name}",
-        description=(
-            "Standalone Mímir knowledge service. "
-            f"Role: {config.role}. "
-            "Exposes the Mímir wiki over HTTP for Ravens, Valkyries, and Pi room nodes."
-        ),
-        version="1.0.0",
-        docs_url="/mimir/docs",
-        redoc_url=None,
-    )
-
-    app.include_router(mimir_router.router, prefix="/mimir")
-
-    @app.on_event("startup")
-    async def _announce() -> None:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if config.announce_url:
             logger.info(
                 "mimir[%s]: announcing at %s (role=%s)",
@@ -64,7 +52,6 @@ def create_app(config: MimirServiceConfig) -> FastAPI:
                 config.announce_url,
                 config.role,
             )
-            # Sleipnir announce — best-effort, no hard dependency
             try:
                 from ravn.adapters.mesh.sleipnir_mesh import _announce_mimir  # type: ignore[import]
 
@@ -76,5 +63,21 @@ def create_app(config: MimirServiceConfig) -> FastAPI:
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.debug("mimir: sleipnir announce skipped (%s)", exc)
+        yield
+
+    app = FastAPI(
+        title=f"Mímir — {config.name}",
+        description=(
+            "Standalone Mímir knowledge service. "
+            f"Role: {config.role}. "
+            "Exposes the Mímir wiki over HTTP for Ravens, Valkyries, and Pi room nodes."
+        ),
+        version="1.0.0",
+        docs_url="/mimir/docs",
+        redoc_url=None,
+        lifespan=lifespan,
+    )
+
+    app.include_router(mimir_router.router, prefix="/mimir")
 
     return app

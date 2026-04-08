@@ -34,4 +34,15 @@ dependencies:
   - name: mimir
     version: ">=0.0.0-0"
     repository: "file://../mimir"
-    condition: mimir.enabled
+    alias: mimir-shared
+    condition: mimir-shared.enabled
+  - name: mimir
+    version: ">=0.0.0-0"
+    repository: "file://../mimir"
+    alias: mimir-kanuck
+    condition: mimir-kanuck.enabled
+  - name: mimir
+    version: ">=0.0.0-0"
+    repository: "file://../mimir"
+    alias: mimir-research
+    condition: mimir-research.enabled

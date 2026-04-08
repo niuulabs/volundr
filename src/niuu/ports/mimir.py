@@ -84,6 +84,15 @@ class MimirPort(ABC):
         ...
 
     @abstractmethod
+    async def get_page(self, path: str) -> MimirPage:
+        """Return content and metadata for the wiki page at *path* in one call.
+
+        More efficient than calling ``read_page`` and ``list_pages`` separately.
+        Raises ``FileNotFoundError`` if the page does not exist.
+        """
+        ...
+
+    @abstractmethod
     async def list_pages(
         self,
         category: str | None = None,

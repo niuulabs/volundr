@@ -129,6 +129,17 @@ class HttpMimirAdapter(MimirPort):
         response = await client.put("/mimir/page", json={"path": path, "content": content})
         response.raise_for_status()
 
+    async def get_page(self, path: str) -> MimirPage:
+        """GET /mimir/page?path=... — return full page with metadata."""
+        client = self._get_client()
+        response = await client.get("/mimir/page", params={"path": path})
+        if response.status_code == 404:
+            raise FileNotFoundError(f"Mímir page not found: {path}")
+        response.raise_for_status()
+        data = response.json()
+        meta = _parse_page_meta(data)
+        return MimirPage(meta=meta, content=data["content"])
+
     async def read_page(self, path: str) -> str:
         """GET /mimir/page?path=... — return raw Markdown content."""
         client = self._get_client()

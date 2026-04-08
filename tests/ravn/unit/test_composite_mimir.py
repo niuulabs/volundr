@@ -70,11 +70,16 @@ def _mock_port(
 
     if read_raises:
         port.read_page = AsyncMock(side_effect=FileNotFoundError("not found"))
+        port.get_page = AsyncMock(side_effect=FileNotFoundError("not found"))
     else:
         async def _read(path: str) -> str:
             return f"content of {path}"
 
+        async def _get_page(path: str) -> MimirPage:
+            return _make_page(path)
+
         port.read_page = _read
+        port.get_page = _get_page
 
     return port
 
@@ -219,6 +224,31 @@ async def test_read_page_raises_if_all_mounts_miss() -> None:
     adapter = CompositeMimirAdapter(mounts=[local, shared])
     with pytest.raises(FileNotFoundError, match="not found in any mount"):
         await adapter.read_page("missing.md")
+
+
+# ---------------------------------------------------------------------------
+# CompositeMimirAdapter — get_page fallthrough
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_page_falls_through_to_second_mount() -> None:
+    local = _make_mount("local", priority=0, read_raises=True)
+    shared = _make_mount("shared", priority=1, role="shared", pages=[_make_page("technical/a.md")])
+
+    adapter = CompositeMimirAdapter(mounts=[local, shared])
+    page = await adapter.get_page("technical/a.md")
+    assert "technical/a.md" in page.content
+
+
+@pytest.mark.asyncio
+async def test_get_page_raises_if_all_mounts_miss() -> None:
+    local = _make_mount("local", priority=0, read_raises=True)
+    shared = _make_mount("shared", priority=1, role="shared", read_raises=True)
+
+    adapter = CompositeMimirAdapter(mounts=[local, shared])
+    with pytest.raises(FileNotFoundError, match="not found in any mount"):
+        await adapter.get_page("missing.md")
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,32 @@
+# values-kanuck.yaml — Kanuck Valley Models domain Mímir instance.
+#
+# Install:
+#   helm install mimir-kanuck charts/mimir -f charts/mimir/values-kanuck.yaml -n eitri
+
+config:
+  name: "kanuck"
+  role: "domain"
+  categories:
+    - kanuck
+  announceUrl: ""
+  port: 7477
+  logLevel: "info"
+
+persistence:
+  size: 10Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  host: "mimir-kanuck.odin.niuu.world"
+  tls: true
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

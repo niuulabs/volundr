@@ -180,21 +180,17 @@ class MimirRouter:
         @router.get("/page", response_model=PageResponse)
         async def read_page(path: str = Query()) -> PageResponse:
             try:
-                content = await adapter.read_page(path)
+                page = await adapter.get_page(path)
             except FileNotFoundError:
                 raise HTTPException(status_code=404, detail=f"Page not found: {path}")
-            pages = await adapter.list_pages()
-            meta = next((m for m in pages if m.path == path), None)
-            if meta is None:
-                raise HTTPException(status_code=404, detail=f"Page not found: {path}")
             return PageResponse(
-                path=meta.path,
-                title=meta.title,
-                summary=meta.summary,
-                category=meta.category,
-                updated_at=meta.updated_at.isoformat(),
-                source_ids=meta.source_ids,
-                content=content,
+                path=page.meta.path,
+                title=page.meta.title,
+                summary=page.meta.summary,
+                category=page.meta.category,
+                updated_at=page.meta.updated_at.isoformat(),
+                source_ids=page.meta.source_ids,
+                content=page.content,
             )
 
         @router.get("/search", response_model=list[SearchResult])
@@ -214,8 +210,8 @@ class MimirRouter:
         async def log_entries(n: int = Query(default=50)) -> dict:
             """Return last *n* log entries as raw text (delegated to filesystem adapter)."""
             try:
-                content = await adapter.read_page("../log.md")
-            except (FileNotFoundError, Exception):
+                content = await adapter.read_page("log.md")
+            except FileNotFoundError:
                 return {"entries": [], "raw": ""}
             lines = content.splitlines()
             # Each entry starts with "## "

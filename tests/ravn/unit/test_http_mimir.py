@@ -129,6 +129,44 @@ async def test_query_returns_result_struct(adapter: HttpMimirAdapter) -> None:
 
 
 # ---------------------------------------------------------------------------
+# HttpMimirAdapter.get_page
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_page_returns_mimir_page(adapter: HttpMimirAdapter) -> None:
+    respx.get("http://mimir.test/mimir/page").mock(
+        return_value=Response(
+            200,
+            json={
+                "path": "technical/test.md",
+                "title": "Test",
+                "summary": "",
+                "category": "technical",
+                "updated_at": datetime.now(UTC).isoformat(),
+                "source_ids": ["src_abc"],
+                "content": "# Test\nSome content.",
+            },
+        )
+    )
+    page = await adapter.get_page("technical/test.md")
+    assert page.meta.path == "technical/test.md"
+    assert page.meta.source_ids == ["src_abc"]
+    assert "# Test" in page.content
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_page_raises_file_not_found(adapter: HttpMimirAdapter) -> None:
+    respx.get("http://mimir.test/mimir/page").mock(
+        return_value=Response(404, json={"detail": "Page not found"})
+    )
+    with pytest.raises(FileNotFoundError, match="technical/missing.md"):
+        await adapter.get_page("technical/missing.md")
+
+
+# ---------------------------------------------------------------------------
 # HttpMimirAdapter.upsert_page
 # ---------------------------------------------------------------------------
 

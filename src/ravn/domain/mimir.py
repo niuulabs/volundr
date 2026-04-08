@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from niuu.ports.mimir import MimirPort
+
 
 @dataclass
 class MimirAuth:
@@ -42,7 +44,7 @@ class MimirMount:
     """
 
     name: str
-    port: object  # MimirPort — typed as object to avoid circular import at runtime
+    port: MimirPort
     role: Literal["shared", "local", "domain"]
     categories: list[str] | None = None  # None = all categories
     read_priority: int = 0

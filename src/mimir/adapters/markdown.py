@@ -308,6 +308,15 @@ class MarkdownMimirAdapter(MimirPort):
 
         logger.info("mimir: upserted page %s (new=%s)", path, is_new)
 
+    async def get_page(self, path: str) -> MimirPage:
+        """Return content and metadata for the wiki page at *path* in one call."""
+        page_path = self._safe_wiki_path(path)
+        if not page_path.exists():
+            raise FileNotFoundError(f"Mímir page not found: {path}")
+        content = page_path.read_text(encoding="utf-8")
+        meta = self._build_page_meta(page_path, content)
+        return MimirPage(meta=meta, content=content)
+
     async def read_page(self, path: str) -> str:
         """Return the raw Markdown content of the page at *path*."""
         page_path = self._safe_wiki_path(path)

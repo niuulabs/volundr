@@ -35,5 +35,44 @@ niuu-shared:
 bifrost:
   enabled: true
 
-mimir:
+# Mímir — shared ODIN-wide instance (always enabled)
+mimir-shared:
   enabled: true
+  config:
+    name: "shared"
+    role: "shared"
+    announceUrl: ""
+    categories: []
+  persistence:
+    size: 50Gi
+  ingress:
+    enabled: false
+    host: ""
+
+# Mímir — Kanuck Valley Models domain instance (disabled by default, opt-in per cluster)
+mimir-kanuck:
+  enabled: false
+  config:
+    name: "kanuck"
+    role: "domain"
+    announceUrl: ""
+    categories: ["kanuck"]
+  persistence:
+    size: 10Gi
+  ingress:
+    enabled: false
+    host: ""
+
+# Mímir — research domain instance (disabled by default)
+mimir-research:
+  enabled: false
+  config:
+    name: "research"
+    role: "domain"
+    announceUrl: ""
+    categories: ["research"]
+  persistence:
+    size: 10Gi
+  ingress:
+    enabled: false
+    host: ""

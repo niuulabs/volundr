@@ -82,7 +82,7 @@ class CompositeMimirAdapter(MimirPort):
         all_paths: list[str] = []
         for mount in self._mounts:
             try:
-                paths = await mount.port.ingest(source)  # type: ignore[union-attr]
+                paths = await mount.port.ingest(source)
                 all_paths.extend(paths)
             except Exception as exc:
                 logger.warning("composite mimir: ingest failed on %r: %s", mount.name, exc)
@@ -95,7 +95,7 @@ class CompositeMimirAdapter(MimirPort):
 
         for mount in self._mounts:
             try:
-                result = await mount.port.query(question)  # type: ignore[union-attr]
+                result = await mount.port.query(question)
                 for page in result.sources:
                     if page.meta.path not in seen_paths:
                         seen_paths.add(page.meta.path)
@@ -112,7 +112,7 @@ class CompositeMimirAdapter(MimirPort):
 
         for mount in self._mounts:
             try:
-                pages = await mount.port.search(query)  # type: ignore[union-attr]
+                pages = await mount.port.search(query)
                 for page in pages:
                     if page.meta.path not in seen_paths:
                         seen_paths.add(page.meta.path)
@@ -122,11 +122,22 @@ class CompositeMimirAdapter(MimirPort):
 
         return results
 
+    async def get_page(self, path: str) -> MimirPage:
+        """Read full page from the first mount (in priority order) that has it."""
+        for mount in self._mounts:
+            try:
+                return await mount.port.get_page(path)
+            except FileNotFoundError:
+                continue
+            except Exception as exc:
+                logger.warning("composite mimir: get_page failed on %r: %s", mount.name, exc)
+        raise FileNotFoundError(f"Mímir page not found in any mount: {path}")
+
     async def read_page(self, path: str) -> str:
         """Read from the first mount (in priority order) that has the page."""
         for mount in self._mounts:
             try:
-                return await mount.port.read_page(path)  # type: ignore[union-attr]
+                return await mount.port.read_page(path)
             except FileNotFoundError:
                 continue
             except Exception as exc:
@@ -140,7 +151,7 @@ class CompositeMimirAdapter(MimirPort):
 
         for mount in self._mounts:
             try:
-                pages = await mount.port.list_pages(category)  # type: ignore[union-attr]
+                pages = await mount.port.list_pages(category)
                 for meta in pages:
                     if meta.path not in seen_paths:
                         seen_paths.add(meta.path)
@@ -162,7 +173,7 @@ class CompositeMimirAdapter(MimirPort):
 
         for mount in self._mounts:
             try:
-                report = await mount.port.lint()  # type: ignore[union-attr]
+                report = await mount.port.lint()
                 merged.orphans.extend(report.orphans)
                 merged.contradictions.extend(report.contradictions)
                 merged.stale.extend(report.stale)
@@ -201,7 +212,7 @@ class CompositeMimirAdapter(MimirPort):
                 )
                 continue
             try:
-                await mount.port.upsert_page(path, content)  # type: ignore[union-attr]
+                await mount.port.upsert_page(path, content)
                 logger.debug("composite mimir: wrote %r to mount %r", path, name)
             except Exception as exc:
                 logger.warning("composite mimir: upsert_page failed on %r: %s", name, exc)
