@@ -86,10 +86,13 @@ export function LogViewer({ entries, filter, onFilterChange }: LogViewerProps) {
         </div>
       ) : (
         <ol className={styles.entryList} reversed>
-          {[...filtered].reverse().map((entry, i) => {
+          {[...filtered].reverse().map((entry, reverseIdx) => {
             const kw = classifyEntry(entry);
+            // Use original index as key for stability: reverseIdx maps to
+            // filtered.length - 1 - reverseIdx in the un-reversed array.
+            const stableKey = filtered.length - 1 - reverseIdx;
             return (
-              <li key={i} className={styles.entry} data-kw={kw ?? 'none'}>
+              <li key={stableKey} className={styles.entry} data-kw={kw ?? 'none'}>
                 <span className={styles.entryText}>{entry}</span>
               </li>
             );

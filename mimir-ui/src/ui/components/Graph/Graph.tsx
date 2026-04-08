@@ -13,11 +13,30 @@ export interface GraphProps {
   categoryFilter: string | null;
 }
 
-// D3 needs concrete hex values — CSS vars are not available in SVG attr calls
+// D3 needs concrete hex values — CSS vars are not available in SVG attr calls.
+// Seed map with well-known categories; unknown categories get a palette color.
 const CATEGORY_COLORS: Record<string, string> = {
-  technical: '#6366f1',
-  projects: '#10b981',
+  technical: '#6366f1',   // indigo
+  projects: '#10b981',    // emerald
+  research: '#06b6d4',    // cyan
+  people: '#a855f7',      // purple
+  ops: '#f97316',         // orange
+  security: '#ef4444',    // red
+  data: '#eab308',        // yellow
+  design: '#3b82f6',      // blue
 };
+// Palette to cycle through for categories not in the seed map
+const PALETTE = ['#6366f1','#10b981','#06b6d4','#a855f7','#f97316','#ef4444','#eab308','#3b82f6','#f59e0b'];
+const _categoryColorCache: Record<string, string> = {};
+
+function categoryColor(category: string): string {
+  if (CATEGORY_COLORS[category]) return CATEGORY_COLORS[category];
+  if (_categoryColorCache[category]) return _categoryColorCache[category];
+  const idx = Object.keys(_categoryColorCache).length % PALETTE.length;
+  _categoryColorCache[category] = PALETTE[idx];
+  return _categoryColorCache[category];
+}
+
 const COLOR_DEFAULT = '#71717a';
 const COLOR_SELECTED_RING = '#f59e0b';
 const COLOR_DIM = '#3f3f46';
@@ -43,7 +62,7 @@ function nodeRadius(inboundCount: number): number {
 }
 
 function nodeColor(category: string): string {
-  return CATEGORY_COLORS[category] ?? COLOR_DEFAULT;
+  return categoryColor(category) ?? COLOR_DEFAULT;
 }
 
 export function Graph({

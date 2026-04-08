@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { GraphNode, GraphEdge, MimirPageMeta, MimirStats } from '@/domain';
+import type { GraphNode, GraphEdge, MimirPageMeta, MimirStats, MimirPage } from '@/domain';
 import { useActivePorts } from '@/contexts/PortsContext';
 import { Graph } from '@/ui/components/Graph/Graph';
 import { FileTree } from '@/ui/components/FileTree/FileTree';
@@ -9,13 +9,14 @@ import { StatsBar } from '@/ui/components/StatsBar/StatsBar';
 import styles from './GraphPage.module.css';
 
 export function GraphPage() {
-  const { api, graph } = useActivePorts();
+  const { api, graph, instance } = useActivePorts();
 
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [pages, setPages] = useState<MimirPageMeta[]>([]);
   const [stats, setStats] = useState<MimirStats | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
+  const [selectedPage, setSelectedPage] = useState<MimirPage | null>(null);
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -53,6 +54,23 @@ export function GraphPage() {
     };
   }, [api, graph]);
 
+  // Fetch page content whenever selectedPath changes
+  useEffect(() => {
+    if (!selectedPath) {
+      setSelectedPage(null);
+      return;
+    }
+    let cancelled = false;
+    api.getPage(selectedPath).then((page) => {
+      if (!cancelled) setSelectedPage(page);
+    }).catch(() => {
+      if (!cancelled) setSelectedPage(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, selectedPath]);
+
   function handleNodeClick(nodeId: string) {
     setSelectedNodeId(nodeId);
     setSelectedPath(nodeId);
@@ -74,13 +92,19 @@ export function GraphPage() {
     setShowEditor((prev) => !prev);
   }
 
+  async function handleSave(path: string, content: string): Promise<void> {
+    await api.upsertPage(path, content);
+    const updated = await api.getPage(path);
+    setSelectedPage(updated);
+  }
+
   const rightPanelTitle = showEditor ? 'Edit Page' : 'View Page';
 
   return (
     <div className={styles.page}>
       {stats && (
         <div className={styles.topBar}>
-          <StatsBar stats={stats} />
+          <StatsBar stats={stats} instanceName={instance.name} />
         </div>
       )}
       {error && <div className={styles.error}>{error}</div>}
@@ -156,10 +180,17 @@ export function GraphPage() {
               </div>
             )}
             {selectedPath && !showEditor && (
-              <PageViewer path={selectedPath} api={api} />
+              <PageViewer
+                page={selectedPage}
+                onLinkClick={handlePageSelect}
+              />
             )}
             {selectedPath && showEditor && (
-              <PageEditor path={selectedPath} api={api} />
+              <PageEditor
+                page={selectedPage}
+                onSave={handleSave}
+                writeEnabled={instance.writeEnabled}
+              />
             )}
           </div>
         </aside>

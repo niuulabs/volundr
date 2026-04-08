@@ -33,7 +33,10 @@ export function IngestPage() {
       ) {
         setJobs((prev) =>
           prev.map((job) => {
-            if (event.sourceId && !job.id.startsWith('local-')) return job;
+            // Only match jobs that have been resolved to a real sourceId
+            if (!event.sourceId) return job;
+            if (job.id !== event.sourceId) return job;
+            if (isTerminal(job.status)) return job;
 
             if (event.type === 'ingest_running') {
               return transitionJob(job, {
@@ -44,27 +47,20 @@ export function IngestPage() {
             }
 
             if (event.type === 'ingest_complete') {
-              return isTerminal(job.status)
-                ? job
-                : transitionJob(job, {
-                    status: 'complete',
-                    completedAt: event.timestamp,
-                    currentActivity: undefined,
-                  });
+              return transitionJob(job, {
+                status: 'complete',
+                completedAt: event.timestamp,
+                currentActivity: undefined,
+              });
             }
 
-            if (event.type === 'ingest_failed') {
-              return isTerminal(job.status)
-                ? job
-                : transitionJob(job, {
-                    status: 'failed',
-                    completedAt: event.timestamp,
-                    errorMessage: event.message,
-                    currentActivity: undefined,
-                  });
-            }
-
-            return job;
+            // ingest_failed
+            return transitionJob(job, {
+              status: 'failed',
+              completedAt: event.timestamp,
+              errorMessage: event.message,
+              currentActivity: undefined,
+            });
           }),
         );
       }

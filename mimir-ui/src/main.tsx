@@ -6,7 +6,6 @@ import { HttpMimirAdapter } from './adapters/mimir/HttpMimirAdapter';
 import { HttpIngestAdapter } from './adapters/ingest/HttpIngestAdapter';
 import { HttpGraphAdapter } from './adapters/graph/HttpGraphAdapter';
 import { WebSocketEventAdapter } from './adapters/events/WebSocketEventAdapter';
-import { PollingEventAdapter } from './adapters/events/PollingEventAdapter';
 import type { InstancePorts } from './contexts/PortsContext';
 import './styles/tokens.css';
 import './styles/reset.css';
@@ -18,15 +17,17 @@ function buildWsUrl(httpUrl: string): string {
 }
 
 const instancePorts: InstancePorts[] = configs.map((instance) => {
+  // WebSocketEventAdapter connects lazily on first subscribe() call and handles
+  // failure gracefully — always use it as the primary event source.
+  // PollingEventAdapter is available as a manual fallback but not the default.
   const wsAdapter = new WebSocketEventAdapter(buildWsUrl(instance.url));
-  const pollingAdapter = new PollingEventAdapter(`${instance.url}/log`);
 
   return {
     instance,
     api: new HttpMimirAdapter(instance.url),
     ingest: new HttpIngestAdapter(instance.url),
     graph: new HttpGraphAdapter(instance.url),
-    events: wsAdapter.isConnected() ? wsAdapter : pollingAdapter,
+    events: wsAdapter,
   };
 });
 

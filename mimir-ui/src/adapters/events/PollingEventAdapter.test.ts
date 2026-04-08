@@ -65,7 +65,8 @@ describe('PollingEventAdapter', () => {
       await Promise.resolve();
 
       expect(handler).toHaveBeenCalledOnce();
-      expect(handler.mock.calls[0][0].type).toBe('page_updated');
+      // "Ingestion complete" classifies as ingest_complete per keyword rules
+      expect(handler.mock.calls[0][0].type).toBe('ingest_complete');
       expect(handler.mock.calls[0][0].message).toBe('## 2026-04-08 Ingestion complete');
     });
 

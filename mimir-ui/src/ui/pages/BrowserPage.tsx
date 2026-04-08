@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { MimirPageMeta } from '@/domain';
+import type { MimirPageMeta, MimirPage } from '@/domain';
 import { useActivePorts } from '@/contexts/PortsContext';
 import { FileTree } from '@/ui/components/FileTree/FileTree';
 import { PageViewer } from '@/ui/components/PageViewer/PageViewer';
@@ -8,12 +8,14 @@ import { PageEditor } from '@/ui/components/PageEditor/PageEditor';
 import styles from './BrowserPage.module.css';
 
 export function BrowserPage() {
-  const { api } = useActivePorts();
+  const { api, instance } = useActivePorts();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [pages, setPages] = useState<MimirPageMeta[]>([]);
+  const [selectedPage, setSelectedPage] = useState<MimirPage | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showEditor, setShowEditor] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const selectedPath = searchParams.get('path');
 
@@ -21,9 +23,15 @@ export function BrowserPage() {
     let cancelled = false;
 
     async function load() {
-      const pageList = await api.listPages();
-      if (!cancelled) {
-        setPages(pageList);
+      try {
+        const pageList = await api.listPages();
+        if (!cancelled) {
+          setPages(pageList);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load pages');
+        }
       }
     }
 
@@ -33,6 +41,23 @@ export function BrowserPage() {
     };
   }, [api]);
 
+  // Fetch page content whenever selectedPath changes
+  useEffect(() => {
+    if (!selectedPath) {
+      setSelectedPage(null);
+      return;
+    }
+    let cancelled = false;
+    api.getPage(selectedPath).then((page) => {
+      if (!cancelled) setSelectedPage(page);
+    }).catch(() => {
+      if (!cancelled) setSelectedPage(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, selectedPath]);
+
   function handlePageSelect(path: string) {
     setSearchParams({ path });
     setShowEditor(false);
@@ -40,6 +65,12 @@ export function BrowserPage() {
 
   function handleToggleEditor() {
     setShowEditor((prev) => !prev);
+  }
+
+  async function handleSave(path: string, content: string): Promise<void> {
+    await api.upsertPage(path, content);
+    const updated = await api.getPage(path);
+    setSelectedPage(updated);
   }
 
   return (
@@ -66,6 +97,7 @@ export function BrowserPage() {
       </aside>
 
       <main className={styles.main}>
+        {error && <div className={styles.error}>{error}</div>}
         <div className={styles.mainHeader}>
           <h2 className={styles.pageTitle}>{selectedPath ?? 'No page selected'}</h2>
           {selectedPath && (
@@ -86,10 +118,17 @@ export function BrowserPage() {
             </div>
           )}
           {selectedPath && !showEditor && (
-            <PageViewer path={selectedPath} api={api} />
+            <PageViewer
+              page={selectedPage}
+              onLinkClick={handlePageSelect}
+            />
           )}
           {selectedPath && showEditor && (
-            <PageEditor path={selectedPath} api={api} />
+            <PageEditor
+              page={selectedPage}
+              onSave={handleSave}
+              writeEnabled={instance.writeEnabled}
+            />
           )}
         </div>
       </main>

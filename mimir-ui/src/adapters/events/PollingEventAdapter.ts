@@ -1,6 +1,17 @@
-import type { EventPort, EventHandler, UnsubscribeFn, MimirEvent } from '@/ports';
+import type { EventPort, EventHandler, UnsubscribeFn, MimirEvent, EventType } from '@/ports';
 
 const DEFAULT_POLL_INTERVAL_MS = 5000;
+
+/** Classify a log entry string into the appropriate EventType. */
+function classifyEntry(entry: string): EventType {
+  const lower = entry.toLowerCase();
+  if (lower.includes('ingest') && lower.includes('running')) return 'ingest_running';
+  if (lower.includes('ingest') && lower.includes('complete')) return 'ingest_complete';
+  if (lower.includes('ingest') && lower.includes('fail')) return 'ingest_failed';
+  if (lower.includes('ingest')) return 'ingest_queued';
+  if (lower.includes('lint')) return 'lint_complete';
+  return 'page_updated';
+}
 
 /**
  * PollingEventAdapter — fallback event source that polls GET /mimir/log
@@ -67,7 +78,7 @@ export class PollingEventAdapter implements EventPort {
 
       for (const entry of newEntries) {
         const event: MimirEvent = {
-          type: 'page_updated',
+          type: classifyEntry(entry),
           message: entry,
           timestamp: new Date().toISOString(),
         };

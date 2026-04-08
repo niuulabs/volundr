@@ -6,6 +6,7 @@ interface FileTreeProps {
   pages: MimirPageMeta[];
   selectedPath: string | null;
   onSelect: (path: string) => void;
+  searchQuery?: string;
 }
 
 interface CategoryGroup {
@@ -30,8 +31,11 @@ function groupByCategory(pages: MimirPageMeta[]): CategoryGroup[] {
     }));
 }
 
-export function FileTree({ pages, selectedPath, onSelect }: FileTreeProps) {
-  const groups = groupByCategory(pages);
+export function FileTree({ pages, selectedPath, onSelect, searchQuery = '' }: FileTreeProps) {
+  const filteredPages = searchQuery.trim()
+    ? pages.filter((p) => p.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    : pages;
+  const groups = groupByCategory(filteredPages);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const toggleCategory = (category: string) => {

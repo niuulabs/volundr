@@ -120,7 +120,8 @@ describe('BrowserPage', () => {
     const ports = makePorts();
     renderBrowserPage(ports, '/browse?path=technical/ravn/architecture.md');
     await waitFor(() => {
-      expect(screen.getByText('Ravn Architecture')).toBeDefined();
+      // Multiple elements show the title (header + viewer) — use getAllByText
+      expect(screen.getAllByText('Ravn Architecture').length).toBeGreaterThan(0);
     });
     // Edit/View button should appear when a path is selected
     const toggleBtn = screen.queryByRole('button', { name: /edit|view/i });
