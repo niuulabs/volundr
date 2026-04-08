@@ -13,7 +13,11 @@ from typing import Any
 from ravn.budget import IterationBudget, TokenEstimator
 from ravn.compression import CompressionResult, ContextCompressor
 from ravn.config import ExtendedThinkingConfig, OutcomeConfig
-from ravn.domain.checkpoint import Checkpoint, InterruptReason
+from ravn.domain.checkpoint import (
+    DESTRUCTIVE_TOOL_NAMES,
+    Checkpoint,
+    InterruptReason,
+)
 from ravn.domain.events import RavnEvent
 from ravn.domain.exceptions import MaxIterationsError, PermissionDeniedError
 from ravn.domain.models import (
@@ -93,6 +97,10 @@ class RavnAgent:
         session: Session | None = None,
         checkpoint_port: CheckpointPort | None = None,
         task_id: str | None = None,
+        # NIU-537: named snapshot trigger configuration
+        checkpoint_every_n_tools: int = 0,
+        auto_checkpoint_before_destructive: bool = False,
+        budget_milestone_fractions: list[float] | None = None,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -126,6 +134,12 @@ class RavnAgent:
         self._checkpoint_port = checkpoint_port
         self._task_id = task_id or str(self._session.id)
         self._interrupt_reason: InterruptReason | None = None
+        # NIU-537: named snapshot trigger state
+        self._checkpoint_every_n_tools = checkpoint_every_n_tools
+        self._auto_checkpoint_before_destructive = auto_checkpoint_before_destructive
+        self._budget_milestones: list[float] = budget_milestone_fractions or []
+        self._tool_call_count: int = 0
+        self._fired_milestones: set[float] = set()
 
     @property
     def session(self) -> Session:
@@ -335,6 +349,14 @@ class RavnAgent:
             last_had_tool_error = False
             for tool_call in llm_response.tool_calls:
                 turn_tool_calls.append(tool_call)
+
+                # NIU-537: auto-snapshot before destructive operations.
+                if (
+                    self._auto_checkpoint_before_destructive
+                    and tool_call.name in DESTRUCTIVE_TOOL_NAMES
+                ):
+                    await self._maybe_save_snapshot(label=f"auto: before {tool_call.name}")
+
                 result = await self._execute_tool(tool_call)
 
                 # Inject budget warning into the tool result content.
@@ -360,6 +382,10 @@ class RavnAgent:
                     last_tool_result=result,
                     interrupted_by=None,
                 )
+
+                # NIU-537: increment tool counter and check cadence/budget triggers.
+                self._tool_call_count += 1
+                await self._check_auto_snapshot_triggers(tool_call.name)
 
             # Append tool results as a user message.
             self._session.messages.append(Message(role="user", content=tool_results_content))
@@ -496,6 +522,77 @@ class RavnAgent:
                 result.removed_message_count,
             )
         return messages
+
+    async def _maybe_save_snapshot(self, *, label: str = "") -> None:
+        """Save a named snapshot if a checkpoint port is configured.
+
+        Failures are logged and never propagated — losing a snapshot is
+        preferable to crashing the task.
+        """
+        if self._checkpoint_port is None:
+            return
+
+        from datetime import UTC, datetime
+
+        from ravn.domain.checkpoint import Checkpoint
+
+        messages: list[dict] = [
+            {"role": m.role, "content": m.content} for m in self._session.messages
+        ]
+        todos: list[dict] = [
+            {"id": t.id, "content": t.content, "status": str(t.status), "priority": t.priority}
+            for t in self._session.todos
+        ]
+        consumed = self._iteration_budget.consumed if self._iteration_budget is not None else 0
+        total = self._iteration_budget.total if self._iteration_budget is not None else 0
+
+        checkpoint = Checkpoint(
+            task_id=self._task_id,
+            user_input="",
+            messages=messages,
+            todos=todos,
+            iteration_budget_consumed=consumed,
+            iteration_budget_total=total,
+            last_tool_call=None,
+            last_tool_result=None,
+            partial_response="",
+            interrupted_by=None,
+            created_at=datetime.now(UTC),
+            label=label,
+        )
+        try:
+            await self._checkpoint_port.save_snapshot(checkpoint)
+            logger.debug("Named snapshot saved for task %r (label=%r)", self._task_id, label)
+        except Exception as exc:
+            logger.warning("Named snapshot save failed for task %r: %s", self._task_id, exc)
+
+    async def _check_auto_snapshot_triggers(self, tool_name: str) -> None:
+        """Evaluate and fire automatic named-snapshot triggers.
+
+        Called after each tool call completes.  Checks:
+        1. N-tools cadence trigger (checkpoint_every_n_tools)
+        2. Budget milestone trigger (budget_milestone_fractions)
+        """
+        if self._checkpoint_port is None:
+            return
+
+        # N-tools cadence
+        if self._checkpoint_every_n_tools > 0:
+            if self._tool_call_count % self._checkpoint_every_n_tools == 0:
+                await self._maybe_save_snapshot(label=f"auto: after {self._tool_call_count} tools")
+                return  # Only one trigger per call
+
+        # Budget milestone
+        if self._budget_milestones and self._iteration_budget is not None:
+            total = self._iteration_budget.total
+            if total > 0:
+                fraction = self._iteration_budget.consumed / total
+                for milestone in sorted(self._budget_milestones):
+                    if fraction >= milestone and milestone not in self._fired_milestones:
+                        self._fired_milestones.add(milestone)
+                        pct = int(milestone * 100)
+                        await self._maybe_save_snapshot(label=f"auto: {pct}% budget consumed")
+                        break  # One milestone per call
 
     async def _write_checkpoint(
         self,

@@ -1675,11 +1675,44 @@ class BrowserConfig(BaseModel):
 
 
 class CheckpointConfig(BaseModel):
-    """Task-interruption checkpoint configuration (NIU-504)."""
+    """Checkpoint manager configuration (NIU-504 + NIU-537)."""
 
+    enabled: bool = Field(
+        default=True,
+        description="Enable checkpoint persistence (crash-recovery and named snapshots).",
+    )
+    backend: Literal["local", "postgres"] = Field(
+        default="local",
+        description="Storage backend: 'local' (disk) or 'postgres' (infra mode).",
+    )
     dir: Path = Field(
         default=Path.home() / ".ravn" / "checkpoints",
         description="Directory for disk-based checkpoint files (Pi / local mode).",
+    )
+    checkpoint_every_n_tools: int = Field(
+        default=10,
+        description=(
+            "Save a named snapshot after every N tool calls (0 = disabled). "
+            "Counts tool calls across all iterations in a turn."
+        ),
+    )
+    max_checkpoints_per_task: int = Field(
+        default=20,
+        description="Maximum named snapshots retained per task; oldest are pruned.",
+    )
+    auto_before_destructive: bool = Field(
+        default=True,
+        description=(
+            "Automatically save a named snapshot before destructive file operations "
+            "(write_file, edit_file, bash with write flags)."
+        ),
+    )
+    budget_milestone_fractions: list[float] = Field(
+        default_factory=lambda: [0.5, 0.75, 0.9],
+        description=(
+            "Save named snapshots when iteration budget consumption crosses these "
+            "fractions (e.g. 0.5 = 50%%).  Empty list disables milestone checkpointing."
+        ),
     )
 
 
@@ -1755,7 +1788,7 @@ class Settings(BaseSettings):
     # NIU-435: cascade coordinator / flock delegation / ephemeral spawn
     cascade: CascadeConfig = Field(default_factory=CascadeConfig)
 
-    # NIU-504: task interruption / resume
+    # NIU-504/NIU-537: task interruption / resume / named checkpoint snapshots
     checkpoint: CheckpointConfig = Field(default_factory=CheckpointConfig)
 
     # NIU-532: browser automation

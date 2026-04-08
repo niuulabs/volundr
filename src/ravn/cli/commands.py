@@ -680,20 +680,30 @@ def _resolve_persona(
 def _build_checkpoint(settings: Settings) -> CheckpointPort:
     """Build the checkpoint adapter from config.
 
-    Defaults to the disk adapter (Pi mode).  Switches to Postgres when
-    a memory DSN is configured and the memory backend is ``postgres``.
+    Backend selection:
+    * ``checkpoint.backend = 'postgres'`` (or memory backend = postgres with DSN):
+      PostgresCheckpointAdapter.
+    * Otherwise: DiskCheckpointAdapter (Pi / local mode).
     """
     from ravn.adapters.checkpoint.disk import DiskCheckpointAdapter
 
-    if settings.memory.backend == "postgres":
+    cp = settings.checkpoint
+    max_snap = cp.max_checkpoints_per_task
+
+    # Prefer explicit checkpoint.backend setting, fall back to memory.backend heuristic.
+    use_postgres = cp.backend == "postgres"
+    if not use_postgres and settings.memory.backend == "postgres":
+        use_postgres = True
+
+    if use_postgres:
         dsn = os.environ.get(settings.memory.dsn_env, "") if settings.memory.dsn_env else ""
         dsn = dsn or settings.memory.dsn
         if dsn:
             from ravn.adapters.checkpoint.postgres import PostgresCheckpointAdapter
 
-            return PostgresCheckpointAdapter(dsn=dsn)
+            return PostgresCheckpointAdapter(dsn=dsn, max_snapshots_per_task=max_snap)
 
-    return DiskCheckpointAdapter(checkpoint_dir=settings.checkpoint.dir)
+    return DiskCheckpointAdapter(checkpoint_dir=cp.dir, max_snapshots_per_task=max_snap)
 
 
 # ---------------------------------------------------------------------------
@@ -776,6 +786,7 @@ def _build_agent(
         if persona_config.iteration_budget:
             max_iterations = persona_config.iteration_budget
 
+    cp_cfg = settings.checkpoint
     agent = RavnAgent(
         llm=llm,
         tools=tools,
@@ -798,8 +809,11 @@ def _build_agent(
         outcome_port=outcome_port,
         outcome_config=outcome_config,
         extended_thinking=extended_thinking,
-        checkpoint_port=checkpoint_port,
+        checkpoint_port=checkpoint_port if cp_cfg.enabled else None,
         task_id=task_id,
+        checkpoint_every_n_tools=cp_cfg.checkpoint_every_n_tools,
+        auto_checkpoint_before_destructive=cp_cfg.auto_before_destructive,
+        budget_milestone_fractions=cp_cfg.budget_milestone_fractions,
     )
 
     return agent, channel
@@ -815,6 +829,8 @@ def _make_slash_ctx(agent: RavnAgent, settings: Settings) -> Any:
         max_iterations=agent.max_iterations,
         llm_adapter_name=agent.llm_adapter_name,
         permission_mode=settings.permission.mode,
+        checkpoint_port=agent.checkpoint_port,
+        task_id=agent.task_id,
     )
 
 
@@ -856,6 +872,7 @@ def run(
             prompt=prompt,
             show_usage=show_usage,
             resume_task_id=resume.strip() or None,
+            resume_checkpoint_id=None,
         )
     )
 
@@ -868,6 +885,7 @@ async def _run_with_signals(
     prompt: str,
     show_usage: bool,
     resume_task_id: str | None,
+    resume_checkpoint_id: str | None = None,
 ) -> None:
     """Build the agent, install signal handlers, and run the conversation."""
     # Optionally load a checkpoint for resume.
@@ -875,7 +893,10 @@ async def _run_with_signals(
     restored_prompt: str = prompt
     if resume_task_id is not None:
         restored_session, restored_prompt = await _load_checkpoint_session(
-            settings, resume_task_id, fallback_prompt=prompt
+            settings,
+            resume_task_id,
+            fallback_prompt=prompt,
+            checkpoint_id=resume_checkpoint_id,
         )
 
     agent, channel = _build_agent(
@@ -922,17 +943,28 @@ async def _load_checkpoint_session(
     task_id: str,
     *,
     fallback_prompt: str,
+    checkpoint_id: str | None = None,
 ) -> tuple[Session | None, str]:
     """Load a checkpoint and reconstruct a Session from it.
+
+    When *checkpoint_id* is provided, loads a named snapshot; otherwise loads
+    the crash-recovery checkpoint for *task_id*.
 
     Returns ``(session, user_input)`` where ``user_input`` is the original
     prompt from the checkpoint (or *fallback_prompt* if no checkpoint exists).
     """
     port = _build_checkpoint(settings)
-    checkpoint = await port.load(task_id)
-    if checkpoint is None:
-        typer.echo(f"[ravn] No checkpoint found for task_id={task_id!r}", err=True)
-        return None, fallback_prompt
+
+    if checkpoint_id:
+        checkpoint = await port.load_snapshot(checkpoint_id)
+        if checkpoint is None:
+            typer.echo(f"[ravn] No snapshot found for checkpoint_id={checkpoint_id!r}", err=True)
+            return None, fallback_prompt
+    else:
+        checkpoint = await port.load(task_id)
+        if checkpoint is None:
+            typer.echo(f"[ravn] No checkpoint found for task_id={task_id!r}", err=True)
+            return None, fallback_prompt
 
     # Reconstruct session from checkpoint messages.
     session = Session()
@@ -1072,6 +1104,49 @@ def approvals_revoke(
     else:
         typer.echo(f"No matching approval found for {pattern!r}", err=True)
         raise typer.Exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Resume CLI (NIU-537)
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def resume(
+    task_id: str = typer.Argument(help="task_id to resume from its latest checkpoint."),
+    checkpoint_id: str = typer.Option(
+        "",
+        "--checkpoint",
+        "-c",
+        help="Specific checkpoint_id to restore (defaults to latest crash-recovery checkpoint).",
+    ),
+    config: str = typer.Option("", "--config", help="Path to ravn config YAML."),
+    show_usage: bool = typer.Option(False, "--show-usage", help="Print token usage after turn."),
+) -> None:
+    """Resume a task from a checkpoint.
+
+    Loads the crash-recovery checkpoint (or a named snapshot when --checkpoint
+    is given) and re-enters the REPL at the point the task was interrupted.
+    """
+    if config:
+        os.environ["RAVN_CONFIG"] = config
+
+    settings = Settings()
+    _configure_logging(settings)
+    project_config = ProjectConfig.discover()
+    persona_config = _resolve_persona("", project_config)
+
+    asyncio.run(
+        _run_with_signals(
+            settings=settings,
+            no_tools=False,
+            persona_config=persona_config,
+            prompt="",
+            show_usage=show_usage,
+            resume_task_id=task_id.strip(),
+            resume_checkpoint_id=checkpoint_id.strip() or None,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -845,4 +845,45 @@ data:
 
   000030_ravn_checkpoints.down.sql: |
     DROP TABLE IF EXISTS ravn_checkpoints;
+
+  000031_ravn_checkpoint_snapshots.up.sql: |
+    -- NIU-537: named checkpoint snapshots table and extended crash-recovery columns.
+    ALTER TABLE ravn_checkpoints
+        ADD COLUMN IF NOT EXISTS checkpoint_id   TEXT NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS seq             INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS label           TEXT NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS tags            JSONB NOT NULL DEFAULT '[]',
+        ADD COLUMN IF NOT EXISTS memory_context  TEXT NOT NULL DEFAULT '';
+
+    CREATE TABLE IF NOT EXISTS ravn_checkpoint_snapshots (
+        checkpoint_id        TEXT PRIMARY KEY,
+        task_id              TEXT NOT NULL,
+        seq                  INTEGER NOT NULL,
+        label                TEXT NOT NULL DEFAULT '',
+        tags                 JSONB NOT NULL DEFAULT '[]',
+        memory_context       TEXT NOT NULL DEFAULT '',
+        user_input           TEXT NOT NULL DEFAULT '',
+        messages             JSONB NOT NULL DEFAULT '[]',
+        todos                JSONB NOT NULL DEFAULT '[]',
+        budget_consumed      INTEGER NOT NULL DEFAULT 0,
+        budget_total         INTEGER NOT NULL DEFAULT 0,
+        last_tool_call       JSONB,
+        last_tool_result     JSONB,
+        partial_response     TEXT NOT NULL DEFAULT '',
+        interrupted_by       TEXT,
+        created_at           TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ravn_snapshots_task_id
+        ON ravn_checkpoint_snapshots (task_id, seq DESC);
+
+  000031_ravn_checkpoint_snapshots.down.sql: |
+    DROP TABLE IF EXISTS ravn_checkpoint_snapshots;
+
+    ALTER TABLE ravn_checkpoints
+        DROP COLUMN IF EXISTS checkpoint_id,
+        DROP COLUMN IF EXISTS seq,
+        DROP COLUMN IF EXISTS label,
+        DROP COLUMN IF EXISTS tags,
+        DROP COLUMN IF EXISTS memory_context;
 {{- end }}
