@@ -271,6 +271,23 @@ class BashToolConfig(BaseModel):
     )
 
 
+class ToolProfileConfig(BaseModel):
+    """Named tool profile — controls which tool groups are active."""
+
+    include_groups: list[str] = Field(
+        default=["core", "extended", "skill", "platform", "cascade"],
+        description=(
+            "Tool groups to include. Built-in groups: core, extended, skill, platform. "
+            "The 'cascade' group signals that cascade tools (wired via build_cascade_tools) "
+            "should be appended when the profile is selected by the coordinator."
+        ),
+    )
+    include_mcp: bool = Field(
+        default=True,
+        description="Whether to append MCP tools when this profile is active.",
+    )
+
+
 class ToolsConfig(BaseModel):
     """Tool availability and custom adapter configuration."""
 
@@ -288,6 +305,13 @@ class ToolsConfig(BaseModel):
     custom: list[ToolAdapterConfig] = Field(
         default_factory=list,
         description="Custom tool adapters to register alongside built-ins.",
+    )
+    profiles: dict[str, ToolProfileConfig] = Field(
+        default_factory=dict,
+        description=(
+            "Named tool profiles. Built-in profiles: 'default' (full set) and "
+            "'worker' (core only, no MCP). Custom profiles override built-in defaults."
+        ),
     )
     file: FileToolsConfig = Field(
         default_factory=FileToolsConfig,

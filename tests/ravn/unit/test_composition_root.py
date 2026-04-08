@@ -186,7 +186,9 @@ class TestBuildPermission:
         assert isinstance(perm, DenyAllPermission)
 
     def test_read_only_persona_overrides_to_deny_all(
-        self, settings: Settings, tmp_path: Path,
+        self,
+        settings: Settings,
+        tmp_path: Path,
     ) -> None:
         from ravn.adapters.permission.allow_deny import DenyAllPermission
         from ravn.cli.commands import _build_permission
@@ -211,8 +213,14 @@ class TestBuildTools:
         session = Session()
         llm = MagicMock()
         tools = _build_tools(
-            settings, tmp_path, session, llm, None, None,
-            no_tools=False, persona_config=None,
+            settings,
+            tmp_path,
+            session,
+            llm,
+            None,
+            None,
+            no_tools=False,
+            persona_config=None,
         )
         # Expect at least 20 tools (file, git, bash, terminal, web, todo, ask_user, introspection)
         assert len(tools) >= 20
@@ -222,22 +230,36 @@ class TestBuildTools:
         from ravn.domain.models import Session
 
         tools = _build_tools(
-            settings, tmp_path, Session(), MagicMock(), None, None,
-            no_tools=True, persona_config=None,
+            settings,
+            tmp_path,
+            Session(),
+            MagicMock(),
+            None,
+            None,
+            no_tools=True,
+            persona_config=None,
         )
         assert tools == []
 
     @pytest.mark.usefixtures("_api_key", "_mock_anthropic")
     def test_memory_tools_added_when_memory_present(
-        self, settings: Settings, tmp_path: Path,
+        self,
+        settings: Settings,
+        tmp_path: Path,
     ) -> None:
         from ravn.cli.commands import _build_tools
         from ravn.domain.models import Session
 
         mock_memory = MagicMock()
         tools = _build_tools(
-            settings, tmp_path, Session(), MagicMock(), mock_memory, None,
-            no_tools=False, persona_config=None,
+            settings,
+            tmp_path,
+            Session(),
+            MagicMock(),
+            mock_memory,
+            None,
+            no_tools=False,
+            persona_config=None,
         )
         tool_names = {t.name for t in tools}
         assert "ravn_memory_search" in tool_names
@@ -245,14 +267,22 @@ class TestBuildTools:
 
     @pytest.mark.usefixtures("_api_key", "_mock_anthropic")
     def test_introspection_tools_present(
-        self, settings: Settings, tmp_path: Path,
+        self,
+        settings: Settings,
+        tmp_path: Path,
     ) -> None:
         from ravn.cli.commands import _build_tools
         from ravn.domain.models import Session
 
         tools = _build_tools(
-            settings, tmp_path, Session(), MagicMock(), None, None,
-            no_tools=False, persona_config=None,
+            settings,
+            tmp_path,
+            Session(),
+            MagicMock(),
+            None,
+            None,
+            no_tools=False,
+            persona_config=None,
         )
         tool_names = {t.name for t in tools}
         assert "ravn_state" in tool_names
@@ -260,19 +290,223 @@ class TestBuildTools:
 
     @pytest.mark.usefixtures("_api_key", "_mock_anthropic")
     def test_introspection_tools_can_be_disabled(
-        self, settings: Settings, tmp_path: Path,
+        self,
+        settings: Settings,
+        tmp_path: Path,
     ) -> None:
         from ravn.cli.commands import _build_tools
         from ravn.domain.models import Session
 
         settings.tools.disabled = ["ravn_state", "ravn_reflect"]
         tools = _build_tools(
-            settings, tmp_path, Session(), MagicMock(), None, None,
-            no_tools=False, persona_config=None,
+            settings,
+            tmp_path,
+            Session(),
+            MagicMock(),
+            None,
+            None,
+            no_tools=False,
+            persona_config=None,
         )
         tool_names = {t.name for t in tools}
         assert "ravn_state" not in tool_names
         assert "ravn_reflect" not in tool_names
+
+    @pytest.mark.usefixtures("_api_key", "_mock_anthropic")
+    def test_worker_profile_has_only_core_tools(
+        self,
+        settings: Settings,
+        tmp_path: Path,
+    ) -> None:
+        from ravn.cli.commands import _build_tools
+        from ravn.domain.models import Session
+
+        tools = _build_tools(
+            settings,
+            tmp_path,
+            Session(),
+            MagicMock(),
+            None,
+            None,
+            no_tools=False,
+            persona_config=None,
+            profile="worker",
+        )
+        tool_names = {t.name for t in tools}
+        # Core tools should be present
+        assert "read_file" in tool_names
+        assert "bash" in tool_names
+        # Extended tools should be absent in worker profile
+        assert "ravn_state" not in tool_names
+        assert "ravn_reflect" not in tool_names
+        assert "web_search" not in tool_names
+
+    @pytest.mark.usefixtures("_api_key", "_mock_anthropic")
+    def test_default_profile_has_extended_tools(
+        self,
+        settings: Settings,
+        tmp_path: Path,
+    ) -> None:
+        from ravn.cli.commands import _build_tools
+        from ravn.domain.models import Session
+
+        tools = _build_tools(
+            settings,
+            tmp_path,
+            Session(),
+            MagicMock(),
+            None,
+            None,
+            no_tools=False,
+            persona_config=None,
+            profile="default",
+        )
+        tool_names = {t.name for t in tools}
+        assert "ravn_state" in tool_names
+        assert "ravn_reflect" in tool_names
+        assert "web_search" in tool_names
+
+    @pytest.mark.usefixtures("_api_key", "_mock_anthropic")
+    def test_custom_profile_from_settings(
+        self,
+        settings: Settings,
+        tmp_path: Path,
+    ) -> None:
+        from ravn.cli.commands import _build_tools
+        from ravn.config import ToolProfileConfig
+        from ravn.domain.models import Session
+
+        settings.tools.profiles["minimal"] = ToolProfileConfig(
+            include_groups=["core"],
+            include_mcp=False,
+        )
+        tools = _build_tools(
+            settings,
+            tmp_path,
+            Session(),
+            MagicMock(),
+            None,
+            None,
+            no_tools=False,
+            persona_config=None,
+            profile="minimal",
+        )
+        tool_names = {t.name for t in tools}
+        assert "read_file" in tool_names
+        assert "ravn_state" not in tool_names
+
+    @pytest.mark.usefixtures("_api_key", "_mock_anthropic")
+    def test_unknown_profile_falls_back_to_default(
+        self,
+        settings: Settings,
+        tmp_path: Path,
+    ) -> None:
+        from ravn.cli.commands import _build_tools
+        from ravn.domain.models import Session
+
+        tools = _build_tools(
+            settings,
+            tmp_path,
+            Session(),
+            MagicMock(),
+            None,
+            None,
+            no_tools=False,
+            persona_config=None,
+            profile="nonexistent_profile",
+        )
+        # Falls back to default — should have extended tools
+        tool_names = {t.name for t in tools}
+        assert "ravn_state" in tool_names
+
+    @pytest.mark.usefixtures("_api_key", "_mock_anthropic")
+    def test_ravn_state_tool_names_populated_after_filtering(
+        self,
+        settings: Settings,
+        tmp_path: Path,
+    ) -> None:
+        from ravn.cli.commands import _build_tools
+        from ravn.domain.models import Session
+
+        tools = _build_tools(
+            settings,
+            tmp_path,
+            Session(),
+            MagicMock(),
+            None,
+            None,
+            no_tools=False,
+            persona_config=None,
+        )
+        state_tool = next((t for t in tools if t.name == "ravn_state"), None)
+        assert state_tool is not None
+        expected_names = {t.name for t in tools}
+        assert set(state_tool._tool_names) == expected_names
+
+    @pytest.mark.usefixtures("_api_key", "_mock_anthropic")
+    def test_memory_tools_absent_when_memory_none(
+        self,
+        settings: Settings,
+        tmp_path: Path,
+    ) -> None:
+        from ravn.cli.commands import _build_tools
+        from ravn.domain.models import Session
+
+        tools = _build_tools(
+            settings,
+            tmp_path,
+            Session(),
+            MagicMock(),
+            None,
+            None,
+            no_tools=False,
+            persona_config=None,
+        )
+        tool_names = {t.name for t in tools}
+        assert "ravn_memory_search" not in tool_names
+        assert "session_search" not in tool_names
+
+
+# ---------------------------------------------------------------------------
+# _get_profile
+# ---------------------------------------------------------------------------
+
+
+class TestGetProfile:
+    def test_default_profile_returned_for_default_name(self, settings: Settings) -> None:
+        from ravn.cli.commands import _get_profile
+
+        cfg = _get_profile(settings, "default")
+        assert "core" in cfg.include_groups
+        assert "extended" in cfg.include_groups
+        assert cfg.include_mcp is True
+
+    def test_worker_profile_returned_for_worker_name(self, settings: Settings) -> None:
+        from ravn.cli.commands import _get_profile
+
+        cfg = _get_profile(settings, "worker")
+        assert "core" in cfg.include_groups
+        assert "extended" not in cfg.include_groups
+        assert cfg.include_mcp is False
+
+    def test_custom_profile_overrides_builtin(self, settings: Settings) -> None:
+        from ravn.cli.commands import _get_profile
+        from ravn.config import ToolProfileConfig
+
+        settings.tools.profiles["default"] = ToolProfileConfig(
+            include_groups=["core"],
+            include_mcp=False,
+        )
+        cfg = _get_profile(settings, "default")
+        assert cfg.include_groups == ["core"]
+        assert cfg.include_mcp is False
+
+    def test_unknown_profile_falls_back_gracefully(self, settings: Settings) -> None:
+        from ravn.cli.commands import _get_profile
+
+        cfg = _get_profile(settings, "does_not_exist")
+        # Falls back to default
+        assert "extended" in cfg.include_groups
 
 
 # ---------------------------------------------------------------------------

@@ -14,7 +14,7 @@ from typing import Any
 import typer
 
 from ravn.agent import PostToolHook, PreToolHook, RavnAgent
-from ravn.config import InitiativeConfig, OutcomeConfig, ProjectConfig, Settings
+from ravn.config import InitiativeConfig, OutcomeConfig, ProjectConfig, Settings, ToolProfileConfig
 from ravn.domain.checkpoint import InterruptReason
 from ravn.domain.models import (
     Message,
@@ -281,6 +281,32 @@ def _build_permission(
 
 
 # ---------------------------------------------------------------------------
+# Builder: Tools — profile resolution and defaults
+# ---------------------------------------------------------------------------
+
+_DEFAULT_PROFILES: dict[str, ToolProfileConfig] = {
+    "default": ToolProfileConfig(
+        include_groups=["core", "extended", "skill", "platform", "cascade"],
+        include_mcp=True,
+    ),
+    "worker": ToolProfileConfig(
+        include_groups=["core"],
+        include_mcp=False,
+    ),
+}
+
+
+def _get_profile(settings: Settings, name: str) -> ToolProfileConfig:
+    """Return the named profile, falling back to built-in defaults."""
+    if name in settings.tools.profiles:
+        return settings.tools.profiles[name]
+    if name in _DEFAULT_PROFILES:
+        return _DEFAULT_PROFILES[name]
+    logger.warning("Unknown tool profile %r — using 'default'", name)
+    return _DEFAULT_PROFILES["default"]
+
+
+# ---------------------------------------------------------------------------
 # Builder: Tools
 # ---------------------------------------------------------------------------
 
@@ -295,141 +321,63 @@ def _build_tools(
     *,
     no_tools: bool = False,
     persona_config: Any | None = None,
+    profile: str = "default",
 ) -> list[Any]:
-    """Build the full tool list from config."""
+    """Build the tool list from the built-in registry, filtered by profile.
+
+    The registry (``builtin_registry.BUILTIN_TOOLS``) drives all built-in
+    tool construction.  Custom tools from ``settings.tools.custom`` are
+    appended afterward.  MCP and cascade tools are NOT added here — callers
+    are responsible for appending them based on the profile's ``include_mcp``
+    flag and ``"cascade"`` group membership.
+    """
     if no_tools:
         return []
 
-    from ravn.adapters.tools.ask_user import AskUserTool
-    from ravn.adapters.tools.bash import BashTool
-    from ravn.adapters.tools.file_tools import (
-        EditFileTool,
-        GlobSearchTool,
-        GrepSearchTool,
-        ReadFileTool,
-        WriteFileTool,
-    )
-    from ravn.adapters.tools.git import (
-        GitAddTool,
-        GitCheckoutTool,
-        GitCommitTool,
-        GitDiffTool,
-        GitLogTool,
-        GitPrTool,
-        GitStatusTool,
-    )
-    from ravn.adapters.tools.introspection import (
-        RavnMemorySearchTool,
-        RavnReflectTool,
-        RavnStateTool,
-    )
-    from ravn.adapters.tools.session_search import SessionSearchTool
-    from ravn.adapters.tools.todo import TodoReadTool, TodoWriteTool
-    from ravn.adapters.tools.web_fetch import WebFetchTool
-    from ravn.adapters.tools.web_search import WebSearchTool
+    from ravn.adapters.tools.builtin_registry import BUILTIN_TOOLS
     from ravn.ports.tool import ToolPort
 
-    fc = settings.tools.file
-    tools: list[ToolPort] = [
-        # -- File tools --
-        ReadFileTool(workspace, max_bytes=fc.max_read_bytes),
-        WriteFileTool(
-            workspace,
-            max_bytes=fc.max_write_bytes,
-            binary_check_bytes=fc.binary_check_bytes,
-        ),
-        EditFileTool(
-            workspace,
-            max_bytes=fc.max_write_bytes,
-            binary_check_bytes=fc.binary_check_bytes,
-        ),
-        GlobSearchTool(workspace),
-        GrepSearchTool(workspace),
-        # -- Git tools --
-        GitStatusTool(workspace),
-        GitDiffTool(workspace),
-        GitAddTool(workspace),
-        GitCommitTool(workspace),
-        GitCheckoutTool(workspace),
-        GitLogTool(workspace),
-        GitPrTool(workspace),
-        # -- Bash tool --
-        BashTool(config=settings.tools.bash, workspace_root=workspace),
-        # -- Web tools --
-        WebFetchTool(
-            timeout=settings.tools.web.fetch.timeout,
-            user_agent=settings.tools.web.fetch.user_agent,
-            content_budget=settings.tools.web.fetch.content_budget,
-        ),
-        # -- Todo tools --
-        TodoWriteTool(session),
-        TodoReadTool(session),
-        # -- Ask user --
-        AskUserTool(),
-    ]
+    profile_cfg = _get_profile(settings, profile)
+    include_groups = set(profile_cfg.include_groups)
 
-    # -- Terminal tool (local or docker) --
-    tc = settings.tools.terminal
-    if tc.backend == "docker":
-        from ravn.adapters.tools.terminal_docker import DockerTerminalTool
+    persona_prefix: str = (
+        persona_config.system_prompt_template[:40]
+        if persona_config and persona_config.system_prompt_template
+        else ""
+    )
 
-        tools.append(
-            DockerTerminalTool(
-                config=tc.docker,
-                workspace_root=workspace,
-                timeout_seconds=tc.timeout_seconds,
-            )
-        )
-    else:
-        from ravn.adapters.tools.terminal import TerminalTool
+    runtime_ctx: dict[str, Any] = {
+        "workspace": workspace,
+        "session": session,
+        "llm": llm,
+        "memory": memory,
+        "iteration_budget": iteration_budget,
+        "persona_prefix": persona_prefix,
+    }
 
-        tools.append(
-            TerminalTool(
-                shell=tc.shell,
-                timeout_seconds=tc.timeout_seconds,
-                persistent_shell=tc.persistent_shell,
-            )
-        )
+    tools: list[ToolPort] = []
+    state_tool: Any = None
 
-    # -- Web search (with pluggable provider) --
-    ws_cfg = settings.tools.web.search
-    search_provider = None
-    if ws_cfg.provider.adapter != "ravn.adapters.tools.web_search.MockWebSearchProvider":
+    for tool_key, tool_def in BUILTIN_TOOLS.items():
+        if not (tool_def.groups & include_groups):
+            continue
+        if tool_def.condition is not None and not tool_def.condition(settings):
+            continue
+        if any(runtime_ctx.get(dep) is None for dep in tool_def.required_context):
+            continue
+
         try:
-            cls = _import_class(ws_cfg.provider.adapter)
-            kwargs = _inject_secrets(ws_cfg.provider.kwargs, ws_cfg.provider.secret_kwargs_env)
-            search_provider = cls(**kwargs)
+            cls = _import_class(tool_def.adapter)
+            kwargs = tool_def.kwargs_fn(settings, runtime_ctx)
+            tool = cls(**kwargs)
+            if tool_key == "ravn_state":
+                state_tool = tool
+            tools.append(tool)
         except Exception as exc:
-            logger.warning("Failed to load web search provider: %s — using mock", exc)
-    tools.append(WebSearchTool(provider=search_provider, num_results=ws_cfg.num_results))
+            logger.warning("Failed to load built-in tool %r: %s", tool_key, exc)
 
-    # -- Skill tools (if enabled) --
-    if settings.skill.enabled:
-        from ravn.adapters.tools.skill_tools import SkillListTool, SkillRunTool
-
-        if settings.skill.backend == "sqlite":
-            from ravn.adapters.skill.sqlite import SqliteSkillAdapter
-
-            skill_port = SqliteSkillAdapter(
-                path=settings.skill.path,
-                suggestion_threshold=settings.skill.suggestion_threshold,
-                cache_max_entries=settings.skill.cache_max_entries,
-            )
-        else:
-            from ravn.adapters.skill.file_registry import FileSkillRegistry
-
-            skill_port = FileSkillRegistry(
-                skill_dirs=settings.skill.skill_dirs or None,
-                include_builtin=settings.skill.include_builtin,
-                cwd=workspace,
-            )
-        tools.append(SkillListTool(skill_port))
-        tools.append(SkillRunTool(skill_port))
-
-    # -- Memory-dependent tools --
+    # -- Memory extra tools (dynamic, injected by the memory adapter) --
     if memory is not None:
-        tools.append(RavnMemorySearchTool(memory))
-        tools.append(SessionSearchTool(memory))
         tools.extend(memory.extra_tools(session_id=str(session.id)))
 
     # -- Custom tools from config --
@@ -441,54 +389,12 @@ def _build_tools(
         except Exception as exc:
             logger.warning("Failed to load custom tool %r: %s", ct.adapter, exc)
 
-    # -- Platform tools (gateway/platform mode only) --
-    if settings.gateway.platform.enabled:
-        from ravn.adapters.tools.platform_tools import (
-            TrackerIssueTool,
-            TyrSagaTool,
-            VolundrGitTool,
-            VolundrSessionTool,
-        )
-
-        _purl = settings.gateway.platform.base_url
-        _ptimeout = settings.gateway.platform.timeout
-        tools.extend(
-            [
-                VolundrSessionTool(base_url=_purl, timeout=_ptimeout),
-                VolundrGitTool(base_url=_purl, timeout=_ptimeout),
-                TyrSagaTool(base_url=_purl, timeout=_ptimeout),
-                TrackerIssueTool(base_url=_purl, timeout=_ptimeout),
-            ]
-        )
-
-    # -- Introspection tools (added before filtering so they can be disabled) --
-    state_tool = RavnStateTool(
-        tool_names=[],  # populated after filtering
-        permission_mode=settings.permission.mode,
-        model=settings.effective_model(),
-        persona=(
-            persona_config.system_prompt_template[:40]
-            if persona_config and persona_config.system_prompt_template
-            else ""
-        ),
-        iteration_budget=iteration_budget,
-        memory=memory,
-    )
-    tools.append(state_tool)
-    tools.append(
-        RavnReflectTool(
-            llm,
-            session,
-            model=settings.agent.outcome.reflection_model,
-            max_tokens=settings.agent.outcome.reflection_max_tokens,
-        )
-    )
-
     # -- Apply enabled/disabled filters --
     tools = _filter_tools(tools, settings, persona_config)
 
     # Update state tool with final tool names after filtering
-    state_tool._tool_names = [t.name for t in tools]
+    if state_tool is not None:
+        state_tool._tool_names = [t.name for t in tools]
 
     return tools
 
@@ -1515,9 +1421,7 @@ def listen(
     project_config = ProjectConfig.discover()
     persona_config = _resolve_persona(persona, project_config)
 
-    asyncio.run(
-        _run_daemon(settings, persona_config=persona_config, task_dispatch=True)
-    )
+    asyncio.run(_run_daemon(settings, persona_config=persona_config, task_dispatch=True))
 
 
 async def _run_daemon(
@@ -1581,7 +1485,10 @@ async def _run_daemon(
         # Sub-tasks (cascade workers) get only base tools — no cascade/MCP to
         # prevent tool-looping on small models.  The coordinator (task_id=None)
         # gets the full set.
-        is_subtask = task_id is not None
+        # Sub-tasks (cascade workers) use the 'worker' profile: core tools only,
+        # no MCP, no cascade.  The coordinator uses 'default': full tool set.
+        profile = "worker" if task_id is not None else "default"
+        profile_cfg = _get_profile(settings, profile)
         tools = _build_tools(
             settings,
             workspace,
@@ -1590,14 +1497,14 @@ async def _run_daemon(
             memory,
             budget,
             persona_config=persona_config,
+            profile=profile,
         )
-        if not is_subtask:
+        if profile_cfg.include_mcp:
             tools.extend(mcp_tools)
-
+        if "cascade" in profile_cfg.include_groups:
             # Add cascade tools (parallel task execution) if wired
             cascade_tools = getattr(drive_loop, "_cascade_tools", [])
-            if cascade_tools:
-                tools.extend(cascade_tools)
+            tools.extend(cascade_tools)
 
         return RavnAgent(
             llm=llm,
