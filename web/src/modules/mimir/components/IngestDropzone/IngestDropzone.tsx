@@ -8,10 +8,9 @@ interface DropzoneInstance {
 }
 
 interface IngestDropzoneProps {
-  instances: DropzoneInstance[];
-  activeInstanceName: string;
+  instances?: DropzoneInstance[];
+  activeInstanceName?: string;
   onIngest: (
-    instanceName: string,
     title: string,
     content: string,
     sourceType: IngestSourceType,
@@ -35,7 +34,13 @@ function detectSourceType(file: File): IngestSourceType {
   return 'document';
 }
 
-export function IngestDropzone({ instances, activeInstanceName, onIngest }: IngestDropzoneProps) {
+const DEFAULT_INSTANCES: DropzoneInstance[] = [{ name: 'shared', writeEnabled: true }];
+
+export function IngestDropzone({
+  instances = DEFAULT_INSTANCES,
+  activeInstanceName = 'shared',
+  onIngest,
+}: IngestDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [targetInstance, setTargetInstance] = useState(activeInstanceName);
   const [title, setTitle] = useState('');
@@ -118,13 +123,7 @@ export function IngestDropzone({ instances, activeInstanceName, onIngest }: Inge
     setSuccess(false);
 
     try {
-      await onIngest(
-        targetInstance,
-        title.trim(),
-        content,
-        sourceType,
-        originUrl.trim() || undefined
-      );
+      await onIngest(title.trim(), content, sourceType, originUrl.trim() || undefined);
       setSuccess(true);
       resetForm();
     } catch (err) {

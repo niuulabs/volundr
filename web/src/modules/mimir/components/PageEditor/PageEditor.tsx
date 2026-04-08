@@ -9,10 +9,10 @@ interface EditablePage {
 interface PageEditorProps {
   page: EditablePage | null;
   onSave: (path: string, content: string) => Promise<void>;
-  writeEnabled: boolean;
+  writeEnabled?: boolean;
 }
 
-export function PageEditor({ page, onSave, writeEnabled }: PageEditorProps) {
+export function PageEditor({ page, onSave, writeEnabled = true }: PageEditorProps) {
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);

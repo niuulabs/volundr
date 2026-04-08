@@ -3,10 +3,10 @@ import styles from './StatsBar.module.css';
 
 interface StatsBarProps {
   stats: MimirStats | null;
-  instanceName: string;
+  instanceName?: string;
 }
 
-export function StatsBar({ stats, instanceName }: StatsBarProps) {
+export function StatsBar({ stats, instanceName = 'shared' }: StatsBarProps) {
   if (!stats) {
     return (
       <div className={styles.statsBar}>
