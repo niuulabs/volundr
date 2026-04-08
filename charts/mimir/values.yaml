@@ -1,0 +1,149 @@
+# Default values for the Mímir standalone knowledge service Helm chart.
+# Override these values in your environment-specific values file.
+
+# -- Number of replicas. Mímir uses a PVC for storage so this should stay at 1
+# unless you use a ReadWriteMany storage class.
+replicaCount: 1
+
+# -- How many old ReplicaSets to retain.
+revisionHistoryLimit: 10
+
+image:
+  # -- Container image registry (leave blank to use Docker Hub).
+  registry: ""
+  # -- Container image repository.
+  repository: ghcr.io/niuulabs/mimir
+  # -- Image tag. Defaults to Chart.appVersion.
+  tag: ""
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+
+# -- Image pull secrets for private registries.
+imagePullSecrets: []
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the full release name.
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create a ServiceAccount for the Mímir pods.
+  create: true
+  # -- ServiceAccount name. Auto-generated when blank.
+  name: ""
+  # -- Annotations to add to the ServiceAccount.
+  annotations: {}
+
+# -- Annotations added to every pod.
+podAnnotations: {}
+
+# -- Additional pod labels.
+podLabels: {}
+
+# -- Pod-level security context.
+podSecurityContext: {}
+
+# -- Container-level security context.
+securityContext: {}
+
+# -- Optional priority class name.
+priorityClassName: ""
+
+# -- Seconds the pod has to shut down gracefully.
+terminationGracePeriodSeconds: 30
+
+service:
+  # -- Service type.
+  type: ClusterIP
+  # -- Port exposed by the Service.
+  port: 80
+  # -- Port the container listens on.
+  targetPort: 7477
+  # -- Additional service annotations.
+  annotations: {}
+
+# -- Container resource requests and limits.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+autoscaling:
+  # -- Enable HorizontalPodAutoscaler.
+  # Disable when using a single-writer PVC (ReadWriteOnce).
+  enabled: false
+  # -- Minimum number of replicas.
+  minReplicas: 1
+  # -- Maximum number of replicas.
+  maxReplicas: 3
+  # -- Target CPU utilisation percentage (null to disable).
+  targetCPUUtilizationPercentage: 70
+  # -- Target memory utilisation percentage (null to disable).
+  targetMemoryUtilizationPercentage: null
+
+podDisruptionBudget:
+  # -- Enable PodDisruptionBudget.
+  enabled: true
+  # -- Minimum number of pods that must be available.
+  minAvailable: 0
+  # -- Maximum pods that can be unavailable (alternative to minAvailable).
+  maxUnavailable: null
+
+# -- Node selector for pod assignment.
+nodeSelector: {}
+# -- Tolerations for pod scheduling.
+tolerations: []
+# -- Affinity rules for pod scheduling.
+affinity: {}
+# -- Topology spread constraints.
+topologySpreadConstraints: []
+
+# -- Extra environment variables injected into the container.
+extraEnv: []
+# -- Extra envFrom sources (ConfigMaps / Secrets).
+envFrom: []
+# -- Extra volume mounts added to the container.
+extraVolumeMounts: []
+# -- Extra volumes added to the pod spec.
+extraVolumes: []
+# -- Annotations added to the Deployment resource.
+deploymentAnnotations: {}
+
+# ---------------------------------------------------------------------------
+# Persistent storage for the Mímir wiki
+# ---------------------------------------------------------------------------
+persistence:
+  # -- Enable a PersistentVolumeClaim for the wiki data.
+  enabled: true
+  # -- Use an existing PVC instead of creating one.
+  existingClaim: ""
+  # -- Storage class name. Leave empty to use the cluster default.
+  storageClass: ""
+  # -- Access mode. Use ReadWriteMany if running multiple replicas.
+  accessMode: ReadWriteOnce
+  # -- Storage size.
+  size: 5Gi
+  # -- Additional annotations for the PVC.
+  annotations: {}
+
+# ---------------------------------------------------------------------------
+# Mímir service configuration
+# ---------------------------------------------------------------------------
+config:
+  # -- Instance name (used in Sleipnir announce events).
+  name: "local"
+  # -- Instance role: shared, local, or domain.
+  role: "local"
+  # -- Public URL to announce on Sleipnir. Empty = no announcement.
+  announceUrl: ""
+  # -- Category filter for domain-scoped Mímirs. Empty = all categories.
+  categories: []
+  # -- Path inside the container where the wiki is stored.
+  dataPath: "/data/mimir"
+  # -- HTTP port the service listens on.
+  port: 7477
+  # -- Log level.
+  logLevel: "info"
