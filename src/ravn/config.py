@@ -923,12 +923,156 @@ class PlatformToolsConfig(BaseModel):
     timeout: float = Field(default=30.0)
 
 
+class DiscordChannelConfig(BaseModel):
+    """Discord bot gateway configuration."""
+
+    enabled: bool = Field(default=False)
+    token_env: str = Field(
+        default="DISCORD_BOT_TOKEN",
+        description="Environment variable name containing the Discord bot token.",
+    )
+    guild_id: str = Field(
+        default="",
+        description="Default guild (server) ID; used when chat_id has no guild prefix.",
+    )
+    command_prefix: str = Field(
+        default="/",
+        description="Prefix character for slash commands recognised by the bot.",
+    )
+    message_max_chars: int = Field(
+        default=2000,
+        description="Maximum characters per outbound Discord message (API limit).",
+    )
+    retry_delay: float = Field(
+        default=5.0,
+        description="Seconds to wait after a gateway error before reconnecting.",
+    )
+    gateway_url: str = Field(
+        default="wss://gateway.discord.gg/?v=10&encoding=json",
+        description="Discord Gateway WebSocket URL.",
+    )
+    api_base: str = Field(
+        default="https://discord.com/api/v10",
+        description="Discord REST API base URL.",
+    )
+
+
+class SlackChannelConfig(BaseModel):
+    """Slack bot gateway configuration."""
+
+    enabled: bool = Field(default=False)
+    bot_token_env: str = Field(
+        default="SLACK_BOT_TOKEN",
+        description="Environment variable name containing the Slack bot token (xoxb-).",
+    )
+    app_token_env: str = Field(
+        default="SLACK_APP_TOKEN",
+        description="Environment variable name for Socket Mode app token (xapp-).",
+    )
+    poll_interval: float = Field(
+        default=2.0,
+        description="Seconds between conversations.history polls (fallback polling mode).",
+    )
+    message_max_chars: int = Field(
+        default=3000,
+        description="Maximum characters per outbound Slack message before truncation.",
+    )
+    retry_delay: float = Field(
+        default=5.0,
+        description="Seconds to wait after an API error before retrying.",
+    )
+    api_base: str = Field(
+        default="https://slack.com/api",
+        description="Slack Web API base URL.",
+    )
+
+
+class MatrixChannelConfig(BaseModel):
+    """Matrix client-server gateway configuration."""
+
+    enabled: bool = Field(default=False)
+    homeserver: str = Field(
+        default="https://matrix.niuu.world",
+        description="Matrix homeserver base URL.",
+    )
+    user_id_env: str = Field(
+        default="MATRIX_USER_ID",
+        description="Environment variable name containing the Matrix user ID (@user:server).",
+    )
+    access_token_env: str = Field(
+        default="MATRIX_ACCESS_TOKEN",
+        description="Environment variable name containing the Matrix access token.",
+    )
+    e2e: bool = Field(
+        default=False,
+        description="Enable end-to-end encryption (requires libolm; not yet implemented).",
+    )
+    sync_timeout_ms: int = Field(
+        default=30000,
+        description="Long-poll timeout in milliseconds for the /sync endpoint.",
+    )
+    retry_delay: float = Field(
+        default=5.0,
+        description="Seconds to wait after a sync error before retrying.",
+    )
+    message_max_chars: int = Field(
+        default=32000,
+        description="Maximum characters per outbound Matrix message.",
+    )
+
+
+class WhatsAppChannelConfig(BaseModel):
+    """WhatsApp gateway configuration (Meta Cloud API)."""
+
+    enabled: bool = Field(default=False)
+    mode: str = Field(
+        default="business_api",
+        description="Adapter mode: 'business_api' (Meta Cloud) or 'local_bridge' (stub).",
+    )
+    api_key_env: str = Field(
+        default="WA_API_KEY",
+        description="Environment variable name containing the Meta API key (bearer token).",
+    )
+    phone_number_id_env: str = Field(
+        default="WA_PHONE_NUMBER_ID",
+        description="Environment variable name containing the WhatsApp phone number ID.",
+    )
+    webhook_verify_token_env: str = Field(
+        default="WA_WEBHOOK_VERIFY_TOKEN",
+        description="Environment variable name for Meta webhook verification token.",
+    )
+    webhook_host: str = Field(
+        default="0.0.0.0",
+        description="Host to bind the inbound webhook HTTP listener.",
+    )
+    webhook_port: int = Field(
+        default=7478,
+        description="Port for the inbound webhook HTTP listener.",
+    )
+    retry_delay: float = Field(
+        default=5.0,
+        description="Seconds to wait after an API error before retrying.",
+    )
+    message_max_chars: int = Field(
+        default=4096,
+        description="Maximum characters per outbound WhatsApp message.",
+    )
+    api_base: str = Field(
+        default="https://graph.facebook.com/v18.0",
+        description="Meta Graph API base URL.",
+    )
+
+
 class GatewayChannelsConfig(BaseModel):
     """Per-channel gateway configuration."""
 
     telegram: TelegramChannelConfig = Field(default_factory=TelegramChannelConfig)
     http: HttpChannelConfig = Field(default_factory=HttpChannelConfig)
     skuld: SkuldChannelConfig = Field(default_factory=SkuldChannelConfig)
+    discord: DiscordChannelConfig = Field(default_factory=DiscordChannelConfig)
+    slack: SlackChannelConfig = Field(default_factory=SlackChannelConfig)
+    matrix: MatrixChannelConfig = Field(default_factory=MatrixChannelConfig)
+    whatsapp: WhatsAppChannelConfig = Field(default_factory=WhatsAppChannelConfig)
 
 
 class GatewayConfig(BaseModel):
