@@ -2131,6 +2131,65 @@ def _build_discovery_adapter(name: str, settings: Settings, identity: Any) -> An
     return cls(**kwargs)
 
 
+@app.command()
+def tui(
+    connect: list[str] = typer.Option(
+        [],
+        "--connect",
+        "-c",
+        help="Connect to a Ravn daemon at host:port. May be repeated.",
+    ),
+    discover: bool = typer.Option(
+        False,
+        "--discover",
+        help="Auto-discover Ravn daemons via mDNS.",
+    ),
+    layout: str = typer.Option(
+        "",
+        "--layout",
+        "-l",
+        help="Start with a named layout preset (flokk, cascade, mimir, compare, broadcast).",
+    ),
+) -> None:
+    """Launch the Ravn TUI — terminal operator interface for Flokk management.
+
+    \b
+    Examples:
+      ravn tui                                   — auto-discover via mDNS
+      ravn tui --connect tanngrisnir.gimle:7477  — explicit target
+      ravn tui --connect t1:7477 --connect t2:7477 --connect t3:7477
+      ravn tui --layout cascade
+    """
+    try:
+        from ravn.tui.app import RavnTUI
+    except ImportError as exc:
+        typer.echo(
+            f"Textual is required for the TUI: pip install ravn[tui]\n{exc}",
+            err=True,
+        )
+        raise typer.Exit(1) from exc
+
+    parsed_connections: list[tuple[str, int]] = []
+    for spec in connect:
+        if ":" not in spec:
+            typer.echo(f"Invalid --connect value {spec!r} (expected host:port)", err=True)
+            raise typer.Exit(1)
+        host, port_str = spec.rsplit(":", 1)
+        try:
+            port = int(port_str)
+        except ValueError:
+            typer.echo(f"Invalid port in {spec!r}", err=True)
+            raise typer.Exit(1)
+        parsed_connections.append((host, port))
+
+    ravn_tui = RavnTUI(
+        connections=parsed_connections,
+        discover=discover or not parsed_connections,
+        layout_name=layout or None,
+    )
+    ravn_tui.run()
+
+
 def main() -> None:
     app()
 
