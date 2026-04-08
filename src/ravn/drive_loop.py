@@ -301,6 +301,7 @@ class DriveLoop:
         try:
             await agent.run_turn(prompt)  # type: ignore[attr-defined]
             success = True
+            self._save_task_output(task, channel)
         except asyncio.CancelledError:
             logger.info("drive_loop: task %s cancelled mid-turn", task.task_id)
             self._result_store.set_status(task.task_id, "cancelled")
@@ -336,6 +337,19 @@ class DriveLoop:
 
         if channel.surface_triggered:
             await self._re_deliver_surface(task, channel.response_text)
+
+    def _save_task_output(self, task: AgentTask, channel: ChannelPort) -> None:
+        """Persist agent response to ``task.output_path`` when set (cron tasks)."""
+        if task.output_path is None:
+            return
+        text = getattr(channel, "response_text", "")
+        try:
+            task.output_path.parent.mkdir(parents=True, exist_ok=True)
+            header = f"# {task.title}\n\ntriggered_by: {task.triggered_by}\n\n"
+            task.output_path.write_text(header + text)
+            logger.debug("drive_loop: saved task output to %s", task.output_path)
+        except Exception as exc:
+            logger.warning("drive_loop: failed to save task output: %s", exc)
 
     async def _re_deliver_surface(self, task: AgentTask, text: str) -> None:
         """Re-publish a [SURFACE]-prefixed response to Sleipnir at AMBIENT urgency."""
@@ -406,6 +420,7 @@ class DriveLoop:
                         "priority": task.priority,
                         "max_tokens": task.max_tokens,
                         "deadline": task.deadline.isoformat() if task.deadline else None,
+                        "output_path": str(task.output_path) if task.output_path else None,
                         "created_at": task.created_at.isoformat(),
                     }
                 )
@@ -432,6 +447,7 @@ class DriveLoop:
                     if rec.get("created_at")
                     else datetime.now(UTC)
                 )
+                output_path_str = rec.get("output_path")
                 task = AgentTask(
                     task_id=rec["task_id"],
                     title=rec["title"],
@@ -442,6 +458,7 @@ class DriveLoop:
                     priority=rec.get("priority", 10),
                     max_tokens=rec.get("max_tokens"),
                     deadline=deadline,
+                    output_path=Path(output_path_str) if output_path_str else None,
                     created_at=created_at,
                 )
                 # Check deadline before restoring

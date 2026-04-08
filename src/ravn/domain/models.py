@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID, uuid4
 
@@ -356,6 +357,7 @@ class AgentTask:
     priority: int = 10  # lower = higher priority
     max_tokens: int | None = None
     deadline: datetime | None = None  # task discarded if queue time exceeds this
+    output_path: Path | None = None  # where to save task output (cron tasks)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     session_id: str = field(init=False)
 
