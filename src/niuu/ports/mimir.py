@@ -105,6 +105,11 @@ class MimirPort(ABC):
         ...
 
     @abstractmethod
+    async def read_source(self, source_id: str) -> MimirSource | None:
+        """Return the full raw source by ID, or None if not found."""
+        ...
+
+    @abstractmethod
     async def list_sources(self, *, unprocessed_only: bool = False) -> list[MimirSourceMeta]:
         """List ingested raw sources.
 

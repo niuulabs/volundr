@@ -1398,6 +1398,22 @@ class MimirSourceTriggerConfig(BaseModel):
         default="mimir-curator",
         description="Persona to use for synthesis tasks.",
     )
+    max_tokens: int | None = Field(
+        default=4096,
+        description=(
+            "Maximum output tokens for synthesis tasks. "
+            "Set lower than the LLM default to leave room for large source documents "
+            "in the context window. None uses the LLM/settings default."
+        ),
+    )
+    retry_after_seconds: int = Field(
+        default=600,
+        description=(
+            "Seconds to wait before re-enqueuing a source whose previous synthesis "
+            "task failed or did not complete. Prevents infinite retry storms while "
+            "still recovering from transient failures."
+        ),
+    )
 
 
 class MimirStalenessTriggerConfig(BaseModel):
@@ -1418,6 +1434,13 @@ class MimirStalenessTriggerConfig(BaseModel):
     persona: str = Field(
         default="mimir-curator",
         description="Persona to use for refresh tasks.",
+    )
+    max_tokens: int | None = Field(
+        default=4096,
+        description=(
+            "Maximum output tokens for staleness refresh tasks. "
+            "None uses the LLM/settings default."
+        ),
     )
 
 

@@ -43,7 +43,9 @@ class MimirSourceTrigger:
     def __init__(self, mimir: MimirPort, config: MimirSourceTriggerConfig) -> None:
         self._mimir = mimir
         self._config = config
-        self._enqueued: set[str] = set()
+        # source_id → time it was enqueued; cleared after retry_after_seconds
+        # so failed tasks are automatically retried on the next eligible poll.
+        self._enqueued: dict[str, float] = {}
 
     @property
     def name(self) -> str:
@@ -74,11 +76,23 @@ class MimirSourceTrigger:
         self,
         enqueue: Callable[[AgentTask], Awaitable[None]],
     ) -> None:
+        now = time.monotonic()
+        retry_after = self._config.retry_after_seconds
+
         sources = await self._mimir.list_sources(unprocessed_only=True)
         for src in sources:
-            if src.source_id in self._enqueued:
+            enqueued_at = self._enqueued.get(src.source_id)
+            if enqueued_at is not None and (now - enqueued_at) < retry_after:
                 continue
-            self._enqueued.add(src.source_id)
+            self._enqueued[src.source_id] = now
+
+            # Fetch full content so the agent can synthesise without filesystem access
+            full_source = await self._mimir.read_source(src.source_id)
+            content_section = (
+                f"\n\n## Source content\n\n{full_source.content}"
+                if full_source is not None
+                else "\n\n(Content unavailable — check raw/ directory manually.)"
+            )
 
             context = (
                 f"A new raw source has been ingested into Mímir and requires synthesis.\n\n"
@@ -88,10 +102,11 @@ class MimirSourceTrigger:
                 f"Ingested: {src.ingested_at.isoformat()}\n\n"
                 f"Follow the synthesis workflow in MIMIR.md:\n"
                 f"1. Call mimir_query on the source topic to check for existing pages.\n"
-                f"2. Call mimir_ingest is already done (source_id: {src.source_id}).\n"
-                f"3. Read the source via the raw/ directory and synthesise wiki pages.\n"
+                f"2. Ingest is already done (source_id: {src.source_id}).\n"
+                f"3. Read the source content below and synthesise wiki pages.\n"
                 f"4. Optionally run targeted web searches if recency matters.\n"
                 f"5. Write pages with mimir_write, cross-link, update log."
+                f"{content_section}"
             )
 
             task_id = f"task_{int(time.time() * 1000):x}_{src.source_id[:8]}"
@@ -103,6 +118,7 @@ class MimirSourceTrigger:
                 output_mode=OutputMode.SILENT,
                 persona=self._config.persona,
                 priority=8,
+                max_tokens=self._config.max_tokens,
             )
             logger.info(
                 "MimirSourceTrigger: enqueuing synthesis for source %r (%s)",

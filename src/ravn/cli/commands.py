@@ -843,11 +843,14 @@ def _build_agent(
     # Apply persona overrides
     system_prompt = settings.agent.system_prompt
     max_iterations = settings.agent.max_iterations
+    max_tokens = settings.effective_max_tokens()
     if persona_config is not None:
         if persona_config.system_prompt_template:
             system_prompt = persona_config.system_prompt_template
         if persona_config.iteration_budget:
             max_iterations = persona_config.iteration_budget
+        if persona_config.llm.max_tokens:
+            max_tokens = persona_config.llm.max_tokens
 
     cp_cfg = settings.checkpoint
     agent = RavnAgent(
@@ -857,7 +860,7 @@ def _build_agent(
         permission=permission,
         system_prompt=system_prompt,
         model=settings.effective_model(),
-        max_tokens=settings.effective_max_tokens(),
+        max_tokens=max_tokens,
         max_iterations=max_iterations,
         session=session,
         pre_tool_hooks=pre_hooks or None,
@@ -2239,7 +2242,7 @@ def tui(
     connect: list[str] = typer.Option(
         [],
         "--connect",
-        "-c",
+        "-C",
         help="Connect to a Ravn daemon at host:port. May be repeated.",
     ),
     discover: bool = typer.Option(
@@ -2253,6 +2256,12 @@ def tui(
         "-l",
         help="Start with a named layout preset (flokk, cascade, mimir, compare, broadcast).",
     ),
+    config: str = typer.Option(
+        "",
+        "--config",
+        "-c",
+        help="Path to ravn config YAML.",
+    ),
 ) -> None:
     """Launch the Ravn TUI — terminal operator interface for Flokk management.
 
@@ -2263,6 +2272,9 @@ def tui(
       ravn tui --connect t1:7477 --connect t2:7477 --connect t3:7477
       ravn tui --layout cascade
     """
+    if config:
+        os.environ["RAVN_CONFIG"] = config
+
     try:
         from ravn.tui.app import RavnTUI
     except ImportError as exc:

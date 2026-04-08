@@ -162,6 +162,17 @@ class CompositeMimirAdapter(MimirPort):
 
         return results
 
+    async def read_source(self, source_id: str) -> MimirSource | None:
+        """Return raw source from the first mount that has it."""
+        for mount in self._mounts:
+            try:
+                source = await mount.port.read_source(source_id)
+                if source is not None:
+                    return source
+            except Exception as exc:
+                logger.debug("composite mimir: read_source failed on %r: %s", mount.name, exc)
+        return None
+
     async def list_sources(self, *, unprocessed_only: bool = False) -> list[MimirSourceMeta]:
         """List sources from all mounts, de-duplicated by source_id.
 

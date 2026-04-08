@@ -102,7 +102,7 @@ class PaneWidget(Widget):
         self.mount(self._build_view())
 
     def watch_focused_pane(self, focused: bool) -> None:
-        self.toggle_class("-focused", focused)
+        self.set_class(focused, "-focused")
 
     def on_focus(self) -> None:
         self.focused_pane = True

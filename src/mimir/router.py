@@ -128,6 +128,16 @@ class SourceMetaResponse(BaseModel):
     source_type: str
 
 
+class SourceResponse(BaseModel):
+    source_id: str
+    title: str
+    content: str
+    source_type: str
+    ingested_at: str
+    content_hash: str
+    origin_url: str | None
+
+
 # ---------------------------------------------------------------------------
 # Auth dependency (bearer token or SPIFFE — pass-through for now)
 # ---------------------------------------------------------------------------
@@ -251,6 +261,21 @@ class MimirRouter:
                             edges.append(GraphEdge(source=src, target=tgt))
 
             return GraphResponse(nodes=nodes, edges=edges)
+
+        @router.get("/source", response_model=SourceResponse)
+        async def read_source(source_id: str = Query()) -> SourceResponse:
+            source = await adapter.read_source(source_id)
+            if source is None:
+                raise HTTPException(status_code=404, detail=f"Source not found: {source_id}")
+            return SourceResponse(
+                source_id=source.source_id,
+                title=source.title,
+                content=source.content,
+                source_type=source.source_type,
+                ingested_at=source.ingested_at.isoformat(),
+                content_hash=source.content_hash,
+                origin_url=source.origin_url,
+            )
 
         @router.get("/sources", response_model=list[SourceMetaResponse])
         async def list_sources(

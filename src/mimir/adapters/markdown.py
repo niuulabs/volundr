@@ -368,6 +368,10 @@ class MarkdownMimirAdapter(MimirPort):
         """List all wiki pages, optionally filtered by category."""
         return [meta for meta, _ in self._list_pages_with_content(category)]
 
+    async def read_source(self, source_id: str) -> MimirSource | None:
+        """Return the full raw source by ID, or None if not found."""
+        return self.read_raw_source(source_id)
+
     async def list_sources(self, *, unprocessed_only: bool = False) -> list[MimirSourceMeta]:
         """List all ingested raw sources.
 

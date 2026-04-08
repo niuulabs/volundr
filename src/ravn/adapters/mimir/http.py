@@ -174,6 +174,24 @@ class HttpMimirAdapter(MimirPort):
             pages_checked=data.get("pages_checked", 0),
         )
 
+    async def read_source(self, source_id: str) -> MimirSource | None:
+        """GET /mimir/source?source_id=... — return full raw source."""
+        client = self._get_client()
+        response = await client.get("/mimir/source", params={"source_id": source_id})
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        data = response.json()
+        return MimirSource(
+            source_id=data["source_id"],
+            title=data["title"],
+            content=data["content"],
+            source_type=data["source_type"],
+            origin_url=data.get("origin_url"),
+            content_hash=data["content_hash"],
+            ingested_at=datetime.fromisoformat(data["ingested_at"]),
+        )
+
     async def list_sources(self, *, unprocessed_only: bool = False) -> list[MimirSourceMeta]:
         """GET /mimir/sources — list raw sources, optionally unprocessed only."""
         client = self._get_client()

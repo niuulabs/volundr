@@ -47,6 +47,7 @@ class PersonaLLMConfig:
 
     primary_alias: str = ""
     thinking_enabled: bool = False
+    max_tokens: int = 0  # 0 = use settings default
 
 
 @dataclass
@@ -252,6 +253,7 @@ class PersonaLoader:
         llm = PersonaLLMConfig(
             primary_alias=str(llm_raw.get("primary_alias", "")),
             thinking_enabled=_safe_bool(llm_raw.get("thinking_enabled", False)),
+            max_tokens=_safe_int(llm_raw.get("max_tokens", 0)),
         )
 
         allowed = raw.get("allowed_tools", [])
