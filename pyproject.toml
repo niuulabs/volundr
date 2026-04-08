@@ -54,6 +54,9 @@ otel = [
 encryption = [
     "cryptography>=42.0",
 ]
+browser = [
+    "playwright>=1.44",
+]
 infra = [
     "redis>=5.0",
 ]
@@ -117,6 +120,7 @@ markers = [
     "broker: tests that require real message broker services (NATS, RabbitMQ, Redis)",
     "ravn: tests for the Ravn agent module",
     "e2e: end-to-end tests for full agent conversation flows",
+    "browser: tests that require a real browser (Playwright + Chromium)",
 ]
 
 [tool.ruff]
