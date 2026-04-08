@@ -13,7 +13,7 @@ import pytest
 
 from ravn.adapters.channels.silent import SilentChannel
 from ravn.adapters.triggers.condition_poll import ConditionPollTrigger
-from ravn.adapters.triggers.cron import CronJob, CronTrigger, _cron_matches, _parse_schedule
+from ravn.adapters.triggers.cron import CronJob, CronTrigger, _cron_matches, parse_schedule
 from ravn.config import InitiativeConfig, Settings, TriggerConfig
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.models import AgentTask, OutputMode
@@ -296,33 +296,33 @@ async def test_drive_loop_surface_escalation_logged(
 # ---------------------------------------------------------------------------
 
 
-def test_parse_schedule_cron_expression() -> None:
-    result = _parse_schedule("0 8 * * *")
+def testparse_schedule_cron_expression() -> None:
+    result = parse_schedule("0 8 * * *")
     assert result == "0 8 * * *"
 
 
-def test_parse_schedule_natural_every_minutes() -> None:
-    result = _parse_schedule("every 30m")
+def testparse_schedule_natural_every_minutes() -> None:
+    result = parse_schedule("every 30m")
     assert result == "every:1800"
 
 
-def test_parse_schedule_natural_every_hours() -> None:
-    result = _parse_schedule("every 2h")
+def testparse_schedule_natural_every_hours() -> None:
+    result = parse_schedule("every 2h")
     assert result == "every:7200"
 
 
-def test_parse_schedule_natural_every_seconds() -> None:
-    result = _parse_schedule("every 5s")
+def testparse_schedule_natural_every_seconds() -> None:
+    result = parse_schedule("every 5s")
     assert result == "every:5"
 
 
-def test_parse_schedule_daily_at() -> None:
-    result = _parse_schedule("daily at 08:00")
+def testparse_schedule_daily_at() -> None:
+    result = parse_schedule("daily at 08:00")
     assert result == "0 8 * * *"
 
 
-def test_parse_schedule_iso_timestamp() -> None:
-    result = _parse_schedule("2026-04-07T08:00:00")
+def testparse_schedule_iso_timestamp() -> None:
+    result = parse_schedule("2026-04-07T08:00:00")
     assert result.startswith("once:")
 
 
