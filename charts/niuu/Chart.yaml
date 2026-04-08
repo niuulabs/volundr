@@ -31,3 +31,7 @@ dependencies:
     version: ">=0.0.0-0"
     repository: "file://../bifrost"
     condition: bifrost.enabled
+  - name: mimir
+    version: ">=0.0.0-0"
+    repository: "file://../mimir"
+    condition: mimir.enabled

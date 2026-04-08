@@ -34,3 +34,6 @@ niuu-shared:
 
 bifrost:
   enabled: true
+
+mimir:
+  enabled: true
