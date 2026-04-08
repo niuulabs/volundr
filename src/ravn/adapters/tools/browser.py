@@ -20,6 +20,7 @@ import os
 from typing import Any
 from urllib.parse import urlparse
 
+from ravn.adapters.tools._url_security import check_ssrf
 from ravn.domain.models import ToolResult
 from ravn.ports.browser import BrowserPort, PageSummary
 from ravn.ports.tool import ToolPort
@@ -30,20 +31,17 @@ logger = logging.getLogger(__name__)
 # URL security
 # ---------------------------------------------------------------------------
 
-_DEFAULT_BLOCKED_ORIGINS: list[str] = []
-_DEFAULT_ALLOWED_ORIGINS: list[str] = []
-
 # Schemes permitted by browser_navigate.
 _ALLOWED_SCHEMES = {"http", "https"}
 
-# JS expressions that are always considered safe (read-only).
-_SAFE_JS_PATTERNS: list[str] = [
+# JS expressions that are always considered safe (read-only exact matches).
+_SAFE_JS_PATTERNS: frozenset[str] = frozenset({
     "document.title",
     "document.URL",
     "window.location",
     "document.body.innerText",
     "document.readyState",
-]
+})
 
 
 def _validate_browser_url(
@@ -57,6 +55,7 @@ def _validate_browser_url(
     1. Scheme must be http or https.
     2. URL must not match any ``blocked_origins`` glob pattern.
     3. If ``allowed_origins`` is non-empty, URL must match at least one pattern.
+    4. Hostname must not resolve to a private/reserved IP range (SSRF protection).
     """
     parsed = urlparse(url)
     if parsed.scheme not in _ALLOWED_SCHEMES:
@@ -77,13 +76,12 @@ def _validate_browser_url(
                 f"Allowed: {allowed_origins}"
             )
 
-    return None
+    return check_ssrf(hostname)
 
 
 def _is_safe_js(js: str) -> bool:
-    """Return True if the JS expression is in the read-only safe list."""
-    stripped = js.strip()
-    return any(stripped.startswith(p) for p in _SAFE_JS_PATTERNS)
+    """Return True if the JS expression exactly matches a read-only safe expression."""
+    return js.strip() in _SAFE_JS_PATTERNS
 
 
 # ---------------------------------------------------------------------------
@@ -135,8 +133,8 @@ class _BrowserToolBase(ToolPort):
     ) -> None:
         self._session_manager = session_manager
         self._task_id = task_id
-        self._allowed_origins: list[str] = allowed_origins or _DEFAULT_ALLOWED_ORIGINS
-        self._blocked_origins: list[str] = blocked_origins or _DEFAULT_BLOCKED_ORIGINS
+        self._allowed_origins: list[str] = allowed_origins if allowed_origins is not None else []
+        self._blocked_origins: list[str] = blocked_origins if blocked_origins is not None else []
         self._full_js = full_js
 
     @property

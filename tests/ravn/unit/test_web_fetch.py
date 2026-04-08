@@ -6,10 +6,10 @@ import httpx
 import pytest
 import respx
 
+from ravn.adapters.tools._url_security import is_private_ip as _is_private_ip
 from ravn.adapters.tools.web_fetch import (
     _INJECTION_WARNING,
     WebFetchTool,
-    _is_private_ip,
     _validate_url,
     extract_text,
     scan_for_injection,

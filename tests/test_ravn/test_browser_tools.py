@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ravn.adapters.browser.local import _ax_node_to_line, _serialise_ax_tree
+from ravn.adapters.browser._base import _ax_node_to_line, _serialise_ax_tree
 from ravn.adapters.tools.browser import (
     BrowserClickTool,
     BrowserEvaluateTool,
@@ -72,6 +72,18 @@ def make_session_manager(browser: AsyncMock, task_id: str = "task-1") -> Browser
 
 
 class TestValidateBrowserUrl:
+    @pytest.fixture(autouse=True)
+    def _mock_dns(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Patch socket.getaddrinfo so URL validation tests don't need real DNS."""
+
+        def _fake_getaddrinfo(host: str, port: object, *args: object, **kwargs: object) -> list:
+            # Return a benign public IP for any hostname lookup.
+            return [(2, 1, 6, "", ("93.184.216.34", 0))]
+
+        monkeypatch.setattr(
+            "ravn.adapters.tools._url_security.socket.getaddrinfo", _fake_getaddrinfo
+        )
+
     def test_http_allowed(self) -> None:
         assert _validate_browser_url("http://example.com", [], []) is None
 
@@ -136,6 +148,40 @@ class TestIsSafeJs:
 
     def test_delete_call_not_safe(self) -> None:
         assert _is_safe_js("delete window.alert") is False
+
+    def test_startswith_bypass_not_safe(self) -> None:
+        # Exact-match guard: chaining after a safe prefix must be rejected.
+        assert _is_safe_js("document.title; fetch('https://evil.com')") is False
+
+
+# ---------------------------------------------------------------------------
+# SSRF protection
+# ---------------------------------------------------------------------------
+
+
+class TestSsrfProtection:
+    """Tests for IP-based SSRF blocking in _validate_browser_url.
+
+    No DNS mock needed — loopback/private IPs are resolved by getaddrinfo
+    without any network activity.
+    """
+
+    def test_loopback_ip_blocked(self) -> None:
+        err = _validate_browser_url("http://127.0.0.1", [], [])
+        assert err is not None
+        assert "private" in err.lower() or "reserved" in err.lower()
+
+    def test_private_class_a_blocked(self) -> None:
+        err = _validate_browser_url("http://10.0.0.1", [], [])
+        assert err is not None
+
+    def test_ipv6_loopback_blocked(self) -> None:
+        err = _validate_browser_url("http://[::1]", [], [])
+        assert err is not None
+
+    def test_link_local_blocked(self) -> None:
+        err = _validate_browser_url("http://169.254.1.1", [], [])
+        assert err is not None
 
 
 # ---------------------------------------------------------------------------
