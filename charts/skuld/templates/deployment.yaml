@@ -77,23 +77,16 @@ spec:
               mkdir -p "$HOME_DIR/.config"
 
               # Ensure the non-root user owns the home directory tree.
-              # Only run recursive chown if the root directory doesn't already
-              # have the correct ownership — avoids expensive traversal on
-              # large home volumes where ownership is already correct.
-              CURRENT_OWNER=$(stat -c '%u:%g' "$HOME_DIR" 2>/dev/null || echo "unknown")
-              if [ "$CURRENT_OWNER" != "$TARGET_UID:$TARGET_GID" ]; then
-                echo "Ownership mismatch ($CURRENT_OWNER != $TARGET_UID:$TARGET_GID), running chown -R"
-                chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR" 2>/tmp/chown.err || true
-                if [ -s /tmp/chown.err ]; then
-                  grep -Ev 'Invalid argument|No such file or directory|Stale file handle' /tmp/chown.err >&2 || true
-                  if grep -qEv 'Invalid argument|No such file or directory|Stale file handle' /tmp/chown.err; then
-                    echo "ERROR: chown encountered unexpected errors" >&2
-                    cat /tmp/chown.err >&2
-                    exit 1
-                  fi
+              # Ignore transient errors from stale sockets/files on hostPath
+              # volumes that vanish mid-traversal.
+              chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR" 2>/tmp/chown.err || true
+              if [ -s /tmp/chown.err ]; then
+                grep -Ev 'Invalid argument|No such file or directory|Stale file handle' /tmp/chown.err >&2 || true
+                if grep -qEv 'Invalid argument|No such file or directory|Stale file handle' /tmp/chown.err; then
+                  echo "ERROR: chown encountered unexpected errors" >&2
+                  cat /tmp/chown.err >&2
+                  exit 1
                 fi
-              else
-                echo "Ownership already correct ($CURRENT_OWNER), skipping chown -R"
               fi
 
               # Symlink each credential file from the K8s secret into $DEST_DIR/
@@ -253,10 +246,13 @@ spec:
             {{- if .Values.homeVolume.enabled }}
             - name: HOME
               value: {{ .Values.homeVolume.mountPath | quote }}
-            - name: CLAUDE_CONFIG_DIR
-              value: "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}"
+            {{- if eq (toString .Values.broker.cliType) "codex" }}
             - name: CODEX_HOME
               value: "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}"
+            {{- else }}
+            - name: CLAUDE_CONFIG_DIR
+              value: "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}"
+            {{- end }}
             {{- end }}
             {{- range .Values.envSecrets }}
             - name: {{ .envVar }}

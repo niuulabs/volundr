@@ -249,7 +249,7 @@ class TestCommitSagaIdempotency:
                 confidence=0.5,
                 created_at=datetime.now(UTC),
                 base_branch="dev",
-                owner_id="dev-user",
+                owner_id="default",
             )
         )
         resp = client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
@@ -335,7 +335,7 @@ class TestCommitSagaOwnership:
         self, client: TestClient, saga_repo: MockSagaRepo
     ) -> None:
         client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
-        assert saga_repo.sagas[0].owner_id == "dev-user"
+        assert saga_repo.sagas[0].owner_id == "default"
 
 
 class TestCommitSagaTrackerFailure:

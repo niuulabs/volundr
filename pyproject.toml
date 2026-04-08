@@ -18,30 +18,11 @@ dependencies = [
     "uvicorn>=0.27",
     "websockets>=12.0",
     "python-on-whales>=0.70",
-    "gitpython>=3.1",
-    "msgpack>=1.0",
-    "typer>=0.24.1",
-    "respx>=0.21",
 ]
 
 [project.optional-dependencies]
-nng = [
-    "pynng>=0.9.0",
-]
-nats = [
-    "nats-py>=2.3",
-]
-test = [
-    "pytest>=9.0.2",
-    "pytest-asyncio>=1.3.0",
-    "pytest-cov>=7.1.0",
-    "respx>=0.22.0",
-]
 rabbitmq = [
     "aio-pika>=9.0",
-]
-redis = [
-    "redis[hiredis]>=5.0",
 ]
 k8s = [
     "kubernetes-asyncio>=30.0",
@@ -54,48 +35,20 @@ otel = [
 encryption = [
     "cryptography>=42.0",
 ]
-browser = [
-    "playwright>=1.44",
-]
-infra = [
-    "redis>=5.0",
-]
-cli = [
-    "typer>=0.12",
-    "textual>=0.79",
-    "nuitka>=2.1",
-    "ordered-set>=4.1",
-    "patchelf>=0.14; sys_platform == 'linux'",
-]
 dev = [
-    "pytest>=9.0.2",
-    "pytest-asyncio>=1.3.0",
-    "pytest-cov>=7.1.0",
-    "ruff>=0.8,<0.16",
-    "respx>=0.22.0",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.0",
+    "ruff>=0.1",
+    "respx>=0.21",
     "cryptography>=42.0",
-    "textual>=0.79",
-    "typer>=0.24.1",
-    "nats-py>=2.3",
 ]
 
 [project.scripts]
-niuu = "cli.main:main"
 volundr = "volundr.main:main"
 skuld = "skuld.broker:main"
-bifrost = "bifrost.__main__:main"
+bifrost = "volundr.bifrost.__main__:main"
 tyr = "tyr.main:main"
-ravn = "ravn.cli.commands:app"
-ravn-approvals = "ravn.cli.commands:approvals_main"
-ravn-gateway = "ravn.cli.commands:gateway_main"
-ravn-evolve = "ravn.cli.commands:evolve_main"
-
-[project.entry-points."niuu.plugins"]
-niuu = "niuu.plugin:NiuuPlugin"
-volundr = "volundr.plugin:VolundrPlugin"
-tyr = "tyr.plugin:TyrPlugin"
-ravn = "ravn.plugin:RavnPlugin"
-bifrost = "bifrost.plugin:BifrostPlugin"
 
 [project.urls]
 Homepage = "https://github.com/niuulabs/volundr"
@@ -108,20 +61,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cli", "src/niuu", "src/volundr", "src/tyr", "src/skuld", "src/sleipnir", "src/ravn", "src/bifrost"]
+packages = ["src/niuu", "src/volundr", "src/tyr", "src/skuld"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "-v --tb=short -m 'not integration and not broker'"
-markers = [
-    "integration: tests that require a real PostgreSQL database",
-    "broker: tests that require real message broker services (NATS, RabbitMQ, Redis)",
-    "ravn: tests for the Ravn agent module",
-    "e2e: end-to-end tests for full agent conversation flows",
-    "browser: tests that require a real browser (Playwright + Chromium)",
-]
+addopts = "--cov=src/volundr --cov-report=term-missing --cov-fail-under=85"
 
 [tool.ruff]
 target-version = "py311"
@@ -131,7 +77,7 @@ line-length = 100
 select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.coverage.run]
-source = ["src/volundr", "src/cli", "src/tyr", "src/niuu", "src/skuld", "src/sleipnir", "src/ravn", "src/bifrost"]
+source = ["src/volundr"]
 branch = true
 
 [tool.coverage.report]
@@ -139,12 +85,4 @@ exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
     "@abstractmethod",
-]
-
-[dependency-groups]
-dev = [
-    "pytest>=9.0.2",
-    "pytest-asyncio>=1.3.0",
-    "pytest-cov>=7.1.0",
-    "ruff>=0.8,<0.15",
 ]

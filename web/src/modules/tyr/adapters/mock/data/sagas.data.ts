@@ -299,7 +299,6 @@ export const mockDispatcherState: DispatcherState = {
   running: true,
   threshold: 0.6,
   max_concurrent_raids: 3,
-  auto_continue: false,
   updated_at: '2026-03-21T08:00:00Z',
 };
 

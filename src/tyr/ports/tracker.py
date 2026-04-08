@@ -42,14 +42,18 @@ class TrackerPort(ABC):
         self, raid: Raid, *, project_id: str = "", milestone_id: str = ""
     ) -> str: ...
 
-    async def attach_document(self, project_id: str, title: str, content: str) -> str:
+    async def attach_document(
+        self, project_id: str, title: str, content: str
+    ) -> str:
         """Attach a document to a project. Returns document ID. Optional — noop by default."""
         return ""
 
     async def add_comment(self, issue_id: str, body: str) -> None:
         """Add a comment to an issue. Optional — noop by default."""
 
-    async def attach_issue_document(self, issue_id: str, title: str, content: str) -> str:
+    async def attach_issue_document(
+        self, issue_id: str, title: str, content: str
+    ) -> str:
         """Attach a document to an issue. Returns document ID. Optional — noop by default."""
         return ""
 
@@ -74,15 +78,6 @@ class TrackerPort(ABC):
 
     @abstractmethod
     async def list_pending_raids(self, phase_id: str) -> list[Raid]: ...
-
-    # -- Dependency tracking --
-
-    async def get_blocked_identifiers(self, project_id: str) -> set[str]:
-        """Return identifiers of issues blocked by incomplete dependencies.
-
-        Default returns empty set (no dependency tracking).
-        """
-        return set()
 
     # -- Browsing: read-only access to external tracker hierarchy --
 

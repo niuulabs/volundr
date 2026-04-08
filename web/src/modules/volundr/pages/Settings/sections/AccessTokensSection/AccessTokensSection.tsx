@@ -1,9 +1,13 @@
 import { useState, useCallback } from 'react';
 import { Plus, Trash2, KeyRound } from 'lucide-react';
-import { volundrService } from '@/modules/volundr/adapters';
+import type { IVolundrService } from '@/modules/volundr/ports';
 import { useTokens } from '@/modules/volundr/hooks/useTokens';
 import { NewTokenOverlay } from './NewTokenOverlay';
 import styles from './AccessTokensSection.module.css';
+
+interface AccessTokensSectionProps {
+  service: IVolundrService;
+}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -13,8 +17,8 @@ function formatDate(iso: string): string {
   });
 }
 
-export function AccessTokensSection() {
-  const { tokens, loading, createToken, revokeToken, refresh } = useTokens(volundrService);
+export function AccessTokensSection({ service }: AccessTokensSectionProps) {
+  const { tokens, loading, createToken, revokeToken, refresh } = useTokens(service);
 
   const [showForm, setShowForm] = useState(false);
   const [tokenName, setTokenName] = useState('');

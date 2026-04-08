@@ -22,6 +22,12 @@ updates:
     schedule:
       interval: weekly
 
+  - package-ecosystem: gomod
+    directory: /cli
+    target-branch: dev
+    schedule:
+      interval: weekly
+
   - package-ecosystem: docker
     directory: /containers/volundr
     target-branch: dev
@@ -30,6 +36,12 @@ updates:
 
   - package-ecosystem: docker
     directory: /containers/skuld
+    target-branch: dev
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /containers/skuld-codex
     target-branch: dev
     schedule:
       interval: weekly

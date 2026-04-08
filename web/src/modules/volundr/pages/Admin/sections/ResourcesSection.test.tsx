@@ -4,14 +4,6 @@ import { ResourcesSection } from './ResourcesSection';
 import type { IVolundrService } from '@/modules/volundr/ports';
 import type { ClusterResourceInfo } from '@/modules/volundr/models';
 
-const mockServiceRef = { current: {} as IVolundrService };
-
-vi.mock('@/modules/volundr/adapters', () => ({
-  get volundrService() {
-    return mockServiceRef.current;
-  },
-}));
-
 const mockResources: ClusterResourceInfo = {
   resourceTypes: [
     {
@@ -78,7 +70,6 @@ describe('ResourcesSection', () => {
 
   beforeEach(() => {
     service = createMockService();
-    mockServiceRef.current = service;
   });
 
   it('renders loading state initially', () => {
@@ -86,14 +77,12 @@ describe('ResourcesSection', () => {
       getClusterResources: vi.fn().mockReturnValue(new Promise(() => {})),
     } as unknown as IVolundrService;
 
-    mockServiceRef.current = service;
-    render(<ResourcesSection />);
+    render(<ResourcesSection service={service} />);
     expect(screen.getByText('Loading cluster resources...')).toBeInTheDocument();
   });
 
   it('renders summary cards for each resource type', async () => {
-    mockServiceRef.current = service;
-    render(<ResourcesSection />);
+    render(<ResourcesSection service={service} />);
 
     await waitFor(() => {
       expect(screen.getByText('Cluster Resources')).toBeInTheDocument();
@@ -106,8 +95,7 @@ describe('ResourcesSection', () => {
   });
 
   it('renders summary card values aggregated across nodes', async () => {
-    mockServiceRef.current = service;
-    render(<ResourcesSection />);
+    render(<ResourcesSection service={service} />);
 
     await waitFor(() => {
       expect(screen.getByText('Cluster Resources')).toBeInTheDocument();
@@ -120,8 +108,7 @@ describe('ResourcesSection', () => {
   });
 
   it('renders node table with correct data', async () => {
-    mockServiceRef.current = service;
-    render(<ResourcesSection />);
+    render(<ResourcesSection service={service} />);
 
     await waitFor(() => {
       expect(screen.getByText('node-1')).toBeInTheDocument();
@@ -133,8 +120,7 @@ describe('ResourcesSection', () => {
   });
 
   it('renders utilization badges with correct status', async () => {
-    mockServiceRef.current = service;
-    render(<ResourcesSection />);
+    render(<ResourcesSection service={service} />);
 
     await waitFor(() => {
       expect(screen.getByText('node-1')).toBeInTheDocument();
@@ -155,8 +141,7 @@ describe('ResourcesSection', () => {
 
   it('renders empty state when no nodes', async () => {
     service = createMockService(emptyResources);
-    mockServiceRef.current = service;
-    render(<ResourcesSection />);
+    render(<ResourcesSection service={service} />);
 
     await waitFor(() => {
       expect(
@@ -168,8 +153,7 @@ describe('ResourcesSection', () => {
   });
 
   it('refresh button triggers re-fetch', async () => {
-    mockServiceRef.current = service;
-    render(<ResourcesSection />);
+    render(<ResourcesSection service={service} />);
 
     await waitFor(() => {
       expect(screen.getByText('Cluster Resources')).toBeInTheDocument();
@@ -185,8 +169,7 @@ describe('ResourcesSection', () => {
   });
 
   it('applies correct data-category attributes to summary cards', async () => {
-    mockServiceRef.current = service;
-    render(<ResourcesSection />);
+    render(<ResourcesSection service={service} />);
 
     await waitFor(() => {
       expect(screen.getByText('Cluster Resources')).toBeInTheDocument();
@@ -224,8 +207,7 @@ describe('ResourcesSection', () => {
     };
 
     service = createMockService(badResources);
-    mockServiceRef.current = service;
-    render(<ResourcesSection />);
+    render(<ResourcesSection service={service} />);
 
     await waitFor(() => {
       expect(screen.getByText('bad-node')).toBeInTheDocument();
@@ -262,8 +244,7 @@ describe('ResourcesSection', () => {
     };
 
     service = createMockService(sparseResources);
-    mockServiceRef.current = service;
-    render(<ResourcesSection />);
+    render(<ResourcesSection service={service} />);
 
     await waitFor(() => {
       expect(screen.getByText('sparse-node')).toBeInTheDocument();
@@ -297,8 +278,7 @@ describe('ResourcesSection', () => {
     };
 
     service = createMockService(bytesResources);
-    mockServiceRef.current = service;
-    render(<ResourcesSection />);
+    render(<ResourcesSection service={service} />);
 
     await waitFor(() => {
       expect(screen.getByText('mem-node')).toBeInTheDocument();
@@ -332,8 +312,7 @@ describe('ResourcesSection', () => {
     };
 
     service = createMockService(zeroResources);
-    mockServiceRef.current = service;
-    render(<ResourcesSection />);
+    render(<ResourcesSection service={service} />);
 
     await waitFor(() => {
       expect(screen.getByText('no-gpu-node')).toBeInTheDocument();

@@ -5,7 +5,7 @@ import type {
   ResourceType,
   NodeResourceSummary,
 } from '@/modules/volundr/models';
-import { volundrService } from '@/modules/volundr/adapters';
+import type { IVolundrService } from '@/modules/volundr/ports';
 import { cn } from '@/utils/classnames';
 import { parseK8sQuantity, formatResourceValue } from '@/utils/k8sQuantity';
 import styles from './ResourcesSection.module.css';
@@ -60,19 +60,23 @@ function aggregateResources(
   });
 }
 
-export function ResourcesSection() {
+interface ResourcesSectionProps {
+  service: IVolundrService;
+}
+
+export function ResourcesSection({ service }: ResourcesSectionProps) {
   const [resources, setResources] = useState<ClusterResourceInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadResources = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await volundrService.getClusterResources();
+      const data = await service.getClusterResources();
       setResources(data);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [service]);
 
   useEffect(() => {
     loadResources();

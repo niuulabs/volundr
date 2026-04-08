@@ -23,7 +23,6 @@ interface ChatInputProps {
   isLoading: boolean;
   onStop: () => void;
   disabled?: boolean;
-  stopDisabled?: boolean;
   className?: string;
   sessionId?: string | null;
   sessionHost?: string | null;
@@ -64,7 +63,6 @@ export function ChatInput({
   isLoading,
   onStop,
   disabled = false,
-  stopDisabled = false,
   className,
   sessionId = null,
   sessionHost = null,
@@ -369,14 +367,7 @@ export function ChatInput({
 
         <div className={styles.rightActions}>
           {isLoading && (
-            <button
-              type="button"
-              className={styles.stopBtn}
-              onClick={onStop}
-              disabled={stopDisabled}
-              title={stopDisabled ? 'Interrupt not supported by this transport' : 'Stop generation'}
-              data-testid="stop-btn"
-            >
+            <button type="button" className={styles.stopBtn} onClick={onStop}>
               <Square className={styles.stopIcon} />
               <span>Stop</span>
             </button>

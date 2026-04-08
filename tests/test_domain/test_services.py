@@ -1,6 +1,5 @@
 """Tests for domain services."""
 
-import asyncio
 from uuid import uuid4
 
 import pytest
@@ -472,11 +471,11 @@ class TestSessionServiceStart:
 
         result = await service.start_session(created.id)
 
-        # Async provisioning: returns STARTING immediately with
-        # eagerly-set chat_endpoint. Pod manager called in background.
-        assert result.status == SessionStatus.STARTING
-        assert result.chat_endpoint is not None
-        assert "session" in result.chat_endpoint
+        assert result.status == SessionStatus.PROVISIONING
+        assert result.chat_endpoint == pod_manager.chat_endpoint
+        assert result.code_endpoint == pod_manager.code_endpoint
+        assert result.pod_name == pod_manager.pod_name
+        assert len(pod_manager.start_calls) == 1
 
     async def test_start_stopped_session(self, repository: Repo, pod_manager: Pods):
         """Starting a stopped session works."""
@@ -494,7 +493,7 @@ class TestSessionServiceStart:
 
         result = await service.start_session(created.id)
 
-        assert result.status == SessionStatus.STARTING
+        assert result.status == SessionStatus.PROVISIONING
 
     async def test_start_failed_session(self, repository: Repo, pod_manager: Pods):
         """Starting a failed session works (retry)."""
@@ -512,7 +511,7 @@ class TestSessionServiceStart:
 
         result = await service.start_session(created.id)
 
-        assert result.status == SessionStatus.STARTING
+        assert result.status == SessionStatus.PROVISIONING
 
     async def test_start_nonexistent(self, repository: Repo, pod_manager: Pods):
         """Starting a nonexistent session raises SessionNotFoundError."""
@@ -544,7 +543,7 @@ class TestSessionServiceStart:
     async def test_start_failure_marks_failed_with_error(
         self, repository: Repo, failing_pod_manager: Pods
     ):
-        """If pod start fails, background task marks session as FAILED."""
+        """If pod start fails, session is marked as FAILED with error message."""
         service = SessionService(repository, failing_pod_manager)
         created = await service.create_session(
             name="test",
@@ -555,12 +554,8 @@ class TestSessionServiceStart:
             ),
         )
 
-        # start_session returns immediately (async provisioning)
-        result = await service.start_session(created.id)
-        assert result.status == SessionStatus.STARTING
-
-        # Wait for background task to fail
-        await asyncio.sleep(0.5)
+        with pytest.raises(RuntimeError):
+            await service.start_session(created.id)
 
         session = await repository.get(created.id)
         assert session is not None

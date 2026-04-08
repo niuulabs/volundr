@@ -214,13 +214,8 @@
   transition: all var(--transition-fast);
 }
 
-.stopBtn:hover:not(:disabled) {
+.stopBtn:hover {
   background-color: var(--color-bg-elevated);
-}
-
-.stopBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .stopIcon {

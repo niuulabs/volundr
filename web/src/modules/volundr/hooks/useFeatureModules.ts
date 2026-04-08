@@ -1,19 +1,15 @@
 import { useState, useEffect, useCallback, useMemo, lazy } from 'react';
 import type { ComponentType } from 'react';
-import type {
-  IFeatureCatalogService,
-  FeatureScope,
-  FeatureModule,
-  UserFeaturePreference,
-} from '@/modules/shared/ports/feature-catalog.port';
+import type { IVolundrService } from '@/modules/volundr/ports';
+import type { FeatureScope, FeatureModule, UserFeaturePreference } from '@/modules/volundr/models';
 import type { SectionDefinition } from '@/modules/volundr/components/SectionLayout';
 import { getModule } from '@/modules/registry';
 import { resolveIcon } from '@/modules/icons';
 
 // Cache lazy components so React.lazy is only called once per module key
-const lazyCache = new Map<string, ComponentType>();
+const lazyCache = new Map<string, ComponentType<{ service: IVolundrService }>>();
 
-function getLazyComponent(key: string): ComponentType | undefined {
+function getLazyComponent(key: string): ComponentType<{ service: IVolundrService }> | undefined {
   if (lazyCache.has(key)) {
     return lazyCache.get(key)!;
   }
@@ -42,7 +38,7 @@ interface UseFeatureModulesResult {
  */
 export function useFeatureModules(
   scope: FeatureScope,
-  service: IFeatureCatalogService
+  service: IVolundrService
 ): UseFeatureModulesResult {
   const [features, setFeatures] = useState<FeatureModule[]>([]);
   const [preferences, setPreferences] = useState<UserFeaturePreference[]>([]);

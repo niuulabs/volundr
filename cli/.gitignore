@@ -1,0 +1,6 @@
+bin/
+dist/
+/volundr
+*.exe
+internal/web/dist/
+cli/niuu

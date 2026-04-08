@@ -14,6 +14,7 @@ All configuration MUST flow through the Settings class.
 """
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -25,36 +26,11 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
-from niuu.config import (
-    GitHubConfig,  # noqa: F401
-    GitHubInstance,  # noqa: F401
-    GitLabConfig,  # noqa: F401
-    GitLabInstance,  # noqa: F401
-)
-
-
-# Config file search paths (in order of priority).
-# NIUU_CONFIG env var (set by the CLI --config flag) takes precedence.
-def _config_paths() -> list[Path]:
-    env = os.environ.get("NIUU_CONFIG")
-    if env:
-        return [Path(env)]
-    return [
-        Path("./config.yaml"),
-        Path("/etc/volundr/config.yaml"),
-    ]
-
-
-CONFIG_PATHS = _config_paths()
-
-
-class LocalGitConfig(BaseModel):
-    """Configuration for local git workspace operations."""
-
-    subprocess_timeout: float = Field(
-        default=30.0,
-        description="Maximum time in seconds a git/gh subprocess may run before being killed.",
-    )
+# Config file search paths (in order of priority)
+CONFIG_PATHS = [
+    Path("./config.yaml"),
+    Path("/etc/volundr/config.yaml"),
+]
 
 
 class LocalMountsConfig(BaseModel):
@@ -63,10 +39,6 @@ class LocalMountsConfig(BaseModel):
     enabled: bool = Field(
         default=False,
         description="Enable local path mounts as session workspace sources.",
-    )
-    mini_mode: bool = Field(
-        default=False,
-        description="Running in mini/local mode (CLI). Enables local-only UI features.",
     )
     allow_root_mount: bool = Field(
         default=False,
@@ -156,6 +128,108 @@ class PodManagerConfig(BaseModel):
         default_factory=dict,
         description="Mapping of kwarg names to env var names holding secret values.",
     )
+
+
+@dataclass(frozen=True)
+class GitHubInstance:
+    """Configuration for a single GitHub instance."""
+
+    name: str
+    base_url: str
+    token: str | None = None
+    orgs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class GitLabInstance:
+    """Configuration for a single GitLab instance."""
+
+    name: str
+    base_url: str
+    token: str | None = None
+    orgs: tuple[str, ...] = ()
+
+
+class GitHubConfig(BaseModel):
+    """GitHub provider configuration."""
+
+    enabled: bool = Field(default=False)
+    token: str | None = Field(default=None)
+    base_url: str = Field(default="https://api.github.com")
+    instances: list[dict[str, Any]] = Field(default_factory=list)
+
+    def get_instances(self) -> list[GitHubInstance]:
+        """Get all configured GitHub instances.
+
+        Token resolution order per instance:
+        1. Explicit ``token`` field in the instance dict
+        2. Environment variable named by ``token_env`` (set by Helm from per-instance secrets)
+        3. Top-level ``self.token`` (from ``GIT__GITHUB__TOKEN`` env var)
+        """
+        result: list[GitHubInstance] = []
+
+        for item in self.instances:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name", "")
+            base_url = item.get("base_url", "")
+            if not name or not base_url:
+                continue
+            token = item.get("token")
+            if not token:
+                token_env = item.get("token_env")
+                if token_env:
+                    token = os.environ.get(token_env)
+            if not token:
+                token = self.token
+            orgs = tuple(item.get("orgs", []))
+            result.append(GitHubInstance(name, base_url, token, orgs))
+
+        if not result and (self.enabled or self.token):
+            result.append(GitHubInstance("GitHub", self.base_url, self.token))
+
+        return result
+
+
+class GitLabConfig(BaseModel):
+    """GitLab provider configuration."""
+
+    enabled: bool = Field(default=False)
+    token: str | None = Field(default=None)
+    base_url: str = Field(default="https://gitlab.com")
+    instances: list[dict[str, Any]] = Field(default_factory=list)
+
+    def get_instances(self) -> list[GitLabInstance]:
+        """Get all configured GitLab instances.
+
+        Token resolution order per instance:
+        1. Explicit ``token`` field in the instance dict
+        2. Environment variable named by ``token_env`` (set by Helm from per-instance secrets)
+        3. Top-level ``self.token`` (from ``GIT__GITLAB__TOKEN`` env var)
+        """
+        result: list[GitLabInstance] = []
+
+        for item in self.instances:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name", "")
+            base_url = item.get("base_url", "")
+            if not name or not base_url:
+                continue
+            token = item.get("token")
+            if not token:
+                token_env = item.get("token_env")
+                if token_env:
+                    token = os.environ.get(token_env)
+            if not token:
+                token = self.token
+            orgs = tuple(item.get("orgs", []))
+            result.append(GitLabInstance(name, base_url, token, orgs))
+
+        if not result and (self.enabled or self.token):
+            result.append(GitLabInstance("GitLab", self.base_url, self.token))
+
+        return result
 
 
 class MCPServerEntry(BaseModel):
@@ -261,33 +335,6 @@ class EventPipelineConfig(BaseModel):
     postgres_buffer_size: int = Field(default=1, ge=1)
     rabbitmq: RabbitMQConfig = Field(default_factory=RabbitMQConfig)
     otel: OtelConfig = Field(default_factory=OtelConfig)
-
-
-class SleipnirConfig(BaseModel):
-    """Sleipnir platform event bus integration (optional).
-
-    When ``enabled`` is True, Volundr creates a Sleipnir adapter and
-    registers a :class:`~volundr.adapters.outbound.sleipnir_event_sink.SleipnirEventSink`
-    in the event pipeline and forwards SSE broadcaster events to the platform bus.
-
-    Example YAML::
-
-        sleipnir:
-          enabled: true
-          adapter: "sleipnir.adapters.nats_transport.NatsTransport"
-          kwargs:
-            servers: ["nats://nats:4222"]
-    """
-
-    enabled: bool = Field(
-        default=False,
-        description="Enable Sleipnir platform event bus integration.",
-    )
-    adapter: str = Field(
-        default="sleipnir.adapters.in_process.InProcessBus",
-        description="Fully-qualified class path for the Sleipnir adapter.",
-    )
-    kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
 class IdentityConfig(BaseModel):
@@ -975,7 +1022,7 @@ class LinearConfig(BaseModel):
 
 
 class GitConfig(BaseModel):
-    """Git provider configuration (extends niuu.config.GitConfig with Volundr-specific fields)."""
+    """Git provider configuration."""
 
     github: GitHubConfig = Field(default_factory=GitHubConfig)
     gitlab: GitLabConfig = Field(default_factory=GitLabConfig)
@@ -1013,7 +1060,6 @@ class Settings(BaseSettings):
         yaml_file=CONFIG_PATHS,
         yaml_file_encoding="utf-8",
         env_nested_delimiter="__",
-        extra="ignore",
     )
 
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
@@ -1022,7 +1068,6 @@ class Settings(BaseSettings):
     git: GitConfig = Field(default_factory=GitConfig)
     chronicle: ChronicleConfig = Field(default_factory=ChronicleConfig)
     event_pipeline: EventPipelineConfig = Field(default_factory=EventPipelineConfig)
-    sleipnir: SleipnirConfig = Field(default_factory=SleipnirConfig)
     identity: IdentityConfig = Field(default_factory=IdentityConfig)
     authorization: AuthorizationConfig = Field(default_factory=AuthorizationConfig)
     credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
@@ -1036,7 +1081,6 @@ class Settings(BaseSettings):
     integrations: IntegrationsConfig = Field(default_factory=IntegrationsConfig)
     oauth: OAuthConfig = Field(default_factory=OAuthConfig)
     provisioning: ProvisioningConfig = Field(default_factory=ProvisioningConfig)
-    local_git: LocalGitConfig = Field(default_factory=LocalGitConfig)
     local_mounts: LocalMountsConfig = Field(default_factory=LocalMountsConfig)
     session_contributors: list[SessionContributorConfig] = Field(default_factory=list)
     models: list[AIModelConfig] = Field(default_factory=list)

@@ -15,7 +15,7 @@ import type {
   VolundrProvisioningResult,
   VolundrTenant,
 } from '@/modules/volundr/models';
-import { volundrService } from '@/modules/volundr/adapters';
+import type { IVolundrService } from '@/modules/volundr/ports';
 import { cn } from '@/utils/classnames';
 import styles from './TenantsSection.module.css';
 
@@ -30,7 +30,11 @@ function formatDate(iso: string | undefined): string {
   });
 }
 
-export function TenantsSection() {
+interface TenantsSectionProps {
+  service: IVolundrService;
+}
+
+export function TenantsSection({ service }: TenantsSectionProps) {
   const [tenants, setTenants] = useState<VolundrTenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -40,12 +44,12 @@ export function TenantsSection() {
   const loadTenants = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await volundrService.getTenants();
+      const data = await service.getTenants();
       setTenants(data);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [service]);
 
   useEffect(() => {
     loadTenants();
@@ -53,21 +57,21 @@ export function TenantsSection() {
 
   const handleCreate = useCallback(
     async (data: { name: string; tier: string; maxSessions: number; maxStorageGb: number }) => {
-      await volundrService.createTenant(data);
+      await service.createTenant(data);
       setShowForm(false);
       await loadTenants();
     },
-    [loadTenants]
+    [service, loadTenants]
   );
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget) {
       return;
     }
-    await volundrService.deleteTenant(deleteTarget.id);
+    await service.deleteTenant(deleteTarget.id);
     setDeleteTarget(null);
     await loadTenants();
-  }, [deleteTarget, loadTenants]);
+  }, [deleteTarget, service, loadTenants]);
 
   const toggleExpand = useCallback((tenantId: string) => {
     setExpandedTenant(prev => (prev === tenantId ? null : tenantId));
@@ -128,7 +132,7 @@ export function TenantsSection() {
               </div>
 
               {expandedTenant === tenant.id && (
-                <TenantDetails tenant={tenant} onUpdated={loadTenants} />
+                <TenantDetails tenant={tenant} service={service} onUpdated={loadTenants} />
               )}
             </div>
           ))}
@@ -172,10 +176,11 @@ export function TenantsSection() {
 
 interface TenantDetailsProps {
   tenant: VolundrTenant;
+  service: IVolundrService;
   onUpdated: () => Promise<void>;
 }
 
-function TenantDetails({ tenant, onUpdated }: TenantDetailsProps) {
+function TenantDetails({ tenant, service, onUpdated }: TenantDetailsProps) {
   const [members, setMembers] = useState<VolundrMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
 
@@ -195,7 +200,7 @@ function TenantDetails({ tenant, onUpdated }: TenantDetailsProps) {
     async function load() {
       setMembersLoading(true);
       try {
-        const data = await volundrService.getTenantMembers(tenant.id);
+        const data = await service.getTenantMembers(tenant.id);
         if (!cancelled) {
           setMembers(data);
         }
@@ -209,7 +214,7 @@ function TenantDetails({ tenant, onUpdated }: TenantDetailsProps) {
     return () => {
       cancelled = true;
     };
-  }, [tenant.id]);
+  }, [service, tenant.id]);
 
   const hasChanges =
     editTier !== tenant.tier ||
@@ -220,7 +225,7 @@ function TenantDetails({ tenant, onUpdated }: TenantDetailsProps) {
     setSaving(true);
     setSaveError(null);
     try {
-      await volundrService.updateTenant(tenant.id, {
+      await service.updateTenant(tenant.id, {
         tier: editTier,
         maxSessions: editMaxSessions,
         maxStorageGb: editMaxStorageGb,
@@ -231,18 +236,18 @@ function TenantDetails({ tenant, onUpdated }: TenantDetailsProps) {
     } finally {
       setSaving(false);
     }
-  }, [tenant.id, editTier, editMaxSessions, editMaxStorageGb, onUpdated]);
+  }, [service, tenant.id, editTier, editMaxSessions, editMaxStorageGb, onUpdated]);
 
   const handleReprovision = useCallback(async () => {
     setReprovisioning(true);
     setReprovisionResults(null);
     try {
-      const results = await volundrService.reprovisionTenant(tenant.id);
+      const results = await service.reprovisionTenant(tenant.id);
       setReprovisionResults(results);
     } finally {
       setReprovisioning(false);
     }
-  }, [tenant.id]);
+  }, [service, tenant.id]);
 
   return (
     <div className={styles.detailsPanel}>

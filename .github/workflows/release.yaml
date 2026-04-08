@@ -19,7 +19,7 @@ jobs:
       version: ${{ steps.extract.outputs.version }}
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
         with:
           egress-policy: audit
 
@@ -43,10 +43,10 @@ jobs:
     strategy:
       matrix:
         platform: [amd64, arm64]
-        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh, tyr]
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
         with:
           egress-policy: audit
 
@@ -56,7 +56,7 @@ jobs:
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -102,10 +102,10 @@ jobs:
       id-token: write
     strategy:
       matrix:
-        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh, tyr]
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
         with:
           egress-policy: audit
 
@@ -126,7 +126,7 @@ jobs:
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -183,17 +183,17 @@ jobs:
       packages: read
     strategy:
       matrix:
-        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh, tyr]
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
         with:
           egress-policy: audit
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Log in to Container Registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -230,7 +230,7 @@ jobs:
             -o sarif > "grype-${{ matrix.container }}.sarif"
 
       - name: Upload Grype results
-        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4
+        uses: github/codeql-action/upload-sarif@38697555549f1db7851b81482ff19f1fa5c4fedc # v4
         if: always()
         with:
           sarif_file: grype-${{ matrix.container }}.sarif
@@ -240,47 +240,36 @@ jobs:
   # CLI binaries
   # ---------------------------------------------------------------------------
   build-cli:
-    name: "Build CLI (${{ matrix.os }}/${{ matrix.arch }})"
+    name: Build CLI (${{ matrix.goos }}/${{ matrix.goarch }})
     needs: [version]
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     strategy:
-      fail-fast: false
       matrix:
         include:
-          - os: darwin
-            arch: arm64
-            runner: macos-15
-          - os: linux
-            arch: amd64
-            runner: ubuntu-latest
-          - os: linux
-            arch: arm64
-            runner: ubuntu-24.04-arm
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
     steps:
       - name: Harden runner
-        if: runner.os == 'Linux'
-        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
         with:
           egress-policy: audit
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Cache PostgreSQL build
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
         with:
-          path: build/pginstall
-          key: pginstall-${{ runner.os }}-${{ runner.arch }}-pg17.9-vec0.8.2
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v6
-        with:
-          version: "latest"
-
-      - name: Set up Python 3.12
-        run: uv python install 3.12
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
 
       - name: Set up Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
@@ -289,19 +278,31 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Install dependencies
-        run: uv sync --python 3.12 --extra cli --extra dev
+      - name: Build frontend
+        run: |
+          cd web && npm ci --ignore-scripts && npm run build
+          cd ..
+          rm -rf cli/internal/web/dist
+          cp -r web/dist cli/internal/web/dist
 
-      - name: Build
-        run: make build
+      - name: Build CLI
+        working-directory: cli
         env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          BINARY="niuu-${{ matrix.goos }}-${{ matrix.goarch }}"
+          go build -tags embed_web \
+            -ldflags "-s -w -X github.com/niuulabs/volundr/cli/internal/cli.Version=${VERSION}" \
+            -o "dist/${BINARY}" ./cmd/niuu
 
       - name: Upload artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
-          name: niuu-${{ matrix.os }}-${{ matrix.arch }}
-          path: dist/niuu-${{ matrix.os }}-${{ matrix.arch }}
+          name: niuu-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: cli/dist/niuu-${{ matrix.goos }}-${{ matrix.goarch }}
 
   # ---------------------------------------------------------------------------
   # Helm charts
@@ -315,7 +316,7 @@ jobs:
       packages: write
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
         with:
           egress-policy: audit
 
@@ -350,10 +351,6 @@ jobs:
           sed -i "s/^version:.*/version: $VERSION/" charts/skuld-planner/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/skuld-planner/Chart.yaml
 
-          # Update niuu-shared chart
-          sed -i "s/^version:.*/version: $VERSION/" charts/niuu-shared/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/niuu-shared/Chart.yaml
-
           # Update niuu umbrella chart
           sed -i "s/^version:.*/version: $VERSION/" charts/niuu/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/niuu/Chart.yaml
@@ -367,12 +364,11 @@ jobs:
           helm package charts/skuld-planner -d .helm-packages/
           helm package charts/volundr -d .helm-packages/
           helm package charts/tyr -d .helm-packages/
-          helm package charts/niuu-shared -d .helm-packages/
           helm dependency build charts/niuu
           helm package charts/niuu -d .helm-packages/
 
       - name: Log in to Container Registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -384,8 +380,7 @@ jobs:
           helm push .helm-packages/skuld-planner-*.tgz ${{ env.CHART_REPO }}
           helm push .helm-packages/volundr-*.tgz ${{ env.CHART_REPO }}
           helm push .helm-packages/tyr-*.tgz ${{ env.CHART_REPO }}
-          helm push .helm-packages/niuu-shared-*.tgz ${{ env.CHART_REPO }}
-          helm push .helm-packages/niuu-0*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/niuu-*.tgz ${{ env.CHART_REPO }}
 
   # ---------------------------------------------------------------------------
   # npm package
@@ -402,7 +397,7 @@ jobs:
         working-directory: web
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
         with:
           egress-policy: audit
 
@@ -445,7 +440,7 @@ jobs:
       attestations: write
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
         with:
           egress-policy: audit
 

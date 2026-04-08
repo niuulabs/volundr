@@ -226,7 +226,7 @@ class TestCreateSession:
         assert data["model"] == "claude-sonnet-4"
         assert data["source"]["repo"] == "https://github.com/org/repo"
         assert data["source"]["branch"] == "main"
-        assert data["status"] == "starting"
+        assert data["status"] == "provisioning"
         assert "id" in data
 
     def test_create_session_validation_error(self, client: TestClient):
@@ -461,10 +461,10 @@ class TestStartSession:
         response = client.post(f"/api/v1/volundr/sessions/{session.id}/start")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "starting"
+        assert data["status"] == "provisioning"
         assert data["chat_endpoint"] is not None
-        # code_endpoint set in background task
-        # pod_name set in background task
+        assert data["code_endpoint"] is not None
+        assert data["pod_name"] is not None
 
     def test_start_session_not_found(self, client: TestClient):
         """Returns 404 for non-existent session."""

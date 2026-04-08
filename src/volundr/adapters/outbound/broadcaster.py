@@ -13,29 +13,9 @@ from volundr.domain.models import EventType, RealtimeEvent, Stats, TimelineRespo
 from volundr.domain.ports import EventBroadcaster
 
 if TYPE_CHECKING:
-    from sleipnir.ports.events import SleipnirPublisher
     from volundr.domain.models import Session, TimelineEvent
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Mapping from Volundr EventType → Sleipnir event type string
-# ---------------------------------------------------------------------------
-# Import lazily to avoid a hard dependency on sleipnir at module load time.
-def _build_realtime_sleipnir_map() -> dict[str, str]:
-    from sleipnir.domain import registry  # noqa: PLC0415
-
-    return {
-        EventType.SESSION_CREATED.value: registry.VOLUNDR_SESSION_CREATED,
-        EventType.SESSION_UPDATED.value: registry.VOLUNDR_SESSION_UPDATED,
-        EventType.SESSION_DELETED.value: registry.VOLUNDR_SESSION_DELETED,
-        EventType.STATS_UPDATED.value: registry.VOLUNDR_STATS_UPDATED,
-        EventType.CHRONICLE_CREATED.value: registry.VOLUNDR_CHRONICLE_CREATED,
-        EventType.CHRONICLE_UPDATED.value: registry.VOLUNDR_CHRONICLE_UPDATED,
-        EventType.CHRONICLE_DELETED.value: registry.VOLUNDR_CHRONICLE_DELETED,
-        EventType.CHRONICLE_EVENT.value: registry.VOLUNDR_CHRONICLE_UPDATED,
-    }
 
 
 class InMemoryEventBroadcaster(EventBroadcaster):
@@ -45,41 +25,21 @@ class InMemoryEventBroadcaster(EventBroadcaster):
     published to all active subscriber queues. If a subscriber's queue
     is full, old events are dropped to prevent memory issues with slow
     consumers.
-
-    When a :class:`~sleipnir.ports.events.SleipnirPublisher` is provided,
-    high-level session lifecycle and chronicle events are also forwarded to
-    the platform-wide event bus so that Skuld brokers and other services can
-    react in real time.
     """
 
-    def __init__(
-        self,
-        max_queue_size: int = 100,
-        sleipnir_publisher: SleipnirPublisher | None = None,
-        sleipnir_source: str = "volundr",
-    ):
+    def __init__(self, max_queue_size: int = 100):
         """Initialize the broadcaster.
 
         Args:
             max_queue_size: Maximum number of events to buffer per subscriber.
                 When exceeded, oldest events are dropped.
-            sleipnir_publisher: Optional Sleipnir publisher.  When provided,
-                session lifecycle and chronicle events are forwarded to the
-                platform event bus in addition to local SSE clients.
-            sleipnir_source: Source string used in Sleipnir events (e.g.
-                ``"volundr"`` or ``"volundr:prod"``).
         """
         self._subscribers: set[asyncio.Queue[RealtimeEvent]] = set()
         self._max_queue_size = max_queue_size
         self._lock = asyncio.Lock()
-        self._sleipnir_publisher = sleipnir_publisher
-        self._sleipnir_source = sleipnir_source
-        self._sleipnir_type_map: dict[str, str] | None = None
 
     async def publish(self, event: RealtimeEvent) -> None:
         """Publish an event to all connected subscribers.
-
-        Also forwards to Sleipnir if a publisher was provided at construction.
 
         Args:
             event: The event to broadcast.
@@ -90,6 +50,9 @@ class InMemoryEventBroadcaster(EventBroadcaster):
             event.type.value,
             subscriber_count,
         )
+        if subscriber_count == 0:
+            logger.debug("SSE publish: no subscribers, event dropped: %s", event.type.value)
+            return
 
         async with self._lock:
             dead_queues: list[asyncio.Queue[RealtimeEvent]] = []
@@ -121,45 +84,6 @@ class InMemoryEventBroadcaster(EventBroadcaster):
             event.type.value,
             subscriber_count - len(dead_queues),
         )
-
-        # Forward to Sleipnir when a publisher is configured
-        if self._sleipnir_publisher is not None:
-            await self._forward_to_sleipnir(event)
-
-    async def _forward_to_sleipnir(self, event: RealtimeEvent) -> None:
-        """Convert a RealtimeEvent to a SleipnirEvent and publish it."""
-        if self._sleipnir_type_map is None:
-            self._sleipnir_type_map = _build_realtime_sleipnir_map()
-
-        sleipnir_type = self._sleipnir_type_map.get(event.type.value)
-        if sleipnir_type is None:
-            return  # Heartbeats and other non-forwarded events
-
-        try:
-            from datetime import UTC  # noqa: PLC0415
-
-            from sleipnir.domain.events import SleipnirEvent  # noqa: PLC0415
-
-            sleipnir_event = SleipnirEvent(
-                event_type=sleipnir_type,
-                source=self._sleipnir_source,
-                payload=dict(event.data),
-                summary=f"{event.type.value} broadcast",
-                urgency=0.5,
-                domain="code",
-                timestamp=(
-                    event.timestamp.replace(tzinfo=UTC)
-                    if event.timestamp.tzinfo is None
-                    else event.timestamp
-                ),
-            )
-            await self._sleipnir_publisher.publish(sleipnir_event)
-        except Exception:
-            logger.warning(
-                "InMemoryEventBroadcaster: failed to forward %s to Sleipnir",
-                event.type.value,
-                exc_info=True,
-            )
 
     async def subscribe(self) -> AsyncGenerator[RealtimeEvent, None]:
         """Subscribe to receive events.

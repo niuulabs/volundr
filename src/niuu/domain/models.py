@@ -104,51 +104,6 @@ class RepoInfo:
     branches: tuple[str, ...] = ()
 
 
-class PullRequestStatus(StrEnum):
-    """Status of a pull request."""
-
-    OPEN = "open"
-    MERGED = "merged"
-    CLOSED = "closed"
-
-
-class CIStatus(StrEnum):
-    """CI pipeline status."""
-
-    PASSING = "passing"
-    FAILING = "failing"
-    PENDING = "pending"
-    UNKNOWN = "unknown"
-
-
-class ReviewStatus(StrEnum):
-    """Code review status."""
-
-    APPROVED = "approved"
-    CHANGES_REQUESTED = "changes_requested"
-    PENDING = "pending"
-    UNKNOWN = "unknown"
-
-
-@dataclass(frozen=True)
-class PullRequest:
-    """A pull request / merge request from a git provider."""
-
-    number: int
-    title: str
-    url: str
-    repo_url: str
-    provider: GitProviderType
-    source_branch: str
-    target_branch: str
-    status: PullRequestStatus
-    description: str | None = None
-    ci_status: CIStatus | None = None
-    review_status: ReviewStatus | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-
 @dataclass(frozen=True)
 class PersonalAccessToken:
     """A personal access token for API authentication."""

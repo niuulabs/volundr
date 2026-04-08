@@ -8,11 +8,9 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 
 import httpx
 
-from tyr.adapters.bifrost_publisher import BifrostPublisher
 from tyr.domain.models import SagaStructure
 from tyr.domain.validation import ValidationError, parse_and_validate
 from tyr.ports.llm import LLMPort
@@ -73,9 +71,6 @@ Specification:
 # HTTP status codes that trigger a retry (transient server/rate-limit errors).
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503})
 
-# HTTP status codes that indicate the upstream provider is unhealthy.
-_PROVIDER_ERROR_CODES = frozenset({500, 502, 503, 504})
-
 
 class DecompositionError(Exception):
     """Raised when LLM decomposition fails after all retries."""
@@ -86,15 +81,6 @@ class BifrostAdapter(LLMPort):
 
     Works with the Anthropic API, Bifröst gateway, or any compatible endpoint.
     Constructor kwargs are forwarded from LLMConfig via the dynamic adapter pattern.
-
-    A :class:`~tyr.adapters.bifrost_publisher.BifrostPublisher` can be injected
-    after construction via :meth:`set_publisher` to enable Sleipnir event emission:
-
-    * ``bifrost.request.complete`` — after every successful LLM call
-    * ``bifrost.quota.warning``    — when cumulative tokens reach *quota_warning_threshold*
-    * ``bifrost.quota.exceeded``   — when cumulative tokens exceed *budget_tokens*
-    * ``bifrost.provider.down``    — when a provider error is detected
-    * ``bifrost.provider.recovered``— when the provider returns a success after an error
     """
 
     def __init__(
@@ -108,9 +94,6 @@ class BifrostAdapter(LLMPort):
         min_estimate_hours: float = 2.0,
         max_estimate_hours: float = 8.0,
         decomposition_system_prompt: str = "",
-        budget_tokens: int = 0,
-        quota_warning_threshold: float = 0.8,
-        agent_id: str = "",
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
@@ -120,19 +103,6 @@ class BifrostAdapter(LLMPort):
         self._max_estimate_hours = max_estimate_hours
         self._decomposition_prompt = decomposition_system_prompt or DECOMPOSITION_PROMPT
         self._client = httpx.AsyncClient(timeout=timeout)
-        self._budget_tokens = budget_tokens
-        self._quota_warning_threshold = quota_warning_threshold
-        self._agent_id = agent_id
-        # Runtime state
-        self._publisher: BifrostPublisher | None = None
-        self._provider_healthy: bool = True
-        self._total_tokens: int = 0
-        self._quota_warning_emitted: bool = False
-        self._quota_exceeded_emitted: bool = False
-
-    def set_publisher(self, publisher: BifrostPublisher) -> None:
-        """Inject the Sleipnir publisher.  Called from main.py after wiring."""
-        self._publisher = publisher
 
     def _headers(self) -> dict[str, str]:
         headers: dict[str, str] = {
@@ -149,14 +119,12 @@ class BifrostAdapter(LLMPort):
 
         for attempt in range(1, self._max_retries + 1):
             try:
-                raw, usage = await self._call_api(prompt, model=model)
-                result = parse_and_validate(
+                raw = await self._call_api(prompt, model=model)
+                return parse_and_validate(
                     raw,
                     min_estimate_hours=self._min_estimate_hours,
                     max_estimate_hours=self._max_estimate_hours,
                 )
-                await self._on_success(model=model, usage=usage)
-                return result
             except (json.JSONDecodeError, ValidationError) as exc:
                 logger.warning(
                     "Decomposition attempt %d/%d failed: %s",
@@ -174,21 +142,14 @@ class BifrostAdapter(LLMPort):
                     self._max_retries,
                     exc.response.status_code,
                 )
-                await self._on_provider_error(exc)
                 last_error = exc
 
         raise DecompositionError(
             f"Failed to decompose spec after {self._max_retries} attempts: {last_error}"
         )
 
-    async def _call_api(self, prompt: str, *, model: str) -> tuple[str, dict]:
-        """Call the Anthropic-compatible Messages API.
-
-        Returns:
-            A ``(text, usage)`` tuple where *usage* contains ``input_tokens``
-            and ``output_tokens`` as reported by the API.
-        """
-        t0 = time.monotonic()
+    async def _call_api(self, prompt: str, *, model: str) -> str:
+        """Call the Anthropic-compatible Messages API and return the raw text."""
         resp = await self._client.post(
             f"{self._base_url}/v1/messages",
             headers=self._headers(),
@@ -198,85 +159,12 @@ class BifrostAdapter(LLMPort):
                 "messages": [{"role": "user", "content": prompt}],
             },
         )
-        latency_ms = (time.monotonic() - t0) * 1000
         resp.raise_for_status()
         data = resp.json()
         content_blocks = data.get("content", [])
         text_parts = [block["text"] for block in content_blocks if block.get("type") == "text"]
-        raw_usage = data.get("usage", {})
-        usage = {
-            "input_tokens": int(raw_usage.get("input_tokens", 0)),
-            "output_tokens": int(raw_usage.get("output_tokens", 0)),
-            "latency_ms": latency_ms,
-        }
-        return "".join(text_parts), usage
+        return "".join(text_parts)
 
     async def close(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()
-
-    # ------------------------------------------------------------------
-    # Event emission helpers
-    # ------------------------------------------------------------------
-
-    async def _on_success(self, *, model: str, usage: dict) -> None:
-        """Handle a successful API call: emit request.complete + quota events."""
-        if self._publisher is None:
-            return
-
-        input_tokens = usage["input_tokens"]
-        output_tokens = usage["output_tokens"]
-        latency_ms = usage["latency_ms"]
-
-        # Recover if the provider was previously marked as unhealthy.
-        if not self._provider_healthy:
-            self._provider_healthy = True
-            await self._publisher.provider_recovered(provider=self._base_url)
-
-        await self._publisher.request_complete(
-            model=model,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            latency_ms=latency_ms,
-        )
-
-        self._total_tokens += input_tokens + output_tokens
-        await self._check_quota()
-
-    async def _on_provider_error(self, exc: httpx.HTTPStatusError) -> None:
-        """Emit provider.down on the first 5xx/502/503 from the provider."""
-        if self._publisher is None:
-            return
-        if exc.response.status_code not in _PROVIDER_ERROR_CODES:
-            return
-        if self._provider_healthy:
-            self._provider_healthy = False
-            await self._publisher.provider_down(
-                provider=self._base_url,
-                status_code=exc.response.status_code,
-                error=exc.response.text or exc.response.reason_phrase or "unknown error",
-            )
-
-    async def _check_quota(self) -> None:
-        """Emit quota events when cumulative token usage crosses configured thresholds.
-
-        Only called from :meth:`_on_success`, which already guards ``publisher is None``.
-        """
-        if self._budget_tokens <= 0:
-            return
-
-        pct_used = self._total_tokens / self._budget_tokens
-
-        if pct_used >= self._quota_warning_threshold and not self._quota_warning_emitted:
-            self._quota_warning_emitted = True
-            await self._publisher.quota_warning(
-                tokens_used=self._total_tokens,
-                budget_tokens=self._budget_tokens,
-            )
-
-        if pct_used >= 1.0 and not self._quota_exceeded_emitted:
-            self._quota_exceeded_emitted = True
-            await self._publisher.quota_exceeded(
-                tokens_used=self._total_tokens,
-                budget_tokens=self._budget_tokens,
-            )

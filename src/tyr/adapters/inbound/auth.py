@@ -28,16 +28,16 @@ async def extract_principal(request: Request) -> Principal:
     """
     user_id = request.headers.get("x-auth-user-id", "")
     if not user_id:
-        settings = getattr(request.app.state, "settings", None)
-        allow_anon = settings.auth.allow_anonymous_dev if settings else False
+        allow_anon = getattr(request.app.state, "settings", None)
+        if allow_anon is not None:
+            allow_anon = allow_anon.auth.allow_anonymous_dev
         if not allow_anon:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Missing authentication headers",
             )
-        default_uid = settings.auth.default_user_id if settings else "dev-user"
         return Principal(
-            user_id=default_uid,
+            user_id="default",
             email="",
             tenant_id="",
             roles=["volundr:developer"],

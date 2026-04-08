@@ -1,1 +1,0 @@
-"""Bifrost domain models."""

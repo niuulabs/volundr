@@ -15,7 +15,6 @@ from skuld.broker import (
     broker,
 )
 from skuld.config import SkuldSettings
-from skuld.transports import TransportCapabilities
 
 
 class TestConversationTurn:
@@ -122,7 +121,7 @@ class TestConversationTurnCapture:
         b = Broker(settings=settings)
         b._transport = MagicMock()
         b._transport.is_alive = True
-        b._transport.capabilities = TransportCapabilities()
+        b._transport.supports_cli_websocket = False
         return b
 
     @pytest.mark.asyncio

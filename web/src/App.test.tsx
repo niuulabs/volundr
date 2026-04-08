@@ -10,29 +10,8 @@ vi.mock('@/modules/volundr/pages/Volundr/VolundrPopout', () => ({
   VolundrPopout: () => <div data-testid="volundr-popout">Volundr Popout</div>,
 }));
 
-vi.mock('@/contexts/useAppIdentity', () => ({
-  useAppIdentity: () => ({
-    identity: null,
-    isAdmin: false,
-    hasRole: () => false,
-    loading: false,
-    error: null,
-  }),
-}));
-
-vi.mock('@/auth', () => ({
-  useAuth: vi.fn(() => ({
-    enabled: false,
-    authenticated: false,
-    loading: false,
-    user: null,
-    logout: vi.fn(),
-  })),
-}));
-
 vi.mock('@/modules/shared/registry', () => ({
   getProductModules: vi.fn(() => []),
-  getModuleDefinitions: vi.fn(() => []),
 }));
 
 import { VolundrPage } from '@/modules/volundr/pages/Volundr';

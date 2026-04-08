@@ -614,10 +614,6 @@ pod_manager:
 
         # Change working directory so ./config.yaml resolves to our temp file
         monkeypatch.chdir(tmp_path)
-        # Clear env vars that could leak from embedded PG or NIUU_CONFIG
-        monkeypatch.delenv("NIUU_CONFIG", raising=False)
-        monkeypatch.delenv("DATABASE__HOST", raising=False)
-        monkeypatch.delenv("DATABASE__PORT", raising=False)
 
         settings = Settings()
 
@@ -639,9 +635,6 @@ database:
         config_file.write_text(yaml_content)
 
         monkeypatch.chdir(tmp_path)
-        # Clear env vars that could leak from embedded PG
-        monkeypatch.delenv("NIUU_CONFIG", raising=False)
-        monkeypatch.delenv("DATABASE__PORT", raising=False)
         # Use nested delimiter (DATABASE__HOST) to override nested config
         monkeypatch.setenv("DATABASE__HOST", "env-host")
 

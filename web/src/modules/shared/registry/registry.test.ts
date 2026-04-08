@@ -1,19 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { Settings, Compass } from 'lucide-react';
+import { Settings } from 'lucide-react';
+import type { IVolundrService } from '@/ports';
 import {
   registerModule,
   getModule,
   getAllModules,
   registerProductModule,
   getProductModules,
-  registerModuleDefinition,
-  getModuleDefinitions,
-  getModuleDefinition,
 } from './registry';
 
 const dummyLoad = () =>
   Promise.resolve({
-    default: (() => null) as unknown as React.ComponentType,
+    default: (() => null) as unknown as React.ComponentType<{ service: IVolundrService }>,
   });
 
 describe('Module Registry', () => {
@@ -43,11 +41,11 @@ describe('Module Registry', () => {
   it('overwrites existing registration with same key', () => {
     const loadA = () =>
       Promise.resolve({
-        default: (() => 'A') as unknown as React.ComponentType,
+        default: (() => 'A') as unknown as React.ComponentType<{ service: IVolundrService }>,
       });
     const loadB = () =>
       Promise.resolve({
-        default: (() => 'B') as unknown as React.ComponentType,
+        default: (() => 'B') as unknown as React.ComponentType<{ service: IVolundrService }>,
       });
 
     registerModule({ key: 'overwrite-test', load: loadA, icon: Settings });
@@ -101,105 +99,5 @@ describe('Product Module Registry', () => {
     const modules = getProductModules();
     expect(modules.some(m => m.key === 'product-a')).toBe(true);
     expect(modules.some(m => m.key === 'product-b')).toBe(true);
-  });
-});
-
-describe('Module Definition Registry', () => {
-  it('registers and retrieves a module definition', () => {
-    registerModuleDefinition({
-      key: 'def-test',
-      label: 'Def Test',
-      icon: Compass,
-      basePath: '/def-test',
-      routes: [{ path: '', load: dummyLoad }],
-    });
-
-    const def = getModuleDefinition('def-test');
-    expect(def).toBeDefined();
-    expect(def!.key).toBe('def-test');
-    expect(def!.label).toBe('Def Test');
-    expect(def!.basePath).toBe('/def-test');
-  });
-
-  it('populates legacy product module registry', () => {
-    registerModuleDefinition({
-      key: 'def-legacy-product',
-      label: 'Legacy Product',
-      icon: Compass,
-      basePath: '/legacy-product',
-      routes: [{ path: '', load: dummyLoad }],
-    });
-
-    const products = getProductModules();
-    const found = products.find(m => m.key === 'def-legacy-product');
-    expect(found).toBeDefined();
-    expect(found!.label).toBe('Legacy Product');
-    expect(found!.basePath).toBe('/legacy-product');
-  });
-
-  it('populates legacy feature module registry from sections', () => {
-    const sectionLoad = () =>
-      Promise.resolve({ default: (() => null) as unknown as React.ComponentType });
-
-    registerModuleDefinition({
-      key: 'def-with-sections',
-      label: 'With Sections',
-      icon: Compass,
-      basePath: '/with-sections',
-      routes: [{ path: '', load: dummyLoad }],
-      sections: [
-        { key: 'my-setting', scope: 'settings', icon: Settings, load: sectionLoad },
-        { key: 'my-admin', scope: 'admin', icon: Settings, load: sectionLoad },
-      ],
-    });
-
-    expect(getModule('my-setting')).toBeDefined();
-    expect(getModule('my-admin')).toBeDefined();
-  });
-
-  it('getModuleDefinitions returns all registered definitions', () => {
-    registerModuleDefinition({
-      key: 'def-list-a',
-      label: 'A',
-      icon: Compass,
-      basePath: '/a',
-      routes: [{ path: '', load: dummyLoad }],
-    });
-    registerModuleDefinition({
-      key: 'def-list-b',
-      label: 'B',
-      icon: Compass,
-      basePath: '/b',
-      routes: [{ path: '', load: dummyLoad }],
-    });
-
-    const defs = getModuleDefinitions();
-    expect(defs.some(d => d.key === 'def-list-a')).toBe(true);
-    expect(defs.some(d => d.key === 'def-list-b')).toBe(true);
-  });
-
-  it('handles module with layout', () => {
-    const layoutLoad = () =>
-      Promise.resolve({ default: (() => null) as unknown as React.ComponentType });
-
-    registerModuleDefinition({
-      key: 'def-with-layout',
-      label: 'With Layout',
-      icon: Compass,
-      basePath: '/with-layout',
-      layout: layoutLoad,
-      routes: [
-        { path: '', index: true, redirectTo: 'dashboard' },
-        { path: 'dashboard', load: dummyLoad },
-      ],
-    });
-
-    const def = getModuleDefinition('def-with-layout');
-    expect(def!.layout).toBe(layoutLoad);
-    expect(def!.routes).toHaveLength(2);
-  });
-
-  it('returns undefined for unregistered definition', () => {
-    expect(getModuleDefinition('nonexistent-def')).toBeUndefined();
   });
 });

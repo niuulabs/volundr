@@ -2,15 +2,16 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/auth';
 import { ThemeProvider } from '@/contexts/ThemeContext';
-import { IdentityProvider } from '@/contexts/IdentityContext';
-import { useAppIdentity } from '@/contexts/useAppIdentity';
+import { useIdentity } from '@/hooks/useIdentity';
+import { volundrService } from '@/modules/volundr/adapters';
 import { AppShell } from '@/modules/shared/components/AppShell';
-import { ModuleRoutes } from '@/modules/shared/components/ModuleRouter';
 // Initialize module registry (registers all built-in feature modules)
 import '@/modules';
 import styles from './App.module.css';
 
-// Shared pages that exist outside the module system
+const VolundrPage = lazy(() =>
+  import('@/modules/volundr/pages/Volundr').then(m => ({ default: m.VolundrPage }))
+);
 const VolundrPopout = lazy(() =>
   import('@/modules/volundr/pages/Volundr/VolundrPopout').then(m => ({ default: m.VolundrPopout }))
 );
@@ -19,6 +20,30 @@ const SettingsPage = lazy(() =>
 );
 const AdminPage = lazy(() =>
   import('@/modules/volundr/pages/Admin').then(m => ({ default: m.AdminPage }))
+);
+const TyrLayout = lazy(() =>
+  import('@/modules/tyr/pages/TyrLayout').then(m => ({ default: m.TyrLayout }))
+);
+const SagasView = lazy(() =>
+  import('@/modules/tyr/pages/SagasView').then(m => ({ default: m.SagasView }))
+);
+const SagaDetailView = lazy(() =>
+  import('@/modules/tyr/pages/DetailView').then(m => ({ default: m.DetailView }))
+);
+const DispatcherView = lazy(() =>
+  import('@/modules/tyr/pages/DispatcherView').then(m => ({ default: m.DispatcherView }))
+);
+const TyrSessionsView = lazy(() =>
+  import('@/modules/tyr/pages/SessionsView').then(m => ({ default: m.SessionsView }))
+);
+const ImportView = lazy(() =>
+  import('@/modules/tyr/pages/ImportView').then(m => ({ default: m.ImportView }))
+);
+const PlanSagaView = lazy(() =>
+  import('@/modules/tyr/pages/PlanSagaView').then(m => ({ default: m.PlanSagaView }))
+);
+const DashboardView = lazy(() =>
+  import('@/modules/tyr/pages/DashboardView').then(m => ({ default: m.DashboardView }))
 );
 
 function PageLoader() {
@@ -31,16 +56,28 @@ function PageLoader() {
 }
 
 function AppContent() {
-  const { isAdmin } = useAppIdentity();
+  const { isAdmin } = useIdentity(volundrService);
 
   return (
     <AppShell isAdmin={isAdmin}>
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<Navigate to="/volundr" replace />} />
-          {ModuleRoutes()}
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/volundr" element={<VolundrPage />} />
+          <Route path="/tyr" element={<TyrLayout />}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="sagas" element={<SagasView />} />
+            <Route path="sagas/:id" element={<SagaDetailView />} />
+            <Route path="new" element={<PlanSagaView />} />
+            <Route path="import" element={<ImportView />} />
+            <Route path="plan" element={<Navigate to="/tyr/new" replace />} />
+            <Route path="dispatcher" element={<DispatcherView />} />
+            <Route path="sessions" element={<TyrSessionsView />} />
+            <Route path="dashboard" element={<DashboardView />} />
+            <Route path="settings" element={<Navigate to="/settings" replace />} />
+          </Route>
+          <Route path="/settings" element={<SettingsPage service={volundrService} />} />
+          <Route path="/admin" element={<AdminPage service={volundrService} />} />
           <Route path="/integrations" element={<Navigate to="/settings" replace />} />
         </Routes>
       </Suspense>
@@ -53,15 +90,13 @@ function App() {
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <IdentityProvider>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route path="/volundr/popout" element={<VolundrPopout />} />
-                <Route path="/popout" element={<VolundrPopout />} />
-                <Route path="/*" element={<AppContent />} />
-              </Routes>
-            </Suspense>
-          </IdentityProvider>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/volundr/popout" element={<VolundrPopout />} />
+              <Route path="/popout" element={<VolundrPopout />} />
+              <Route path="/*" element={<AppContent />} />
+            </Routes>
+          </Suspense>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

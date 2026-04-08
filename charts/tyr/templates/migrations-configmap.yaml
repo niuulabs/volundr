@@ -391,10 +391,4 @@ data:
   000019_saga_feature_branch.down.sql: |
     ALTER TABLE sagas ALTER COLUMN base_branch SET DEFAULT 'main';
     ALTER TABLE sagas DROP COLUMN IF EXISTS feature_branch;
-
-  000021_dispatcher_auto_continue.up.sql: |
-    ALTER TABLE dispatcher_state ADD COLUMN IF NOT EXISTS auto_continue BOOLEAN NOT NULL DEFAULT FALSE;
-
-  000021_dispatcher_auto_continue.down.sql: |
-    ALTER TABLE dispatcher_state DROP COLUMN IF EXISTS auto_continue;
 {{- end }}
