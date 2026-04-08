@@ -57,6 +57,8 @@ class InMemoryCheckpointAdapter(CheckpointPort):
 
     def __init__(self) -> None:
         self._store: dict[str, Checkpoint] = {}
+        self._snapshots: dict[str, Checkpoint] = {}
+        self._seq: dict[str, int] = {}
 
     async def save(self, checkpoint: Checkpoint) -> None:
         self._store[checkpoint.task_id] = checkpoint
@@ -69,6 +71,28 @@ class InMemoryCheckpointAdapter(CheckpointPort):
 
     async def list_task_ids(self) -> list[str]:
         return list(self._store.keys())
+
+    async def save_snapshot(self, checkpoint: Checkpoint) -> str:
+        seq = self._seq.get(checkpoint.task_id, 0) + 1
+        self._seq[checkpoint.task_id] = seq
+        cid = Checkpoint.make_snapshot_id(checkpoint.task_id, seq)
+        checkpoint.checkpoint_id = cid
+        checkpoint.seq = seq
+        self._snapshots[cid] = checkpoint
+        return cid
+
+    async def list_for_task(self, task_id: str) -> list[Checkpoint]:
+        return sorted(
+            (cp for cp in self._snapshots.values() if cp.task_id == task_id),
+            key=lambda c: c.seq,
+            reverse=True,
+        )
+
+    async def load_snapshot(self, checkpoint_id: str) -> Checkpoint | None:
+        return self._snapshots.get(checkpoint_id)
+
+    async def delete_snapshot(self, checkpoint_id: str) -> None:
+        self._snapshots.pop(checkpoint_id, None)
 
 
 # ---------------------------------------------------------------------------
@@ -171,9 +195,9 @@ class TestDiskCheckpointAdapter:
         adapter = DiskCheckpointAdapter(checkpoint_dir=tmp_path)
         cp = _make_checkpoint()
         await adapter.save(cp)
-        files = list(tmp_path.glob("*.json"))
+        files = list(tmp_path.glob("*.json.gz"))
         assert len(files) == 1
-        assert files[0].stem == "task_001"
+        assert files[0].name == "task_001.json.gz"
 
     @pytest.mark.asyncio
     async def test_roundtrip_all_fields(self, tmp_path: Path) -> None:
@@ -265,7 +289,7 @@ class TestDiskCheckpointAdapter:
         cp = _make_checkpoint(task_id="../evil")
         await adapter.save(cp)
         # The file should be inside tmp_path, not outside it.
-        saved_files = list(tmp_path.glob("*.json"))
+        saved_files = list(tmp_path.glob("*.json.gz"))
         assert len(saved_files) == 1
         assert saved_files[0].parent == tmp_path
 
@@ -469,6 +493,18 @@ async def test_checkpoint_save_failure_does_not_crash_agent() -> None:
 
         async def list_task_ids(self) -> list[str]:
             return []
+
+        async def save_snapshot(self, checkpoint: Checkpoint) -> str:
+            return ""
+
+        async def list_for_task(self, task_id: str) -> list[Checkpoint]:
+            return []
+
+        async def load_snapshot(self, checkpoint_id: str) -> Checkpoint | None:
+            return None
+
+        async def delete_snapshot(self, checkpoint_id: str) -> None:
+            pass
 
     llm = MockLLM(
         [

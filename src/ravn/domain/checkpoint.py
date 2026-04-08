@@ -25,7 +25,7 @@ class Checkpoint:
     not just on explicit interruption.  Fields are kept intentionally flat
     (primitive types and plain dicts) so serialisation is trivial.
 
-    Attributes:
+    NIU-504 (crash-recovery) checkpoint fields:
         task_id:                Unique ID for this task / checkpoint.
         user_input:             The original prompt that started the task.
         messages:               Full conversation history, Anthropic API format.
@@ -41,6 +41,15 @@ class Checkpoint:
                                 None when the checkpoint was written mid-run
                                 (crash-safe checkpoint, not an explicit stop).
         created_at:             UTC timestamp when this checkpoint was written.
+
+    NIU-537 (named snapshot) extensions:
+        checkpoint_id:          Globally unique snapshot ID: ``ckpt_{task_id}_{seq}``.
+                                Empty string for crash-recovery checkpoints (NIU-504).
+        seq:                    Monotonically increasing sequence number within the task.
+                                0 for crash-recovery checkpoints.
+        label:                  Optional human-readable label, e.g. "after tests pass".
+        tags:                   Optional list of free-form tag strings.
+        memory_context:         Memory context string captured at snapshot time.
     """
 
     task_id: str
@@ -54,3 +63,20 @@ class Checkpoint:
     partial_response: str
     interrupted_by: InterruptReason | None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    # NIU-537 named-snapshot fields (default to crash-recovery values)
+    checkpoint_id: str = ""
+    seq: int = 0
+    label: str = ""
+    tags: list[str] = field(default_factory=list)
+    memory_context: str = ""
+
+    @property
+    def is_named_snapshot(self) -> bool:
+        """True when this is a named snapshot (NIU-537), not a crash-recovery write."""
+        return bool(self.checkpoint_id)
+
+    @classmethod
+    def make_snapshot_id(cls, task_id: str, seq: int) -> str:
+        """Return a canonical checkpoint_id for the given task and sequence."""
+        return f"ckpt_{task_id}_{seq}"
