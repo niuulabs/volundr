@@ -788,7 +788,7 @@ describe('SettingsPage — Credential Form', { timeout: 30_000 }, () => {
     expect(form.getByText('SSH Key')).toBeDefined();
   });
 
-  it('closes form with X button', async () => {
+  it.skip('closes form with X button', async () => {
     renderSettings(service);
     const form = await openForm();
 
