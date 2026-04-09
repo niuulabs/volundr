@@ -713,9 +713,15 @@ class RavnTUI(App[None]):
 
     async def action_command_palette(self) -> None:
         from ravn.tui.widgets.command_palette import CommandPaletteScreen
-        cmd = await self.push_screen_wait(CommandPaletteScreen())
-        if not cmd:
-            return
+
+        def _on_dismiss(cmd: str | None) -> None:
+            if not cmd:
+                return
+            asyncio.create_task(self._handle_palette_result(cmd))
+
+        self.push_screen(CommandPaletteScreen(), _on_dismiss)
+
+    async def _handle_palette_result(self, cmd: str) -> None:
         text = cmd.lstrip(":")
         if cmd.endswith(" "):
             # Command needs arguments — pre-fill the command bar
