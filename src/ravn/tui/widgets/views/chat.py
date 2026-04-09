@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from typing import TYPE_CHECKING, Any
 
 from textual.app import ComposeResult
@@ -286,8 +287,8 @@ class ChatView(Widget):
             return
         name = self._connection.name if self._connection else "ravn"
         ts = datetime.now().strftime("%H:%M:%S")
-        safe = text.replace("[", "\\[")
-        log.write(f"[#d4d4d8 on #1c1c1e]  {safe}  [/]")
+        for line in _render_markdown(text):
+            log.write(line)
         log.write(f"[#3f3f46]  {ts} · {name}[/]")
         log.write("")
         log.scroll_end(animate=False)
@@ -313,3 +314,80 @@ class ChatView(Widget):
             log.write(f"[#3f3f46]  ── {text} ──[/]")
         except Exception:
             pass
+
+
+# ---------------------------------------------------------------------------
+# Markdown renderer
+# ---------------------------------------------------------------------------
+
+
+def _inline(text: str) -> str:
+    """Apply inline markdown to already-escape-safe text.
+
+    Assumes `[` has NOT been escaped yet — this function does the escaping
+    first, then applies bold/italic/code substitutions.
+    """
+    text = text.replace("[", "\\[")
+    # Inline code (highest priority — must run before bold/italic)
+    text = re.sub(r"`(.+?)`", lambda m: "[#a1a1aa on #111111] " + m.group(1).replace("[", "\\[") + " [/]", text)
+    # Bold
+    text = re.sub(r"\*\*(.+?)\*\*", r"[bold #fafafa]\1[/]", text)
+    text = re.sub(r"__(.+?)__", r"[bold #fafafa]\1[/]", text)
+    # Italic
+    text = re.sub(r"\*(.+?)\*", r"[italic #d4d4d8]\1[/]", text)
+    text = re.sub(r"(?<!\w)_(.+?)_(?!\w)", r"[italic #d4d4d8]\1[/]", text)
+    return text
+
+
+def _render_markdown(text: str) -> list[str]:
+    """Convert a markdown response to a list of Rich markup strings."""
+    output: list[str] = []
+    in_code_block = False
+    code_lang = ""
+
+    for raw in text.split("\n"):
+        # Code fence toggle
+        if raw.startswith("```"):
+            if in_code_block:
+                in_code_block = False
+                output.append("[#3f3f46]  ───[/]")
+            else:
+                in_code_block = True
+                code_lang = raw[3:].strip()
+                label = f" {code_lang}" if code_lang else ""
+                output.append(f"[#3f3f46]  ──{label}[/]")
+            continue
+
+        if in_code_block:
+            safe = raw.replace("[", "\\[")
+            output.append(f"  [#a1a1aa on #111111]{safe}[/]")
+            continue
+
+        # Headings
+        if raw.startswith("### "):
+            output.append(f"[bold #a1a1aa]{_inline(raw[4:])}[/]")
+        elif raw.startswith("## "):
+            output.append(f"[bold #d4d4d8]{_inline(raw[3:])}[/]")
+        elif raw.startswith("# "):
+            output.append(f"[bold #fafafa]{_inline(raw[2:])}[/]")
+        # Unordered list
+        elif raw.startswith(("- ", "* ")):
+            output.append(f"  [#52525b]·[/] [#d4d4d8]{_inline(raw[2:])}[/]")
+        # Ordered list
+        elif re.match(r"^\d+\. ", raw):
+            content = re.sub(r"^\d+\. ", "", raw)
+            num = re.match(r"^(\d+)\. ", raw).group(1)  # type: ignore[union-attr]
+            output.append(f"  [#52525b]{num}.[/] [#d4d4d8]{_inline(content)}[/]")
+        # Blockquote
+        elif raw.startswith("> "):
+            output.append(f"  [italic #71717a]{_inline(raw[2:])}[/]")
+        # Horizontal rule
+        elif raw.strip() in ("---", "***", "___"):
+            output.append("[#3f3f46]  ─────────────────────────────────────[/]")
+        # Normal text
+        elif raw:
+            output.append(f"[#d4d4d8]{_inline(raw)}[/]")
+        else:
+            output.append("")
+
+    return output
