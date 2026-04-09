@@ -118,7 +118,8 @@ class RavnProfile:
     # ------------------------------------------------------------------
 
     checkpoint_enabled: bool = False
-    checkpoint_strategy: str = "on_milestone"  # "on_milestone" | "on_every_n_tools" | "on_destructive"
+    # "on_milestone" | "on_every_n_tools" | "on_destructive"
+    checkpoint_strategy: str = "on_milestone"
 
     # ------------------------------------------------------------------
     # Serialisation

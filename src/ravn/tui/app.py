@@ -560,7 +560,9 @@ class RavnTUI(App[None]):
         self._kb_map = KeybindingLoader().load(source)
         self._kb_seq = KeySequenceBuffer()
         self._init_sequence_buffer()
-        self.notify(f"Keybindings reloaded ({self._kb_map.single_key.__len__()} single, {len(self._kb_map.multi_key)} sequences)")
+        n_single = len(self._kb_map.single_key)
+        n_seq = len(self._kb_map.multi_key)
+        self.notify(f"Keybindings reloaded ({n_single} single, {n_seq} sequences)")
 
     async def _switch_layout(self, name: str) -> None:
         data = self.layout_mgr.load(name)

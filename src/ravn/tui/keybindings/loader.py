@@ -149,8 +149,8 @@ class KeybindingLoader:
 
     def _load_vim(self, kb: KeybindingMap) -> int:
         """Try vim config, fall back to nvim, then give up."""
-        from ravn.tui.keybindings.vim import VimscriptParser, find_vimrc
         from ravn.tui.keybindings.nvim import NvimLuaParser, find_nvim_config
+        from ravn.tui.keybindings.vim import VimscriptParser, find_vimrc
 
         config_path = self._resolved_path()
 

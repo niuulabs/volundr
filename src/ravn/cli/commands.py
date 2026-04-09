@@ -16,7 +16,6 @@ import typer
 from ravn.agent import PostToolHook, PreToolHook, RavnAgent
 from ravn.config import InitiativeConfig, OutcomeConfig, ProjectConfig, Settings, ToolGroupConfig
 from ravn.domain.checkpoint import InterruptReason
-from ravn.domain.profile import RavnProfile
 from ravn.domain.models import (
     Message,
     Session,
@@ -26,6 +25,7 @@ from ravn.domain.models import (
     ToolCall,
     ToolResult,
 )
+from ravn.domain.profile import RavnProfile
 from ravn.ports.checkpoint import CheckpointPort
 
 logger = logging.getLogger(__name__)
@@ -1697,7 +1697,9 @@ def daemon(
     effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
     persona_config = _resolve_persona(effective_persona, project_config)
 
-    asyncio.run(_run_daemon(settings, persona_config=persona_config, profile=ravn_profile, resume=resume))
+    asyncio.run(
+        _run_daemon(settings, persona_config=persona_config, profile=ravn_profile, resume=resume)
+    )
 
 
 @app.command()
