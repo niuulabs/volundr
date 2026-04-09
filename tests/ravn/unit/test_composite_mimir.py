@@ -540,7 +540,7 @@ async def test_read_source_exception_falls_through() -> None:
     good = MimirMount(name="good", port=good_port, role="shared", read_priority=1)
     adapter = CompositeMimirAdapter(mounts=[bad, good])
     # good_port.read_source returns None by default (from _mock_port)
-    result = await adapter.read_source("src-1")
+    await adapter.read_source("src-1")
     good_port.read_source.assert_called_once()
 
 

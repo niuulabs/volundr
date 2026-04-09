@@ -204,7 +204,9 @@ class KeybindingMap:
         else:
             self.multi_key.append((list(sequence), action))
 
-    def register_vim_rhs(self, textual_lhs: list[str], vim_rhs: str, action_map: dict[str, str]) -> bool:
+    def register_vim_rhs(
+        self, textual_lhs: list[str], vim_rhs: str, action_map: dict[str, str]
+    ) -> bool:
         """Try to map a user lhs to an action via vim rhs patterns.
 
         Returns True if a mapping was found.

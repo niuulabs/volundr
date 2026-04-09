@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ravn.tui.keybindings.model import KeybindingMap
-from ravn.tui.keybindings.vim import VimscriptParser
-from ravn.tui.keybindings.nvim import NvimLuaParser
 from ravn.tui.keybindings.emacs import EmacsParser
-
+from ravn.tui.keybindings.model import KeybindingMap
+from ravn.tui.keybindings.nvim import NvimLuaParser
+from ravn.tui.keybindings.vim import VimscriptParser
 
 # ---------------------------------------------------------------------------
 # VimscriptParser
@@ -155,7 +154,9 @@ class TestEmacsParser:
         assert "C-j" in result
 
     def test_parse_evil_define_key(self) -> None:
-        content = "(evil-define-key 'normal evil-normal-state-map (kbd \"C-l\") 'evil-window-right)\n"
+        content = (
+            "(evil-define-key 'normal evil-normal-state-map (kbd \"C-l\") 'evil-window-right)\n"
+        )
         result = EmacsParser().parse(content)
         assert "C-l" in result
 

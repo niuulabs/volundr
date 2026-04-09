@@ -329,7 +329,11 @@ def _inline(text: str) -> str:
     """
     text = text.replace("[", "\\[")
     # Inline code (highest priority — must run before bold/italic)
-    text = re.sub(r"`(.+?)`", lambda m: "[#a1a1aa on #111111] " + m.group(1).replace("[", "\\[") + " [/]", text)
+    text = re.sub(
+        r"`(.+?)`",
+        lambda m: "[#a1a1aa on #111111] " + m.group(1).replace("[", "\\[") + " [/]",
+        text,
+    )
     # Bold
     text = re.sub(r"\*\*(.+?)\*\*", r"[bold #fafafa]\1[/]", text)
     text = re.sub(r"__(.+?)__", r"[bold #fafafa]\1[/]", text)

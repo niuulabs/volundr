@@ -132,7 +132,7 @@ class CommandPaletteScreen(ModalScreen[str | None]):
     def on_input_changed(self, event: Input.Changed) -> None:
         q = event.value.lower().strip()
         if q:
-            self._filtered = [(l, c) for l, c in _ITEMS if q in l.lower()]
+            self._filtered = [(label, c) for label, c in _ITEMS if q in label.lower()]
         else:
             self._filtered = list(_ITEMS)
         self._idx = 0
