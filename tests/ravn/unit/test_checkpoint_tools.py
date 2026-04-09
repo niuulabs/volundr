@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -13,7 +13,7 @@ from ravn.adapters.tools.checkpoint_tools import (
     CheckpointSaveTool,
 )
 from ravn.domain.checkpoint import Checkpoint
-from ravn.domain.models import Session, TodoItem, TodoStatus
+from ravn.domain.models import Session
 
 
 def _make_checkpoint(

@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from ravn.domain.profile import MimirMountRef, RavnProfile
-
 
 # ---------------------------------------------------------------------------
 # MimirMountRef

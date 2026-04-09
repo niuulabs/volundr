@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from ravn.tui.keybindings.model import (
     KeybindingMap,
     emacs_kbd_to_textual,
@@ -11,7 +9,6 @@ from ravn.tui.keybindings.model import (
     vim_key_to_textual,
     vim_sequence_to_textual,
 )
-
 
 # ---------------------------------------------------------------------------
 # vim_key_to_textual

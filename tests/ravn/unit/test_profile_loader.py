@@ -4,11 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from ravn.adapters.profiles.loader import ProfileLoader, _BUILTIN_PROFILES
-from ravn.domain.profile import MimirMountRef, RavnProfile
-
+from ravn.adapters.profiles.loader import ProfileLoader
+from ravn.domain.profile import RavnProfile
 
 # ---------------------------------------------------------------------------
 # Built-in profiles

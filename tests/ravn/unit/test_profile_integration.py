@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from ravn.domain.profile import RavnProfile
-
 
 # ---------------------------------------------------------------------------
 # RavnGateway.get_status
