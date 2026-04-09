@@ -219,17 +219,62 @@ jobs:
           flags: backend-tyr
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  python-test-ravn:
+    name: "Python: Test Ravn"
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run tests with coverage
+        run: |
+          # src/ravn/tui/ is excluded via [tool.coverage.run] omit in pyproject.toml —
+          # Textual widgets require a running terminal and cannot be tested with plain pytest.
+          uv run pytest tests/ravn tests/test_ravn tests/test_bifrost tests/test_sleipnir \
+            -v --tb=short \
+            --override-ini="addopts=" \
+            --cov=src/ravn --cov=src/bifrost --cov=src/sleipnir \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=85
+
+      - name: Upload coverage to Codecov
+        if: always() && hashFiles('coverage.xml') != ''
+        uses: codecov/codecov-action@aa56896cf108bd10b5eb883cd1d24196da57f695 # v5.5.4
+        with:
+          files: coverage.xml
+          flags: backend-ravn
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   # Rollup gate — branch ruleset requires "Python: Test"
   python-test:
     name: "Python: Test"
-    needs: [python-test-volundr, python-test-tyr]
+    needs: [python-test-volundr, python-test-tyr, python-test-ravn]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         run: |
           if [[ "${{ needs.python-test-volundr.result }}" == "failure" ]] || \
-             [[ "${{ needs.python-test-tyr.result }}" == "failure" ]]; then
+             [[ "${{ needs.python-test-tyr.result }}" == "failure" ]] || \
+             [[ "${{ needs.python-test-ravn.result }}" == "failure" ]]; then
             exit 1
           fi
 
