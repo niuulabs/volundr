@@ -94,8 +94,6 @@ class FlokkaView(Widget):
         Binding("k", "select_prev", "Prev", show=False),
         Binding("enter", "open_chat", "Chat", show=False),
         Binding("g", "ghost_mode", "Ghost"),
-        Binding("b", "broadcast", "Broadcast"),
-        Binding("n", "notifications", "Notifs"),
     ]
 
     _selected_idx: reactive[int] = reactive(0)
@@ -194,14 +192,6 @@ class FlokkaView(Widget):
         conn = self.get_selected_connection()
         if conn and hasattr(self.app, "GhostMode"):
             self.app.post_message(self.app.GhostMode(conn.host, conn.port))
-
-    def action_broadcast(self) -> None:
-        if hasattr(self.app, "action_broadcast"):
-            self.app.action_broadcast()
-
-    def action_notifications(self) -> None:
-        if hasattr(self.app, "action_notifications"):
-            self.app.action_notifications()
 
     # ------------------------------------------------------------------
     # Helpers

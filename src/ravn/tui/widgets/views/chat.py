@@ -1,9 +1,9 @@
 """ChatView — WebSocket conversation with a Ravn daemon.
 
 Uses the /ws WebSocket endpoint with the CLI stream-json format (same as the
-web UI's useSkuldChat hook).  Text deltas are buffered per content_block and
-written to the log as one bubble when the block closes, giving clean output
-instead of a line per token.
+web UI's useSkuldChat hook).  Text deltas are streamed live into a Static
+widget as they arrive; when the block closes the content is committed as a
+chat bubble to the RichLog.
 """
 
 from __future__ import annotations
@@ -13,9 +13,10 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import Input, RichLog
+from textual.widgets import Input, RichLog, Static
 
 if TYPE_CHECKING:
     pass
@@ -43,6 +44,15 @@ class ChatView(Widget):
         height: 1fr;
         background: #09090b;
     }
+    ChatView #cv-stream {
+        padding: 0 1;
+        background: #1c1c1e;
+        color: #d4d4d8;
+        display: none;
+    }
+    ChatView #cv-stream.streaming {
+        display: block;
+    }
     ChatView #cv-input-bar {
         height: 3;
         border-top: solid #27272a;
@@ -59,6 +69,13 @@ class ChatView(Widget):
 
     can_focus = True
 
+    BINDINGS = [
+        Binding("j", "scroll_down", show=False),
+        Binding("k", "scroll_up", show=False),
+        Binding("G", "scroll_bottom", show=False),
+        Binding("g", "scroll_top", show=False),
+    ]
+
     streaming: reactive[bool] = reactive(False)
 
     def __init__(self, connection: Any | None = None, **kwargs: object) -> None:
@@ -72,6 +89,7 @@ class ChatView(Widget):
 
     def compose(self) -> ComposeResult:
         yield RichLog(id="cv-log", markup=True, highlight=True, wrap=True)
+        yield Static("", id="cv-stream", markup=True)
         name = self._connection.name if self._connection else "ravn"
         yield Input(placeholder=f"{name} > message…", id="cv-input")
 
@@ -93,6 +111,34 @@ class ChatView(Widget):
             log.write("")
             log.write("[#52525b]  No ravn? Connect one:[/]")
             log.write("[#3f3f46]  :[/][#71717a]connect host:7477[/]")
+
+    # ------------------------------------------------------------------
+    # Scroll actions (j/k/G/g when log is in view)
+    # ------------------------------------------------------------------
+
+    def action_scroll_down(self) -> None:
+        try:
+            self.query_one("#cv-log", RichLog).scroll_down(animate=False)
+        except Exception:
+            pass
+
+    def action_scroll_up(self) -> None:
+        try:
+            self.query_one("#cv-log", RichLog).scroll_up(animate=False)
+        except Exception:
+            pass
+
+    def action_scroll_bottom(self) -> None:
+        try:
+            self.query_one("#cv-log", RichLog).scroll_end(animate=False)
+        except Exception:
+            pass
+
+    def action_scroll_top(self) -> None:
+        try:
+            self.query_one("#cv-log", RichLog).scroll_home(animate=False)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # WebSocket connection
@@ -118,6 +164,7 @@ class ChatView(Widget):
         finally:
             self._ws = None
             self.streaming = False
+            self._clear_stream()
 
     # ------------------------------------------------------------------
     # CLI stream-json frame handler
@@ -135,20 +182,24 @@ class ChatView(Widget):
                 if self._block_type == "tool_use":
                     tool_name = cb.get("name", "?")
                     self._append_tool_start(tool_name)
+                elif self._block_type == "text":
+                    self._show_stream("")
 
             case "content_block_delta":
                 delta = frame.get("delta", {})
                 dtype = delta.get("type", "")
                 if dtype == "text_delta":
                     self._text_buf += delta.get("text", "")
+                    # Stream live into the Static widget
+                    self._show_stream(self._text_buf)
                 elif dtype == "thinking_delta":
                     self._think_buf += delta.get("thinking", "")
 
             case "content_block_stop":
+                self._clear_stream()
                 if self._block_type == "text" and self._text_buf:
                     self._append_ravn(self._text_buf)
                 elif self._block_type == "thinking" and self._think_buf:
-                    # Show a compact thought indicator, not the full text
                     preview = self._think_buf[:80].replace("\n", " ")
                     dots = "…" if len(self._think_buf) > 80 else ""
                     self._append_thought(f"{preview}{dots}")
@@ -191,6 +242,28 @@ class ChatView(Widget):
             self._append_system("[#ef4444]send failed[/]")
 
     # ------------------------------------------------------------------
+    # Live stream display
+    # ------------------------------------------------------------------
+
+    def _show_stream(self, text: str) -> None:
+        try:
+            stream = self.query_one("#cv-stream", Static)
+            stream.add_class("streaming")
+            # Escape Rich markup in streamed text to avoid parse errors
+            safe = text.replace("[", "\\[")
+            stream.update(f"[#d4d4d8]  {safe}[/]")
+        except Exception:
+            pass
+
+    def _clear_stream(self) -> None:
+        try:
+            stream = self.query_one("#cv-stream", Static)
+            stream.remove_class("streaming")
+            stream.update("")
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
     # Rendering helpers
     # ------------------------------------------------------------------
 
@@ -199,7 +272,8 @@ class ChatView(Widget):
 
         log = self.query_one("#cv-log", RichLog)
         ts = datetime.now().strftime("%H:%M:%S")
-        log.write(f"[#d4d4d8 on #1a1308]  {text}  [/]")
+        safe = text.replace("[", "\\[")
+        log.write(f"[#d4d4d8 on #1a1308]  {safe}  [/]")
         log.write(f"[#3f3f46]  {ts} · you[/]")
         log.write("")
 
@@ -212,7 +286,8 @@ class ChatView(Widget):
             return
         name = self._connection.name if self._connection else "ravn"
         ts = datetime.now().strftime("%H:%M:%S")
-        log.write(f"[#d4d4d8 on #1c1c1e]  {text}  [/]")
+        safe = text.replace("[", "\\[")
+        log.write(f"[#d4d4d8 on #1c1c1e]  {safe}  [/]")
         log.write(f"[#3f3f46]  {ts} · {name}[/]")
         log.write("")
         log.scroll_end(animate=False)
@@ -220,7 +295,8 @@ class ChatView(Widget):
     def _append_thought(self, text: str) -> None:
         try:
             log = self.query_one("#cv-log", RichLog)
-            log.write(f"[italic #52525b]  ✦ {text}[/]")
+            safe = text.replace("[", "\\[")
+            log.write(f"[italic #52525b]  ✦ {safe}[/]")
         except Exception:
             pass
 

@@ -41,6 +41,7 @@ _KEY_ALIASES: dict[str, str] = {
     "slash": "/",
     "colon": ":",
     "semicolon": ";",
+    "question_mark": "?",
 }
 
 # Keys already handled by Textual BINDINGS or by individual view widgets —
