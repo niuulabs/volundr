@@ -73,6 +73,7 @@ class MimirSourceMeta:
     title: str
     ingested_at: datetime
     source_type: str
+    mount_name: str | None = None  # set by CompositeMimirAdapter to identify origin mount
 
 
 @dataclass

@@ -400,11 +400,30 @@ class MarkdownMimirAdapter(MimirPort):
             return all_sources
 
         # Collect all source_ids referenced across wiki pages
-        referenced: set[str] = set()
+        referenced_ids: set[str] = set()
         for _, content in self._list_pages_with_content():
-            referenced.update(self._extract_source_ids(content))
+            referenced_ids.update(self._extract_source_ids(content))
 
-        return [s for s in all_sources if s.source_id not in referenced]
+        # Build a map of content_hash → source_id for all referenced sources so that
+        # re-ingested sources with identical content (same hash, new id) are not
+        # re-synthesised.
+        referenced_hashes: set[str] = set()
+        for src in all_sources:
+            if src.source_id in referenced_ids:
+                # Load the full source to get its hash
+                full = self.read_raw_source(src.source_id)
+                if full is not None:
+                    referenced_hashes.add(full.content_hash)
+
+        results: list[MimirSourceMeta] = []
+        for src in all_sources:
+            if src.source_id in referenced_ids:
+                continue
+            full = self.read_raw_source(src.source_id)
+            if full is not None and full.content_hash in referenced_hashes:
+                continue
+            results.append(src)
+        return results
 
     # ------------------------------------------------------------------
     # Raw source storage

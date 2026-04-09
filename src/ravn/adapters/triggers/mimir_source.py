@@ -100,12 +100,16 @@ class MimirSourceTrigger:
                 f"Title: {src.title}\n"
                 f"Type: {src.source_type}\n"
                 f"Ingested: {src.ingested_at.isoformat()}\n\n"
-                f"Follow the synthesis workflow in MIMIR.md:\n"
-                f"1. Call mimir_query on the source topic to check for existing pages.\n"
+                f"Synthesis workflow:\n"
+                f"1. Call mimir_query on the source topic to find existing pages.\n"
                 f"2. Ingest is already done (source_id: {src.source_id}).\n"
                 f"3. Read the source content below and synthesise wiki pages.\n"
-                f"4. Optionally run targeted web searches if recency matters.\n"
-                f"5. Write pages with mimir_write, cross-link, update log."
+                f"4. Optionally run 1-2 targeted web searches if recency matters.\n"
+                f"5. Call mimir_write to write or update each synthesised page. Every page\n"
+                f"   MUST include `<!-- sources: {src.source_id} -->` in its footer.\n"
+                f"   If a page already exists but lacks this source_id, call mimir_write\n"
+                f"   to update it — do not skip synthesis because pages already exist.\n"
+                f"6. Cross-link related pages, update wiki/index.md, append to wiki/log.md."
                 f"{content_section}"
             )
 
@@ -120,9 +124,11 @@ class MimirSourceTrigger:
                 priority=8,
                 max_tokens=self._config.max_tokens,
             )
+            mount_tag = f" [mount={src.mount_name}]" if src.mount_name else ""
             logger.info(
-                "MimirSourceTrigger: enqueuing synthesis for source %r (%s)",
+                "MimirSourceTrigger: enqueuing synthesis for source %r (%s)%s",
                 src.source_id,
                 src.title,
+                mount_tag,
             )
             await enqueue(task)

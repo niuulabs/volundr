@@ -158,7 +158,7 @@ class HttpGateway:
                 "type": str(event.type),
                 "payload": event.payload,
                 "source": event.source,
-                "session_id": event.session_id,
+                "session_id": str(event.session_id),
                 "timestamp": event.timestamp.isoformat(),
             }
         )

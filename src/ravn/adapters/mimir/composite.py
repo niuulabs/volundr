@@ -188,6 +188,7 @@ class CompositeMimirAdapter(MimirPort):
                 for meta in sources:
                     if meta.source_id not in seen_ids:
                         seen_ids.add(meta.source_id)
+                        meta.mount_name = mount.name
                         results.append(meta)
             except Exception as exc:
                 logger.debug(

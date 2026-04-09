@@ -5,4 +5,4 @@
 - Created [[implementations/odin/mimir|Mímir]] in `wiki/implementations/odin/`.
 - Updated `wiki/index.md`.
 - Synthesised [[sources/karpathy_llm_wiki|Karpathy LLM Wiki]] from src_2d7c0b059d2d9bd0 (2026-04-08)
-- Synthesised [[sources/karpathy_llm_wiki|Karpathy LLM Wiki]] from src_2d7c0b059d2d9bd0 (2026-04-08)
+- Updated [[sources/karpathy_llm_wiki|Karpathy LLM Wiki]] with v2 synthesis (2026-04-08)
