@@ -12,7 +12,7 @@ _TABS: list[tuple[str, str]] = [
     ("ᚠ Flokk", "flokk"),
     ("⑄ Cascade", "cascade"),
     ("ᛗ Mímir", "mimir"),
-    ("⊞ Split", "split"),
+    ("⑃ Broadcast", "broadcast"),
 ]
 
 

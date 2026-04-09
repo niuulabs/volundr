@@ -1,4 +1,10 @@
-"""ChatView — WebSocket conversation with a Ravn daemon."""
+"""ChatView — WebSocket conversation with a Ravn daemon.
+
+Uses the /ws WebSocket endpoint with the CLI stream-json format (same as the
+web UI's useSkuldChat hook).  Text deltas are buffered per content_block and
+written to the log as one bubble when the block closes, giving clean output
+instead of a line per token.
+"""
 
 from __future__ import annotations
 
@@ -16,10 +22,14 @@ if TYPE_CHECKING:
 
 
 class ChatView(Widget):
-    """Streams chat via POST /chat (SSE response).
+    """Streams over /ws WebSocket (CLI stream-json format).
 
-    Displays message bubbles with role distinction, inline THOUGHT
-    display in muted italic, tool call badges, and a streaming indicator.
+    Message protocol (server → client):
+      content_block_start  type=text|thinking|tool_use
+      content_block_delta  type=text_delta|thinking_delta|input_json_delta
+      content_block_stop
+      result               subtype=success|error
+      error                error.message
     """
 
     DEFAULT_CSS = """
@@ -54,7 +64,11 @@ class ChatView(Widget):
     def __init__(self, connection: Any | None = None, **kwargs: object) -> None:
         super().__init__(**kwargs)
         self._connection: Any | None = connection
-        self._history: list[dict[str, Any]] = []
+        self._ws: Any | None = None
+        # Per-block stream buffers
+        self._block_type: str = ""
+        self._text_buf: str = ""
+        self._think_buf: str = ""
 
     def compose(self) -> ComposeResult:
         yield RichLog(id="cv-log", markup=True, highlight=True, wrap=True)
@@ -66,6 +80,7 @@ class ChatView(Widget):
         if self._connection:
             log.write(f"[#3f3f46]  ── {self._connection.name} ──[/]")
             log.write("")
+            asyncio.create_task(self._connect_ws(), name="chat-ws")
         else:
             log.write("[#3f3f46]  ── no ravn selected ──[/]")
             log.write("")
@@ -78,33 +93,82 @@ class ChatView(Widget):
             log.write("")
             log.write("[#52525b]  No ravn? Connect one:[/]")
             log.write("[#3f3f46]  :[/][#71717a]connect host:7477[/]")
-            log.write("")
-            log.write("[#52525b]  Split this pane:[/]")
-            log.write(
-                "[#3f3f46]  ^w v[/][#71717a] vsplit  [/]"
-                "[#3f3f46]^w s[/][#71717a] hsplit[/]"
-            )
 
-    def _handle_event(self, data: dict[str, Any]) -> None:
-        event_type = data.get("type", "")
-        payload = data.get("payload", {}) or {}
-        match event_type:
-            case "thought":
-                self._append_thought(payload.get("text", ""))
-            case "tool_start":
-                tool = payload.get("tool_name", "?")
-                args = payload.get("args", "")
-                self._append_tool_start(tool, str(args)[:60] if args else "")
-            case "tool_result":
-                tool = payload.get("tool_name", "?")
-                result = str(payload.get("result", ""))
-                self._append_tool_result(tool, result)
-            case "response":
+    # ------------------------------------------------------------------
+    # WebSocket connection
+    # ------------------------------------------------------------------
+
+    async def _connect_ws(self) -> None:
+        if not self._connection:
+            return
+        try:
+            import websockets
+
+            async with websockets.connect(self._connection.ws_url) as ws:
+                self._ws = ws
+                self._append_system("connected")
+                async for raw in ws:
+                    try:
+                        frame = json.loads(raw)
+                        self._handle_frame(frame)
+                    except json.JSONDecodeError:
+                        pass
+        except Exception as exc:
+            self._append_system(f"[#ef4444]disconnected: {exc}[/]")
+        finally:
+            self._ws = None
+            self.streaming = False
+
+    # ------------------------------------------------------------------
+    # CLI stream-json frame handler
+    # ------------------------------------------------------------------
+
+    def _handle_frame(self, frame: dict[str, Any]) -> None:
+        ftype = frame.get("type", "")
+
+        match ftype:
+            case "content_block_start":
+                cb = frame.get("content_block", {})
+                self._block_type = cb.get("type", "")
+                self._text_buf = ""
+                self._think_buf = ""
+                if self._block_type == "tool_use":
+                    tool_name = cb.get("name", "?")
+                    self._append_tool_start(tool_name)
+
+            case "content_block_delta":
+                delta = frame.get("delta", {})
+                dtype = delta.get("type", "")
+                if dtype == "text_delta":
+                    self._text_buf += delta.get("text", "")
+                elif dtype == "thinking_delta":
+                    self._think_buf += delta.get("thinking", "")
+
+            case "content_block_stop":
+                if self._block_type == "text" and self._text_buf:
+                    self._append_ravn(self._text_buf)
+                elif self._block_type == "thinking" and self._think_buf:
+                    # Show a compact thought indicator, not the full text
+                    preview = self._think_buf[:80].replace("\n", " ")
+                    dots = "…" if len(self._think_buf) > 80 else ""
+                    self._append_thought(f"{preview}{dots}")
+                self._block_type = ""
+                self._text_buf = ""
+                self._think_buf = ""
+
+            case "result":
                 self.streaming = False
-                self._append_ravn(payload.get("text", ""))
+                if frame.get("subtype") == "error" or frame.get("is_error"):
+                    self._append_system(f"[#ef4444]{frame.get('result', 'error')}[/]")
+
             case "error":
                 self.streaming = False
-                self._append_system(f"[#ef4444]{payload.get('message', 'error')}[/]")
+                msg = frame.get("error", {}).get("message", "unknown error")
+                self._append_system(f"[#ef4444]{msg}[/]")
+
+    # ------------------------------------------------------------------
+    # Input
+    # ------------------------------------------------------------------
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()
@@ -115,36 +179,20 @@ class ChatView(Widget):
         await self._send(text)
 
     async def _send(self, text: str) -> None:
-        if not self._connection:
-            self._append_system("[#71717a](not connected)[/]")
+        if not self._ws:
+            self._append_system("[#71717a](not connected — reconnecting…)[/]")
+            if self._connection:
+                asyncio.create_task(self._connect_ws(), name="chat-ws-reconnect")
             return
-        self.streaming = True
-        asyncio.create_task(self._stream_response(text), name="chat-send")
-
-    async def _stream_response(self, text: str) -> None:
         try:
-            import httpx
+            await self._ws.send(json.dumps({"type": "user", "content": text}))
+            self.streaming = True
+        except Exception:
+            self._append_system("[#ef4444]send failed[/]")
 
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(None, connect=5.0)
-            ) as client:
-                async with client.stream(
-                    "POST",
-                    f"{self._connection.base_url}/chat",
-                    json={"message": text},
-                ) as resp:
-                    async for line in resp.aiter_lines():
-                        if not line.startswith("data: "):
-                            continue
-                        try:
-                            data = json.loads(line[6:])
-                        except json.JSONDecodeError:
-                            continue
-                        self._handle_event(data)
-        except Exception as exc:
-            self._append_system(f"[#ef4444]Error: {exc}[/]")
-        finally:
-            self.streaming = False
+    # ------------------------------------------------------------------
+    # Rendering helpers
+    # ------------------------------------------------------------------
 
     def _append_user(self, text: str) -> None:
         from datetime import datetime
@@ -158,26 +206,30 @@ class ChatView(Widget):
     def _append_ravn(self, text: str) -> None:
         from datetime import datetime
 
-        log = self.query_one("#cv-log", RichLog)
+        try:
+            log = self.query_one("#cv-log", RichLog)
+        except Exception:
+            return
         name = self._connection.name if self._connection else "ravn"
         ts = datetime.now().strftime("%H:%M:%S")
         log.write(f"[#d4d4d8 on #1c1c1e]  {text}  [/]")
         log.write(f"[#3f3f46]  {ts} · {name}[/]")
         log.write("")
+        log.scroll_end(animate=False)
 
     def _append_thought(self, text: str) -> None:
-        log = self.query_one("#cv-log", RichLog)
-        log.write(f"[italic #52525b]  ✦ {text}[/]")
+        try:
+            log = self.query_one("#cv-log", RichLog)
+            log.write(f"[italic #52525b]  ✦ {text}[/]")
+        except Exception:
+            pass
 
-    def _append_tool_start(self, tool: str, args: str = "") -> None:
-        log = self.query_one("#cv-log", RichLog)
-        detail = f": {args}" if args else ""
-        log.write(f"[#06b6d4 on #071a1e]  TOOL [/][#06b6d4] {tool}{detail}[/]")
-
-    def _append_tool_result(self, tool: str, result: str = "") -> None:
-        log = self.query_one("#cv-log", RichLog)
-        summary = result[:80] + "…" if len(result) > 80 else result
-        log.write(f"[#10b981 on #071a12]  RESULT [/][#10b981] {tool}: {summary}[/]")
+    def _append_tool_start(self, tool: str) -> None:
+        try:
+            log = self.query_one("#cv-log", RichLog)
+            log.write(f"[#06b6d4 on #071a1e]  TOOL [/][#06b6d4] {tool}[/]")
+        except Exception:
+            pass
 
     def _append_system(self, text: str) -> None:
         try:

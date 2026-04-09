@@ -271,23 +271,26 @@ class RavnTUI(App[None]):
 
     async def on_key(self, event: Any) -> None:
         """Intercept keys for multi-key sequence matching before Textual dispatch."""
-        # Don't intercept keys while the command input is focused
         from textual.widgets import Input as _Input
-        if isinstance(self.focused, _Input):
-            return
-
+        in_input = isinstance(self.focused, _Input)
         key = _normalise_key(event.key)
 
-        # Multi-key sequence matching (ctrl+w v, g g, etc.)
+        # Multi-key sequences (ctrl+w v, ctrl+w s, g g, etc.) always run,
+        # even inside Input widgets — so pane splits work from the chat bar.
         action, consumed = self._kb_seq.handle(key)
         if consumed:
             event.stop()
+            if in_input:
+                # Prevent the Input from processing sequence keys as typed text.
+                event.prevent_default()
         if action:
             await self._dispatch_kb_action(action)
             return
 
-        # Single-key app-level dispatch — only when no sequence is in progress
-        # and the key isn't already handled by BINDINGS or view widgets.
+        # Single-key dispatch is blocked inside Input fields.
+        if in_input:
+            return
+
         if not self._kb_seq.pending and key not in _BINDINGS_KEYS and key not in _VIEW_NAV_KEYS:
             single_action = self._kb_map.single_key.get(key)
             if single_action:
@@ -699,9 +702,19 @@ class RavnTUI(App[None]):
                 self.notify("Usage: keybindings [show|reload] [source]")
 
     async def action_quit_guard(self) -> None:
-        """Quit only when not mid-sequence (prevents ^w q from closing the app)."""
-        if not self._kb_seq.pending:
-            self.exit()
+        """Quit only when not mid-sequence.
+
+        Textual fires BINDINGS before on_key, so when the user presses ^w q
+        the 'q' BINDING fires here while _kb_seq still holds ["ctrl+w"] as a
+        pending prefix.  We complete the sequence manually so on_key sees an
+        already-cleared buffer and doesn't double-dispatch.
+        """
+        if self._kb_seq.pending:
+            action, _ = self._kb_seq.handle("q")
+            if action:
+                await self._dispatch_kb_action(action)
+            return
+        self.exit()
 
     async def _cmd_quit(self) -> None:
         self.exit()
