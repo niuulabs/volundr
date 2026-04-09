@@ -138,11 +138,22 @@ class FlokkaManager:
         conn.status = "disconnected"
 
     async def broadcast(self, message: str) -> dict[str, str]:
-        """Send message to all idle Ravens. Returns {name: task_id}."""
-        results: dict[str, str] = {}
-        eligible = [c for c in self.connections() if c.status == "connected" and not c.ghost]
+        """Send message to all connected Ravens. Returns {name: task_id}."""
+        return await self.broadcast_to(
+            [c.name for c in self.connections()],
+            message,
+        )
+
+    async def broadcast_to(self, names: list[str], message: str) -> dict[str, str]:
+        """Send message to a specific subset of Ravens. Returns {name: task_id}."""
+        name_set = set(names)
+        eligible = [
+            c for c in self.connections()
+            if c.name in name_set and c.status == "connected" and not c.ghost
+        ]
         tasks = [self._send_message(conn, message) for conn in eligible]
         responses = await asyncio.gather(*tasks, return_exceptions=True)
+        results: dict[str, str] = {}
         for conn, resp in zip(eligible, responses):
             if isinstance(resp, str):
                 results[conn.name] = resp

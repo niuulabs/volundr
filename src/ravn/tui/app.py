@@ -45,7 +45,9 @@ _KEY_ALIASES: dict[str, str] = {
 
 # Keys already handled by Textual BINDINGS or by individual view widgets —
 # do NOT dispatch these from on_key's single-key handler.
-_BINDINGS_KEYS: frozenset[str] = frozenset({":", "q", "b", "n", "escape"})
+# NOTE: "q" is intentionally absent — it is handled entirely in on_key so that
+# the Textual BINDING mechanism cannot fire action_quit_guard mid-sequence.
+_BINDINGS_KEYS: frozenset[str] = frozenset({":", "b", "n", "escape"})
 _VIEW_NAV_KEYS: frozenset[str] = frozenset({"j", "k", "G", "/"})
 
 
@@ -65,7 +67,6 @@ class RavnTUI(App[None]):
 
     BINDINGS = [
         Binding(":", "command_mode", "Command"),
-        Binding("q", "quit_guard", "Quit"),
         Binding("b", "broadcast", "Broadcast"),
         Binding("n", "notifications", "Notifs"),
         Binding("escape", "escape", "Escape", show=False),
@@ -324,6 +325,13 @@ class RavnTUI(App[None]):
         if in_input:
             return
 
+        # "q" is handled here (not via BINDING) so ^w q sequences are never
+        # intercepted by a quit BINDING before on_key sees the second key.
+        if not self._kb_seq.pending and key == "q":
+            event.stop()
+            self.exit()
+            return
+
         if not self._kb_seq.pending and key not in _BINDINGS_KEYS and key not in _VIEW_NAV_KEYS:
             single_action = self._kb_map.single_key.get(key)
             if single_action:
@@ -395,6 +403,8 @@ class RavnTUI(App[None]):
                 await self._cmd_view("tasks")
             case "command_mode":
                 await self.action_command_mode()
+            case "command_palette":
+                await self.action_command_palette()
             case "broadcast":
                 await self.action_broadcast()
             case "notifications":
@@ -697,12 +707,29 @@ class RavnTUI(App[None]):
         self.notify(f"Broadcast to {len(results)} Ravens")
 
     async def action_broadcast(self) -> None:
-        # Open command mode pre-filled with broadcast
-        container = self.query_one("#cmd-input-container", Container)
-        container.add_class("visible")
-        inp = self.query_one("#cmd-input", Input)
-        inp.value = "broadcast "
-        inp.focus()
+        from ravn.tui.widgets.broadcast_overlay import BroadcastOverlay
+        await self.push_screen(BroadcastOverlay(self.flokka))
+
+    async def action_command_palette(self) -> None:
+        from ravn.tui.widgets.command_palette import CommandPaletteScreen
+        cmd = await self.push_screen_wait(CommandPaletteScreen())
+        if not cmd:
+            return
+        text = cmd.lstrip(":")
+        if cmd.endswith(" "):
+            # Command needs arguments — pre-fill the command bar
+            container = self.query_one("#cmd-input-container", Container)
+            container.add_class("visible")
+            inp = self.query_one("#cmd-input", Input)
+            inp.value = text
+            inp.focus()
+        else:
+            # Execute directly
+            try:
+                parsed = parse_command(text)
+                await self._cmd_dispatcher.dispatch(parsed)
+            except CommandParseError as exc:
+                self.notify(str(exc), severity="error")
 
     async def action_notifications(self) -> None:
         if self._notif_log:
@@ -767,21 +794,6 @@ class RavnTUI(App[None]):
                 self.notify("\n".join(lines[:20]))
             case _:
                 self.notify("Usage: keybindings [show|reload] [source]")
-
-    async def action_quit_guard(self) -> None:
-        """Quit only when not mid-sequence.
-
-        Textual fires BINDINGS before on_key, so when the user presses ^w q
-        the 'q' BINDING fires here while _kb_seq still holds ["ctrl+w"] as a
-        pending prefix.  We complete the sequence manually so on_key sees an
-        already-cleared buffer and doesn't double-dispatch.
-        """
-        if self._kb_seq.pending:
-            action, _ = self._kb_seq.handle("q")
-            if action:
-                await self._dispatch_kb_action(action)
-            return
-        self.exit()
 
     async def _cmd_quit(self) -> None:
         self.exit()
