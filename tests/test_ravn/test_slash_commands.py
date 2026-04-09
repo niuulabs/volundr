@@ -496,8 +496,7 @@ class TestCmdSkills:
 class TestCmdCheckpoint:
     def _ctx_with_checkpoint(self) -> SlashCommandContext:
         from unittest.mock import AsyncMock, MagicMock
-        from ravn.domain.checkpoint import Checkpoint
-        from datetime import UTC, datetime
+
 
         port = MagicMock()
         port.save_snapshot = AsyncMock(return_value="ckpt_task-1_1")
@@ -535,9 +534,10 @@ class TestCmdCheckpoint:
         assert "No checkpoints" in result
 
     def test_checkpoint_list_with_entries(self) -> None:
-        from unittest.mock import AsyncMock
-        from ravn.domain.checkpoint import Checkpoint
         from datetime import UTC, datetime
+        from unittest.mock import AsyncMock
+
+        from ravn.domain.checkpoint import Checkpoint
 
         cp = Checkpoint(
             task_id="task-1",
