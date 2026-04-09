@@ -935,7 +935,7 @@ async def test_drive_loop_runs_agent_turn_from_cron(tmp_path: Path) -> None:
 
     mock_agent.run_turn = _capture_run_turn
 
-    def agent_factory(channel, task_id=None):
+    def agent_factory(channel, task_id=None, persona=None):
         return mock_agent
 
     drive_loop = DriveLoop(agent_factory=agent_factory, config=config, settings=settings)

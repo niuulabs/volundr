@@ -1,4 +1,4 @@
-"""StatusBar — top bar with logo, Flokk count, active Ravn, clock."""
+"""StatusBar — top bar: ᚱ RAVN · flokk tag · active ravn · clock."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Any
 
 from textual.app import ComposeResult
-from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Label, Static
 
@@ -14,62 +13,64 @@ _URGENCY_THRESHOLD = 0.8
 
 
 class StatusBar(Widget):
-    """Top status bar: ᚠ Flokk name · Ravn count · active task count · clock."""
+    """Top status bar matching the HTML prototype.
+
+    Layout: [ᚱ RAVN] │ [flokk:name · N ravens · N tasks] │ [→ active-ravn] · · · [clock]
+    """
 
     DEFAULT_CSS = """
     StatusBar {
         height: 1;
-        background: #18181b;
+        background: #161618;
         layout: horizontal;
-        border-bottom: solid #3f3f46;
+        padding: 0 1;
     }
     StatusBar #sb-logo {
-        color: #f59e0b;
+        width: auto;
+        padding: 0 1 0 0;
+    }
+    StatusBar #sb-sep1 {
+        width: auto;
+        padding: 0 1;
+        color: #3f3f46;
+    }
+    StatusBar #sb-flokk-tag {
         width: auto;
         padding: 0 1;
     }
-    StatusBar #sb-flokk {
-        color: #a1a1aa;
+    StatusBar #sb-sep2 {
         width: auto;
         padding: 0 1;
+        color: #3f3f46;
     }
     StatusBar #sb-active {
-        color: #06b6d4;
         width: auto;
         padding: 0 1;
-    }
-    StatusBar #sb-tasks {
-        color: #a855f7;
-        width: auto;
-        padding: 0 1;
-    }
-    StatusBar #sb-clock {
-        color: #71717a;
-        width: auto;
-        padding: 0 1;
-        dock: right;
+        color: #52525b;
     }
     StatusBar #sb-notification {
-        color: #f59e0b;
         width: 1fr;
         padding: 0 1;
     }
+    StatusBar #sb-clock {
+        width: auto;
+        color: #52525b;
+        dock: right;
+    }
     """
-
-    _clock: reactive[str] = reactive("")
-    _notification: reactive[str] = reactive("")
 
     def __init__(self, flokka: Any | None = None, **kwargs: object) -> None:
         super().__init__(**kwargs)
         self._flokka = flokka
         self._active_ravn: str = "—"
-        self._task_count: int = 0
+        self._flokk_name: str = "local"
 
     def compose(self) -> ComposeResult:
-        yield Static("ᚠ Flokk", id="sb-logo")
-        yield Label("0 ravens", id="sb-flokk")
-        yield Label("—", id="sb-active")
-        yield Label("0 tasks", id="sb-tasks")
+        yield Static("[bold #f59e0b]ᚱ RAVN[/]", id="sb-logo")
+        yield Static("[#3f3f46]│[/]", id="sb-sep1")
+        yield Label("[#f59e0b]flokk:local · 0 ravens · 0 tasks[/]", id="sb-flokk-tag")
+        yield Static("[#3f3f46]│[/]", id="sb-sep2")
+        yield Label("[#52525b]→ —[/]", id="sb-active")
         yield Static("", id="sb-notification")
         yield Label("", id="sb-clock")
 
@@ -84,7 +85,7 @@ class StatusBar(Widget):
             self.query_one("#sb-clock", Label).update(now)
         except Exception:
             pass
-        self._update_flokk_count()
+        self._update_flokk_tag()
 
     def _on_event(self, conn: Any, event: dict[str, Any]) -> None:
         data = event.get("data", {})
@@ -92,45 +93,54 @@ class StatusBar(Widget):
             return
         urgency = data.get("urgency", 0.0)
         if urgency >= _URGENCY_THRESHOLD:
-            self._flash_notification(str(data.get("payload", {}).get("text", "")))
+            text = str(data.get("payload", {}).get("text", ""))
+            if text:
+                self._flash_notification(text)
 
     def _flash_notification(self, text: str) -> None:
         try:
             notif = self.query_one("#sb-notification", Static)
-            notif.update(f"⚡ {text}")
-            notif.add_class("-urgent")
+            notif.update(f"[bold #f59e0b]⚡ {text}[/]")
         except Exception:
             return
         self.set_timer(5.0, self._clear_notification)
 
     def _clear_notification(self) -> None:
         try:
-            notif = self.query_one("#sb-notification", Static)
-            notif.update("")
-            notif.remove_class("-urgent")
+            self.query_one("#sb-notification", Static).update("")
         except Exception:
             pass
 
-    def _update_flokk_count(self) -> None:
+    def _update_flokk_tag(self) -> None:
         if not self._flokka:
             return
         conns = self._flokka.connections()
         count = len(conns)
+        # Derive flokk group name from the common host suffix of connected ravens
+        if conns:
+            host = conns[0].host
+            parts = host.rsplit(".", 1)
+            if len(parts) == 2 and parts[1]:
+                self._flokk_name = parts[1]
+        # Count ravens with an active task
+        running = sum(
+            1
+            for c in conns
+            if c.ravn_info and c.ravn_info.get("state") == "running"
+        )
+        tag = f"flokk:{self._flokk_name} · {count} ravens · {running} tasks"
         try:
-            self.query_one("#sb-flokk", Label).update(f"{count} ravens")
+            self.query_one("#sb-flokk-tag", Label).update(f"[#f59e0b]{tag}[/]")
         except Exception:
             pass
 
     def set_active_ravn(self, name: str) -> None:
         self._active_ravn = name
         try:
-            self.query_one("#sb-active", Label).update(name)
+            self.query_one("#sb-active", Label).update(f"[#52525b]→ {name}[/]")
         except Exception:
             pass
 
     def set_task_count(self, count: int) -> None:
-        self._task_count = count
-        try:
-            self.query_one("#sb-tasks", Label).update(f"{count} tasks")
-        except Exception:
-            pass
+        # task count is now derived live in _update_flokk_tag; kept for compat
+        pass

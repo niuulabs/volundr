@@ -1,36 +1,56 @@
-"""FlokkaView — Flokk membership overview."""
+"""FlokkaView — Flokk sidebar list with status dots, progress bars, and section dividers."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from textual.app import ComposeResult
+from textual.binding import Binding
+from textual.containers import VerticalScroll
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import DataTable, Static
+from textual.widgets import Static
 
 from ravn.tui.utils import iter_bar
 
-if TYPE_CHECKING:
-    pass
-
-_STATUS_LABEL: dict[str, str] = {
-    "connected": "● connected",
-    "connecting": "◌ connecting",
-    "disconnected": "○ disconnected",
-    "error": "✗ error",
+# Status dot markup per ravn state
+_STATE_DOT: dict[str, str] = {
+    "running": "[bold #f59e0b]●[/]",
+    "thinking": "[bold #06b6d4]●[/]",
+    "idle": "[#3f3f46]●[/]",
+    "error": "[bold #ef4444]●[/]",
+    "connecting": "[#f59e0b]◌[/]",
+    "disconnected": "[#3f3f46]○[/]",
 }
 
-_STATUS_STYLE: dict[str, str] = {
-    "connected": "bold #10b981",
-    "connecting": "#f59e0b",
-    "disconnected": "#71717a",
-    "error": "bold #ef4444",
+# Iter bar color per state
+_ITER_COLOR: dict[str, str] = {
+    "running": "#f59e0b",
+    "thinking": "#06b6d4",
 }
 
 
 class FlokkaView(Widget):
-    """Lists all discovered Ravens with status, progress, and capabilities."""
+    """Scrollable Flokk sidebar: ravens with status dots, progress bars, section dividers.
+
+    Keyboard navigation: j/k move selection, Enter opens chat for selected ravn.
+    Clicking a row also selects it.
+    """
+
+    class RavnSelected(Message):
+        """Posted when the user selects a different ravn (keyboard or click)."""
+
+        def __init__(self, conn: Any) -> None:
+            super().__init__()
+            self.conn = conn
+
+    class _RowClicked(Message):
+        """Internal — emitted by _RavnRow so FlokkaView can update selection."""
+
+        def __init__(self, idx: int) -> None:
+            super().__init__()
+            self.idx = idx
 
     DEFAULT_CSS = """
     FlokkaView {
@@ -38,93 +58,244 @@ class FlokkaView(Widget):
         width: 1fr;
         background: #09090b;
     }
-    FlokkaView #fv-header {
-        color: #f59e0b;
-        padding: 0 1;
+    FlokkaView VerticalScroll {
+        background: #09090b;
+        scrollbar-size: 1 1;
+        scrollbar-color: #27272a;
+        scrollbar-color-hover: #3f3f46;
     }
-    FlokkaView DataTable {
-        height: 1fr;
+    FlokkaView .fv-section {
+        height: 1;
+        padding: 0 1;
+        color: #52525b;
+        text-style: bold;
+    }
+    FlokkaView ._ravn-row {
+        height: auto;
+        padding: 1 1 0 1;
+    }
+    FlokkaView ._ravn-row:hover {
+        background: #111113;
+    }
+    FlokkaView ._ravn-row--selected {
+        background: #111113;
+    }
+    FlokkaView .fv-empty {
+        height: 1;
+        padding: 0 2;
+        color: #3f3f46;
     }
     """
 
+    can_focus = True
+
     BINDINGS = [
-        ("g", "ghost_mode", "Ghost"),
-        ("b", "broadcast", "Broadcast"),
-        ("n", "notifications", "Notifs"),
+        Binding("j", "select_next", "Next", show=False),
+        Binding("k", "select_prev", "Prev", show=False),
+        Binding("enter", "open_chat", "Chat", show=False),
+        Binding("g", "ghost_mode", "Ghost"),
+        Binding("b", "broadcast", "Broadcast"),
+        Binding("n", "notifications", "Notifs"),
     ]
 
-    _tick: reactive[int] = reactive(0)
+    _selected_idx: reactive[int] = reactive(0)
 
     def __init__(self, flokka: Any | None = None, **kwargs: object) -> None:
         super().__init__(**kwargs)
-        self._flokka: Any | None = flokka
+        self._flokka = flokka
 
     def compose(self) -> ComposeResult:
-        yield Static("ᚠ  Flokk", id="fv-header")
-        table = DataTable(id="fv-table", cursor_type="row")
-        table.add_columns("Name", "Host", "Status", "Iter", "Uptime", "Task")
-        yield table
+        with VerticalScroll(id="fv-scroll"):
+            yield Static("[#3f3f46]  loading…[/]", classes="fv-empty")
 
     def on_mount(self) -> None:
-        self.set_interval(2.0, self._refresh_table)
+        self.set_interval(2.0, self._rebuild)
         if self._flokka:
-            self._flokka.on_event(self._on_flokk_event)
-        self._refresh_table()
+            self._flokka.on_event(lambda *_: self.call_after_refresh(self._rebuild))
+        self._rebuild()
 
-    def _on_flokk_event(self, conn: Any, event: dict[str, Any]) -> None:
-        self.call_after_refresh(self._refresh_table)
+    # ------------------------------------------------------------------
+    # Rebuilding the list
+    # ------------------------------------------------------------------
 
-    def _refresh_table(self) -> None:
+    def _rebuild(self) -> None:
         try:
-            table = self.query_one("#fv-table", DataTable)
+            scroll = self.query_one("#fv-scroll", VerticalScroll)
         except Exception:
             return
-        table.clear()
-        if not self._flokka:
-            table.add_row("(no flokka)", "—", "—", "—", "—", "—")
+
+        conns = self._flokka.connections() if self._flokka else []
+
+        if conns and self._selected_idx >= len(conns):
+            self._selected_idx = len(conns) - 1
+
+        # Derive the flokk group name from the common host suffix
+        flokk_name = _derive_flokk_name(conns)
+
+        widgets: list[Widget] = []
+
+        # --- Ravens section ---
+        widgets.append(Static(f"  {flokk_name.upper()}", classes="fv-section"))
+        if conns:
+            for i, conn in enumerate(conns):
+                widgets.append(_RavnRow(conn, selected=(i == self._selected_idx), idx=i))
+        else:
+            widgets.append(Static(
+                "  [#3f3f46]no ravens connected[/]\n"
+                "\n"
+                "  [#52525b]connect a ravn:[/]\n"
+                "  [#3f3f46]:[/][#71717a]connect host:7477[/]\n"
+                "\n"
+                "  [#3f3f46]j/k[/] [#52525b]navigate[/]  "
+                "[#3f3f46]↵[/] [#52525b]open chat[/]\n"
+                "  [#3f3f46]^w v[/] [#52525b]vsplit[/]  "
+                "[#3f3f46]^w s[/] [#52525b]hsplit[/]",
+                classes="fv-empty",
+            ))
+
+        scroll.remove_children()
+        scroll.mount(*widgets)
+
+    # ------------------------------------------------------------------
+    # Row click handler
+    # ------------------------------------------------------------------
+
+    def on_flokka_view__row_clicked(self, msg: _RowClicked) -> None:
+        self._selected_idx = msg.idx
+        self._rebuild()
+        self._emit_selected()
+
+    # ------------------------------------------------------------------
+    # Keyboard actions
+    # ------------------------------------------------------------------
+
+    def action_select_next(self) -> None:
+        conns = self._flokka.connections() if self._flokka else []
+        if not conns:
             return
-        for conn in self._flokka.connections():
-            status = conn.status
-            label = _STATUS_LABEL.get(status, status)
-            style = _STATUS_STYLE.get(status, "")
-            info = conn.ravn_info
-            iter_str = iter_bar(info.get("iteration"), info.get("max_iterations"), prefix="iter ")
-            uptime = info.get("uptime", "—")
-            task = _truncate(info.get("task_title", "—"), 30)
-            ghost_marker = " ⊙" if conn.ghost else ""
-            name = f"ᚱ {conn.name}{ghost_marker}"
-            table.add_row(
-                name,
-                conn.host,
-                f"[{style}]{label}[/]",
-                iter_str,
-                uptime,
-                task,
-            )
+        self._selected_idx = (self._selected_idx + 1) % len(conns)
+        self._rebuild()
+        self._emit_selected()
+
+    def action_select_prev(self) -> None:
+        conns = self._flokka.connections() if self._flokka else []
+        if not conns:
+            return
+        self._selected_idx = (self._selected_idx - 1) % len(conns)
+        self._rebuild()
+        self._emit_selected()
+
+    def action_open_chat(self) -> None:
+        conn = self.get_selected_connection()
+        if conn:
+            self._emit_selected()
 
     def action_ghost_mode(self) -> None:
-        """Open ghost (read-only) event stream for selected Ravn."""
-        try:
-            table = self.query_one("#fv-table", DataTable)
-            row = table.cursor_row
-            if self._flokka:
-                conns = self._flokka.connections()
-                if 0 <= row < len(conns):
-                    conn = conns[row]
-                    self.app.post_message_no_wait(
-                        self.app.GhostMode(conn.host, conn.port)
-                    ) if hasattr(self.app, "GhostMode") else None
-        except Exception:
-            pass
+        conn = self.get_selected_connection()
+        if conn and hasattr(self.app, "GhostMode"):
+            self.app.post_message(self.app.GhostMode(conn.host, conn.port))
 
     def action_broadcast(self) -> None:
-        self.app.action_broadcast() if hasattr(self.app, "action_broadcast") else None
+        if hasattr(self.app, "action_broadcast"):
+            self.app.action_broadcast()
 
     def action_notifications(self) -> None:
-        self.app.action_notifications() if hasattr(self.app, "action_notifications") else None
+        if hasattr(self.app, "action_notifications"):
+            self.app.action_notifications()
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def get_selected_connection(self) -> Any | None:
+        if not self._flokka:
+            return None
+        conns = self._flokka.connections()
+        if not conns or self._selected_idx >= len(conns):
+            return None
+        return conns[self._selected_idx]
+
+    def _emit_selected(self) -> None:
+        conn = self.get_selected_connection()
+        if conn:
+            self.post_message(self.RavnSelected(conn))
 
 
-def _truncate(text: str, max_len: int) -> str:
-    if len(text) <= max_len:
-        return text
-    return text[: max_len - 1] + "…"
+# ---------------------------------------------------------------------------
+# Helper widgets
+# ---------------------------------------------------------------------------
+
+
+class _RavnRow(Static):
+    """Multi-line Static representing one ravn in the sidebar."""
+
+    def __init__(self, conn: Any, selected: bool, idx: int, **kwargs: object) -> None:
+        markup = _build_ravn_markup(conn, selected)
+        classes = "_ravn-row" + (" _ravn-row--selected" if selected else "")
+        super().__init__(markup, classes=classes, **kwargs)
+        self._idx = idx
+
+    def on_click(self) -> None:
+        self.post_message(FlokkaView._RowClicked(self._idx))
+
+
+# ---------------------------------------------------------------------------
+# Markup builders
+# ---------------------------------------------------------------------------
+
+
+def _build_ravn_markup(conn: Any, selected: bool) -> str:
+    info: dict[str, Any] = conn.ravn_info or {}
+    state = _resolve_state(conn, info)
+
+    dot = _STATE_DOT.get(state, "[#3f3f46]●[/]")
+    ghost_mark = " [#52525b]⊙[/]" if getattr(conn, "ghost", False) else ""
+
+    # Amber left-accent for selected row, plain space otherwise
+    accent = "[bold #f59e0b]▌[/]" if selected else " "
+
+    # Line 1 — rune · dot · name
+    name_line = f"{accent}[bold]ᚱ[/] {dot} [#fafafa]{conn.name}{ghost_mark}[/]"
+
+    # Line 2 — iter progress bar or idle/uptime
+    cur = info.get("iteration")
+    mx = info.get("max_iterations")
+    uptime: str = info.get("uptime", "")
+
+    if cur is not None and mx is not None:
+        bar = iter_bar(cur, mx)
+        color = _ITER_COLOR.get(state, "#f59e0b")
+        state_line = f"  [{color}]{bar}[/]"
+    else:
+        idle_text = f"idle · {uptime}" if uptime else "idle"
+        state_line = f"  [#3f3f46]{idle_text}[/]"
+
+    # Optional line 3 — capabilities / persona (omit when empty)
+    caps: list[str] = list(info.get("capabilities", []) or [])
+    persona: str = info.get("persona", "")
+    if caps:
+        detail = " · ".join(str(c) for c in caps[:4])
+        return f"{name_line}\n{state_line}\n  [#52525b]{detail}[/]"
+    if persona:
+        return f"{name_line}\n{state_line}\n  [#52525b]{persona}[/]"
+    return f"{name_line}\n{state_line}"
+
+
+def _resolve_state(conn: Any, info: dict[str, Any]) -> str:
+    if conn.status == "error":
+        return "error"
+    if conn.status in ("connecting",):
+        return "connecting"
+    if conn.status == "disconnected":
+        return "disconnected"
+    return info.get("state", "idle")
+
+
+def _derive_flokk_name(conns: list[Any]) -> str:
+    if not conns:
+        return "local"
+    host = conns[0].host
+    parts = host.rsplit(".", 1)
+    if len(parts) == 2 and parts[1]:
+        return parts[1]
+    return "local"

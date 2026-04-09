@@ -8,7 +8,7 @@ from typing import Any
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.widget import Widget
-from textual.widgets import DataTable, Label
+from textual.widgets import DataTable
 
 _STATUS_STYLE = {
     "enabled": "#10b981",
@@ -27,14 +27,12 @@ class CronView(Widget):
         width: 1fr;
         background: #09090b;
     }
-    CronView #cr-header {
-        color: #f59e0b;
-        padding: 0 1;
-    }
     CronView DataTable {
         height: 1fr;
     }
     """
+
+    can_focus = True
 
     BINDINGS = [
         Binding("space", "toggle_job", "Toggle"),
@@ -49,7 +47,6 @@ class CronView(Widget):
         self._jobs: list[dict[str, Any]] = []
 
     def compose(self) -> ComposeResult:
-        yield Label("🕐 cron", id="cr-header")
         table = DataTable(id="cr-table", cursor_type="row")
         table.add_columns("Name", "Schedule", "Last run", "Next run", "Status")
         yield table

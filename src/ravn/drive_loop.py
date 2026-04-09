@@ -270,7 +270,7 @@ class DriveLoop:
             channel: ChannelPort = CaptureChannel(task.task_id, self._result_store)
         else:
             channel = SilentChannel()
-        agent = self._agent_factory(channel, task.task_id)
+        agent = self._agent_factory(channel, task.task_id, task.persona)
         prompt = build_initiative_prompt(task)
 
         logger.info(
@@ -302,6 +302,13 @@ class DriveLoop:
             await agent.run_turn(prompt)  # type: ignore[attr-defined]
             success = True
             self._save_task_output(task, channel)
+            response_text = getattr(channel, "response_text", "")
+            if response_text:
+                logger.info(
+                    "drive_loop: task %s output: %s",
+                    task.task_id,
+                    response_text[:500],
+                )
         except asyncio.CancelledError:
             logger.info("drive_loop: task %s cancelled mid-turn", task.task_id)
             self._result_store.set_status(task.task_id, "cancelled")

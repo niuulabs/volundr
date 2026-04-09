@@ -471,22 +471,37 @@ def _filter_tools(
     settings: Settings,
     persona_config: Any | None,
 ) -> list[Any]:
-    """Apply enabled/disabled and persona tool filters."""
-    enabled = set(settings.tools.enabled)
-    disabled = set(settings.tools.disabled)
+    """Apply enabled/disabled and persona tool filters.
 
+    ``persona_config.allowed_tools`` and ``forbidden_tools`` entries are treated
+    as group prefixes (e.g. ``"mimir"`` matches ``mimir_query``, ``mimir_write``).
+    ``settings.tools.enabled`` / ``disabled`` are exact tool names.
+    """
+    enabled_names = set(settings.tools.enabled)
+    disabled_names = set(settings.tools.disabled)
+
+    allowed_groups: set[str] = set()
+    forbidden_groups: set[str] = set()
     if persona_config is not None:
         if persona_config.allowed_tools:
-            persona_allowed = set(persona_config.allowed_tools)
-            enabled = (enabled | persona_allowed) if enabled else persona_allowed
+            allowed_groups = set(persona_config.allowed_tools)
         if persona_config.forbidden_tools:
-            disabled = disabled | set(persona_config.forbidden_tools)
+            forbidden_groups = set(persona_config.forbidden_tools)
 
-    if enabled:
-        tools = [t for t in tools if t.name in enabled]
+    def _in_groups(name: str, groups: set[str]) -> bool:
+        return any(name == g or name.startswith(g + "_") for g in groups)
 
-    if disabled:
-        tools = [t for t in tools if t.name not in disabled]
+    if allowed_groups or enabled_names:
+        tools = [
+            t for t in tools
+            if t.name in enabled_names or (allowed_groups and _in_groups(t.name, allowed_groups))
+        ]
+
+    if disabled_names:
+        tools = [t for t in tools if t.name not in disabled_names]
+
+    if forbidden_groups:
+        tools = [t for t in tools if not _in_groups(t.name, forbidden_groups)]
 
     return tools
 
@@ -1658,10 +1673,34 @@ async def _run_daemon(
 
     mcp_manager, mcp_tools = await _start_mcp_shared(settings)
 
+    # Build Mímir adapter early so _agent_factory closure can capture it.
+    daemon_mimir = _build_mimir(settings)
+
     # Populated by _wire_cron after drive_loop is created; captured by _agent_factory.
     cron_tools: list[Any] = []
 
-    def _agent_factory(channel: ChannelPort, task_id: str | None = None) -> Any:
+    def _agent_factory(
+        channel: ChannelPort,
+        task_id: str | None = None,
+        task_persona: str | None = None,
+    ) -> Any:
+        # Resolve per-task persona — triggered tasks may request a different persona.
+        resolved_persona = persona_config
+        resolved_system_prompt = system_prompt
+        resolved_max_iterations = max_iterations
+        resolved_max_tokens = settings.effective_max_tokens()
+        if task_persona and task_persona != (persona_config.name if persona_config else None):
+            from ravn.adapters.personas.loader import PersonaLoader
+            task_persona_cfg = PersonaLoader().load(task_persona)
+            if task_persona_cfg is not None:
+                resolved_persona = task_persona_cfg
+                if task_persona_cfg.system_prompt_template:
+                    resolved_system_prompt = task_persona_cfg.system_prompt_template
+                if task_persona_cfg.iteration_budget:
+                    resolved_max_iterations = task_persona_cfg.iteration_budget
+                if task_persona_cfg.llm.max_tokens:
+                    resolved_max_tokens = task_persona_cfg.llm.max_tokens
+
         session = Session()
         budget = IterationBudget(
             total=settings.iteration_budget.total,
@@ -1671,12 +1710,15 @@ async def _run_daemon(
             settings,
             workspace,
             no_tools=False,
-            persona_config=persona_config,
+            persona_config=resolved_persona,
         )
 
-        # Sub-tasks (cascade workers) use the 'worker' profile: core tools only,
-        # no MCP, no cascade.  The coordinator uses 'default': full tool set.
-        profile = "worker" if task_id is not None else "default"
+        # Cascade sub-tasks (task_id set by cascade dispatcher) use the 'worker'
+        # profile: core tools only.  Triggered tasks from the drive loop also
+        # receive a task_id but need the full tool set — use 'default' for those.
+        # Cascade workers are identified by the absence of a task-level persona
+        # (drive-loop triggered tasks always carry one).
+        profile = "worker" if (task_id is not None and not task_persona) else "default"
         profile_cfg = _get_profile(settings, profile)
         tools = _build_tools(
             settings,
@@ -1685,11 +1727,12 @@ async def _run_daemon(
             llm,
             memory,
             budget,
-            persona_config=persona_config,
+            mimir=daemon_mimir,
+            persona_config=resolved_persona,
             profile=profile,
         )
         if profile_cfg.include_mcp:
-            tools.extend(mcp_tools)
+            tools.extend(_filter_tools(mcp_tools, settings, resolved_persona))
         if "cascade" in profile_cfg.include_groups:
             # Add cascade tools (parallel task execution) if wired
             # NOTE: cascade_tools uses the same monkey-patch pattern as before —
@@ -1706,10 +1749,10 @@ async def _run_daemon(
             tools=tools,
             channel=channel,
             permission=permission,
-            system_prompt=system_prompt,
+            system_prompt=resolved_system_prompt,
             model=settings.effective_model(),
-            max_tokens=settings.effective_max_tokens(),
-            max_iterations=max_iterations,
+            max_tokens=resolved_max_tokens,
+            max_iterations=resolved_max_iterations,
             session=session,
             pre_tool_hooks=pre_hooks or None,
             post_tool_hooks=post_hooks or None,
@@ -1778,9 +1821,8 @@ async def _run_daemon(
         cron_tools[:] = _wire_cron(drive_loop, _cron_jobs, settings.initiative)
 
         # Wire Mímir triggers (source synthesis + staleness refresh)
-        _mimir_daemon = _build_mimir(settings)
-        if _mimir_daemon is not None:
-            _wire_mimir_triggers(drive_loop, _mimir_daemon, settings)
+        if daemon_mimir is not None:
+            _wire_mimir_triggers(drive_loop, daemon_mimir, settings)
 
         # Wire task dispatch subscription when requested (--listen / --daemon)
         if task_dispatch and settings.sleipnir.enabled:
@@ -2297,10 +2339,22 @@ def tui(
             raise typer.Exit(1)
         parsed_connections.append((host, port))
 
+    # Extract mimir HTTP instance URLs from the loaded config
+    mimir_urls: list[tuple[str, str]] = []
+    try:
+        from ravn.config import Settings
+        settings = Settings()
+        for inst in sorted(settings.mimir.instances, key=lambda i: i.read_priority):
+            if inst.url:
+                mimir_urls.append((inst.name, inst.url))
+    except Exception:
+        pass
+
     ravn_tui = RavnTUI(
         connections=parsed_connections,
         discover=discover or not parsed_connections,
         layout_name=layout or None,
+        mimir_urls=mimir_urls,
     )
     ravn_tui.run()
 

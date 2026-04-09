@@ -7,7 +7,7 @@ from typing import Any
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.widget import Widget
-from textual.widgets import DataTable, Label
+from textual.widgets import DataTable
 
 from ravn.tui.utils import iter_bar
 
@@ -29,14 +29,12 @@ class TaskBoardView(Widget):
         width: 1fr;
         background: #09090b;
     }
-    TaskBoardView #tb-header {
-        color: #f59e0b;
-        padding: 0 1;
-    }
     TaskBoardView DataTable {
         height: 1fr;
     }
     """
+
+    can_focus = True
 
     BINDINGS = [
         Binding("s", "stop_task", "Stop"),
@@ -51,7 +49,6 @@ class TaskBoardView(Widget):
         self._tasks: list[dict[str, Any]] = []
 
     def compose(self) -> ComposeResult:
-        yield Label("⚙ tasks", id="tb-header")
         table = DataTable(id="tb-table", cursor_type="row")
         table.add_columns("Task ID", "Title", "Ravn", "Status", "Progress", "Elapsed")
         yield table

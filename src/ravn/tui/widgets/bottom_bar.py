@@ -1,4 +1,4 @@
-"""BottomBar — keybinding hints, updates contextually per focused view."""
+"""BottomBar — contextual keybinding hints with kbd-style key boxes."""
 
 from __future__ import annotations
 
@@ -6,57 +6,105 @@ from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
-# Default keybinding hints shown at the bottom
-_DEFAULT_HINTS = (
-    "[#71717a]^W v[/] vsplit  "
-    "[#71717a]^W s[/] hsplit  "
-    "[#71717a]^W q[/] close  "
-    "[#71717a]^W w[/] next  "
-    "[#71717a]^W z[/] zoom  "
-    "[#71717a]:[/] cmd  "
-    "[#71717a]q[/] quit"
+
+def _kbd(key: str) -> str:
+    """Render a key as a subtle pill: key on dark background."""
+    return f"[#c4c4c4 on #232326] {key} [/]"
+
+
+def _lbl(text: str) -> str:
+    """Render a hint label in muted text."""
+    return f"[#71717a]{text}[/]"
+
+
+# Global hints — always shown, matches HTML prototype layout
+_GLOBAL = (
+    f"{_kbd('tab')} {_lbl('pane')}  "
+    f"{_kbd('hjkl')} {_lbl('nav')}  "
+    f"{_kbd('f')} {_lbl('flokka')}  "
+    f"{_kbd('e')} {_lbl('events')}  "
+    f"{_kbd('m')} {_lbl('mímir')}  "
+    f"{_kbd('t')} {_lbl('tasks')}  "
+    f"{_kbd('b')} {_lbl('broadcast')}  "
+    f"{_kbd('z')} {_lbl('zoom')}  "
+    f"{_kbd(':')} {_lbl('command')}  "
+    f"{_kbd('q')} {_lbl('quit')}"
 )
 
+# Contextual hints shown above global when a specific view is focused
 _VIEW_HINTS: dict[str, str] = {
-    "flokka": ("[#71717a]g[/] ghost  [#71717a]b[/] broadcast  [#71717a]n[/] notifs  "),
-    "events": ("[#71717a]f[/] filter  [#71717a]G[/] bottom  [#71717a]l[/] lock  "),
+    "flokka": (
+        f"{_kbd('j/k')} {_lbl('select')}  "
+        f"{_kbd('↵')} {_lbl('chat')}  "
+        f"{_kbd('g')} {_lbl('ghost')}  "
+        f"{_kbd('^w v')} {_lbl('vsplit')}  "
+        f"{_kbd('^w s')} {_lbl('hsplit')}  "
+        f"{_kbd('^w q')} {_lbl('close')}  "
+        f"[#3f3f46]│[/]  "
+    ),
+    "chat": (
+        f"{_kbd('↵')} {_lbl('send')}  "
+        f"{_kbd('g/G')} {_lbl('scroll')}  "
+        f"[#3f3f46]│[/]  "
+    ),
+    "events": (
+        f"{_kbd('f')} {_lbl('filter')}  "
+        f"{_kbd('G')} {_lbl('bottom')}  "
+        f"{_kbd('l')} {_lbl('lock')}  "
+        f"[#3f3f46]│[/]  "
+    ),
     "tasks": (
-        "[#71717a]s[/] stop  [#71717a]c[/] collect  [#71717a]n[/] new  [#71717a]↵[/] expand  "
+        f"{_kbd('n')} {_lbl('new')}  "
+        f"{_kbd('s')} {_lbl('stop')}  "
+        f"{_kbd('↵')} {_lbl('expand')}  "
+        f"[#3f3f46]│[/]  "
     ),
     "mimir": (
-        "[#71717a]↵[/] open  [#71717a]⌫[/] back  [#71717a]/[/] search  [#71717a]g[/] graph  "
+        f"{_kbd('/')} {_lbl('search')}  "
+        f"{_kbd('↵')} {_lbl('open')}  "
+        f"{_kbd('⌫')} {_lbl('back')}  "
+        f"[#3f3f46]│[/]  "
     ),
     "cron": (
-        "[#71717a]space[/] toggle  [#71717a]r[/] run  [#71717a]d[/] delete  [#71717a]n[/] new  "
+        f"{_kbd('spc')} {_lbl('toggle')}  "
+        f"{_kbd('r')} {_lbl('run')}  "
+        f"{_kbd('d')} {_lbl('delete')}  "
+        f"[#3f3f46]│[/]  "
     ),
-    "checkpoints": ("[#71717a]r[/] resume  [#71717a]d[/] delete  "),
+    "checkpoints": (
+        f"{_kbd('r')} {_lbl('resume')}  "
+        f"{_kbd('d')} {_lbl('delete')}  "
+        f"[#3f3f46]│[/]  "
+    ),
 }
 
 
 class BottomBar(Widget):
-    """Bottom bar displaying contextual keybinding hints."""
+    """Bottom bar showing contextual keybinding hints.
+
+    Hints update when the focused view type changes via :meth:`set_context`.
+    """
 
     DEFAULT_CSS = """
     BottomBar {
         height: 1;
-        background: #18181b;
+        background: #111113;
         layout: horizontal;
-        border-top: solid #3f3f46;
     }
     BottomBar #bb-hints {
-        color: #71717a;
         width: 1fr;
         padding: 0 1;
+        color: #52525b;
     }
     """
 
     def compose(self) -> ComposeResult:
-        yield Static(_DEFAULT_HINTS, id="bb-hints")
+        yield Static(_GLOBAL, id="bb-hints")
 
     def set_context(self, view_type: str) -> None:
-        """Update hints for the focused view type."""
+        """Update hint text for the currently focused view type."""
         extra = _VIEW_HINTS.get(view_type, "")
-        text = extra + _DEFAULT_HINTS if extra else _DEFAULT_HINTS
+        text = extra + _GLOBAL if extra else _GLOBAL
         try:
             self.query_one("#bb-hints", Static).update(text)
         except Exception:

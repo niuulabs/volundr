@@ -6,7 +6,7 @@ from typing import Any
 
 from textual.app import ComposeResult
 from textual.widget import Widget
-from textual.widgets import DataTable, Label
+from textual.widgets import DataTable
 
 _TIER_STYLE: dict[str, str] = {
     "full": "#10b981",
@@ -43,10 +43,6 @@ class CapsView(Widget):
         width: 1fr;
         background: #09090b;
     }
-    CapsView #caps-header {
-        color: #f59e0b;
-        padding: 0 1;
-    }
     CapsView DataTable {
         height: 1fr;
     }
@@ -57,7 +53,6 @@ class CapsView(Widget):
         self._flokka = flokka
 
     def compose(self) -> ComposeResult:
-        yield Label("⬡ capabilities", id="caps-header")
         table = DataTable(id="caps-table", cursor_type="row")
         table.add_column("Ravn")
         for cap in _KNOWN_CAPABILITIES:

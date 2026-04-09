@@ -1,57 +1,29 @@
 /* Ravn TUI — Textual CSS
- * Zinc-950 base, amber brand, JetBrains Mono throughout.
+ * Zinc-950 base (#09090b), amber brand (#f59e0b), JetBrains Mono throughout.
+ * Matches the HTML prototype aesthetic: ravn_flokk_tui.html
  */
 
 /* ------------------------------------------------------------------ */
-/* Global reset */
+/* Screen / global reset                                               */
 /* ------------------------------------------------------------------ */
 
 Screen {
     background: #09090b;
-    color: #fafafa;
+    color: #d4d4d8;
 }
 
 /* ------------------------------------------------------------------ */
-/* Command input overlay */
+/* Main container — fills between tab bar and bottom bar              */
 /* ------------------------------------------------------------------ */
 
-#cmd-input-container {
-    height: 1;
-    background: #18181b;
-    border-top: solid #f59e0b;
-    display: none;
-    dock: bottom;
-}
-
-#cmd-input-container.visible {
-    display: block;
-}
-
-#cmd-input {
-    background: #18181b;
-    color: #fafafa;
-    border: none;
-    width: 1fr;
-}
-
-/* ------------------------------------------------------------------ */
-/* Zoom overlay */
-/* ------------------------------------------------------------------ */
-
-#zoom-overlay {
-    layer: overlay;
-    display: none;
+#main-container {
     height: 1fr;
     width: 1fr;
-    background: #09090b;
-}
-
-#zoom-overlay.visible {
-    display: block;
+    layout: horizontal;
 }
 
 /* ------------------------------------------------------------------ */
-/* Split pane containers */
+/* Split pane containers                                               */
 /* ------------------------------------------------------------------ */
 
 .split-h {
@@ -67,45 +39,76 @@ Screen {
 }
 
 /* ------------------------------------------------------------------ */
-/* Notification flash */
+/* Command input overlay (vim : line)                                  */
 /* ------------------------------------------------------------------ */
 
-#sb-notification.-urgent {
+#cmd-input-container {
+    height: 1;
+    background: #0d0d0f;
+    display: none;
+    dock: bottom;
+    layout: horizontal;
+    padding: 0 1;
+}
+
+#cmd-input-container.visible {
+    display: block;
+}
+
+#cmd-input-prompt {
+    width: auto;
     color: #f59e0b;
-    background: rgba(245, 158, 11, 0.15);
+    padding: 0;
+}
+
+#cmd-input {
+    background: #0d0d0f;
+    color: #f59e0b;
+    border: none;
+    width: 1fr;
+    padding: 0;
+    height: 1;
 }
 
 /* ------------------------------------------------------------------ */
-/* DataTable theming */
+/* DataTable theming                                                   */
 /* ------------------------------------------------------------------ */
 
 DataTable {
     background: #09090b;
-    color: #fafafa;
+    color: #d4d4d8;
 }
 
 DataTable > .datatable--header {
-    background: #18181b;
-    color: #a1a1aa;
+    background: #161618;
+    color: #52525b;
     text-style: bold;
 }
 
 DataTable > .datatable--cursor {
-    background: #27272a;
+    background: #1c1c1e;
     color: #fafafa;
 }
 
 DataTable > .datatable--fixed {
-    background: #18181b;
+    background: #161618;
+}
+
+DataTable > .datatable--odd-row {
+    background: #09090b;
+}
+
+DataTable > .datatable--even-row {
+    background: #0c0c0e;
 }
 
 /* ------------------------------------------------------------------ */
-/* Input theming */
+/* Input theming                                                       */
 /* ------------------------------------------------------------------ */
 
 Input {
     background: #18181b;
-    color: #fafafa;
+    color: #d4d4d8;
     border: solid #3f3f46;
 }
 
@@ -114,20 +117,30 @@ Input:focus {
 }
 
 /* ------------------------------------------------------------------ */
-/* RichLog */
+/* RichLog                                                             */
 /* ------------------------------------------------------------------ */
 
 RichLog {
     background: #09090b;
-    color: #fafafa;
-    scrollbar-color: #3f3f46;
-    scrollbar-color-hover: #f59e0b;
+    color: #d4d4d8;
+    scrollbar-size: 1 1;
+    scrollbar-color: #27272a;
+    scrollbar-color-hover: #3f3f46;
 }
 
 /* ------------------------------------------------------------------ */
-/* Label */
+/* Label / Static                                                      */
 /* ------------------------------------------------------------------ */
 
 Label {
     color: #a1a1aa;
+}
+
+/* ------------------------------------------------------------------ */
+/* Notification flash in status bar                                    */
+/* ------------------------------------------------------------------ */
+
+#sb-notification.-urgent {
+    color: #f59e0b;
+    background: #1a1200;
 }

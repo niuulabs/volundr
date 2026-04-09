@@ -12,21 +12,45 @@ from textual.binding import Binding
 from textual.containers import Container
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Input
+from textual.widgets import Input, Label
 
 from ravn.tui.commands import CommandDispatcher, CommandParseError, parse_command
 from ravn.tui.connections import FlokkaManager
+from ravn.tui.keybindings import KeybindingLoader, KeybindingMap, KeySequenceBuffer
 from ravn.tui.layouts import LayoutManager
 from ravn.tui.widgets.bottom_bar import BottomBar
 from ravn.tui.widgets.pane import PaneWidget
 from ravn.tui.widgets.split import PaneNode, SplitNode, SplitTree, TreeNode
 from ravn.tui.widgets.status_bar import StatusBar
+from ravn.tui.widgets.tab_bar import TabBar
 
 logger = logging.getLogger(__name__)
 
 _APP_TITLE = "ᚠ Ravn"
 _RESIZE_STEP = 0.05
 _ZOOM_STEP = 0.05
+
+# Textual uses verbose names for some keys; normalise to the short form
+# the keybinding map uses.
+_KEY_ALIASES: dict[str, str] = {
+    "less_than_sign": "<",
+    "greater_than_sign": ">",
+    "plus": "+",
+    "minus": "-",
+    "equal_sign": "=",
+    "slash": "/",
+    "colon": ":",
+    "semicolon": ";",
+}
+
+# Keys already handled by Textual BINDINGS or by individual view widgets —
+# do NOT dispatch these from on_key's single-key handler.
+_BINDINGS_KEYS: frozenset[str] = frozenset({":", "q", "b", "n", "escape"})
+_VIEW_NAV_KEYS: frozenset[str] = frozenset({"j", "k", "G", "/"})
+
+
+def _normalise_key(key: str) -> str:
+    return _KEY_ALIASES.get(key, key)
 
 
 class RavnTUI(App[None]):
@@ -40,9 +64,8 @@ class RavnTUI(App[None]):
     CSS_PATH = Path(__file__).parent / "app.tcss"
 
     BINDINGS = [
-        Binding("ctrl+w", "window_action", "Window", show=False),
         Binding(":", "command_mode", "Command"),
-        Binding("q", "quit", "Quit"),
+        Binding("q", "quit_guard", "Quit"),
         Binding("b", "broadcast", "Broadcast"),
         Binding("n", "notifications", "Notifs"),
         Binding("escape", "escape", "Escape", show=False),
@@ -69,12 +92,14 @@ class RavnTUI(App[None]):
         connections: list[tuple[str, int]] | None = None,
         discover: bool = False,
         layout_name: str | None = None,
+        mimir_urls: list[tuple[str, str]] | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self._initial_connections = connections or []
         self._discover = discover
         self._initial_layout = layout_name
+        self.mimir_urls: list[tuple[str, str]] = mimir_urls or []
 
         self.flokka = FlokkaManager()
         self.layout_mgr = LayoutManager()
@@ -82,12 +107,14 @@ class RavnTUI(App[None]):
         self._focused_pane_id: str | None = None
         self._zoomed: bool = False
         self._zoom_previous_tree: SplitTree | None = None
-        self._notifications: list[str] = []
+        self._notif_log: list[str] = []
         self._cmd_dispatcher = CommandDispatcher()
         self._register_commands()
 
-        # Pending ctrl+w sub-key
-        self._pending_ctrl_w = False
+        # Load keybindings from editor config (default: vim)
+        self._kb_map: KeybindingMap = KeybindingLoader().load()
+        self._kb_seq: KeySequenceBuffer = KeySequenceBuffer()
+        self._init_sequence_buffer()
 
     # ------------------------------------------------------------------
     # Compose
@@ -95,9 +122,11 @@ class RavnTUI(App[None]):
 
     def compose(self) -> ComposeResult:
         yield StatusBar(flokka=self.flokka, id="status-bar")
+        yield TabBar(id="tab-bar")
         yield Container(id="main-container")
         yield Container(
-            Input(placeholder=":  ", id="cmd-input"),
+            Label("[bold #f59e0b]:[/]", id="cmd-input-prompt"),
+            Input(placeholder="command", id="cmd-input"),
             id="cmd-input-container",
         )
         yield BottomBar(id="bottom-bar")
@@ -177,6 +206,7 @@ class RavnTUI(App[None]):
                 view_type=node.view_type,
                 target=node.target,
                 flokka=self.flokka,
+                mimir_urls=self.mimir_urls,
                 id=f"pane-{node.pane_id.replace('-', '_')}",
             )
             return pane
@@ -201,72 +231,155 @@ class RavnTUI(App[None]):
     # ------------------------------------------------------------------
 
     def _focus_pane(self, pane_id: str) -> None:
+        from ravn.tui.widgets.pane import PaneHeader
+
+        # Remove amber border from previous pane
+        if self._focused_pane_id and self._focused_pane_id != pane_id:
+            try:
+                prev = self.query_one(
+                    f"#pane-{self._focused_pane_id.replace('-', '_')}", PaneWidget
+                )
+                prev.focused_pane = False
+            except Exception:
+                pass
+
         self._focused_pane_id = pane_id
         try:
             pane = self.query_one(f"#pane-{pane_id.replace('-', '_')}", PaneWidget)
-            pane.focus()
-            # Update bottom bar context
+            pane.focused_pane = True
+            # Focus the view widget inside (first non-header child)
+            view = next(
+                (c for c in pane.children if not isinstance(c, PaneHeader)),
+                None,
+            )
+            if view is not None:
+                view.focus()
+            # Update contextual bars
             self.query_one("#bottom-bar", BottomBar).set_context(pane._view_type)
             self.query_one("#status-bar", StatusBar).set_active_ravn(pane._target or "—")
         except Exception:
             pass
 
     # ------------------------------------------------------------------
-    # ctrl+w window actions
+    # Keybinding sequence dispatch
     # ------------------------------------------------------------------
 
-    async def action_window_action(self) -> None:
-        """Set pending flag — next key selects the window sub-action."""
-        self._pending_ctrl_w = True
+    def _init_sequence_buffer(self) -> None:
+        """Register all multi-key sequences from the loaded keybinding map."""
+        for seq, action in self._kb_map.multi_key:
+            self._kb_seq.register(seq, action)
 
     async def on_key(self, event: Any) -> None:
-        if not self._pending_ctrl_w:
+        """Intercept keys for multi-key sequence matching before Textual dispatch."""
+        # Don't intercept keys while the command input is focused
+        from textual.widgets import Input as _Input
+        if isinstance(self.focused, _Input):
             return
-        self._pending_ctrl_w = False
-        key = event.key
 
-        match key:
-            case "v":
+        key = _normalise_key(event.key)
+
+        # Multi-key sequence matching (ctrl+w v, g g, etc.)
+        action, consumed = self._kb_seq.handle(key)
+        if consumed:
+            event.stop()
+        if action:
+            await self._dispatch_kb_action(action)
+            return
+
+        # Single-key app-level dispatch — only when no sequence is in progress
+        # and the key isn't already handled by BINDINGS or view widgets.
+        if not self._kb_seq.pending and key not in _BINDINGS_KEYS and key not in _VIEW_NAV_KEYS:
+            single_action = self._kb_map.single_key.get(key)
+            if single_action:
+                event.stop()
+                await self._dispatch_kb_action(single_action)
+
+    async def _dispatch_kb_action(self, action: str) -> None:
+        """Dispatch a TUI action name to the correct handler."""
+        match action:
+            case "split_vert":
                 await self._split_current("vertical")
-            case "s":
+            case "split_horiz":
                 await self._split_current("horizontal")
-            case "q":
+            case "close_pane":
                 await self._close_current()
-            case "w":
+            case "focus_next":
                 self._focus_next_pane()
-            case "h":
+            case "focus_left":
                 self._focus_direction("left")
-            case "j":
+            case "focus_down":
                 self._focus_direction("down")
-            case "k":
+            case "focus_up":
                 self._focus_direction("up")
-            case "l":
+            case "focus_right":
                 self._focus_direction("right")
-            case "H":
+            case "move_far_left":
                 await self._move_to_edge("left")
-            case "J":
+            case "move_far_down":
                 await self._move_to_edge("bottom")
-            case "K":
+            case "move_far_up":
                 await self._move_to_edge("top")
-            case "L":
+            case "move_far_right":
                 await self._move_to_edge("right")
-            case "x":
+            case "swap_pane":
                 await self._swap_current()
-            case "equal":
+            case "equalise_panes":
                 self._tree.equalise()
                 await self._render_tree()
-            case "z":
+            case "zoom_pane":
                 await self._toggle_zoom()
-            case "less_than_sign" | "<":
+            case "resize_left":
                 await self._resize_current(-_RESIZE_STEP)
-            case "greater_than_sign" | ">":
+            case "resize_right":
                 await self._resize_current(_RESIZE_STEP)
-            case "plus" | "+":
+            case "resize_up":
                 await self._resize_current_height(_RESIZE_STEP)
-            case "minus" | "-":
+            case "resize_down":
                 await self._resize_current_height(-_RESIZE_STEP)
-            case "r":
+            case "rotate_pane":
                 await self._rotate_current()
+            case "scroll_top":
+                self._scroll_focused("top")
+            case "scroll_bottom":
+                self._scroll_focused("bottom")
+            case "layout_flokk":
+                await self._switch_layout("flokk")
+            case "layout_cascade":
+                await self._switch_layout("cascade")
+            case "layout_mimir":
+                await self._switch_layout("mimir")
+            # Assign current pane to a view type (f/e/m/t keys)
+            case "view_flokka":
+                await self._cmd_view("flokka")
+            case "view_events":
+                await self._cmd_view("events")
+            case "view_mimir":
+                await self._cmd_view("mimir")
+            case "view_tasks":
+                await self._cmd_view("tasks")
+            case "command_mode":
+                await self.action_command_mode()
+            case "broadcast":
+                await self.action_broadcast()
+            case "notifications":
+                await self.action_notifications()
+            case "quit":
+                self.exit()
+
+    def _scroll_focused(self, direction: str) -> None:
+        """Send a scroll action to the currently focused pane's view."""
+        if not self._focused_pane_id:
+            return
+        try:
+            pane = self.query_one(
+                f"#pane-{self._focused_pane_id.replace('-', '_')}", PaneWidget
+            )
+            if direction == "top":
+                pane.scroll_home(animate=False)
+            else:
+                pane.scroll_end(animate=False)
+        except Exception:
+            pass
 
     async def _split_current(self, direction: str) -> None:
         if not self._focused_pane_id:
@@ -364,6 +477,57 @@ class RavnTUI(App[None]):
         self._focus_pane(self._focused_pane_id)
 
     # ------------------------------------------------------------------
+    # Tab bar
+    # ------------------------------------------------------------------
+
+    async def on_tab_bar_tab_changed(self, msg: TabBar.TabChanged) -> None:
+        tab_id = msg.tab_id
+        if tab_id == "split":
+            # "Split" tab = current custom layout, nothing to load
+            return
+        data = self.layout_mgr.load(tab_id)
+        if data:
+            self._tree = SplitTree.from_dict(data)
+            await self._render_tree()
+            panes = self._tree.all_panes()
+            if panes:
+                self._focus_pane(panes[0].pane_id)
+
+    async def action_layout_flokk(self) -> None:
+        await self._switch_layout("flokk")
+
+    async def action_layout_cascade(self) -> None:
+        await self._switch_layout("cascade")
+
+    async def action_layout_mimir(self) -> None:
+        await self._switch_layout("mimir")
+
+    def reload_keybindings(self, source: str | None = None) -> None:
+        """Hot-reload keybindings from editor config.
+
+        Called at runtime if the user changes their tui.yaml and wants
+        the TUI to pick up the new bindings without restarting.
+        """
+        self._kb_map = KeybindingLoader().load(source)
+        self._kb_seq = KeySequenceBuffer()
+        self._init_sequence_buffer()
+        self.notify(f"Keybindings reloaded ({self._kb_map.single_key.__len__()} single, {len(self._kb_map.multi_key)} sequences)")
+
+    async def _switch_layout(self, name: str) -> None:
+        data = self.layout_mgr.load(name)
+        if not data:
+            return
+        self._tree = SplitTree.from_dict(data)
+        await self._render_tree()
+        panes = self._tree.all_panes()
+        if panes:
+            self._focus_pane(panes[0].pane_id)
+        try:
+            self.query_one(TabBar).set_active(name)
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
     # Command mode
     # ------------------------------------------------------------------
 
@@ -417,6 +581,7 @@ class RavnTUI(App[None]):
         d.register("ingest", self._cmd_ingest)
         d.register("checkpoint", self._cmd_checkpoint)
         d.register("resume", self._cmd_resume)
+        d.register("keybindings", self._cmd_keybindings)
         d.register("quit", self._cmd_quit)
         d.register("q", self._cmd_quit)
 
@@ -470,6 +635,10 @@ class RavnTUI(App[None]):
                 panes = self._tree.all_panes()
                 if panes:
                     self._focus_pane(panes[0].pane_id)
+                try:
+                    self.query_one(TabBar).set_active(name)
+                except Exception:
+                    pass
                 self.notify(f"Layout loaded: {name}")
             case "list":
                 names = ", ".join(self.layout_mgr.list())
@@ -495,8 +664,8 @@ class RavnTUI(App[None]):
         inp.focus()
 
     async def action_notifications(self) -> None:
-        if self._notifications:
-            self.notify("\n".join(self._notifications[-5:]))
+        if self._notif_log:
+            self.notify("\n".join(self._notif_log[-5:]))
         else:
             self.notify("No notifications")
 
@@ -518,8 +687,49 @@ class RavnTUI(App[None]):
     async def _cmd_resume(self, task_id: str = "") -> None:
         self.notify(f"Resume: {task_id}")
 
+    async def _cmd_keybindings(self, subcommand: str = "show", source: str = "") -> None:
+        match subcommand:
+            case "reload":
+                self.reload_keybindings(source or None)
+            case "show":
+                lines = [f"{k} → {a}" for k, a in sorted(self._kb_map.single_key.items())]
+                lines += [f"{'+'.join(seq)} → {a}" for seq, a in self._kb_map.multi_key]
+                self.notify("\n".join(lines[:20]))
+            case _:
+                self.notify("Usage: keybindings [show|reload] [source]")
+
+    async def action_quit_guard(self) -> None:
+        """Quit only when not mid-sequence (prevents ^w q from closing the app)."""
+        if not self._kb_seq.pending:
+            self.exit()
+
     async def _cmd_quit(self) -> None:
         self.exit()
+
+    # ------------------------------------------------------------------
+    # Ravn selection from FlokkaView
+    # ------------------------------------------------------------------
+
+    def on_flokka_view_ravn_selected(self, msg: Any) -> None:
+        """Wire a selected ravn to the nearest chat pane."""
+        conn = msg.conn
+        panes = self._tree.all_panes()
+
+        # Prefer an existing chat pane; fall back to first non-flokka pane
+        target_pane = next((p for p in panes if p.view_type == "chat"), None)
+        if target_pane is None:
+            target_pane = next((p for p in panes if p.view_type != "flokka"), None)
+        if target_pane is None:
+            return
+
+        try:
+            widget = self.query_one(
+                f"#pane-{target_pane.pane_id.replace('-', '_')}", PaneWidget
+            )
+            widget.assign_view("chat", conn.name, self.flokka)
+            self._focus_pane(target_pane.pane_id)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Ghost mode

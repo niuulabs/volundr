@@ -8,7 +8,7 @@ from typing import Any
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.widget import Widget
-from textual.widgets import DataTable, Label
+from textual.widgets import DataTable
 
 _REASON_STYLE: dict[str, str] = {
     "manual": "#06b6d4",
@@ -31,14 +31,12 @@ class CheckpointsView(Widget):
         width: 1fr;
         background: #09090b;
     }
-    CheckpointsView #ck-header {
-        color: #f59e0b;
-        padding: 0 1;
-    }
     CheckpointsView DataTable {
         height: 1fr;
     }
     """
+
+    can_focus = True
 
     BINDINGS = [
         Binding("r", "resume", "Resume"),
@@ -51,7 +49,6 @@ class CheckpointsView(Widget):
         self._checkpoints: list[dict[str, Any]] = []
 
     def compose(self) -> ComposeResult:
-        yield Label("⏹ checkpoints", id="ck-header")
         table = DataTable(id="ck-table", cursor_type="row")
         table.add_columns("Task ID", "Label", "Tags", "Created", "Iter", "Reason")
         yield table
