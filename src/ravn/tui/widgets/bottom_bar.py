@@ -21,7 +21,7 @@ def _lbl(text: str) -> str:
 _GLOBAL = (
     f"{_kbd('tab')} {_lbl('pane')}  "
     f"{_kbd('hjkl')} {_lbl('nav')}  "
-    f"{_kbd('f')} {_lbl('flokka')}  "
+    f"{_kbd('f')} {_lbl('flokk')}  "
     f"{_kbd('e')} {_lbl('events')}  "
     f"{_kbd('m')} {_lbl('mímir')}  "
     f"{_kbd('t')} {_lbl('tasks')}  "
@@ -33,7 +33,7 @@ _GLOBAL = (
 
 # Contextual hints shown above global when a specific view is focused
 _VIEW_HINTS: dict[str, str] = {
-    "flokka": (
+    "flokk": (
         f"{_kbd('j/k')} {_lbl('select')}  "
         f"{_kbd('↵')} {_lbl('chat')}  "
         f"{_kbd('g')} {_lbl('ghost')}  "

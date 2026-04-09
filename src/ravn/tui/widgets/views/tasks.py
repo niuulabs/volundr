@@ -43,9 +43,9 @@ class TaskBoardView(Widget):
         Binding("enter", "expand_task", "Expand"),
     ]
 
-    def __init__(self, flokka: Any | None = None, **kwargs: object) -> None:
+    def __init__(self, flokk: Any | None = None, **kwargs: object) -> None:
         super().__init__(**kwargs)
-        self._flokka = flokka
+        self._flokk = flokk
         self._tasks: list[dict[str, Any]] = []
 
     def compose(self) -> ComposeResult:
@@ -54,8 +54,8 @@ class TaskBoardView(Widget):
         yield table
 
     def on_mount(self) -> None:
-        if self._flokka:
-            self._flokka.on_event(self._on_event)
+        if self._flokk:
+            self._flokk.on_event(self._on_event)
         self.set_interval(2.0, self._refresh)
 
     def _on_event(self, conn: Any, event: dict[str, Any]) -> None:
@@ -67,10 +67,10 @@ class TaskBoardView(Widget):
         except Exception:
             return
         table.clear()
-        if not self._flokka:
-            table.add_row("—", "no flokka connection", "—", "—", "—", "—")
+        if not self._flokk:
+            table.add_row("—", "no flokk connection", "—", "—", "—", "—")
             return
-        conns = self._flokka.connections()
+        conns = self._flokk.connections()
         if not conns:
             table.add_row("—", "no ravens connected", "—", "—", "—", "—")
             return

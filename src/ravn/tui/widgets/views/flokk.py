@@ -1,4 +1,4 @@
-"""FlokkaView — Flokk sidebar list with status dots, progress bars, and section dividers."""
+"""FlokkView — Flokk sidebar list with status dots, progress bars, and section dividers."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ _ITER_COLOR: dict[str, str] = {
 }
 
 
-class FlokkaView(Widget):
+class FlokkView(Widget):
     """Scrollable Flokk sidebar: ravens with status dots, progress bars, section dividers.
 
     Keyboard navigation: j/k move selection, Enter opens chat for selected ravn.
@@ -46,41 +46,41 @@ class FlokkaView(Widget):
             self.conn = conn
 
     class _RowClicked(Message):
-        """Internal — emitted by _RavnRow so FlokkaView can update selection."""
+        """Internal — emitted by _RavnRow so FlokkView can update selection."""
 
         def __init__(self, idx: int) -> None:
             super().__init__()
             self.idx = idx
 
     DEFAULT_CSS = """
-    FlokkaView {
+    FlokkView {
         height: 1fr;
         width: 1fr;
         background: #09090b;
     }
-    FlokkaView VerticalScroll {
+    FlokkView VerticalScroll {
         background: #09090b;
         scrollbar-size: 1 1;
         scrollbar-color: #27272a;
         scrollbar-color-hover: #3f3f46;
     }
-    FlokkaView .fv-section {
+    FlokkView .fv-section {
         height: 1;
         padding: 0 1;
         color: #52525b;
         text-style: bold;
     }
-    FlokkaView ._ravn-row {
+    FlokkView ._ravn-row {
         height: auto;
         padding: 1 1 0 1;
     }
-    FlokkaView ._ravn-row:hover {
+    FlokkView ._ravn-row:hover {
         background: #111113;
     }
-    FlokkaView ._ravn-row--selected {
+    FlokkView ._ravn-row--selected {
         background: #111113;
     }
-    FlokkaView .fv-empty {
+    FlokkView .fv-empty {
         height: 1;
         padding: 0 2;
         color: #3f3f46;
@@ -98,9 +98,9 @@ class FlokkaView(Widget):
 
     _selected_idx: reactive[int] = reactive(0)
 
-    def __init__(self, flokka: Any | None = None, **kwargs: object) -> None:
+    def __init__(self, flokk: Any | None = None, **kwargs: object) -> None:
         super().__init__(**kwargs)
-        self._flokka = flokka
+        self._flokk = flokk
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="fv-scroll"):
@@ -108,8 +108,8 @@ class FlokkaView(Widget):
 
     def on_mount(self) -> None:
         self.set_interval(2.0, self._rebuild)
-        if self._flokka:
-            self._flokka.on_event(lambda *_: self.call_after_refresh(self._rebuild))
+        if self._flokk:
+            self._flokk.on_event(lambda *_: self.call_after_refresh(self._rebuild))
         self._rebuild()
 
     # ------------------------------------------------------------------
@@ -122,7 +122,7 @@ class FlokkaView(Widget):
         except Exception:
             return
 
-        conns = self._flokka.connections() if self._flokka else []
+        conns = self._flokk.connections() if self._flokk else []
 
         if conns and self._selected_idx >= len(conns):
             self._selected_idx = len(conns) - 1
@@ -158,7 +158,7 @@ class FlokkaView(Widget):
     # Row click handler
     # ------------------------------------------------------------------
 
-    def on_flokka_view__row_clicked(self, msg: _RowClicked) -> None:
+    def on_flokk_view__row_clicked(self, msg: _RowClicked) -> None:
         self._selected_idx = msg.idx
         self._rebuild()
         self._emit_selected()
@@ -168,7 +168,7 @@ class FlokkaView(Widget):
     # ------------------------------------------------------------------
 
     def action_select_next(self) -> None:
-        conns = self._flokka.connections() if self._flokka else []
+        conns = self._flokk.connections() if self._flokk else []
         if not conns:
             return
         self._selected_idx = (self._selected_idx + 1) % len(conns)
@@ -176,7 +176,7 @@ class FlokkaView(Widget):
         self._emit_selected()
 
     def action_select_prev(self) -> None:
-        conns = self._flokka.connections() if self._flokka else []
+        conns = self._flokk.connections() if self._flokk else []
         if not conns:
             return
         self._selected_idx = (self._selected_idx - 1) % len(conns)
@@ -198,9 +198,9 @@ class FlokkaView(Widget):
     # ------------------------------------------------------------------
 
     def get_selected_connection(self) -> Any | None:
-        if not self._flokka:
+        if not self._flokk:
             return None
-        conns = self._flokka.connections()
+        conns = self._flokk.connections()
         if not conns or self._selected_idx >= len(conns):
             return None
         return conns[self._selected_idx]
@@ -226,7 +226,7 @@ class _RavnRow(Static):
         self._idx = idx
 
     def on_click(self) -> None:
-        self.post_message(FlokkaView._RowClicked(self._idx))
+        self.post_message(FlokkView._RowClicked(self._idx))
 
 
 # ---------------------------------------------------------------------------

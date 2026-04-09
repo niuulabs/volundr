@@ -102,9 +102,9 @@ class ChatView(Widget):
         else:
             log.write("[#3f3f46]  ── no ravn selected ──[/]")
             log.write("")
-            log.write("[#52525b]  Select a ravn from the Flokka panel:[/]")
+            log.write("[#52525b]  Select a ravn from the Flokk panel:[/]")
             log.write(
-                "[#3f3f46]  Tab[/][#71717a] → focus Flokka  [/]"
+                "[#3f3f46]  Tab[/][#71717a] → focus Flokk  [/]"
                 "[#3f3f46]j/k[/][#71717a] → navigate  [/]"
                 "[#3f3f46]↵[/][#71717a] → open chat[/]"
             )

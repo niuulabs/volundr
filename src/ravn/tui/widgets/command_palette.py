@@ -15,7 +15,7 @@ _ITEMS: list[tuple[str, str]] = [
     # Commands
     ("connect <host:port>",     ":connect "),
     ("disconnect <name>",       ":disconnect "),
-    ("view flokka",             ":view flokka"),
+    ("view flokk",             ":view flokk"),
     ("view events",             ":view events"),
     ("view mimir",              ":view mimir"),
     ("view tasks",              ":view tasks"),
@@ -35,7 +35,7 @@ _ITEMS: list[tuple[str, str]] = [
     ("^w w   next pane",        ""),
     ("^w =   equalise panes",   ""),
     ("^w z   zoom/unzoom",      ""),
-    ("f      flokka view",      ""),
+    ("f      flokk view",      ""),
     ("e      events view",      ""),
     ("m      mímir view",       ""),
     ("t      tasks view",       ""),

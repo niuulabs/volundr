@@ -30,7 +30,7 @@ class PaneNode:
     """A leaf node in the split tree."""
 
     pane_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    view_type: str = "flokka"
+    view_type: str = "flokk"
     target: str | None = None
 
     @property
@@ -49,7 +49,7 @@ class PaneNode:
     def from_dict(cls, data: dict[str, Any]) -> PaneNode:
         return cls(
             pane_id=data.get("pane_id", str(uuid.uuid4())),
-            view_type=data.get("view", "flokka"),
+            view_type=data.get("view", "flokk"),
             target=data.get("target"),
         )
 
@@ -121,7 +121,7 @@ class SplitTree:
     # Split operations
     # ------------------------------------------------------------------
 
-    def split_vertical(self, pane_id: str, new_view: str = "flokka") -> str:
+    def split_vertical(self, pane_id: str, new_view: str = "flokk") -> str:
         """Split *pane_id* into left | right. Returns new pane_id."""
         new_pane = PaneNode(view_type=new_view)
         self._root = _replace_leaf(
@@ -135,7 +135,7 @@ class SplitTree:
         )
         return new_pane.pane_id
 
-    def split_horizontal(self, pane_id: str, new_view: str = "flokka") -> str:
+    def split_horizontal(self, pane_id: str, new_view: str = "flokk") -> str:
         """Split *pane_id* into top | bottom. Returns new pane_id."""
         new_pane = PaneNode(view_type=new_view)
         self._root = _replace_leaf(

@@ -24,7 +24,7 @@ _BUILTIN_LAYOUTS: dict[str, dict[str, Any]] = {
         "type": "branch",
         "direction": "horizontal",
         "ratio": 0.25,
-        "left": {"type": "leaf", "view": "flokka", "target": None},
+        "left": {"type": "leaf", "view": "flokk", "target": None},
         "right": {
             "type": "branch",
             "direction": "horizontal",
@@ -64,7 +64,7 @@ _BUILTIN_LAYOUTS: dict[str, dict[str, Any]] = {
         "type": "branch",
         "direction": "horizontal",
         "ratio": 0.5,
-        "left": {"type": "leaf", "view": "flokka", "target": None},
+        "left": {"type": "leaf", "view": "flokk", "target": None},
         "right": {"type": "leaf", "view": "events", "target": None},
     },
 }

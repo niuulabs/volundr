@@ -90,7 +90,7 @@ class RavnConnection:
         }
 
 
-class FlokkaManager:
+class FlokkManager:
     """Maintains live membership of the Flokk.
 
     Discovers Ravens via:

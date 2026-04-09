@@ -1,0 +1,423 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  .tui{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.4;background:#0d0d0f;color:#d4d4d8;min-height:560px;display:flex;flex-direction:column;border-radius:10px;overflow:hidden;border:1px solid #27272a}
+  .statusbar{background:#1c1c1e;border-bottom:1px solid #27272a;padding:3px 10px;display:flex;gap:16px;align-items:center;font-size:12px}
+  .sb-logo{color:#f59e0b;font-weight:600;letter-spacing:.05em}
+  .sb-sep{color:#3f3f46}
+  .sb-tag{padding:1px 6px;border-radius:3px;font-size:11px}
+  .sb-running{background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b40}
+  .sb-info{color:#71717a}
+  .sb-right{margin-left:auto;color:#52525b}
+  .layout{display:flex;flex:1;overflow:hidden}
+  .pane{display:flex;flex-direction:column;border-right:1px solid #27272a;overflow:hidden}
+  .pane:last-child{border-right:none}
+  .pane-header{background:#161618;border-bottom:1px solid #27272a;padding:4px 10px;font-size:11px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+  .pane-title{color:#a1a1aa;text-transform:uppercase;letter-spacing:.08em;font-size:10px}
+  .pane-title.active{color:#f59e0b}
+  .pane-body{flex:1;overflow-y:auto;padding:6px 0}
+  .pane-body::-webkit-scrollbar{width:2px}
+  .pane-body::-webkit-scrollbar-thumb{background:#3f3f46}
+  .ravn-row{padding:5px 10px;cursor:pointer;display:flex;flex-direction:column;gap:1px;border-left:2px solid transparent;transition:background 80ms}
+  .ravn-row:hover{background:#1a1a1c}
+  .ravn-row.selected{background:#f59e0b12;border-left-color:#f59e0b}
+  .ravn-name{color:#fafafa;font-size:12px;display:flex;align-items:center;gap:6px}
+  .ravn-rune{color:#f59e0b;font-size:14px}
+  .ravn-detail{color:#52525b;font-size:11px;padding-left:22px}
+  .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+  .dot-run{background:#f59e0b;box-shadow:0 0 4px #f59e0b80}
+  .dot-think{background:#06b6d4}
+  .dot-idle{background:#3f3f46}
+  .bar-outer{background:#27272a;border-radius:2px;height:3px;width:60px}
+  .bar-inner{height:3px;border-radius:2px;background:#f59e0b}
+  .section-divider{padding:6px 10px 2px;color:#3f3f46;font-size:10px;text-transform:uppercase;letter-spacing:.1em}
+  .chat-area{display:flex;flex-direction:column;height:100%}
+  .chat-msgs{flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:8px}
+  .chat-msgs::-webkit-scrollbar{width:2px}
+  .chat-msgs::-webkit-scrollbar-thumb{background:#3f3f46}
+  .msg{display:flex;flex-direction:column;gap:2px}
+  .msg-you{align-items:flex-end}
+  .msg-ravn{align-items:flex-start}
+  .msg-bubble{padding:6px 10px;border-radius:6px;font-size:12px;max-width:90%;line-height:1.5}
+  .msg-you .msg-bubble{background:#f59e0b18;border:1px solid #f59e0b30;color:#d4d4d8}
+  .msg-ravn .msg-bubble{background:#1c1c1e;border:1px solid #2d2d30;color:#d4d4d8}
+  .msg-meta{font-size:10px;color:#3f3f46}
+  .msg-tool{background:#06b6d418;border:1px solid #06b6d430;border-radius:4px;padding:4px 8px;font-size:11px;color:#06b6d4;display:flex;align-items:center;gap:6px}
+  .msg-thought{color:#52525b;font-size:11px;font-style:italic;padding:0 4px}
+  .chat-input-area{padding:8px 10px;border-top:1px solid #27272a;display:flex;gap:8px;align-items:center;background:#0d0d0f}
+  .chat-prompt{color:#52525b;font-size:12px;flex-shrink:0}
+  .chat-input{flex:1;background:transparent;border:none;outline:none;color:#d4d4d8;font-family:'JetBrains Mono',monospace;font-size:12px;caret-color:#f59e0b}
+  .event-row{padding:3px 10px;display:flex;gap:8px;font-size:11px;border-bottom:1px solid #1a1a1c;cursor:pointer}
+  .event-row:hover{background:#1a1a1c}
+  .ev-time{color:#3f3f46;flex-shrink:0;width:50px}
+  .ev-type{flex-shrink:0;width:90px;font-size:10px;padding:1px 5px;border-radius:3px;text-align:center}
+  .ev-thought{background:#52525b20;color:#71717a}
+  .ev-tool{background:#06b6d420;color:#06b6d4}
+  .ev-result{background:#10b98120;color:#10b981}
+  .ev-response{background:#f59e0b20;color:#f59e0b}
+  .ev-task{background:#a855f720;color:#a855f7}
+  .ev-heart{background:#27272a;color:#52525b}
+  .ev-src{color:#52525b;flex-shrink:0;width:80px}
+  .ev-detail{color:#71717a;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .task-row{padding:6px 10px;border-bottom:1px solid #1a1a1c}
+  .task-title{color:#d4d4d8;font-size:12px;display:flex;justify-content:space-between}
+  .task-sub{color:#52525b;font-size:11px;display:flex;align-items:center;gap:8px;margin-top:3px}
+  .task-bar-outer{flex:1;background:#27272a;border-radius:2px;height:2px}
+  .task-bar-inner{height:2px;border-radius:2px}
+  .kbd{display:inline-block;padding:0 5px;background:#1c1c1e;border:1px solid #3f3f46;border-radius:3px;font-size:10px;color:#71717a}
+  .bottombar{background:#161618;border-top:1px solid #27272a;padding:3px 10px;display:flex;gap:12px;font-size:11px;color:#52525b;flex-shrink:0}
+  .tab-btn{padding:2px 8px;border-radius:3px;cursor:pointer;border:none;background:transparent;font-family:'JetBrains Mono',monospace;font-size:11px;color:#52525b;transition:all 80ms}
+  .tab-btn:hover{background:#1c1c1e;color:#a1a1aa}
+  .tab-btn.active{background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b30}
+  .cmd-overlay{display:none;position:absolute;bottom:0;left:0;right:0;background:#0d0d0f;border-top:1px solid #f59e0b40;padding:6px 12px;font-size:12px;z-index:10}
+  .cmd-overlay.show{display:flex;align-items:center;gap:8px}
+  .cmd-input{flex:1;background:transparent;border:none;outline:none;color:#f59e0b;font-family:'JetBrains Mono',monospace;font-size:12px}
+  .badge{padding:1px 5px;border-radius:3px;font-size:10px}
+  .badge-amber{background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b30}
+  .badge-cyan{background:#06b6d420;color:#06b6d4}
+  .badge-zinc{background:#27272a;color:#52525b}
+  .badge-purple{background:#a855f720;color:#a855f7}
+  .mimir-page{padding:8px 12px;font-size:12px}
+  .mimir-h1{color:#fafafa;font-size:14px;font-weight:600;margin-bottom:8px;border-bottom:1px solid #27272a;padding-bottom:6px}
+  .mimir-h2{color:#f59e0b;font-size:12px;font-weight:500;margin:10px 0 4px}
+  .mimir-p{color:#a1a1aa;line-height:1.6;margin-bottom:6px}
+  .mimir-code{background:#1c1c1e;border:1px solid #2d2d30;border-radius:4px;padding:6px 8px;font-size:11px;color:#06b6d4;margin:4px 0}
+  .mimir-link{color:#06b6d4;cursor:pointer;text-decoration:underline}
+</style>
+<div class="tui" style="position:relative" id="tui">
+  <div class="statusbar">
+    <span class="sb-logo">ᚱ RAVN</span>
+    <span class="sb-sep">│</span>
+    <span class="sb-tag sb-running" id="flokk-count">flokk:valaskjalf · 3 ravens · 1 task</span>
+    <span class="sb-sep">│</span>
+    <span class="sb-info" id="active-ravn">→ ravn-tanngrisnir-a3f8</span>
+    <span class="sb-right" id="clock">04:08:22</span>
+  </div>
+
+  <div style="display:flex;background:#161618;border-bottom:1px solid #27272a;padding:3px 8px;gap:4px">
+    <button class="tab-btn active" onclick="setLayout('flokk')">ᚠ Flokk</button>
+    <button class="tab-btn" onclick="setLayout('cascade')">⑄ Cascade</button>
+    <button class="tab-btn" onclick="setLayout('mimir')">ᛗ Mímir</button>
+    <button class="tab-btn" onclick="setLayout('split')">⊞ Split</button>
+  </div>
+
+  <div class="layout" id="main-layout">
+    <div class="pane" style="width:210px;min-width:210px">
+      <div class="pane-header">
+        <span class="pane-title active">Flokk</span>
+        <span style="margin-left:auto;color:#52525b;font-size:10px">3 / 3</span>
+      </div>
+      <div class="pane-body" id="flokk-panel">
+        <div class="section-divider">valaskjalf</div>
+        <div class="ravn-row selected" onclick="selectRavn('tanngrisnir')">
+          <div class="ravn-name"><span class="ravn-rune">ᚱ</span><span class="dot dot-run"></span>tanngrisnir</div>
+          <div class="ravn-detail">autonomous · bash · mimir</div>
+          <div class="ravn-detail" style="display:flex;align-items:center;gap:6px;margin-top:2px">
+            <span style="color:#f59e0b">iter 7/20</span>
+            <div class="bar-outer"><div class="bar-inner" style="width:35%"></div></div>
+          </div>
+        </div>
+        <div class="ravn-row" onclick="selectRavn('tanngnjostr')">
+          <div class="ravn-name"><span class="ravn-rune">ᚱ</span><span class="dot dot-idle"></span>tanngnjostr</div>
+          <div class="ravn-detail">coding-agent · bash · git</div>
+          <div class="ravn-detail" style="color:#3f3f46">idle · 14h 22m</div>
+        </div>
+        <div class="ravn-row" onclick="selectRavn('thrudr')">
+          <div class="ravn-name"><span class="ravn-rune">ᚱ</span><span class="dot dot-think"></span>thrudr</div>
+          <div class="ravn-detail">autonomous · mimir · buri</div>
+          <div class="ravn-detail" style="display:flex;align-items:center;gap:6px;margin-top:2px">
+            <span style="color:#06b6d4">iter 2/10</span>
+            <div class="bar-outer"><div class="bar-inner" style="width:20%;background:#06b6d4"></div></div>
+          </div>
+        </div>
+        <div class="section-divider" style="margin-top:8px">mimir</div>
+        <div style="padding:4px 10px;font-size:11px;color:#52525b">
+          <div style="display:flex;justify-content:space-between"><span>shared</span><span class="badge badge-amber">34p</span></div>
+          <div style="display:flex;justify-content:space-between;margin-top:2px"><span>kanuck</span><span class="badge badge-zinc">12p</span></div>
+        </div>
+        <div class="section-divider" style="margin-top:8px">cron</div>
+        <div style="padding:4px 10px;font-size:11px">
+          <div style="color:#10b981">✓ morning_check 09:00</div>
+          <div style="color:#52525b;margin-top:2px">⏸ mimir_distill</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane" style="flex:1" id="center-pane">
+      <div class="pane-header" id="center-header">
+        <span class="pane-title active" id="center-title">tanngrisnir · chat</span>
+        <span class="badge badge-amber" style="margin-left:6px">running</span>
+        <span style="margin-left:auto;font-size:10px;color:#52525b">full_access · ws:4575</span>
+      </div>
+      <div class="chat-area">
+        <div class="chat-msgs" id="chat-msgs">
+          <div class="msg msg-you">
+            <div class="msg-bubble">Run a morning cluster health check across Valaskjalf. Check for any pods in error state and summarise findings.</div>
+            <div class="msg-meta">04:07:44 · you</div>
+          </div>
+          <div class="msg msg-ravn">
+            <div class="msg-thought">Thinking through approach — I'll check all namespaces systematically...</div>
+          </div>
+          <div class="msg msg-ravn">
+            <div class="msg-tool"><span style="color:#06b6d4">TOOL</span>bash → kubectl get pods -A --field-selector=status.phase!=Running</div>
+          </div>
+          <div class="msg msg-ravn">
+            <div class="msg-tool" style="background:#10b98118;border-color:#10b98130;color:#10b981"><span>RESULT</span>skrymir-storage-0 CrashLoopBackOff · longhorn-system · 3 restarts</div>
+          </div>
+          <div class="msg msg-ravn">
+            <div class="msg-thought">Found one issue — investigating the storage pod...</div>
+          </div>
+          <div class="msg msg-ravn">
+            <div class="msg-tool"><span style="color:#06b6d4">TOOL</span>bash → kubectl describe pod skrymir-storage-0 -n longhorn-system</div>
+          </div>
+          <div id="streaming-msg" class="msg msg-ravn" style="display:none">
+            <div class="msg-bubble" id="streaming-text" style="border-color:#f59e0b30"></div>
+            <div class="msg-meta">04:08:22 · tanngrisnir <span style="color:#f59e0b">●</span></div>
+          </div>
+        </div>
+        <div class="chat-input-area">
+          <span class="chat-prompt">tanngrisnir ›</span>
+          <input class="chat-input" id="chat-input" placeholder="message... (: for commands)" onkeydown="handleInput(event)" />
+        </div>
+      </div>
+    </div>
+
+    <div class="pane" style="width:260px;min-width:260px" id="right-pane">
+      <div class="pane-header">
+        <span class="pane-title">Events</span>
+        <span style="margin-left:auto;display:flex;gap:4px">
+          <button onclick="filterEvt('all')" class="tab-btn active" id="ef-all" style="padding:0 5px;font-size:10px">all</button>
+          <button onclick="filterEvt('tool')" class="tab-btn" id="ef-tool" style="padding:0 5px;font-size:10px">tool</button>
+          <button onclick="filterEvt('task')" class="tab-btn" id="ef-task" style="padding:0 5px;font-size:10px">task</button>
+        </span>
+      </div>
+      <div class="pane-body" id="events-panel">
+        <div class="event-row"><span class="ev-time">04:08:21</span><span class="ev-type ev-tool">TOOL_START</span><span class="ev-src">tangrisn…</span><span class="ev-detail">bash: kubectl describe pod...</span></div>
+        <div class="event-row"><span class="ev-time">04:08:19</span><span class="ev-type ev-thought">THOUGHT</span><span class="ev-src">tangrisn…</span><span class="ev-detail">investigating storage pod...</span></div>
+        <div class="event-row"><span class="ev-time">04:08:14</span><span class="ev-type ev-result">TOOL_RES</span><span class="ev-src">tangrisn…</span><span class="ev-detail">CrashLoopBackOff · 3 restarts</span></div>
+        <div class="event-row"><span class="ev-time">04:08:10</span><span class="ev-type ev-tool">TOOL_START</span><span class="ev-src">tangrisn…</span><span class="ev-detail">bash: kubectl get pods -A...</span></div>
+        <div class="event-row"><span class="ev-time">04:08:05</span><span class="ev-type ev-thought">THOUGHT</span><span class="ev-src">tangrisn…</span><span class="ev-detail">approach: check all namespaces...</span></div>
+        <div class="event-row"><span class="ev-time">04:07:51</span><span class="ev-type ev-task">TASK_START</span><span class="ev-src">tangrisn…</span><span class="ev-detail">morning cluster health check</span></div>
+        <div class="event-row"><span class="ev-time">04:07:44</span><span class="ev-type ev-heart">HEARTBEAT</span><span class="ev-src">driveloop</span><span class="ev-detail">active=1 queued=0 triggers=1</span></div>
+        <div class="event-row"><span class="ev-time">04:07:40</span><span class="ev-type ev-task">TASK_START</span><span class="ev-src">thrudr</span><span class="ev-detail">mimir_distill · post_session</span></div>
+        <div class="event-row"><span class="ev-time">04:07:35</span><span class="ev-type ev-result">TOOL_RES</span><span class="ev-src">thrudr</span><span class="ev-detail">mimir_write: drive-loop.md ✓</span></div>
+        <div class="event-row"><span class="ev-time">04:07:30</span><span class="ev-type ev-tool">TOOL_START</span><span class="ev-src">thrudr</span><span class="ev-detail">mimir_write: drive-loop.md</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <span><span class="kbd">tab</span> pane</span>
+    <span><span class="kbd">hjkl</span> nav</span>
+    <span><span class="kbd">f</span> flokk</span>
+    <span><span class="kbd">e</span> events</span>
+    <span><span class="kbd">m</span> mímir</span>
+    <span><span class="kbd">t</span> tasks</span>
+    <span><span class="kbd">b</span> broadcast</span>
+    <span><span class="kbd">z</span> zoom</span>
+    <span><span class="kbd">:</span> command</span>
+    <span style="margin-left:auto"><span class="kbd">q</span> quit</span>
+  </div>
+
+  <div class="cmd-overlay" id="cmd-overlay">
+    <span style="color:#f59e0b">:</span>
+    <input class="cmd-input" id="cmd-input" placeholder="connect / spawn / broadcast / pipe / layout / quit" onkeydown="handleCmd(event)" />
+  </div>
+</div>
+
+<script>
+const RAVENS = {
+  tanngrisnir: {name:'ravn-tanngrisnir-a3f8',status:'running',persona:'autonomous-agent',host:'tanngrisnir.gimle',uptime:'14h 22m',task:'Morning cluster health check',iter:7,max:20,caps:['bash','file','git','web','mimir'],perm:'full_access'},
+  tanngnjostr: {name:'ravn-tanngnjostr-b7c2',status:'idle',persona:'coding-agent',host:'tanngnjostr.gimle',uptime:'14h 22m',task:null,iter:0,max:0,caps:['bash','file','git','terminal'],perm:'workspace_write'},
+  thrudr: {name:'ravn-thrudr-c9e1',status:'thinking',persona:'autonomous-agent',host:'thrudr.gimle',uptime:'3h 41m',task:'Mímir distillation',iter:2,max:10,caps:['bash','file','web','mimir','buri'],perm:'full_access'},
+};
+let selected = 'tanngrisnir';
+let evtFilter = 'all';
+let layout = 'flokk';
+let streaming = false;
+let streamIdx = 0;
+const STREAM_PARTS = [
+  'Cluster health summary for Valaskjalf:\n\n',
+  '**1 critical issue found:**\n\n',
+  '`skrymir-storage-0` is in CrashLoopBackOff state in the `longhorn-system` namespace. ',
+  'The pod has restarted 3 times in the past hour. ',
+  'Root cause appears to be a volume mount failure — ',
+  'the underlying PVC `skrymir-longhorn-data` cannot attach to the node, ',
+  'likely due to the LRDIMM slot issue previously diagnosed on Skrymir.\n\n',
+  '**Recommended action:** Force-detach the volume and re-attach, or cordon the Skrymir node and reschedule to a healthy node.',
+];
+
+function tick() {
+  const now = new Date();
+  const t = now.toTimeString().slice(0,8);
+  document.getElementById('clock').textContent = t;
+  if(streaming && streamIdx < STREAM_PARTS.length) {
+    const el = document.getElementById('streaming-text');
+    el.textContent += STREAM_PARTS[streamIdx++];
+    document.getElementById('chat-msgs').scrollTop = 99999;
+    setTimeout(tick, streamIdx < STREAM_PARTS.length ? 280 : 1000);
+  } else {
+    setTimeout(tick, 1000);
+  }
+}
+
+function selectRavn(key) {
+  selected = key;
+  document.querySelectorAll('.ravn-row').forEach((r,i)=>{
+    r.classList.toggle('selected', ['tanngrisnir','tanngnjostr','thrudr'][i]===key);
+  });
+  const r = RAVENS[key];
+  document.getElementById('active-ravn').textContent = '→ '+r.name;
+  document.getElementById('center-title').textContent = key+' · chat';
+  const badge = document.querySelector('#center-header .badge-amber');
+  if(badge) badge.textContent = r.status;
+  badge.className = 'badge '+(r.status==='running'?'badge-amber':r.status==='thinking'?'badge-cyan':'badge-zinc');
+}
+
+function setLayout(l) {
+  layout = l;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  if(l==='mimir') showMimir();
+  else if(l==='cascade') showCascade();
+  else {
+    document.getElementById('center-title').textContent = selected+' · chat';
+    document.getElementById('center-pane').innerHTML = document.getElementById('center-pane').innerHTML;
+    location.reload && null;
+  }
+}
+
+function showMimir() {
+  document.getElementById('center-title').textContent = 'mímir · shared · technical/ravn/drive-loop.md';
+  const body = document.querySelector('#center-pane .chat-area');
+  if(body) body.innerHTML = `<div class="mimir-page">
+    <div class="mimir-h1">Drive Loop</div>
+    <div class="mimir-p" style="color:#52525b;font-size:11px">technical/ravn/drive-loop.md · 3.2KB · 2 sources · updated 1m ago</div>
+    <div class="mimir-p">The DriveLoop is Ravn's perpetually-running initiative engine. It maintains three concurrent asyncio tasks: <code style="color:#06b6d4">_trigger_watcher</code>, <code style="color:#06b6d4">_task_executor</code>, and <code style="color:#06b6d4">_heartbeat</code>.</div>
+    <div class="mimir-h2">Architecture</div>
+    <div class="mimir-p">Tasks are persisted to <code style="color:#06b6d4">~/.ravn/daemon/queue.json</code> on every enqueue/dequeue. Semaphore cap defaults to 3 concurrent tasks.</div>
+    <div class="mimir-code">drive_loop.task_status(task_id, include_progress=True)
+→ {status, events[], event_count, output}</div>
+    <div class="mimir-h2">Key decisions</div>
+    <div class="mimir-p">RabbitMQ chosen as Sleipnir primary transport (April 2026). SilentChannel replaced by <span class="mimir-link">CaptureChannel</span> when cascade enabled → <span class="mimir-link">[[cascade]]</span></div>
+    <div style="margin-top:12px;padding-top:8px;border-top:1px solid #27272a;font-size:11px;color:#52525b">
+      <span>→ outbound: </span><span class="mimir-link">buri-memory</span><span style="color:#3f3f46"> · </span><span class="mimir-link">cascade</span><span style="color:#3f3f46"> · </span><span class="mimir-link">sleipnir</span>
+    </div>
+    <div style="margin-top:4px;padding:6px 8px;background:#1c1c1e;border-radius:4px;font-size:11px">
+      <input style="background:transparent;border:none;outline:none;color:#d4d4d8;font-family:'JetBrains Mono',monospace;font-size:11px;width:100%" placeholder="/ search wiki..." />
+    </div>
+  </div>`;
+}
+
+function showCascade() {
+  document.getElementById('center-title').textContent = 'cascade · task board';
+  const body = document.querySelector('#center-pane .chat-area');
+  if(body) body.innerHTML = `<div style="padding:8px 0;flex:1;overflow-y:auto">
+    <div style="padding:4px 10px;font-size:10px;color:#52525b;text-transform:uppercase;letter-spacing:.1em">Active tasks</div>
+    <div class="task-row">
+      <div class="task-title"><span style="color:#fafafa">Morning cluster health check</span><span class="badge badge-amber">running</span></div>
+      <div class="task-sub"><span style="color:#52525b">tanngrisnir</span><span style="color:#f59e0b">iter 7/20</span><div class="task-bar-outer"><div class="task-bar-inner" style="width:35%;background:#f59e0b"></div></div><span style="color:#52525b">6m 38s</span></div>
+      <div style="padding:4px 0 2px;font-size:11px;color:#71717a">→ bash: kubectl describe pod skrymir-storage-0...</div>
+    </div>
+    <div class="task-row">
+      <div class="task-title"><span style="color:#fafafa">Mímir distillation</span><span class="badge badge-cyan">thinking</span></div>
+      <div class="task-sub"><span style="color:#52525b">thrudr</span><span style="color:#06b6d4">iter 2/10</span><div class="task-bar-outer"><div class="task-bar-inner" style="width:20%;background:#06b6d4"></div></div><span style="color:#52525b">1m 42s</span></div>
+      <div style="padding:4px 0 2px;font-size:11px;color:#71717a">→ mimir_write: drive-loop.md</div>
+    </div>
+    <div style="padding:4px 10px;font-size:10px;color:#52525b;text-transform:uppercase;letter-spacing:.1em;margin-top:8px">Queued</div>
+    <div class="task-row" style="opacity:.5">
+      <div class="task-title"><span style="color:#d4d4d8">Valkyrie morning briefing</span><span class="badge badge-zinc">queued</span></div>
+      <div class="task-sub"><span style="color:#52525b">cron trigger · 09:00</span></div>
+    </div>
+    <div style="padding:16px 10px 0;font-size:11px;color:#52525b">
+      <span class="kbd">n</span> new task &nbsp; <span class="kbd">s</span> stop &nbsp; <span class="kbd">c</span> collect &nbsp; <span class="kbd">f</span> spawn ravn
+    </div>
+  </div>
+  <div class="chat-input-area">
+    <span class="chat-prompt">cascade ›</span>
+    <input class="chat-input" placeholder="task_create(prompt=...) or : for commands" />
+  </div>`;
+}
+
+function filterEvt(f) {
+  evtFilter = f;
+  document.querySelectorAll('[id^="ef-"]').forEach(b=>b.classList.remove('active'));
+  document.getElementById('ef-'+f).classList.add('active');
+}
+
+function handleInput(e) {
+  if(e.key===':' && e.target.value==='') {
+    e.preventDefault();
+    showCmd();
+    return;
+  }
+  if(e.key==='Enter' && e.target.value.trim()) {
+    const v = e.target.value.trim();
+    e.target.value='';
+    addUserMsg(v);
+    setTimeout(startStream, 800);
+  }
+}
+
+function addUserMsg(text) {
+  const msgs = document.getElementById('chat-msgs');
+  if(!msgs) return;
+  const d = document.createElement('div');
+  d.className='msg msg-you';
+  d.innerHTML=`<div class="msg-bubble">${text}</div><div class="msg-meta">${document.getElementById('clock').textContent} · you</div>`;
+  msgs.appendChild(d);
+  msgs.scrollTop=99999;
+}
+
+function startStream() {
+  const msgs = document.getElementById('chat-msgs');
+  if(!msgs) return;
+  const el = document.getElementById('streaming-msg');
+  if(el) {el.style.display='flex';streaming=true;streamIdx=0;document.getElementById('streaming-text').textContent='';}
+}
+
+function handleCmd(e) {
+  if(e.key==='Escape') hideCmd();
+  if(e.key==='Enter') {
+    const v = e.target.value.trim();
+    hideCmd();
+    if(v.startsWith('layout ')) setLayoutByName(v.slice(7));
+    if(v==='quit') alert('ravn tui: disconnected from flokk');
+    if(v.startsWith('broadcast')) showBroadcast();
+  }
+}
+
+function setLayoutByName(n) {
+  if(n==='flokk') setLayout('flokk');
+  if(n==='cascade') setLayout('cascade');
+  if(n==='mimir') setLayout('mimir');
+}
+
+function showCmd() {
+  document.getElementById('cmd-overlay').classList.add('show');
+  document.getElementById('cmd-input').focus();
+  document.getElementById('cmd-input').value='';
+}
+function hideCmd() {
+  document.getElementById('cmd-overlay').classList.remove('show');
+  const ci = document.getElementById('chat-input');
+  if(ci) ci.focus();
+}
+
+function showBroadcast() {
+  const inp = document.getElementById('chat-input');
+  if(inp) {inp.placeholder='[BROADCAST → all ravens] message...';inp.style.color='#f59e0b';}
+}
+
+document.addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT') return;
+  if(e.key===':') showCmd();
+  if(e.key==='m') setLayout('mimir');
+  if(e.key==='t') setLayout('cascade');
+  if(e.key==='f') setLayout('flokk');
+});
+
+tick();
+setTimeout(startStream, 2000);
+</script>

@@ -55,9 +55,9 @@ class BroadcastOverlay(ModalScreen[None]):
     }
     """
 
-    def __init__(self, flokka: Any) -> None:
+    def __init__(self, flokk: Any) -> None:
         super().__init__()
-        self._flokka = flokka
+        self._flokk = flokk
         self._ravns: list[Any] = []
         self._selected: set[str] = set()
         self._list_idx: int = 0
@@ -76,7 +76,7 @@ class BroadcastOverlay(ModalScreen[None]):
             )
 
     def on_mount(self) -> None:
-        conns = self._flokka.connections() if self._flokka else []
+        conns = self._flokk.connections() if self._flokk else []
         self._ravns = [c for c in conns if not getattr(c, "ghost", False)]
         self._selected = {c.name for c in self._ravns}
         self._rebuild()
@@ -146,7 +146,7 @@ class BroadcastOverlay(ModalScreen[None]):
 
     async def _do_send(self, names: list[str], message: str) -> None:
         try:
-            results = await self._flokka.broadcast_to(names, message)
+            results = await self._flokk.broadcast_to(names, message)
             self.app.notify(f"Broadcast sent to {len(results)} ravn(s)")
         except Exception as exc:
             self.app.notify(f"Broadcast failed: {exc}", severity="error")

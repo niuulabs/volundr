@@ -15,7 +15,7 @@ from textual.widget import Widget
 from textual.widgets import Input, Label
 
 from ravn.tui.commands import CommandDispatcher, CommandParseError, parse_command
-from ravn.tui.connections import FlokkaManager
+from ravn.tui.connections import FlokkManager
 from ravn.tui.keybindings import KeybindingLoader, KeybindingMap, KeySequenceBuffer
 from ravn.tui.layouts import LayoutManager
 from ravn.tui.widgets.bottom_bar import BottomBar
@@ -103,7 +103,7 @@ class RavnTUI(App[None]):
         self._initial_layout = layout_name
         self.mimir_urls: list[tuple[str, str]] = mimir_urls or []
 
-        self.flokka = FlokkaManager()
+        self.flokk = FlokkManager()
         self.layout_mgr = LayoutManager()
         self._tree = SplitTree()
         self._focused_pane_id: str | None = None
@@ -124,7 +124,7 @@ class RavnTUI(App[None]):
     # ------------------------------------------------------------------
 
     def compose(self) -> ComposeResult:
-        yield StatusBar(flokka=self.flokka, id="status-bar")
+        yield StatusBar(flokk=self.flokk, id="status-bar")
         yield TabBar(id="tab-bar")
         yield Container(id="main-container")
         yield Container(
@@ -150,7 +150,7 @@ class RavnTUI(App[None]):
         # Connect to initial Ravens
         for host, port in self._initial_connections:
             asyncio.create_task(
-                self.flokka.connect(host, port),
+                self.flokk.connect(host, port),
                 name=f"connect:{host}:{port}",
             )
 
@@ -178,7 +178,7 @@ class RavnTUI(App[None]):
                     if info:
                         host = info.server or info.parsed_addresses()[0]
                         port = info.port or 7477
-                        asyncio.create_task(self.flokka.connect(host, port))
+                        asyncio.create_task(self.flokk.connect(host, port))
 
                 _browser = ServiceBrowser(  # noqa: F841
                     azc.zeroconf,
@@ -208,7 +208,7 @@ class RavnTUI(App[None]):
                 pane_id=node.pane_id,
                 view_type=node.view_type,
                 target=node.target,
-                flokka=self.flokka,
+                flokk=self.flokk,
                 mimir_urls=self.mimir_urls,
                 id=f"pane-{node.pane_id.replace('-', '_')}",
             )
@@ -394,8 +394,8 @@ class RavnTUI(App[None]):
             case "layout_mimir":
                 await self._switch_layout("mimir")
             # Assign current pane to a view type (f/e/m/t keys)
-            case "view_flokka":
-                await self._cmd_view("flokka")
+            case "view_flokk":
+                await self._cmd_view("flokk")
             case "view_events":
                 await self._cmd_view("events")
             case "view_mimir":
@@ -647,21 +647,21 @@ class RavnTUI(App[None]):
         except ValueError:
             self.notify(f"Invalid port: {port_str}", severity="error")
             return
-        await self.flokka.connect(host, port)
+        await self.flokk.connect(host, port)
         self.notify(f"Connecting to {host}:{port}")
 
     async def _cmd_disconnect(self, name: str = "") -> None:
-        await self.flokka.disconnect(name)
+        await self.flokk.disconnect(name)
         self.notify(f"Disconnected {name}")
 
-    async def _cmd_view(self, view_type: str = "flokka", target: str | None = None) -> None:
+    async def _cmd_view(self, view_type: str = "flokk", target: str | None = None) -> None:
         if not self._focused_pane_id:
             return
         self._tree.set_view(self._focused_pane_id, view_type, target)
         try:
             pane_id = self._focused_pane_id
             pane = self.query_one(f"#pane-{pane_id.replace('-', '_')}", PaneWidget)
-            pane.assign_view(view_type, target, self.flokka)
+            pane.assign_view(view_type, target, self.flokk)
             self.query_one("#bottom-bar", BottomBar).set_context(view_type)
         except Exception:
             await self._render_tree()
@@ -704,12 +704,12 @@ class RavnTUI(App[None]):
         if not message:
             self.notify("Usage: broadcast <message>", severity="error")
             return
-        results = await self.flokka.broadcast(message)
+        results = await self.flokk.broadcast(message)
         self.notify(f"Broadcast to {len(results)} Ravens")
 
     async def action_broadcast(self) -> None:
         from ravn.tui.widgets.broadcast_overlay import BroadcastOverlay
-        await self.push_screen(BroadcastOverlay(self.flokka))
+        await self.push_screen(BroadcastOverlay(self.flokk))
 
     async def action_command_palette(self) -> None:
         from ravn.tui.widgets.command_palette import CommandPaletteScreen
@@ -806,18 +806,18 @@ class RavnTUI(App[None]):
         self.exit()
 
     # ------------------------------------------------------------------
-    # Ravn selection from FlokkaView
+    # Ravn selection from FlokkView
     # ------------------------------------------------------------------
 
-    def on_flokka_view_ravn_selected(self, msg: Any) -> None:
+    def on_flokk_view_ravn_selected(self, msg: Any) -> None:
         """Wire a selected ravn to the nearest chat pane."""
         conn = msg.conn
         panes = self._tree.all_panes()
 
-        # Prefer an existing chat pane; fall back to first non-flokka pane
+        # Prefer an existing chat pane; fall back to first non-flokk pane
         target_pane = next((p for p in panes if p.view_type == "chat"), None)
         if target_pane is None:
-            target_pane = next((p for p in panes if p.view_type != "flokka"), None)
+            target_pane = next((p for p in panes if p.view_type != "flokk"), None)
         if target_pane is None:
             return
 
@@ -825,7 +825,7 @@ class RavnTUI(App[None]):
             widget = self.query_one(
                 f"#pane-{target_pane.pane_id.replace('-', '_')}", PaneWidget
             )
-            widget.assign_view("chat", conn.name, self.flokka)
+            widget.assign_view("chat", conn.name, self.flokk)
             self._focus_pane(target_pane.pane_id)
         except Exception:
             pass
@@ -835,5 +835,5 @@ class RavnTUI(App[None]):
     # ------------------------------------------------------------------
 
     async def on_ravn_t_u_i_ghost_mode(self, message: GhostMode) -> None:
-        conn = await self.flokka.connect(message.host, message.port, ghost=True)
+        conn = await self.flokk.connect(message.host, message.port, ghost=True)
         self.notify(f"Ghost mode: {conn.name}")

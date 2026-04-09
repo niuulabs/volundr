@@ -88,7 +88,7 @@ def build_default_map(disabled: list[str] | None = None) -> KeybindingMap:
         (["i"], "insert_mode"),
         (["?"], "command_palette"),
         # View assignment: assign current pane to the given view type
-        (["f"], "view_flokka"),
+        (["f"], "view_flokk"),
         (["e"], "view_events"),
         (["t"], "view_tasks"),
         (["m"], "view_mimir"),

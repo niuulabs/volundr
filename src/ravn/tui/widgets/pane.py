@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     pass
 
 _VIEW_LABELS: dict[str, str] = {
-    "flokka": "FLOKK",
+    "flokk": "FLOKK",
     "chat": "CHAT",
     "events": "EVENTS",
     "tasks": "CASCADE",
@@ -137,9 +137,9 @@ class PaneWidget(Widget):
     def __init__(
         self,
         pane_id: str,
-        view_type: str = "flokka",
+        view_type: str = "flokk",
         target: str | None = None,
-        flokka: Any | None = None,
+        flokk: Any | None = None,
         mimir_urls: list[tuple[str, str]] | None = None,
         **kwargs: object,
     ) -> None:
@@ -147,7 +147,7 @@ class PaneWidget(Widget):
         self.pane_id = pane_id
         self._view_type = view_type
         self._target = target
-        self._flokka: Any | None = flokka
+        self._flokk: Any | None = flokk
         self._mimir_urls: list[tuple[str, str]] = mimir_urls or []
 
     def compose(self) -> ComposeResult:
@@ -164,21 +164,21 @@ class PaneWidget(Widget):
         from ravn.tui.widgets.views.checkpoints import CheckpointsView
         from ravn.tui.widgets.views.cron import CronView
         from ravn.tui.widgets.views.events import EventStreamView
-        from ravn.tui.widgets.views.flokka import FlokkaView
+        from ravn.tui.widgets.views.flokk import FlokkView
         from ravn.tui.widgets.views.mimir import MimirView
         from ravn.tui.widgets.views.tasks import TaskBoardView
 
         conn = None
-        if self._flokka and self._target:
-            conn = self._flokka.get(self._target)
+        if self._flokk and self._target:
+            conn = self._flokk.get(self._target)
 
         match self._view_type:
             case "chat":
                 return ChatView(connection=conn)
             case "events":
-                return EventStreamView(flokka=self._flokka, target=self._target)
+                return EventStreamView(flokk=self._flokk, target=self._target)
             case "tasks":
-                return TaskBoardView(flokka=self._flokka)
+                return TaskBoardView(flokk=self._flokk)
             case "mimir":
                 return MimirView(connection=conn, mimir_urls=self._mimir_urls)
             case "cron":
@@ -186,21 +186,21 @@ class PaneWidget(Widget):
             case "checkpoints":
                 return CheckpointsView(connection=conn)
             case "caps":
-                return CapsView(flokka=self._flokka)
+                return CapsView(flokk=self._flokk)
             case _:
-                return FlokkaView(flokka=self._flokka)
+                return FlokkView(flokk=self._flokk)
 
     def assign_view(
         self,
         view_type: str,
         target: str | None = None,
-        flokka: Any | None = None,
+        flokk: Any | None = None,
     ) -> None:
         """Swap the view hosted by this pane without touching the PaneHeader."""
         self._view_type = view_type
         self._target = target
-        if flokka is not None:
-            self._flokka = flokka
+        if flokk is not None:
+            self._flokk = flokk
 
         # Update header title
         try:

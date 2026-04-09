@@ -11,7 +11,7 @@ from typing import Any
 
 # All known view types for tab completion
 VIEW_TYPES = [
-    "flokka",
+    "flokk",
     "chat",
     "events",
     "tasks",

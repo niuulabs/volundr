@@ -64,9 +64,9 @@ class StatusBar(Widget):
     }
     """
 
-    def __init__(self, flokka: Any | None = None, **kwargs: object) -> None:
+    def __init__(self, flokk: Any | None = None, **kwargs: object) -> None:
         super().__init__(**kwargs)
-        self._flokka = flokka
+        self._flokk = flokk
         self._active_ravn: str = "—"
         self._flokk_name: str = "local"
 
@@ -82,8 +82,8 @@ class StatusBar(Widget):
 
     def on_mount(self) -> None:
         self.set_interval(1.0, self._tick)
-        if self._flokka:
-            self._flokka.on_event(self._on_event)
+        if self._flokk:
+            self._flokk.on_event(self._on_event)
 
     def _tick(self) -> None:
         now = datetime.now().strftime("%H:%M:%S")
@@ -118,9 +118,9 @@ class StatusBar(Widget):
             pass
 
     def _update_flokk_tag(self) -> None:
-        if not self._flokka:
+        if not self._flokk:
             return
-        conns = self._flokka.connections()
+        conns = self._flokk.connections()
         count = len(conns)
         # Derive flokk group name from the common host suffix of connected ravens
         if conns:

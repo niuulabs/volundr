@@ -75,12 +75,12 @@ class EventStreamView(Widget):
 
     def __init__(
         self,
-        flokka: Any | None = None,
+        flokk: Any | None = None,
         target: str | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
-        self._flokka = flokka
+        self._flokk = flokk
         self._target = target
         self._row_count = 0
 
@@ -88,8 +88,8 @@ class EventStreamView(Widget):
         yield RichLog(id="ev-log", markup=True, highlight=False, wrap=False)
 
     def on_mount(self) -> None:
-        if self._flokka:
-            self._flokka.on_event(self._on_event)
+        if self._flokk:
+            self._flokk.on_event(self._on_event)
         self._push_meta()
 
     def _on_event(self, conn: Any, event: dict[str, Any]) -> None:
