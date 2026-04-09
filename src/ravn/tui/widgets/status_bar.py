@@ -29,6 +29,11 @@ class StatusBar(Widget):
         width: auto;
         padding: 0 1 0 0;
     }
+    StatusBar #sb-mode {
+        width: auto;
+        padding: 0 1;
+        color: #3f3f46;
+    }
     StatusBar #sb-sep1 {
         width: auto;
         padding: 0 1;
@@ -67,6 +72,7 @@ class StatusBar(Widget):
 
     def compose(self) -> ComposeResult:
         yield Static("[bold #f59e0b]ᚱ RAVN[/]", id="sb-logo")
+        yield Static("[#3f3f46] NORMAL [/]", id="sb-mode")
         yield Static("[#3f3f46]│[/]", id="sb-sep1")
         yield Label("[#f59e0b]flokk:local · 0 ravens · 0 tasks[/]", id="sb-flokk-tag")
         yield Static("[#3f3f46]│[/]", id="sb-sep2")
@@ -144,3 +150,14 @@ class StatusBar(Widget):
     def set_task_count(self, count: int) -> None:
         # task count is now derived live in _update_flokk_tag; kept for compat
         pass
+
+    def set_mode(self, mode: str) -> None:
+        """Update the vim mode indicator (NORMAL / INSERT)."""
+        if mode == "INSERT":
+            markup = "[bold #f59e0b] INSERT [/]"
+        else:
+            markup = "[#3f3f46] NORMAL [/]"
+        try:
+            self.query_one("#sb-mode", Static).update(markup)
+        except Exception:
+            pass

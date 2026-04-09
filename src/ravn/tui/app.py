@@ -108,6 +108,7 @@ class RavnTUI(App[None]):
         self._zoomed: bool = False
         self._zoom_previous_tree: SplitTree | None = None
         self._notif_log: list[str] = []
+        self._insert_mode: bool = False
         self._cmd_dispatcher = CommandDispatcher()
         self._register_commands()
 
@@ -264,6 +265,34 @@ class RavnTUI(App[None]):
     # Keybinding sequence dispatch
     # ------------------------------------------------------------------
 
+    def _enter_insert_mode(self) -> None:
+        """Focus the Input in the current pane and enter INSERT mode."""
+        if not self._focused_pane_id:
+            return
+        try:
+            from textual.widgets import Input as _Input
+            pane = self.query_one(
+                f"#pane-{self._focused_pane_id.replace('-', '_')}", PaneWidget
+            )
+            inp = next((c for c in pane.query(_Input)), None)
+            if inp is None:
+                return
+            inp.focus()
+            self._insert_mode = True
+            self.query_one("#status-bar", StatusBar).set_mode("INSERT")
+        except Exception:
+            pass
+
+    def _exit_insert_mode(self) -> None:
+        """Return to NORMAL mode, restoring pane focus."""
+        self._insert_mode = False
+        try:
+            self.query_one("#status-bar", StatusBar).set_mode("NORMAL")
+        except Exception:
+            pass
+        if self._focused_pane_id:
+            self._focus_pane(self._focused_pane_id)
+
     def _init_sequence_buffer(self) -> None:
         """Register all multi-key sequences from the loaded keybinding map."""
         for seq, action in self._kb_map.multi_key:
@@ -275,19 +304,23 @@ class RavnTUI(App[None]):
         in_input = isinstance(self.focused, _Input)
         key = _normalise_key(event.key)
 
-        # Multi-key sequences (ctrl+w v, ctrl+w s, g g, etc.) always run,
-        # even inside Input widgets — so pane splits work from the chat bar.
+        # Multi-key sequences always run (even in inputs) so ^w v/s/q work from chat bar.
         action, consumed = self._kb_seq.handle(key)
         if consumed:
             event.stop()
             if in_input:
-                # Prevent the Input from processing sequence keys as typed text.
                 event.prevent_default()
         if action:
             await self._dispatch_kb_action(action)
             return
 
-        # Single-key dispatch is blocked inside Input fields.
+        # In INSERT mode Esc exits; all other keys pass through to the focused widget.
+        if self._insert_mode:
+            if key == "escape":
+                event.stop()
+                self._exit_insert_mode()
+            return
+
         if in_input:
             return
 
@@ -366,6 +399,8 @@ class RavnTUI(App[None]):
                 await self.action_broadcast()
             case "notifications":
                 await self.action_notifications()
+            case "insert_mode":
+                self._enter_insert_mode()
             case "quit":
                 self.exit()
 
@@ -399,8 +434,8 @@ class RavnTUI(App[None]):
             return
         panes = self._tree.all_panes()
         if len(panes) <= 1:
+            self.notify("Only one pane — use ^w v or ^w s to split first")
             return
-        # Find a sibling to focus after closing
         new_focus = self._tree.next_pane(self._focused_pane_id)
         self._tree.close_pane(self._focused_pane_id)
         await self._render_tree()
@@ -561,6 +596,9 @@ class RavnTUI(App[None]):
             self._focus_pane(self._focused_pane_id)
 
     async def action_escape(self) -> None:
+        if self._insert_mode:
+            self._exit_insert_mode()
+            return
         container = self.query_one("#cmd-input-container", Container)
         if "visible" in container.classes:
             container.remove_class("visible")
@@ -681,8 +719,37 @@ class RavnTUI(App[None]):
     async def _cmd_filter(self, event_type: str = "all") -> None:
         self.notify(f"Filter: {event_type}")
 
-    async def _cmd_ingest(self, url: str = "") -> None:
-        self.notify(f"Ingest: {url}")
+    async def _cmd_ingest(self, path: str = "") -> None:
+        import os
+        if not path:
+            self.notify("Usage: ingest <filepath>", severity="error")
+            return
+        if not self.mimir_urls:
+            self.notify("No mimir HTTP instances configured", severity="error")
+            return
+        filepath = os.path.expanduser(path)
+        if not os.path.isfile(filepath):
+            self.notify(f"File not found: {filepath}", severity="error")
+            return
+        try:
+            import httpx
+            with open(filepath, encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            title = os.path.basename(filepath)
+            name, base_url = self.mimir_urls[0]
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    f"{base_url}/mimir/ingest",
+                    json={"title": title, "content": content, "source_type": "document"},
+                )
+            if resp.status_code == 200:
+                data = resp.json()
+                pages = len(data.get("pages_updated", []))
+                self.notify(f"Ingested '{title}' into {name} → {pages} pages updated")
+            else:
+                self.notify(f"Ingest failed: HTTP {resp.status_code}", severity="error")
+        except Exception as exc:
+            self.notify(f"Ingest error: {exc}", severity="error")
 
     async def _cmd_checkpoint(self, label: str = "") -> None:
         self.notify(f"Checkpoint: {label}")

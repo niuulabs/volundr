@@ -29,6 +29,13 @@ _BADGE: dict[str, str] = {
 _EVENT_CYCLE = ["all", "thought", "tool", "response", "task", "heartbeat"]
 _MAX_ROWS = 500
 
+_SOURCE_COLORS = ["#f59e0b", "#06b6d4", "#10b981", "#a855f7", "#f97316", "#6366f1"]
+
+
+def _source_color(name: str) -> str:
+    """Assign a stable accent color to a source name via hash."""
+    return _SOURCE_COLORS[abs(hash(name)) % len(_SOURCE_COLORS)]
+
 
 class EventStreamView(Widget):
     """SSE subscription to /events.
@@ -118,10 +125,11 @@ class EventStreamView(Widget):
         detail = _summarise(data) if isinstance(data, dict) else ""
         source = (conn.name if hasattr(conn, "name") else str(conn))[:12]
 
+        src_color = _source_color(source)
         line = (
             f"[#3f3f46]{ts}[/] "
             f"{badge} "
-            f"[#52525b]{source}[/]"
+            f"[{src_color}]{source}[/]"
             + (f"  [#71717a]{detail}[/]" if detail else "")
         )
         log.write(line)

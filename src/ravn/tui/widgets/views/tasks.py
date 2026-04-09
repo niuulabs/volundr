@@ -56,12 +56,10 @@ class TaskBoardView(Widget):
     def on_mount(self) -> None:
         if self._flokka:
             self._flokka.on_event(self._on_event)
-        self.set_interval(5.0, self._refresh)
+        self.set_interval(2.0, self._refresh)
 
     def _on_event(self, conn: Any, event: dict[str, Any]) -> None:
-        event_type = str(event.get("event", ""))
-        if event_type in ("task_started", "task_complete"):
-            self.call_after_refresh(self._refresh)
+        self.call_after_refresh(self._refresh)
 
     def _refresh(self) -> None:
         try:
@@ -69,21 +67,29 @@ class TaskBoardView(Widget):
         except Exception:
             return
         table.clear()
-        for task in self._tasks:
-            tid = str(task.get("task_id", ""))[:8]
-            title = task.get("title", "—")[:30]
-            ravn = task.get("ravn", "—")
-            status = task.get("status", "?")
-            style = _STATUS_STYLE.get(status, "#a1a1aa")
-            progress = iter_bar(task.get("iteration"), task.get("max_iterations"))
-            elapsed = task.get("elapsed", "—")
+        if not self._flokka:
+            table.add_row("—", "no flokka connection", "—", "—", "—", "—")
+            return
+        conns = self._flokka.connections()
+        if not conns:
+            table.add_row("—", "no ravens connected", "—", "—", "—", "—")
+            return
+        for conn in conns:
+            info = conn.ravn_info or {}
+            state = info.get("state", conn.status)
+            style = _STATUS_STYLE.get(state, "#a1a1aa")
+            persona = str(info.get("persona", "—"))[:30]
+            cur = info.get("iteration")
+            mx = info.get("max_iterations")
+            progress = iter_bar(cur, mx) if cur is not None and mx is not None else "—"
+            uptime = str(info.get("uptime", "—"))
             table.add_row(
-                tid,
-                title,
-                ravn,
-                f"[{style}]{status}[/]",
+                conn.name[:12],
+                persona,
+                conn.name[:12],
+                f"[{style}]{state}[/]",
                 progress,
-                elapsed,
+                uptime,
             )
 
     def load_tasks(self, tasks: list[dict[str, Any]]) -> None:
