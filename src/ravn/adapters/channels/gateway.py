@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from ravn.agent import RavnAgent
 from ravn.config import GatewayConfig
 from ravn.domain.events import RavnEvent, RavnEventType
+from ravn.domain.profile import RavnProfile
 from ravn.ports.channel import ChannelPort
 
 logger = logging.getLogger(__name__)
@@ -129,9 +130,12 @@ class RavnGateway:
         self,
         config: GatewayConfig,
         agent_factory: AgentFactory,
+        *,
+        profile: RavnProfile | None = None,
     ) -> None:
         self._config = config
         self._agent_factory = agent_factory
+        self._profile = profile
         self._sessions: dict[str, GatewaySession] = {}
         self._broadcast_queues: list[asyncio.Queue[RavnEvent | None]] = []
 
@@ -142,6 +146,18 @@ class RavnGateway:
     def session_ids(self) -> list[str]:
         """Return all active session IDs."""
         return list(self._sessions.keys())
+
+    def get_status(self) -> dict:
+        """Return a status dict for the /status endpoint.
+
+        Includes profile identity fields when a :class:`~ravn.domain.profile.RavnProfile`
+        was supplied at construction time.
+        """
+        ids = self.session_ids()
+        status: dict = {"session_count": len(ids), "active_sessions": ids}
+        if self._profile is not None:
+            status["profile"] = self._profile.to_dict()
+        return status
 
     def get_or_create_session(self, session_id: str) -> GatewaySession:
         """Return an existing session or create a fresh one."""

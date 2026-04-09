@@ -417,3 +417,147 @@ async def test_integration_two_markdown_adapters(tmp_path: Path) -> None:
     shared_pages = await shared_adapter.list_pages()
     shared_paths = [m.path for m in shared_pages]
     assert "technical/local-page.md" not in shared_paths
+
+
+# ---------------------------------------------------------------------------
+# Exception isolation — one mount failing should not abort others
+# ---------------------------------------------------------------------------
+
+
+def _error_port(error: Exception = RuntimeError("mount down")) -> object:
+    """Return a mock port where every operation raises."""
+    port = AsyncMock()
+    port.ingest = AsyncMock(side_effect=error)
+    port.query = AsyncMock(side_effect=error)
+    port.search = AsyncMock(side_effect=error)
+    port.list_pages = AsyncMock(side_effect=error)
+    port.list_sources = AsyncMock(side_effect=error)
+    port.lint = AsyncMock(side_effect=error)
+    port.read_source = AsyncMock(side_effect=error)
+    port.read_page = AsyncMock(side_effect=error)
+    port.get_page = AsyncMock(side_effect=error)
+    port.upsert_page = AsyncMock(side_effect=error)
+    return port
+
+
+@pytest.mark.asyncio
+async def test_ingest_exception_in_one_mount_continues_others() -> None:
+    bad_port = _error_port()
+    good_port = AsyncMock()
+    good_port.ingest = AsyncMock(return_value=["wiki/page.md"])
+    bad = MimirMount(name="bad", port=bad_port, role="local", read_priority=0)
+    good = MimirMount(name="good", port=good_port, role="shared", read_priority=1)
+    adapter = CompositeMimirAdapter(mounts=[bad, good])
+    source = MimirSource(
+        source_id="s1", title="T", content="c", source_type="document",
+        ingested_at=datetime.now(UTC), content_hash=compute_content_hash("c"),
+    )
+    result = await adapter.ingest(source)
+    good_port.ingest.assert_called_once()
+    assert result == ["wiki/page.md"]
+
+
+@pytest.mark.asyncio
+async def test_query_exception_in_one_mount_continues_others() -> None:
+    bad_port = _error_port()
+    good_port = _mock_port()
+    bad = MimirMount(name="bad", port=bad_port, role="local", read_priority=0)
+    good = MimirMount(name="good", port=good_port, role="shared", read_priority=1)
+    adapter = CompositeMimirAdapter(mounts=[bad, good])
+    result = await adapter.query("test question")
+    good_port.query.assert_called_once()
+    assert isinstance(result, MimirQueryResult)
+
+
+@pytest.mark.asyncio
+async def test_search_exception_in_one_mount_continues_others() -> None:
+    bad_port = _error_port()
+    good_port = _mock_port()
+    bad = MimirMount(name="bad", port=bad_port, role="local", read_priority=0)
+    good = MimirMount(name="good", port=good_port, role="shared", read_priority=1)
+    adapter = CompositeMimirAdapter(mounts=[bad, good])
+    result = await adapter.search("query")
+    good_port.search.assert_called_once()
+    assert isinstance(result, list)
+
+
+@pytest.mark.asyncio
+async def test_list_pages_exception_in_one_mount_continues_others() -> None:
+    bad_port = _error_port()
+    good_port = _mock_port()
+    bad = MimirMount(name="bad", port=bad_port, role="local", read_priority=0)
+    good = MimirMount(name="good", port=good_port, role="shared", read_priority=1)
+    adapter = CompositeMimirAdapter(mounts=[bad, good])
+    result = await adapter.list_pages()
+    good_port.list_pages.assert_called_once()
+    assert isinstance(result, list)
+
+
+@pytest.mark.asyncio
+async def test_list_sources_sets_mount_name() -> None:
+    from niuu.domain.mimir import MimirSourceMeta
+
+    meta = MimirSourceMeta(
+        source_id="src-1", title="T", ingested_at=datetime.now(UTC), source_type="web"
+    )
+    port = AsyncMock()
+    port.list_sources = AsyncMock(return_value=[meta])
+    mount = MimirMount(name="local", port=port, role="local", read_priority=0)
+    adapter = CompositeMimirAdapter(mounts=[mount])
+    result = await adapter.list_sources()
+    assert result[0].mount_name == "local"
+
+
+@pytest.mark.asyncio
+async def test_list_sources_exception_in_one_mount_continues_others() -> None:
+    bad_port = _error_port()
+    good_port = _mock_port()
+    bad = MimirMount(name="bad", port=bad_port, role="local", read_priority=0)
+    good = MimirMount(name="good", port=good_port, role="shared", read_priority=1)
+    adapter = CompositeMimirAdapter(mounts=[bad, good])
+    result = await adapter.list_sources()
+    # Should not raise, returns whatever good_port has
+    assert isinstance(result, list)
+
+
+@pytest.mark.asyncio
+async def test_lint_exception_in_one_mount_continues_others() -> None:
+    bad_port = _error_port()
+    good_port = _mock_port()
+    bad = MimirMount(name="bad", port=bad_port, role="local", read_priority=0)
+    good = MimirMount(name="good", port=good_port, role="shared", read_priority=1)
+    adapter = CompositeMimirAdapter(mounts=[bad, good])
+    result = await adapter.lint()
+    good_port.lint.assert_called_once()
+    assert isinstance(result, MimirLintReport)
+
+
+@pytest.mark.asyncio
+async def test_read_source_exception_falls_through() -> None:
+    bad_port = _error_port()
+    good_port = _mock_port()
+    bad = MimirMount(name="bad", port=bad_port, role="local", read_priority=0)
+    good = MimirMount(name="good", port=good_port, role="shared", read_priority=1)
+    adapter = CompositeMimirAdapter(mounts=[bad, good])
+    # good_port.read_source returns None by default (from _mock_port)
+    result = await adapter.read_source("src-1")
+    good_port.read_source.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_upsert_unknown_mount_name_skipped() -> None:
+    good_port = _mock_port()
+    good = MimirMount(name="good", port=good_port, role="local", read_priority=0)
+    routing = WriteRouting(rules=[("wiki/", ["nonexistent"])], default=["good"])
+    adapter = CompositeMimirAdapter(mounts=[good], write_routing=routing)
+    # Should not crash — unknown mount is silently skipped
+    await adapter.upsert_page("wiki/page.md", "content")
+
+
+@pytest.mark.asyncio
+async def test_upsert_exception_in_mount_logged_not_raised() -> None:
+    bad_port = _error_port()
+    bad = MimirMount(name="bad", port=bad_port, role="local", read_priority=0)
+    adapter = CompositeMimirAdapter(mounts=[bad])
+    # Should not raise
+    await adapter.upsert_page("wiki/page.md", "content")

@@ -456,3 +456,138 @@ class TestDetectProjectType:
         (tmp_path / "pyproject.toml").write_text("")
         (tmp_path / "package.json").write_text("")
         assert _detect_project_type(tmp_path) == "python"
+
+
+# ---------------------------------------------------------------------------
+# /skills
+# ---------------------------------------------------------------------------
+
+
+class TestCmdSkills:
+    def test_skills_not_available_when_listing_is_none(self) -> None:
+        ctx = _ctx()
+        ctx.skills_listing = None
+        result = handle("/skills", ctx)
+        assert result is not None
+        assert "not available" in result.lower()
+
+    def test_skills_empty_listing(self) -> None:
+        ctx = _ctx()
+        ctx.skills_listing = []
+        result = handle("/skills", ctx)
+        assert result is not None
+        assert "No skills" in result
+
+    def test_skills_lists_skills(self) -> None:
+        ctx = _ctx()
+        ctx.skills_listing = [("commit", "Create a commit"), ("review", "Review PR")]
+        result = handle("/skills", ctx)
+        assert result is not None
+        assert "commit" in result
+        assert "review" in result
+        assert "Skills (2)" in result
+
+
+# ---------------------------------------------------------------------------
+# /checkpoint
+# ---------------------------------------------------------------------------
+
+
+class TestCmdCheckpoint:
+    def _ctx_with_checkpoint(self) -> SlashCommandContext:
+        from unittest.mock import AsyncMock, MagicMock
+        from ravn.domain.checkpoint import Checkpoint
+        from datetime import UTC, datetime
+
+        port = MagicMock()
+        port.save_snapshot = AsyncMock(return_value="ckpt_task-1_1")
+        port.list_for_task = AsyncMock(return_value=[])
+        port.load_snapshot = AsyncMock(return_value=None)
+        port.delete_snapshot = AsyncMock()
+
+        ctx = _ctx()
+        ctx.checkpoint_port = port
+        ctx.task_id = "task-1"
+        return ctx
+
+    def test_no_checkpoint_port_returns_error(self) -> None:
+        ctx = _ctx()
+        result = handle("/checkpoint", ctx)
+        assert result is not None
+        assert "not configured" in result.lower()
+
+    def test_checkpoint_save_no_label(self) -> None:
+        ctx = self._ctx_with_checkpoint()
+        result = handle("/checkpoint", ctx)
+        assert result is not None
+        assert "ckpt_task-1_1" in result
+
+    def test_checkpoint_save_with_label(self) -> None:
+        ctx = self._ctx_with_checkpoint()
+        result = handle("/checkpoint after tests", ctx)
+        assert result is not None
+        assert "after tests" in result
+
+    def test_checkpoint_list_empty(self) -> None:
+        ctx = self._ctx_with_checkpoint()
+        result = handle("/checkpoint list", ctx)
+        assert result is not None
+        assert "No checkpoints" in result
+
+    def test_checkpoint_list_with_entries(self) -> None:
+        from unittest.mock import AsyncMock
+        from ravn.domain.checkpoint import Checkpoint
+        from datetime import UTC, datetime
+
+        cp = Checkpoint(
+            task_id="task-1",
+            user_input="",
+            messages=[],
+            todos=[],
+            iteration_budget_consumed=0,
+            iteration_budget_total=10,
+            last_tool_call=None,
+            last_tool_result=None,
+            partial_response="",
+            interrupted_by=None,
+            created_at=datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
+            label="milestone",
+            seq=1,
+        )
+        ctx = self._ctx_with_checkpoint()
+        ctx.checkpoint_port.list_for_task = AsyncMock(return_value=[cp])
+        result = handle("/checkpoint list", ctx)
+        assert result is not None
+        assert "milestone" in result
+
+    def test_checkpoint_restore_missing_id(self) -> None:
+        ctx = self._ctx_with_checkpoint()
+        result = handle("/checkpoint restore", ctx)
+        assert result is not None
+        assert "Usage" in result
+
+    def test_checkpoint_restore_not_found(self) -> None:
+        ctx = self._ctx_with_checkpoint()
+        result = handle("/checkpoint restore no-such-id", ctx)
+        assert result is not None
+        assert "not found" in result.lower()
+
+    def test_checkpoint_delete_missing_id(self) -> None:
+        ctx = self._ctx_with_checkpoint()
+        result = handle("/checkpoint delete", ctx)
+        assert result is not None
+        assert "Usage" in result
+
+    def test_checkpoint_delete_success(self) -> None:
+        ctx = self._ctx_with_checkpoint()
+        result = handle("/checkpoint delete ckpt_x", ctx)
+        assert result is not None
+        assert "deleted" in result.lower()
+
+    def test_checkpoint_save_exception_returns_error(self) -> None:
+        from unittest.mock import AsyncMock
+        ctx = self._ctx_with_checkpoint()
+        ctx.checkpoint_port.save_snapshot = AsyncMock(side_effect=RuntimeError("db down"))
+        result = handle("/checkpoint", ctx)
+        assert result is not None
+        assert "failed" in result.lower()

@@ -271,8 +271,8 @@ class BashToolConfig(BaseModel):
     )
 
 
-class ToolProfileConfig(BaseModel):
-    """Named tool profile — controls which tool groups are active."""
+class ToolGroupConfig(BaseModel):
+    """Named tool group configuration — controls which tool groups are active."""
 
     include_groups: list[str] = Field(
         default=["core", "extended", "skill", "platform", "cascade", "mimir"],
@@ -307,7 +307,7 @@ class ToolsConfig(BaseModel):
         default_factory=list,
         description="Custom tool adapters to register alongside built-ins.",
     )
-    profiles: dict[str, ToolProfileConfig] = Field(
+    profiles: dict[str, ToolGroupConfig] = Field(
         default_factory=dict,
         description=(
             "Named tool profiles. Built-in profiles: 'default' (full set) and "

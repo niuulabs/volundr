@@ -376,16 +376,17 @@ def _cmd_checkpoint(ctx: SlashCommandContext, args: str) -> str:
 def _run_async(coro: object) -> object:
     """Run an async coroutine from a synchronous context."""
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(asyncio.run, coro)
-                return future.result(timeout=30)
-        return loop.run_until_complete(coro)
+        loop = asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(coro)
+        loop = None
+
+    if loop is not None and loop.is_running():
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(asyncio.run, coro)
+            return future.result(timeout=30)
+    return asyncio.run(coro)
 
 
 def _checkpoint_save(ctx: SlashCommandContext, label: str = "") -> str:

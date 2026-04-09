@@ -48,8 +48,12 @@ def resolve_safe(path: str | Path, workspace: Path) -> Path:
         If the path escapes the workspace or matches a system prefix.
     """
     workspace = workspace.resolve()
-    resolved = Path(path).resolve()
+    raw = Path(path)
+    resolved = raw.resolve()
 
+    # Check system prefixes on both the original (pre-resolve) and resolved
+    # paths so that macOS symlinks (/etc → /private/etc) are caught correctly.
+    _assert_not_system(raw)
     _assert_within(resolved, workspace)
     _assert_not_system(resolved)
 

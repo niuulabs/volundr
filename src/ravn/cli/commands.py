@@ -14,8 +14,9 @@ from typing import Any
 import typer
 
 from ravn.agent import PostToolHook, PreToolHook, RavnAgent
-from ravn.config import InitiativeConfig, OutcomeConfig, ProjectConfig, Settings, ToolProfileConfig
+from ravn.config import InitiativeConfig, OutcomeConfig, ProjectConfig, Settings, ToolGroupConfig
 from ravn.domain.checkpoint import InterruptReason
+from ravn.domain.profile import RavnProfile
 from ravn.domain.models import (
     Message,
     Session,
@@ -285,26 +286,26 @@ def _build_permission(
 # Builder: Tools — profile resolution and defaults
 # ---------------------------------------------------------------------------
 
-_DEFAULT_PROFILES: dict[str, ToolProfileConfig] = {
-    "default": ToolProfileConfig(
+_DEFAULT_TOOL_GROUPS: dict[str, ToolGroupConfig] = {
+    "default": ToolGroupConfig(
         include_groups=["core", "extended", "skill", "platform", "cascade", "mimir"],
         include_mcp=True,
     ),
-    "worker": ToolProfileConfig(
+    "worker": ToolGroupConfig(
         include_groups=["core"],
         include_mcp=False,
     ),
 }
 
 
-def _get_profile(settings: Settings, name: str) -> ToolProfileConfig:
-    """Return the named profile, falling back to built-in defaults."""
+def _get_tool_group(settings: Settings, name: str) -> ToolGroupConfig:
+    """Return the named tool group config, falling back to built-in defaults."""
     if name in settings.tools.profiles:
         return settings.tools.profiles[name]
-    if name in _DEFAULT_PROFILES:
-        return _DEFAULT_PROFILES[name]
-    logger.warning("Unknown tool profile %r — using 'default'", name)
-    return _DEFAULT_PROFILES["default"]
+    if name in _DEFAULT_TOOL_GROUPS:
+        return _DEFAULT_TOOL_GROUPS[name]
+    logger.warning("Unknown tool group %r — using 'default'", name)
+    return _DEFAULT_TOOL_GROUPS["default"]
 
 
 # ---------------------------------------------------------------------------
@@ -392,7 +393,7 @@ def _build_tools(
     from ravn.adapters.tools.builtin_registry import BUILTIN_TOOLS
     from ravn.ports.tool import ToolPort
 
-    profile_cfg = _get_profile(settings, profile)
+    profile_cfg = _get_tool_group(settings, profile)
     include_groups = set(profile_cfg.include_groups)
 
     persona_prefix: str = (
@@ -749,6 +750,72 @@ def _resolve_persona(
 
 
 # ---------------------------------------------------------------------------
+# Profile resolution
+# ---------------------------------------------------------------------------
+
+
+def _resolve_profile(profile_name: str) -> RavnProfile | None:
+    """Load a RavnProfile by name from ~/.ravn/profiles/ or the built-in set.
+
+    Returns ``None`` when *profile_name* is empty or cannot be resolved, so
+    callers can proceed without a profile using Settings defaults.
+    """
+    from ravn.adapters.profiles.loader import ProfileLoader
+
+    name = profile_name.strip()
+    if not name:
+        return None
+
+    profile = ProfileLoader().load(name)
+    if profile is None:
+        typer.echo(f"Warning: profile '{name}' not found — using defaults.", err=True)
+        return None
+
+    return profile
+
+
+def _apply_profile(
+    profile: RavnProfile,
+    settings: Settings,
+    *,
+    persona_config: Any | None,
+) -> tuple[str, int, int]:
+    """Apply profile overrides and return (system_prompt, max_iterations, max_tokens).
+
+    The profile's ``system_prompt_extra`` is appended after the persona template
+    (or the settings default prompt) when non-empty.  The profile also enables
+    checkpoint and filters MCP servers in-place on *settings*.
+
+    Returns the resolved (system_prompt, max_iterations, max_tokens) triple so
+    callers don't need to re-derive persona overrides separately.
+    """
+    system_prompt = settings.agent.system_prompt
+    max_iterations = settings.agent.max_iterations
+    max_tokens = settings.effective_max_tokens()
+
+    if persona_config is not None:
+        if persona_config.system_prompt_template:
+            system_prompt = persona_config.system_prompt_template
+        if persona_config.iteration_budget:
+            max_iterations = persona_config.iteration_budget
+        if persona_config.llm.max_tokens:
+            max_tokens = persona_config.llm.max_tokens
+
+    if profile.system_prompt_extra:
+        system_prompt = f"{system_prompt}\n\n{profile.system_prompt_extra}"
+
+    if profile.checkpoint_enabled:
+        settings.checkpoint.enabled = True
+
+    if profile.mcp_servers:
+        settings.mcp_servers = [
+            s for s in settings.mcp_servers if s.name in profile.mcp_servers
+        ]
+
+    return system_prompt, max_iterations, max_tokens
+
+
+# ---------------------------------------------------------------------------
 # Builder: Checkpoint
 # ---------------------------------------------------------------------------
 
@@ -792,6 +859,7 @@ def _build_agent(
     *,
     no_tools: bool = False,
     persona_config: Any | None = None,
+    profile: RavnProfile | None = None,
     session: Session | None = None,
     task_id: str | None = None,
 ) -> tuple[RavnAgent, Any]:
@@ -807,6 +875,23 @@ def _build_agent(
     from ravn.adapters.cli_channel import CliChannel
     from ravn.budget import IterationBudget
     from ravn.ports.channel import ChannelPort
+
+    # Apply profile overrides to settings and derive resolved prompts/limits.
+    if profile is not None:
+        system_prompt, max_iterations, max_tokens = _apply_profile(
+            profile, settings, persona_config=persona_config
+        )
+    else:
+        system_prompt = settings.agent.system_prompt
+        max_iterations = settings.agent.max_iterations
+        max_tokens = settings.effective_max_tokens()
+        if persona_config is not None:
+            if persona_config.system_prompt_template:
+                system_prompt = persona_config.system_prompt_template
+            if persona_config.iteration_budget:
+                max_iterations = persona_config.iteration_budget
+            if persona_config.llm.max_tokens:
+                max_tokens = persona_config.llm.max_tokens
 
     workspace = _resolve_workspace(settings)
     llm = _build_llm(settings)
@@ -854,18 +939,6 @@ def _build_agent(
     extended_thinking = (
         settings.llm.extended_thinking if settings.llm.extended_thinking.enabled else None
     )
-
-    # Apply persona overrides
-    system_prompt = settings.agent.system_prompt
-    max_iterations = settings.agent.max_iterations
-    max_tokens = settings.effective_max_tokens()
-    if persona_config is not None:
-        if persona_config.system_prompt_template:
-            system_prompt = persona_config.system_prompt_template
-        if persona_config.iteration_budget:
-            max_iterations = persona_config.iteration_budget
-        if persona_config.llm.max_tokens:
-            max_tokens = persona_config.llm.max_tokens
 
     cp_cfg = settings.checkpoint
     agent = RavnAgent(
@@ -929,6 +1002,9 @@ def run(
     persona: str = typer.Option(
         "", "--persona", "-p", help="Persona name (built-in or from ~/.ravn/personas/)."
     ),
+    profile: str = typer.Option(
+        "", "--profile", help="Profile name (built-in or from ~/.ravn/profiles/)."
+    ),
     resume: str = typer.Option(
         "",
         "--resume",
@@ -943,13 +1019,18 @@ def run(
     settings = Settings()
     _configure_logging(settings)
     project_config = ProjectConfig.discover()
-    persona_config = _resolve_persona(persona, project_config)
+    ravn_profile = _resolve_profile(profile)
+    # --persona overrides the profile's persona reference; if neither is given
+    # the persona is taken from the profile (or ProjectConfig as fallback).
+    effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
+    persona_config = _resolve_persona(effective_persona, project_config)
 
     asyncio.run(
         _run_with_signals(
             settings=settings,
             no_tools=no_tools,
             persona_config=persona_config,
+            profile=ravn_profile,
             prompt=prompt,
             show_usage=show_usage,
             resume_task_id=resume.strip() or None,
@@ -963,6 +1044,7 @@ async def _run_with_signals(
     settings: Settings,
     no_tools: bool,
     persona_config: Any | None,
+    profile: RavnProfile | None = None,
     prompt: str,
     show_usage: bool,
     resume_task_id: str | None,
@@ -984,6 +1066,7 @@ async def _run_with_signals(
         settings,
         no_tools=no_tools,
         persona_config=persona_config,
+        profile=profile,
         session=restored_session,
         task_id=resume_task_id,
     )
@@ -1222,6 +1305,7 @@ def resume(
             settings=settings,
             no_tools=False,
             persona_config=persona_config,
+            profile=None,
             prompt="",
             show_usage=show_usage,
             resume_task_id=task_id.strip(),
@@ -1351,6 +1435,9 @@ def gateway(
     persona: str = typer.Option(
         "", "--persona", "-p", help="Persona name applied to all gateway sessions."
     ),
+    profile: str = typer.Option(
+        "", "--profile", help="Profile name (built-in or from ~/.ravn/profiles/)."
+    ),
 ) -> None:
     """Start the Ravn gateway (Telegram polling + local HTTP server).
 
@@ -1377,7 +1464,9 @@ def gateway(
     settings = Settings()
     _configure_logging(settings)
     project_config = ProjectConfig.discover()
-    persona_config = _resolve_persona(persona, project_config)
+    ravn_profile = _resolve_profile(profile)
+    effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
+    persona_config = _resolve_persona(effective_persona, project_config)
 
     # CLI flags override config file.
     if telegram:
@@ -1395,7 +1484,7 @@ def gateway(
         )
         raise typer.Exit(1)
 
-    asyncio.run(_run_gateway(settings, persona_config=persona_config))
+    asyncio.run(_run_gateway(settings, persona_config=persona_config, profile=ravn_profile))
 
 
 def _make_channel_tasks(
@@ -1440,6 +1529,7 @@ async def _run_gateway(
     settings: Settings,
     *,
     persona_config: Any | None = None,
+    profile: RavnProfile | None = None,
 ) -> None:
     """Build and run the gateway until interrupted."""
     from ravn.adapters.channels.gateway import RavnGateway
@@ -1456,6 +1546,20 @@ async def _run_gateway(
         )
         raise typer.Exit(1)
 
+    if profile is not None:
+        system_prompt, max_iterations, max_tokens_gw = _apply_profile(
+            profile, settings, persona_config=persona_config
+        )
+    else:
+        system_prompt = settings.agent.system_prompt
+        max_iterations = settings.agent.max_iterations
+        max_tokens_gw = settings.effective_max_tokens()
+        if persona_config is not None:
+            if persona_config.system_prompt_template:
+                system_prompt = persona_config.system_prompt_template
+            if persona_config.iteration_budget:
+                max_iterations = persona_config.iteration_budget
+
     # Shared resources (safe to reuse across sessions)
     workspace = _resolve_workspace(settings)
     llm = _build_llm(settings)
@@ -1468,14 +1572,6 @@ async def _run_gateway(
     extended_thinking = (
         settings.llm.extended_thinking if settings.llm.extended_thinking.enabled else None
     )
-
-    system_prompt = settings.agent.system_prompt
-    max_iterations = settings.agent.max_iterations
-    if persona_config is not None:
-        if persona_config.system_prompt_template:
-            system_prompt = persona_config.system_prompt_template
-        if persona_config.iteration_budget:
-            max_iterations = persona_config.iteration_budget
 
     # Start MCP servers (shared across sessions)
     mcp_manager, mcp_tools = await _start_mcp_shared(settings)
@@ -1525,7 +1621,7 @@ async def _run_gateway(
             permission=permission,
             system_prompt=system_prompt,
             model=settings.effective_model(),
-            max_tokens=settings.effective_max_tokens(),
+            max_tokens=max_tokens_gw,
             max_iterations=max_iterations,
             session=session,
             pre_tool_hooks=pre_hooks or None,
@@ -1542,7 +1638,7 @@ async def _run_gateway(
             extended_thinking=extended_thinking,
         )
 
-    gw = RavnGateway(settings.gateway, _agent_factory)
+    gw = RavnGateway(settings.gateway, _agent_factory, profile=profile)
 
     tasks: list[asyncio.Task] = []
 
@@ -1578,6 +1674,9 @@ def daemon(
     persona: str = typer.Option(
         "", "--persona", "-p", help="Persona name applied to all daemon sessions."
     ),
+    profile: str = typer.Option(
+        "", "--profile", help="Profile name (built-in or from ~/.ravn/profiles/)."
+    ),
     resume: bool = typer.Option(
         False, "--resume", help="Resume unfinished tasks from the journal."
     ),
@@ -1594,9 +1693,11 @@ def daemon(
     settings = Settings()
     _configure_logging(settings)
     project_config = ProjectConfig.discover()
-    persona_config = _resolve_persona(persona, project_config)
+    ravn_profile = _resolve_profile(profile)
+    effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
+    persona_config = _resolve_persona(effective_persona, project_config)
 
-    asyncio.run(_run_daemon(settings, persona_config=persona_config, resume=resume))
+    asyncio.run(_run_daemon(settings, persona_config=persona_config, profile=ravn_profile, resume=resume))
 
 
 @app.command()
@@ -1604,6 +1705,9 @@ def listen(
     config: str = typer.Option("", "--config", "-c", help="Path to ravn config YAML."),
     persona: str = typer.Option(
         "", "--persona", "-p", help="Default persona for dispatched tasks."
+    ),
+    profile: str = typer.Option(
+        "", "--profile", help="Profile name (built-in or from ~/.ravn/profiles/)."
     ),
 ) -> None:
     """Listen for remotely dispatched tasks via Sleipnir (NIU-505).
@@ -1623,15 +1727,25 @@ def listen(
     settings = Settings()
     _configure_logging(settings)
     project_config = ProjectConfig.discover()
-    persona_config = _resolve_persona(persona, project_config)
+    ravn_profile = _resolve_profile(profile)
+    effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
+    persona_config = _resolve_persona(effective_persona, project_config)
 
-    asyncio.run(_run_daemon(settings, persona_config=persona_config, task_dispatch=True))
+    asyncio.run(
+        _run_daemon(
+            settings,
+            persona_config=persona_config,
+            profile=ravn_profile,
+            task_dispatch=True,
+        )
+    )
 
 
 async def _run_daemon(
     settings: Settings,
     *,
     persona_config: Any | None = None,
+    profile: RavnProfile | None = None,
     task_dispatch: bool = False,
     resume: bool = False,
 ) -> None:
@@ -1651,6 +1765,19 @@ async def _run_daemon(
         )
         raise typer.Exit(1)
 
+    if profile is not None:
+        system_prompt, max_iterations, _max_tokens_d = _apply_profile(
+            profile, settings, persona_config=persona_config
+        )
+    else:
+        system_prompt = settings.agent.system_prompt
+        max_iterations = settings.agent.max_iterations
+        if persona_config is not None:
+            if persona_config.system_prompt_template:
+                system_prompt = persona_config.system_prompt_template
+            if persona_config.iteration_budget:
+                max_iterations = persona_config.iteration_budget
+
     workspace = _resolve_workspace(settings)
     llm = _build_llm(settings)
     memory = _build_memory(settings)
@@ -1662,14 +1789,6 @@ async def _run_daemon(
     extended_thinking = (
         settings.llm.extended_thinking if settings.llm.extended_thinking.enabled else None
     )
-
-    system_prompt = settings.agent.system_prompt
-    max_iterations = settings.agent.max_iterations
-    if persona_config is not None:
-        if persona_config.system_prompt_template:
-            system_prompt = persona_config.system_prompt_template
-        if persona_config.iteration_budget:
-            max_iterations = persona_config.iteration_budget
 
     mcp_manager, mcp_tools = await _start_mcp_shared(settings)
 
@@ -1719,7 +1838,7 @@ async def _run_daemon(
         # Cascade workers are identified by the absence of a task-level persona
         # (drive-loop triggered tasks always carry one).
         profile = "worker" if (task_id is not None and not task_persona) else "default"
-        profile_cfg = _get_profile(settings, profile)
+        profile_cfg = _get_tool_group(settings, profile)
         tools = _build_tools(
             settings,
             workspace,
@@ -1782,7 +1901,7 @@ async def _run_daemon(
         or channels_cfg.whatsapp.enabled
     )
     if _any_channel:
-        gw = RavnGateway(settings.gateway, _agent_factory)
+        gw = RavnGateway(settings.gateway, _agent_factory, profile=profile)
 
         if channels_cfg.telegram.enabled:
             tg = TelegramGateway(channels_cfg.telegram, gw)

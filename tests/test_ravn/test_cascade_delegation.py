@@ -197,7 +197,7 @@ class TestDriveLoopDeadline:
         executed: list[str] = []
         barrier = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -278,7 +278,7 @@ class TestDriveLoopEventPublishing:
         publisher = _RecordingPublisher()
         finished = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -305,7 +305,7 @@ class TestDriveLoopEventPublishing:
         publisher = _RecordingPublisher()
         finished = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -333,7 +333,7 @@ class TestDriveLoopEventPublishing:
         publisher = _RecordingPublisher()
         finished = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -363,7 +363,7 @@ class TestDriveLoopEventPublishing:
         publisher = _RecordingPublisher()
         finished = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -401,7 +401,7 @@ class TestDriveLoopLifecycle:
         started = asyncio.Event()
         done = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -432,7 +432,7 @@ class TestDriveLoopLifecycle:
         """A task that raises an exception is removed from _active_tasks."""
         finished = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -460,7 +460,7 @@ class TestDriveLoopLifecycle:
         publisher = _RecordingPublisher()
         started = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -499,7 +499,7 @@ class TestDriveLoopSurfaceEscalation:
         publisher = _RecordingPublisher()
         finished = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -825,7 +825,7 @@ class TestEpistemicSovereignty:
         done_count = [0]
         all_done = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             instance = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -867,7 +867,7 @@ class TestTeamSimulation:
         done_count = [0]
         all_done = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -900,7 +900,7 @@ class TestTeamSimulation:
         done_count = [0]
         all_done = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -933,7 +933,7 @@ class TestTeamSimulation:
         """TaskCollectTool reports complete=True once the task is no longer active."""
         done = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -973,7 +973,7 @@ class TestErrorHandling:
         executed: list[str] = []
         success_done = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -1034,7 +1034,7 @@ class TestE2EDelegation:
         """E2E: parent calls task_create → task runs → parent calls task_collect → result."""
         done = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -1078,7 +1078,7 @@ class TestE2EDelegation:
         done_count = [0]
         all_done = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:
@@ -1124,7 +1124,7 @@ class TestE2EDelegation:
         """Sub-ravn fails → task status is 'unknown' → parent can detect and handle."""
         failed = asyncio.Event()
 
-        def _factory(channel, task_id=None):  # noqa: ANN001
+        def _factory(channel, task_id=None, persona=None):  # noqa: ANN001
             mock = MagicMock()
 
             async def _run(prompt: str) -> None:

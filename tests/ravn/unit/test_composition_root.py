@@ -373,10 +373,10 @@ class TestBuildTools:
         tmp_path: Path,
     ) -> None:
         from ravn.cli.commands import _build_tools
-        from ravn.config import ToolProfileConfig
+        from ravn.config import ToolGroupConfig
         from ravn.domain.models import Session
 
-        settings.tools.profiles["minimal"] = ToolProfileConfig(
+        settings.tools.profiles["minimal"] = ToolGroupConfig(
             include_groups=["core"],
             include_mcp=False,
         )
@@ -468,43 +468,43 @@ class TestBuildTools:
 
 
 # ---------------------------------------------------------------------------
-# _get_profile
+# _get_tool_group
 # ---------------------------------------------------------------------------
 
 
 class TestGetProfile:
     def test_default_profile_returned_for_default_name(self, settings: Settings) -> None:
-        from ravn.cli.commands import _get_profile
+        from ravn.cli.commands import _get_tool_group
 
-        cfg = _get_profile(settings, "default")
+        cfg = _get_tool_group(settings, "default")
         assert "core" in cfg.include_groups
         assert "extended" in cfg.include_groups
         assert cfg.include_mcp is True
 
     def test_worker_profile_returned_for_worker_name(self, settings: Settings) -> None:
-        from ravn.cli.commands import _get_profile
+        from ravn.cli.commands import _get_tool_group
 
-        cfg = _get_profile(settings, "worker")
+        cfg = _get_tool_group(settings, "worker")
         assert "core" in cfg.include_groups
         assert "extended" not in cfg.include_groups
         assert cfg.include_mcp is False
 
     def test_custom_profile_overrides_builtin(self, settings: Settings) -> None:
-        from ravn.cli.commands import _get_profile
-        from ravn.config import ToolProfileConfig
+        from ravn.cli.commands import _get_tool_group
+        from ravn.config import ToolGroupConfig
 
-        settings.tools.profiles["default"] = ToolProfileConfig(
+        settings.tools.profiles["default"] = ToolGroupConfig(
             include_groups=["core"],
             include_mcp=False,
         )
-        cfg = _get_profile(settings, "default")
+        cfg = _get_tool_group(settings, "default")
         assert cfg.include_groups == ["core"]
         assert cfg.include_mcp is False
 
     def test_unknown_profile_falls_back_gracefully(self, settings: Settings) -> None:
-        from ravn.cli.commands import _get_profile
+        from ravn.cli.commands import _get_tool_group
 
-        cfg = _get_profile(settings, "does_not_exist")
+        cfg = _get_tool_group(settings, "does_not_exist")
         # Falls back to default
         assert "extended" in cfg.include_groups
 

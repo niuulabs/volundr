@@ -23,7 +23,7 @@ def test_pane_node_is_leaf() -> None:
 
 def test_pane_node_defaults() -> None:
     pane = PaneNode()
-    assert pane.view_type == "flokka"
+    assert pane.view_type == "flokk"
     assert pane.target is None
     assert pane.pane_id != ""
 
@@ -81,7 +81,7 @@ def test_node_from_dict_branch() -> None:
         "type": "branch",
         "direction": "horizontal",
         "ratio": 0.5,
-        "left": {"type": "leaf", "view": "flokka"},
+        "left": {"type": "leaf", "view": "flokk"},
         "right": {"type": "leaf", "view": "chat"},
     }
     node = _node_from_dict(data)
@@ -431,7 +431,7 @@ def test_from_dict_preserves_directions() -> None:
         "direction": "vertical",
         "ratio": 0.4,
         "node_id": "test-node",
-        "left": {"type": "leaf", "view": "flokka", "pane_id": "p1"},
+        "left": {"type": "leaf", "view": "flokk", "pane_id": "p1"},
         "right": {
             "type": "branch",
             "direction": "horizontal",
@@ -459,13 +459,13 @@ def test_from_dict_preserves_directions() -> None:
 
 
 def test_collect_panes() -> None:
-    left = PaneNode(view_type="flokka")
+    left = PaneNode(view_type="flokk")
     right = PaneNode(view_type="chat")
     branch = SplitNode(left=left, right=right)
     result: list[PaneNode] = []
     _collect_panes(branch, result)
     assert len(result) == 2
-    assert result[0].view_type == "flokka"
+    assert result[0].view_type == "flokk"
     assert result[1].view_type == "chat"
 
 

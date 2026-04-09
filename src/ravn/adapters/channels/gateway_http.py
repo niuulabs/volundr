@@ -102,9 +102,8 @@ class HttpGateway:
 
         @app.get("/status")
         async def status() -> dict:
-            """Return active session IDs and session count."""
-            ids = self._gateway.session_ids()
-            return {"session_count": len(ids), "active_sessions": ids}
+            """Return active session IDs, session count, and profile identity."""
+            return self._gateway.get_status()
 
         @app.get("/events")
         async def events() -> StreamingResponse:

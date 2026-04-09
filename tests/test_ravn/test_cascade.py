@@ -670,7 +670,7 @@ async def test_mode1_local_parallel_tasks():
     mock_agent = MagicMock()
     mock_agent.run_turn = _mock_run_turn
 
-    def _agent_factory(channel, task_id=None):  # noqa: ANN001
+    def _agent_factory(channel, task_id=None, persona=None):  # noqa: ANN001
         return mock_agent
 
     cfg = InitiativeConfig(enabled=True, max_concurrent_tasks=3, task_queue_max=50)

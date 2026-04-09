@@ -79,7 +79,7 @@ def test_complete_partial_command_name() -> None:
 
 def test_complete_view_returns_view_types() -> None:
     completions = complete_command(":view ")
-    assert "flokka" in completions
+    assert "flokk" in completions
     assert "chat" in completions
     assert "events" in completions
 
@@ -88,7 +88,7 @@ def test_complete_view_with_prefix() -> None:
     completions = complete_command(":view ch")
     assert "chat" in completions
     assert "checkpoints" in completions
-    assert "flokka" not in completions
+    assert "flokk" not in completions
 
 
 def test_complete_layout_returns_subcommands() -> None:

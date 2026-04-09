@@ -244,8 +244,20 @@ def _build_ravn_markup(conn: Any, selected: bool) -> str:
     # Amber left-accent for selected row, plain space otherwise
     accent = "[bold #f59e0b]▌[/]" if selected else " "
 
-    # Line 1 — rune · dot · name
-    name_line = f"{accent}[bold]ᚱ[/] {dot} [#fafafa]{conn.name}{ghost_mark}[/]"
+    # Profile identity — use rune/name/location from profile when available.
+    profile: dict[str, Any] = info.get("profile") or {}
+    rune: str = profile.get("rune") or "ᚱ"
+    display_name: str = profile.get("name") or conn.name
+    location: str = profile.get("location") or ""
+    specialisations: list[str] = list(profile.get("specialisations") or [])
+
+    location_mark = f" [#52525b]{location}[/]" if location else ""
+
+    # Line 1 — rune · dot · name · location
+    name_line = (
+        f"{accent}[bold]{rune}[/] {dot} "
+        f"[#fafafa]{display_name}{ghost_mark}[/]{location_mark}"
+    )
 
     # Line 2 — iter progress bar or idle/uptime
     cur = info.get("iteration")
@@ -260,9 +272,12 @@ def _build_ravn_markup(conn: Any, selected: bool) -> str:
         idle_text = f"idle · {uptime}" if uptime else "idle"
         state_line = f"  [#3f3f46]{idle_text}[/]"
 
-    # Optional line 3 — capabilities / persona (omit when empty)
+    # Line 3 — specialisations > capabilities > persona (first available wins)
     caps: list[str] = list(info.get("capabilities", []) or [])
     persona: str = info.get("persona", "")
+    if specialisations:
+        detail = " · ".join(str(s) for s in specialisations[:4])
+        return f"{name_line}\n{state_line}\n  [#52525b]{detail}[/]"
     if caps:
         detail = " · ".join(str(c) for c in caps[:4])
         return f"{name_line}\n{state_line}\n  [#52525b]{detail}[/]"

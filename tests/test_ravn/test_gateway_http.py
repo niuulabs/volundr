@@ -32,6 +32,7 @@ def _make_gateway_mock(response: str = "agent reply") -> RavnGateway:
     """Return a mock RavnGateway that returns a canned response."""
     gw = MagicMock(spec=RavnGateway)
     gw.session_ids.return_value = ["http:default"]
+    gw.get_status.return_value = {"session_count": 1, "active_sessions": ["http:default"]}
 
     async def handle_stream(session_id: str, message: str) -> AsyncIterator[RavnEvent]:
         yield RavnEvent.thought(_SRC, "thinking...", _CID, _SID)
@@ -74,6 +75,7 @@ def test_status_endpoint_returns_session_info():
 def test_status_endpoint_no_sessions():
     gw = MagicMock(spec=RavnGateway)
     gw.session_ids.return_value = []
+    gw.get_status.return_value = {"session_count": 0, "active_sessions": []}
     ht = HttpGateway(_make_http_config(), gw)
     client = TestClient(ht.app)
     resp = client.get("/status")

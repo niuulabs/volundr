@@ -1,4 +1,4 @@
-"""Unit tests for Ravn TUI connections — FlokkaManager and RavnConnection."""
+"""Unit tests for Ravn TUI connections — FlokkManager and RavnConnection."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ravn.tui.connections import FlokkaManager, RavnConnection, _parse_sse_block
+from ravn.tui.connections import FlokkManager, RavnConnection, _parse_sse_block
 
 # ---------------------------------------------------------------------------
 # RavnConnection
@@ -111,13 +111,13 @@ def test_parse_sse_block_comment_only() -> None:
 
 
 # ---------------------------------------------------------------------------
-# FlokkaManager
+# FlokkManager
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_flokka_manager_connect_returns_connection() -> None:
-    manager = FlokkaManager()
+    manager = FlokkManager()
 
     with (
         patch.object(manager, "_maintain_sse", new=AsyncMock()),
@@ -132,7 +132,7 @@ async def test_flokka_manager_connect_returns_connection() -> None:
 
 @pytest.mark.asyncio
 async def test_flokka_manager_connect_idempotent() -> None:
-    manager = FlokkaManager()
+    manager = FlokkManager()
 
     with (
         patch.object(manager, "_maintain_sse", new=AsyncMock()),
@@ -146,7 +146,7 @@ async def test_flokka_manager_connect_idempotent() -> None:
 
 @pytest.mark.asyncio
 async def test_flokka_manager_disconnect_removes_connection() -> None:
-    manager = FlokkaManager()
+    manager = FlokkManager()
 
     with (
         patch.object(manager, "_maintain_sse", new=AsyncMock()),
@@ -162,13 +162,13 @@ async def test_flokka_manager_disconnect_removes_connection() -> None:
 
 @pytest.mark.asyncio
 async def test_flokka_manager_disconnect_nonexistent_is_noop() -> None:
-    manager = FlokkaManager()
+    manager = FlokkManager()
     await manager.disconnect("not-there")  # should not raise
 
 
 @pytest.mark.asyncio
 async def test_flokka_manager_get() -> None:
-    manager = FlokkaManager()
+    manager = FlokkManager()
 
     with (
         patch.object(manager, "_maintain_sse", new=AsyncMock()),
@@ -183,7 +183,7 @@ async def test_flokka_manager_get() -> None:
 
 @pytest.mark.asyncio
 async def test_flokka_manager_connections_snapshot() -> None:
-    manager = FlokkaManager()
+    manager = FlokkManager()
 
     with (
         patch.object(manager, "_maintain_sse", new=AsyncMock()),
@@ -201,7 +201,7 @@ async def test_flokka_manager_connections_snapshot() -> None:
 
 @pytest.mark.asyncio
 async def test_flokka_manager_ghost_mode() -> None:
-    manager = FlokkaManager()
+    manager = FlokkManager()
 
     # Ghost mode should NOT call _fetch_info
     fetch_info = AsyncMock()
@@ -217,7 +217,7 @@ async def test_flokka_manager_ghost_mode() -> None:
 
 @pytest.mark.asyncio
 async def test_flokka_manager_global_event_callback() -> None:
-    manager = FlokkaManager()
+    manager = FlokkManager()
     received = []
     manager.on_event(lambda c, e: received.append(e))
 
@@ -234,14 +234,14 @@ async def test_flokka_manager_global_event_callback() -> None:
 
 @pytest.mark.asyncio
 async def test_flokka_manager_broadcast_no_connections() -> None:
-    manager = FlokkaManager()
+    manager = FlokkManager()
     results = await manager.broadcast("hello")
     assert results == {}
 
 
 @pytest.mark.asyncio
 async def test_flokka_manager_broadcast_skips_ghost() -> None:
-    manager = FlokkaManager()
+    manager = FlokkManager()
 
     with (
         patch.object(manager, "_maintain_sse", new=AsyncMock()),
@@ -259,14 +259,14 @@ async def test_flokka_manager_broadcast_skips_ghost() -> None:
 
 
 # ---------------------------------------------------------------------------
-# FlokkaManager internal methods
+# FlokkManager internal methods
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_fetch_info_success() -> None:
     """_fetch_info sets ravn_info and status=connected on 200."""
-    manager = FlokkaManager()
+    manager = FlokkManager()
     conn = RavnConnection(name="test", host="localhost", port=7477)
 
     mock_resp = MagicMock()
@@ -289,7 +289,7 @@ async def test_fetch_info_success() -> None:
 @pytest.mark.asyncio
 async def test_fetch_info_non_200_doesnt_set_info() -> None:
     """_fetch_info with non-200 response doesn't set ravn_info."""
-    manager = FlokkaManager()
+    manager = FlokkManager()
     conn = RavnConnection(name="test", host="localhost", port=7477)
 
     mock_resp = MagicMock()
@@ -311,7 +311,7 @@ async def test_fetch_info_non_200_doesnt_set_info() -> None:
 @pytest.mark.asyncio
 async def test_fetch_info_exception_sets_error() -> None:
     """_fetch_info exception sets status=error."""
-    manager = FlokkaManager()
+    manager = FlokkManager()
     conn = RavnConnection(name="test", host="localhost", port=7477)
 
     with patch("ravn.tui.connections.httpx") as mock_httpx:
@@ -324,7 +324,7 @@ async def test_fetch_info_exception_sets_error() -> None:
 @pytest.mark.asyncio
 async def test_maintain_sse_cancelled() -> None:
     """_maintain_sse exits cleanly on CancelledError."""
-    manager = FlokkaManager()
+    manager = FlokkManager()
     conn = RavnConnection(name="test", host="localhost", port=7477)
 
     async def cancel_immediately(c: RavnConnection) -> None:
@@ -339,7 +339,7 @@ async def test_maintain_sse_cancelled() -> None:
 @pytest.mark.asyncio
 async def test_maintain_sse_reconnects_on_error() -> None:
     """_maintain_sse reconnects after a non-cancellation exception."""
-    manager = FlokkaManager()
+    manager = FlokkManager()
     conn = RavnConnection(name="test", host="localhost", port=7477)
 
     call_count = 0
@@ -363,7 +363,7 @@ async def test_maintain_sse_reconnects_on_error() -> None:
 @pytest.mark.asyncio
 async def test_sse_loop_processes_events() -> None:
     """_sse_loop calls _emit_event for valid SSE blocks."""
-    manager = FlokkaManager()
+    manager = FlokkManager()
     conn = RavnConnection(name="test", host="localhost", port=7477)
     received = []
     conn.on_event(lambda c, e: received.append(e))
@@ -401,7 +401,7 @@ async def test_send_message_success() -> None:
     """_send_message returns task_id from WebSocket response."""
     import json
 
-    manager = FlokkaManager()
+    manager = FlokkManager()
     conn = RavnConnection(name="test", host="localhost", port=7477)
 
     mock_ws = AsyncMock()
@@ -420,7 +420,7 @@ async def test_send_message_success() -> None:
 @pytest.mark.asyncio
 async def test_send_message_exception_returns_empty() -> None:
     """_send_message returns empty string on exception."""
-    manager = FlokkaManager()
+    manager = FlokkManager()
     conn = RavnConnection(name="test", host="localhost", port=7477)
 
     with patch("ravn.tui.connections.websockets") as mock_ws_module:
@@ -433,7 +433,7 @@ async def test_send_message_exception_returns_empty() -> None:
 @pytest.mark.asyncio
 async def test_global_event_callback_error_doesnt_crash() -> None:
     """Global event callback errors are swallowed."""
-    manager = FlokkaManager()
+    manager = FlokkManager()
     conn = RavnConnection(name="test", host="localhost", port=7477)
 
     def bad_global_cb(c: object, e: object) -> None:
