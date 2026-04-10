@@ -480,12 +480,12 @@ class TestSettingsThread:
             assert s.thread.sub_thread_weight == 0.7
             assert s.thread.owner_id == "ravn-prod-1"
 
-    def test_env_var_thread_enabled(self, tmp_path) -> None:
+    def test_env_var_thread_enabled(self) -> None:
         with patch.dict(os.environ, {"RAVN_THREAD__ENABLED": "true"}):
             s = Settings()
             assert s.thread.enabled is True
 
-    def test_env_var_thread_decay_rate(self, tmp_path) -> None:
+    def test_env_var_thread_decay_rate(self) -> None:
         with patch.dict(os.environ, {"RAVN_THREAD__DECAY_RATE_PER_DAY": "0.2"}):
             s = Settings()
             assert s.thread.decay_rate_per_day == 0.2
