@@ -1,9 +1,9 @@
 """Tests for the InMemoryEventBroadcaster adapter."""
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -547,3 +547,135 @@ class TestInMemoryEventBroadcaster:
         assert evt.data["files"] == []
         assert evt.data["commits"] == []
         assert evt.data["token_burn"] == []
+
+
+# ---------------------------------------------------------------------------
+# Sleipnir forwarding tests
+# ---------------------------------------------------------------------------
+
+
+class TestInMemoryEventBroadcasterSleipnirForwarding:
+    """Tests for the optional Sleipnir publisher integration."""
+
+    @pytest.mark.asyncio
+    async def test_no_sleipnir_publisher_no_forward(self):
+        """When no publisher is configured, no Sleipnir call is made."""
+        publisher = AsyncMock()
+        b = InMemoryEventBroadcaster(max_queue_size=10)
+        event = RealtimeEvent(
+            type=EventType.SESSION_CREATED,
+            data={"id": str(uuid4())},
+            timestamp=datetime.now(UTC),
+        )
+
+        await b.publish(event)
+
+        publisher.publish.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_sleipnir_publisher_called_for_session_created(self):
+        """SESSION_CREATED events are forwarded to Sleipnir."""
+        publisher = AsyncMock()
+        publisher.publish = AsyncMock()
+        b = InMemoryEventBroadcaster(max_queue_size=10, sleipnir_publisher=publisher)
+        event = RealtimeEvent(
+            type=EventType.SESSION_CREATED,
+            data={"id": str(uuid4())},
+            timestamp=datetime.now(UTC),
+        )
+
+        await b.publish(event)
+
+        publisher.publish.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_sleipnir_not_called_for_heartbeat(self):
+        """HEARTBEAT events are not forwarded (not in the mapping)."""
+        publisher = AsyncMock()
+        publisher.publish = AsyncMock()
+        b = InMemoryEventBroadcaster(max_queue_size=10, sleipnir_publisher=publisher)
+        event = RealtimeEvent(
+            type=EventType.HEARTBEAT,
+            data={},
+            timestamp=datetime.now(UTC),
+        )
+
+        await b.publish(event)
+
+        publisher.publish.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_sleipnir_publish_failure_is_silent(self):
+        """A Sleipnir publish error does not propagate to callers."""
+        publisher = AsyncMock()
+        publisher.publish = AsyncMock(side_effect=RuntimeError("bus down"))
+        b = InMemoryEventBroadcaster(max_queue_size=10, sleipnir_publisher=publisher)
+        event = RealtimeEvent(
+            type=EventType.SESSION_CREATED,
+            data={},
+            timestamp=datetime.now(UTC),
+        )
+
+        # Should not raise
+        await b.publish(event)
+
+    @pytest.mark.asyncio
+    async def test_sleipnir_type_map_built_lazily(self):
+        """The Sleipnir type map is None until first publish."""
+        publisher = AsyncMock()
+        publisher.publish = AsyncMock()
+        b = InMemoryEventBroadcaster(max_queue_size=10, sleipnir_publisher=publisher)
+
+        assert b._sleipnir_type_map is None
+
+        event = RealtimeEvent(
+            type=EventType.SESSION_CREATED,
+            data={},
+            timestamp=datetime.now(UTC),
+        )
+        await b.publish(event)
+
+        assert b._sleipnir_type_map is not None
+
+    @pytest.mark.asyncio
+    async def test_sleipnir_forwarded_event_uses_correct_type(self):
+        """Forwarded SleipnirEvent uses the mapped event type."""
+        from sleipnir.domain import registry
+        from sleipnir.domain.events import SleipnirEvent
+
+        publisher = AsyncMock()
+        publisher.publish = AsyncMock()
+        b = InMemoryEventBroadcaster(max_queue_size=10, sleipnir_publisher=publisher)
+        event = RealtimeEvent(
+            type=EventType.SESSION_CREATED,
+            data={"id": "sess-1"},
+            timestamp=datetime.now(UTC),
+        )
+
+        await b.publish(event)
+
+        arg: SleipnirEvent = publisher.publish.call_args[0][0]
+        assert arg.event_type == registry.VOLUNDR_SESSION_CREATED
+
+    @pytest.mark.asyncio
+    async def test_custom_source_used_in_sleipnir_event(self):
+        """The sleipnir_source string is used in the published event."""
+        from sleipnir.domain.events import SleipnirEvent
+
+        publisher = AsyncMock()
+        publisher.publish = AsyncMock()
+        b = InMemoryEventBroadcaster(
+            max_queue_size=10,
+            sleipnir_publisher=publisher,
+            sleipnir_source="volundr:staging",
+        )
+        event = RealtimeEvent(
+            type=EventType.SESSION_CREATED,
+            data={},
+            timestamp=datetime.now(UTC),
+        )
+
+        await b.publish(event)
+
+        arg: SleipnirEvent = publisher.publish.call_args[0][0]
+        assert arg.source == "volundr:staging"

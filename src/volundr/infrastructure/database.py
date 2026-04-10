@@ -369,6 +369,32 @@ CREATE INDEX IF NOT EXISTS idx_pats_owner_id ON personal_access_tokens(owner_id)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pats_owner_name ON personal_access_tokens(owner_id, name);
 """
 
+SLEIPNIR_EVENTS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS sleipnir_events (
+    event_id        TEXT        PRIMARY KEY,
+    event_type      TEXT        NOT NULL,
+    source          TEXT        NOT NULL,
+    summary         TEXT,
+    urgency         REAL,
+    domain          TEXT,
+    correlation_id  TEXT,
+    causation_id    TEXT,
+    tenant_id       TEXT,
+    payload         JSONB,
+    timestamp       TIMESTAMPTZ NOT NULL,
+    ttl             INTEGER
+);
+"""
+
+SLEIPNIR_EVENTS_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_sleipnir_events_type_ts
+    ON sleipnir_events (event_type, timestamp);
+CREATE INDEX IF NOT EXISTS idx_sleipnir_events_correlation
+    ON sleipnir_events (correlation_id);
+CREATE INDEX IF NOT EXISTS idx_sleipnir_events_source_ts
+    ON sleipnir_events (source, timestamp);
+"""
+
 
 async def create_pool(config: DatabaseConfig) -> asyncpg.Pool:
     """Create an asyncpg connection pool."""
@@ -427,6 +453,8 @@ async def init_db(pool: asyncpg.Pool) -> None:
         await conn.execute(USER_FEATURE_PREFERENCES_INDEX_SQL)
         await conn.execute(PERSONAL_ACCESS_TOKENS_TABLE_SQL)
         await conn.execute(PERSONAL_ACCESS_TOKENS_INDEX_SQL)
+        await conn.execute(SLEIPNIR_EVENTS_TABLE_SQL)
+        await conn.execute(SLEIPNIR_EVENTS_INDEX_SQL)
 
 
 @asynccontextmanager

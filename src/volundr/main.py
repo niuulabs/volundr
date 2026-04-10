@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from volundr.adapters.inbound.rest import create_router
 from volundr.adapters.inbound.rest_admin_settings import create_admin_settings_router
+from volundr.adapters.inbound.rest_audit import create_audit_router
 from volundr.adapters.inbound.rest_credentials import create_credentials_router
 from volundr.adapters.inbound.rest_events import create_events_router
 from volundr.adapters.inbound.rest_features import create_features_router
@@ -526,7 +527,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             gateway_adapter = _create_gateway_adapter(settings)
             pricing_provider = HardcodedPricingProvider(settings.models or None)
             git_registry = create_git_registry(settings.git)
-            broadcaster = InMemoryEventBroadcaster()
+
+            # Sleipnir integration (optional — enabled via sleipnir.enabled config)
+            sleipnir_bus = None
+            if settings.sleipnir.enabled:
+                try:
+                    sl_cls = import_class(settings.sleipnir.adapter)
+                    sleipnir_bus = sl_cls(**settings.sleipnir.kwargs)
+                    logger.info(
+                        "Sleipnir integration enabled: adapter=%s",
+                        settings.sleipnir.adapter.rsplit(".", 1)[-1],
+                    )
+                except Exception:
+                    logger.exception("Failed to initialise Sleipnir integration")
+                    sleipnir_bus = None
+
+            broadcaster = InMemoryEventBroadcaster(
+                sleipnir_publisher=sleipnir_bus,
+            )
 
             # Create services with broadcaster for real-time updates
             # Create profile and template adapters (config-driven)
@@ -855,6 +873,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 except Exception:
                     logger.exception("Failed to initialize OTel event sink")
 
+            # Register Sleipnir event sink when integration is active
+            audit_subscriber = None
+            if sleipnir_bus is not None:
+                from volundr.adapters.outbound.sleipnir_event_sink import (  # noqa: PLC0415
+                    SleipnirEventSink,
+                )
+
+                event_sinks.append(SleipnirEventSink(sleipnir_bus))
+                logger.info("Sleipnir event sink registered in pipeline")
+
+                # Audit log subscriber — persistent record of every event
+                from sleipnir.adapters.audit_postgres import PostgresAuditRepository
+                from sleipnir.adapters.audit_subscriber import AuditSubscriber
+
+                audit_repository = PostgresAuditRepository(pool)
+                audit_subscriber = AuditSubscriber(sleipnir_bus, audit_repository)
+                await audit_subscriber.start()
+
+                audit_router = create_audit_router(audit_repository)
+                app.include_router(audit_router)
+                logger.info("Audit log subscriber started")
+
             event_ingestion = EventIngestionService(sinks=event_sinks)
             events_router = create_events_router(
                 event_ingestion, pg_event_sink, session_service=session_service
@@ -898,6 +938,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     await background_task
                 except asyncio.CancelledError:
                     pass  # Expected: task cancellation during shutdown
+                if audit_subscriber is not None:
+                    await audit_subscriber.stop()
                 await event_ingestion.close_all()
                 await pod_manager.close()
                 if hasattr(gateway_adapter, "close"):

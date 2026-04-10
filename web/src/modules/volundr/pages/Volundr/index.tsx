@@ -332,6 +332,11 @@ export function VolundrPage() {
   }, [sessionHost, chatEndpoint, isSessionReady]);
 
   const chatWsUrl = useMemo(() => {
+    // Dev override: ?ravn_ws=ws://localhost:7477/ws
+    const params = new URLSearchParams(window.location.search);
+    const ravnWs = params.get('ravn_ws');
+    if (ravnWs) return ravnWs;
+
     if (!sessionHost || !isSessionReady) {
       return null;
     }

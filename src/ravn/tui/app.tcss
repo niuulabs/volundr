@@ -1,0 +1,146 @@
+/* Ravn TUI — Textual CSS
+ * Zinc-950 base (#09090b), amber brand (#f59e0b), JetBrains Mono throughout.
+ * Matches the HTML prototype aesthetic: ravn_flokk_tui.html
+ */
+
+/* ------------------------------------------------------------------ */
+/* Screen / global reset                                               */
+/* ------------------------------------------------------------------ */
+
+Screen {
+    background: #09090b;
+    color: #d4d4d8;
+}
+
+/* ------------------------------------------------------------------ */
+/* Main container — fills between tab bar and bottom bar              */
+/* ------------------------------------------------------------------ */
+
+#main-container {
+    height: 1fr;
+    width: 1fr;
+    layout: horizontal;
+}
+
+/* ------------------------------------------------------------------ */
+/* Split pane containers                                               */
+/* ------------------------------------------------------------------ */
+
+.split-h {
+    layout: horizontal;
+    height: 1fr;
+    width: 1fr;
+}
+
+.split-v {
+    layout: vertical;
+    height: 1fr;
+    width: 1fr;
+}
+
+/* ------------------------------------------------------------------ */
+/* Command input overlay (vim : line)                                  */
+/* ------------------------------------------------------------------ */
+
+#cmd-input-container {
+    height: 1;
+    background: #0d0d0f;
+    display: none;
+    dock: bottom;
+    layout: horizontal;
+    padding: 0 1;
+}
+
+#cmd-input-container.visible {
+    display: block;
+}
+
+#cmd-input-prompt {
+    width: auto;
+    color: #f59e0b;
+    padding: 0;
+}
+
+#cmd-input {
+    background: #0d0d0f;
+    color: #f59e0b;
+    border: none;
+    width: 1fr;
+    padding: 0;
+    height: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* DataTable theming                                                   */
+/* ------------------------------------------------------------------ */
+
+DataTable {
+    background: #09090b;
+    color: #d4d4d8;
+}
+
+DataTable > .datatable--header {
+    background: #161618;
+    color: #52525b;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: #1c1c1e;
+    color: #fafafa;
+}
+
+DataTable > .datatable--fixed {
+    background: #161618;
+}
+
+DataTable > .datatable--odd-row {
+    background: #09090b;
+}
+
+DataTable > .datatable--even-row {
+    background: #0c0c0e;
+}
+
+/* ------------------------------------------------------------------ */
+/* Input theming                                                       */
+/* ------------------------------------------------------------------ */
+
+Input {
+    background: #18181b;
+    color: #d4d4d8;
+    border: solid #3f3f46;
+}
+
+Input:focus {
+    border: solid #f59e0b;
+}
+
+/* ------------------------------------------------------------------ */
+/* RichLog                                                             */
+/* ------------------------------------------------------------------ */
+
+RichLog {
+    background: #09090b;
+    color: #d4d4d8;
+    scrollbar-size: 1 1;
+    scrollbar-color: #27272a;
+    scrollbar-color-hover: #3f3f46;
+}
+
+/* ------------------------------------------------------------------ */
+/* Label / Static                                                      */
+/* ------------------------------------------------------------------ */
+
+Label {
+    color: #a1a1aa;
+}
+
+/* ------------------------------------------------------------------ */
+/* Notification flash in status bar                                    */
+/* ------------------------------------------------------------------ */
+
+#sb-notification.-urgent {
+    color: #f59e0b;
+    background: #1a1200;
+}

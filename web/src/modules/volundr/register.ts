@@ -1,5 +1,4 @@
 import {
-  Hammer,
   Users,
   Building2,
   HardDrive,
@@ -12,11 +11,12 @@ import {
   LayoutDashboard,
 } from 'lucide-react';
 import { registerModuleDefinition } from '@/modules/shared/registry';
+import { KenazRune } from '@/modules/shared/registry/rune-icons';
 
 registerModuleDefinition({
   key: 'volundr',
   label: 'V\u00f6lundr',
-  icon: Hammer,
+  icon: KenazRune,
   basePath: '/volundr',
   routes: [
     {

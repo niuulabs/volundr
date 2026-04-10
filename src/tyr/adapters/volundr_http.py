@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -270,6 +271,10 @@ class VolundrHTTPAdapter(VolundrPort):
         # Fall back to the very last assistant message
         return assistant_turns[-1].get("content", "")
 
+    # Volundr sends heartbeats every 30s; if we receive nothing for 90s the
+    # connection is dead and we should break so the caller can reconnect.
+    _SSE_READ_TIMEOUT: float = 90.0
+
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         """Subscribe to the Volundr SSE stream and yield activity + session lifecycle events."""
         url = f"{self._base_url}/api/v1/volundr/sessions/stream"
@@ -277,7 +282,23 @@ class VolundrHTTPAdapter(VolundrPort):
             async with client.stream("GET", url, headers=self._headers()) as resp:
                 resp.raise_for_status()
                 event_type = ""
-                async for line in resp.aiter_lines():
+                line_iter = resp.aiter_lines().__aiter__()
+                while True:
+                    try:
+                        line = await asyncio.wait_for(
+                            line_iter.__anext__(), timeout=self._SSE_READ_TIMEOUT
+                        )
+                    except StopAsyncIteration:
+                        return
+                    except TimeoutError:
+                        logger.warning(
+                            "SSE read timeout (%.0fs with no data) — "
+                            "connection to %s presumed dead, reconnecting",
+                            self._SSE_READ_TIMEOUT,
+                            self._base_url,
+                        )
+                        return
+
                     if line.startswith("event:"):
                         event_type = line[len("event:") :].strip()
                     elif line.startswith("data:"):

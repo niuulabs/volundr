@@ -25,8 +25,9 @@ POSTGRES_VERSION := $(shell python3 -c "exec(open('$(PG_VERSIONS_PY)').read()); 
 PGVECTOR_VERSION := $(shell python3 -c "exec(open('$(PG_VERSIONS_PY)').read()); print(PGVECTOR_VERSION)")
 PGINSTALL_DIR    := build/pginstall
 
-.PHONY: build build-web build-postgres build-cli copy-migrations clean lint test verify \
-       test-integration test-integration-volundr test-integration-tyr test-e2e test-e2e-ui test-all
+.PHONY: build build-web build-postgres build-cli build-ravn copy-migrations clean lint test verify \
+       test-integration test-integration-volundr test-integration-tyr test-integration-sleipnir \
+       test-e2e test-e2e-ui test-all test-ravn
 
 # --------------------------------------------------------------------------
 # Full build: web assets → migrations → PostgreSQL → Nuitka binary
@@ -69,6 +70,13 @@ build-cli:
 		--output-dir $(OUTPUT_DIR)
 
 # --------------------------------------------------------------------------
+# Ravn Nuitka single-binary compilation (no postgres/web assets)
+# --------------------------------------------------------------------------
+build-ravn:
+	uv run python -m ravn.build \
+		--output-dir $(OUTPUT_DIR)
+
+# --------------------------------------------------------------------------
 # Quality gates
 # --------------------------------------------------------------------------
 lint:
@@ -92,6 +100,9 @@ test-integration-volundr:
 test-integration-tyr:
 	uv run pytest tests/integration/tyr/ -v --tb=short -m integration
 
+test-integration-sleipnir:
+	uv run pytest tests/integration/sleipnir/ -v --tb=short -m broker --override-ini="addopts="
+
 test-e2e:
 	cd $(WEB_DIR) && npm run test:e2e
 
@@ -99,6 +110,13 @@ test-e2e-ui:
 	cd $(WEB_DIR) && npm run test:e2e -- --ui
 
 test-all: test test-integration test-e2e
+
+# --------------------------------------------------------------------------
+# Ravn-specific tests with coverage
+# --------------------------------------------------------------------------
+test-ravn:
+	uv run --extra test pytest tests/ravn/ tests/test_ravn/ -v --tb=short \
+		--cov=src/ravn --cov-report=term-missing --cov-fail-under=85
 
 # --------------------------------------------------------------------------
 # Cleanup

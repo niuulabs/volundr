@@ -380,6 +380,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
             app.dependency_overrides[dispatcher_resolve_event_bus] = _resolve_event_bus
 
+            # Wire Sleipnir bridge (optional — enabled via sleipnir.enabled config)
+            tyr_sleipnir_bridge = None
+            sleipnir_bus = None
+            if settings.sleipnir.enabled:
+                from tyr.adapters.sleipnir_event_bridge import TyrSleipnirBridge  # noqa: PLC0415
+
+                sl_cls = import_class(settings.sleipnir.adapter)
+                sleipnir_bus = sl_cls(**settings.sleipnir.kwargs)
+                tyr_sleipnir_bridge = TyrSleipnirBridge(
+                    event_bus=event_bus,
+                    publisher=sleipnir_bus,
+                )
+                await tyr_sleipnir_bridge.start()
+                logger.info(
+                    "Tyr Sleipnir bridge started: adapter=%s",
+                    settings.sleipnir.adapter.rsplit(".", 1)[-1],
+                )
+
             # Wire Telegram reply client (shared httpx.AsyncClient)
             from tyr.adapters.inbound.rest_telegram_webhook import (
                 TelegramReplyClient,
@@ -405,6 +423,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
             llm_adapter = llm_cls(**llm_kwargs)
             logger.info("LLM adapter: %s", llm_cfg.adapter.rsplit(".", 1)[-1])
+
+            # Wire Sleipnir publisher into the LLM adapter when both are enabled.
+            if sleipnir_bus is not None and hasattr(llm_adapter, "set_publisher"):
+                from tyr.adapters.bifrost_publisher import BifrostPublisher  # noqa: PLC0415
+
+                bifrost_pub = BifrostPublisher(
+                    sleipnir_bus,
+                    agent_id=llm_cfg.agent_id,
+                )
+                llm_adapter.set_publisher(bifrost_pub)
+                logger.info("Bifrost publisher wired to Sleipnir")
 
             async def _resolve_llm() -> _LLMPort:
                 return llm_adapter
@@ -459,6 +488,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
 
             # Lifecycle cleanup
+            if tyr_sleipnir_bridge is not None:
+                await tyr_sleipnir_bridge.stop()
             await review_engine.stop()
             await notification_service.stop()
             await telegram_reply_client.close()

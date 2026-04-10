@@ -1,10 +1,10 @@
-import { Compass } from 'lucide-react';
 import { registerModuleDefinition } from '@/modules/shared/registry';
+import { JeraRune } from '@/modules/shared/registry/rune-icons';
 
 registerModuleDefinition({
   key: 'tyr',
   label: 'Tyr',
-  icon: Compass,
+  icon: JeraRune,
   basePath: '/tyr',
   layout: () => import('./pages/TyrLayout').then(m => ({ default: m.TyrLayout })),
   routes: [
@@ -44,7 +44,7 @@ registerModuleDefinition({
     {
       key: 'tyr-connections',
       scope: 'settings',
-      icon: Compass,
+      icon: JeraRune,
       load: () =>
         import('./pages/Settings/TyrConnectionsWrapper').then(m => ({
           default: m.TyrConnectionsWrapper,

@@ -517,6 +517,27 @@ class LLMConfig(BaseModel):
             "When empty, the built-in DECOMPOSITION_PROMPT in bifrost.py is used."
         ),
     )
+    budget_tokens: int = Field(
+        default=0,
+        description=(
+            "Cumulative token budget per BifrostAdapter instance. "
+            "0 means unlimited. When exceeded, bifrost.quota.exceeded is emitted."
+        ),
+    )
+    quota_warning_threshold: float = Field(
+        default=0.8,
+        description=(
+            "Fraction of budget_tokens at which bifrost.quota.warning is emitted. "
+            "Must be between 0.0 and 1.0. Default: 0.8 (80%)."
+        ),
+    )
+    agent_id: str = Field(
+        default="",
+        description=(
+            "Optional identifier for the agent/saga making LLM calls. "
+            "Used as correlation_id in Sleipnir events."
+        ),
+    )
 
 
 class LinearConfig(BaseModel):
@@ -595,6 +616,33 @@ class EventBusConfig(BaseModel):
     kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
+class SleipnirConfig(BaseModel):
+    """Sleipnir platform event bus integration (optional).
+
+    When ``enabled`` is True, Tyr creates a Sleipnir adapter and starts a
+    :class:`~tyr.adapters.sleipnir_event_bridge.TyrSleipnirBridge` that
+    republishes all Tyr events to the platform-wide bus.
+
+    Example YAML::
+
+        sleipnir:
+          enabled: true
+          adapter: "sleipnir.adapters.nats_transport.NatsTransport"
+          kwargs:
+            servers: ["nats://nats:4222"]
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable Sleipnir platform event bus integration.",
+    )
+    adapter: str = Field(
+        default="sleipnir.adapters.in_process.InProcessBus",
+        description="Fully-qualified class path for the Sleipnir adapter.",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+
+
 class NotificationConfig(BaseModel):
     """Notification service configuration."""
 
@@ -662,6 +710,7 @@ class Settings(BaseSettings):
     events: EventsConfig = Field(default_factory=EventsConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     notification: NotificationConfig = Field(default_factory=NotificationConfig)
+    sleipnir: SleipnirConfig = Field(default_factory=SleipnirConfig)
 
     @classmethod
     def settings_customise_sources(

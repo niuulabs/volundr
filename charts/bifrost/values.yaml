@@ -1,0 +1,233 @@
+# Default values for the Bifröst LLM gateway Helm chart.
+# Override these values in your environment-specific values file.
+
+# -- Number of replicas when autoscaling is disabled.
+replicaCount: 2
+
+# -- How many old ReplicaSets to retain.
+revisionHistoryLimit: 10
+
+image:
+  # -- Container image registry (leave blank to use Docker Hub).
+  registry: ""
+  # -- Container image repository.
+  repository: bifrost
+  # -- Image tag. Defaults to Chart.appVersion.
+  tag: ""
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+
+# -- Image pull secrets for private registries.
+imagePullSecrets: []
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the full release name.
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create a ServiceAccount for the gateway pods.
+  create: true
+  # -- ServiceAccount name. Auto-generated when blank.
+  name: ""
+  # -- Annotations to add to the ServiceAccount.
+  annotations: {}
+
+# -- Annotations added to every pod.
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "8088"
+
+# -- Additional pod labels.
+podLabels: {}
+
+# -- Pod-level security context (merged with the hardened defaults in the template).
+podSecurityContext: {}
+
+# -- Container-level security context (merged with the hardened defaults in the template).
+securityContext: {}
+
+# -- Optional priority class name.
+priorityClassName: ""
+
+# -- Seconds the pod has to shut down gracefully.
+terminationGracePeriodSeconds: 30
+
+service:
+  # -- Service type.
+  type: ClusterIP
+  # -- Port exposed by the Service.
+  port: 80
+  # -- Port the container listens on.
+  targetPort: 8088
+  # -- Additional service annotations.
+  annotations: {}
+
+# Prometheus metrics scraping configuration.
+metrics:
+  # -- Expose a dedicated metrics port in the Service (same port as HTTP).
+  enabled: true
+  # -- Port number used when creating the metrics service port entry.
+  port: 9090
+
+# -- Container resource requests and limits.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+
+autoscaling:
+  # -- Enable HorizontalPodAutoscaler.
+  enabled: true
+  # -- Minimum number of replicas.
+  minReplicas: 2
+  # -- Maximum number of replicas.
+  maxReplicas: 10
+  # -- Target CPU utilisation percentage (null to disable).
+  targetCPUUtilizationPercentage: 70
+  # -- Target memory utilisation percentage (null to disable).
+  targetMemoryUtilizationPercentage: null
+  # -- Target average requests-per-second per pod (requires prometheus-adapter).
+  # Set to null to disable RPS-based scaling.
+  targetRPS: 100
+  # -- Custom HPA metrics in addition to the built-in ones.
+  customMetrics: []
+  # -- HPA scale-up/down behaviour overrides.
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+
+podDisruptionBudget:
+  # -- Enable PodDisruptionBudget to maintain availability during disruptions.
+  enabled: true
+  # -- Minimum number of pods that must be available. Set one of minAvailable or
+  # maxUnavailable.
+  minAvailable: 1
+  # -- Maximum number of pods that can be unavailable (alternative to minAvailable).
+  maxUnavailable: null
+
+# -- Node selector for pod assignment.
+nodeSelector: {}
+# -- Tolerations for pod scheduling.
+tolerations: []
+# -- Affinity rules for pod scheduling.
+affinity: {}
+# -- Topology spread constraints for even distribution.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: bifrost
+
+# -- Extra environment variables injected into the gateway container.
+extraEnv: []
+# -- Extra envFrom sources (ConfigMaps / Secrets).
+envFrom: []
+# -- Extra volume mounts added to the gateway container.
+extraVolumeMounts: []
+# -- Extra volumes added to the pod spec.
+extraVolumes: []
+# -- Annotations added to the Deployment resource.
+deploymentAnnotations: {}
+
+# ---------------------------------------------------------------------------
+# Provider secret references (keys populated from Kubernetes Secrets via ESO)
+# ---------------------------------------------------------------------------
+# Each entry maps a provider name to the Secret that holds its API key.
+# The Secret itself is created either manually or via externalSecrets below.
+#
+# Example:
+#   providers:
+#     anthropic:
+#       apiKeyEnv: ANTHROPIC_API_KEY
+#       existingSecret: bifrost-anthropic-secret
+#       secretKey: api-key
+#     openai:
+#       apiKeyEnv: OPENAI_API_KEY
+#       existingSecret: bifrost-openai-secret
+#       secretKey: api-key
+providers: {}
+
+# ---------------------------------------------------------------------------
+# PAT signing secret
+# ---------------------------------------------------------------------------
+pat:
+  # -- Name of the Secret containing the HS256 PAT signing secret.
+  # Required when the bifrost config sets auth_mode: pat.
+  existingSecret: ""
+  # -- Key within the Secret that holds the PAT secret value.
+  secretKey: "pat-secret"
+
+# ---------------------------------------------------------------------------
+# Usage store DSN secret
+# ---------------------------------------------------------------------------
+usageStore:
+  # -- Name of the Secret containing the PostgreSQL DSN for the usage store.
+  existingSecret: ""
+  # -- Key within the Secret that holds the DSN value.
+  secretKey: "dsn"
+
+# ---------------------------------------------------------------------------
+# External Secrets Operator (ESO) — OpenBao integration
+# ---------------------------------------------------------------------------
+externalSecrets:
+  # -- Enable ExternalSecret resources to sync secrets from OpenBao via ESO.
+  enabled: false
+  # -- Name of the (Cluster)SecretStore that points at OpenBao.
+  secretStoreName: openbao
+  # -- Kind of the secret store: SecretStore or ClusterSecretStore.
+  secretStoreKind: ClusterSecretStore
+  # -- List of ExternalSecret definitions to create.
+  # Each entry becomes a separate ExternalSecret manifest.
+  #
+  # Example:
+  #   secrets:
+  #     - name: bifrost-anthropic-secret
+  #       refreshInterval: 1h
+  #       data:
+  #         - secretKey: api-key
+  #           remoteKey: secret/bifrost/anthropic
+  #           remoteProperty: api_key
+  secrets: []
+
+# ---------------------------------------------------------------------------
+# Bifröst gateway configuration
+# ---------------------------------------------------------------------------
+# The contents of this section are rendered verbatim into the bifrost.yaml
+# ConfigMap that is mounted at /etc/bifrost/bifrost.yaml.
+# See bifrost.yaml.example in the repository root for all available options.
+config:
+  routing_strategy: failover
+  host: "0.0.0.0"
+  port: 8088
+  auth_mode: open
+  providers: {}
+  aliases: {}
+  default_quota: {}
+  tenant_quotas: {}
+  agent_permissions: {}
+  guardrails: {}
+  rules: []
+  usage_store:
+    adapter: memory
+  key_vault: {}
+  events:
+    adapter: "null"
+  cache:
+    mode: disabled

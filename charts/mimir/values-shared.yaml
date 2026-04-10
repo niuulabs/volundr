@@ -1,0 +1,31 @@
+# values-shared.yaml — ODIN-wide shared Mímir instance.
+#
+# Install:
+#   helm install mimir-shared charts/mimir -f charts/mimir/values-shared.yaml -n valhalla
+
+config:
+  name: "shared"
+  role: "shared"
+  categories: []
+  announceUrl: ""
+  port: 7477
+  logLevel: "info"
+
+persistence:
+  size: 50Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  host: "mimir-shared.odin.niuu.world"
+  tls: true
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

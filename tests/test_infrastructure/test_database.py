@@ -27,6 +27,8 @@ from volundr.infrastructure.database import (
     SESSIONS_IDENTITY_COLUMNS_SQL,
     SESSIONS_IDENTITY_INDEX_SQL,
     SESSIONS_TABLE_SQL,
+    SLEIPNIR_EVENTS_INDEX_SQL,
+    SLEIPNIR_EVENTS_TABLE_SQL,
     TENANT_MEMBERSHIPS_INDEX_SQL,
     TENANT_MEMBERSHIPS_TABLE_SQL,
     TENANTS_INDEX_SQL,
@@ -172,7 +174,7 @@ class TestInitDb:
 
         await init_db(mock_pool)
 
-        assert mock_conn.execute.call_count == 35
+        assert mock_conn.execute.call_count == 37
         calls = mock_conn.execute.call_args_list
         assert calls[0][0][0] == SESSIONS_TABLE_SQL
         assert calls[1][0][0] == CREATE_INDEX_SQL
@@ -209,6 +211,8 @@ class TestInitDb:
         assert calls[32][0][0] == USER_FEATURE_PREFERENCES_INDEX_SQL
         assert calls[33][0][0] == PERSONAL_ACCESS_TOKENS_TABLE_SQL
         assert calls[34][0][0] == PERSONAL_ACCESS_TOKENS_INDEX_SQL
+        assert calls[35][0][0] == SLEIPNIR_EVENTS_TABLE_SQL
+        assert calls[36][0][0] == SLEIPNIR_EVENTS_INDEX_SQL
 
 
 class TestDatabasePool:
