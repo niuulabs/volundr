@@ -1759,14 +1759,6 @@ async def _run_daemon(
     from ravn.drive_loop import DriveLoop
     from ravn.ports.channel import ChannelPort
 
-    api_key = settings.effective_api_key()
-    if not api_key:
-        typer.echo(
-            "Error: No API key found. Set ANTHROPIC_API_KEY or configure ravn.yaml.",
-            err=True,
-        )
-        raise typer.Exit(1)
-
     if profile is not None:
         system_prompt, max_iterations, _max_tokens_d = _apply_profile(
             profile, settings, persona_config=persona_config
