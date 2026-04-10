@@ -1414,8 +1414,7 @@ class MimirStalenessTriggerConfig(BaseModel):
     max_tokens: int | None = Field(
         default=4096,
         description=(
-            "Maximum output tokens for staleness refresh tasks. "
-            "None uses the LLM/settings default."
+            "Maximum output tokens for staleness refresh tasks. None uses the LLM/settings default."
         ),
     )
 
@@ -1763,6 +1762,79 @@ class CheckpointConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# NIU-558: Thread enrichment config
+# ---------------------------------------------------------------------------
+
+
+class ThreadConfig(BaseModel):
+    """Thread enrichment queue configuration (NIU-558).
+
+    Controls the background enricher that scores and prioritises Mímir pages
+    into the wakefulness thread queue.  Disabled by default — M2 activates
+    it by setting ``thread.enabled: true`` in the deployment YAML.
+
+    All timing values and weight coefficients are overridable via environment
+    variables (``RAVN_THREAD__DECAY_RATE_PER_DAY``, etc.) or the ``thread:``
+    section of ``ravn.yaml``.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable the thread enricher.  Off until M2 activates the trigger; "
+            "flip to true in the deployment ravn.yaml to start queueing."
+        ),
+    )
+    max_queue_size: int = Field(
+        default=200,
+        description="Maximum number of entries held in the wakefulness thread queue.",
+    )
+    enricher_poll_interval_seconds: int = Field(
+        default=300,
+        description="How often (seconds) the enricher checks Mímir for new pages.",
+    )
+    enricher_llm_alias: str = Field(
+        default="fast",
+        description=(
+            "LLM alias used by the enricher.  Should resolve to the cheapest/fastest "
+            "model configured in the llm aliases map."
+        ),
+    )
+    decay_rate_per_day: float = Field(
+        default=0.05,
+        description="Exponential score decay applied per calendar day of inactivity.",
+    )
+    recency_weight: float = Field(
+        default=1.0,
+        description="Weight applied to the recency signal when computing thread score.",
+    )
+    mention_weight: float = Field(
+        default=0.3,
+        description="Weight applied to the mention-count signal.",
+    )
+    engagement_weight: float = Field(
+        default=0.5,
+        description="Weight applied to the engagement signal.",
+    )
+    peer_weight: float = Field(
+        default=0.2,
+        description="Weight applied to the peer-reference signal.",
+    )
+    sub_thread_weight: float = Field(
+        default=0.4,
+        description="Weight applied to the sub-thread depth signal.",
+    )
+    owner_id: str | None = Field(
+        default=None,
+        description=(
+            "This Ravn instance's ID for ownership claims on queue entries.  "
+            "Defaults to the runtime instance ID when None; set explicitly in "
+            "the deployment YAML so co-deployed instances can share a queue."
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Root settings
 # ---------------------------------------------------------------------------
 
@@ -1910,6 +1982,9 @@ class Settings(BaseSettings):
 
     # NIU-539: drive loop / initiative engine
     initiative: InitiativeConfig = Field(default_factory=InitiativeConfig)
+
+    # NIU-558: thread enrichment queue
+    thread: ThreadConfig = Field(default_factory=ThreadConfig)
 
     # NIU-541: Búri knowledge memory substrate
     buri: BuriConfig = Field(default_factory=BuriConfig)

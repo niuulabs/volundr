@@ -21,6 +21,7 @@ from ravn.config import (
     PermissionConfig,
     PermissionRuleConfig,
     Settings,
+    ThreadConfig,
     ToolAdapterConfig,
     ToolsConfig,
 )
@@ -406,3 +407,90 @@ class TestSettings:
             s = Settings()
             assert s.context.per_file_limit == 2048
             assert s.context.total_budget == 6144
+
+
+# ---------------------------------------------------------------------------
+# NIU-558: ThreadConfig
+# ---------------------------------------------------------------------------
+
+
+class TestThreadConfig:
+    def test_defaults(self) -> None:
+        c = ThreadConfig()
+        assert c.enabled is False
+        assert c.max_queue_size == 200
+        assert c.enricher_poll_interval_seconds == 300
+        assert c.enricher_llm_alias == "fast"
+        assert c.decay_rate_per_day == 0.05
+        assert c.recency_weight == 1.0
+        assert c.mention_weight == 0.3
+        assert c.engagement_weight == 0.5
+        assert c.peer_weight == 0.2
+        assert c.sub_thread_weight == 0.4
+        assert c.owner_id is None
+
+    def test_enabled_override(self) -> None:
+        c = ThreadConfig(enabled=True)
+        assert c.enabled is True
+
+    def test_custom_weights(self) -> None:
+        c = ThreadConfig(recency_weight=2.0, mention_weight=0.8)
+        assert c.recency_weight == 2.0
+        assert c.mention_weight == 0.8
+
+    def test_owner_id_set(self) -> None:
+        c = ThreadConfig(owner_id="ravn-instance-42")
+        assert c.owner_id == "ravn-instance-42"
+
+
+class TestSettingsThread:
+    def test_settings_thread_defaults(self) -> None:
+        s = Settings()
+        assert s.thread.enabled is False
+        assert s.thread.max_queue_size == 200
+        assert s.thread.owner_id is None
+
+    def test_yaml_thread_section(self, tmp_path) -> None:
+        cfg = tmp_path / "ravn.yaml"
+        cfg.write_text(
+            "thread:\n"
+            "  enabled: true\n"
+            "  max_queue_size: 500\n"
+            "  enricher_poll_interval_seconds: 60\n"
+            "  enricher_llm_alias: turbo\n"
+            "  decay_rate_per_day: 0.1\n"
+            "  recency_weight: 2.0\n"
+            "  mention_weight: 0.6\n"
+            "  engagement_weight: 0.9\n"
+            "  peer_weight: 0.4\n"
+            "  sub_thread_weight: 0.7\n"
+            "  owner_id: ravn-prod-1\n"
+        )
+        with patch.dict(os.environ, {"RAVN_CONFIG": str(cfg)}):
+            s = Settings()
+            assert s.thread.enabled is True
+            assert s.thread.max_queue_size == 500
+            assert s.thread.enricher_poll_interval_seconds == 60
+            assert s.thread.enricher_llm_alias == "turbo"
+            assert s.thread.decay_rate_per_day == 0.1
+            assert s.thread.recency_weight == 2.0
+            assert s.thread.mention_weight == 0.6
+            assert s.thread.engagement_weight == 0.9
+            assert s.thread.peer_weight == 0.4
+            assert s.thread.sub_thread_weight == 0.7
+            assert s.thread.owner_id == "ravn-prod-1"
+
+    def test_env_var_thread_enabled(self, tmp_path) -> None:
+        with patch.dict(os.environ, {"RAVN_THREAD__ENABLED": "true"}):
+            s = Settings()
+            assert s.thread.enabled is True
+
+    def test_env_var_thread_decay_rate(self, tmp_path) -> None:
+        with patch.dict(os.environ, {"RAVN_THREAD__DECAY_RATE_PER_DAY": "0.2"}):
+            s = Settings()
+            assert s.thread.decay_rate_per_day == 0.2
+
+    def test_env_var_thread_owner_id(self) -> None:
+        with patch.dict(os.environ, {"RAVN_THREAD__OWNER_ID": "instance-xyz"}):
+            s = Settings()
+            assert s.thread.owner_id == "instance-xyz"
