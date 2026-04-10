@@ -88,13 +88,21 @@ def test_slugify_unicode_to_ascii() -> None:
 
 def test_thread_state_values() -> None:
     assert ThreadState.open == "open"
+    assert ThreadState.assigned == "assigned"
     assert ThreadState.closed == "closed"
     assert ThreadState.dissolved == "dissolved"
 
 
 def test_thread_state_from_string() -> None:
     assert ThreadState("open") == ThreadState.open
+    assert ThreadState("assigned") == ThreadState.assigned
     assert ThreadState("closed") == ThreadState.closed
+
+
+def test_thread_state_assigned_is_str() -> None:
+    """ThreadState.assigned must be a plain string (StrEnum behaviour)."""
+    assert isinstance(ThreadState.assigned, str)
+    assert str(ThreadState.assigned) == "assigned"
 
 
 # ---------------------------------------------------------------------------
@@ -489,6 +497,89 @@ async def test_update_thread_weight_raises_for_missing(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
     with pytest.raises(FileNotFoundError):
         await adapter.update_thread_weight("threads/nonexistent", 0.5)
+
+
+@pytest.mark.asyncio
+async def test_update_thread_weight_stores_signals(tmp_path: Path) -> None:
+    """When signals are provided they must be persisted in the YAML."""
+    adapter = _make_adapter(tmp_path)
+    await adapter.create_thread(title="Signal Thread", weight=0.5)
+    signals = {"age_days": 3.0, "mention_count": 5}
+    await adapter.update_thread_weight("threads/signal-thread", 0.75, signals=signals)
+    schema = ThreadYamlSchema.from_yaml(tmp_path / "mimir" / "threads" / "signal-thread.yaml")
+    assert abs(schema.weight - 0.75) < 1e-9
+    assert schema.weight_signals["age_days"] == 3.0
+    assert schema.weight_signals["mention_count"] == 5
+
+
+@pytest.mark.asyncio
+async def test_update_thread_weight_signals_none_preserves_existing(tmp_path: Path) -> None:
+    """Passing signals=None must leave existing weight_signals untouched."""
+    adapter = _make_adapter(tmp_path)
+    await adapter.create_thread(title="Preserve Signals Thread", weight=0.5)
+    await adapter.update_thread_weight("threads/preserve-signals-thread", 0.6, signals={"x": 1.0})
+    await adapter.update_thread_weight("threads/preserve-signals-thread", 0.7)
+    schema = ThreadYamlSchema.from_yaml(
+        tmp_path / "mimir" / "threads" / "preserve-signals-thread.yaml"
+    )
+    assert schema.weight_signals == {"x": 1.0}
+
+
+# ---------------------------------------------------------------------------
+# list_threads
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_threads_returns_all_threads(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.create_thread(title="Thread Alpha")
+    await adapter.create_thread(title="Thread Beta")
+    pages = await adapter.list_threads()
+    titles = [p.meta.title for p in pages]
+    assert "Thread Alpha" in titles
+    assert "Thread Beta" in titles
+
+
+@pytest.mark.asyncio
+async def test_list_threads_empty_when_no_threads(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    pages = await adapter.list_threads()
+    assert pages == []
+
+
+@pytest.mark.asyncio
+async def test_list_threads_filtered_by_state(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    await adapter.create_thread(title="Open Thread")
+    await adapter.create_thread(title="Closed Thread")
+    await adapter.update_thread_state("threads/closed-thread", ThreadState.closed)
+    open_pages = await adapter.list_threads(state=ThreadState.open)
+    titles = [p.meta.title for p in open_pages]
+    assert "Open Thread" in titles
+    assert "Closed Thread" not in titles
+
+
+@pytest.mark.asyncio
+async def test_list_threads_filtered_by_assigned_state(tmp_path: Path) -> None:
+    """ThreadState.assigned must work as a filter value."""
+    adapter = _make_adapter(tmp_path)
+    await adapter.create_thread(title="Open Thread 2")
+    await adapter.create_thread(title="Assigned Thread")
+    await adapter.update_thread_state("threads/assigned-thread", ThreadState.assigned)
+    pages = await adapter.list_threads(state=ThreadState.assigned)
+    titles = [p.meta.title for p in pages]
+    assert "Assigned Thread" in titles
+    assert "Open Thread 2" not in titles
+
+
+@pytest.mark.asyncio
+async def test_list_threads_respects_limit(tmp_path: Path) -> None:
+    adapter = _make_adapter(tmp_path)
+    for i in range(5):
+        await adapter.create_thread(title=f"Limited Thread {i}")
+    pages = await adapter.list_threads(limit=3)
+    assert len(pages) == 3
 
 
 # ---------------------------------------------------------------------------
