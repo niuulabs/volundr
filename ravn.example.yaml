@@ -1,0 +1,70 @@
+# ravn.example.yaml — Ravn application configuration reference
+#
+# Copy this file to one of the default search paths and edit to taste:
+#   ~/.ravn/config.yaml  (recommended for personal installs)
+#   ./ravn.yaml          (project-level override)
+#   /etc/ravn/config.yaml (system-wide)
+#
+# Override with RAVN_CONFIG env var to point to a custom path.
+#
+# Environment variable override format (RAVN_ prefix, __ for nesting):
+#   RAVN_ANTHROPIC__API_KEY=...
+#   RAVN_LLM__MODEL=claude-opus-4-6
+#   RAVN_THREAD__ENABLED=true
+#
+# Precedence (highest to lowest): env vars > yaml file > defaults
+
+# ---------------------------------------------------------------------------
+# Anthropic API
+# ---------------------------------------------------------------------------
+# anthropic:
+#   api_key: ""          # prefer ANTHROPIC_API_KEY env var
+#   base_url: "https://api.anthropic.com"
+
+# ---------------------------------------------------------------------------
+# LLM
+# ---------------------------------------------------------------------------
+# llm:
+#   model: claude-sonnet-4-6
+#   max_tokens: 8192
+#   max_retries: 3
+#   timeout: 120
+
+# ---------------------------------------------------------------------------
+# Thread enrichment queue (NIU-558)
+#
+# The thread enricher scores Mímir pages and queues them for wakefulness
+# processing.  It is DISABLED by default (M1 safe).  M2 sets enabled: true.
+#
+# All weight fields contribute to the composite thread score:
+#   score = (recency_weight * recency_signal)
+#         + (mention_weight * mention_signal)
+#         + (engagement_weight * engagement_signal)
+#         + (peer_weight * peer_signal)
+#         + (sub_thread_weight * sub_thread_signal)
+#   score *= exp(-decay_rate_per_day * days_since_last_activity)
+# ---------------------------------------------------------------------------
+# thread:
+#   enabled: false                      # flip to true in M2 deployment YAML
+#   max_queue_size: 200
+#   enricher_poll_interval_seconds: 300 # check Mímir every 5 minutes
+#   enricher_llm_alias: fast            # use cheapest/fastest model alias
+#   decay_rate_per_day: 0.05
+#   recency_weight: 1.0
+#   mention_weight: 0.3
+#   engagement_weight: 0.5
+#   peer_weight: 0.2
+#   sub_thread_weight: 0.4
+#   owner_id: null                      # defaults to this instance's own ID
+
+# ---------------------------------------------------------------------------
+# Memory
+# ---------------------------------------------------------------------------
+# memory:
+#   backend: sqlite
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+# logging:
+#   level: info
