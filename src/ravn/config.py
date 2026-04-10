@@ -1531,6 +1531,10 @@ class DiscoveryMdnsConfig(BaseModel):
         default=5.0,
         description="Seconds to wait for HMAC handshake completion.",
     )
+    handshake_port: int = Field(
+        default=7482,
+        description="nng PAIR port used for HMAC handshake exchange. Must be unique per instance on the same host.",
+    )
 
 
 class DiscoverySleipnirConfig(BaseModel):
@@ -1573,6 +1577,10 @@ class DiscoveryConfig(BaseModel):
     - ``composite`` — combines multiple backends
     """
 
+    enabled: bool = Field(
+        default=False,
+        description="Enable flock peer discovery.",
+    )
     adapter: str = Field(
         default="mdns",
         description="Discovery backend: 'mdns', 'sleipnir', 'k8s', or 'composite'.",

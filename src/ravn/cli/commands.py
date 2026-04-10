@@ -2103,21 +2103,21 @@ def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
     """
     from ravn.adapters.tools.cascade_tools import build_cascade_tools  # noqa: PLC0415
 
-    # Build optional mesh and discovery adapters
+    # Build optional mesh and discovery adapters (discovery first — mesh needs it)
     mesh: Any = None
     discovery: Any = None
 
-    if settings.mesh.enabled if hasattr(settings.mesh, "enabled") else False:
-        try:
-            mesh = _build_mesh(settings)
-        except Exception as exc:
-            logger.warning("cascade: failed to build mesh adapter: %s", exc)
-
-    if settings.discovery.enabled if hasattr(settings.discovery, "enabled") else False:
+    if settings.discovery.enabled:
         try:
             discovery = _build_discovery(settings)
         except Exception as exc:
             logger.warning("cascade: failed to build discovery adapter: %s", exc)
+
+    if settings.mesh.enabled:
+        try:
+            mesh = _build_mesh(settings, discovery)
+        except Exception as exc:
+            logger.warning("cascade: failed to build mesh adapter: %s", exc)
 
     # Build cascade tools (Mode 1 always; Mode 2/3 when mesh/discovery available)
     cascade_tools = build_cascade_tools(
@@ -2200,35 +2200,89 @@ def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
         mesh.set_rpc_handler(drive_loop.handle_rpc)
 
 
-def _build_mesh(settings: Settings) -> Any:
+def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
     """Build the mesh adapter from config."""
-    mesh_cfg = settings.mesh
-    adapter_path = getattr(mesh_cfg, "adapter", "nng")
+    import socket
 
-    adapter_map = {
-        "nng": "ravn.adapters.mesh.nng_mesh.NngMeshAdapter",
-        "sleipnir": "ravn.adapters.mesh.sleipnir_mesh.SleipnirMeshAdapter",
-        "composite": "ravn.adapters.mesh.composite_mesh.CompositeMeshAdapter",
-    }
-    dotted = adapter_map.get(adapter_path, adapter_path)
-    cls = _import_class(dotted)
-    return cls(settings)
+    from ravn.adapters.mesh.nng_mesh import NngMeshAdapter
+    from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
+
+    mesh_cfg = settings.mesh
+    own_peer_id = mesh_cfg.own_peer_id or socket.gethostname()
+
+    if mesh_cfg.adapter == "nng":
+        return NngMeshAdapter(
+            config=mesh_cfg.nng,
+            discovery=discovery,
+            own_peer_id=own_peer_id,
+        )
+
+    if mesh_cfg.adapter == "sleipnir":
+        return SleipnirMeshAdapter(
+            sleipnir_config=settings.sleipnir,
+            mesh_sleipnir_config=mesh_cfg.sleipnir,
+            own_peer_id=own_peer_id,
+            discovery=discovery,
+        )
+
+    if mesh_cfg.adapter == "composite":
+        from ravn.adapters.mesh.composite import CompositeMeshAdapter
+
+        preferred = SleipnirMeshAdapter(
+            sleipnir_config=settings.sleipnir,
+            mesh_sleipnir_config=mesh_cfg.sleipnir,
+            own_peer_id=own_peer_id,
+            discovery=discovery,
+        )
+        fallback = NngMeshAdapter(
+            config=mesh_cfg.nng,
+            discovery=discovery,
+            own_peer_id=own_peer_id,
+        )
+        return CompositeMeshAdapter(preferred=preferred, fallback=fallback)
+
+    raise ValueError(f"Unknown mesh adapter: {mesh_cfg.adapter!r}")
 
 
 def _build_discovery(settings: Settings) -> Any:
-    """Build the discovery adapter from config."""
-    disc_cfg = settings.discovery
-    adapter_path = getattr(disc_cfg, "adapter", "mdns")
+    """Build the discovery adapter from config, wiring the own identity."""
+    import importlib.metadata
+    import socket
 
-    adapter_map = {
-        "mdns": "ravn.adapters.discovery.mdns.MdnsDiscoveryAdapter",
-        "sleipnir": "ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter",
-        "k8s": "ravn.adapters.discovery.k8s.K8sDiscoveryAdapter",
-        "composite": "ravn.adapters.discovery.composite.CompositeDiscoveryAdapter",
-    }
-    dotted = adapter_map.get(adapter_path, adapter_path)
-    cls = _import_class(dotted)
-    return cls(settings)
+    from ravn.adapters.discovery._identity import (
+        load_or_create_peer_id,
+        load_or_create_realm_key,
+        realm_id_from_key,
+    )
+    from ravn.domain.models import RavnIdentity
+
+    peer_id = settings.mesh.own_peer_id or load_or_create_peer_id()
+    realm_key = load_or_create_realm_key()
+    realm_id = realm_id_from_key(realm_key)
+
+    try:
+        version = importlib.metadata.version("ravn")
+    except Exception:
+        version = "0.0.0"
+
+    # Advertise addresses that remote peers can connect to.
+    # Replace nng wildcard listen address (*) with 127.0.0.1 for same-host meshes.
+    rep_address = settings.mesh.nng.req_rep_address.replace("*", "127.0.0.1")
+    pub_address = settings.mesh.nng.pub_sub_address.replace("*", "127.0.0.1")
+
+    identity = RavnIdentity(
+        peer_id=peer_id,
+        realm_id=realm_id,
+        persona=settings.agent.system_prompt[:30] if settings.agent.system_prompt else "ravn",
+        capabilities=[],
+        permission_mode=settings.permission.mode,
+        version=version,
+        rep_address=rep_address,
+        pub_address=pub_address,
+    )
+
+    handshake_port = settings.discovery.mdns.handshake_port
+    return _build_discovery_adapter(settings.discovery.adapter, settings, identity, handshake_port=handshake_port)
 
 
 @app.command()
@@ -2337,7 +2391,9 @@ _DISCOVERY_ALIASES: dict[str, str] = {
 _SLEIPNIR_KWARGS_ADAPTERS = {"ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter"}
 
 
-def _build_discovery_adapter(name: str, settings: Settings, identity: Any) -> Any:
+def _build_discovery_adapter(
+    name: str, settings: Settings, identity: Any, *, handshake_port: int = 7482
+) -> Any:
     """Instantiate a discovery adapter by short name or fully-qualified class path.
 
     Single-backend adapters are resolved via dynamic import (dynamic-adapters pattern).
@@ -2351,7 +2407,7 @@ def _build_discovery_adapter(name: str, settings: Settings, identity: Any) -> An
         mdns_cls = _import_class(_DISCOVERY_ALIASES["mdns"])
         sleipnir_cls = _import_class(_DISCOVERY_ALIASES["sleipnir"])
         backends: list[Any] = [
-            mdns_cls(config=settings.discovery, own_identity=identity),
+            mdns_cls(config=settings.discovery, own_identity=identity, handshake_port=handshake_port),
             sleipnir_cls(
                 config=settings.discovery,
                 sleipnir_config=settings.sleipnir,
@@ -2364,6 +2420,8 @@ def _build_discovery_adapter(name: str, settings: Settings, identity: Any) -> An
     kwargs: dict[str, Any] = {"config": settings.discovery, "own_identity": identity}
     if fq_class in _SLEIPNIR_KWARGS_ADAPTERS:
         kwargs["sleipnir_config"] = settings.sleipnir
+    if fq_class == _DISCOVERY_ALIASES["mdns"]:
+        kwargs["handshake_port"] = handshake_port
     return cls(**kwargs)
 
 
