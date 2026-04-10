@@ -317,6 +317,14 @@ class TestFromDictValidation:
         with pytest.raises(ThreadSchemaError, match="weight_signals"):
             ThreadYamlSchema.from_dict(data)
 
+    def test_context_ref_invalid_ref_type(self):
+        data = {
+            **_minimal_dict(),
+            "context_refs": [{"ref_type": "foobar", "ref_id": "x", "ref_summary": "y"}],
+        }
+        with pytest.raises(ThreadSchemaError, match="ref_type"):
+            ThreadYamlSchema.from_dict(data)
+
 
 # ---------------------------------------------------------------------------
 # ThreadYamlSchema.to_dict / roundtrip

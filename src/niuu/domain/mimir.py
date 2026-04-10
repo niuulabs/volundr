@@ -142,6 +142,8 @@ class MimirLintReport:
 # Thread YAML schema
 # ---------------------------------------------------------------------------
 
+_VALID_REF_TYPES: frozenset[str] = frozenset({"conversation", "ingest", "observation", "search"})
+
 
 class ThreadSchemaError(Exception):
     """Raised when a thread YAML file fails validation."""
@@ -281,20 +283,20 @@ class ThreadYamlSchema:
             raise ThreadSchemaError(path, "'state' is required")
         try:
             state = ThreadState(raw_state)
-        except ValueError:
+        except ValueError as exc:
             valid = ", ".join(s.value for s in ThreadState)
             raise ThreadSchemaError(
                 path,
                 f"'state' {raw_state!r} is not a valid ThreadState; valid: {valid}",
-            )
+            ) from exc
 
         raw_weight = data.get("weight")
         if raw_weight is None:
             raise ThreadSchemaError(path, "'weight' is required")
         try:
             weight = float(raw_weight)
-        except (TypeError, ValueError):
-            raise ThreadSchemaError(path, f"'weight' must be a float, got {raw_weight!r}")
+        except (TypeError, ValueError) as exc:
+            raise ThreadSchemaError(path, f"'weight' must be a float, got {raw_weight!r}") from exc
         if weight < 0.0:
             raise ThreadSchemaError(path, f"'weight' must be >= 0.0, got {weight!r}")
 
@@ -351,6 +353,12 @@ class ThreadYamlSchema:
         for key in ("ref_type", "ref_id", "ref_summary"):
             if key not in item:
                 raise ThreadSchemaError(path, f"context_refs entry missing required key {key!r}")
+        if item["ref_type"] not in _VALID_REF_TYPES:
+            raise ThreadSchemaError(
+                path,
+                f"context_refs entry has invalid ref_type {item['ref_type']!r}; "
+                f"valid: {', '.join(sorted(_VALID_REF_TYPES))}",
+            )
         return ThreadContextRef(
             ref_type=item["ref_type"],
             ref_id=item["ref_id"],
