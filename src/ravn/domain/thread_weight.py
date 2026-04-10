@@ -9,11 +9,11 @@ in page frontmatter without interpreting them.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from math import exp
 
 
-@dataclass
+@dataclass(frozen=True)
 class ThreadWeightSignals:
     """Raw signals fed into the weight model.
 
@@ -28,7 +28,7 @@ class ThreadWeightSignals:
     sub_thread_count: int
 
 
-@dataclass
+@dataclass(frozen=True)
 class ThreadWeightConfig:
     """Tunable knobs for the weight formula.
 
@@ -41,12 +41,12 @@ class ThreadWeightConfig:
     - weight near 0 after 60 days of silence
     """
 
-    decay_rate_per_day: float = field(default=0.05)  # half-life ~14 days
-    recency_weight: float = field(default=1.0)
-    mention_weight: float = field(default=0.3)
-    engagement_weight: float = field(default=0.5)
-    peer_weight: float = field(default=0.2)
-    sub_thread_weight: float = field(default=0.4)
+    decay_rate_per_day: float = 0.05  # half-life ~14 days
+    recency_weight: float = 1.0
+    mention_weight: float = 0.3
+    engagement_weight: float = 0.5
+    peer_weight: float = 0.2
+    sub_thread_weight: float = 0.4
 
 
 def compute_weight(
