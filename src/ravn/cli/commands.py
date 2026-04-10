@@ -2051,6 +2051,16 @@ def _wire_mimir_triggers(drive_loop: Any, mimir: Any, settings: Settings) -> Non
             mc.staleness_trigger.persona,
         )
 
+    # Thread queue trigger — wired always; only fires when thread.enabled=True.
+    from ravn.adapters.triggers.thread_queue import ThreadQueueTrigger
+
+    drive_loop.register_trigger(ThreadQueueTrigger(mimir=mimir, config=settings.thread))
+    logger.info(
+        "thread: queue trigger registered (enabled=%s, poll_interval=%ds)",
+        settings.thread.enabled,
+        settings.thread.enricher_poll_interval_seconds,
+    )
+
 
 def _wire_cron(
     drive_loop: Any,
