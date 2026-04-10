@@ -467,7 +467,7 @@ gateway:
   enabled: true
   channels:
     telegram:
-      bot_token_env: TELEGRAM_BOT_TOKEN
+      token_env: TELEGRAM_BOT_TOKEN
       allowed_chat_ids: [123456789]
     http:
       host: "0.0.0.0"

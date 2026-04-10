@@ -92,7 +92,7 @@ Setup:
 gateway:
   channels:
     discord:
-      bot_token_env: "DISCORD_BOT_TOKEN"
+      token_env: "DISCORD_BOT_TOKEN"
       guild_id: "123456789"
       command_prefix: "!"
 ```
