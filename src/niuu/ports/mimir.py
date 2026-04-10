@@ -15,6 +15,8 @@ from niuu.domain.mimir import (
     MimirQueryResult,
     MimirSource,
     MimirSourceMeta,
+    ThreadContextRef,
+    ThreadState,
 )
 
 
@@ -117,3 +119,71 @@ class MimirPort(ABC):
         referenced in any wiki page (i.e. no page carries a matching source_id).
         """
         ...
+
+    # ------------------------------------------------------------------
+    # Thread methods — optional extension point
+    # ------------------------------------------------------------------
+    # Not declared abstract so that existing adapters (HttpMimirAdapter,
+    # CompositeMimirAdapter) do not need to implement them in this ticket.
+    # Only MarkdownMimirAdapter provides a real implementation.
+    # ------------------------------------------------------------------
+
+    async def create_thread(
+        self,
+        title: str,
+        weight: float = 0.5,
+        context_refs: list[ThreadContextRef] | None = None,
+        next_action_hint: str | None = None,
+    ) -> MimirPage:
+        """Create a new thread with the given title and initial metadata.
+
+        Creates ``threads/{slug}.yaml`` and ``threads/{slug}.md`` under the
+        Mímir root.  Returns a ``MimirPage`` representing the new thread.
+        Raises ``FileExistsError`` if a thread with the same slug already exists.
+        """
+        raise NotImplementedError
+
+    async def get_thread(self, path: str) -> MimirPage:
+        """Return full thread data including the Markdown working notes.
+
+        *path* is the stem path, e.g. ``"threads/retrieval-architecture"``.
+        Raises ``FileNotFoundError`` if the thread YAML does not exist.
+        """
+        raise NotImplementedError
+
+    async def get_thread_queue(
+        self,
+        owner_id: str | None = None,
+        limit: int = 50,
+    ) -> list[MimirPage]:
+        """Return open threads sorted by weight descending.
+
+        Hot path — only reads ``.yaml`` files, never opens ``.md`` files.
+        Optionally filtered to *owner_id*.
+        """
+        raise NotImplementedError
+
+    async def update_thread_state(self, path: str, state: ThreadState) -> None:
+        """Transition a thread to *state*.
+
+        Writes only the YAML file.  Raises ``FileNotFoundError`` if the thread
+        does not exist.
+        """
+        raise NotImplementedError
+
+    async def update_thread_weight(self, path: str, weight: float) -> None:
+        """Update the weight score for a thread.
+
+        Writes only the YAML file.  Raises ``FileNotFoundError`` if the thread
+        does not exist.
+        """
+        raise NotImplementedError
+
+    async def assign_thread_owner(self, path: str, owner_id: str | None) -> None:
+        """Assign (or clear) the owner of a thread.
+
+        Uses a ``.lock`` file for mutual exclusion.  Raises
+        ``ThreadOwnershipError`` if the thread already has a different owner.
+        Raises ``FileNotFoundError`` if the thread does not exist.
+        """
+        raise NotImplementedError
