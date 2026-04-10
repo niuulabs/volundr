@@ -40,7 +40,12 @@ from niuu.domain.mimir import (
     MimirQueryResult,
     MimirSource,
     MimirSourceMeta,
+    ThreadContextRef,
+    ThreadOwnershipError,
+    ThreadState,
+    ThreadYamlSchema,
     compute_content_hash,
+    slugify,
 )
 from niuu.ports.mimir import MimirPort
 
@@ -185,6 +190,7 @@ class MarkdownMimirAdapter(MimirPort):
         self._root = Path(root).expanduser()
         self._wiki = self._root / "wiki"
         self._raw = self._root / "raw"
+        self._threads = self._root / "threads"
         self._schema = self._root / "MIMIR.md"
         self._index = self._wiki / "index.md"
         self._log = self._wiki / "log.md"
@@ -198,6 +204,7 @@ class MarkdownMimirAdapter(MimirPort):
         """Create the directory structure and seed MIMIR.md on first run."""
         self._wiki.mkdir(parents=True, exist_ok=True)
         self._raw.mkdir(parents=True, exist_ok=True)
+        self._threads.mkdir(parents=True, exist_ok=True)
 
         if not self._schema.exists():
             self._schema.write_text(_MIMIR_MD_SEED, encoding="utf-8")
@@ -426,6 +433,183 @@ class MarkdownMimirAdapter(MimirPort):
         return results
 
     # ------------------------------------------------------------------
+    # Thread methods
+    # ------------------------------------------------------------------
+
+    async def create_thread(
+        self,
+        title: str,
+        weight: float = 0.5,
+        context_refs: list[ThreadContextRef] | None = None,
+        next_action_hint: str | None = None,
+    ) -> MimirPage:
+        """Create a new thread YAML + Markdown pair under threads/."""
+        slug = slugify(title)
+        if not slug:
+            raise ValueError(f"Cannot create thread: title {title!r} produces an empty slug")
+        yaml_path = self._safe_thread_path(f"threads/{slug}")
+        md_path = self._safe_thread_md_path(slug)
+
+        if yaml_path.exists():
+            raise FileExistsError(f"Thread already exists: threads/{slug}")
+
+        now = datetime.now(UTC)
+        first_ref_summary = context_refs[0].summary if context_refs else ""
+        schema = ThreadYamlSchema(
+            title=title,
+            state=ThreadState.open,
+            weight=weight,
+            created_at=now,
+            updated_at=now,
+            owner_id=None,
+            next_action_hint=next_action_hint,
+            resolved_artifact_path=None,
+            context_refs=context_refs or [],
+            weight_signals={
+                "age_days": 0.0,
+                "mention_count": 0,
+                "operator_engagement_count": 0,
+                "peer_interest_count": 0,
+                "sub_thread_count": 0,
+            },
+        )
+        schema.to_yaml(yaml_path)
+
+        md_content = _build_thread_md(title, now, first_ref_summary)
+        md_path.write_text(md_content, encoding="utf-8")
+        logger.info("mimir: created thread '%s' at threads/%s", title, slug)
+
+        return self._schema_to_page(slug, schema, content=md_content)
+
+    async def get_thread(self, path: str) -> MimirPage:
+        """Return full thread data, loading both YAML metadata and Markdown content."""
+        slug = path.removeprefix("threads/")
+        yaml_path = self._safe_thread_path(path)
+        md_path = self._safe_thread_md_path(slug)
+
+        if not yaml_path.exists():
+            raise FileNotFoundError(f"Thread not found: {path}")
+
+        schema = ThreadYamlSchema.from_yaml(yaml_path)
+        content = md_path.read_text(encoding="utf-8") if md_path.exists() else ""
+        return self._schema_to_page(slug, schema, content=content)
+
+    async def get_thread_queue(
+        self,
+        owner_id: str | None = None,
+        limit: int = 50,
+    ) -> list[MimirPage]:
+        """Return open threads sorted by weight — hot path, YAML only."""
+        threads: list[MimirPage] = []
+        for yaml_path in self._threads.glob("*.yaml"):
+            try:
+                schema = ThreadYamlSchema.from_yaml(yaml_path)
+            except Exception:
+                logger.warning("mimir: skipping invalid thread YAML: %s", yaml_path.name)
+                continue
+
+            if schema.state in (ThreadState.closed, ThreadState.dissolved):
+                continue
+
+            if owner_id and schema.owner_id and schema.owner_id != owner_id:
+                continue
+
+            threads.append(self._schema_to_page(yaml_path.stem, schema))
+
+        threads.sort(key=lambda p: p.meta.thread_weight or 0.0, reverse=True)
+        return threads[:limit]
+
+    async def update_thread_state(self, path: str, state: ThreadState) -> None:
+        """Transition a thread to *state* — writes YAML only."""
+        yaml_path = self._safe_thread_path(path)
+        if not yaml_path.exists():
+            raise FileNotFoundError(f"Thread not found: {path}")
+        schema = ThreadYamlSchema.from_yaml(yaml_path)
+        schema.state = state
+        schema.updated_at = datetime.now(UTC)
+        schema.to_yaml(yaml_path)
+
+    async def update_thread_weight(self, path: str, weight: float) -> None:
+        """Update the weight score for a thread — writes YAML only."""
+        yaml_path = self._safe_thread_path(path)
+        if not yaml_path.exists():
+            raise FileNotFoundError(f"Thread not found: {path}")
+        schema = ThreadYamlSchema.from_yaml(yaml_path)
+        schema.weight = weight
+        schema.updated_at = datetime.now(UTC)
+        schema.to_yaml(yaml_path)
+
+    async def assign_thread_owner(self, path: str, owner_id: str | None) -> None:
+        """Assign (or clear) the owner of a thread with lock-file mutual exclusion."""
+        yaml_path = self._safe_thread_path(path)
+        if not yaml_path.exists():
+            raise FileNotFoundError(f"Thread not found: {path}")
+        lock_path = yaml_path.with_suffix(".lock")
+        lock_path.touch()
+        try:
+            schema = ThreadYamlSchema.from_yaml(yaml_path)
+            if owner_id and schema.owner_id and schema.owner_id != owner_id:
+                raise ThreadOwnershipError(path, schema.owner_id)
+            schema.owner_id = owner_id
+            schema.updated_at = datetime.now(UTC)
+            schema.to_yaml(yaml_path)
+        finally:
+            lock_path.unlink(missing_ok=True)
+
+    # ------------------------------------------------------------------
+    # Thread helpers
+    # ------------------------------------------------------------------
+
+    def _safe_thread_path(self, path: str) -> Path:
+        """Resolve a thread stem path to its YAML file, rejecting path traversal.
+
+        Raises ``PathSecurityError`` if the resolved path escapes the threads
+        directory (e.g. due to ``../`` traversal in the slug).
+        """
+        slug = path.removeprefix("threads/")
+        threads_root = self._threads.resolve()
+        resolved = (self._threads / f"{slug}.yaml").resolve()
+        try:
+            resolved.relative_to(threads_root)
+        except ValueError:
+            raise PathSecurityError(
+                f"Path '{path}' resolves outside the threads directory '{threads_root}'"
+            )
+        return resolved
+
+    def _safe_thread_md_path(self, slug: str) -> Path:
+        """Resolve a thread slug to its Markdown file, rejecting path traversal."""
+        threads_root = self._threads.resolve()
+        resolved = (self._threads / f"{slug}.md").resolve()
+        try:
+            resolved.relative_to(threads_root)
+        except ValueError:
+            raise PathSecurityError(
+                f"Slug '{slug}' resolves outside the threads directory '{threads_root}'"
+            )
+        return resolved
+
+    def _schema_to_page(
+        self,
+        slug: str,
+        schema: ThreadYamlSchema,
+        content: str = "",
+    ) -> MimirPage:
+        """Build a MimirPage from a ThreadYamlSchema."""
+        meta = MimirPageMeta(
+            path=f"threads/{slug}",
+            title=schema.title,
+            summary=schema.next_action_hint or "",
+            category="threads",
+            updated_at=schema.updated_at,
+            source_ids=[],
+            thread_state=schema.state,
+            thread_weight=schema.weight,
+            is_thread=True,
+        )
+        return MimirPage(meta=meta, content=content)
+
+    # ------------------------------------------------------------------
     # Raw source storage
     # ------------------------------------------------------------------
 
@@ -619,6 +803,27 @@ class MarkdownMimirAdapter(MimirPort):
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
+
+def _build_thread_md(title: str, created_at: datetime, context_ref_summary: str) -> str:
+    """Return the initial Markdown content for a new thread."""
+    date_str = created_at.strftime("%Y-%m-%d")
+    history_line = f"- {date_str} — Opened"
+    if context_ref_summary:
+        history_line += f" from {context_ref_summary}"
+    return (
+        f"# {title}\n\n"
+        "## Context\n\n"
+        "Where this thread came from and why it matters.\n\n"
+        "## What I know so far\n\n"
+        "Accumulated findings — updated each work cycle.\n\n"
+        "## Open questions\n\n"
+        "The unresolved things. When empty, thread is probably closeable.\n\n"
+        "## Next action\n\n"
+        "One sentence. Updated by the agent after each work cycle.\n\n"
+        "## History\n\n"
+        f"{history_line}\n"
+    )
 
 
 def _extract_title(content: str) -> str:

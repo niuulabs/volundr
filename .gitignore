@@ -237,3 +237,4 @@ charts/*/Chart.lock
 coverage.json
 .skuld/
 
+threads/*.lock
