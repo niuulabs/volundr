@@ -1859,6 +1859,62 @@ class ProfileSourceConfig(BaseModel):
     )
 
 
+class ThreadConfig(BaseModel):
+    """Vaka wakefulness — thread memory configuration (NIU-555).
+
+    Controls how Sjón enrichment classifies Mímir pages as threads, the weight
+    decay applied to open threads, and the batch size the Vaka tick loop uses
+    when reading from the weighted work queue.
+    """
+
+    decay_half_life_days: float = Field(
+        default=7.0,
+        description=(
+            "Half-life in days for exponential recency decay on thread weights. "
+            "A thread created 7 days ago will have half the recency factor of a "
+            "brand-new thread (with the default value)."
+        ),
+    )
+    initial_weight: float = Field(
+        default=0.5,
+        description="Default base_score assigned by enrichment when no LLM score is available.",
+    )
+    importance_default: float = Field(
+        default=1.0,
+        description=(
+            "Default importance_factor when the enrichment LLM does not return one. "
+            "Must be in (0, 1]."
+        ),
+    )
+    weight_floor: float = Field(
+        default=0.05,
+        description=(
+            "Threads whose composite weight drops below this floor are automatically "
+            "closed during the next queue sweep."
+        ),
+    )
+    enrichment_model: str = Field(
+        default="claude-haiku-4-5-20251001",
+        description="Model alias used for the Sjón enrichment LLM call (cheap / fast).",
+    )
+    enrichment_max_tokens: int = Field(
+        default=256,
+        description="Maximum tokens for the Sjón enrichment LLM response.",
+    )
+    queue_batch_size: int = Field(
+        default=10,
+        description="Number of threads the Vaka tick loop dequeues per cycle (M2).",
+    )
+    dsn: str = Field(
+        default="",
+        description="PostgreSQL DSN for the thread backend (shared with checkpoint dsn).",
+    )
+    dsn_env: str = Field(
+        default="",
+        description="Env var name to read the thread backend DSN from.",
+    )
+
+
 class Settings(BaseSettings):
     """Ravn application settings.
 
@@ -1931,6 +1987,9 @@ class Settings(BaseSettings):
 
     # NIU-532: browser automation
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
+
+    # NIU-555: Vaka wakefulness / thread memory
+    thread: ThreadConfig = Field(default_factory=lambda: ThreadConfig())
 
     # Plugin extension points
     slash_commands: list[SlashCommandAdapterConfig] = Field(
