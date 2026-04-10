@@ -445,8 +445,10 @@ class MarkdownMimirAdapter(MimirPort):
     ) -> MimirPage:
         """Create a new thread YAML + Markdown pair under threads/."""
         slug = slugify(title)
-        yaml_path = self._threads / f"{slug}.yaml"
-        md_path = self._threads / f"{slug}.md"
+        if not slug:
+            raise ValueError(f"Cannot create thread: title {title!r} produces an empty slug")
+        yaml_path = self._safe_thread_path(f"threads/{slug}")
+        md_path = self._safe_thread_md_path(slug)
 
         if yaml_path.exists():
             raise FileExistsError(f"Thread already exists: threads/{slug}")
@@ -482,8 +484,8 @@ class MarkdownMimirAdapter(MimirPort):
     async def get_thread(self, path: str) -> MimirPage:
         """Return full thread data, loading both YAML metadata and Markdown content."""
         slug = path.removeprefix("threads/")
-        yaml_path = self._thread_yaml_path(path)
-        md_path = self._threads / f"{slug}.md"
+        yaml_path = self._safe_thread_path(path)
+        md_path = self._safe_thread_md_path(slug)
 
         if not yaml_path.exists():
             raise FileNotFoundError(f"Thread not found: {path}")
@@ -519,7 +521,7 @@ class MarkdownMimirAdapter(MimirPort):
 
     async def update_thread_state(self, path: str, state: ThreadState) -> None:
         """Transition a thread to *state* — writes YAML only."""
-        yaml_path = self._thread_yaml_path(path)
+        yaml_path = self._safe_thread_path(path)
         if not yaml_path.exists():
             raise FileNotFoundError(f"Thread not found: {path}")
         schema = ThreadYamlSchema.from_yaml(yaml_path)
@@ -529,7 +531,7 @@ class MarkdownMimirAdapter(MimirPort):
 
     async def update_thread_weight(self, path: str, weight: float) -> None:
         """Update the weight score for a thread — writes YAML only."""
-        yaml_path = self._thread_yaml_path(path)
+        yaml_path = self._safe_thread_path(path)
         if not yaml_path.exists():
             raise FileNotFoundError(f"Thread not found: {path}")
         schema = ThreadYamlSchema.from_yaml(yaml_path)
@@ -539,7 +541,7 @@ class MarkdownMimirAdapter(MimirPort):
 
     async def assign_thread_owner(self, path: str, owner_id: str | None) -> None:
         """Assign (or clear) the owner of a thread with lock-file mutual exclusion."""
-        yaml_path = self._thread_yaml_path(path)
+        yaml_path = self._safe_thread_path(path)
         if not yaml_path.exists():
             raise FileNotFoundError(f"Thread not found: {path}")
         lock_path = yaml_path.with_suffix(".lock")
@@ -558,10 +560,34 @@ class MarkdownMimirAdapter(MimirPort):
     # Thread helpers
     # ------------------------------------------------------------------
 
-    def _thread_yaml_path(self, path: str) -> Path:
-        """Resolve a thread stem path to its YAML file path."""
+    def _safe_thread_path(self, path: str) -> Path:
+        """Resolve a thread stem path to its YAML file, rejecting path traversal.
+
+        Raises ``PathSecurityError`` if the resolved path escapes the threads
+        directory (e.g. due to ``../`` traversal in the slug).
+        """
         slug = path.removeprefix("threads/")
-        return self._threads / f"{slug}.yaml"
+        threads_root = self._threads.resolve()
+        resolved = (self._threads / f"{slug}.yaml").resolve()
+        try:
+            resolved.relative_to(threads_root)
+        except ValueError:
+            raise PathSecurityError(
+                f"Path '{path}' resolves outside the threads directory '{threads_root}'"
+            )
+        return resolved
+
+    def _safe_thread_md_path(self, slug: str) -> Path:
+        """Resolve a thread slug to its Markdown file, rejecting path traversal."""
+        threads_root = self._threads.resolve()
+        resolved = (self._threads / f"{slug}.md").resolve()
+        try:
+            resolved.relative_to(threads_root)
+        except ValueError:
+            raise PathSecurityError(
+                f"Slug '{slug}' resolves outside the threads directory '{threads_root}'"
+            )
+        return resolved
 
     def _schema_to_page(
         self,

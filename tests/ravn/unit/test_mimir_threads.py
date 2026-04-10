@@ -611,3 +611,64 @@ async def test_thread_not_returned_by_search(tmp_path: Path) -> None:
     results = await adapter.search("zxqwerty")
     paths = [p.meta.path for p in results]
     assert not any("threads" in p for p in paths)
+
+
+# ---------------------------------------------------------------------------
+# Security: path traversal rejection
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_thread_rejects_empty_slug(tmp_path: Path) -> None:
+    """Empty or all-special titles must raise ValueError (no hidden dotfiles)."""
+    adapter = _make_adapter(tmp_path)
+    with pytest.raises(ValueError, match="empty slug"):
+        await adapter.create_thread(title="")
+
+
+@pytest.mark.asyncio
+async def test_create_thread_rejects_special_char_only_title(tmp_path: Path) -> None:
+    """A title that slugifies to empty must also raise ValueError."""
+    adapter = _make_adapter(tmp_path)
+    with pytest.raises(ValueError, match="empty slug"):
+        await adapter.create_thread(title="!@#$%^&*()")
+
+
+@pytest.mark.asyncio
+async def test_get_thread_rejects_path_traversal(tmp_path: Path) -> None:
+    """get_thread must raise PathSecurityError on traversal attempts."""
+    from mimir.adapters.markdown import PathSecurityError
+
+    adapter = _make_adapter(tmp_path)
+    with pytest.raises(PathSecurityError):
+        await adapter.get_thread("threads/../../etc/passwd")
+
+
+@pytest.mark.asyncio
+async def test_update_thread_state_rejects_path_traversal(tmp_path: Path) -> None:
+    """update_thread_state must raise PathSecurityError on traversal attempts."""
+    from mimir.adapters.markdown import PathSecurityError
+
+    adapter = _make_adapter(tmp_path)
+    with pytest.raises(PathSecurityError):
+        await adapter.update_thread_state("threads/../../evil", ThreadState.closed)
+
+
+@pytest.mark.asyncio
+async def test_update_thread_weight_rejects_path_traversal(tmp_path: Path) -> None:
+    """update_thread_weight must raise PathSecurityError on traversal attempts."""
+    from mimir.adapters.markdown import PathSecurityError
+
+    adapter = _make_adapter(tmp_path)
+    with pytest.raises(PathSecurityError):
+        await adapter.update_thread_weight("threads/../../evil", 0.5)
+
+
+@pytest.mark.asyncio
+async def test_assign_thread_owner_rejects_path_traversal(tmp_path: Path) -> None:
+    """assign_thread_owner must raise PathSecurityError on traversal attempts."""
+    from mimir.adapters.markdown import PathSecurityError
+
+    adapter = _make_adapter(tmp_path)
+    with pytest.raises(PathSecurityError):
+        await adapter.assign_thread_owner("threads/../../evil", "agent-1")
