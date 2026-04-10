@@ -25,7 +25,7 @@ POSTGRES_VERSION := $(shell python3 -c "exec(open('$(PG_VERSIONS_PY)').read()); 
 PGVECTOR_VERSION := $(shell python3 -c "exec(open('$(PG_VERSIONS_PY)').read()); print(PGVECTOR_VERSION)")
 PGINSTALL_DIR    := build/pginstall
 
-.PHONY: build build-web build-postgres build-cli copy-migrations clean lint test verify \
+.PHONY: build build-web build-postgres build-cli build-ravn copy-migrations clean lint test verify \
        test-integration test-integration-volundr test-integration-tyr test-integration-sleipnir \
        test-e2e test-e2e-ui test-all test-ravn
 
@@ -67,6 +67,13 @@ build-cli:
 	uv run python -m cli.build \
 		--name $(BINARY_NAME) \
 		--entry $(ENTRY_POINT) \
+		--output-dir $(OUTPUT_DIR)
+
+# --------------------------------------------------------------------------
+# Ravn Nuitka single-binary compilation (no postgres/web assets)
+# --------------------------------------------------------------------------
+build-ravn:
+	uv run python -m ravn.build \
 		--output-dir $(OUTPUT_DIR)
 
 # --------------------------------------------------------------------------

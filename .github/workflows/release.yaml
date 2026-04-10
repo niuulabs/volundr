@@ -304,6 +304,58 @@ jobs:
           path: dist/niuu-${{ matrix.os }}-${{ matrix.arch }}
 
   # ---------------------------------------------------------------------------
+  # Ravn binary
+  # ---------------------------------------------------------------------------
+  build-ravn:
+    name: "Build Ravn (${{ matrix.os }}/${{ matrix.arch }})"
+    needs: [version]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: darwin
+            arch: arm64
+            runner: macos-15
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+          - os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Harden runner
+        if: runner.os == 'Linux'
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v6
+        with:
+          version: "latest"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --python 3.12 --extra cli --extra dev
+
+      - name: Build
+        run: make build-ravn
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: ravn-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/ravn-${{ matrix.os }}-${{ matrix.arch }}
+
+  # ---------------------------------------------------------------------------
   # Helm charts
   # ---------------------------------------------------------------------------
   build-charts:
@@ -437,7 +489,7 @@ jobs:
   # ---------------------------------------------------------------------------
   release:
     name: Create Release
-    needs: [version, merge-container-manifests, scan-containers, build-charts, build-cli, publish-web-package]
+    needs: [version, merge-container-manifests, scan-containers, build-charts, build-cli, build-ravn, publish-web-package]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -457,21 +509,30 @@ jobs:
           path: cli-binaries
           pattern: niuu-*
 
+      - name: Download Ravn artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: cli-binaries
+          pattern: ravn-*
+
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
-          for dir in cli-binaries/niuu-*/; do
+          for dir in cli-binaries/niuu-*/ cli-binaries/ravn-*/; do
+            [ -d "$dir" ] || continue
             binary=$(basename "$dir")
             cp "${dir}${binary}" "release-assets/${binary}"
             chmod +x "release-assets/${binary}"
           done
-          cd release-assets && sha256sum niuu-* > checksums.txt
+          cd release-assets && sha256sum niuu-* ravn-* > checksums.txt
           ls -lh
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
         with:
-          subject-path: release-assets/niuu-*
+          subject-path: |
+            release-assets/niuu-*
+            release-assets/ravn-*
 
       - name: Create GitHub Release
         env:
@@ -481,4 +542,5 @@ jobs:
             --title "Release v${{ needs.version.outputs.version }}" \
             --generate-notes \
             release-assets/niuu-* \
+            release-assets/ravn-* \
             release-assets/checksums.txt
