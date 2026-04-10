@@ -171,11 +171,25 @@ class MimirPort(ABC):
         """
         raise NotImplementedError
 
-    async def update_thread_weight(self, path: str, weight: float) -> None:
+    async def list_threads(
+        self,
+        state: ThreadState | None = None,
+        limit: int = 100,
+    ) -> list[MimirPage]:
+        """List thread pages, optionally filtered by *state*."""
+        raise NotImplementedError
+
+    async def update_thread_weight(
+        self,
+        path: str,
+        weight: float,
+        signals: dict | None = None,
+    ) -> None:
         """Update the weight score for a thread.
 
         Writes only the YAML file.  Raises ``FileNotFoundError`` if the thread
-        does not exist.
+        does not exist.  If *signals* are provided they are stored alongside the
+        weight for later recomputation.
         """
         raise NotImplementedError
 

@@ -30,6 +30,7 @@ from niuu.domain.mimir import (
     MimirQueryResult,
     MimirSource,
     MimirSourceMeta,
+    ThreadState,
 )
 from niuu.ports.mimir import MimirPort
 from ravn.domain.mimir import MimirAuth
@@ -191,6 +192,26 @@ class HttpMimirAdapter(MimirPort):
             content_hash=data["content_hash"],
             ingested_at=datetime.fromisoformat(data["ingested_at"]),
         )
+
+    async def list_threads(
+        self,
+        state: ThreadState | None = None,
+        limit: int = 100,
+    ) -> list[MimirPage]:
+        """GET /mimir/threads — list threads, optionally filtered by state.
+
+        Not yet implemented in HttpMimirAdapter.
+        """
+        raise NotImplementedError("Thread listing not yet implemented in HttpMimirAdapter")
+
+    async def update_thread_weight(
+        self,
+        path: str,
+        weight: float,
+        signals: dict | None = None,
+    ) -> None:
+        """Update thread weight.  Not yet implemented in HttpMimirAdapter."""
+        raise NotImplementedError("Thread weight update not yet implemented in HttpMimirAdapter")
 
     async def list_sources(self, *, unprocessed_only: bool = False) -> list[MimirSourceMeta]:
         """GET /mimir/sources — list raw sources, optionally unprocessed only."""

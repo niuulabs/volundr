@@ -33,6 +33,7 @@ class ThreadState(StrEnum):
     """Lifecycle states for a Mímir thread."""
 
     open = "open"
+    assigned = "assigned"
     closed = "closed"
     dissolved = "dissolved"
 

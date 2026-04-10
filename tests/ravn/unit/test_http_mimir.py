@@ -101,9 +101,7 @@ async def test_search_returns_pages(adapter: HttpMimirAdapter) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_search_returns_empty_list(adapter: HttpMimirAdapter) -> None:
-    respx.get("http://mimir.test/mimir/search").mock(
-        return_value=Response(200, json=[])
-    )
+    respx.get("http://mimir.test/mimir/search").mock(return_value=Response(200, json=[]))
     pages = await adapter.search("nonexistent")
     assert pages == []
 
@@ -174,9 +172,7 @@ async def test_get_page_raises_file_not_found(adapter: HttpMimirAdapter) -> None
 @pytest.mark.asyncio
 @respx.mock
 async def test_upsert_page_sends_put(adapter: HttpMimirAdapter) -> None:
-    route = respx.put("http://mimir.test/mimir/page").mock(
-        return_value=Response(204)
-    )
+    route = respx.put("http://mimir.test/mimir/page").mock(return_value=Response(204))
     await adapter.upsert_page("technical/test.md", "# Test\ncontent")
     assert route.called
     assert route.calls[0].request.method == "PUT"
@@ -186,9 +182,7 @@ async def test_upsert_page_sends_put(adapter: HttpMimirAdapter) -> None:
 @respx.mock
 async def test_upsert_page_ignores_mimir_param(adapter: HttpMimirAdapter) -> None:
     """The mimir= param is for CompositeMimirAdapter routing; HttpMimirAdapter ignores it."""
-    route = respx.put("http://mimir.test/mimir/page").mock(
-        return_value=Response(204)
-    )
+    route = respx.put("http://mimir.test/mimir/page").mock(return_value=Response(204))
     await adapter.upsert_page("technical/test.md", "# Test\ncontent", mimir="shared")
     assert route.called
 
@@ -262,9 +256,7 @@ async def test_list_pages_returns_metadata(adapter: HttpMimirAdapter) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_list_pages_with_category(adapter: HttpMimirAdapter) -> None:
-    respx.get("http://mimir.test/mimir/pages").mock(
-        return_value=Response(200, json=[])
-    )
+    respx.get("http://mimir.test/mimir/pages").mock(return_value=Response(200, json=[]))
     result = await adapter.list_pages(category="technical")
     assert result == []
     # Verify category param was sent
@@ -307,13 +299,40 @@ async def test_lint_returns_report(adapter: HttpMimirAdapter) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_bearer_auth_header_is_sent(adapter_bearer: HttpMimirAdapter) -> None:
-    route = respx.get("http://mimir.test/mimir/pages").mock(
-        return_value=Response(200, json=[])
-    )
+    route = respx.get("http://mimir.test/mimir/pages").mock(return_value=Response(200, json=[]))
     await adapter_bearer.list_pages()
     assert route.called
     auth_header = route.calls[0].request.headers.get("authorization", "")
     assert auth_header == "Bearer test-token"
+
+
+# ---------------------------------------------------------------------------
+# HttpMimirAdapter — thread stubs (NIU-559)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_threads_raises_not_implemented() -> None:
+    """list_threads is a stub in HttpMimirAdapter — must raise NotImplementedError."""
+    adapter = HttpMimirAdapter(base_url="http://mimir.test")
+    with pytest.raises(NotImplementedError):
+        await adapter.list_threads()
+
+
+@pytest.mark.asyncio
+async def test_update_thread_weight_raises_not_implemented() -> None:
+    """update_thread_weight is a stub in HttpMimirAdapter — must raise NotImplementedError."""
+    adapter = HttpMimirAdapter(base_url="http://mimir.test")
+    with pytest.raises(NotImplementedError):
+        await adapter.update_thread_weight("threads/my-thread", 0.75)
+
+
+@pytest.mark.asyncio
+async def test_update_thread_weight_with_signals_raises_not_implemented() -> None:
+    """Signals param does not change the stub behaviour."""
+    adapter = HttpMimirAdapter(base_url="http://mimir.test")
+    with pytest.raises(NotImplementedError):
+        await adapter.update_thread_weight("threads/my-thread", 0.75, signals={"x": 1.0})
 
 
 # ---------------------------------------------------------------------------

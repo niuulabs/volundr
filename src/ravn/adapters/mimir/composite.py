@@ -46,6 +46,7 @@ from niuu.domain.mimir import (
     MimirQueryResult,
     MimirSource,
     MimirSourceMeta,
+    ThreadState,
 )
 from niuu.ports.mimir import MimirPort
 from ravn.domain.mimir import MimirMount, WriteRouting
@@ -191,9 +192,7 @@ class CompositeMimirAdapter(MimirPort):
                         meta.mount_name = mount.name
                         results.append(meta)
             except Exception as exc:
-                logger.debug(
-                    "composite mimir: list_sources failed on %r: %s", mount.name, exc
-                )
+                logger.debug("composite mimir: list_sources failed on %r: %s", mount.name, exc)
 
         return results
 
@@ -219,6 +218,51 @@ class CompositeMimirAdapter(MimirPort):
                 logger.warning("composite mimir: lint failed on %r: %s", mount.name, exc)
 
         return merged
+
+    async def list_threads(
+        self,
+        state: ThreadState | None = None,
+        limit: int = 100,
+    ) -> list[MimirPage]:
+        """List threads from all mounts in priority order, de-dup by path."""
+        seen_paths: set[str] = set()
+        results: list[MimirPage] = []
+
+        for mount in self._mounts:
+            try:
+                pages = await mount.port.list_threads(state=state, limit=limit)
+                for page in pages:
+                    if page.meta.path not in seen_paths:
+                        seen_paths.add(page.meta.path)
+                        results.append(page)
+                        if len(results) >= limit:
+                            return results
+            except Exception as exc:
+                logger.warning("composite mimir: list_threads failed on %r: %s", mount.name, exc)
+
+        return results
+
+    async def update_thread_weight(
+        self,
+        path: str,
+        weight: float,
+        signals: dict | None = None,
+    ) -> None:
+        """Update thread weight on routed mounts (same routing as upsert_page)."""
+        target_names = self._write_routing.resolve(path)
+        for name in target_names:
+            mount = self._mount_map.get(name)
+            if mount is None:
+                logger.warning(
+                    "composite mimir: write routing named unknown mount %r for path %r",
+                    name,
+                    path,
+                )
+                continue
+            try:
+                await mount.port.update_thread_weight(path, weight, signals)
+            except Exception as exc:
+                logger.warning("composite mimir: update_thread_weight failed on %r: %s", name, exc)
 
     # ------------------------------------------------------------------
     # MimirPort — write operations (routed)

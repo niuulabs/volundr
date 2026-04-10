@@ -529,7 +529,48 @@ class MarkdownMimirAdapter(MimirPort):
         schema.updated_at = datetime.now(UTC)
         schema.to_yaml(yaml_path)
 
-    async def update_thread_weight(self, path: str, weight: float) -> None:
+    async def list_threads(
+        self,
+        state: ThreadState | None = None,
+        limit: int = 100,
+    ) -> list[MimirPage]:
+        """List thread pages, optionally filtered by *state*."""
+        threads_dir = self._root / "threads"
+        if not threads_dir.exists():
+            return []
+        results: list[MimirPage] = []
+        for yaml_path in sorted(threads_dir.glob("*.yaml")):
+            try:
+                schema = ThreadYamlSchema.from_yaml(yaml_path)
+            except Exception:
+                continue
+            if state is not None and schema.state != state:
+                continue
+            slug = yaml_path.stem
+            path = f"threads/{slug}"
+            results.append(
+                MimirPage(
+                    meta=MimirPageMeta(
+                        path=path,
+                        title=schema.title,
+                        summary=schema.next_action_hint or "",
+                        category="threads",
+                        updated_at=schema.updated_at,
+                        source_ids=[],
+                    ),
+                    content="",
+                )
+            )
+            if len(results) >= limit:
+                break
+        return results
+
+    async def update_thread_weight(
+        self,
+        path: str,
+        weight: float,
+        signals: dict | None = None,
+    ) -> None:
         """Update the weight score for a thread — writes YAML only."""
         yaml_path = self._safe_thread_path(path)
         if not yaml_path.exists():
@@ -537,6 +578,8 @@ class MarkdownMimirAdapter(MimirPort):
         schema = ThreadYamlSchema.from_yaml(yaml_path)
         schema.weight = weight
         schema.updated_at = datetime.now(UTC)
+        if signals is not None:
+            schema.weight_signals = signals
         schema.to_yaml(yaml_path)
 
     async def assign_thread_owner(self, path: str, owner_id: str | None) -> None:
