@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING
 from ravn.adapters.channels._rabbitmq_base import RabbitMQPublishMixin
 from ravn.adapters.personas.loader import PersonaLoader
 from ravn.domain.models import AgentTask, OutputMode
+from ravn.ports.trigger import TriggerPort
 
 if TYPE_CHECKING:
     from ravn.config import SleipnirConfig
@@ -82,7 +83,7 @@ def _build_initiative_context(task_text: str, context: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-class TaskDispatchChannel(RabbitMQPublishMixin):
+class TaskDispatchChannel(TriggerPort, RabbitMQPublishMixin):
     """Inbound task receiver and outbound response publisher for Sleipnir dispatch.
 
     Subscribes to ``ravn.task.dispatch`` (and the agent-targeted variant
