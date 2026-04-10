@@ -68,14 +68,14 @@ Poll-based Telegram bot integration:
 gateway:
   channels:
     telegram:
-      bot_token_env: "TELEGRAM_BOT_TOKEN"
+      token_env: "TELEGRAM_BOT_TOKEN"
       allowed_chat_ids: [123456789, 987654321]
       poll_timeout: 30
 ```
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `bot_token_env` | str | | Env var containing bot token. |
+| `token_env` | str | `"TELEGRAM_BOT_TOKEN"` | Env var containing bot token. |
 | `allowed_chat_ids` | list[int] | `[]` | Restrict to specific chat IDs. Empty = all. |
 | `poll_timeout` | int | `30` | Long-poll timeout (seconds). |
 
@@ -119,10 +119,10 @@ gateway:
   channels:
     matrix:
       homeserver: "https://matrix.example.com"
-      user_id: "@ravn:example.com"
+      user_id_env: "MATRIX_USER_ID"
       access_token_env: "MATRIX_TOKEN"
-      e2e_enabled: false
-      sync_timeout: 30000
+      e2e: false
+      sync_timeout_ms: 30000
 ```
 
 ## WhatsApp

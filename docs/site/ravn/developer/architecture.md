@@ -34,7 +34,7 @@ graph TD
 
 | Port | File | Methods |
 |------|------|---------|
-| `LLMPort` | `llm.py` | `complete()`, `stream()` |
+| `LLMPort` | `llm.py` | `generate()`, `stream()` |
 | `MemoryPort` | `memory.py` | `query()`, `prefetch()`, `save_episode()` |
 | `ToolPort` | `tool.py` | `name`, `description`, `input_schema`, `execute()` |
 | `PermissionPort` | `permission.py` | `check()`, `evaluate()` |

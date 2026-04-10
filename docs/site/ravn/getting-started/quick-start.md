@@ -14,12 +14,10 @@
     uv pip install ravn
     ```
 
-=== "Docker"
+=== "Nuitka binary"
 
-    ```bash
-    docker pull ghcr.io/niuulabs/ravn:latest
-    docker run --rm -it -e ANTHROPIC_API_KEY ghcr.io/niuulabs/ravn run "hello"
-    ```
+    Ravn can be compiled into a standalone binary via `make ravn-binary`.
+    No Python installation required on the target machine.
 
 ### Optional Extras
 

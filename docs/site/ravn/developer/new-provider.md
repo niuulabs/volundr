@@ -38,42 +38,59 @@ class MyProviderAdapter(LLMPort):
         self._max_tokens = max_tokens
         self._timeout = timeout
 
-    async def complete(
+    async def generate(
         self,
-        messages: list[Message],
-        tools: list[dict] | None = None,
-        system: str | None = None,
-        max_tokens: int | None = None,
+        messages: list[dict],
+        *,
+        tools: list[dict],
+        system: str | list[dict],
+        model: str,
+        max_tokens: int,
+        thinking: dict | None = None,
     ) -> LLMResponse:
         """Non-streaming completion."""
         # Convert messages to provider format
         provider_messages = self._convert_messages(messages)
-        provider_tools = self._convert_tools(tools) if tools else None
+        provider_tools = self._convert_tools(tools)
 
         # Make API call
         response = await self._call_api(
-            provider_messages, provider_tools, system, max_tokens
+            provider_messages, provider_tools, system, model, max_tokens
         )
 
         # Convert response back to Ravn format
         return self._parse_response(response)
 
-    async def stream(
+    def stream(
         self,
-        messages: list[Message],
-        tools: list[dict] | None = None,
-        system: str | None = None,
-        max_tokens: int | None = None,
+        messages: list[dict],
+        *,
+        tools: list[dict],
+        system: str | list[dict],
+        model: str,
+        max_tokens: int,
+        thinking: dict | None = None,
     ) -> AsyncIterator[StreamEvent]:
         """Streaming completion."""
         provider_messages = self._convert_messages(messages)
-        provider_tools = self._convert_tools(tools) if tools else None
+        provider_tools = self._convert_tools(tools)
 
         async for chunk in self._stream_api(
-            provider_messages, provider_tools, system, max_tokens
+            provider_messages, provider_tools, system, model, max_tokens
         ):
             yield self._parse_stream_event(chunk)
 ```
+
+### LLMPort Interface
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `stream(messages, *, tools, system, model, max_tokens, thinking)` | `AsyncIterator[StreamEvent]` | Stream response events as they arrive. |
+| `generate(messages, *, tools, system, model, max_tokens, thinking)` | `LLMResponse` | Non-streaming completion. |
+| `supports_thinking` (property) | `bool` | Whether adapter supports extended thinking (default: `False`). |
+
+All parameters after `messages` are **keyword-only** (`*`). The `system`
+parameter can be a plain string or a list of Anthropic-format text blocks.
 
 ## Step 2: Stream Event Types
 

@@ -9,14 +9,17 @@ Create a new adapter in `src/ravn/adapters/channels/`:
 
 ```python
 # src/ravn/adapters/channels/my_channel.py
-from collections.abc import AsyncIterator
-
 from ravn.domain.events import RavnEvent
 from ravn.ports.channel import ChannelPort
 
 
 class MyChannelAdapter(ChannelPort):
-    """Adapter for MyChannel messaging platform."""
+    """Adapter for MyChannel messaging platform.
+
+    ChannelPort defines a single method: ``emit(event)``.  Lifecycle
+    management (start/stop) and inbound message handling are left to the
+    concrete adapter — typically orchestrated by the gateway runner.
+    """
 
     def __init__(
         self,
@@ -25,31 +28,10 @@ class MyChannelAdapter(ChannelPort):
     ):
         self._api_key = api_key
         self._poll_interval = poll_interval
-        self._running = False
-
-    async def start(self) -> None:
-        """Initialize connection to the messaging platform."""
-        self._running = True
-        # Connect to API, authenticate, etc.
-
-    async def stop(self) -> None:
-        """Gracefully disconnect."""
-        self._running = False
-        # Close connections, flush buffers
-
-    async def receive(self) -> AsyncIterator[dict]:
-        """Yield incoming messages from the platform."""
-        while self._running:
-            messages = await self._poll_messages()
-            for msg in messages:
-                yield {
-                    "session_id": msg.conversation_id,
-                    "content": msg.text,
-                    "sender": msg.author,
-                }
+        self._buffer: list[str] = []
 
     async def emit(self, event: RavnEvent) -> None:
-        """Send an event to the messaging platform."""
+        """Emit a Ravn event to the messaging platform."""
         match event.type:
             case "text_delta":
                 # Buffer text and send when complete
@@ -62,16 +44,33 @@ class MyChannelAdapter(ChannelPort):
             case "tool_call":
                 # Optionally show tool usage
                 pass
+
+    # --- Adapter-specific (not part of ChannelPort) ---
+
+    async def start(self) -> None:
+        """Connect to the messaging platform (adapter-specific)."""
+        ...
+
+    async def stop(self) -> None:
+        """Gracefully disconnect (adapter-specific)."""
+        ...
+
+    async def _send_message(self, session_id: str, text: str) -> None:
+        """Send a message via the platform API."""
+        ...
 ```
 
 ### ChannelPort Interface
 
+The port itself is intentionally minimal:
+
 | Method | Description |
 |--------|-------------|
-| `start()` | Initialize the channel connection. |
-| `stop()` | Gracefully shut down. |
-| `receive()` | Async iterator yielding incoming messages. |
-| `emit(event)` | Send an outbound event to the channel. |
+| `emit(event: RavnEvent)` | Emit a Ravn event to the output surface. |
+
+Lifecycle methods (`start()`, `stop()`) and inbound message polling are
+adapter-specific concerns handled outside the port interface, typically by
+the gateway runner that orchestrates channel adapters.
 
 ## Step 2: Event Translation
 

@@ -105,7 +105,7 @@ mimir:
       url: "http://mimir.ravn.svc:8080"
       auth:
         type: bearer
-        token_env: MIMIR_TOKEN
+        token: "${MIMIR_TOKEN}"
       categories: [technical, projects]
     - name: domain
       role: domain
@@ -123,11 +123,11 @@ mimir:
   write_routing:
     rules:
       - prefix: "self/"
-        targets: [local]
+        mounts: [local]
       - prefix: "technical/"
-        targets: [local, shared]
+        mounts: [local, shared]
       - prefix: "research/"
-        targets: [shared, domain]
+        mounts: [shared, domain]
 ```
 
 ## How Mímir Differs from Búri

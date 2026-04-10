@@ -96,16 +96,12 @@ checkpoint:
   backend: postgres
 ```
 
-### Helm Chart
+### Deployment
 
-Deploy via the Volundr Helm chart:
-
-```bash
-helm install ravn charts/volundr \
-  --set ravn.enabled=true \
-  --set ravn.replicas=3 \
-  --set ravn.config.sleipnir.enabled=true
-```
+Ravn does not have its own Helm chart. In Kubernetes, deploy it as a
+standalone binary (Nuitka build) or container with a `ravn.yaml` ConfigMap.
+The platform charts (`charts/volundr`, `charts/tyr`, `charts/bifrost`,
+`charts/mimir`, etc.) handle their respective services.
 
 ## Docker
 
@@ -168,9 +164,8 @@ example configs:
 
 | File | Purpose |
 |------|---------|
-| `buri.example.yaml` | Minimal example with documentation |
-| `buri.docker.yaml` | Docker/container deployment |
-| `buri.mac.yaml` | macOS local development |
+| `ravn.tui.example.yaml` | TUI keybinding and layout configuration |
+| `bifrost.pi.example.yaml` | Bifrost proxy setup for Pi mode |
 
 Use the `RAVN_CONFIG` environment variable or `--config` flag to select
 the appropriate overlay.

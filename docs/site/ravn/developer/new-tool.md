@@ -39,7 +39,7 @@ class MyTool(ToolPort):
         }
 
     @property
-    def permission(self) -> str:
+    def required_permission(self) -> str:
         return "my_tool:execute"
 
     async def execute(self, tool_input: dict) -> str:
@@ -56,7 +56,7 @@ class MyTool(ToolPort):
 | `name` | str | Unique tool identifier. |
 | `description` | str | Human-readable description (shown to LLM). |
 | `input_schema` | dict | JSON Schema for input parameters. |
-| `permission` | str | Permission string checked before execution. |
+| `required_permission` | str | Permission string checked before execution. |
 | `execute(tool_input)` | async → str | Execute the tool and return result. |
 
 ## Step 2: Register in Builtin Registry

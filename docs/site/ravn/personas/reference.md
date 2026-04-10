@@ -14,7 +14,7 @@ General-purpose software engineering agent.
 |---------|-------|
 | Tools | file, git, terminal, web, todo, introspection |
 | Forbidden | cascade, volundr |
-| Permission | `workspace_write` |
+| Permission | `workspace-write` |
 | Model alias | `balanced` |
 | Thinking | Enabled |
 | Budget | 40 iterations |
@@ -27,7 +27,7 @@ Information gathering and synthesis — no mutation.
 |---------|-------|
 | Tools | web, file, introspection |
 | Forbidden | git, terminal, cascade |
-| Permission | `read_only` |
+| Permission | `read-only` |
 | Model alias | `balanced` |
 | Thinking | Disabled |
 | Budget | 30 iterations |
@@ -40,7 +40,7 @@ Structured planning and architecture — read-only, high reasoning.
 |---------|-------|
 | Tools | file, introspection |
 | Forbidden | git, terminal, cascade, volundr |
-| Permission | `read_only` |
+| Permission | `read-only` |
 | Model alias | `powerful` |
 | Thinking | Enabled |
 | Budget | 20 iterations |
@@ -53,7 +53,7 @@ Fully unsupervised execution — all tools, all permissions.
 |---------|-------|
 | Tools | All |
 | Forbidden | None |
-| Permission | `full_access` |
+| Permission | `full-access` |
 | Model alias | `powerful` |
 | Thinking | Enabled |
 | Budget | 100 iterations |
@@ -64,10 +64,12 @@ Knowledge base synthesis and maintenance.
 
 | Setting | Value |
 |---------|-------|
-| Tools | mimir_query, mimir_ingest, mimir_write, mimir_lint |
-| Permission | `workspace_write` |
+| Tools | mimir, web, file, introspection |
+| Forbidden | git, terminal, cascade, volundr |
+| Permission | `workspace-write` |
 | Model alias | `balanced` |
-| Budget | 50 iterations |
+| Thinking | Disabled |
+| Budget | 60 iterations |
 
 ## Custom Personas
 
@@ -92,7 +94,7 @@ forbidden_tools:
   - cascade
   - volundr
 
-permission_mode: workspace_write
+permission_mode: workspace-write
 primary_alias: balanced
 
 thinking:
@@ -111,7 +113,7 @@ iteration_budget: 50
 | `system_prompt` | string | Override system prompt |
 | `allowed_tools` | list | Tool names or groups to enable |
 | `forbidden_tools` | list | Tool names or groups to disable |
-| `permission_mode` | string | `read_only`, `workspace_write`, `full_access`, `prompt` |
+| `permission_mode` | string | `read-only`, `workspace-write`, `full-access`, `prompt` |
 | `primary_alias` | string | Bifrost model alias: `powerful`, `balanced`, `fast` |
 | `thinking.enabled` | bool | Enable extended thinking |
 | `thinking.budget_tokens` | int | Thinking token budget |
