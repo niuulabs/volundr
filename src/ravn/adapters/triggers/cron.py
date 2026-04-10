@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import IO
 
 from ravn.domain.models import AgentTask, OutputMode
+from ravn.ports.trigger import TriggerPort
 
 logger = logging.getLogger(__name__)
 
@@ -316,7 +317,7 @@ class CronJobStore:
 # ---------------------------------------------------------------------------
 
 
-class CronTrigger:
+class CronTrigger(TriggerPort):
     """Trigger that fires tasks on a cron schedule.
 
     Combines two job sources:

@@ -1996,59 +1996,26 @@ async def _run_daemon(
 def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> list[Any]:
     """Instantiate trigger adapters from config and register them on drive_loop.
 
-    Config-defined cron jobs are collected and returned so that ``_wire_cron``
-    can create a single ``CronTrigger`` (one lock) that also services runtime
-    jobs from the ``CronJobStore``.
+    Loads each entry in ``initiative.trigger_adapters`` via its fully-qualified
+    class path (any :class:`~ravn.ports.trigger.TriggerPort` subclass).
 
-    Returns a list of ``CronJob`` objects for the caller to pass to ``_wire_cron``.
+    Returns an empty list — cron jobs come exclusively from ``_wire_cron`` now.
     """
-    from ravn.domain.models import OutputMode
-
-    cron_jobs: list[Any] = []
-
-    for tc in initiative.triggers:
-        output_mode = OutputMode(tc.output_mode) if tc.output_mode else OutputMode.SILENT
+    for ta in initiative.trigger_adapters:
         try:
-            if tc.type == "cron":
-                from ravn.adapters.triggers.cron import CronJob
-
-                job = CronJob(
-                    name=tc.name,
-                    schedule=tc.schedule,
-                    context=tc.context,
-                    output_mode=output_mode,
-                    persona=tc.persona or None,
-                    priority=tc.priority,
-                )
-                cron_jobs.append(job)
-
-            elif tc.type == "sleipnir_event":
-                from ravn.adapters.triggers.sleipnir import SleipnirEventTrigger
-
-                drive_loop.register_trigger(
-                    SleipnirEventTrigger(
-                        name=tc.name,
-                        pattern=tc.pattern,
-                        context_template=tc.context_template,
-                        output_mode=output_mode,
-                        persona=tc.persona or None,
-                        priority=tc.priority,
-                        amqp_url=tc.amqp_url,
-                        exchange=tc.exchange,
-                        retry_delay_seconds=tc.retry_delay_seconds,
-                    )
-                )
-
-            elif tc.type == "condition_poll":
-                logger.warning(
-                    "condition_poll trigger %r requires a sensor_agent_factory — skipping",
-                    tc.name,
-                )
-
+            cls = _import_class(ta.adapter)
+            kwargs = _inject_secrets(dict(ta.kwargs), ta.secret_kwargs_env)
+            trigger = cls(**kwargs)
+            drive_loop.register_trigger(trigger)
+            logger.info(
+                "trigger adapter registered: %s (name=%r)",
+                ta.adapter,
+                getattr(trigger, "name", "?"),
+            )
         except Exception as exc:
-            logger.error("Failed to wire trigger %r: %s", tc.name, exc)
+            logger.error("Failed to wire trigger adapter %r: %s", ta.adapter, exc)
 
-    return cron_jobs
+    return []
 
 
 def _wire_mimir_triggers(drive_loop: Any, mimir: Any, settings: Settings) -> None:

@@ -30,11 +30,12 @@ from niuu.ports.mimir import MimirPort
 from ravn.config import MimirStalenessTriggerConfig
 from ravn.domain.models import AgentTask, OutputMode
 from ravn.ports.mimir_usage import MimirUsagePort
+from ravn.ports.trigger import TriggerPort
 
 logger = logging.getLogger(__name__)
 
 
-class MimirStalenessTrigger:
+class MimirStalenessTrigger(TriggerPort):
     """TriggerPort implementation that refreshes stale high-priority pages.
 
     Args:

@@ -16,11 +16,12 @@ import time
 from collections.abc import Awaitable, Callable
 
 from ravn.domain.models import AgentTask, OutputMode
+from ravn.ports.trigger import TriggerPort
 
 logger = logging.getLogger(__name__)
 
 
-class SleipnirEventTrigger:
+class SleipnirEventTrigger(TriggerPort):
     """Trigger that fires tasks from RabbitMQ routing-key pattern matches."""
 
     def __init__(

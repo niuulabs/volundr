@@ -28,11 +28,12 @@ from collections.abc import Awaitable, Callable
 from niuu.ports.mimir import MimirPort
 from ravn.config import MimirSourceTriggerConfig
 from ravn.domain.models import AgentTask, OutputMode
+from ravn.ports.trigger import TriggerPort
 
 logger = logging.getLogger(__name__)
 
 
-class MimirSourceTrigger:
+class MimirSourceTrigger(TriggerPort):
     """TriggerPort implementation that synthesises unprocessed Mímir sources.
 
     Args:

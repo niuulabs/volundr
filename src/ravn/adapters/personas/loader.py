@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from ravn.config import ProjectConfig, _safe_int
+from ravn.ports.persona import PersonaPort
 
 _DEFAULT_PERSONAS_DIR = Path.home() / ".ravn" / "personas"
 
@@ -172,7 +173,7 @@ def _safe_bool(val: Any, default: bool = False) -> bool:
     return default
 
 
-class PersonaLoader:
+class PersonaLoader(PersonaPort):
     """Loads persona configurations from YAML files or the built-in set.
 
     Lookup order for :meth:`load`:
@@ -214,6 +215,19 @@ class PersonaLoader:
         except OSError:
             return None
         return self.parse(text)
+
+    def list_names(self) -> list[str]:
+        """Return a sorted list of all resolvable persona names.
+
+        Combines built-in personas with any YAML files found in
+        ``personas_dir``.  File-system names take precedence when there is a
+        name collision with a built-in.
+        """
+        names: set[str] = set(_BUILTIN_PERSONAS)
+        if self._personas_dir.is_dir():
+            for p in self._personas_dir.glob("*.yaml"):
+                names.add(p.stem)
+        return sorted(names)
 
     def list_builtin_names(self) -> list[str]:
         """Return a sorted list of built-in persona names."""

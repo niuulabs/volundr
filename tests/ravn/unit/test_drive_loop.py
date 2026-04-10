@@ -14,7 +14,7 @@ import pytest
 from ravn.adapters.channels.silent import SilentChannel
 from ravn.adapters.triggers.condition_poll import ConditionPollTrigger
 from ravn.adapters.triggers.cron import CronJob, CronTrigger, _cron_matches, parse_schedule
-from ravn.config import InitiativeConfig, Settings, TriggerConfig
+from ravn.config import InitiativeConfig, Settings, TriggerAdapterConfig
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.models import AgentTask, OutputMode
 from ravn.drive_loop import DriveLoop
@@ -561,10 +561,11 @@ def test_initiative_config_defaults() -> None:
     assert cfg.task_queue_max == 50
 
 
-def test_trigger_config_cron() -> None:
-    tc = TriggerConfig(type="cron", name="morning", schedule="0 8 * * 1-5", context="review")
-    assert tc.type == "cron"
-    assert tc.output_mode == "silent"
+def test_trigger_adapter_config() -> None:
+    ta = TriggerAdapterConfig(adapter="mypackage.MyTrigger", kwargs={"interval": 60})
+    assert ta.adapter == "mypackage.MyTrigger"
+    assert ta.kwargs["interval"] == 60
+    assert ta.secret_kwargs_env == {}
 
 
 def test_settings_has_initiative_field() -> None:

@@ -1146,61 +1146,34 @@ class SleipnirConfig(BaseModel):
     publish_timeout_s: float = Field(default=2.0)
 
 
-class TriggerConfig(BaseModel):
-    """Configuration for a single drive-loop trigger."""
+class TriggerAdapterConfig(BaseModel):
+    """Config for a trigger adapter loaded via dotted class path.
 
-    type: Literal["cron", "sleipnir_event", "condition_poll"] = Field(
-        description="Trigger type.",
+    Supports any :class:`~ravn.ports.trigger.TriggerPort` implementation
+    without modifying Ravn source code.
+
+    Example ``ravn.yaml``::
+
+        initiative:
+          trigger_adapters:
+            - adapter: mypackage.triggers.WebhookTrigger
+              kwargs:
+                port: 9000
+                path: /hook
+              secret_kwargs_env:
+                token: WEBHOOK_SECRET_TOKEN
+    """
+
+    adapter: str = Field(
+        description="Fully-qualified class path for the TriggerPort implementation.",
     )
-    name: str = Field(description="Human-readable trigger name.")
-    # cron fields
-    schedule: str = Field(
-        default="",
-        description="Cron expression, natural language, or ISO timestamp (cron type).",
+    kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Keyword arguments passed to the adapter constructor.",
     )
-    # sleipnir_event fields
-    pattern: str = Field(
-        default="",
-        description="RabbitMQ routing-key pattern to subscribe to (sleipnir_event type).",
-    )
-    context_template: str = Field(
-        default="",
-        description="Jinja2 template rendered with message payload (sleipnir_event type).",
-    )
-    # shared
-    output_mode: str = Field(
-        default="silent",
-        description="Output mode: 'silent', 'ambient', or 'surface'.",
-    )
-    context: str = Field(
-        default="",
-        description="Initiative context passed to the agent as the task prompt (cron type).",
-    )
-    persona: str = Field(default="")
-    priority: int = Field(default=10)
-    # sleipnir_event transport
-    amqp_url: str = Field(default="amqp://guest:guest@localhost/")
-    exchange: str = Field(default="sleipnir")
-    retry_delay_seconds: float = Field(
-        default=5.0,
-        description="Seconds to wait before reconnecting on error (sleipnir_event type).",
-    )
-    # condition_poll fields
-    sensor_prompt: str = Field(
-        default="",
-        description="Prompt given to the sensor agent (condition_poll type).",
-    )
-    task_context: str = Field(
-        default="",
-        description="Full task context when TRIGGER fires (condition_poll type).",
-    )
-    check_interval_seconds: float = Field(
-        default=300.0,
-        description="Seconds between sensor polls (condition_poll type).",
-    )
-    cooldown_minutes: float = Field(
-        default=60.0,
-        description="Minutes before the trigger can fire again (condition_poll type).",
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of kwarg name → env var name for secret values.",
     )
 
 
@@ -1239,9 +1212,12 @@ class InitiativeConfig(BaseModel):
         default=30.0,
         description="Seconds between cron trigger ticks (scheduler wake interval).",
     )
-    triggers: list[TriggerConfig] = Field(
+    trigger_adapters: list[TriggerAdapterConfig] = Field(
         default_factory=list,
-        description="Ordered list of trigger configurations.",
+        description=(
+            "Custom trigger adapters loaded via fully-qualified class path. "
+            "Supports any TriggerPort implementation without modifying Ravn source code."
+        ),
     )
 
 
@@ -1791,6 +1767,98 @@ class CheckpointConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class SlashCommandAdapterConfig(BaseModel):
+    """Config for a custom slash command loaded via dotted class path.
+
+    Any class implementing :class:`~ravn.ports.slash_command.SlashCommandPort`
+    can be registered here and it will be available in every REPL and gateway
+    session.  Custom commands are registered *after* built-ins, so they take
+    precedence on name collision.
+
+    Example ``ravn.yaml``::
+
+        slash_commands:
+          - adapter: mypackage.commands.DeployCommand
+          - adapter: mypackage.commands.PagerCommand
+            kwargs:
+              webhook_url: "https://hooks.pagerduty.com/..."
+    """
+
+    adapter: str = Field(
+        description="Fully-qualified class path for the SlashCommandPort implementation.",
+    )
+    kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Keyword arguments passed to the adapter constructor.",
+    )
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of kwarg name → env var name for secret values.",
+    )
+
+
+class PersonaSourceConfig(BaseModel):
+    """Config for a custom persona configuration source.
+
+    By default Ravn loads personas from ``~/.ravn/personas/*.yaml`` and the
+    built-in set.  Point ``persona_source.adapter`` at any class implementing
+    :class:`~ravn.ports.persona.PersonaPort` to use a different source
+    (database, remote API, generated at runtime, etc.).
+
+    Example ``ravn.yaml``::
+
+        persona_source:
+          adapter: mycompany.ravn.DbPersonaAdapter
+          kwargs:
+            table: ravn_personas
+          secret_kwargs_env:
+            dsn: PERSONA_DB_DSN
+    """
+
+    adapter: str = Field(
+        default="ravn.adapters.personas.loader.PersonaLoader",
+        description="Fully-qualified class path for the PersonaPort implementation.",
+    )
+    kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Keyword arguments passed to the adapter constructor.",
+    )
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of kwarg name → env var name for secret values.",
+    )
+
+
+class ProfileSourceConfig(BaseModel):
+    """Config for a custom deployment profile source.
+
+    By default Ravn loads profiles from ``~/.ravn/profiles/*.yaml`` and the
+    built-in set.  Point ``profile_source.adapter`` at any class implementing
+    :class:`~ravn.ports.profile.ProfilePort` to use a different source
+    (Kubernetes ConfigMap, database, etc.).
+
+    Example ``ravn.yaml``::
+
+        profile_source:
+          adapter: mycompany.ravn.K8sConfigMapProfileAdapter
+          kwargs:
+            namespace: ravn-system
+    """
+
+    adapter: str = Field(
+        default="ravn.adapters.profiles.loader.ProfileLoader",
+        description="Fully-qualified class path for the ProfilePort implementation.",
+    )
+    kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Keyword arguments passed to the adapter constructor.",
+    )
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of kwarg name → env var name for secret values.",
+    )
+
+
 class Settings(BaseSettings):
     """Ravn application settings.
 
@@ -1863,6 +1931,20 @@ class Settings(BaseSettings):
 
     # NIU-532: browser automation
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
+
+    # Plugin extension points
+    slash_commands: list[SlashCommandAdapterConfig] = Field(
+        default_factory=list,
+        description="Custom slash command adapters loaded via dotted class path.",
+    )
+    persona_source: PersonaSourceConfig = Field(
+        default_factory=PersonaSourceConfig,
+        description="Persona configuration source adapter.",
+    )
+    profile_source: ProfileSourceConfig = Field(
+        default_factory=ProfileSourceConfig,
+        description="Deployment profile source adapter.",
+    )
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)

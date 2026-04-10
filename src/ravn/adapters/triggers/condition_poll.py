@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 
 from ravn.adapters.channels.silent import SilentChannel
 from ravn.domain.models import AgentTask, OutputMode
+from ravn.ports.trigger import TriggerPort
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ _DEFAULT_CHECK_INTERVAL = 300  # seconds
 _DEFAULT_COOLDOWN = 60  # minutes
 
 
-class ConditionPollTrigger:
+class ConditionPollTrigger(TriggerPort):
     """Trigger that polls a sensor agent and fires when it says ``TRIGGER``."""
 
     def __init__(

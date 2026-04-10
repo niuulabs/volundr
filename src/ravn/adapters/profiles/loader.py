@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import Any
 
 from ravn.domain.profile import MimirMountRef, RavnProfile
+from ravn.ports.profile import ProfilePort
 
 _DEFAULT_PROFILES_DIR = Path.home() / ".ravn" / "profiles"
 
@@ -123,7 +124,7 @@ def _safe_int(val: Any, default: int = 0) -> int:
 # ---------------------------------------------------------------------------
 
 
-class ProfileLoader:
+class ProfileLoader(ProfilePort):
     """Loads :class:`~ravn.domain.profile.RavnProfile` from YAML files or the built-in set.
 
     Lookup order for :meth:`load`:
@@ -165,6 +166,19 @@ class ProfileLoader:
         except OSError:
             return None
         return self.parse(text)
+
+    def list_names(self) -> list[str]:
+        """Return a sorted list of all resolvable profile names.
+
+        Combines built-in profiles with any YAML files found in
+        ``profiles_dir``.  File-system names take precedence when there is a
+        name collision with a built-in.
+        """
+        names: set[str] = set(_BUILTIN_PROFILES)
+        if self._profiles_dir.is_dir():
+            for p in self._profiles_dir.glob("*.yaml"):
+                names.add(p.stem)
+        return sorted(names)
 
     def list_builtin_names(self) -> list[str]:
         """Return a sorted list of built-in profile names."""
