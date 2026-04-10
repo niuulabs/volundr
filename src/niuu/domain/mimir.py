@@ -229,6 +229,13 @@ class MimirPageMeta:
     thread_state: ThreadState | None = None
     thread_weight: float | None = None
     is_thread: bool = False
+    # Set by the thread enricher after LLM classification
+    thread_weight_signals: dict = field(default_factory=dict)
+    thread_next_action_hint: str | None = None
+    thread_context_refs: list[ThreadContextRef] = field(default_factory=list)
+    # Set by action shapes when they write artifacts derived from a thread.
+    # The enricher skips pages with this flag to prevent feedback loops.
+    produced_by_thread: bool = False
 
 
 @dataclass

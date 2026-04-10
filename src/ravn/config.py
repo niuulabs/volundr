@@ -1832,6 +1832,13 @@ class ThreadConfig(BaseModel):
             "the deployment YAML so co-deployed instances can share a queue."
         ),
     )
+    confidence_threshold: float = Field(
+        default=0.7,
+        description=(
+            "Minimum LLM confidence score (0.0–1.0) required to classify a page "
+            "as a thread.  Pages below this threshold are silently skipped."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

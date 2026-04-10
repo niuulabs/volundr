@@ -66,6 +66,7 @@ class MimirPort(ABC):
         path: str,
         content: str,
         mimir: str | None = None,
+        meta: MimirPageMeta | None = None,
     ) -> None:
         """Create or replace a wiki page at *path*.
 
@@ -75,6 +76,10 @@ class MimirPort(ABC):
         The optional *mimir* parameter is used by ``CompositeMimirAdapter`` to
         route writes to a specific named Mímir instance, bypassing the default
         category-based routing.
+
+        The optional *meta* parameter carries updated page metadata (e.g. thread
+        fields written by the thread enricher).  Adapters that support it will
+        persist the metadata alongside the content; others may ignore it.
         """
         ...
 
