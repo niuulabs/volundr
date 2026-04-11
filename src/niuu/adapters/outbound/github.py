@@ -437,9 +437,10 @@ class GitHubProvider(GitProvider, GitWorkflowProvider):
 
             if scopes:
                 logger.info(
-                    "GitHubProvider[%s]: token scopes: %s",
+                    "GitHubProvider[%s]: token scopes received (count=%d, has_repo_scope=%s)",
                     self._name,
-                    ", ".join(scopes),
+                    len(scopes),
+                    "repo" in scopes,
                 )
                 if "repo" not in scopes:
                     logger.warning(
