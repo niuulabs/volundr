@@ -272,10 +272,6 @@ async def test_drive_loop_surface_escalation_logged(
     mock_agent = AsyncMock()
     mock_agent.run_turn = AsyncMock(return_value=None)
 
-    async def side_effect(prompt):
-        # Simulate the channel getting a [SURFACE] event
-        pass
-
     # Patch the SilentChannel to always have surface_triggered=True
     with patch("ravn.drive_loop.SilentChannel") as mock_channel:
         mock_ch = MagicMock()

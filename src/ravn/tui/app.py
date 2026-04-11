@@ -180,7 +180,7 @@ class RavnTUI(App[None]):
                         port = info.port or 7477
                         asyncio.create_task(self.flokk.connect(host, port))
 
-                _browser = ServiceBrowser(  # noqa: F841
+                ServiceBrowser(
                     azc.zeroconf,
                     "_ravn._tcp.local.",
                     handlers=[on_service_added],
