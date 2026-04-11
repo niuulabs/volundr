@@ -288,11 +288,24 @@ class RootServer(Service):
             if port is None:
                 return JSONResponse({"detail": "Session not found"}, status_code=404)
 
+            import re
             from urllib.parse import quote
 
             import httpx
 
-            sanitized_path = quote(path, safe="/")
+            # Validate user-controlled path to prevent path traversal / path confusion
+            # when proxying to internal service endpoints.
+            allowed_segment = re.compile(r"^[A-Za-z0-9._~-]+$")
+            raw_segments = path.split("/")
+            normalized_segments: list[str] = []
+            for seg in raw_segments:
+                if seg in ("", ".", ".."):
+                    return JSONResponse({"detail": "Invalid path"}, status_code=400)
+                if "\\" in seg or not allowed_segment.fullmatch(seg):
+                    return JSONResponse({"detail": "Invalid path"}, status_code=400)
+                normalized_segments.append(seg)
+
+            sanitized_path = "/".join(quote(seg, safe="") for seg in normalized_segments)
             url = f"http://127.0.0.1:{port}/api/{sanitized_path}"
             params = dict(request.query_params)
             headers = {
