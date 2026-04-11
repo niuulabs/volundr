@@ -43,6 +43,13 @@ logger = logging.getLogger(__name__)
 _PRIORITY_MIN = 1
 _PRIORITY_MAX = 10
 
+# Keyword → persona mapping for wakefulness action shapes.
+# Keywords are matched case-insensitively against the next_action_hint.
+# Order matters: first match wins.
+_PERSONA_KEYWORDS: list[tuple[str, list[str]]] = [
+    ("draft-a-note", ["draft", "note", "capture", "observe"]),
+]
+
 
 class ThreadQueueTrigger(TriggerPort):
     """TriggerPort that polls the Mímir thread queue and enqueues wakefulness tasks.
@@ -121,9 +128,7 @@ class ThreadQueueTrigger(TriggerPort):
         title = next_action_hint or _title_from_path(path)
 
         initiative_context = (
-            f"Thread: {path}\n"
-            f"Weight: {weight:.2f}\n"
-            f"Next action: {next_action_hint}\n"
+            f"Thread: {path}\nWeight: {weight:.2f}\nNext action: {next_action_hint}\n"
         )
 
         priority = max(_PRIORITY_MIN, min(_PRIORITY_MAX, int(_PRIORITY_MAX - weight)))
@@ -136,6 +141,7 @@ class ThreadQueueTrigger(TriggerPort):
             triggered_by=f"thread:{path}",
             output_mode=OutputMode.AMBIENT,
             priority=priority,
+            persona=_select_persona(next_action_hint),
         )
         logger.info(
             "ThreadQueueTrigger: enqueuing task for thread %r (weight=%.2f, priority=%d)",
@@ -149,6 +155,21 @@ class ThreadQueueTrigger(TriggerPort):
 def _generate_owner_id() -> str:
     """Return a stable owner ID for this process lifetime."""
     return f"ravn-{uuid.uuid4().hex[:8]}"
+
+
+def _select_persona(hint: str) -> str | None:
+    """Map a next_action_hint to a persona name via keyword matching.
+
+    Iterates ``_PERSONA_KEYWORDS`` in order; returns the first persona whose
+    keyword list contains any word present in *hint* (case-insensitive).
+    Returns ``None`` when no keyword matches — the drive loop then falls back
+    to the default agent settings.
+    """
+    hint_lower = hint.lower()
+    for persona_name, keywords in _PERSONA_KEYWORDS:
+        if any(kw in hint_lower for kw in keywords):
+            return persona_name
+    return None
 
 
 def _title_from_path(path: str) -> str:

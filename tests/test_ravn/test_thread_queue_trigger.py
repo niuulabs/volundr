@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from niuu.domain.mimir import MimirPage, MimirPageMeta, ThreadOwnershipError, ThreadState
-from ravn.adapters.triggers.thread_queue import ThreadQueueTrigger
+from ravn.adapters.triggers.thread_queue import ThreadQueueTrigger, _select_persona
 from ravn.config import ThreadConfig
 from ravn.domain.models import AgentTask, OutputMode
 
@@ -352,6 +352,93 @@ class TestPriorityMapping:
         enqueued_hi = await _collect_enqueued(_make_trigger(mimir=mimir_hi))
 
         assert enqueued_hi[0].priority < enqueued_lo[0].priority
+
+
+# ---------------------------------------------------------------------------
+# _select_persona — keyword routing
+# ---------------------------------------------------------------------------
+
+
+class TestSelectPersona:
+    def test_draft_keyword_routes_to_draft_a_note(self) -> None:
+        assert _select_persona("draft a summary of the meeting") == "draft-a-note"
+
+    def test_note_keyword_routes_to_draft_a_note(self) -> None:
+        assert _select_persona("write a note about the architecture decision") == "draft-a-note"
+
+    def test_capture_keyword_routes_to_draft_a_note(self) -> None:
+        assert _select_persona("capture this observation before it is lost") == "draft-a-note"
+
+    def test_observe_keyword_routes_to_draft_a_note(self) -> None:
+        assert _select_persona("observe patterns in recent retrieval latency") == "draft-a-note"
+
+    def test_case_insensitive_matching(self) -> None:
+        assert _select_persona("Draft a quick NOTE") == "draft-a-note"
+
+    def test_unrecognised_hint_returns_none(self) -> None:
+        assert _select_persona("process the backlog items") is None
+
+    def test_empty_hint_returns_none(self) -> None:
+        assert _select_persona("") is None
+
+
+# ---------------------------------------------------------------------------
+# ThreadQueueTrigger sets persona on enqueued tasks
+# ---------------------------------------------------------------------------
+
+
+class TestPersonaSelection:
+    @pytest.mark.asyncio
+    async def test_note_hint_sets_draft_a_note_persona(self) -> None:
+        mimir = AsyncMock()
+        page = _thread_page(summary="draft a note on the retrieval approach")
+        mimir.get_thread_queue = AsyncMock(return_value=[page])
+        mimir.assign_thread_owner = AsyncMock()
+        mimir.update_thread_state = AsyncMock()
+        trigger = _make_trigger(mimir=mimir)
+
+        enqueued = await _collect_enqueued(trigger)
+
+        assert enqueued[0].persona == "draft-a-note"
+
+    @pytest.mark.asyncio
+    async def test_unrecognised_hint_leaves_persona_none(self) -> None:
+        mimir = AsyncMock()
+        page = _thread_page(summary="process the next batch of items")
+        mimir.get_thread_queue = AsyncMock(return_value=[page])
+        mimir.assign_thread_owner = AsyncMock()
+        mimir.update_thread_state = AsyncMock()
+        trigger = _make_trigger(mimir=mimir)
+
+        enqueued = await _collect_enqueued(trigger)
+
+        assert enqueued[0].persona is None
+
+    @pytest.mark.asyncio
+    async def test_no_hint_leaves_persona_none(self) -> None:
+        mimir = AsyncMock()
+        page = _thread_page(summary="")
+        mimir.get_thread_queue = AsyncMock(return_value=[page])
+        mimir.assign_thread_owner = AsyncMock()
+        mimir.update_thread_state = AsyncMock()
+        trigger = _make_trigger(mimir=mimir)
+
+        enqueued = await _collect_enqueued(trigger)
+
+        assert enqueued[0].persona is None
+
+    @pytest.mark.asyncio
+    async def test_capture_hint_sets_draft_a_note_persona(self) -> None:
+        mimir = AsyncMock()
+        page = _thread_page(summary="capture observations from today's review")
+        mimir.get_thread_queue = AsyncMock(return_value=[page])
+        mimir.assign_thread_owner = AsyncMock()
+        mimir.update_thread_state = AsyncMock()
+        trigger = _make_trigger(mimir=mimir)
+
+        enqueued = await _collect_enqueued(trigger)
+
+        assert enqueued[0].persona == "draft-a-note"
 
 
 # ---------------------------------------------------------------------------
