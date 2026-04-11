@@ -76,7 +76,7 @@ def _thread_page(
     )
 
 
-async def _collect_enqueued(trigger: ThreadQueueTrigger, mimir: object) -> list[AgentTask]:
+async def _collect_enqueued(trigger: ThreadQueueTrigger) -> list[AgentTask]:
     enqueued: list[AgentTask] = []
 
     async def _enqueue(task: AgentTask) -> None:
@@ -98,7 +98,7 @@ class TestDisabledTrigger:
         mimir.get_thread_queue = AsyncMock(return_value=[_thread_page()])
         trigger = _make_trigger(mimir=mimir, enabled=False)
 
-        enqueued = await _collect_enqueued(trigger, mimir)
+        enqueued = await _collect_enqueued(trigger)
 
         assert enqueued == []
         mimir.get_thread_queue.assert_not_called()
@@ -110,7 +110,7 @@ class TestDisabledTrigger:
         mimir.assign_thread_owner = AsyncMock()
         trigger = _make_trigger(mimir=mimir, enabled=False)
 
-        await _collect_enqueued(trigger, mimir)
+        await _collect_enqueued(trigger)
 
         mimir.assign_thread_owner.assert_not_called()
 
@@ -127,7 +127,7 @@ class TestEmptyQueue:
         mimir.get_thread_queue = AsyncMock(return_value=[])
         trigger = _make_trigger(mimir=mimir)
 
-        enqueued = await _collect_enqueued(trigger, mimir)
+        enqueued = await _collect_enqueued(trigger)
 
         assert enqueued == []
 
@@ -138,7 +138,7 @@ class TestEmptyQueue:
         mimir.assign_thread_owner = AsyncMock()
         trigger = _make_trigger(mimir=mimir)
 
-        await _collect_enqueued(trigger, mimir)
+        await _collect_enqueued(trigger)
 
         mimir.assign_thread_owner.assert_not_called()
 
@@ -158,7 +158,7 @@ class TestQueueWithItem:
         mimir.update_thread_state = AsyncMock()
         trigger = _make_trigger(mimir=mimir, owner_id="agent-1")
 
-        await _collect_enqueued(trigger, mimir)
+        await _collect_enqueued(trigger)
 
         mimir.assign_thread_owner.assert_called_once_with("threads/my-topic", "agent-1")
 
@@ -171,7 +171,7 @@ class TestQueueWithItem:
         mimir.update_thread_state = AsyncMock()
         trigger = _make_trigger(mimir=mimir)
 
-        await _collect_enqueued(trigger, mimir)
+        await _collect_enqueued(trigger)
 
         mimir.update_thread_state.assert_called_once_with(
             "threads/retrieval-architecture", ThreadState.pulling
@@ -186,7 +186,7 @@ class TestQueueWithItem:
         mimir.update_thread_state = AsyncMock()
         trigger = _make_trigger(mimir=mimir)
 
-        enqueued = await _collect_enqueued(trigger, mimir)
+        enqueued = await _collect_enqueued(trigger)
 
         assert len(enqueued) == 1
 
@@ -199,7 +199,7 @@ class TestQueueWithItem:
         mimir.update_thread_state = AsyncMock()
         trigger = _make_trigger(mimir=mimir)
 
-        enqueued = await _collect_enqueued(trigger, mimir)
+        enqueued = await _collect_enqueued(trigger)
 
         assert enqueued[0].output_mode == OutputMode.AMBIENT
 
@@ -212,7 +212,7 @@ class TestQueueWithItem:
         mimir.update_thread_state = AsyncMock()
         trigger = _make_trigger(mimir=mimir)
 
-        enqueued = await _collect_enqueued(trigger, mimir)
+        enqueued = await _collect_enqueued(trigger)
 
         assert enqueued[0].triggered_by == "thread:threads/retrieval-architecture"
 
@@ -225,7 +225,7 @@ class TestQueueWithItem:
         mimir.update_thread_state = AsyncMock()
         trigger = _make_trigger(mimir=mimir)
 
-        enqueued = await _collect_enqueued(trigger, mimir)
+        enqueued = await _collect_enqueued(trigger)
 
         assert enqueued[0].title == "Compare HNSW vs flat"
 
@@ -238,7 +238,7 @@ class TestQueueWithItem:
         mimir.update_thread_state = AsyncMock()
         trigger = _make_trigger(mimir=mimir)
 
-        enqueued = await _collect_enqueued(trigger, mimir)
+        enqueued = await _collect_enqueued(trigger)
 
         assert enqueued[0].title == "Retrieval Architecture"
 
@@ -251,7 +251,7 @@ class TestQueueWithItem:
         mimir.update_thread_state = AsyncMock()
         trigger = _make_trigger(mimir=mimir)
 
-        enqueued = await _collect_enqueued(trigger, mimir)
+        enqueued = await _collect_enqueued(trigger)
 
         ctx = enqueued[0].initiative_context
         assert "threads/my-topic" in ctx
@@ -263,7 +263,7 @@ class TestQueueWithItem:
         mimir.get_thread_queue = AsyncMock(return_value=[])
         trigger = _make_trigger(mimir=mimir, owner_id="specific-agent")
 
-        await _collect_enqueued(trigger, mimir)
+        await _collect_enqueued(trigger)
 
         mimir.get_thread_queue.assert_called_once_with(owner_id="specific-agent", limit=1)
 
@@ -284,7 +284,7 @@ class TestOwnershipError:
         mimir.update_thread_state = AsyncMock()
         trigger = _make_trigger(mimir=mimir)
 
-        enqueued = await _collect_enqueued(trigger, mimir)
+        enqueued = await _collect_enqueued(trigger)
 
         assert enqueued == []
 
@@ -298,7 +298,7 @@ class TestOwnershipError:
         mimir.update_thread_state = AsyncMock()
         trigger = _make_trigger(mimir=mimir)
 
-        await _collect_enqueued(trigger, mimir)
+        await _collect_enqueued(trigger)
 
         mimir.update_thread_state.assert_not_called()
 
@@ -312,7 +312,7 @@ class TestOwnershipError:
         trigger = _make_trigger(mimir=mimir)
 
         # Must not raise
-        await _collect_enqueued(trigger, mimir)
+        await _collect_enqueued(trigger)
 
 
 # ---------------------------------------------------------------------------
@@ -330,7 +330,7 @@ class TestPriorityMapping:
             mimir.update_thread_state = AsyncMock()
             trigger = _make_trigger(mimir=mimir)
 
-            enqueued = await _collect_enqueued(trigger, mimir)
+            enqueued = await _collect_enqueued(trigger)
 
             p = enqueued[0].priority
             assert 1 <= p <= 10, f"weight={weight} → priority={p} out of range"
@@ -348,8 +348,8 @@ class TestPriorityMapping:
         mimir_hi.assign_thread_owner = AsyncMock()
         mimir_hi.update_thread_state = AsyncMock()
 
-        enqueued_lo = await _collect_enqueued(_make_trigger(mimir=mimir_lo), mimir_lo)
-        enqueued_hi = await _collect_enqueued(_make_trigger(mimir=mimir_hi), mimir_hi)
+        enqueued_lo = await _collect_enqueued(_make_trigger(mimir=mimir_lo))
+        enqueued_hi = await _collect_enqueued(_make_trigger(mimir=mimir_hi))
 
         assert enqueued_hi[0].priority < enqueued_lo[0].priority
 
