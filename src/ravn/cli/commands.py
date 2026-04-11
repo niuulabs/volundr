@@ -483,6 +483,21 @@ def _in_groups(name: str, groups: set[str]) -> bool:
     return any(name == g or name.startswith(g + "_") for g in groups)
 
 
+def _apply_trust_filter(
+    tools: list[Any],
+    settings: Settings,
+    triggered_by: str | None,
+) -> list[Any]:
+    """Remove tools forbidden by the trust gradient for thread-triggered tasks."""
+    if not triggered_by or not triggered_by.startswith("thread:"):
+        return tools
+    _allowed, forbidden = resolve_trust_tools(settings.trust)
+    if not forbidden:
+        return tools
+    forbidden_set = set(forbidden)
+    return [t for t in tools if not _in_groups(t.name, forbidden_set)]
+
+
 def _filter_tools(
     tools: list[Any],
     settings: Settings,
@@ -1877,11 +1892,7 @@ async def _run_daemon(
                 tools.extend(cron_tools)
 
         # NIU-571: Apply trust gradient constraints for thread-triggered tasks
-        if triggered_by and triggered_by.startswith("thread:"):
-            _trust_allowed, trust_forbidden = resolve_trust_tools(settings.trust)
-            if trust_forbidden:
-                forbidden_set = set(trust_forbidden)
-                tools = [t for t in tools if not _in_groups(t.name, forbidden_set)]
+        tools = _apply_trust_filter(tools, settings, triggered_by)
 
         return RavnAgent(
             llm=llm,
