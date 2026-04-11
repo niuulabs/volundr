@@ -2149,6 +2149,28 @@ def _wire_mimir_triggers(
                 settings.wakefulness.poll_interval_seconds,
             )
 
+    # Recap trigger (NIU-569) — surfaces overnight work on operator return.
+    if settings.recap.enabled:
+        if interaction_tracker is None:
+            logger.warning("recap: no interaction tracker provided — skipping")
+        else:
+            from ravn.adapters.triggers.recap import RecapTrigger
+
+            drive_loop.register_trigger(
+                RecapTrigger(
+                    mimir=mimir,
+                    config=settings.recap,
+                    last_interaction=interaction_tracker.last,
+                )
+            )
+            logger.info(
+                "recap: trigger registered (absence=%ds, window=%ds, cron=%r, poll=%ds)",
+                settings.recap.absence_threshold_seconds,
+                settings.recap.return_detection_window_seconds,
+                settings.recap.scheduled_recap_cron,
+                settings.recap.poll_interval_seconds,
+            )
+
 
 def _wire_cron(
     drive_loop: Any,

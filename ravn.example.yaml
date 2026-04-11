@@ -58,6 +58,27 @@
 #   owner_id: null                      # defaults to this instance's own ID
 
 # ---------------------------------------------------------------------------
+# Recap trigger (NIU-569)
+#
+# Fires when the operator returns after an absence and surfaces a summary of
+# what happened while they were away (closed threads, completed work).
+#
+# Two firing modes:
+#   1. Return detection — interaction within return_detection_window_seconds
+#      after a gap longer than absence_threshold_seconds.
+#   2. Scheduled fallback — scheduled_recap_cron fires at a daily time.
+# ---------------------------------------------------------------------------
+# recap:
+#   enabled: false                          # flip to true to activate
+#   absence_threshold_seconds: 3600         # 1 h gap = "was away"
+#   return_detection_window_seconds: 300    # within 5 min = "just returned"
+#   scheduled_recap_cron: ""               # e.g. "0 7 * * *" for 07:00 daily
+#   max_threads_in_recap: 10
+#   persona: produce-recap
+#   channel: ""                            # empty = TUI only
+#   poll_interval_seconds: 60
+
+# ---------------------------------------------------------------------------
 # Trust gradient (NIU-571)
 #
 # Constrains what the Ravn can do autonomously during wakefulness.
