@@ -14,8 +14,8 @@ import pytest
 from ravn.adapters.memory.outcome import SQLiteOutcomeAdapter, _format_lessons, _sanitise_fts_query
 from ravn.adapters.permission.allow_deny import AllowAllPermission
 from ravn.agent import RavnAgent
-from ravn.domain.budget import compute_cost as _compute_cost
 from ravn.config import OutcomeConfig
+from ravn.domain.budget import compute_cost as _compute_cost
 from ravn.domain.models import (
     LLMResponse,
     Outcome,
