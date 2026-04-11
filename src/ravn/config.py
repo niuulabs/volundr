@@ -1842,6 +1842,66 @@ class ThreadConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# NIU-565: Wakefulness trigger config
+# ---------------------------------------------------------------------------
+
+
+class WakefulnessConfig(BaseModel):
+    """Wakefulness trigger configuration (NIU-565).
+
+    Controls the background trigger that detects operator silence, runs a
+    cheap LLM reflection on the conversation, and emits 0–N follow-up
+    intents as threads into Mímir via ``create_thread()``.
+
+    Disabled by default — enable via ``wakefulness.enabled: true`` in the
+    deployment YAML.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable the wakefulness trigger.  Off until explicitly activated; "
+            "flip to true in the deployment ravn.yaml."
+        ),
+    )
+    silence_threshold_seconds: int = Field(
+        default=1800,
+        description="Seconds of operator silence before a reflection fires (30 min).",
+    )
+    reflection_cooldown_seconds: int = Field(
+        default=3600,
+        description="Minimum seconds between shallow reflections (1 h).",
+    )
+    deep_reflection_threshold_seconds: int = Field(
+        default=7200,
+        description="Seconds of silence before a deep reflection fires (2 h).",
+    )
+    deep_reflection_cooldown_seconds: int = Field(
+        default=14400,
+        description="Minimum seconds between deep reflections (4 h).",
+    )
+    llm_alias: str = Field(
+        default="fast",
+        description=(
+            "LLM alias for the reflection call.  Should resolve to a cheap/fast "
+            "model in the LLM aliases map."
+        ),
+    )
+    max_intents_per_reflection: int = Field(
+        default=5,
+        description="Cap on follow-up intents emitted per reflection.",
+    )
+    initial_thread_weight: float = Field(
+        default=5.0,
+        description="Weight assigned to newly created wakefulness threads.",
+    )
+    poll_interval_seconds: int = Field(
+        default=60,
+        description="How often (seconds) the trigger checks for silence.",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Root settings
 # ---------------------------------------------------------------------------
 
@@ -1992,6 +2052,9 @@ class Settings(BaseSettings):
 
     # NIU-558: thread enrichment queue
     thread: ThreadConfig = Field(default_factory=ThreadConfig)
+
+    # NIU-565: wakefulness trigger
+    wakefulness: WakefulnessConfig = Field(default_factory=WakefulnessConfig)
 
     # NIU-541: Búri knowledge memory substrate
     buri: BuriConfig = Field(default_factory=BuriConfig)
