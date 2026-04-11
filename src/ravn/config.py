@@ -1926,6 +1926,66 @@ class WakefulnessConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# NIU-569: Recap trigger config
+# ---------------------------------------------------------------------------
+
+
+class RecapConfig(BaseModel):
+    """Recap trigger configuration (NIU-569).
+
+    Controls the trigger that fires on operator return after absence to assemble
+    and surface a summary of what happened overnight (or since last interaction).
+
+    Disabled by default — enable via ``recap.enabled: true`` in the deployment YAML.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable the recap trigger.  Off until explicitly activated; "
+            "flip to true in the deployment ravn.yaml."
+        ),
+    )
+    absence_threshold_seconds: int = Field(
+        default=3600,
+        description="Minimum absence gap (seconds) that counts as 'was away'.",
+    )
+    return_detection_window_seconds: int = Field(
+        default=300,
+        description=(
+            "How recently (seconds) the operator must have interacted to count as having returned."
+        ),
+    )
+    scheduled_recap_cron: str = Field(
+        default="",
+        description=(
+            "Optional cron expression for a daily scheduled recap fallback "
+            "(e.g. '0 7 * * *').  Empty string disables the scheduled fallback."
+        ),
+    )
+    max_threads_in_recap: int = Field(
+        default=10,
+        description="Maximum number of closed threads included in a single recap.",
+    )
+    max_outcomes_in_recap: int = Field(
+        default=10,
+        description="Maximum number of task outcomes included in a single recap.",
+    )
+    persona: str = Field(
+        default="produce-recap",
+        description="Persona used when running the recap agent task.",
+    )
+    channel: str = Field(
+        default="",
+        description="Output channel for the recap (empty = TUI only).",
+    )
+    poll_interval_seconds: int = Field(
+        default=60,
+        description="How often (seconds) the trigger checks for operator return.",
+    )
+
+
+# ---------------------------------------------------------------------------
 # NIU-571: Trust gradient — constrains tool availability per category
 # ---------------------------------------------------------------------------
 
@@ -2238,6 +2298,9 @@ class Settings(BaseSettings):
 
     # NIU-565: wakefulness trigger
     wakefulness: WakefulnessConfig = Field(default_factory=WakefulnessConfig)
+
+    # NIU-569: recap trigger
+    recap: RecapConfig = Field(default_factory=RecapConfig)
 
     # NIU-571: trust gradient — constrains wakefulness tool availability
     trust: TrustGradientConfig = Field(default_factory=TrustGradientConfig)
