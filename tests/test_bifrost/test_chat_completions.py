@@ -1088,7 +1088,7 @@ class TestChatCompletionsEndpoint:
         assert resp.status_code == 502
         body = resp.json()
         assert "error" in body
-        assert "all providers failed" in body["error"]["message"]
+        assert body["error"]["message"] == "Upstream routing failed."
         assert body["error"]["type"] == "server_error"
 
     def test_unknown_model_error_has_openai_shape(self):

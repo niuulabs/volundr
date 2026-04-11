@@ -83,10 +83,10 @@ async def test_code_forge_connection_error():
 @pytest.mark.asyncio
 @respx.mock
 async def test_telegram_bot_success():
-    respx.get("https://api.telegram.org/botMY_TOKEN/getMe").mock(
+    respx.get("https://api.telegram.org/bot123456:ABCdefGHIjklMNOpqrsTUVwxyz/getMe").mock(
         return_value=httpx.Response(200, json={"ok": True, "result": {"username": "mybot"}})
     )
-    result = await _ct.test_telegram_bot(bot_token="MY_TOKEN")
+    result = await _ct.test_telegram_bot(bot_token="123456:ABCdefGHIjklMNOpqrsTUVwxyz")
     assert result.success is True
     assert "@mybot" in result.message
     assert result.provider == "telegram"
@@ -135,10 +135,11 @@ async def test_connection_code_forge():
 @pytest.mark.asyncio
 @respx.mock
 async def test_connection_messaging():
-    respx.get("https://api.telegram.org/botMY_TOKEN/getMe").mock(
+    respx.get("https://api.telegram.org/bot123456:ABCdefGHIjklMNOpqrsTUVwxyz/getMe").mock(
         return_value=httpx.Response(200, json={"ok": True, "result": {"username": "bot"}})
     )
-    result = await _ct.test_connection("messaging", {}, {"bot_token": "MY_TOKEN"})
+    token = "123456:ABCdefGHIjklMNOpqrsTUVwxyz"
+    result = await _ct.test_connection("messaging", {}, {"bot_token": token})
     assert result.success is True
 
 

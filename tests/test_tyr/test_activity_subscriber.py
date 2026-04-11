@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
 
 from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.config import WatcherConfig
-from tyr.domain.models import DispatcherState, PRStatus
+from tyr.domain.models import DispatcherState, PRStatus, Raid, RaidStatus
 from tyr.domain.services.activity_subscriber import (
     CompletionEvaluation,
     SessionActivitySubscriber,
@@ -29,6 +30,38 @@ SESSION_ID = "session-1"
 OWNER_ID = "user-1"
 SAGA_ID = UUID("00000000-0000-0000-0000-000000000002")
 TRACKER_ISSUE_ID = "issue-1"
+PHASE_ID = UUID("00000000-0000-0000-0000-000000000003")
+RAID_ID = UUID("00000000-0000-0000-0000-000000000004")
+
+
+def _make_raid(
+    session_id: str = SESSION_ID,
+    tracker_id: str = TRACKER_ISSUE_ID,
+    status: RaidStatus = RaidStatus.RUNNING,
+    review_round: int = 0,
+) -> Raid:
+    """Create a Raid domain object for testing."""
+    return Raid(
+        id=RAID_ID,
+        phase_id=PHASE_ID,
+        tracker_id=tracker_id,
+        name="Test Raid",
+        description="A test raid",
+        acceptance_criteria=[],
+        declared_files=[],
+        estimate_hours=None,
+        status=status,
+        confidence=0.5,
+        session_id=session_id,
+        branch=None,
+        chronicle_summary=None,
+        pr_url=None,
+        pr_id=None,
+        retry_count=0,
+        created_at=NOW,
+        updated_at=NOW,
+        review_round=review_round,
+    )
 
 
 class StubVolundr(VolundrPort):
@@ -73,62 +106,48 @@ class StubVolundr(VolundrPort):
     ) -> None:
         pass
 
+    async def stop_session(
+        self, session_id: str, *, auth_token: str | None = None
+    ) -> None:
+        pass
+
+    async def list_integration_ids(self, *, auth_token: str | None = None) -> list[str]:
+        return []
+
+    async def list_repos(self, *, auth_token: str | None = None) -> list[dict]:
+        return []
+
+    async def get_last_assistant_message(self, session_id: str) -> str:
+        return ""
+
+    async def get_conversation(self, session_id: str) -> dict:
+        return {}
+
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         for event in self.activity_events:
             yield event
 
 
-class StubPool:
-    """Mock asyncpg.Pool for dispatched_sessions queries."""
+class MockTracker:
+    """Mock TrackerPort that records calls and returns configured raids."""
 
-    def __init__(self) -> None:
-        self.sessions: dict[str, dict] = {}
-        self.executed: list[tuple[str, tuple]] = []
+    def __init__(self, raids_by_session: dict[str, Raid] | None = None) -> None:
+        self._raids_by_session = raids_by_session or {}
+        self.update_raid_progress = AsyncMock(
+            side_effect=self._update_raid_progress_impl,
+        )
+        self.update_raid_state = AsyncMock()
 
-    def add_session(
-        self,
-        session_id: str,
-        owner_id: str = OWNER_ID,
-        saga_id: UUID = SAGA_ID,
-        tracker_issue_id: str = TRACKER_ISSUE_ID,
-        status: str = "running",
-    ) -> None:
-        self.sessions[session_id] = {
-            "id": uuid4(),
-            "session_id": session_id,
-            "owner_id": owner_id,
-            "saga_id": saga_id,
-            "tracker_issue_id": tracker_issue_id,
-            "status": status,
-        }
+    async def _update_raid_progress_impl(self, tracker_id: str, **kwargs: object) -> Raid:
+        """Return a raid with updated status when update_raid_progress is called."""
+        # Find the raid by tracker_id
+        for raid in self._raids_by_session.values():
+            if raid.tracker_id == tracker_id:
+                return raid
+        return _make_raid()
 
-    async def fetch(self, query: str, *args: object) -> list[dict]:
-        if "DISTINCT owner_id" in query:
-            owners = {s["owner_id"] for s in self.sessions.values() if s["status"] == "running"}
-            return [{"owner_id": o} for o in owners]
-        return []
-
-    async def fetchrow(self, query: str, *args: object) -> dict | None:
-        if "dispatched_sessions" in query and args:
-            session_id = args[0]
-            s = self.sessions.get(session_id)  # type: ignore[arg-type]
-            if s and s["status"] == "running":
-                return s
-        return None
-
-    async def execute(self, query: str, *args: object) -> None:
-        self.executed.append((query, args))
-        if "UPDATE dispatched_sessions SET status" not in query:
-            return
-        # Determine session_id from first positional arg ($1)
-        session_id = args[0] if args else None
-        for s in self.sessions.values():
-            if s["session_id"] == session_id:
-                if "'complete'" in query:
-                    s["status"] = "complete"
-                elif "'failed'" in query:
-                    s["status"] = "failed"
-                break
+    async def get_raid_by_session(self, session_id: str) -> Raid | None:
+        return self._raids_by_session.get(session_id)
 
 
 class StubDispatcherRepo(DispatcherRepository):
@@ -144,11 +163,15 @@ class StubDispatcherRepo(DispatcherRepository):
             running=self._running,
             threshold=0.5,
             max_concurrent_raids=3,
+            auto_continue=True,
             updated_at=NOW,
         )
 
     async def update(self, owner_id: str, **fields: object) -> DispatcherState:
         return await self.get_or_create(owner_id)
+
+    async def list_active_owner_ids(self) -> list[str]:
+        return []
 
 
 class StubVolundrFactory:
@@ -157,8 +180,18 @@ class StubVolundrFactory:
     def __init__(self, adapter: StubVolundr) -> None:
         self._adapter = adapter
 
-    async def for_owner(self, owner_id: str) -> StubVolundr:
-        return self._adapter
+    async def for_owner(self, owner_id: str) -> list[StubVolundr]:
+        return [self._adapter]
+
+
+class MockTrackerFactory:
+    """Stub TrackerFactory that returns a configurable list of tracker adapters."""
+
+    def __init__(self, trackers: list[MockTracker] | None = None) -> None:
+        self._trackers = trackers or []
+
+    async def for_owner(self, owner_id: str) -> list[MockTracker]:
+        return list(self._trackers)
 
 
 # ---------------------------------------------------------------------------
@@ -195,45 +228,34 @@ def _make_volundr_session(session_id: str = SESSION_ID, status: str = "running")
     )
 
 
-def _make_record(
-    session_id: str = SESSION_ID,
-    owner_id: str = OWNER_ID,
-    saga_id: UUID = SAGA_ID,
-    tracker_issue_id: str = TRACKER_ISSUE_ID,
-    status: str = "running",
-) -> dict:
-    """Create a dispatched_sessions record dict."""
-    return {
-        "id": uuid4(),
-        "session_id": session_id,
-        "owner_id": owner_id,
-        "saga_id": saga_id,
-        "tracker_issue_id": tracker_issue_id,
-        "status": status,
-    }
-
-
 def _make_subscriber(
     volundr: StubVolundr | None = None,
-    pool: StubPool | None = None,
     dispatcher_repo: StubDispatcherRepo | None = None,
     event_bus: InMemoryEventBus | None = None,
     config: WatcherConfig | None = None,
-) -> tuple[SessionActivitySubscriber, StubVolundr, StubPool, InMemoryEventBus]:
+    tracker: MockTracker | None = None,
+    raid: Raid | None = None,
+) -> tuple[SessionActivitySubscriber, StubVolundr, MockTracker, InMemoryEventBus]:
     v = volundr or StubVolundr()
     if SESSION_ID not in v.sessions:
         v.sessions[SESSION_ID] = _make_volundr_session()
-    p = pool or StubPool()
-    if not p.sessions:
-        p.add_session(SESSION_ID)
+
+    r = raid or _make_raid()
+    t = tracker or MockTracker(raids_by_session={r.session_id: r} if r.session_id else {})
+    tf = MockTrackerFactory(trackers=[t])
+
     d = dispatcher_repo or StubDispatcherRepo()
     e = event_bus or InMemoryEventBus()
     c = config or _default_config()
     factory = StubVolundrFactory(v)
     sub = SessionActivitySubscriber(
-        volundr_factory=factory, pool=p, dispatcher_repo=d, event_bus=e, config=c
+        volundr_factory=factory,
+        tracker_factory=tf,
+        dispatcher_repo=d,
+        event_bus=e,
+        config=c,
     )
-    return sub, v, p, e
+    return sub, v, t, e
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +319,7 @@ class TestActivityEventHandling:
     @pytest.mark.asyncio
     async def test_idle_event_triggers_completion(self) -> None:
         """Idle event with sufficient turns completes the session."""
-        sub, volundr, pool, event_bus = _make_subscriber()
+        sub, volundr, tracker, event_bus = _make_subscriber()
 
         event = ActivityEvent(
             session_id=SESSION_ID,
@@ -312,34 +334,37 @@ class TestActivityEventHandling:
         # Wait for debounced evaluation (delay=0)
         await asyncio.sleep(0.1)
 
-        assert pool.sessions[SESSION_ID]["status"] == "complete"
+        tracker.update_raid_progress.assert_called()
+        progress_call = tracker.update_raid_progress.call_args
+        assert progress_call.args[0] == TRACKER_ISSUE_ID
+        assert progress_call.kwargs["status"] == RaidStatus.REVIEW
 
         bus_event = await asyncio.wait_for(q.get(), timeout=1.0)
-        assert bus_event.event == "session.state_changed"
-        assert bus_event.data["status"] == "complete"
+        assert bus_event.event == "raid.state_changed"
+        assert bus_event.data["status"] == "REVIEW"
 
     @pytest.mark.asyncio
     async def test_idle_with_no_turns_does_not_complete(self) -> None:
         """Idle with turn_count <= 1 should not trigger completion."""
-        sub, volundr, pool, _ = _make_subscriber()
+        sub, volundr, tracker, _ = _make_subscriber()
 
         event = ActivityEvent(
             session_id=SESSION_ID,
             state="idle",
-            metadata={"turn_count": 1, "duration_seconds": 5},
+            metadata={"turn_count": 0, "duration_seconds": 5},
             owner_id=OWNER_ID,
         )
 
         await sub._on_activity_event(event, volundr, OWNER_ID)
         await asyncio.sleep(0.1)
 
-        assert pool.sessions[SESSION_ID]["status"] == "running"
+        tracker.update_raid_progress.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_active_event_cancels_pending_evaluation(self) -> None:
         """An active event should cancel any pending idle evaluation."""
         config = _default_config(completion_check_delay=1.0)
-        sub, volundr, pool, _ = _make_subscriber(config=config)
+        sub, volundr, tracker, _ = _make_subscriber(config=config)
 
         idle_event = ActivityEvent(
             session_id=SESSION_ID,
@@ -359,13 +384,13 @@ class TestActivityEventHandling:
         )
         await sub._on_activity_event(active_event, volundr, OWNER_ID)
         assert SESSION_ID not in sub._pending_evaluations
-        assert pool.sessions[SESSION_ID]["status"] == "running"
+        tracker.update_raid_progress.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_tool_executing_cancels_pending_evaluation(self) -> None:
         """A tool_executing event should cancel pending idle evaluation."""
         config = _default_config(completion_check_delay=1.0)
-        sub, volundr, pool, _ = _make_subscriber(config=config)
+        sub, volundr, tracker, _ = _make_subscriber(config=config)
 
         idle_event = ActivityEvent(
             session_id=SESSION_ID,
@@ -387,7 +412,8 @@ class TestActivityEventHandling:
     @pytest.mark.asyncio
     async def test_no_session_record_is_ignored(self) -> None:
         """Idle event for a session with no running record is ignored."""
-        sub, volundr, pool, _ = _make_subscriber()
+        # Tracker has no raid for "unknown-session"
+        sub, volundr, tracker, _ = _make_subscriber()
 
         event = ActivityEvent(
             session_id="unknown-session",
@@ -398,6 +424,7 @@ class TestActivityEventHandling:
         await sub._on_activity_event(event, volundr, OWNER_ID)
         await asyncio.sleep(0.1)
         # No crash, no transitions
+        tracker.update_raid_progress.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -410,11 +437,11 @@ class TestCompletionEvaluationLogic:
     async def test_basic_completion(self) -> None:
         """Session idle with turns > 1 should evaluate as complete."""
         sub, volundr, _, _ = _make_subscriber()
-        record = _make_record()
-        volundr.pr_error_sessions.add(record["session_id"])
+        raid = _make_raid()
+        volundr.pr_error_sessions.add(raid.session_id)
 
         result = await sub._evaluate_completion(
-            record, volundr, {"turn_count": 5, "duration_seconds": 60}
+            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
         )
         assert result.is_complete is True
         assert result.signals["session_idle"] is True
@@ -425,8 +452,8 @@ class TestCompletionEvaluationLogic:
     async def test_pr_increases_confidence(self) -> None:
         """PR existence should increase confidence."""
         sub, volundr, _, _ = _make_subscriber()
-        record = _make_record()
-        volundr.pr_statuses[record["session_id"]] = PRStatus(
+        raid = _make_raid()
+        volundr.pr_statuses[raid.session_id] = PRStatus(
             pr_id="PR-1",
             url="https://github.com/pull/1",
             state="open",
@@ -435,7 +462,7 @@ class TestCompletionEvaluationLogic:
         )
 
         result = await sub._evaluate_completion(
-            record, volundr, {"turn_count": 5, "duration_seconds": 60}
+            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
         )
         assert result.is_complete is True
         assert result.signals["pr_exists"] is True
@@ -447,11 +474,11 @@ class TestCompletionEvaluationLogic:
         """When require_pr=True and no PR, should not complete."""
         config = _default_config(require_pr=True)
         sub, volundr, _, _ = _make_subscriber(config=config)
-        record = _make_record()
-        volundr.pr_error_sessions.add(record["session_id"])
+        raid = _make_raid()
+        volundr.pr_error_sessions.add(raid.session_id)
 
         result = await sub._evaluate_completion(
-            record, volundr, {"turn_count": 5, "duration_seconds": 60}
+            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
         )
         assert result.is_complete is False
 
@@ -460,8 +487,8 @@ class TestCompletionEvaluationLogic:
         """When require_ci=True and CI not passed, should not complete."""
         config = _default_config(require_ci=True)
         sub, volundr, _, _ = _make_subscriber(config=config)
-        record = _make_record()
-        volundr.pr_statuses[record["session_id"]] = PRStatus(
+        raid = _make_raid()
+        volundr.pr_statuses[raid.session_id] = PRStatus(
             pr_id="PR-1",
             url="url",
             state="open",
@@ -470,7 +497,7 @@ class TestCompletionEvaluationLogic:
         )
 
         result = await sub._evaluate_completion(
-            record, volundr, {"turn_count": 5, "duration_seconds": 60}
+            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
         )
         assert result.is_complete is False
 
@@ -479,11 +506,11 @@ class TestCompletionEvaluationLogic:
         """Duration above threshold should increase confidence."""
         config = _default_config(idle_threshold=10.0)
         sub, volundr, _, _ = _make_subscriber(config=config)
-        record = _make_record()
-        volundr.pr_error_sessions.add(record["session_id"])
+        raid = _make_raid()
+        volundr.pr_error_sessions.add(raid.session_id)
 
         result = await sub._evaluate_completion(
-            record, volundr, {"turn_count": 5, "duration_seconds": 120}
+            raid, volundr, {"turn_count": 5, "duration_seconds": 120}
         )
         assert result.signals["extended_idle"] is True
         assert result.confidence >= 0.6
@@ -492,11 +519,11 @@ class TestCompletionEvaluationLogic:
     async def test_no_pr_still_evaluates(self) -> None:
         """Session without PR should still evaluate (pr_exists=False)."""
         sub, volundr, _, _ = _make_subscriber()
-        record = _make_record()
-        volundr.pr_error_sessions.add(record["session_id"])
+        raid = _make_raid()
+        volundr.pr_error_sessions.add(raid.session_id)
 
         result = await sub._evaluate_completion(
-            record, volundr, {"turn_count": 5, "duration_seconds": 60}
+            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
         )
         assert result.is_complete is True
         assert result.signals["pr_exists"] is False
@@ -511,11 +538,9 @@ class TestCompletionHandling:
     @pytest.mark.asyncio
     async def test_pr_info_stored_on_completion(self) -> None:
         """PR URL and ID should be emitted when PR is detected."""
-        sub, volundr, pool, event_bus = _make_subscriber()
+        sub, volundr, tracker, event_bus = _make_subscriber()
 
-        record = _make_record()
-        pool.sessions[SESSION_ID] = record
-
+        raid = _make_raid()
         evaluation = CompletionEvaluation(
             is_complete=True,
             signals={
@@ -529,9 +554,14 @@ class TestCompletionHandling:
         )
 
         q = event_bus.subscribe()
-        await sub._handle_completion(record, evaluation)
+        await sub._handle_completion(raid, tracker, volundr, OWNER_ID, evaluation)
 
-        assert pool.sessions[SESSION_ID]["status"] == "complete"
+        tracker.update_raid_progress.assert_called_once()
+        progress_call = tracker.update_raid_progress.call_args
+        assert progress_call.args[0] == TRACKER_ISSUE_ID
+        assert progress_call.kwargs["status"] == RaidStatus.REVIEW
+        assert progress_call.kwargs["pr_id"] == "PR-42"
+        assert progress_call.kwargs["pr_url"] == "https://github.com/org/repo/pull/42"
 
         bus_event = await asyncio.wait_for(q.get(), timeout=1.0)
         assert bus_event.data["pr_id"] == "PR-42"
@@ -539,37 +569,35 @@ class TestCompletionHandling:
 
     @pytest.mark.asyncio
     async def test_no_pr_still_transitions(self) -> None:
-        """Completion without a PR should still transition to complete."""
-        sub, volundr, pool, _ = _make_subscriber()
+        """Completion without a PR should still transition to REVIEW."""
+        sub, volundr, tracker, _ = _make_subscriber()
 
-        record = _make_record()
-        pool.sessions[SESSION_ID] = record
-
+        raid = _make_raid()
         evaluation = CompletionEvaluation(
             is_complete=True,
             signals={"session_idle": True, "has_turns": True},
             confidence=0.5,
         )
 
-        await sub._handle_completion(record, evaluation)
+        await sub._handle_completion(raid, tracker, volundr, OWNER_ID, evaluation)
 
-        assert pool.sessions[SESSION_ID]["status"] == "complete"
+        tracker.update_raid_progress.assert_called_once()
+        progress_call = tracker.update_raid_progress.call_args
+        assert progress_call.kwargs["status"] == RaidStatus.REVIEW
 
     @pytest.mark.asyncio
     async def test_event_emitted_on_completion(self) -> None:
-        """Event bus should receive session.state_changed on completion."""
-        sub, volundr, pool, event_bus = _make_subscriber()
+        """Event bus should receive raid.state_changed on completion."""
+        sub, volundr, tracker, event_bus = _make_subscriber()
 
-        record = _make_record()
-        pool.sessions[SESSION_ID] = record
-
+        raid = _make_raid()
         q = event_bus.subscribe()
-        await sub._handle_completion(record)
+        await sub._handle_completion(raid, tracker, volundr, OWNER_ID)
 
         bus_event = await asyncio.wait_for(q.get(), timeout=1.0)
-        assert bus_event.event == "session.state_changed"
+        assert bus_event.event == "raid.state_changed"
         assert bus_event.data["session_id"] == SESSION_ID
-        assert bus_event.data["status"] == "complete"
+        assert bus_event.data["status"] == "REVIEW"
 
 
 # ---------------------------------------------------------------------------
@@ -582,10 +610,8 @@ class TestDispatcherPauseFiltering:
     async def test_paused_dispatcher_skips_completion(self) -> None:
         """Sessions belonging to paused owners should not complete."""
         dispatcher_repo = StubDispatcherRepo(running=False)
-        pool = StubPool()
-        pool.add_session(SESSION_ID, owner_id="user-paused")
 
-        sub, volundr, _, _ = _make_subscriber(pool=pool, dispatcher_repo=dispatcher_repo)
+        sub, volundr, tracker, _ = _make_subscriber(dispatcher_repo=dispatcher_repo)
 
         event = ActivityEvent(
             session_id=SESSION_ID,
@@ -596,16 +622,14 @@ class TestDispatcherPauseFiltering:
         await sub._on_activity_event(event, volundr, OWNER_ID)
         await asyncio.sleep(0.1)
 
-        assert pool.sessions[SESSION_ID]["status"] == "running"
+        tracker.update_raid_progress.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_running_dispatcher_allows_completion(self) -> None:
         """Sessions belonging to running owners should complete normally."""
         dispatcher_repo = StubDispatcherRepo(running=True)
-        pool = StubPool()
-        pool.add_session(SESSION_ID, owner_id="user-active")
 
-        sub, volundr, _, _ = _make_subscriber(pool=pool, dispatcher_repo=dispatcher_repo)
+        sub, volundr, tracker, _ = _make_subscriber(dispatcher_repo=dispatcher_repo)
 
         event = ActivityEvent(
             session_id=SESSION_ID,
@@ -616,7 +640,9 @@ class TestDispatcherPauseFiltering:
         await sub._on_activity_event(event, volundr, OWNER_ID)
         await asyncio.sleep(0.1)
 
-        assert pool.sessions[SESSION_ID]["status"] == "complete"
+        tracker.update_raid_progress.assert_called()
+        progress_call = tracker.update_raid_progress.call_args
+        assert progress_call.kwargs["status"] == RaidStatus.REVIEW
 
 
 # ---------------------------------------------------------------------------
@@ -628,7 +654,7 @@ class TestFailureDetection:
     @pytest.mark.asyncio
     async def test_session_stopped_transitions_to_failed(self) -> None:
         """A session_status=stopped event should mark the session failed."""
-        sub, volundr, pool, event_bus = _make_subscriber()
+        sub, volundr, tracker, event_bus = _make_subscriber()
 
         event = ActivityEvent(
             session_id=SESSION_ID,
@@ -641,16 +667,18 @@ class TestFailureDetection:
         q = event_bus.subscribe()
         await sub._on_activity_event(event, volundr, OWNER_ID)
 
-        assert pool.sessions[SESSION_ID]["status"] == "failed"
+        tracker.update_raid_progress.assert_called_once()
+        progress_call = tracker.update_raid_progress.call_args
+        assert progress_call.kwargs["status"] == RaidStatus.FAILED
 
         bus_event = await asyncio.wait_for(q.get(), timeout=1.0)
-        assert bus_event.event == "session.state_changed"
-        assert bus_event.data["status"] == "failed"
+        assert bus_event.event == "raid.state_changed"
+        assert bus_event.data["status"] == "FAILED"
 
     @pytest.mark.asyncio
     async def test_session_failed_transitions_to_failed(self) -> None:
         """A session_status=failed event should mark the session failed."""
-        sub, volundr, pool, _ = _make_subscriber()
+        sub, volundr, tracker, _ = _make_subscriber()
 
         event = ActivityEvent(
             session_id=SESSION_ID,
@@ -662,13 +690,15 @@ class TestFailureDetection:
 
         await sub._on_activity_event(event, volundr, OWNER_ID)
 
-        assert pool.sessions[SESSION_ID]["status"] == "failed"
+        tracker.update_raid_progress.assert_called_once()
+        progress_call = tracker.update_raid_progress.call_args
+        assert progress_call.kwargs["status"] == RaidStatus.FAILED
 
     @pytest.mark.asyncio
     async def test_session_failed_cancels_pending_evaluation(self) -> None:
         """A failure event should cancel any pending idle evaluation."""
         config = _default_config(completion_check_delay=1.0)
-        sub, volundr, pool, _ = _make_subscriber(config=config)
+        sub, volundr, tracker, _ = _make_subscriber(config=config)
 
         # Schedule an idle evaluation
         idle_event = ActivityEvent(
@@ -691,12 +721,14 @@ class TestFailureDetection:
         await sub._on_activity_event(fail_event, volundr, OWNER_ID)
 
         assert SESSION_ID not in sub._pending_evaluations
-        assert pool.sessions[SESSION_ID]["status"] == "failed"
+        tracker.update_raid_progress.assert_called_once()
+        progress_call = tracker.update_raid_progress.call_args
+        assert progress_call.kwargs["status"] == RaidStatus.FAILED
 
     @pytest.mark.asyncio
     async def test_session_not_found_during_eval_fails(self) -> None:
         """If get_session returns None during evaluation, session fails."""
-        sub, volundr, pool, _ = _make_subscriber()
+        sub, volundr, tracker, _ = _make_subscriber()
 
         # Remove the session so get_session returns None
         volundr.sessions.pop(SESSION_ID, None)
@@ -710,12 +742,14 @@ class TestFailureDetection:
         await sub._on_activity_event(event, volundr, OWNER_ID)
         await asyncio.sleep(0.1)
 
-        assert pool.sessions[SESSION_ID]["status"] == "failed"
+        tracker.update_raid_progress.assert_called_once()
+        progress_call = tracker.update_raid_progress.call_args
+        assert progress_call.kwargs["status"] == RaidStatus.FAILED
 
     @pytest.mark.asyncio
     async def test_session_stopped_during_eval_fails(self) -> None:
         """If get_session returns stopped during evaluation, session fails."""
-        sub, volundr, pool, _ = _make_subscriber()
+        sub, volundr, tracker, _ = _make_subscriber()
 
         # Session is stopped
         volundr.sessions[SESSION_ID] = _make_volundr_session(
@@ -731,12 +765,14 @@ class TestFailureDetection:
         await sub._on_activity_event(event, volundr, OWNER_ID)
         await asyncio.sleep(0.1)
 
-        assert pool.sessions[SESSION_ID]["status"] == "failed"
+        tracker.update_raid_progress.assert_called_once()
+        progress_call = tracker.update_raid_progress.call_args
+        assert progress_call.kwargs["status"] == RaidStatus.FAILED
 
     @pytest.mark.asyncio
     async def test_failure_no_session_record_is_ignored(self) -> None:
         """A failure event for an unknown session should be ignored."""
-        sub, volundr, pool, _ = _make_subscriber()
+        sub, volundr, tracker, _ = _make_subscriber()
 
         event = ActivityEvent(
             session_id="unknown-session",
@@ -747,21 +783,21 @@ class TestFailureDetection:
         )
         await sub._on_activity_event(event, volundr, OWNER_ID)
         # No crash, no transitions
+        tracker.update_raid_progress.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_event_emitted_on_failure(self) -> None:
-        """Event bus should receive session.state_changed on failure."""
-        sub, volundr, pool, event_bus = _make_subscriber()
-        record = _make_record()
-        pool.sessions[SESSION_ID] = record
+        """Event bus should receive raid.state_changed on failure."""
+        sub, volundr, tracker, event_bus = _make_subscriber()
+        raid = _make_raid()
 
         q = event_bus.subscribe()
-        await sub._handle_failure(record, reason="Session stopped")
+        await sub._handle_failure(raid, tracker, OWNER_ID, reason="Session stopped")
 
         bus_event = await asyncio.wait_for(q.get(), timeout=1.0)
-        assert bus_event.event == "session.state_changed"
+        assert bus_event.event == "raid.state_changed"
         assert bus_event.data["session_id"] == SESSION_ID
-        assert bus_event.data["status"] == "failed"
+        assert bus_event.data["status"] == "FAILED"
 
 
 # ---------------------------------------------------------------------------
