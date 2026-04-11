@@ -1919,6 +1919,8 @@ async def _run_daemon(
     event_publisher: EventPublisherPort = NoOpEventPublisher()
     trigger_names: list[str] = []
     drive_loop: Any = None
+    _cascade_mesh: Any = None
+    _cascade_discovery: Any = None
     if settings.initiative.enabled or task_dispatch:
         if settings.sleipnir.enabled:
             event_publisher = RabbitMQEventPublisher(settings.sleipnir)
@@ -1949,7 +1951,11 @@ async def _run_daemon(
 
         # Wire cascade tools when enabled (Mode 1 local + optional mesh/spawn)
         if settings.cascade.enabled:
-            _wire_cascade(drive_loop, settings)
+            _cascade_mesh, _cascade_discovery = _wire_cascade(drive_loop, settings)
+            if _cascade_discovery is not None:
+                await _cascade_discovery.start()
+            if _cascade_mesh is not None:
+                await _cascade_mesh.start()
 
         trigger_names = [t.name for t in drive_loop._triggers]
         tasks.append(asyncio.create_task(drive_loop.run(), name="drive_loop"))
@@ -1981,6 +1987,10 @@ async def _run_daemon(
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        if _cascade_mesh is not None:
+            await _cascade_mesh.stop()
+        if _cascade_discovery is not None:
+            await _cascade_discovery.stop()
         await event_publisher.close()
         await _shutdown_mcp(mcp_manager)
 
@@ -2190,6 +2200,8 @@ def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
 
     if mesh is not None and hasattr(mesh, "set_rpc_handler"):
         mesh.set_rpc_handler(drive_loop.handle_rpc)
+
+    return mesh, discovery
 
 
 def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
