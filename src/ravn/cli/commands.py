@@ -1977,6 +1977,7 @@ async def _run_daemon(
             settings=settings,
             event_publisher=event_publisher,
             resume=resume,
+            mimir=daemon_mimir,
         )
         _cron_jobs = _wire_triggers(drive_loop, settings.initiative)
         cron_tools[:] = _wire_cron(drive_loop, _cron_jobs, settings.initiative)
