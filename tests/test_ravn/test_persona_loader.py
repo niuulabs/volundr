@@ -226,6 +226,8 @@ class TestListBuiltinNames:
         assert "research-agent" in names
         assert "planning-agent" in names
         assert "autonomous-agent" in names
+        assert "draft-a-note" in names
+        assert "research-and-distill" in names
 
     def test_returns_sorted_list(self) -> None:
         names = PersonaLoader().list_builtin_names()
@@ -302,6 +304,30 @@ class TestBuiltinPersonas:
     def test_draft_a_note_system_prompt_mentions_notes_path(self) -> None:
         cfg = _BUILTIN_PERSONAS["draft-a-note"]
         assert "notes/" in cfg.system_prompt_template
+
+    def test_research_and_distill_exists(self) -> None:
+        cfg = _BUILTIN_PERSONAS["research-and-distill"]
+        assert cfg.name == "research-and-distill"
+        assert cfg.permission_mode == "read-only"
+        assert cfg.iteration_budget == 15
+        assert "mimir_search" in cfg.allowed_tools
+        assert "mimir_read" in cfg.allowed_tools
+        assert "mimir_write" in cfg.allowed_tools
+        assert "mimir_list" in cfg.allowed_tools
+        assert "web_search" in cfg.allowed_tools
+        assert "web_fetch" in cfg.allowed_tools
+        assert "bash" in cfg.forbidden_tools
+        assert "terminal" in cfg.forbidden_tools
+        assert "edit_file" in cfg.forbidden_tools
+        assert "write_file" in cfg.forbidden_tools
+
+    def test_research_and_distill_system_prompt_mentions_produced_by_thread(self) -> None:
+        cfg = _BUILTIN_PERSONAS["research-and-distill"]
+        assert "produced_by_thread" in cfg.system_prompt_template
+
+    def test_research_and_distill_system_prompt_mentions_word_limit(self) -> None:
+        cfg = _BUILTIN_PERSONAS["research-and-distill"]
+        assert "1500" in cfg.system_prompt_template
 
     def test_all_builtins_have_system_prompts(self) -> None:
         for name, cfg in _BUILTIN_PERSONAS.items():
