@@ -58,6 +58,29 @@
 #   owner_id: null                      # defaults to this instance's own ID
 
 # ---------------------------------------------------------------------------
+# Trust gradient (NIU-571)
+#
+# Constrains what the Ravn can do autonomously during wakefulness.
+# Each category maps to a trust level:
+#   "free"     — action allowed without operator intervention
+#   "approval" — tool forbidden; agent writes an approval request to approvals/
+#   "never"    — tool unconditionally forbidden
+# ---------------------------------------------------------------------------
+# trust:
+#   reading: free
+#   writing_notes: free
+#   sandbox_experiments: free
+#   consulting_peers: free
+#   drafting_tickets: free
+#   producing_recaps: free
+#   opening_tickets: approval
+#   closing_tickets: approval
+#   pushing_branches: approval
+#   pushing_main: never
+#   external_messages: approval
+#   spending_beyond_cap: approval
+
+# ---------------------------------------------------------------------------
 # Memory
 # ---------------------------------------------------------------------------
 # memory:

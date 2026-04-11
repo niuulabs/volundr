@@ -5,7 +5,10 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 
+import pytest
+
 from ravn.config import (
+    TRUST_CATEGORY_TOOLS,
     AgentConfig,
     AnthropicConfig,
     ChannelConfig,
@@ -24,6 +27,8 @@ from ravn.config import (
     ThreadConfig,
     ToolAdapterConfig,
     ToolsConfig,
+    TrustGradientConfig,
+    resolve_trust_tools,
 )
 
 
@@ -494,3 +499,198 @@ class TestSettingsThread:
         with patch.dict(os.environ, {"RAVN_THREAD__OWNER_ID": "instance-xyz"}):
             s = Settings()
             assert s.thread.owner_id == "instance-xyz"
+
+
+# ---------------------------------------------------------------------------
+# NIU-571: Trust gradient config
+# ---------------------------------------------------------------------------
+
+
+class TestTrustGradientConfig:
+    def test_defaults_match_vision_doc(self) -> None:
+        """Default config matches vaka-vision.md §5 table."""
+        c = TrustGradientConfig()
+        assert c.reading == "free"
+        assert c.writing_notes == "free"
+        assert c.sandbox_experiments == "free"
+        assert c.consulting_peers == "free"
+        assert c.drafting_tickets == "free"
+        assert c.producing_recaps == "free"
+        assert c.opening_tickets == "approval"
+        assert c.closing_tickets == "approval"
+        assert c.pushing_branches == "approval"
+        assert c.pushing_main == "never"
+        assert c.external_messages == "approval"
+        assert c.spending_beyond_cap == "approval"
+
+    def test_custom_override(self) -> None:
+        c = TrustGradientConfig(reading="approval", pushing_main="approval")
+        assert c.reading == "approval"
+        assert c.pushing_main == "approval"
+
+    def test_all_free(self) -> None:
+        c = TrustGradientConfig(
+            opening_tickets="free",
+            closing_tickets="free",
+            pushing_branches="free",
+            pushing_main="free",
+            external_messages="free",
+            spending_beyond_cap="free",
+        )
+        assert c.opening_tickets == "free"
+        assert c.pushing_main == "free"
+
+    def test_all_never(self) -> None:
+        c = TrustGradientConfig(
+            reading="never",
+            writing_notes="never",
+            sandbox_experiments="never",
+            consulting_peers="never",
+            drafting_tickets="never",
+            producing_recaps="never",
+            opening_tickets="never",
+            closing_tickets="never",
+            pushing_branches="never",
+            pushing_main="never",
+            external_messages="never",
+            spending_beyond_cap="never",
+        )
+        for field_name in TrustGradientConfig.model_fields:
+            assert getattr(c, field_name) == "never"
+
+    def test_invalid_level_rejected(self) -> None:
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            TrustGradientConfig(reading="maybe")  # type: ignore[arg-type]
+
+
+class TestResolveTrustTools:
+    def test_free_tools_in_allowed(self) -> None:
+        c = TrustGradientConfig()
+        allowed, forbidden = resolve_trust_tools(c)
+        # reading is free, so its tools should be in allowed
+        for tool in TRUST_CATEGORY_TOOLS["reading"]:
+            assert tool in allowed
+
+    def test_approval_tools_in_forbidden(self) -> None:
+        c = TrustGradientConfig()
+        allowed, forbidden = resolve_trust_tools(c)
+        # opening_tickets is approval, so its tools should be in forbidden
+        for tool in TRUST_CATEGORY_TOOLS["opening_tickets"]:
+            assert tool in forbidden
+
+    def test_never_tools_in_forbidden(self) -> None:
+        c = TrustGradientConfig()
+        allowed, forbidden = resolve_trust_tools(c)
+        # pushing_main is never, so its tools should be in forbidden
+        for tool in TRUST_CATEGORY_TOOLS["pushing_main"]:
+            assert tool in forbidden
+
+    def test_free_tools_not_in_forbidden(self) -> None:
+        c = TrustGradientConfig()
+        allowed, forbidden = resolve_trust_tools(c)
+        for tool in TRUST_CATEGORY_TOOLS["reading"]:
+            assert tool not in forbidden
+
+    def test_approval_tools_not_in_allowed(self) -> None:
+        c = TrustGradientConfig()
+        allowed, forbidden = resolve_trust_tools(c)
+        for tool in TRUST_CATEGORY_TOOLS["opening_tickets"]:
+            assert tool not in allowed
+
+    def test_merge_with_persona_constraints_intersection(self) -> None:
+        """Tool resolution merges with persona constraints (intersection)."""
+        c = TrustGradientConfig()
+        # Persona allows only "file_read" and "mimir_query" — both trust-free
+        persona_allowed = ["file_read", "mimir_query"]
+        allowed, forbidden = resolve_trust_tools(
+            c,
+            persona_allowed=persona_allowed,
+        )
+        # Only persona-allowed tools that are also trust-free should appear
+        assert "file_read" in allowed
+        assert "mimir_query" in allowed
+
+    def test_merge_persona_forbidden_union(self) -> None:
+        """Persona forbidden list is unioned with trust forbidden list."""
+        c = TrustGradientConfig()
+        persona_forbidden = ["custom_tool"]
+        allowed, forbidden = resolve_trust_tools(
+            c,
+            persona_forbidden=persona_forbidden,
+        )
+        # Both trust-forbidden and persona-forbidden should appear
+        assert "custom_tool" in forbidden
+        for tool in TRUST_CATEGORY_TOOLS["opening_tickets"]:
+            assert tool in forbidden
+
+    def test_persona_allowed_tool_not_in_trust_categories_passes_through(self) -> None:
+        """Persona-allowed tools not governed by trust gradient pass through."""
+        c = TrustGradientConfig()
+        persona_allowed = ["file_read", "custom_untracked_tool"]
+        allowed, _ = resolve_trust_tools(c, persona_allowed=persona_allowed)
+        # custom_untracked_tool is not in any trust category, so it passes through
+        assert "custom_untracked_tool" in allowed
+
+    def test_all_categories_have_tool_mappings(self) -> None:
+        """Every trust category has a corresponding entry in TRUST_CATEGORY_TOOLS."""
+        for field_name in TrustGradientConfig.model_fields:
+            assert field_name in TRUST_CATEGORY_TOOLS, (
+                f"Category {field_name!r} missing from TRUST_CATEGORY_TOOLS"
+            )
+
+    def test_no_persona_constraints(self) -> None:
+        """Without persona constraints, returns raw trust lists."""
+        c = TrustGradientConfig()
+        allowed, forbidden = resolve_trust_tools(c)
+        # All free-category tools in allowed
+        free_tools = []
+        for cat in [
+            "reading",
+            "writing_notes",
+            "sandbox_experiments",
+            "consulting_peers",
+            "drafting_tickets",
+            "producing_recaps",
+        ]:
+            free_tools.extend(TRUST_CATEGORY_TOOLS[cat])
+        for tool in free_tools:
+            assert tool in allowed
+
+    def test_custom_trust_config(self) -> None:
+        """Changing a category from free to never moves tools to forbidden."""
+        c = TrustGradientConfig(reading="never")
+        allowed, forbidden = resolve_trust_tools(c)
+        for tool in TRUST_CATEGORY_TOOLS["reading"]:
+            assert tool in forbidden
+            assert tool not in allowed
+
+
+class TestSettingsTrust:
+    def test_settings_trust_defaults(self) -> None:
+        s = Settings()
+        assert s.trust.reading == "free"
+        assert s.trust.pushing_main == "never"
+        assert s.trust.opening_tickets == "approval"
+
+    def test_yaml_trust_section(self, tmp_path) -> None:
+        cfg = tmp_path / "ravn.yaml"
+        cfg.write_text(
+            "trust:\n  reading: approval\n  pushing_main: approval\n  opening_tickets: free\n"
+        )
+        with patch.dict(os.environ, {"RAVN_CONFIG": str(cfg)}):
+            s = Settings()
+            assert s.trust.reading == "approval"
+            assert s.trust.pushing_main == "approval"
+            assert s.trust.opening_tickets == "free"
+
+    def test_env_var_trust_override(self) -> None:
+        with patch.dict(os.environ, {"RAVN_TRUST__READING": "never"}):
+            s = Settings()
+            assert s.trust.reading == "never"
+
+    def test_env_var_trust_pushing_main(self) -> None:
+        with patch.dict(os.environ, {"RAVN_TRUST__PUSHING_MAIN": "approval"}):
+            s = Settings()
+            assert s.trust.pushing_main == "approval"

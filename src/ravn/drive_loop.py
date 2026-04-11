@@ -52,7 +52,7 @@ class DriveLoop:
 
     def __init__(
         self,
-        agent_factory: Callable[[ChannelPort, str | None, str | None], object],
+        agent_factory: Callable[[ChannelPort, str | None, str | None, str | None], object],
         config: InitiativeConfig,
         settings: Settings,
         event_publisher: EventPublisherPort | None = None,
@@ -271,7 +271,7 @@ class DriveLoop:
             channel: ChannelPort = CaptureChannel(task.task_id, self._result_store)
         else:
             channel = SilentChannel()
-        agent = self._agent_factory(channel, task.task_id, task.persona)
+        agent = self._agent_factory(channel, task.task_id, task.persona, task.triggered_by)
         prompt = build_initiative_prompt(task)
 
         logger.info(

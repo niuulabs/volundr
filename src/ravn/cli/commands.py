@@ -1800,6 +1800,7 @@ async def _run_daemon(
         channel: ChannelPort,
         task_id: str | None = None,
         task_persona: str | None = None,
+        triggered_by: str | None = None,
     ) -> Any:
         # Resolve per-task persona — triggered tasks may request a different persona.
         resolved_persona = persona_config
@@ -1861,6 +1862,28 @@ async def _run_daemon(
             # Add cron scheduling tools
             if cron_tools:
                 tools.extend(cron_tools)
+
+        # NIU-571: Apply trust gradient constraints for thread-triggered tasks
+        if triggered_by and triggered_by.startswith("thread:"):
+            from ravn.config import resolve_trust_tools
+
+            persona_allowed = resolved_persona.allowed_tools if resolved_persona else None
+            persona_forbidden = resolved_persona.forbidden_tools if resolved_persona else None
+            _trust_allowed, trust_forbidden = resolve_trust_tools(
+                settings.trust,
+                persona_allowed=persona_allowed,
+                persona_forbidden=persona_forbidden,
+            )
+            if trust_forbidden:
+                forbidden_set = set(trust_forbidden)
+                tools = [
+                    t
+                    for t in tools
+                    if not any(
+                        t.name == prefix or t.name.startswith(prefix + "_")
+                        for prefix in forbidden_set
+                    )
+                ]
 
         return RavnAgent(
             llm=llm,
