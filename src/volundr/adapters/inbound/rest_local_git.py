@@ -111,7 +111,20 @@ def _resolve_workspace(session_id: UUID, sessions_base: str) -> Path:
     local filesystem.
     """
     base = Path(sessions_base).resolve()
-    workspace = (base / str(session_id) / "workspace").resolve()
+    session_segment = str(session_id)
+    try:
+        canonical_session_segment = str(UUID(session_segment))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid session identifier.",
+        ) from None
+    if session_segment != canonical_session_segment:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid session identifier.",
+        )
+    workspace = (base / session_segment / "workspace").resolve()
 
     try:
         workspace.relative_to(base)
