@@ -956,6 +956,16 @@ async def test_double_unsubscribe_idempotent():
     await sub.unsubscribe()  # should not raise
 
 
+def test_remove_subscription_silently_ignores_missing_sub():
+    """_remove_subscription does not raise when the sub is not in the list."""
+    from unittest.mock import MagicMock
+
+    transport, _ = make_transport()
+    # Call _remove_subscription with a fake sub that was never added
+    fake_sub = MagicMock()
+    transport._remove_subscription(fake_sub)  # should not raise ValueError
+
+
 # ---------------------------------------------------------------------------
 # redis_available import guard
 # ---------------------------------------------------------------------------

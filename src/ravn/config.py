@@ -1177,6 +1177,30 @@ class TriggerAdapterConfig(BaseModel):
     )
 
 
+class BudgetConfig(BaseModel):
+    """Per-Ravn daily API budget configuration (NIU-570)."""
+
+    daily_cap_usd: float = Field(
+        default=1.0,
+        description="Maximum USD spend per UTC day before new initiative tasks are gated.",
+    )
+    input_token_cost_per_million: float = Field(
+        default=3.0,
+        description="Input token cost in USD per million tokens (used to estimate task cost).",
+    )
+    output_token_cost_per_million: float = Field(
+        default=15.0,
+        description="Output token cost in USD per million tokens (used to estimate task cost).",
+    )
+    warn_at_percent: int = Field(
+        default=80,
+        description=(
+            "Publish a DECISION warning event when daily spend reaches this percentage "
+            "of the daily cap."
+        ),
+    )
+
+
 class InitiativeConfig(BaseModel):
     """Drive-loop initiative engine configuration (NIU-539)."""
 
@@ -1989,6 +2013,9 @@ class Settings(BaseSettings):
 
     # NIU-539: drive loop / initiative engine
     initiative: InitiativeConfig = Field(default_factory=InitiativeConfig)
+
+    # NIU-570: daily API budget gates
+    budget: BudgetConfig = Field(default_factory=BudgetConfig)
 
     # NIU-558: thread enrichment queue
     thread: ThreadConfig = Field(default_factory=ThreadConfig)

@@ -13,16 +13,18 @@ daemon instances.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import logging
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from ravn.adapters.channels.capture import CaptureChannel, TaskResult, TaskResultStore
 from ravn.adapters.channels.silent import SilentChannel
 from ravn.adapters.events.noop_publisher import NoOpEventPublisher
-from ravn.config import InitiativeConfig, Settings
+from ravn.config import BudgetConfig, InitiativeConfig, Settings
+from ravn.domain.budget import DailyBudgetTracker
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.models import AgentTask, OutputMode
 from ravn.ports.channel import ChannelPort
@@ -57,6 +59,7 @@ class DriveLoop:
         settings: Settings,
         event_publisher: EventPublisherPort | None = None,
         resume: bool = False,
+        budget: DailyBudgetTracker | None = None,
     ) -> None:
         self._agent_factory = agent_factory
         self._config = config
@@ -73,6 +76,17 @@ class DriveLoop:
         self._counter = 0
         self._rpc_handler: MeshRpcHandler | None = None
         self._result_store: TaskResultStore = TaskResultStore()
+        budget_cfg = getattr(settings, "budget", None)
+        if isinstance(budget_cfg, BudgetConfig):
+            _cap = budget_cfg.daily_cap_usd
+            _warn = budget_cfg.warn_at_percent
+        else:
+            _cap = 1.0
+            _warn = 80
+        self._budget: DailyBudgetTracker = budget or DailyBudgetTracker(
+            daily_cap_usd=_cap,
+            warn_at_percent=_warn,
+        )
 
     # ------------------------------------------------------------------
     # Public API
@@ -266,6 +280,23 @@ class DriveLoop:
 
     async def _run_task(self, task: AgentTask) -> None:
         """Execute a single initiative task."""
+        # Budget pre-check: skip and re-enqueue for tomorrow if daily cap is reached.
+        if not self._budget.can_spend():
+            logger.info(
+                "drive_loop: task %s (%r) skipped — daily budget cap reached "
+                "(spent=%.4f remaining=%.4f)",
+                task.task_id,
+                task.title,
+                self._budget.spent_today_usd,
+                self._budget.remaining_usd,
+            )
+            tomorrow = (datetime.now(UTC) + timedelta(days=1)).replace(
+                hour=0, minute=1, second=0, microsecond=0
+            )
+            deferred = dataclasses.replace(task, deadline=tomorrow)
+            await self.enqueue(deferred)
+            return
+
         if self._settings.cascade.enabled:
             self._result_store.start(task.task_id, task.triggered_by)
             channel: ChannelPort = CaptureChannel(task.task_id, self._result_store)
@@ -300,8 +331,10 @@ class DriveLoop:
 
         success = False
         try:
-            await agent.run_turn(prompt)  # type: ignore[attr-defined]
+            turn_result = await agent.run_turn(prompt)  # type: ignore[attr-defined]
             success = True
+            self._record_task_cost(task, turn_result)
+            await self._maybe_publish_budget_warning(task)
             self._save_task_output(task, channel)
             response_text = getattr(channel, "response_text", "")
             if response_text:
@@ -359,6 +392,59 @@ class DriveLoop:
         except Exception as exc:
             logger.warning("drive_loop: failed to save task output: %s", exc)
 
+    async def _maybe_publish_budget_warning(self, task: AgentTask) -> None:
+        """Publish a DECISION warning event when spend crosses the warn_at_percent threshold."""
+        if not self._budget.warn_threshold_reached:
+            return
+        logger.warning(
+            "drive_loop: daily budget warning — spent=%.4f remaining=%.4f cap=%.4f",
+            self._budget.spent_today_usd,
+            self._budget.remaining_usd,
+            self._settings.budget.daily_cap_usd,
+        )
+        await self._event_publisher.publish(
+            RavnEvent(
+                type=RavnEventType.DECISION,
+                source=self._source_id,
+                payload={
+                    "budget_warning": True,
+                    "spent_today_usd": self._budget.spent_today_usd,
+                    "remaining_usd": self._budget.remaining_usd,
+                    "daily_cap_usd": self._settings.budget.daily_cap_usd,
+                    "warn_at_percent": self._settings.budget.warn_at_percent,
+                },
+                timestamp=datetime.now(UTC),
+                urgency=0.5,
+                correlation_id=task.task_id,
+                session_id=task.session_id,
+                task_id=task.task_id,
+            )
+        )
+
+    def _record_task_cost(self, task: AgentTask, turn_result: object) -> None:
+        """Compute cost from turn_result.usage and record it on the budget tracker."""
+        usage = getattr(turn_result, "usage", None)
+        if usage is None:
+            return
+        input_tokens: int = getattr(usage, "input_tokens", 0)
+        output_tokens: int = getattr(usage, "output_tokens", 0)
+        budget_cfg = getattr(self._settings, "budget", None)
+        if isinstance(budget_cfg, BudgetConfig):
+            input_rate = budget_cfg.input_token_cost_per_million
+            output_rate = budget_cfg.output_token_cost_per_million
+        else:
+            input_rate = 3.0
+            output_rate = 15.0
+        cost_usd = input_tokens * input_rate / 1_000_000 + output_tokens * output_rate / 1_000_000
+        self._budget.record(cost_usd)
+        logger.debug(
+            "drive_loop: task %s cost=%.6f spent_today=%.6f remaining=%.6f",
+            task.task_id,
+            cost_usd,
+            self._budget.spent_today_usd,
+            self._budget.remaining_usd,
+        )
+
     async def _re_deliver_surface(self, task: AgentTask, text: str) -> None:
         """Re-publish a [SURFACE]-prefixed response to Sleipnir at AMBIENT urgency."""
         logger.info(
@@ -390,6 +476,8 @@ class DriveLoop:
                     "active_tasks": active,
                     "queued_tasks": queued,
                     "trigger_count": len(self._triggers),
+                    "budget_spent_usd": round(self._budget.spent_today_usd, 6),
+                    "budget_remaining_usd": round(self._budget.remaining_usd, 6),
                     "heartbeat": True,
                 },
                 timestamp=datetime.now(UTC),
