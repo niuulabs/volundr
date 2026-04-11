@@ -14,7 +14,14 @@ from typing import Any
 import typer
 
 from ravn.agent import PostToolHook, PreToolHook, RavnAgent
-from ravn.config import InitiativeConfig, OutcomeConfig, ProjectConfig, Settings, ToolGroupConfig
+from ravn.config import (
+    InitiativeConfig,
+    OutcomeConfig,
+    ProjectConfig,
+    Settings,
+    ToolGroupConfig,
+    resolve_trust_tools,
+)
 from ravn.domain.checkpoint import InterruptReason
 from ravn.domain.models import (
     Message,
@@ -467,6 +474,30 @@ def _build_tools(
     return tools
 
 
+def _in_groups(name: str, groups: set[str]) -> bool:
+    """Return True if *name* matches any group prefix in *groups*.
+
+    A match means either an exact hit (``name == group``) or a prefixed
+    hit (``name`` starts with ``group_``).
+    """
+    return any(name == g or name.startswith(g + "_") for g in groups)
+
+
+def _apply_trust_filter(
+    tools: list[Any],
+    settings: Settings,
+    triggered_by: str | None,
+) -> list[Any]:
+    """Remove tools forbidden by the trust gradient for thread-triggered tasks."""
+    if not triggered_by or not triggered_by.startswith("thread:"):
+        return tools
+    _allowed, forbidden = resolve_trust_tools(settings.trust)
+    if not forbidden:
+        return tools
+    forbidden_set = set(forbidden)
+    return [t for t in tools if not _in_groups(t.name, forbidden_set)]
+
+
 def _filter_tools(
     tools: list[Any],
     settings: Settings,
@@ -488,9 +519,6 @@ def _filter_tools(
             allowed_groups = set(persona_config.allowed_tools)
         if persona_config.forbidden_tools:
             forbidden_groups = set(persona_config.forbidden_tools)
-
-    def _in_groups(name: str, groups: set[str]) -> bool:
-        return any(name == g or name.startswith(g + "_") for g in groups)
 
     if allowed_groups or enabled_names:
         tools = [
@@ -1800,6 +1828,7 @@ async def _run_daemon(
         channel: ChannelPort,
         task_id: str | None = None,
         task_persona: str | None = None,
+        triggered_by: str | None = None,
     ) -> Any:
         # Resolve per-task persona — triggered tasks may request a different persona.
         resolved_persona = persona_config
@@ -1861,6 +1890,9 @@ async def _run_daemon(
             # Add cron scheduling tools
             if cron_tools:
                 tools.extend(cron_tools)
+
+        # NIU-571: Apply trust gradient constraints for thread-triggered tasks
+        tools = _apply_trust_filter(tools, settings, triggered_by)
 
         return RavnAgent(
             llm=llm,

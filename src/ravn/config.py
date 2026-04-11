@@ -1902,6 +1902,162 @@ class WakefulnessConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# NIU-571: Trust gradient — constrains tool availability per category
+# ---------------------------------------------------------------------------
+
+TrustLevel = Literal["free", "approval", "never"]
+
+
+class TrustGradientConfig(BaseModel):
+    """Trust gradient policy for wakefulness personas (NIU-571).
+
+    Each category maps to a trust level that controls whether the Ravn can
+    perform the action freely, must request operator approval (by writing a
+    Mímir page under ``approvals/``), or is permanently forbidden.
+
+    Levels:
+      - ``"free"``     — action is allowed without operator intervention.
+      - ``"approval"`` — tool is forbidden at runtime; agent writes an
+                         approval request to ``approvals/{slug}.md``.
+      - ``"never"``    — tool is unconditionally forbidden.
+
+    Override via ``trust:`` section in ``ravn.yaml`` or ``RAVN_TRUST__*``
+    environment variables.
+    """
+
+    reading: TrustLevel = Field(
+        default="free",
+        description="Papers, docs, code, ingest.",
+    )
+    writing_notes: TrustLevel = Field(
+        default="free",
+        description="Drafts to Mímir.",
+    )
+    sandbox_experiments: TrustLevel = Field(
+        default="free",
+        description="Völundr sessions.",
+    )
+    consulting_peers: TrustLevel = Field(
+        default="free",
+        description="Bifröst cloud calls within budget.",
+    )
+    drafting_tickets: TrustLevel = Field(
+        default="free",
+        description="Linear drafts (not creation).",
+    )
+    producing_recaps: TrustLevel = Field(
+        default="free",
+        description="Recap generation.",
+    )
+    opening_tickets: TrustLevel = Field(
+        default="approval",
+        description="Creating Linear tickets.",
+    )
+    closing_tickets: TrustLevel = Field(
+        default="approval",
+        description="Closing Linear tickets.",
+    )
+    pushing_branches: TrustLevel = Field(
+        default="approval",
+        description="Git push to feature branches.",
+    )
+    pushing_main: TrustLevel = Field(
+        default="never",
+        description="Git push to main.",
+    )
+    external_messages: TrustLevel = Field(
+        default="approval",
+        description="Slack, email, Telegram to non-operator.",
+    )
+    spending_beyond_cap: TrustLevel = Field(
+        default="approval",
+        description="Exceeding daily budget.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# NIU-571: Trust gradient tool resolution
+# ---------------------------------------------------------------------------
+
+# Maps trust categories → concrete tool name prefixes.  A category may map to
+# multiple tools (e.g. ``reading`` covers several tool prefixes).  Tool names
+# are matched by prefix — ``"mimir"`` matches ``mimir_query``, ``mimir_write``,
+# etc. — consistent with PersonaConfig's existing prefix-match convention.
+TRUST_CATEGORY_TOOLS: dict[str, list[str]] = {
+    "reading": ["file_read", "web_search", "web_fetch", "mimir_query", "mimir_search"],
+    "writing_notes": ["mimir_write", "mimir_ingest"],
+    "sandbox_experiments": ["volundr", "bash", "terminal"],
+    "consulting_peers": ["cascade", "bifrost"],
+    "drafting_tickets": ["linear_draft"],
+    "producing_recaps": ["recap"],
+    "opening_tickets": ["linear_create"],
+    "closing_tickets": ["linear_close", "linear_update"],
+    "pushing_branches": ["git_push"],
+    "pushing_main": ["git_push_main"],
+    "external_messages": ["slack", "email", "telegram"],
+    "spending_beyond_cap": ["budget_override"],
+}
+
+
+def resolve_trust_tools(
+    config: TrustGradientConfig,
+    persona_allowed: list[str] | None = None,
+    persona_forbidden: list[str] | None = None,
+) -> tuple[list[str], list[str]]:
+    """Map trust gradient config to concrete allowed/forbidden tool lists.
+
+    Returns ``(allowed, forbidden)`` where each list contains tool name
+    prefixes.  The caller should apply these as additional constraints on
+    top of the persona's own tool lists.
+
+    When *persona_allowed* or *persona_forbidden* are provided, the result
+    is merged via intersection semantics:
+
+    - A tool is allowed only if **both** the trust gradient and persona
+      permit it (intersection, not union).
+    - A tool is forbidden if **either** the trust gradient or persona
+      forbids it (union of forbidden sets).
+    """
+    trust_allowed: list[str] = []
+    trust_forbidden: list[str] = []
+
+    for category, level in _iter_trust_categories(config):
+        tools = TRUST_CATEGORY_TOOLS.get(category, [])
+        if level == "free":
+            trust_allowed.extend(tools)
+        else:
+            # Both "approval" and "never" result in tools being forbidden
+            trust_forbidden.extend(tools)
+
+    # Merge with persona constraints
+    if persona_forbidden:
+        merged_forbidden = list(dict.fromkeys(trust_forbidden + persona_forbidden))
+    else:
+        merged_forbidden = trust_forbidden
+
+    if persona_allowed:
+        # Intersection: only tools allowed by BOTH persona and trust gradient
+        trust_allowed_set = set(trust_allowed)
+        all_trust = _ALL_TRUST_TOOLS
+        merged_allowed = [
+            t for t in persona_allowed if t in trust_allowed_set or t not in all_trust
+        ]
+    else:
+        merged_allowed = trust_allowed
+
+    return merged_allowed, merged_forbidden
+
+
+def _iter_trust_categories(config: TrustGradientConfig):
+    """Yield ``(category_name, trust_level)`` for each field."""
+    for field_name in TrustGradientConfig.model_fields:
+        yield field_name, getattr(config, field_name)
+
+
+_ALL_TRUST_TOOLS: set[str] = {t for tools in TRUST_CATEGORY_TOOLS.values() for t in tools}
+
+
+# ---------------------------------------------------------------------------
 # Root settings
 # ---------------------------------------------------------------------------
 
@@ -2055,6 +2211,9 @@ class Settings(BaseSettings):
 
     # NIU-565: wakefulness trigger
     wakefulness: WakefulnessConfig = Field(default_factory=WakefulnessConfig)
+
+    # NIU-571: trust gradient — constrains wakefulness tool availability
+    trust: TrustGradientConfig = Field(default_factory=TrustGradientConfig)
 
     # NIU-541: Búri knowledge memory substrate
     buri: BuriConfig = Field(default_factory=BuriConfig)

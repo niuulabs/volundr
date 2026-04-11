@@ -39,11 +39,13 @@ MeshRpcHandler = Callable[[dict], Awaitable[dict]]
 class DriveLoop:
     """Perpetually-running initiative engine.
 
-    ``agent_factory(channel, task_id, persona)`` is called per task to create an
-    isolated :class:`ravn.agent.RavnAgent` instance.  The ``task_id``
-    parameter lets the agent (and its SleipnirChannel) tag all emitted
-    events with the correct task correlation ID.  The ``persona`` parameter
-    allows per-task persona overrides (may be ``None`` to use the default).
+    ``agent_factory(channel, task_id, persona, triggered_by)`` is called per
+    task to create an isolated :class:`ravn.agent.RavnAgent` instance.  The
+    ``task_id`` parameter lets the agent (and its SleipnirChannel) tag all
+    emitted events with the correct task correlation ID.  The ``persona``
+    parameter allows per-task persona overrides (may be ``None`` to use the
+    default).  The ``triggered_by`` parameter carries the trigger source
+    (e.g. ``"thread:<slug>"``) so the factory can apply trust constraints.
 
     Human-initiated turns (from the gateway) are NOT subject to the
     ``max_concurrent_tasks`` cap — that cap only applies to initiative tasks
@@ -52,7 +54,7 @@ class DriveLoop:
 
     def __init__(
         self,
-        agent_factory: Callable[[ChannelPort, str | None, str | None], object],
+        agent_factory: Callable[[ChannelPort, str | None, str | None, str | None], object],
         config: InitiativeConfig,
         settings: Settings,
         event_publisher: EventPublisherPort | None = None,
@@ -271,7 +273,7 @@ class DriveLoop:
             channel: ChannelPort = CaptureChannel(task.task_id, self._result_store)
         else:
             channel = SilentChannel()
-        agent = self._agent_factory(channel, task.task_id, task.persona)
+        agent = self._agent_factory(channel, task.task_id, task.persona, task.triggered_by)
         prompt = build_initiative_prompt(task)
 
         logger.info(
