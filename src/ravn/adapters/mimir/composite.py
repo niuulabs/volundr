@@ -273,6 +273,7 @@ class CompositeMimirAdapter(MimirPort):
         path: str,
         content: str,
         mimir: str | None = None,
+        meta: MimirPageMeta | None = None,
     ) -> None:
         """Write *path* to the mounts selected by routing config or explicit *mimir*.
 
@@ -292,7 +293,7 @@ class CompositeMimirAdapter(MimirPort):
                 )
                 continue
             try:
-                await mount.port.upsert_page(path, content)
+                await mount.port.upsert_page(path, content, meta=meta)
                 logger.debug("composite mimir: wrote %r to mount %r", path, name)
             except Exception as exc:
                 logger.warning("composite mimir: upsert_page failed on %r: %s", name, exc)
