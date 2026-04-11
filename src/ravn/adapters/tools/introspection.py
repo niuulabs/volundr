@@ -76,6 +76,7 @@ class RavnStateTool(ToolPort):
         persona: str = "",
         iteration_budget: IterationBudget | None = None,
         memory: MemoryPort | None = None,
+        discovery: object | None = None,
     ) -> None:
         self._tool_names = list(tool_names)
         self._permission_mode = permission_mode
@@ -83,6 +84,7 @@ class RavnStateTool(ToolPort):
         self._persona = persona
         self._iteration_budget = iteration_budget
         self._memory = memory
+        self._discovery = discovery
 
     @property
     def name(self) -> str:
@@ -141,6 +143,23 @@ class RavnStateTool(ToolPort):
 
         # Model
         lines.append(f"\n**Model**: {self._model}")
+
+        # Flock peers
+        if self._discovery is not None:
+            try:
+                peers = self._discovery.peers()  # dict[str, RavnPeer]
+                if peers:
+                    lines.append(f"\n**Flock peers** ({len(peers)}):")
+                    for p in peers.values():
+                        caps = ", ".join(p.capabilities) if p.capabilities else "unknown"
+                        lines.append(
+                            f"  - {p.peer_id}  persona={p.persona}  "
+                            f"status={p.status}  caps=[{caps}]"
+                        )
+                else:
+                    lines.append("\n**Flock peers**: none discovered yet")
+            except Exception as exc:
+                lines.append(f"\n**Flock peers**: unavailable ({exc})")
 
         return ToolResult(tool_call_id="", content="\n".join(lines))
 

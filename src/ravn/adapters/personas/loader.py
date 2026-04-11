@@ -81,7 +81,7 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
             "You follow the project's conventions as described in RAVN.md.\n"
             "You do not explain what you are about to do — you do it, then report what you did."
         ),
-        allowed_tools=["file", "git", "terminal", "web", "todo", "introspection"],
+        allowed_tools=["mimir_query", "file", "git", "terminal", "web", "todo", "ravn"],
         forbidden_tools=["cascade", "volundr"],
         permission_mode="workspace-write",
         llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=True),
@@ -94,7 +94,7 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
             "You use web search and file tools to find accurate, up-to-date sources.\n"
             "You produce well-structured, cited summaries without modifying project files."
         ),
-        allowed_tools=["web", "file", "introspection"],
+        allowed_tools=["mimir_query", "web", "file", "ravn"],
         forbidden_tools=["git", "terminal", "cascade"],
         permission_mode="read-only",
         llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=False),
@@ -108,7 +108,7 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
             "and acceptance criteria.\n"
             "You do not execute plans — you define them precisely so others can."
         ),
-        allowed_tools=["file", "introspection"],
+        allowed_tools=["mimir_query", "file", "ravn"],
         forbidden_tools=["git", "terminal", "cascade", "volundr"],
         permission_mode="read-only",
         llm=PersonaLLMConfig(primary_alias="powerful", thinking_enabled=True),
@@ -117,12 +117,15 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
     "coordinator": PersonaConfig(
         name="coordinator",
         system_prompt_template=(
-            "You are a coordinator agent responsible for orchestrating work across a flock of Ravens.\n"
-            "When given a complex task, break it into subtasks and delegate each to the most capable\n"
-            "idle peer using task_create. Use task_collect to gather results and synthesise a final answer.\n"
+            "You are a coordinator agent responsible for orchestrating "
+            "work across a flock of Ravens.\n"
+            "When given a complex task, break it into subtasks and "
+            "delegate each to the most capable\n"
+            "idle peer using task_create. Use task_collect to gather "
+            "results and synthesise a final answer.\n"
             "Prefer delegation over doing work yourself — you are the conductor, not the musician."
         ),
-        allowed_tools=["cascade", "file", "introspection", "todo"],
+        allowed_tools=["cascade", "file", "ravn", "todo"],
         forbidden_tools=["terminal"],
         permission_mode="workspace-write",
         llm=PersonaLLMConfig(primary_alias="powerful", thinking_enabled=True),
@@ -165,7 +168,7 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
             "When no synthesis task is pending, call `mimir_lint` to identify stale pages, "
             "orphans, or concept gaps."
         ),
-        allowed_tools=["mimir", "web", "file", "introspection"],
+        allowed_tools=["mimir", "web", "file", "ravn"],
         forbidden_tools=["git", "terminal", "cascade", "volundr"],
         permission_mode="workspace-write",
         llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=False),

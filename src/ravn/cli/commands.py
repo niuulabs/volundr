@@ -382,6 +382,7 @@ def _build_tools(
     no_tools: bool = False,
     persona_config: Any | None = None,
     profile: str = "default",
+    discovery: Any | None = None,
 ) -> list[Any]:
     """Build the tool list from the built-in registry, filtered by profile.
 
@@ -398,6 +399,16 @@ def _build_tools(
     from ravn.ports.tool import ToolPort
 
     profile_cfg = _get_tool_group(settings, profile)
+
+    # When the persona declares explicit allowed_tools, derive include_groups
+    # from those tool names so only the relevant groups are loaded.
+    if persona_config is not None and getattr(persona_config, "allowed_tools", None):
+        from ravn.config import ToolGroupConfig  # noqa: PLC0415
+        profile_cfg = ToolGroupConfig(
+            include_groups=_groups_for_persona(persona_config),
+            include_mcp=profile_cfg.include_mcp,
+        )
+
     include_groups = set(profile_cfg.include_groups)
 
     persona_prefix: str = (
@@ -413,6 +424,7 @@ def _build_tools(
         "memory": memory,
         "iteration_budget": iteration_budget,
         "persona_prefix": persona_prefix,
+        "discovery": discovery,
     }
 
     # Pre-build shared skill port so both skill_list and skill_run reuse one instance
@@ -509,6 +521,28 @@ def _filter_tools(
         tools = [t for t in tools if not _in_groups(t.name, forbidden_groups)]
 
     return tools
+
+
+def _groups_for_persona(persona_config: Any) -> list[str]:
+    """Derive include_groups from a persona's allowed_tools.
+
+    Reverse-maps each allowed tool name/prefix to the groups it belongs to in
+    BUILTIN_TOOLS, so only the groups actually needed by the persona are loaded.
+    ``core`` is always included as a baseline.
+    """
+    from ravn.adapters.tools.builtin_registry import BUILTIN_TOOLS  # noqa: PLC0415
+
+    allowed: set[str] = set(persona_config.allowed_tools or [])
+    forbidden: set[str] = set(persona_config.forbidden_tools or [])
+
+    groups: set[str] = {"core"}
+    for key, tool_def in BUILTIN_TOOLS.items():
+        # Use the same prefix-match logic as _filter_tools
+        if any(key == a or key.startswith(a + "_") for a in allowed):
+            if not any(key == f or key.startswith(f + "_") for f in forbidden):
+                groups.update(tool_def.groups)
+
+    return sorted(groups)
 
 
 # ---------------------------------------------------------------------------
@@ -1830,13 +1864,16 @@ async def _run_daemon(
             persona_config=resolved_persona,
         )
 
-        # Cascade sub-tasks (task_id set by cascade dispatcher) use the 'worker'
-        # profile: core tools only.  Triggered tasks from the drive loop also
-        # receive a task_id but need the full tool set — use 'default' for those.
-        # Cascade workers are identified by the absence of a task-level persona
-        # (drive-loop triggered tasks always carry one).
-        profile = "worker" if (task_id is not None and not task_persona) else "default"
+        # Determine the profile for this task:
+        #   - Anonymous cascade subtasks (no persona, no task_persona) → "worker" (core only)
+        #   - Tasks on a node with a configured persona → derive include_groups from
+        #     the resolved persona's allowed_tools so the tool set matches exactly
+        #     what the persona permits, regardless of how the task was triggered.
+        #   - Everything else → "default"
+        is_anonymous_cascade = task_id is not None and not task_persona and resolved_persona is None
+        profile = "worker" if is_anonymous_cascade else "default"
         profile_cfg = _get_tool_group(settings, profile)
+
         tools = _build_tools(
             settings,
             workspace,
@@ -1847,6 +1884,7 @@ async def _run_daemon(
             mimir=daemon_mimir,
             persona_config=resolved_persona,
             profile=profile,
+            discovery=_cascade_discovery,
         )
         if profile_cfg.include_mcp:
             tools.extend(_filter_tools(mcp_tools, settings, resolved_persona))
@@ -2289,7 +2327,6 @@ def _build_discovery(
 ) -> Any:
     """Build the discovery adapter from config, wiring the own identity."""
     import importlib.metadata
-    import socket
 
     from ravn.adapters.discovery._identity import (
         load_or_create_peer_id,
@@ -2331,7 +2368,10 @@ def _build_discovery(
     )
 
     handshake_port = settings.discovery.mdns.handshake_port
-    return _build_discovery_adapter(settings.discovery.adapter, settings, identity, handshake_port=handshake_port)
+    return _build_discovery_adapter(
+        settings.discovery.adapter, settings, identity,
+        handshake_port=handshake_port,
+    )
 
 
 @app.command()
@@ -2460,7 +2500,11 @@ def _build_discovery_adapter(
         mdns_cls = _import_class(_DISCOVERY_ALIASES["mdns"])
         sleipnir_cls = _import_class(_DISCOVERY_ALIASES["sleipnir"])
         backends: list[Any] = [
-            mdns_cls(config=settings.discovery, own_identity=identity, handshake_port=handshake_port),
+            mdns_cls(
+                config=settings.discovery,
+                own_identity=identity,
+                handshake_port=handshake_port,
+            ),
             sleipnir_cls(
                 config=settings.discovery,
                 sleipnir_config=settings.sleipnir,

@@ -25,8 +25,15 @@ _DEFAULT_BASE_URL = "http://localhost:8080"
 _DEFAULT_TIMEOUT = 30.0
 
 
-def _client(base_url: str, timeout: float) -> httpx.AsyncClient:
-    return httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=timeout)
+def _client(
+    base_url: str, timeout: float, pat_token: str = ""
+) -> httpx.AsyncClient:
+    headers: dict[str, str] = {}
+    if pat_token:
+        headers["Authorization"] = f"Bearer {pat_token}"
+    return httpx.AsyncClient(
+        base_url=base_url.rstrip("/"), timeout=timeout, headers=headers
+    )
 
 
 def _ok(data: object) -> ToolResult:
@@ -48,19 +55,23 @@ class VolundrSessionTool(ToolPort):
     """Create, list, and stop Volundr coding sessions.
 
     Actions:
-    - ``list``   — return all active sessions.
+    - ``list``   — return all sessions (optionally filtered by status).
     - ``create`` — start a new session (requires ``name``).
     - ``stop``   — stop a session (requires ``session_id``).
     - ``delete`` — delete a session (requires ``session_id``).
+    - ``get``    — get session details (requires ``session_id``).
+    - ``start``  — start a stopped session (requires ``session_id``).
     """
 
     def __init__(
         self,
         base_url: str = _DEFAULT_BASE_URL,
         timeout: float = _DEFAULT_TIMEOUT,
+        pat_token: str = "",
     ) -> None:
         self._base_url = base_url
         self._timeout = timeout
+        self._pat_token = pat_token
 
     @property
     def name(self) -> str:
@@ -70,7 +81,8 @@ class VolundrSessionTool(ToolPort):
     def description(self) -> str:
         return (
             "Manage Volundr coding sessions. "
-            "Actions: list, create (name required), stop (session_id required), "
+            "Actions: list, create (name required), get (session_id required), "
+            "start (session_id required), stop (session_id required), "
             "delete (session_id required)."
         )
 
@@ -81,16 +93,38 @@ class VolundrSessionTool(ToolPort):
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["list", "create", "stop", "delete"],
+                    "enum": ["list", "create", "get", "start", "stop", "delete"],
                     "description": "Operation to perform.",
                 },
                 "name": {
                     "type": "string",
-                    "description": "Session name (required for create).",
+                    "description": (
+                        "Session name (required for create). "
+                        "RFC 1123: lowercase alphanumeric and hyphens, 1-63 chars."
+                    ),
                 },
                 "session_id": {
                     "type": "string",
-                    "description": "Session ID (required for stop and delete).",
+                    "description": "Session UUID (required for get, start, stop, delete).",
+                },
+                "model": {
+                    "type": "string",
+                    "description": "LLM model ID for the session (optional, for create).",
+                },
+                "system_prompt": {
+                    "type": "string",
+                    "description": (
+                        "System prompt appended to Claude's "
+                        "instructions (optional, for create)."
+                    ),
+                },
+                "initial_prompt": {
+                    "type": "string",
+                    "description": "Initial user message to send (optional, for create).",
+                },
+                "status": {
+                    "type": "string",
+                    "description": "Filter by status (optional, for list).",
                 },
             },
             "required": ["action"],
@@ -102,12 +136,16 @@ class VolundrSessionTool(ToolPort):
 
     async def execute(self, input: dict) -> ToolResult:
         action = input.get("action", "")
-        async with _client(self._base_url, self._timeout) as client:
+        async with _client(self._base_url, self._timeout, self._pat_token) as client:
             match action:
                 case "list":
-                    return await self._list(client)
+                    return await self._list(client, input)
                 case "create":
-                    return await self._create(client, input.get("name", ""))
+                    return await self._create(client, input)
+                case "get":
+                    return await self._get(client, input.get("session_id", ""))
+                case "start":
+                    return await self._start(client, input.get("session_id", ""))
                 case "stop":
                     return await self._stop(client, input.get("session_id", ""))
                 case "delete":
@@ -115,23 +153,51 @@ class VolundrSessionTool(ToolPort):
                 case _:
                     return _err(f"Unknown action: {action!r}")
 
-    async def _list(self, client: httpx.AsyncClient) -> ToolResult:
+    async def _list(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
         try:
-            resp = await client.get("/api/v1/volundr/sessions")
+            params: dict[str, str] = {}
+            if status := input.get("status"):
+                params["status"] = status
+            resp = await client.get("/api/v1/volundr/sessions", params=params or None)
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
             return _err(f"Failed to list sessions: {exc}")
 
-    async def _create(self, client: httpx.AsyncClient, name: str) -> ToolResult:
+    async def _create(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
+        name = input.get("name", "")
         if not name:
             return _err("session name is required for create action")
+        body: dict = {"name": name}
+        for key in ("model", "system_prompt", "initial_prompt"):
+            if value := input.get(key):
+                body[key] = value
         try:
-            resp = await client.post("/api/v1/volundr/sessions", json={"name": name})
+            resp = await client.post("/api/v1/volundr/sessions", json=body)
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
             return _err(f"Failed to create session: {exc}")
+
+    async def _get(self, client: httpx.AsyncClient, session_id: str) -> ToolResult:
+        if not session_id:
+            return _err("session_id is required for get action")
+        try:
+            resp = await client.get(f"/api/v1/volundr/sessions/{session_id}")
+            resp.raise_for_status()
+            return _ok(resp.json())
+        except Exception as exc:
+            return _err(f"Failed to get session {session_id}: {exc}")
+
+    async def _start(self, client: httpx.AsyncClient, session_id: str) -> ToolResult:
+        if not session_id:
+            return _err("session_id is required for start action")
+        try:
+            resp = await client.post(f"/api/v1/volundr/sessions/{session_id}/start")
+            resp.raise_for_status()
+            return _ok(resp.json())
+        except Exception as exc:
+            return _err(f"Failed to start session {session_id}: {exc}")
 
     async def _stop(self, client: httpx.AsyncClient, session_id: str) -> ToolResult:
         if not session_id:
@@ -139,7 +205,7 @@ class VolundrSessionTool(ToolPort):
         try:
             resp = await client.post(f"/api/v1/volundr/sessions/{session_id}/stop")
             resp.raise_for_status()
-            return _ok({"session_id": session_id, "status": "stopped"})
+            return _ok(resp.json())
         except Exception as exc:
             return _err(f"Failed to stop session {session_id}: {exc}")
 
@@ -163,21 +229,23 @@ class VolundrGitTool(ToolPort):
     """Perform git operations via the Volundr API.
 
     Actions:
-    - ``list_repos``    — list configured repositories.
-    - ``create_branch`` — create a new branch (requires ``repo``, ``branch``).
-    - ``create_pr``     — open a pull request (requires ``repo``, ``branch``,
-                          ``title``, optionally ``body``).
-    - ``ci_status``     — get CI status for a branch (requires ``repo``,
-                          ``branch``).
+    - ``list_branches`` — list branches for a repo (requires ``repo_url``).
+    - ``create_pr``     — open a pull request (requires ``session_id``, ``title``).
+    - ``list_prs``      — list pull requests (requires ``repo_url``).
+    - ``get_pr``        — get PR details (requires ``pr_number``, ``repo_url``).
+    - ``merge_pr``      — merge a pull request (requires ``pr_number``, ``repo_url``).
+    - ``ci_status``     — get CI status (requires ``pr_number``, ``repo_url``, ``branch``).
     """
 
     def __init__(
         self,
         base_url: str = _DEFAULT_BASE_URL,
         timeout: float = _DEFAULT_TIMEOUT,
+        pat_token: str = "",
     ) -> None:
         self._base_url = base_url
         self._timeout = timeout
+        self._pat_token = pat_token
 
     @property
     def name(self) -> str:
@@ -185,7 +253,12 @@ class VolundrGitTool(ToolPort):
 
     @property
     def description(self) -> str:
-        return "Git operations via Volundr: list_repos, create_branch, create_pr, ci_status."
+        return (
+            "Git operations via Volundr: list_branches (repo_url), "
+            "create_pr (session_id + title), list_prs (repo_url), "
+            "get_pr (pr_number + repo_url), merge_pr (pr_number + repo_url), "
+            "ci_status (pr_number + repo_url + branch)."
+        )
 
     @property
     def input_schema(self) -> dict:
@@ -194,28 +267,52 @@ class VolundrGitTool(ToolPort):
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["list_repos", "create_branch", "create_pr", "ci_status"],
+                    "enum": [
+                        "list_branches",
+                        "create_pr",
+                        "list_prs",
+                        "get_pr",
+                        "merge_pr",
+                        "ci_status",
+                    ],
                     "description": "Operation to perform.",
                 },
-                "repo": {
+                "repo_url": {
                     "type": "string",
-                    "description": "Repository name or URL.",
+                    "description": "Repository URL.",
+                },
+                "session_id": {
+                    "type": "string",
+                    "description": "Session UUID (required for create_pr).",
+                },
+                "pr_number": {
+                    "type": "integer",
+                    "description": (
+                        "Pull request number "
+                        "(required for get_pr, merge_pr, ci_status)."
+                    ),
                 },
                 "branch": {
                     "type": "string",
-                    "description": "Branch name.",
+                    "description": "Branch name (required for ci_status).",
                 },
                 "title": {
                     "type": "string",
-                    "description": "Pull request title.",
+                    "description": "Pull request title (for create_pr, auto-generated if omitted).",
                 },
-                "body": {
+                "target_branch": {
                     "type": "string",
-                    "description": "Pull request description body.",
+                    "description": "Target branch for PR (default: main).",
                 },
-                "base_branch": {
+                "merge_method": {
                     "type": "string",
-                    "description": "Base branch for PR (defaults to main).",
+                    "enum": ["merge", "squash", "rebase"],
+                    "description": "Merge method (default: squash).",
+                },
+                "status": {
+                    "type": "string",
+                    "enum": ["open", "closed", "merged", "all"],
+                    "description": "PR status filter for list_prs (default: open).",
                 },
             },
             "required": ["action"],
@@ -227,73 +324,110 @@ class VolundrGitTool(ToolPort):
 
     async def execute(self, input: dict) -> ToolResult:
         action = input.get("action", "")
-        async with _client(self._base_url, self._timeout) as client:
+        async with _client(self._base_url, self._timeout, self._pat_token) as client:
             match action:
-                case "list_repos":
-                    return await self._list_repos(client)
-                case "create_branch":
-                    return await self._create_branch(client, input)
+                case "list_branches":
+                    return await self._list_branches(client, input)
                 case "create_pr":
                     return await self._create_pr(client, input)
+                case "list_prs":
+                    return await self._list_prs(client, input)
+                case "get_pr":
+                    return await self._get_pr(client, input)
+                case "merge_pr":
+                    return await self._merge_pr(client, input)
                 case "ci_status":
                     return await self._ci_status(client, input)
                 case _:
                     return _err(f"Unknown action: {action!r}")
 
-    async def _list_repos(self, client: httpx.AsyncClient) -> ToolResult:
+    async def _list_branches(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
+        repo_url = input.get("repo_url", "")
+        if not repo_url:
+            return _err("repo_url is required for list_branches")
         try:
-            resp = await client.get("/api/v1/volundr/git/repos")
-            resp.raise_for_status()
-            return _ok(resp.json())
-        except Exception as exc:
-            return _err(f"Failed to list repos: {exc}")
-
-    async def _create_branch(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
-        repo = input.get("repo", "")
-        branch = input.get("branch", "")
-        if not repo or not branch:
-            return _err("repo and branch are required for create_branch")
-        try:
-            resp = await client.post(
-                "/api/v1/volundr/git/branches",
-                json={"repo": repo, "branch": branch},
+            resp = await client.get(
+                "/api/v1/volundr/repos/branches", params={"repo_url": repo_url}
             )
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
-            return _err(f"Failed to create branch: {exc}")
+            return _err(f"Failed to list branches: {exc}")
 
     async def _create_pr(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
-        repo = input.get("repo", "")
-        branch = input.get("branch", "")
-        title = input.get("title", "")
-        if not repo or not branch or not title:
-            return _err("repo, branch, and title are required for create_pr")
+        session_id = input.get("session_id", "")
+        if not session_id:
+            return _err("session_id is required for create_pr")
+        body: dict = {"session_id": session_id}
+        if title := input.get("title"):
+            body["title"] = title
+        if target := input.get("target_branch"):
+            body["target_branch"] = target
         try:
-            resp = await client.post(
-                "/api/v1/volundr/git/pull-requests",
-                json={
-                    "repo": repo,
-                    "branch": branch,
-                    "title": title,
-                    "body": input.get("body", ""),
-                    "base_branch": input.get("base_branch", "main"),
-                },
-            )
+            resp = await client.post("/api/v1/volundr/repos/prs", json=body)
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
             return _err(f"Failed to create PR: {exc}")
 
-    async def _ci_status(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
-        repo = input.get("repo", "")
-        branch = input.get("branch", "")
-        if not repo or not branch:
-            return _err("repo and branch are required for ci_status")
+    async def _list_prs(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
+        repo_url = input.get("repo_url", "")
+        if not repo_url:
+            return _err("repo_url is required for list_prs")
+        params: dict[str, str] = {"repo_url": repo_url}
+        if status := input.get("status"):
+            params["status"] = status
+        try:
+            resp = await client.get("/api/v1/volundr/repos/prs", params=params)
+            resp.raise_for_status()
+            return _ok(resp.json())
+        except Exception as exc:
+            return _err(f"Failed to list PRs: {exc}")
+
+    async def _get_pr(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
+        pr_number = input.get("pr_number")
+        repo_url = input.get("repo_url", "")
+        if not pr_number or not repo_url:
+            return _err("pr_number and repo_url are required for get_pr")
         try:
             resp = await client.get(
-                "/api/v1/volundr/git/ci-status",
-                params={"repo": repo, "branch": branch},
+                f"/api/v1/volundr/repos/prs/{pr_number}",
+                params={"repo_url": repo_url},
+            )
+            resp.raise_for_status()
+            return _ok(resp.json())
+        except Exception as exc:
+            return _err(f"Failed to get PR #{pr_number}: {exc}")
+
+    async def _merge_pr(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
+        pr_number = input.get("pr_number")
+        repo_url = input.get("repo_url", "")
+        if not pr_number or not repo_url:
+            return _err("pr_number and repo_url are required for merge_pr")
+        body: dict = {}
+        if method := input.get("merge_method"):
+            body["merge_method"] = method
+        try:
+            resp = await client.post(
+                f"/api/v1/volundr/repos/prs/{pr_number}/merge",
+                params={"repo_url": repo_url},
+                json=body,
+            )
+            resp.raise_for_status()
+            return _ok(resp.json())
+        except Exception as exc:
+            return _err(f"Failed to merge PR #{pr_number}: {exc}")
+
+    async def _ci_status(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
+        pr_number = input.get("pr_number")
+        repo_url = input.get("repo_url", "")
+        branch = input.get("branch", "")
+        if not pr_number or not repo_url or not branch:
+            return _err("pr_number, repo_url, and branch are required for ci_status")
+        try:
+            resp = await client.get(
+                f"/api/v1/volundr/repos/prs/{pr_number}/ci",
+                params={"repo_url": repo_url, "branch": branch},
             )
             resp.raise_for_status()
             return _ok(resp.json())
@@ -311,19 +445,23 @@ class TyrSagaTool(ToolPort):
 
     Actions:
     - ``list``     — list active sagas.
-    - ``create``   — create a new saga (requires ``name``).
-    - ``dispatch`` — dispatch a saga for execution (requires ``saga_id``).
-    - ``status``   — get saga status (requires ``saga_id``).
-    - ``raids``    — list active raids for a saga (requires ``saga_id``).
+    - ``get``      — get saga details (requires ``saga_id``).
+    - ``commit``   — commit a fully structured saga (requires ``name``, ``slug``,
+                     ``repos``, ``base_branch``, ``phases``).
+    - ``dispatch`` — dispatch saga raids for execution (requires ``items`` array).
+    - ``delete``   — delete a saga (requires ``saga_id``).
+    - ``raids``    — list active raids across all sagas.
     """
 
     def __init__(
         self,
         base_url: str = _DEFAULT_BASE_URL,
         timeout: float = _DEFAULT_TIMEOUT,
+        pat_token: str = "",
     ) -> None:
         self._base_url = base_url
         self._timeout = timeout
+        self._pat_token = pat_token
 
     @property
     def name(self) -> str:
@@ -332,9 +470,10 @@ class TyrSagaTool(ToolPort):
     @property
     def description(self) -> str:
         return (
-            "Manage Tyr sagas and raids: list, create (name required), "
-            "dispatch (saga_id required), status (saga_id required), "
-            "raids (saga_id required)."
+            "Manage Tyr sagas and raids: list, get (saga_id), "
+            "commit (name + slug + repos + base_branch + phases), "
+            "dispatch (items array with saga_id + issue_id + repo), "
+            "delete (saga_id), raids (list active raids)."
         )
 
     @property
@@ -344,20 +483,80 @@ class TyrSagaTool(ToolPort):
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["list", "create", "dispatch", "status", "raids"],
+                    "enum": ["list", "get", "commit", "dispatch", "delete", "raids"],
                     "description": "Operation to perform.",
-                },
-                "name": {
-                    "type": "string",
-                    "description": "Saga name (required for create).",
                 },
                 "saga_id": {
                     "type": "string",
-                    "description": "Saga ID (required for dispatch, status, raids).",
+                    "description": "Saga UUID (required for get, delete).",
                 },
-                "spec": {
+                "name": {
                     "type": "string",
-                    "description": "Saga specification / description (optional for create).",
+                    "description": "Saga name (required for commit).",
+                },
+                "slug": {
+                    "type": "string",
+                    "description": "Unique saga slug (required for commit).",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Saga description (optional for commit).",
+                },
+                "repos": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Repositories in org/repo format (required for commit).",
+                },
+                "base_branch": {
+                    "type": "string",
+                    "description": "Branch to base feature branch on (required for commit).",
+                },
+                "phases": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "raids": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string"},
+                                        "description": {"type": "string"},
+                                        "acceptance_criteria": {
+                                            "type": "array",
+                                            "items": {"type": "string"},
+                                        },
+                                        "declared_files": {
+                                            "type": "array",
+                                            "items": {"type": "string"},
+                                        },
+                                    },
+                                    "required": ["name"],
+                                },
+                            },
+                        },
+                        "required": ["name", "raids"],
+                    },
+                    "description": "Phase/raid structure (required for commit).",
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "saga_id": {"type": "string"},
+                            "issue_id": {"type": "string"},
+                            "repo": {"type": "string"},
+                        },
+                        "required": ["saga_id", "issue_id", "repo"],
+                    },
+                    "description": "Dispatch items (required for dispatch).",
+                },
+                "model": {
+                    "type": "string",
+                    "description": "LLM model override for dispatch (optional).",
                 },
             },
             "required": ["action"],
@@ -369,18 +568,20 @@ class TyrSagaTool(ToolPort):
 
     async def execute(self, input: dict) -> ToolResult:
         action = input.get("action", "")
-        async with _client(self._base_url, self._timeout) as client:
+        async with _client(self._base_url, self._timeout, self._pat_token) as client:
             match action:
                 case "list":
                     return await self._list(client)
-                case "create":
-                    return await self._create(client, input)
+                case "get":
+                    return await self._get(client, input.get("saga_id", ""))
+                case "commit":
+                    return await self._commit(client, input)
                 case "dispatch":
-                    return await self._dispatch(client, input.get("saga_id", ""))
-                case "status":
-                    return await self._status(client, input.get("saga_id", ""))
+                    return await self._dispatch(client, input)
+                case "delete":
+                    return await self._delete(client, input.get("saga_id", ""))
                 case "raids":
-                    return await self._raids(client, input.get("saga_id", ""))
+                    return await self._raids(client)
                 case _:
                     return _err(f"Unknown action: {action!r}")
 
@@ -392,52 +593,73 @@ class TyrSagaTool(ToolPort):
         except Exception as exc:
             return _err(f"Failed to list sagas: {exc}")
 
-    async def _create(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
-        name = input.get("name", "")
-        if not name:
-            return _err("name is required for create action")
-        body: dict = {"name": name}
-        if spec := input.get("spec"):
-            body["spec"] = spec
-        try:
-            resp = await client.post("/api/v1/tyr/sagas/commit", json=body)
-            resp.raise_for_status()
-            return _ok(resp.json())
-        except Exception as exc:
-            return _err(f"Failed to create saga: {exc}")
-
-    async def _dispatch(self, client: httpx.AsyncClient, saga_id: str) -> ToolResult:
+    async def _get(self, client: httpx.AsyncClient, saga_id: str) -> ToolResult:
         if not saga_id:
-            return _err("saga_id is required for dispatch action")
-        try:
-            resp = await client.post(
-                "/api/v1/tyr/dispatch/approve",
-                json={"saga_id": saga_id},
-            )
-            resp.raise_for_status()
-            return _ok({"saga_id": saga_id, "status": "dispatched"})
-        except Exception as exc:
-            return _err(f"Failed to dispatch saga {saga_id}: {exc}")
-
-    async def _status(self, client: httpx.AsyncClient, saga_id: str) -> ToolResult:
-        if not saga_id:
-            return _err("saga_id is required for status action")
+            return _err("saga_id is required for get action")
         try:
             resp = await client.get(f"/api/v1/tyr/sagas/{saga_id}")
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
-            return _err(f"Failed to get saga status {saga_id}: {exc}")
+            return _err(f"Failed to get saga {saga_id}: {exc}")
 
-    async def _raids(self, client: httpx.AsyncClient, saga_id: str) -> ToolResult:
-        if not saga_id:
-            return _err("saga_id is required for raids action")
+    async def _commit(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
+        name = input.get("name", "")
+        slug = input.get("slug", "")
+        repos = input.get("repos", [])
+        base_branch = input.get("base_branch", "")
+        phases = input.get("phases", [])
+        if not name or not slug or not repos or not base_branch or not phases:
+            return _err(
+                "name, slug, repos, base_branch, and phases are required for commit"
+            )
+        body: dict = {
+            "name": name,
+            "slug": slug,
+            "repos": repos,
+            "base_branch": base_branch,
+            "phases": phases,
+        }
+        if desc := input.get("description"):
+            body["description"] = desc
         try:
-            resp = await client.get(f"/api/v1/tyr/sagas/{saga_id}/raids")
+            resp = await client.post("/api/v1/tyr/sagas/commit", json=body)
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
-            return _err(f"Failed to list raids for saga {saga_id}: {exc}")
+            return _err(f"Failed to commit saga: {exc}")
+
+    async def _dispatch(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
+        items = input.get("items", [])
+        if not items:
+            return _err("items array is required for dispatch action")
+        body: dict = {"items": items}
+        if model := input.get("model"):
+            body["model"] = model
+        try:
+            resp = await client.post("/api/v1/tyr/dispatch/approve", json=body)
+            resp.raise_for_status()
+            return _ok(resp.json())
+        except Exception as exc:
+            return _err(f"Failed to dispatch: {exc}")
+
+    async def _delete(self, client: httpx.AsyncClient, saga_id: str) -> ToolResult:
+        if not saga_id:
+            return _err("saga_id is required for delete action")
+        try:
+            resp = await client.delete(f"/api/v1/tyr/sagas/{saga_id}")
+            resp.raise_for_status()
+            return _ok({"saga_id": saga_id, "status": "deleted"})
+        except Exception as exc:
+            return _err(f"Failed to delete saga {saga_id}: {exc}")
+
+    async def _raids(self, client: httpx.AsyncClient) -> ToolResult:
+        try:
+            resp = await client.get("/api/v1/tyr/raids/active")
+            resp.raise_for_status()
+            return _ok(resp.json())
+        except Exception as exc:
+            return _err(f"Failed to list active raids: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -446,23 +668,23 @@ class TyrSagaTool(ToolPort):
 
 
 class TrackerIssueTool(ToolPort):
-    """Create and update issues via Tyr's tracker adapters (Linear, Jira, etc.).
+    """Search, view, and update issues via Volundr's tracker integration.
 
     Actions:
-    - ``create`` — create a new issue (requires ``title``; optionally ``description``,
-                   ``project``, ``priority``, ``assignee``).
-    - ``update`` — update an existing issue (requires ``issue_id``; optionally
-                   ``title``, ``description``, ``status``, ``priority``).
-    - ``get``    — fetch issue details (requires ``issue_id``).
+    - ``search``        — search issues across connected trackers (requires ``query``).
+    - ``get``           — get issue details (requires ``issue_id``).
+    - ``update_status`` — update issue status (requires ``issue_id``, ``status``).
     """
 
     def __init__(
         self,
         base_url: str = _DEFAULT_BASE_URL,
         timeout: float = _DEFAULT_TIMEOUT,
+        pat_token: str = "",
     ) -> None:
         self._base_url = base_url
         self._timeout = timeout
+        self._pat_token = pat_token
 
     @property
     def name(self) -> str:
@@ -471,8 +693,9 @@ class TrackerIssueTool(ToolPort):
     @property
     def description(self) -> str:
         return (
-            "Create and update issues in Linear, Jira, or other connected trackers "
-            "via Tyr's tracker adapters. Actions: create, update, get."
+            "Search, view, and update issues in connected trackers (Linear, Jira, etc.) "
+            "via Volundr. Actions: search (query), get (issue_id), "
+            "update_status (issue_id + status)."
         )
 
     @property
@@ -482,37 +705,20 @@ class TrackerIssueTool(ToolPort):
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["create", "update", "get"],
+                    "enum": ["search", "get", "update_status"],
                     "description": "Operation to perform.",
                 },
                 "issue_id": {
                     "type": "string",
-                    "description": "Issue ID (required for update and get).",
+                    "description": "Issue identifier (required for get, update_status).",
                 },
-                "title": {
+                "query": {
                     "type": "string",
-                    "description": "Issue title (required for create).",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Issue description / body.",
-                },
-                "project": {
-                    "type": "string",
-                    "description": "Project or team identifier.",
-                },
-                "priority": {
-                    "type": "string",
-                    "enum": ["urgent", "high", "medium", "low"],
-                    "description": "Issue priority.",
+                    "description": "Search query (required for search).",
                 },
                 "status": {
                     "type": "string",
-                    "description": "Issue status (e.g. 'In Progress', 'Done').",
-                },
-                "assignee": {
-                    "type": "string",
-                    "description": "Assignee user ID or email.",
+                    "description": "New status value (required for update_status).",
                 },
             },
             "required": ["action"],
@@ -524,55 +730,52 @@ class TrackerIssueTool(ToolPort):
 
     async def execute(self, input: dict) -> ToolResult:
         action = input.get("action", "")
-        async with _client(self._base_url, self._timeout) as client:
+        async with _client(self._base_url, self._timeout, self._pat_token) as client:
             match action:
-                case "create":
-                    return await self._create(client, input)
-                case "update":
-                    return await self._update(client, input)
+                case "search":
+                    return await self._search(client, input.get("query", ""))
                 case "get":
                     return await self._get(client, input.get("issue_id", ""))
+                case "update_status":
+                    return await self._update_status(
+                        client, input.get("issue_id", ""), input.get("status", "")
+                    )
                 case _:
                     return _err(f"Unknown action: {action!r}")
 
-    async def _create(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
-        title = input.get("title", "")
-        if not title:
-            return _err("title is required for create action")
-        body: dict = {"title": title}
-        for key in ("description", "project", "priority", "assignee"):
-            if value := input.get(key):
-                body[key] = value
+    async def _search(self, client: httpx.AsyncClient, query: str) -> ToolResult:
+        if not query:
+            return _err("query is required for search action")
         try:
-            resp = await client.post("/api/v1/tyr/tracker/issues", json=body)
+            resp = await client.get(
+                "/api/v1/volundr/issues/search", params={"q": query}
+            )
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
-            return _err(f"Failed to create issue: {exc}")
-
-    async def _update(self, client: httpx.AsyncClient, input: dict) -> ToolResult:
-        issue_id = input.get("issue_id", "")
-        if not issue_id:
-            return _err("issue_id is required for update action")
-        body: dict = {}
-        for key in ("title", "description", "status", "priority", "assignee"):
-            if value := input.get(key):
-                body[key] = value
-        if not body:
-            return _err("at least one field to update must be provided")
-        try:
-            resp = await client.patch(f"/api/v1/tyr/tracker/issues/{issue_id}", json=body)
-            resp.raise_for_status()
-            return _ok(resp.json())
-        except Exception as exc:
-            return _err(f"Failed to update issue {issue_id}: {exc}")
+            return _err(f"Failed to search issues: {exc}")
 
     async def _get(self, client: httpx.AsyncClient, issue_id: str) -> ToolResult:
         if not issue_id:
             return _err("issue_id is required for get action")
         try:
-            resp = await client.get(f"/api/v1/tyr/tracker/issues/{issue_id}")
+            resp = await client.get(f"/api/v1/volundr/issues/{issue_id}")
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
             return _err(f"Failed to get issue {issue_id}: {exc}")
+
+    async def _update_status(
+        self, client: httpx.AsyncClient, issue_id: str, status: str
+    ) -> ToolResult:
+        if not issue_id or not status:
+            return _err("issue_id and status are required for update_status")
+        try:
+            resp = await client.post(
+                f"/api/v1/volundr/issues/{issue_id}/status",
+                json={"status": status},
+            )
+            resp.raise_for_status()
+            return _ok(resp.json())
+        except Exception as exc:
+            return _err(f"Failed to update issue {issue_id}: {exc}")
