@@ -946,6 +946,11 @@ class PlatformToolsConfig(BaseModel):
     )
     base_url: str = Field(default="http://localhost:8080")
     timeout: float = Field(default=30.0)
+    pat_token: str = Field(
+        default="",
+        description="Personal Access Token for platform API authentication. "
+        "Falls back to RAVN_GATEWAY__PLATFORM__PAT_TOKEN env var.",
+    )
 
 
 class DiscordChannelConfig(BaseModel):
@@ -1524,8 +1529,8 @@ class DiscoveryMdnsConfig(BaseModel):
     """mDNS-specific discovery settings (Pi mode)."""
 
     service_type: str = Field(
-        default="_ravn._tcp.local",
-        description="mDNS service type for flock discovery.",
+        default="_ravn._tcp.local.",
+        description="mDNS service type for flock discovery. Must end with '.' per DNS-SD spec.",
     )
     handshake_timeout_s: float = Field(
         default=5.0,
