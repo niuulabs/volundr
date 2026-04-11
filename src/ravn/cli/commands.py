@@ -1941,9 +1941,9 @@ async def _run_daemon(
         _cron_jobs = _wire_triggers(drive_loop, settings.initiative)
         cron_tools[:] = _wire_cron(drive_loop, _cron_jobs, settings.initiative)
 
-        # Wire Mímir triggers (source synthesis + staleness refresh)
+        # Wire Mímir triggers (source synthesis + staleness refresh + threads)
         if daemon_mimir is not None:
-            _wire_mimir_triggers(drive_loop, daemon_mimir, settings)
+            _wire_mimir_triggers(drive_loop, daemon_mimir, settings, llm=llm)
 
         # Wire task dispatch subscription when requested (--listen / --daemon)
         if task_dispatch and settings.sleipnir.enabled:
@@ -2018,11 +2018,14 @@ def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> list[Any]:
     return []
 
 
-def _wire_mimir_triggers(drive_loop: Any, mimir: Any, settings: Settings) -> None:
-    """Register Mímir source and staleness triggers on the drive loop.
+def _wire_mimir_triggers(
+    drive_loop: Any, mimir: Any, settings: Settings, llm: Any = None,
+) -> None:
+    """Register Mímir source, staleness, and thread triggers on the drive loop.
 
-    Both triggers are gated by their individual ``enabled`` flags in
-    ``settings.mimir.source_trigger`` and ``settings.mimir.staleness_trigger``.
+    All triggers are gated by their individual ``enabled`` flags in
+    ``settings.mimir.source_trigger``, ``settings.mimir.staleness_trigger``,
+    and ``settings.thread``.
     """
     mc = settings.mimir
 
@@ -2060,6 +2063,20 @@ def _wire_mimir_triggers(drive_loop: Any, mimir: Any, settings: Settings) -> Non
         settings.thread.enabled,
         settings.thread.enricher_poll_interval_seconds,
     )
+
+    # Thread enricher (Sjón) — classifies new Mímir pages as threads.
+    if settings.thread.enabled and llm is not None:
+        from ravn.adapters.triggers.thread_enricher import ThreadEnricher
+
+        drive_loop.register_trigger(
+            ThreadEnricher(mimir=mimir, llm=llm, config=settings.thread)
+        )
+        logger.info(
+            "thread: enricher registered (poll=%ds, confidence=%.2f, llm_alias=%s)",
+            settings.thread.enricher_poll_interval_seconds,
+            settings.thread.confidence_threshold,
+            settings.thread.enricher_llm_alias,
+        )
 
 
 def _wire_cron(
