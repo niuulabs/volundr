@@ -1943,7 +1943,16 @@ async def _run_daemon(
 
         # Wire Mímir triggers (source synthesis + staleness refresh + threads)
         if daemon_mimir is not None:
-            _wire_mimir_triggers(drive_loop, daemon_mimir, settings, llm=llm)
+            from ravn.domain.interaction_tracker import LastInteractionTracker
+
+            interaction_tracker = LastInteractionTracker()
+            _wire_mimir_triggers(
+                drive_loop,
+                daemon_mimir,
+                settings,
+                llm=llm,
+                interaction_tracker=interaction_tracker,
+            )
 
         # Wire task dispatch subscription when requested (--listen / --daemon)
         if task_dispatch and settings.sleipnir.enabled:
@@ -2019,7 +2028,11 @@ def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> list[Any]:
 
 
 def _wire_mimir_triggers(
-    drive_loop: Any, mimir: Any, settings: Settings, llm: Any = None,
+    drive_loop: Any,
+    mimir: Any,
+    settings: Settings,
+    llm: Any = None,
+    interaction_tracker: Any = None,
 ) -> None:
     """Register Mímir source, staleness, and thread triggers on the drive loop.
 
@@ -2076,6 +2089,27 @@ def _wire_mimir_triggers(
             settings.thread.enricher_poll_interval_seconds,
             settings.thread.confidence_threshold,
             settings.thread.enricher_llm_alias,
+        )
+
+    # Wakefulness trigger (NIU-565) — detects silence, reflects, emits intents.
+    if settings.wakefulness.enabled and llm is not None:
+        from ravn.adapters.triggers.wakefulness import WakefulnessTrigger
+        from ravn.domain.interaction_tracker import LastInteractionTracker
+
+        tracker = interaction_tracker or LastInteractionTracker()
+        drive_loop.register_trigger(
+            WakefulnessTrigger(
+                tracker=tracker,
+                mimir=mimir,
+                llm=llm,
+                config=settings.wakefulness,
+            )
+        )
+        logger.info(
+            "wakefulness: trigger registered (silence=%ds, cooldown=%ds, poll=%ds)",
+            settings.wakefulness.silence_threshold_seconds,
+            settings.wakefulness.reflection_cooldown_seconds,
+            settings.wakefulness.poll_interval_seconds,
         )
 
 
