@@ -24,6 +24,7 @@ State files
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import signal
@@ -703,32 +704,30 @@ def _find_tail() -> str | None:
 
 def _python_tail(paths: list[str], *, lines: int, follow: bool) -> None:
     """Minimal pure-Python tail — prints last *lines* then optionally follows."""
-    handles = []
-    for p in paths:
+    with contextlib.ExitStack() as stack:
+        handles = []
+        for p in paths:
+            try:
+                handles.append((p, stack.enter_context(open(p))))  # noqa: WPS515
+            except OSError:
+                pass
+
         try:
-            handles.append((p, open(p)))  # noqa: WPS515,SIM115
-        except OSError:
-            pass
-
-    try:
-        for path, fh in handles:
-            content = fh.read().splitlines()
-            header = f"==> {path} <=="
-            typer.echo(header)
-            for line in content[-lines:]:
-                typer.echo(line)
-
-        if not follow:
-            return
-
-        while True:
             for path, fh in handles:
-                chunk = fh.read()
-                if chunk:
-                    typer.echo(chunk, nl=False)
-            time.sleep(0.25)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        for _, fh in handles:
-            fh.close()
+                content = fh.read().splitlines()
+                header = f"==> {path} <=="
+                typer.echo(header)
+                for line in content[-lines:]:
+                    typer.echo(line)
+
+            if not follow:
+                return
+
+            while True:
+                for path, fh in handles:
+                    chunk = fh.read()
+                    if chunk:
+                        typer.echo(chunk, nl=False)
+                time.sleep(0.25)
+        except KeyboardInterrupt:
+            pass
