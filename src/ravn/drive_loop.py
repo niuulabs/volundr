@@ -360,6 +360,9 @@ class DriveLoop:
                     task_id=task.task_id,
                 )
             )
+            if task.triggered_by and task.triggered_by.startswith("thread:"):
+                thread_path = task.triggered_by.removeprefix("thread:")
+                await self._finalise_thread(thread_path, False)
             return
         except Exception as exc:
             logger.error("drive_loop: task %s failed: %s", task.task_id, exc)

@@ -1079,3 +1079,23 @@ async def test_finalise_thread_no_mimir_skips_gracefully(tmp_path: Path) -> None
     task = _make_thread_task("threads/no-mimir-thread")
     # Should complete without error even though mimir is None
     await loop._run_task(task)
+
+
+@pytest.mark.asyncio
+async def test_finalise_thread_on_cancelled_task(tmp_path: Path) -> None:
+    """Cancelled thread task → state returns to open, ownership released."""
+    from niuu.domain.mimir import ThreadState
+
+    loop, factory, mock_mimir = _make_drive_loop_with_mimir(tmp_path)
+
+    mock_agent = AsyncMock()
+    mock_agent.run_turn = AsyncMock(side_effect=asyncio.CancelledError())
+    factory.return_value = mock_agent
+
+    task = _make_thread_task("threads/cancelled-thread")
+    await loop._run_task(task)
+
+    mock_mimir.update_thread_state.assert_awaited_once_with(
+        "threads/cancelled-thread", ThreadState.open
+    )
+    mock_mimir.assign_thread_owner.assert_awaited_once_with("threads/cancelled-thread", None)
