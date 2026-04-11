@@ -24,6 +24,11 @@ from aiohttp import web
 
 logger = logging.getLogger("terminal")
 
+
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
 DEFAULT_SHELL_PATH = "/usr/local/bin/restricted-shell"
 UNRESTRICTED_SHELL_PATH = "/bin/bash"
 PTY_READ_TIMEOUT_SECONDS = 1.0
@@ -272,7 +277,10 @@ class TerminalServer:
             window_name=terminal_id,
         )
         self._sessions[terminal_id] = session
-        logger.info("Created tmux window: id=%s label=%s cli_type=%s", terminal_id, label, cli_type)
+        logger.info(
+            "Created tmux window: id=%s label=%s cli_type=%s",
+            _sanitize_log(terminal_id), _sanitize_log(label), _sanitize_log(cli_type),
+        )
         return session
 
     def _attach_pty(self, window_name: str) -> _AttachHandle:
@@ -322,7 +330,7 @@ class TerminalServer:
         if not session:
             return False
         _tmux_run("kill-window", "-t", f"{TMUX_SERVER_NAME}:{session.window_name}")
-        logger.info("Killed tmux window: id=%s", terminal_id)
+        logger.info("Killed tmux window: id=%s", _sanitize_log(terminal_id))
         return True
 
     def _window_alive(self, window_name: str) -> bool:
@@ -522,7 +530,7 @@ class TerminalServer:
         except OSError as e:
             return web.json_response({"error": str(e)}, status=500)
 
-        logger.info("Uploaded dotfile: %s", norm)
+        logger.info("Uploaded dotfile: %s", _sanitize_log(norm))
         return web.json_response({"ok": True, "filename": norm})
 
     async def _handle_delete_dotfile(self, request: web.Request) -> web.Response:
@@ -544,7 +552,7 @@ class TerminalServer:
         except OSError as e:
             return web.json_response({"error": str(e)}, status=500)
 
-        logger.info("Deleted dotfile: %s", norm)
+        logger.info("Deleted dotfile: %s", _sanitize_log(norm))
         return web.json_response({"ok": True, "filename": norm})
 
     # --- Preference Handlers ---
@@ -607,7 +615,10 @@ class TerminalServer:
             )
             self._sessions[terminal_id] = session
 
-        logger.info("Terminal WebSocket opened: id=%s cli_type=%s", terminal_id, session.cli_type)
+        logger.info(
+            "Terminal WebSocket opened: id=%s cli_type=%s",
+            _sanitize_log(terminal_id), _sanitize_log(session.cli_type),
+        )
 
         handle = self._attach_pty(session.window_name)
         try:
@@ -641,13 +652,16 @@ class TerminalServer:
             read_task.cancel()
 
         except Exception:
-            logger.exception("Terminal session error: id=%s", terminal_id)
+            logger.exception("Terminal session error: id=%s", _sanitize_log(terminal_id))
         finally:
             # Clean up the attach handle — tmux window stays alive
             self._cleanup_attach(handle)
             if not ws.closed:
                 await ws.close()
-            logger.info("Terminal WebSocket closed: id=%s (tmux window preserved)", terminal_id)
+            logger.info(
+                "Terminal WebSocket closed: id=%s (tmux window preserved)",
+                _sanitize_log(terminal_id),
+            )
 
         return ws
 

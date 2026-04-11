@@ -232,7 +232,7 @@ class TestSystemToString:
 class TestOpenAIAdapterInit:
     def test_defaults(self) -> None:
         adapter = OpenAICompatibleAdapter()
-        assert "api.openai.com" in adapter._base_url
+        assert adapter._base_url == "https://api.openai.com" or adapter._base_url.startswith("https://api.openai.com/")
         assert adapter._default_model == "gpt-4o"
         assert adapter._max_retries >= 0
 

@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+_ALLOWED_SCHEMES = {"http", "https"}
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,17 @@ async def test_code_forge(url: str, token: str) -> ConnectionTestResult:
     test_url = url.rstrip("/")
     if not test_url:
         return ConnectionTestResult(success=False, message="No URL configured")
+    parsed = urlparse(test_url)
+    if parsed.scheme not in _ALLOWED_SCHEMES:
+        return ConnectionTestResult(
+            success=False,
+            message=f"Unsupported URL scheme: {parsed.scheme!r}",
+            provider="volundr",
+        )
+    if not parsed.hostname:
+        return ConnectionTestResult(
+            success=False, message="Invalid URL: no hostname", provider="volundr"
+        )
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
@@ -63,7 +77,12 @@ async def test_telegram_bot(bot_token: str) -> ConnectionTestResult:
         return ConnectionTestResult(success=False, message="No bot token")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"https://api.telegram.org/bot{bot_token}/getMe")
+            from urllib.parse import quote
+
+            safe_token = quote(bot_token, safe="")
+            resp = await client.get(
+                f"https://api.telegram.org/bot{safe_token}/getMe"
+            )
             if resp.status_code == 200 and resp.json().get("ok"):
                 bot_name = resp.json()["result"].get("username", "bot")
                 return ConnectionTestResult(

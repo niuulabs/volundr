@@ -469,7 +469,7 @@ class TestGitPrTool:
         data = json.loads(result.content)
         assert data["fallback"] is True
         assert data["url"] is None
-        assert "github.com" in data["remote"]
+        assert data["remote"] == "https://github.com/test/repo.git"
 
     async def test_gh_available_creates_pr(self, git_repo: Path):
         pr_url = "https://github.com/test/repo/pull/42"

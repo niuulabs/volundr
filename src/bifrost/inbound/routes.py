@@ -1293,7 +1293,8 @@ def create_router(
             body = await raw_request.json()
             ollama_req = parse_fn(body)
         except Exception as exc:
-            return ollama_error_response(422, str(exc))
+            logger.warning("Ollama request parse error: %s", exc)
+            return ollama_error_response(422, "Invalid request body")
 
         request = translate_fn(ollama_req)
 
@@ -1516,7 +1517,7 @@ def create_router(
                     request=request,
                 )
             )
-            return ollama_error_response(502, str(exc))
+            return ollama_error_response(502, "Upstream provider error")
 
     @api_router.get("/api/tags")
     async def ollama_tags() -> dict:

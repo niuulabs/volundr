@@ -33,6 +33,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 class SkuldPortRegistry:
     """Maps session IDs to their Skuld subprocess ports.
 
@@ -265,7 +270,7 @@ class RootServer(Service):
                     for t in pending:
                         t.cancel()
             except Exception:
-                logger.debug("Skuld WS proxy ended for session %s", session_id)
+                logger.debug("Skuld WS proxy ended for session %s", _sanitize_log(session_id))
             finally:
                 try:
                     await websocket.close()
@@ -283,9 +288,12 @@ class RootServer(Service):
             if port is None:
                 return JSONResponse({"detail": "Session not found"}, status_code=404)
 
+            from urllib.parse import quote
+
             import httpx
 
-            url = f"http://127.0.0.1:{port}/api/{path}"
+            sanitized_path = quote(path, safe="/")
+            url = f"http://127.0.0.1:{port}/api/{sanitized_path}"
             params = dict(request.query_params)
             headers = {
                 k: v

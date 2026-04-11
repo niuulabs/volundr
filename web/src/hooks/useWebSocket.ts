@@ -130,7 +130,14 @@ export function useWebSocket(
         finalUrl = `${wsUrl}${sep}access_token=${encodeURIComponent(token)}`;
       }
 
-      const ws = new WebSocket(finalUrl);
+      // Validate URL before connecting — reject non-ws(s) schemes
+      const parsed = new URL(finalUrl);
+      if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
+        onErrorRef.current?.(new Event('error'));
+        return;
+      }
+
+      const ws = new WebSocket(parsed.href);
       wsRef.current = ws;
 
       ws.onopen = () => {

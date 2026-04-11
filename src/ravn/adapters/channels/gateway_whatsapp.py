@@ -79,8 +79,7 @@ class WhatsAppGateway(GatewayHttpMixin, GatewayChannelPort):
         """Start the webhook HTTP server."""
         if not self._api_key:
             logger.error(
-                "WhatsApp API key env var %r is not set; WhatsApp gateway disabled.",
-                self._config.api_key_env,
+                "WhatsApp API key is not set; WhatsApp gateway disabled."
             )
             return
         self._server_task = asyncio.create_task(

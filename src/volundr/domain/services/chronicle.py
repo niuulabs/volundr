@@ -27,6 +27,11 @@ from .session import SessionNotFoundError, SessionService
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 class ChronicleNotFoundError(Exception):
     """Raised when a chronicle is not found."""
 
@@ -121,9 +126,9 @@ class ChronicleService:
         created = await self._chronicle_repository.create(chronicle)
         logger.info(
             "Chronicle created: id=%s, session=%s, project=%s",
-            created.id,
-            session_id,
-            project,
+            _sanitize_log(created.id),
+            _sanitize_log(session_id),
+            _sanitize_log(project),
         )
         return created
 
@@ -182,14 +187,14 @@ class ChronicleService:
 
         updated = chronicle.model_copy(update=updates)
         result = await self._chronicle_repository.update(updated)
-        logger.info("Chronicle updated: id=%s", chronicle_id)
+        logger.info("Chronicle updated: id=%s", _sanitize_log(chronicle_id))
         return result
 
     async def delete_chronicle(self, chronicle_id: UUID) -> bool:
         """Delete a chronicle."""
         deleted = await self._chronicle_repository.delete(chronicle_id)
         if deleted:
-            logger.info("Chronicle deleted: id=%s", chronicle_id)
+            logger.info("Chronicle deleted: id=%s", _sanitize_log(chronicle_id))
         return deleted
 
     async def create_or_update_from_broker(
@@ -226,8 +231,8 @@ class ChronicleService:
             result = await self._chronicle_repository.update(updated)
             logger.info(
                 "Chronicle enriched from broker: id=%s, session=%s",
-                result.id,
-                session_id,
+                _sanitize_log(result.id),
+                _sanitize_log(session_id),
             )
             return result
 
@@ -251,8 +256,8 @@ class ChronicleService:
 
         logger.info(
             "Chronicle created from broker: id=%s, session=%s",
-            chronicle.id,
-            session_id,
+            _sanitize_log(chronicle.id),
+            _sanitize_log(session_id),
         )
         return chronicle
 
@@ -280,8 +285,8 @@ class ChronicleService:
 
         logger.info(
             "Session reforged: chronicle=%s -> session=%s",
-            chronicle_id,
-            session.id,
+            _sanitize_log(chronicle_id),
+            _sanitize_log(session.id),
         )
         return session
 
@@ -301,8 +306,8 @@ class ChronicleService:
         stored = await self._timeline_repository.add_event(event)
         logger.info(
             "Timeline event added: session=%s, type=%s, t=%d",
-            session_id,
-            event.type.value,
+            _sanitize_log(session_id),
+            _sanitize_log(event.type.value),
             event.t,
         )
 

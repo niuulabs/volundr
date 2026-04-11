@@ -1,17 +1,24 @@
-"""ravn flock — local multi-node Ravn mesh supervisor (NIU-xxx).
+"""ravn flock — local multi-node Ravn mesh supervisor.
 
 Manages a set of ``ravn daemon`` child processes, each with a distinct
 persona and unique nng ports, forming a local Pi-mode mesh for development
 and testing.
 
-Commands
---------
-  ravn flock start [PERSONAS...]  — spin up N daemon nodes
-  ravn flock stop                 — graceful shutdown of all nodes
-  ravn flock status               — show live/dead status table
-  ravn flock list                 — list available personas
-  ravn flock peers                — list verified flock members (via node 0)
-  ravn flock logs [--node NAME]   — tail logs for one or all nodes
+Lifecycle
+---------
+  ravn flock init [PERSONAS...]  — create flock definition + per-node configs
+  ravn flock start               — spawn daemons from the existing definition
+  ravn flock stop                — graceful shutdown; preserves definition
+  ravn flock status              — show live/dead status table
+  ravn flock list                — list available personas
+  ravn flock peers               — list verified flock members (via node 0)
+  ravn flock logs [--node NAME]  — tail logs for one or all nodes
+
+State files
+-----------
+  flock.yaml   — flock definition (created by init, never touched by start/stop)
+  state.json   — runtime PIDs (created by start, deleted by stop)
+  node-*.yaml  — per-node daemon configs (created by init)
 """
 
 from __future__ import annotations
@@ -23,12 +30,10 @@ import signal
 import socket
 import subprocess
 import sys
-import tempfile
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import typer
 
@@ -56,75 +61,131 @@ def _flock_dir_default() -> Path:
 
 
 # ---------------------------------------------------------------------------
-# State model
+# Node definition  (persisted in flock.yaml — the source of truth)
 # ---------------------------------------------------------------------------
 
 
 @dataclass
-class NodeState:
+class NodeDef:
+    """Static node definition — created by init, read by start."""
+
     index: int
     persona: str
     peer_id: str
-    pid: int
     pub_port: int
     rep_port: int
     handshake_port: int
+    gateway_port: int
     config_path: str
     log_path: str
 
 
 @dataclass
-class FlockState:
-    started_at: str
+class FlockDef:
+    """Flock definition — persisted in flock.yaml, created by init."""
+
     base_port: int
-    nodes: list[NodeState] = field(default_factory=list)
+    nodes: list[NodeDef] = field(default_factory=list)
 
     # ------------------------------------------------------------------
     # Serialisation
     # ------------------------------------------------------------------
 
-    def to_json(self) -> str:
-        return json.dumps(
-            {
-                "started_at": self.started_at,
-                "base_port": self.base_port,
-                "nodes": [asdict(n) for n in self.nodes],
-            },
-            indent=2,
-        )
+    def to_yaml(self) -> str:
+        lines = [
+            "# Ravn flock definition",
+            "# Edit freely, then run: ravn flock start",
+            "#",
+            f"# Port layout (base_port={self.base_port}):",
+            "#   pub       = base + index*2",
+            "#   rep       = base + index*2 + 1",
+            "#   handshake = base + 100 + index",
+            "#   gateway   = base + 200 + index  (HTTP + WebSocket)",
+            f"base_port: {self.base_port}",
+            "nodes:",
+        ]
+        for n in self.nodes:
+            lines += [
+                f"  - index: {n.index}",
+                f"    persona: {n.persona}",
+                f"    peer_id: {n.peer_id}",
+                f"    pub_port: {n.pub_port}",
+                f"    rep_port: {n.rep_port}",
+                f"    handshake_port: {n.handshake_port}",
+                f"    gateway_port: {n.gateway_port}",
+                f"    config_path: {n.config_path}",
+                f"    log_path: {n.log_path}",
+            ]
+        return "\n".join(lines) + "\n"
 
     @classmethod
-    def from_json(cls, text: str) -> FlockState:
+    def from_yaml(cls, text: str) -> FlockDef:
+        import yaml  # pydantic-settings[yaml] dep
+
+        raw = yaml.safe_load(text)
+        nodes = [NodeDef(**n) for n in raw.get("nodes", [])]
+        return cls(base_port=raw["base_port"], nodes=nodes)
+
+
+def _flock_def_path(flock_dir: Path) -> Path:
+    return flock_dir / "flock.yaml"
+
+
+def _load_flock_def(flock_dir: Path) -> FlockDef | None:
+    path = _flock_def_path(flock_dir)
+    if not path.exists():
+        return None
+    return FlockDef.from_yaml(path.read_text())
+
+
+def _save_flock_def(flock_def: FlockDef, flock_dir: Path) -> None:
+    path = _flock_def_path(flock_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(flock_def.to_yaml())
+
+
+# ---------------------------------------------------------------------------
+# Runtime state  (persisted in state.json — created by start, deleted by stop)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class FlockRuntime:
+    """Runtime state — maps persona name → PID."""
+
+    started_at: str
+    pids: dict[str, int]
+
+    def to_json(self) -> str:
+        return json.dumps({"started_at": self.started_at, "pids": self.pids}, indent=2)
+
+    @classmethod
+    def from_json(cls, text: str) -> FlockRuntime:
         data = json.loads(text)
-        nodes = [NodeState(**n) for n in data.get("nodes", [])]
-        return cls(
-            started_at=data["started_at"],
-            base_port=data["base_port"],
-            nodes=nodes,
-        )
+        return cls(started_at=data["started_at"], pids=data["pids"])
 
 
 def _state_path(flock_dir: Path) -> Path:
     return flock_dir / "state.json"
 
 
-def _load_state(flock_dir: Path) -> FlockState | None:
+def _load_runtime(flock_dir: Path) -> FlockRuntime | None:
     path = _state_path(flock_dir)
     if not path.exists():
         return None
-    return FlockState.from_json(path.read_text())
+    return FlockRuntime.from_json(path.read_text())
 
 
-def _save_state(state: FlockState, flock_dir: Path) -> None:
+def _save_runtime(runtime: FlockRuntime, flock_dir: Path) -> None:
     """Write state.json atomically."""
     path = _state_path(flock_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(state.to_json())
+    tmp.write_text(runtime.to_json())
     os.replace(tmp, path)
 
 
-def _delete_state(flock_dir: Path) -> None:
+def _delete_runtime(flock_dir: Path) -> None:
     _state_path(flock_dir).unlink(missing_ok=True)
 
 
@@ -141,17 +202,22 @@ def _ports_for(index: int, base_port: int) -> tuple[int, int, int]:
     return pub, rep, hs
 
 
+def _gateway_port_for(index: int, base_port: int) -> int:
+    """Return the HTTP/WS gateway port for node at *index*."""
+    return base_port + 200 + index
+
+
 def _port_free(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return s.connect_ex(("127.0.0.1", port)) != 0
 
 
-def _check_ports(personas: list[str], base_port: int) -> list[int]:
+def _check_ports(nodes: list[NodeDef]) -> list[int]:
     """Return a list of ports that are already in use."""
     taken = []
-    for i in range(len(personas)):
-        for port in _ports_for(i, base_port):
+    for n in nodes:
+        for port in (n.pub_port, n.rep_port, n.handshake_port, n.gateway_port):
             if not _port_free(port):
                 taken.append(port)
     return taken
@@ -170,22 +236,24 @@ def _is_alive(pid: int) -> bool:
         return False
 
 
-def _any_alive(state: FlockState) -> bool:
-    return any(_is_alive(n.pid) for n in state.nodes)
+def _any_runtime_alive(runtime: FlockRuntime) -> bool:
+    return any(_is_alive(pid) for pid in runtime.pids.values())
 
 
 # ---------------------------------------------------------------------------
-# Config file generation
+# Config file generation  (called by init)
 # ---------------------------------------------------------------------------
 
 
-def _write_node_config(node: NodeState, flock_dir: Path) -> None:
+def _write_node_config(node: NodeDef, flock_dir: Path) -> None:
+    """Write the per-node ravn daemon config file."""
     config_path = Path(node.config_path)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(
         f"""\
-# Auto-generated by ravn flock start — do not edit.
-# Node {node.index}: {node.persona}
+# Ravn node config — node {node.index}: {node.persona}
+# Generated by: ravn flock init
+# Edit as needed. Re-run init with --force to regenerate from defaults.
 
 mesh:
   enabled: true
@@ -203,6 +271,14 @@ discovery:
 
 cascade:
   enabled: true
+
+gateway:
+  enabled: true
+  channels:
+    http:
+      enabled: true
+      host: "127.0.0.1"
+      port: {node.gateway_port}
 
 initiative:
   enabled: true
@@ -225,94 +301,93 @@ logging:
 # ---------------------------------------------------------------------------
 
 
-def _spawn_node(node: NodeState, flock_dir: Path) -> int:
+def _spawn_node(node: NodeDef, flock_dir: Path) -> int:
     """Start the daemon process and return its PID."""
     log_path = Path(node.log_path)
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_fd = open(log_path, "a")  # noqa: WPS515 — intentionally left open for child
-
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "ravn", "daemon", "--persona", node.persona],
-        env={**os.environ, "RAVN_CONFIG": node.config_path},
-        stdout=log_fd,
-        stderr=subprocess.STDOUT,
-        stdin=subprocess.DEVNULL,
-        start_new_session=True,  # detach from parent's process group
-    )
-    log_fd.close()  # parent closes its copy; child keeps the fd via inheritance
+    with open(log_path, "a") as log_fd:  # noqa: WPS515
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "ravn", "daemon", "--persona", node.persona],
+            env={**os.environ, "RAVN_CONFIG": node.config_path},
+            stdout=log_fd,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,  # detach from parent's process group
+        )
+    # Parent's fd is closed by context manager; child keeps its inherited copy
     return proc.pid
 
 
-def _stop_nodes(state: FlockState, *, timeout_s: float = 5.0) -> None:
-    """Send SIGTERM to all nodes, then SIGKILL stragglers."""
-    for node in state.nodes:
-        if _is_alive(node.pid):
+def _stop_pids(pids: list[int], *, timeout_s: float = 5.0) -> None:
+    """Send SIGTERM to all pids, then SIGKILL stragglers."""
+    for pid in pids:
+        if _is_alive(pid):
             try:
-                os.kill(node.pid, signal.SIGTERM)
+                os.kill(pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
 
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
-        if not any(_is_alive(n.pid) for n in state.nodes):
+        if not any(_is_alive(pid) for pid in pids):
             return
         time.sleep(0.2)
 
-    for node in state.nodes:
-        if _is_alive(node.pid):
+    for pid in pids:
+        if _is_alive(pid):
             try:
-                os.kill(node.pid, signal.SIGKILL)
+                os.kill(pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
 
 
 # ---------------------------------------------------------------------------
-# commands
+# Commands
 # ---------------------------------------------------------------------------
 
 
-@flock_app.command("start")
-def flock_start(
+@flock_app.command("init")
+def flock_init(
     personas: list[str] = typer.Argument(
         default=None,
-        help="Persona names to run as nodes. Defaults to: coordinator coding-agent research-agent.",
+        help="Persona names. Defaults to: coordinator coding-agent research-agent.",
     ),
     base_port: int = typer.Option(
         _DEFAULT_BASE_PORT,
         "--base-port",
-        help="First nng port. Ports base, base+1 … are allocated sequentially per node.",
+        help="First nng port. Ports are allocated sequentially per node.",
     ),
     flock_dir: str = typer.Option("", "--flock-dir", help="Override flock state directory."),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing definition."),
 ) -> None:
-    """Start a local flock of Ravn daemons, one per persona.
+    """Initialise a flock definition without starting any processes.
+
+    \b
+    Creates:
+      flock.yaml        — flock definition (edit to customise)
+      node-*.yaml       — per-node daemon configs (edit to customise)
+      logs/             — log directory
 
     \b
     Examples:
-      ravn flock start
-      ravn flock start coordinator coding-agent research-agent
-      ravn flock start --base-port 8480 coordinator coding-agent
+      ravn flock init
+      ravn flock init coordinator coding-agent research-agent
+      ravn flock init --base-port 8480 coordinator coding-agent
+      ravn flock init --force   # regenerate from defaults
     """
     resolved_dir = Path(flock_dir) if flock_dir else _flock_dir_default()
     resolved_personas = list(personas) if personas else list(_DEFAULT_PERSONAS)
 
-    # Guard: refuse if a live flock already exists.
-    existing = _load_state(resolved_dir)
-    if existing is not None and _any_alive(existing):
+    existing_def = _load_flock_def(resolved_dir)
+    if existing_def is not None and not force:
         typer.echo(
-            "A flock is already running. Run 'ravn flock stop' first.", err=True
-        )
-        raise typer.Exit(1)
-
-    # Pre-flight: verify all required ports are free.
-    taken = _check_ports(resolved_personas, base_port)
-    if taken:
-        typer.echo(
-            f"Ports already in use: {taken}. Use --base-port to pick a different range.",
+            f"Flock already initialised at {resolved_dir}. "
+            "Use --force to overwrite, or edit flock.yaml directly.",
             err=True,
         )
         raise typer.Exit(1)
 
-    # Validate personas exist before spawning anything.
+    # Validate personas exist before writing anything.
     from ravn.adapters.personas.loader import PersonaLoader  # noqa: PLC0415
 
     loader = PersonaLoader()
@@ -328,57 +403,122 @@ def flock_start(
     logs_dir = resolved_dir / "logs"
     logs_dir.mkdir(exist_ok=True)
 
-    # Build node descriptors (without PIDs yet).
-    nodes: list[NodeState] = []
+    # Build node definitions.
+    nodes: list[NodeDef] = []
     for i, persona in enumerate(resolved_personas):
         pub, rep, hs = _ports_for(i, base_port)
+        gw = _gateway_port_for(i, base_port)
         nodes.append(
-            NodeState(
+            NodeDef(
                 index=i,
                 persona=persona,
                 peer_id=f"flock-{persona}",
-                pid=0,
                 pub_port=pub,
                 rep_port=rep,
                 handshake_port=hs,
+                gateway_port=gw,
                 config_path=str(resolved_dir / f"node-{persona}.yaml"),
                 log_path=str(logs_dir / f"{persona}.log"),
             )
         )
 
-    # Write config files.
+    flock_def = FlockDef(base_port=base_port, nodes=nodes)
+    _save_flock_def(flock_def, resolved_dir)
+
     for node in nodes:
         _write_node_config(node, resolved_dir)
 
-    typer.echo(f"Starting flock ({len(nodes)} nodes)…")
-    typer.echo(f"  State dir: {resolved_dir}")
+    typer.echo(f"Flock initialised at {resolved_dir}")
+    typer.echo("")
+    for node in nodes:
+        typer.echo(
+            f"  [{node.index}] {node.persona:<22} "
+            f"http=127.0.0.1:{node.gateway_port}  ws=127.0.0.1:{node.gateway_port}/ws"
+        )
+    typer.echo("")
+    typer.echo(f"  Definition:  {resolved_dir}/flock.yaml")
+    typer.echo(f"  Node configs: {resolved_dir}/node-*.yaml")
+    typer.echo("")
+    typer.echo("Edit flock.yaml or node configs as needed, then:")
+    typer.echo("  ravn flock start")
+
+
+@flock_app.command("start")
+def flock_start(
+    flock_dir: str = typer.Option("", "--flock-dir", help="Override flock state directory."),
+) -> None:
+    """Start daemons from an existing flock definition.
+
+    \b
+    Run 'ravn flock init' first to create the definition.
+
+    \b
+    Examples:
+      ravn flock start
+      ravn flock start --flock-dir /path/to/my-flock
+    """
+    resolved_dir = Path(flock_dir) if flock_dir else _flock_dir_default()
+
+    flock_def = _load_flock_def(resolved_dir)
+    if flock_def is None:
+        typer.echo(
+            f"No flock definition found at {resolved_dir}. Run 'ravn flock init' first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    # Guard: refuse if a live flock is already running.
+    runtime = _load_runtime(resolved_dir)
+    if runtime is not None and _any_runtime_alive(runtime):
+        typer.echo("A flock is already running. Run 'ravn flock stop' first.", err=True)
+        raise typer.Exit(1)
+
+    # Pre-flight: verify all required ports are free.
+    taken = _check_ports(flock_def.nodes)
+    if taken:
+        typer.echo(
+            f"Ports already in use: {taken}. "
+            "Edit flock.yaml to change ports, or stop whatever is using them.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    typer.echo(f"Starting flock ({len(flock_def.nodes)} nodes)…")
+    typer.echo(f"  Definition: {resolved_dir}/flock.yaml")
     typer.echo("")
 
-    # Spawn workers first (all except index 0 if coordinator is first),
-    # then coordinator last so workers are announcing before it needs them.
-    spawn_order = list(range(1, len(nodes))) + [0]
-
-    state = FlockState(
-        started_at=datetime.now(UTC).isoformat(),
-        base_port=base_port,
-        nodes=nodes,
-    )
+    # Spawn workers first, coordinator last, so workers are announcing before
+    # the coordinator starts looking for peers.
+    spawn_order = list(range(1, len(flock_def.nodes))) + [0]
+    pids: dict[str, int] = {}
 
     for i in spawn_order:
-        node = nodes[i]
+        node = flock_def.nodes[i]
         pid = _spawn_node(node, resolved_dir)
-        node.pid = pid
+        pids[node.persona] = pid
         typer.echo(
             f"  [{node.index}] {node.persona:<22} pid={pid}  "
-            f"pub={node.pub_port}  rep={node.rep_port}  hs={node.handshake_port}"
+            f"pub={node.pub_port}  rep={node.rep_port}  hs={node.handshake_port}  "
+            f"http=127.0.0.1:{node.gateway_port}"
         )
         if i != spawn_order[-1]:
             time.sleep(_SPAWN_STAGGER_S)
 
-    _save_state(state, resolved_dir)
+    _save_runtime(
+        FlockRuntime(started_at=datetime.now(UTC).isoformat(), pids=pids),
+        resolved_dir,
+    )
 
     typer.echo("")
     typer.echo("Flock started. Nodes will discover each other via mDNS (~3s).")
+    typer.echo("")
+    typer.echo("HTTP / WebSocket endpoints:")
+    for node in flock_def.nodes:
+        typer.echo(
+            f"  {node.persona:<22} "
+            f"http://127.0.0.1:{node.gateway_port}/chat  "
+            f"ws://127.0.0.1:{node.gateway_port}/ws"
+        )
     typer.echo("")
     typer.echo("  ravn flock status   — check health")
     typer.echo("  ravn flock peers    — list verified flock members")
@@ -390,22 +530,18 @@ def flock_start(
 def flock_stop(
     flock_dir: str = typer.Option("", "--flock-dir", help="Override flock state directory."),
 ) -> None:
-    """Stop all running flock nodes."""
+    """Stop all running flock nodes. Preserves flock.yaml and node configs."""
     resolved_dir = Path(flock_dir) if flock_dir else _flock_dir_default()
-    state = _load_state(resolved_dir)
-    if state is None:
-        typer.echo("No flock state found.")
+    runtime = _load_runtime(resolved_dir)
+    if runtime is None:
+        typer.echo("No running flock found (no state.json).")
         return
 
-    typer.echo(f"Stopping {len(state.nodes)} node(s)…")
-    _stop_nodes(state)
-
-    # Clean up generated configs (keep logs for post-mortem).
-    for node in state.nodes:
-        Path(node.config_path).unlink(missing_ok=True)
-    _delete_state(resolved_dir)
-
-    typer.echo("Flock stopped.")
+    pids = list(runtime.pids.values())
+    typer.echo(f"Stopping {len(pids)} node(s)…")
+    _stop_pids(pids)
+    _delete_runtime(resolved_dir)
+    typer.echo("Flock stopped. Definition preserved — run 'ravn flock start' to restart.")
 
 
 @flock_app.command("status")
@@ -414,20 +550,26 @@ def flock_status(
 ) -> None:
     """Show the status of each flock node."""
     resolved_dir = Path(flock_dir) if flock_dir else _flock_dir_default()
-    state = _load_state(resolved_dir)
-    if state is None:
-        typer.echo("No flock running.")
+
+    flock_def = _load_flock_def(resolved_dir)
+    if flock_def is None:
+        typer.echo("No flock definition found. Run 'ravn flock init' first.")
         return
 
-    typer.echo(f"Flock nodes ({len(state.nodes)})  [base-port={state.base_port}]")
+    runtime = _load_runtime(resolved_dir)
+    typer.echo(f"Flock  ({len(flock_def.nodes)} nodes)  base-port={flock_def.base_port}")
     typer.echo("")
-    for node in state.nodes:
-        alive = _is_alive(node.pid)
-        status_tag = "running" if alive else "DEAD"
+    for node in flock_def.nodes:
+        pid = runtime.pids.get(node.persona, 0) if runtime else 0
+        if pid and _is_alive(pid):
+            status_tag = f"running  pid={pid}"
+        elif pid:
+            status_tag = f"DEAD     pid={pid}"
+        else:
+            status_tag = "stopped"
         typer.echo(
-            f"  [{node.index}] {node.persona:<22} pid={node.pid:<7} "
-            f"pub={node.pub_port}  rep={node.rep_port}  hs={node.handshake_port}  "
-            f"[{status_tag}]"
+            f"  [{node.index}] {node.persona:<22} "
+            f"http=127.0.0.1:{node.gateway_port}  [{status_tag}]"
         )
 
 
@@ -462,15 +604,24 @@ def flock_peers(
 ) -> None:
     """List verified flock members via the selected node's discovery config."""
     resolved_dir = Path(flock_dir) if flock_dir else _flock_dir_default()
-    state = _load_state(resolved_dir)
-    if state is None:
-        typer.echo("No flock running.", err=True)
+
+    flock_def = _load_flock_def(resolved_dir)
+    if flock_def is None:
+        typer.echo("No flock definition found.", err=True)
+        raise typer.Exit(1)
+
+    runtime = _load_runtime(resolved_dir)
+    if runtime is None:
+        typer.echo("No running flock found.", err=True)
         raise typer.Exit(1)
 
     # Pick the requested node; fall back to first alive if it is dead.
-    target = next((n for n in state.nodes if n.index == node), None)
-    if target is None or not _is_alive(target.pid):
-        target = next((n for n in state.nodes if _is_alive(n.pid)), None)
+    target = next((n for n in flock_def.nodes if n.index == node), None)
+    if target is None or not _is_alive(runtime.pids.get(target.persona, 0)):
+        target = next(
+            (n for n in flock_def.nodes if _is_alive(runtime.pids.get(n.persona, 0))),
+            None,
+        )
     if target is None:
         typer.echo("No live flock nodes found.", err=True)
         raise typer.Exit(1)
@@ -498,20 +649,21 @@ def flock_logs(
 ) -> None:
     """Tail logs for one or all flock nodes."""
     resolved_dir = Path(flock_dir) if flock_dir else _flock_dir_default()
-    state = _load_state(resolved_dir)
-    if state is None:
-        typer.echo("No flock state found.", err=True)
+
+    flock_def = _load_flock_def(resolved_dir)
+    if flock_def is None:
+        typer.echo("No flock definition found.", err=True)
         raise typer.Exit(1)
 
     # Resolve which nodes to tail.
-    target_nodes: list[NodeState]
+    target_nodes: list[NodeDef]
     if not node:
-        target_nodes = state.nodes
+        target_nodes = flock_def.nodes
     elif node.isdigit():
         idx = int(node)
-        target_nodes = [n for n in state.nodes if n.index == idx]
+        target_nodes = [n for n in flock_def.nodes if n.index == idx]
     else:
-        target_nodes = [n for n in state.nodes if n.persona == node]
+        target_nodes = [n for n in flock_def.nodes if n.persona == node]
 
     if not target_nodes:
         typer.echo(f"No node matching {node!r}.", err=True)
@@ -522,7 +674,6 @@ def flock_logs(
         typer.echo("No log files found yet.", err=True)
         raise typer.Exit(1)
 
-    # Use `tail` if available, otherwise fall back to pure Python.
     tail_bin = _find_tail()
     if tail_bin:
         cmd = [tail_bin, f"-n{lines}"]
@@ -535,7 +686,6 @@ def flock_logs(
             pass
         return
 
-    # Pure-Python fallback (Windows / environments without tail).
     _python_tail(log_paths, lines=lines, follow=follow)
 
 
@@ -556,25 +706,21 @@ def _python_tail(paths: list[str], *, lines: int, follow: bool) -> None:
     handles = []
     for p in paths:
         try:
-            handles.append((p, open(p)))  # noqa: WPS515
+            handles.append((p, open(p)))  # noqa: WPS515,SIM115
         except OSError:
             pass
 
-    # Print last N lines from each file.
-    for path, fh in handles:
-        content = fh.read().splitlines()
-        header = f"==> {path} <=="
-        typer.echo(header)
-        for line in content[-lines:]:
-            typer.echo(line)
-
-    if not follow:
-        for _, fh in handles:
-            fh.close()
-        return
-
-    # Follow mode: poll all open file handles.
     try:
+        for path, fh in handles:
+            content = fh.read().splitlines()
+            header = f"==> {path} <=="
+            typer.echo(header)
+            for line in content[-lines:]:
+                typer.echo(line)
+
+        if not follow:
+            return
+
         while True:
             for path, fh in handles:
                 chunk = fh.read()

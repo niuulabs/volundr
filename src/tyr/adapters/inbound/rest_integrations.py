@@ -33,6 +33,11 @@ from tyr.adapters.inbound.auth import extract_principal
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 # --- Request / Response models ---
 
 
@@ -154,10 +159,10 @@ def create_integrations_router() -> APIRouter:
         saved = await repo.save_connection(connection)
         logger.info(
             "Created Tyr integration: type=%s adapter=%s user=%s test=%s",
-            data.integration_type,
-            data.adapter,
+            _sanitize_log(data.integration_type),
+            _sanitize_log(data.adapter),
             principal.user_id,
-            test_result.message,
+            _sanitize_log(test_result.message),
         )
         return IntegrationResponse.from_connection(saved)
 

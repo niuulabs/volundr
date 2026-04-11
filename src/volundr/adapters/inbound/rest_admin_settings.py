@@ -13,6 +13,11 @@ from volundr.domain.models import Principal
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 class AdminStorageSettings(BaseModel):
     """Response/request model for storage settings."""
 
@@ -75,8 +80,8 @@ def create_admin_settings_router() -> APIRouter:
             storage["file_manager_enabled"] = body.storage.file_manager_enabled
             logger.info(
                 "Admin updated storage settings: home_enabled=%s, file_manager_enabled=%s",
-                body.storage.home_enabled,
-                body.storage.file_manager_enabled,
+                _sanitize_log(body.storage.home_enabled),
+                _sanitize_log(body.storage.file_manager_enabled),
             )
         storage = settings.get("storage", {})
         return AdminSettingsResponse(

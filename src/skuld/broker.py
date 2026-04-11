@@ -93,6 +93,11 @@ _configure_logging()
 logger = logging.getLogger("skuld.broker")
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 # ---------------------------------------------------------------------------
 # Session artifacts & summary prompt (Part: Chronicle Summary Generation)
 # ---------------------------------------------------------------------------
@@ -873,7 +878,7 @@ class Broker:
         msg_type = data.get("type")
         logger.info(
             "_dispatch_browser_message: type=%s, transport_alive=%s",
-            msg_type,
+            _sanitize_log(msg_type),
             self._transport.is_alive,
         )
 
@@ -881,7 +886,7 @@ class Broker:
         cap_field = self._CONTROL_CAPABILITY_MAP.get(msg_type or "")
         if cap_field and not getattr(self._transport.capabilities, cap_field):
             error_msg = f"{msg_type} not supported by this transport"
-            logger.warning("_dispatch_browser_message: %s", error_msg)
+            logger.warning("_dispatch_browser_message: %s", _sanitize_log(error_msg))
             if sender_ws:
                 await sender_ws.send_json({"type": "error", "content": error_msg})
             return
@@ -1407,7 +1412,7 @@ class Broker:
         self._user_claims = _decode_jwt_claims(token)
 
         user_id = self._user_claims.get("sub", "unknown")
-        logger.info("JWT updated from WebSocket connection (sub=%s)", user_id)
+        logger.info("JWT updated from WebSocket connection (sub=%s)", _sanitize_log(user_id))
 
         # Propagate new auth headers to the chronicle watcher
         if self._chronicle_watcher is not None:
@@ -1487,12 +1492,12 @@ class Broker:
                 data = await websocket.receive_json()
                 logger.debug(
                     "handle_websocket: browser msg: %s",
-                    json.dumps(data)[:500],
+                    _sanitize_log(json.dumps(data)[:500]),
                 )
                 try:
                     await self._dispatch_browser_message(data, sender_ws=websocket)
                 except Exception as e:
-                    logger.exception("Error processing browser message: %s", data)
+                    logger.exception("Error processing browser message: %s", _sanitize_log(data))
                     await websocket.send_json({"type": "error", "content": str(e)})
 
         except WebSocketDisconnect:
@@ -1516,7 +1521,7 @@ class Broker:
         """
         logger.info(
             "handle_cli_websocket: incoming CLI connection for session=%s (transport=%s)",
-            session_id,
+            _sanitize_log(session_id),
             type(self._transport).__name__ if self._transport else None,
         )
 
@@ -1531,8 +1536,8 @@ class Broker:
         if session_id != self.session_id:
             logger.warning(
                 "CLI WebSocket session mismatch: expected %s, got %s",
-                self.session_id,
-                session_id,
+                _sanitize_log(self.session_id),
+                _sanitize_log(session_id),
             )
             await websocket.close(code=1008, reason="Session ID mismatch")
             return
@@ -2065,7 +2070,7 @@ async def get_diff(
 
     if proc.returncode not in (0, 1):
         detail = stderr.decode(errors="replace").strip()
-        logger.warning("git diff failed for %s: %s", file, detail)
+        logger.warning("git diff failed for %s: %s", _sanitize_log(file), _sanitize_log(detail))
         raise HTTPException(502, f"git diff failed: {detail}")
 
     raw = stdout.decode(errors="replace")

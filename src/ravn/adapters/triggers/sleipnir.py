@@ -58,9 +58,10 @@ class SleipnirEventTrigger(TriggerPort):
 
     def _render_context(self, payload: dict) -> str:
         try:
-            from jinja2 import Template  # type: ignore[import-untyped]
+            from jinja2 import Environment  # type: ignore[import-untyped]
 
-            return Template(self._context_template).render(payload=payload)
+            env = Environment(autoescape=True)
+            return env.from_string(self._context_template).render(payload=payload)
         except ImportError:
             logger.warning("jinja2 not installed — using raw context_template")
             return self._context_template

@@ -371,12 +371,15 @@ class CronTrigger(TriggerPort):
 
     def _acquire_lock(self) -> IO[str] | None:
         """Try to acquire the cron lock.  Returns fd on success, None on failure."""
+        fd = None
         try:
             self._lock_path.parent.mkdir(parents=True, exist_ok=True)
             fd = open(self._lock_path, "w")  # noqa: SIM115
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             return fd
         except (OSError, BlockingIOError):
+            if fd is not None:
+                fd.close()
             return None
 
     # ------------------------------------------------------------------

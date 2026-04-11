@@ -339,7 +339,7 @@ class TestBrowserNavigateTool:
         tool = self._make_tool(browser)
         result = await tool.execute({"url": "https://example.com"})
         assert not result.is_error
-        assert "https://example.com" in result.content
+        assert result.content.startswith("URL: https://example.com\n")
         assert "200" in result.content
 
     @pytest.mark.asyncio
