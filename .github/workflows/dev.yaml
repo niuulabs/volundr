@@ -520,6 +520,54 @@ jobs:
           docker manifest push "${IMAGE}:dev-${SHORT_SHA}"
 
   # ---------------------------------------------------------------------------
+  # Security — container vulnerability scanning
+  # ---------------------------------------------------------------------------
+  scan-containers:
+    name: "Scan: ${{ matrix.container }}"
+    needs: merge-container-manifests
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+    strategy:
+      matrix:
+        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu, mimir, bifrost]
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Grype
+        run: |
+          GRYPE_VERSION="0.87.0"
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/247f5d72abf2131aa37f3164a98495c121b29029/install.sh | sh -s -- -b /usr/local/bin "v${GRYPE_VERSION}"
+          grype version
+
+      - name: Scan container with Grype
+        run: |
+          grype "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:dev" \
+            --only-fixed \
+            --fail-on critical \
+            -o sarif > "grype-${{ matrix.container }}.sarif"
+
+      - name: Upload Grype results
+        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4
+        if: always()
+        with:
+          sarif_file: grype-${{ matrix.container }}.sarif
+          category: grype-${{ matrix.container }}
+
+  # ---------------------------------------------------------------------------
   # Version tagging — prerelease dev tags
   # ---------------------------------------------------------------------------
   tag:
