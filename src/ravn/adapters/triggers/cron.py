@@ -440,13 +440,14 @@ class CronTrigger(TriggerPort):
             logger.warning("cron: another instance holds the lock — skipping")
             return
 
-        try:
-            while True:
-                now = datetime.now(UTC)
-                state = self._load_state()
-                changed = False
+        with lock_fd:
+            try:
+                while True:
+                    now = datetime.now(UTC)
+                    state = self._load_state()
+                    changed = False
 
-                # -- Config-defined jobs --
+                    # -- Config-defined jobs --
                 for job in self._jobs:
                     if not self._is_due(job, now, state):
                         continue
@@ -512,12 +513,11 @@ class CronTrigger(TriggerPort):
                     self._save_state(state)
 
                 await asyncio.sleep(self._tick)
-        finally:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                lock_fd.close()
-            except Exception:
-                pass
+            finally:
+                try:
+                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                except Exception:
+                    pass
 
 
 # ---------------------------------------------------------------------------
