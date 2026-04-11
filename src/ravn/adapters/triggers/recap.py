@@ -35,7 +35,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from niuu.domain.mimir import ThreadState
+from niuu.domain.mimir import MimirPage, ThreadState
 from niuu.ports.mimir import MimirPort
 from ravn.config import RecapConfig
 from ravn.domain.models import AgentTask, OutputMode
@@ -148,7 +148,7 @@ class RecapTrigger(TriggerPort):
         # Operator just returned after an absence.
         logger.info("RecapTrigger: operator returned after absence — checking for recap content")
         self._was_away = False
-        enqueued = await self._try_enqueue_recap(enqueue, now)
+        enqueued = await self._try_enqueue_recap(enqueue, now, triggered_by="recap:return")
         self._save_state()
         return enqueued
 
@@ -180,7 +180,7 @@ class RecapTrigger(TriggerPort):
             "RecapTrigger: scheduled recap firing (cron=%r)",
             self._config.scheduled_recap_cron,
         )
-        enqueued = await self._try_enqueue_recap(enqueue, now)
+        enqueued = await self._try_enqueue_recap(enqueue, now, triggered_by="recap:schedule")
         if enqueued:
             self._save_state()
 
@@ -188,6 +188,8 @@ class RecapTrigger(TriggerPort):
         self,
         enqueue: Callable[[AgentTask], Awaitable[None]],
         now: datetime,
+        *,
+        triggered_by: str,
     ) -> bool:
         """Query Mímir for recap content and enqueue if there is something to report.
 
@@ -217,7 +219,7 @@ class RecapTrigger(TriggerPort):
             task_id=task_id,
             title="Morning recap",
             initiative_context=initiative_context,
-            triggered_by="recap:return",
+            triggered_by=triggered_by,
             output_mode=OutputMode.SURFACE,
             priority=1,
             persona=self._config.persona,
@@ -232,7 +234,7 @@ class RecapTrigger(TriggerPort):
         self._last_recap_at = now
         return True
 
-    async def _fetch_closed_threads(self):  # type: ignore[return]
+    async def _fetch_closed_threads(self) -> list[MimirPage]:
         """Return closed Mímir threads updated since ``last_recap_at``."""
         try:
             threads = await self._mimir.list_threads(

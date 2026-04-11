@@ -1967,10 +1967,6 @@ class RecapConfig(BaseModel):
         default=10,
         description="Maximum number of closed threads included in a single recap.",
     )
-    max_outcomes_in_recap: int = Field(
-        default=10,
-        description="Maximum number of task outcomes included in a single recap.",
-    )
     persona: str = Field(
         default="produce-recap",
         description="Persona used when running the recap agent task.",

@@ -74,7 +74,6 @@
 #   return_detection_window_seconds: 300    # within 5 min = "just returned"
 #   scheduled_recap_cron: ""               # e.g. "0 7 * * *" for 07:00 daily
 #   max_threads_in_recap: 10
-#   max_outcomes_in_recap: 10
 #   persona: produce-recap
 #   channel: ""                            # empty = TUI only
 #   poll_interval_seconds: 60
