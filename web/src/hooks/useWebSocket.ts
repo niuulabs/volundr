@@ -137,7 +137,7 @@ export function useWebSocket(
         return;
       }
 
-      const ws = new WebSocket(parsed.href);
+      const ws = new WebSocket(finalUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
