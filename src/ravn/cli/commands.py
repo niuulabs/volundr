@@ -43,6 +43,10 @@ approvals_app = typer.Typer(
 )
 app.add_typer(approvals_app, name="approvals")
 
+from ravn.cli.flock import flock_app  # noqa: E402 — must be after app is defined
+
+app.add_typer(flock_app, name="flock")
+
 
 def approvals_main() -> None:
     approvals_app()
