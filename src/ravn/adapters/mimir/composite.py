@@ -273,6 +273,7 @@ class CompositeMimirAdapter(MimirPort):
         path: str,
         content: str,
         mimir: str | None = None,
+        meta: MimirPageMeta | None = None,
     ) -> None:
         """Write *path* to the mounts selected by routing config or explicit *mimir*.
 

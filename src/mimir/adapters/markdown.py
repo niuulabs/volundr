@@ -332,12 +332,13 @@ class MarkdownMimirAdapter(MimirPort):
         path: str,
         content: str,
         mimir: str | None = None,
+        meta: MimirPageMeta | None = None,
     ) -> None:
         """Create or replace a wiki page and update index.md.
 
-        The *mimir* parameter is accepted for interface compatibility with
-        ``CompositeMimirAdapter`` but is ignored here — this adapter always
-        writes to its own filesystem root.
+        The *mimir* and *meta* parameters are accepted for interface
+        compatibility but are ignored here — this adapter always writes to its
+        own filesystem root and does not persist metadata separately.
         """
         page_path = self._safe_wiki_path(path)
         page_path.parent.mkdir(parents=True, exist_ok=True)

@@ -127,6 +127,7 @@ class HttpMimirAdapter(MimirPort):
         path: str,
         content: str,
         mimir: str | None = None,
+        meta: MimirPageMeta | None = None,
     ) -> None:
         """PUT /mimir/page — create or replace a wiki page."""
         client = self._get_client()

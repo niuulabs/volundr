@@ -155,6 +155,56 @@ class TestThreadEnricherDisabled:
 
 
 # ---------------------------------------------------------------------------
+# Efficiency: early-exit avoids list_sources() round-trip
+# ---------------------------------------------------------------------------
+
+
+class TestEarlyExit:
+    @pytest.mark.asyncio
+    async def test_no_candidates_skips_list_sources(self) -> None:
+        """When all pages are pre-filtered, list_sources() must not be called."""
+        mimir = AsyncMock()
+        mimir.list_pages = AsyncMock(return_value=[])
+        mimir.list_sources = AsyncMock(return_value=[])
+
+        enricher = _make_enricher(mimir=mimir)
+        await enricher._poll_once()
+
+        mimir.list_sources.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_all_already_threads_skips_list_sources(self) -> None:
+        """Pages that fail the pre-filter must not trigger a list_sources() call."""
+        mimir = AsyncMock()
+        mimir.list_pages = AsyncMock(
+            return_value=[
+                _page_meta(thread_state=ThreadState.open),
+                _page_meta(path="threads/x", is_thread=True),
+            ]
+        )
+        mimir.list_sources = AsyncMock(return_value=[])
+
+        enricher = _make_enricher(mimir=mimir)
+        await enricher._poll_once()
+
+        mimir.list_sources.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_eligible_candidate_triggers_list_sources(self) -> None:
+        """A page that passes the pre-filter must cause list_sources() to be called."""
+        mimir = AsyncMock()
+        mimir.list_pages = AsyncMock(return_value=[_page_meta()])
+        mimir.list_sources = AsyncMock(return_value=[])
+        mimir.get_page = AsyncMock(return_value=_page())
+        mimir.upsert_page = AsyncMock()
+
+        enricher = _make_enricher(mimir=mimir)
+        await enricher._poll_once()
+
+        mimir.list_sources.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # Eligibility filtering
 # ---------------------------------------------------------------------------
 

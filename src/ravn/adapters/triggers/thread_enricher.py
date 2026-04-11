@@ -147,11 +147,30 @@ class ThreadEnricher(TriggerPort):
         now = datetime.now(UTC)
 
         pages = await self._mimir.list_pages()
+
+        # Pre-filter without source type information — avoids a list_sources()
+        # round-trip when there is nothing new to process.
+        candidates = [
+            p
+            for p in pages
+            if not p.path.startswith("threads/")
+            and p.thread_state is None
+            and not p.is_thread
+            and not p.produced_by_thread
+            and (self._last_checked_at is None or p.updated_at > self._last_checked_at)
+        ]
+
+        if not candidates:
+            self._last_checked_at = now
+            self._save_state(now)
+            return
+
         source_metas = await self._mimir.list_sources()
         source_type_map: dict[str, str] = {s.source_id: s.source_type for s in source_metas}
 
-        for page_meta in pages:
+        for page_meta in candidates:
             if not self._is_eligible(page_meta, source_type_map):
+                # source-type guard may still exclude this candidate
                 continue
 
             try:
