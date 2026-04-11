@@ -30,7 +30,7 @@ nng = [
     "zeroconf>=0.131",
 ]
 nats = [
-    "nats-py>=2.3",
+    "nats-py>=2.14.0",
 ]
 test = [
     "pytest>=9.0.2",
@@ -80,7 +80,7 @@ dev = [
     "cryptography>=42.0",
     "textual>=0.79",
     "typer>=0.24.1",
-    "nats-py>=2.3",
+    "nats-py>=2.14.0",
 ]
 
 [project.scripts]
