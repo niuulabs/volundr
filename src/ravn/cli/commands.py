@@ -494,7 +494,8 @@ def _filter_tools(
 
     if allowed_groups or enabled_names:
         tools = [
-            t for t in tools
+            t
+            for t in tools
             if t.name in enabled_names or (allowed_groups and _in_groups(t.name, allowed_groups))
         ]
 
@@ -808,9 +809,7 @@ def _apply_profile(
         settings.checkpoint.enabled = True
 
     if profile.mcp_servers:
-        settings.mcp_servers = [
-            s for s in settings.mcp_servers if s.name in profile.mcp_servers
-        ]
+        settings.mcp_servers = [s for s in settings.mcp_servers if s.name in profile.mcp_servers]
 
     return system_prompt, max_iterations, max_tokens
 
@@ -1169,6 +1168,7 @@ async def _chat(
     settings: Settings,
     prompt: str,
     show_usage: bool,
+    interaction_tracker: Any | None = None,
 ) -> None:
     """Run a single-turn or multi-turn conversation."""
     from ravn.adapters.slash_commands import handle as handle_slash
@@ -1196,6 +1196,8 @@ async def _chat(
                 typer.echo(slash_output)
                 continue
 
+            if interaction_tracker is not None:
+                interaction_tracker.touch()
             await _run_turn(agent, channel, user_input, show_usage=show_usage)
     finally:
         await _shutdown_mcp(mcp_manager)
@@ -1503,19 +1505,13 @@ def _make_channel_tasks(
 
     pairs: list[tuple[Any, str]] = []
     if channels_cfg.discord.enabled:
-        task = asyncio.create_task(
-            DiscordGateway(channels_cfg.discord, gw).run(), name="discord"
-        )
+        task = asyncio.create_task(DiscordGateway(channels_cfg.discord, gw).run(), name="discord")
         pairs.append((task, "discord"))
     if channels_cfg.slack.enabled:
-        task = asyncio.create_task(
-            SlackGateway(channels_cfg.slack, gw).run(), name="slack"
-        )
+        task = asyncio.create_task(SlackGateway(channels_cfg.slack, gw).run(), name="slack")
         pairs.append((task, "slack"))
     if channels_cfg.matrix.enabled:
-        task = asyncio.create_task(
-            MatrixGateway(channels_cfg.matrix, gw).run(), name="matrix"
-        )
+        task = asyncio.create_task(MatrixGateway(channels_cfg.matrix, gw).run(), name="matrix")
         pairs.append((task, "matrix"))
     if channels_cfg.whatsapp.enabled:
         task = asyncio.create_task(
@@ -1812,6 +1808,7 @@ async def _run_daemon(
         resolved_max_tokens = settings.effective_max_tokens()
         if task_persona and task_persona != (persona_config.name if persona_config else None):
             from ravn.adapters.personas.loader import PersonaLoader
+
             task_persona_cfg = PersonaLoader().load(task_persona)
             if task_persona_cfg is not None:
                 resolved_persona = task_persona_cfg
@@ -1891,6 +1888,12 @@ async def _run_daemon(
 
     tasks: list[asyncio.Task] = []
 
+    # Create interaction tracker early so it can be shared between gateway
+    # channels (touch on operator message) and the wakefulness trigger (read).
+    from ravn.domain.interaction_tracker import LastInteractionTracker
+
+    interaction_tracker = LastInteractionTracker()
+
     # Gateway channels (human-initiated turns)
     gw_tasks: list[str] = []
     channels_cfg = settings.gateway.channels
@@ -1903,7 +1906,12 @@ async def _run_daemon(
         or channels_cfg.whatsapp.enabled
     )
     if _any_channel:
-        gw = RavnGateway(settings.gateway, _agent_factory, profile=profile)
+        gw = RavnGateway(
+            settings.gateway,
+            _agent_factory,
+            profile=profile,
+            interaction_tracker=interaction_tracker,
+        )
 
         if channels_cfg.telegram.enabled:
             tg = TelegramGateway(channels_cfg.telegram, gw)
@@ -1943,9 +1951,6 @@ async def _run_daemon(
 
         # Wire Mímir triggers (source synthesis + staleness refresh + threads)
         if daemon_mimir is not None:
-            from ravn.domain.interaction_tracker import LastInteractionTracker
-
-            interaction_tracker = LastInteractionTracker()
             _wire_mimir_triggers(
                 drive_loop,
                 daemon_mimir,
@@ -2081,9 +2086,7 @@ def _wire_mimir_triggers(
     if settings.thread.enabled and llm is not None:
         from ravn.adapters.triggers.thread_enricher import ThreadEnricher
 
-        drive_loop.register_trigger(
-            ThreadEnricher(mimir=mimir, llm=llm, config=settings.thread)
-        )
+        drive_loop.register_trigger(ThreadEnricher(mimir=mimir, llm=llm, config=settings.thread))
         logger.info(
             "thread: enricher registered (poll=%ds, confidence=%.2f, llm_alias=%s)",
             settings.thread.enricher_poll_interval_seconds,
@@ -2093,24 +2096,25 @@ def _wire_mimir_triggers(
 
     # Wakefulness trigger (NIU-565) — detects silence, reflects, emits intents.
     if settings.wakefulness.enabled and llm is not None:
-        from ravn.adapters.triggers.wakefulness import WakefulnessTrigger
-        from ravn.domain.interaction_tracker import LastInteractionTracker
+        if interaction_tracker is None:
+            logger.warning("wakefulness: no interaction tracker provided — skipping")
+        else:
+            from ravn.adapters.triggers.wakefulness import WakefulnessTrigger
 
-        tracker = interaction_tracker or LastInteractionTracker()
-        drive_loop.register_trigger(
-            WakefulnessTrigger(
-                tracker=tracker,
-                mimir=mimir,
-                llm=llm,
-                config=settings.wakefulness,
+            drive_loop.register_trigger(
+                WakefulnessTrigger(
+                    tracker=interaction_tracker,
+                    mimir=mimir,
+                    llm=llm,
+                    config=settings.wakefulness,
+                )
             )
-        )
-        logger.info(
-            "wakefulness: trigger registered (silence=%ds, cooldown=%ds, poll=%ds)",
-            settings.wakefulness.silence_threshold_seconds,
-            settings.wakefulness.reflection_cooldown_seconds,
-            settings.wakefulness.poll_interval_seconds,
-        )
+            logger.info(
+                "wakefulness: trigger registered (silence=%ds, cooldown=%ds, poll=%ds)",
+                settings.wakefulness.silence_threshold_seconds,
+                settings.wakefulness.reflection_cooldown_seconds,
+                settings.wakefulness.poll_interval_seconds,
+            )
 
 
 def _wire_cron(
@@ -2492,6 +2496,7 @@ def tui(
     mimir_urls: list[tuple[str, str]] = []
     try:
         from ravn.config import Settings
+
         settings = Settings()
         for inst in sorted(settings.mimir.instances, key=lambda i: i.read_priority):
             if inst.url:
@@ -2615,9 +2620,7 @@ def _build_single_mimir(settings: Settings, name: str) -> Any:
         return MarkdownMimirAdapter(root=settings.mimir.path)
 
     available = [inst.name for inst in settings.mimir.instances] or ["local"]
-    typer.echo(
-        f"Unknown Mímir instance {name!r}. Available: {', '.join(available)}", err=True
-    )
+    typer.echo(f"Unknown Mímir instance {name!r}. Available: {', '.join(available)}", err=True)
     raise typer.Exit(1)
 
 
