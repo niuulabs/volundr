@@ -9,6 +9,19 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 
+def compute_cost(
+    input_tokens: int,
+    output_tokens: int,
+    input_per_million: float,
+    output_per_million: float,
+) -> float:
+    """Estimate USD cost from token counts using per-million-token rates."""
+    return (
+        input_tokens * input_per_million / 1_000_000
+        + output_tokens * output_per_million / 1_000_000
+    )
+
+
 class DailyBudgetTracker:
     """Tracks USD spend per UTC day and gates tasks when the cap is reached.
 
@@ -32,6 +45,7 @@ class DailyBudgetTracker:
         self._warn_at_percent = warn_at_percent
         self._spent_today: float = 0.0
         self._current_date: date = datetime.now(UTC).date()
+        self._warn_emitted_today: bool = False
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -43,6 +57,7 @@ class DailyBudgetTracker:
         if today != self._current_date:
             self._spent_today = 0.0
             self._current_date = today
+            self._warn_emitted_today = False
 
     # ------------------------------------------------------------------
     # Public API
@@ -84,3 +99,13 @@ class DailyBudgetTracker:
             return False
         pct = (self._spent_today / self._daily_cap_usd) * 100
         return pct >= self._warn_at_percent
+
+    @property
+    def warn_emitted_today(self) -> bool:
+        """True if the budget warning event has already been emitted today."""
+        self._maybe_reset()
+        return self._warn_emitted_today
+
+    def mark_warn_emitted(self) -> None:
+        """Record that the budget warning event was emitted for today."""
+        self._warn_emitted_today = True

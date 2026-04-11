@@ -244,10 +244,10 @@ async def test_drive_loop_skips_task_when_budget_exceeded(tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_drive_loop_requeues_task_for_tomorrow_when_budget_exceeded(
+async def test_drive_loop_does_not_reenqueue_when_budget_exceeded(
     tmp_path: Path,
 ) -> None:
-    """Skipped budget tasks must be re-enqueued with a tomorrow deadline."""
+    """Skipped budget tasks must NOT be re-enqueued (they survive in the journal)."""
     exhausted_tracker = _make_tracker(cap=0.0)
     loop, factory, _ = _make_drive_loop(tmp_path, budget=exhausted_tracker)
 
@@ -259,13 +259,8 @@ async def test_drive_loop_requeues_task_for_tomorrow_when_budget_exceeded(
 
     await loop._run_task(task)
 
-    # Task should have been re-enqueued
-    assert not loop._queue.empty()
-    _, _, requeued = loop._queue.get_nowait()
-    assert requeued.task_id == task.task_id
-    # Deadline must be in the future (tomorrow)
-    assert requeued.deadline is not None
-    assert requeued.deadline > datetime.now(UTC)
+    # Queue must remain empty — no infinite re-enqueue loop
+    assert loop._queue.empty()
 
 
 # ---------------------------------------------------------------------------
@@ -375,6 +370,49 @@ async def test_drive_loop_no_warning_below_threshold(tmp_path: Path) -> None:
         e for e in published if e.type == RavnEventType.DECISION and e.payload.get("budget_warning")
     ]
     assert len(warning_events) == 0
+
+
+@pytest.mark.asyncio
+async def test_drive_loop_warning_emitted_only_once_per_day(tmp_path: Path) -> None:
+    """Budget warning event is published at most once per UTC day."""
+    tracker = _make_tracker(cap=1.0, warn_at=80)
+    tracker.record(0.80)  # at threshold
+
+    loop, factory, published = _make_drive_loop(tmp_path, budget=tracker)
+
+    class FakeTurnResult:
+        usage = TokenUsage(input_tokens=0, output_tokens=0)
+
+    mock_agent = AsyncMock()
+    mock_agent.run_turn = AsyncMock(return_value=FakeTurnResult())
+    factory.return_value = mock_agent
+
+    # Run two tasks in a row — warning should fire only once
+    task1 = _make_task("task-one")
+    task2 = _make_task("task-two")
+
+    with patch.object(loop._settings.cascade, "enabled", False):
+        await loop._run_task(task1)
+        await loop._run_task(task2)
+
+    warning_events = [
+        e for e in published if e.type == RavnEventType.DECISION and e.payload.get("budget_warning")
+    ]
+    assert len(warning_events) == 1
+
+
+def test_tracker_warn_emitted_resets_on_day_rollover() -> None:
+    """_warn_emitted_today resets when the UTC day rolls over."""
+    tracker = _make_tracker(cap=1.0, warn_at=80)
+    tracker.record(0.80)
+    tracker.mark_warn_emitted()
+    assert tracker.warn_emitted_today is True
+
+    yesterday = datetime.now(UTC).date() - timedelta(days=1)
+    tracker._current_date = yesterday
+
+    # Accessing any property triggers reset
+    assert tracker.warn_emitted_today is False
 
 
 # ---------------------------------------------------------------------------

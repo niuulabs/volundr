@@ -13,18 +13,17 @@ daemon instances.
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import json
 import logging
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ravn.adapters.channels.capture import CaptureChannel, TaskResult, TaskResultStore
 from ravn.adapters.channels.silent import SilentChannel
 from ravn.adapters.events.noop_publisher import NoOpEventPublisher
 from ravn.config import BudgetConfig, InitiativeConfig, Settings
-from ravn.domain.budget import DailyBudgetTracker
+from ravn.domain.budget import DailyBudgetTracker, compute_cost
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.models import AgentTask, OutputMode
 from ravn.ports.channel import ChannelPort
@@ -280,7 +279,9 @@ class DriveLoop:
 
     async def _run_task(self, task: AgentTask) -> None:
         """Execute a single initiative task."""
-        # Budget pre-check: skip and re-enqueue for tomorrow if daily cap is reached.
+        # Budget pre-check: skip when daily cap is reached.
+        # The task is already persisted in the journal and will be retried
+        # after the UTC day rolls over and the budget resets.
         if not self._budget.can_spend():
             logger.info(
                 "drive_loop: task %s (%r) skipped — daily budget cap reached "
@@ -290,11 +291,6 @@ class DriveLoop:
                 self._budget.spent_today_usd,
                 self._budget.remaining_usd,
             )
-            tomorrow = (datetime.now(UTC) + timedelta(days=1)).replace(
-                hour=0, minute=1, second=0, microsecond=0
-            )
-            deferred = dataclasses.replace(task, deadline=tomorrow)
-            await self.enqueue(deferred)
             return
 
         if self._settings.cascade.enabled:
@@ -393,15 +389,25 @@ class DriveLoop:
             logger.warning("drive_loop: failed to save task output: %s", exc)
 
     async def _maybe_publish_budget_warning(self, task: AgentTask) -> None:
-        """Publish a DECISION warning event when spend crosses the warn_at_percent threshold."""
+        """Publish a DECISION warning event once per UTC day when spend crosses the threshold."""
         if not self._budget.warn_threshold_reached:
             return
+        if self._budget.warn_emitted_today:
+            return
+        budget_cfg = getattr(self._settings, "budget", None)
+        if isinstance(budget_cfg, BudgetConfig):
+            daily_cap_usd = budget_cfg.daily_cap_usd
+            warn_at_percent = budget_cfg.warn_at_percent
+        else:
+            daily_cap_usd = self._budget._daily_cap_usd
+            warn_at_percent = self._budget._warn_at_percent
         logger.warning(
             "drive_loop: daily budget warning — spent=%.4f remaining=%.4f cap=%.4f",
             self._budget.spent_today_usd,
             self._budget.remaining_usd,
-            self._settings.budget.daily_cap_usd,
+            daily_cap_usd,
         )
+        self._budget.mark_warn_emitted()
         await self._event_publisher.publish(
             RavnEvent(
                 type=RavnEventType.DECISION,
@@ -410,8 +416,8 @@ class DriveLoop:
                     "budget_warning": True,
                     "spent_today_usd": self._budget.spent_today_usd,
                     "remaining_usd": self._budget.remaining_usd,
-                    "daily_cap_usd": self._settings.budget.daily_cap_usd,
-                    "warn_at_percent": self._settings.budget.warn_at_percent,
+                    "daily_cap_usd": daily_cap_usd,
+                    "warn_at_percent": warn_at_percent,
                 },
                 timestamp=datetime.now(UTC),
                 urgency=0.5,
@@ -435,7 +441,7 @@ class DriveLoop:
         else:
             input_rate = 3.0
             output_rate = 15.0
-        cost_usd = input_tokens * input_rate / 1_000_000 + output_tokens * output_rate / 1_000_000
+        cost_usd = compute_cost(input_tokens, output_tokens, input_rate, output_rate)
         self._budget.record(cost_usd)
         logger.debug(
             "drive_loop: task %s cost=%.6f spent_today=%.6f remaining=%.6f",
