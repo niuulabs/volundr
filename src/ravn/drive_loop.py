@@ -19,6 +19,8 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from niuu.domain.mimir import ThreadState
+from niuu.ports.mimir import MimirPort
 from ravn.adapters.channels.capture import CaptureChannel, TaskResult, TaskResultStore
 from ravn.adapters.channels.silent import SilentChannel
 from ravn.adapters.events.noop_publisher import NoOpEventPublisher
@@ -61,12 +63,14 @@ class DriveLoop:
         event_publisher: EventPublisherPort | None = None,
         resume: bool = False,
         budget: DailyBudgetTracker | None = None,
+        mimir: MimirPort | None = None,
     ) -> None:
         self._agent_factory = agent_factory
         self._config = config
         self._settings = settings
         self._event_publisher: EventPublisherPort = event_publisher or NoOpEventPublisher()
         self._resume = resume
+        self._mimir = mimir
         self._triggers: list[TriggerPort] = []
         # (priority, counter, AgentTask)
         self._queue: asyncio.PriorityQueue = asyncio.PriorityQueue(maxsize=config.task_queue_max)
@@ -377,6 +381,10 @@ class DriveLoop:
         if channel.surface_triggered:
             await self._re_deliver_surface(task, channel.response_text)
 
+        if task.triggered_by and task.triggered_by.startswith("thread:"):
+            thread_path = task.triggered_by.removeprefix("thread:")
+            await self._finalise_thread(thread_path, success)
+
     def _save_task_output(self, task: AgentTask, channel: ChannelPort) -> None:
         """Persist agent response to ``task.output_path`` when set (cron tasks)."""
         if task.output_path is None:
@@ -470,6 +478,26 @@ class DriveLoop:
             task_id=task.task_id,
         )
         await self._event_publisher.publish(event)
+
+    async def _finalise_thread(self, thread_path: str, success: bool) -> None:
+        """Transition thread state after task completion.
+
+        On success: ``pulling → closed``.
+        On failure: ``pulling → open`` and ownership is released.
+        All Mímir errors are caught and logged; never propagated.
+        """
+        if self._mimir is None:
+            return
+        try:
+            if success:
+                await self._mimir.update_thread_state(thread_path, ThreadState.closed)
+                logger.info("drive_loop: thread %r closed after successful task", thread_path)
+            else:
+                await self._mimir.update_thread_state(thread_path, ThreadState.open)
+                await self._mimir.assign_thread_owner(thread_path, None)
+                logger.info("drive_loop: thread %r returned to open after failed task", thread_path)
+        except Exception as exc:
+            logger.warning("drive_loop: failed to finalise thread %r: %s", thread_path, exc)
 
     async def _heartbeat(self) -> None:
         """Publish periodic heartbeat events via the event publisher."""
