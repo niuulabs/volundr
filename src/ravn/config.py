@@ -1419,8 +1419,7 @@ class MimirStalenessTriggerConfig(BaseModel):
     max_tokens: int | None = Field(
         default=4096,
         description=(
-            "Maximum output tokens for staleness refresh tasks. "
-            "None uses the LLM/settings default."
+            "Maximum output tokens for staleness refresh tasks. None uses the LLM/settings default."
         ),
     )
 
@@ -1538,11 +1537,17 @@ class DiscoveryMdnsConfig(BaseModel):
     )
     handshake_port: int = Field(
         default=7482,
-        description="nng PAIR port used for HMAC handshake exchange. Must be unique per instance on the same host.",
+        description=(
+            "nng PAIR port used for HMAC handshake exchange. "
+            "Must be unique per instance on the same host."
+        ),
     )
     convergence_wait_s: float = Field(
         default=3.0,
-        description="Seconds to wait after start() for mDNS announcements to arrive before querying the peer table.",
+        description=(
+            "Seconds to wait after start() for mDNS announcements "
+            "to arrive before querying the peer table."
+        ),
     )
 
 

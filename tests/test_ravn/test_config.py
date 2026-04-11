@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import os
-from urllib.parse import urlparse
 from unittest.mock import patch
+from urllib.parse import urlparse
 
 from ravn.config import (
     AgentConfig,

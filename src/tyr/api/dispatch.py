@@ -13,8 +13,6 @@ from pydantic import BaseModel, Field
 
 from niuu.domain.models import IntegrationType, Principal
 from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
-from tyr.api.tracker import resolve_trackers
-from tyr.domain.models import RaidStatus, TrackerIssue
 from tyr.domain.services.dispatch_service import (
     DispatchItem as ServiceDispatchItem,
 )
