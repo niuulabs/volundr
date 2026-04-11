@@ -2376,7 +2376,7 @@ async def _run_peers(settings: Settings, *, verbose: bool, force_scan: bool) -> 
     typer.echo(f"Flock members ({len(verified)}):")
     for pid, peer in sorted(verified.items()):
         caps = ", ".join(peer.capabilities) if peer.capabilities else "—"
-        line = f"  {pid[:8]}  {peer.persona:<20} [{peer.status}]  caps={caps}"
+        line = f"  {pid:<20}  {peer.persona:<20} [{peer.status}]  caps={caps}"
         if verbose:
             rep = peer.rep_address or "—"
             pub = peer.pub_address or "—"
