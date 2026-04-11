@@ -73,7 +73,7 @@ _PREFER_PAT = re.compile(
     r"\b(i\s+prefer|i\s+like|i\s+don[''']t\s+like|i\s+hate|i\s+love)\b", re.IGNORECASE
 )
 _DECISION_PAT = re.compile(
-    r"\b(we\s+decided|let[''']s\s+go\s+with|we[''']re\s+going\s+with|we\s+chose|we\s+picked)\b",
+    r"\b(we\s+decided|let's\s+go\s+with|we're\s+going\s+with|we\s+chose|we\s+picked)\b",
     re.IGNORECASE,
 )
 _FORGET_PAT = re.compile(
