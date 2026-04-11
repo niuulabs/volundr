@@ -2354,6 +2354,10 @@ async def _run_peers(settings: Settings, *, verbose: bool, force_scan: bool) -> 
 
     await discovery.start()
 
+    # Wait for mDNS announcements from peers to arrive before querying the table.
+    convergence_wait = getattr(settings.discovery.mdns, "convergence_wait_s", 3.0)
+    await asyncio.sleep(convergence_wait)
+
     if force_scan:
         candidates = await discovery.scan()
         typer.echo(f"Scan found {len(candidates)} candidate(s).")

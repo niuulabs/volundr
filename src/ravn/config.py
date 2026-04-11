@@ -1540,6 +1540,10 @@ class DiscoveryMdnsConfig(BaseModel):
         default=7482,
         description="nng PAIR port used for HMAC handshake exchange. Must be unique per instance on the same host.",
     )
+    convergence_wait_s: float = Field(
+        default=3.0,
+        description="Seconds to wait after start() for mDNS announcements to arrive before querying the peer table.",
+    )
 
 
 class DiscoverySleipnirConfig(BaseModel):
