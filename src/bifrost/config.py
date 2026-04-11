@@ -378,8 +378,7 @@ class AuditConfig(BaseModel):
     adapter: AuditAdapter = Field(
         default=AuditAdapter.NULL,
         description=(
-            "Audit backend. Accepted values: 'null' (default, no-op), "
-            "'postgres', 'sqlite', 'otel'."
+            "Audit backend. Accepted values: 'null' (default, no-op), 'postgres', 'sqlite', 'otel'."
         ),
     )
     level: AuditDetailLevel = Field(

@@ -556,10 +556,7 @@ class SessionService:
         port = os.environ.get("NIUU_SERVER_PORT", "8080")
         chat_endpoint = f"ws://{host}:{port}/s/{session_id}/session"
 
-        starting = (
-            session.with_status(SessionStatus.STARTING)
-            .with_endpoints(chat_endpoint, None)
-        )
+        starting = session.with_status(SessionStatus.STARTING).with_endpoints(chat_endpoint, None)
         await self._repository.update(starting)
 
         if self._broadcaster is not None:
@@ -630,9 +627,7 @@ class SessionService:
             # Launch readiness poller
             poll_task = asyncio.create_task(self._poll_readiness(final))
             self._provisioning_tasks[final.id] = poll_task
-            poll_task.add_done_callback(
-                lambda t: self._provisioning_tasks.pop(final.id, None)
-            )
+            poll_task.add_done_callback(lambda t: self._provisioning_tasks.pop(final.id, None))
 
         except Exception as e:
             logger.error("Provisioning failed for session %s: %s", session.id, e)

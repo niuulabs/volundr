@@ -33,6 +33,7 @@ def _sanitize_log(value: object) -> str:
     """Sanitize a value for safe log output (prevent log injection)."""
     return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
+
 TELEGRAM_API = "https://api.telegram.org"
 
 HELP_TEXT = (
@@ -72,7 +73,8 @@ class TelegramReplyClient:
         except Exception:
             logger.warning(
                 "Failed to send Telegram reply to %s",
-                _sanitize_log(chat_id), exc_info=True,
+                _sanitize_log(chat_id),
+                exc_info=True,
             )
 
     async def close(self) -> None:

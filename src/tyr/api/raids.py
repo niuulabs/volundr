@@ -38,6 +38,7 @@ def _sanitize_log(value: object) -> str:
     """Sanitize a value for safe log output (prevent log injection)."""
     return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
+
 # ---------------------------------------------------------------------------
 # Response / request models
 # ---------------------------------------------------------------------------
@@ -362,7 +363,8 @@ def create_raids_router() -> APIRouter:
         except Exception:
             logger.warning(
                 "Failed to update tracker for raid %s",
-                _sanitize_log(raid_id), exc_info=True,
+                _sanitize_log(raid_id),
+                exc_info=True,
             )
 
         return _raid_response(result.raid)
@@ -401,7 +403,8 @@ def create_raids_router() -> APIRouter:
         except Exception:
             logger.warning(
                 "Failed to update tracker for raid %s",
-                _sanitize_log(raid_id), exc_info=True,
+                _sanitize_log(raid_id),
+                exc_info=True,
             )
 
         return _raid_response(result.raid, reason=reason)
@@ -437,7 +440,8 @@ def create_raids_router() -> APIRouter:
         except Exception:
             logger.warning(
                 "Failed to update tracker for raid %s",
-                _sanitize_log(raid_id), exc_info=True,
+                _sanitize_log(raid_id),
+                exc_info=True,
             )
 
         return _raid_response(result.raid)
@@ -475,7 +479,8 @@ def create_raids_router() -> APIRouter:
         except Exception as exc:
             logger.warning(
                 "Failed to send message to raid %s: %s",
-                _sanitize_log(raid_id), _sanitize_log(exc),
+                _sanitize_log(raid_id),
+                _sanitize_log(exc),
             )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

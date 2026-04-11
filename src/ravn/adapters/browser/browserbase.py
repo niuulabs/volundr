@@ -91,8 +91,7 @@ class BrowserbaseAdapter(_PlaywrightBrowserBase):
 
         self._session_id = session_data["id"]
         connect_url = session_data.get("connectUrl") or (
-            f"{_DEFAULT_CONNECT_URL}"
-            f"?apiKey={self._api_key}&sessionId={self._session_id}"
+            f"{_DEFAULT_CONNECT_URL}?apiKey={self._api_key}&sessionId={self._session_id}"
         )
 
         self._playwright = await async_playwright().start()

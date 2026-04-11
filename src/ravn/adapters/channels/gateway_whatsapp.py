@@ -78,13 +78,9 @@ class WhatsAppGateway(GatewayHttpMixin, GatewayChannelPort):
     async def start(self) -> None:
         """Start the webhook HTTP server."""
         if not self._api_key:
-            logger.error(
-                "WhatsApp API key is not set; WhatsApp gateway disabled."
-            )
+            logger.error("WhatsApp API key is not set; WhatsApp gateway disabled.")
             return
-        self._server_task = asyncio.create_task(
-            self._run_webhook_server(), name="whatsapp-webhook"
-        )
+        self._server_task = asyncio.create_task(self._run_webhook_server(), name="whatsapp-webhook")
 
     async def stop(self) -> None:
         """Stop the webhook HTTP server."""
@@ -266,7 +262,7 @@ class WhatsAppGateway(GatewayHttpMixin, GatewayChannelPort):
         """
         if not self._webhook_secret:
             return True
-        expected = "sha256=" + hmac.new(
-            self._webhook_secret.encode(), body, hashlib.sha256
-        ).hexdigest()
+        expected = (
+            "sha256=" + hmac.new(self._webhook_secret.encode(), body, hashlib.sha256).hexdigest()
+        )
         return hmac.compare_digest(expected, signature)

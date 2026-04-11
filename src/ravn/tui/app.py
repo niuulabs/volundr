@@ -273,9 +273,8 @@ class RavnTUI(App[None]):
             return
         try:
             from textual.widgets import Input as _Input
-            pane = self.query_one(
-                f"#pane-{self._focused_pane_id.replace('-', '_')}", PaneWidget
-            )
+
+            pane = self.query_one(f"#pane-{self._focused_pane_id.replace('-', '_')}", PaneWidget)
             inp = next((c for c in pane.query(_Input)), None)
             if inp is None:
                 return
@@ -303,6 +302,7 @@ class RavnTUI(App[None]):
     async def on_key(self, event: Any) -> None:
         """Intercept keys for multi-key sequence matching before Textual dispatch."""
         from textual.widgets import Input as _Input
+
         in_input = isinstance(self.focused, _Input)
         key = _normalise_key(event.key)
 
@@ -420,9 +420,7 @@ class RavnTUI(App[None]):
         if not self._focused_pane_id:
             return
         try:
-            pane = self.query_one(
-                f"#pane-{self._focused_pane_id.replace('-', '_')}", PaneWidget
-            )
+            pane = self.query_one(f"#pane-{self._focused_pane_id.replace('-', '_')}", PaneWidget)
             if direction == "top":
                 pane.scroll_home(animate=False)
             else:
@@ -711,6 +709,7 @@ class RavnTUI(App[None]):
 
     async def action_broadcast(self) -> None:
         from ravn.tui.widgets.broadcast_overlay import BroadcastOverlay
+
         await self.push_screen(BroadcastOverlay(self.flokk))
 
     async def action_command_palette(self) -> None:
@@ -757,6 +756,7 @@ class RavnTUI(App[None]):
 
     async def _cmd_ingest(self, path: str = "") -> None:
         import os
+
         if not path:
             self.notify("Usage: ingest <filepath>", severity="error")
             return
@@ -769,6 +769,7 @@ class RavnTUI(App[None]):
             return
         try:
             import httpx
+
             with open(filepath, encoding="utf-8", errors="replace") as f:
                 content = f.read()
             title = os.path.basename(filepath)
@@ -824,9 +825,7 @@ class RavnTUI(App[None]):
             return
 
         try:
-            widget = self.query_one(
-                f"#pane-{target_pane.pane_id.replace('-', '_')}", PaneWidget
-            )
+            widget = self.query_one(f"#pane-{target_pane.pane_id.replace('-', '_')}", PaneWidget)
             widget.assign_view("chat", conn.name, self.flokk)
             self._focus_pane(target_pane.pane_id)
         except Exception:

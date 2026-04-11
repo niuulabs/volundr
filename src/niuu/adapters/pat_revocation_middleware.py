@@ -26,6 +26,7 @@ class PATRevocationMiddleware(BaseHTTPMiddleware):
         call_next: RequestResponseEndpoint,
     ) -> Response:
         import logging
+
         _mw_logger = logging.getLogger("niuu.middleware.pat")
 
         if "activity" in request.url.path:

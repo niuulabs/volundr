@@ -25,15 +25,11 @@ _DEFAULT_BASE_URL = "http://localhost:8080"
 _DEFAULT_TIMEOUT = 30.0
 
 
-def _client(
-    base_url: str, timeout: float, pat_token: str = ""
-) -> httpx.AsyncClient:
+def _client(base_url: str, timeout: float, pat_token: str = "") -> httpx.AsyncClient:
     headers: dict[str, str] = {}
     if pat_token:
         headers["Authorization"] = f"Bearer {pat_token}"
-    return httpx.AsyncClient(
-        base_url=base_url.rstrip("/"), timeout=timeout, headers=headers
-    )
+    return httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=timeout, headers=headers)
 
 
 def _ok(data: object) -> ToolResult:
@@ -114,8 +110,7 @@ class VolundrSessionTool(ToolPort):
                 "system_prompt": {
                     "type": "string",
                     "description": (
-                        "System prompt appended to Claude's "
-                        "instructions (optional, for create)."
+                        "System prompt appended to Claude's instructions (optional, for create)."
                     ),
                 },
                 "initial_prompt": {
@@ -288,8 +283,7 @@ class VolundrGitTool(ToolPort):
                 "pr_number": {
                     "type": "integer",
                     "description": (
-                        "Pull request number "
-                        "(required for get_pr, merge_pr, ci_status)."
+                        "Pull request number (required for get_pr, merge_pr, ci_status)."
                     ),
                 },
                 "branch": {
@@ -346,9 +340,7 @@ class VolundrGitTool(ToolPort):
         if not repo_url:
             return _err("repo_url is required for list_branches")
         try:
-            resp = await client.get(
-                "/api/v1/volundr/repos/branches", params={"repo_url": repo_url}
-            )
+            resp = await client.get("/api/v1/volundr/repos/branches", params={"repo_url": repo_url})
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
@@ -610,9 +602,7 @@ class TyrSagaTool(ToolPort):
         base_branch = input.get("base_branch", "")
         phases = input.get("phases", [])
         if not name or not slug or not repos or not base_branch or not phases:
-            return _err(
-                "name, slug, repos, base_branch, and phases are required for commit"
-            )
+            return _err("name, slug, repos, base_branch, and phases are required for commit")
         body: dict = {
             "name": name,
             "slug": slug,
@@ -747,9 +737,7 @@ class TrackerIssueTool(ToolPort):
         if not query:
             return _err("query is required for search action")
         try:
-            resp = await client.get(
-                "/api/v1/volundr/issues/search", params={"q": query}
-            )
+            resp = await client.get("/api/v1/volundr/issues/search", params={"q": query})
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:

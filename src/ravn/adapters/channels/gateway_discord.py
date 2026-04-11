@@ -211,9 +211,7 @@ class DiscordGateway(GatewayHttpMixin, GatewayChannelPort):
                     heartbeat_task.cancel()
                     await asyncio.gather(heartbeat_task, return_exceptions=True)
 
-    async def _heartbeat_loop(
-        self, ws: Any, interval_seconds: float
-    ) -> None:
+    async def _heartbeat_loop(self, ws: Any, interval_seconds: float) -> None:
         """Send OP 1 HEARTBEAT every *interval_seconds*."""
         while True:
             await asyncio.sleep(interval_seconds)

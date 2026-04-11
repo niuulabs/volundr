@@ -497,7 +497,6 @@ class TestCmdCheckpoint:
     def _ctx_with_checkpoint(self) -> SlashCommandContext:
         from unittest.mock import AsyncMock, MagicMock
 
-
         port = MagicMock()
         port.save_snapshot = AsyncMock(return_value="ckpt_task-1_1")
         port.list_for_task = AsyncMock(return_value=[])
@@ -586,6 +585,7 @@ class TestCmdCheckpoint:
 
     def test_checkpoint_save_exception_returns_error(self) -> None:
         from unittest.mock import AsyncMock
+
         ctx = self._ctx_with_checkpoint()
         ctx.checkpoint_port.save_snapshot = AsyncMock(side_effect=RuntimeError("db down"))
         result = handle("/checkpoint", ctx)

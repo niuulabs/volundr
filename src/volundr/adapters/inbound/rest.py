@@ -1301,9 +1301,7 @@ def create_router(
             _sanitize_log(data.metadata),
         )
         try:
-            updated = await service.update_activity(
-                session_id, activity_state, data.metadata
-            )
+            updated = await service.update_activity(session_id, activity_state, data.metadata)
             logger.info(
                 "Activity updated: session=%s state=%s broadcaster=%s",
                 _sanitize_log(session_id),
@@ -1549,7 +1547,8 @@ def create_router(
         except httpx.RequestError as e:
             logger.warning(
                 "Log proxy connection failed for session %s: %s",
-                _sanitize_log(session_id), e,
+                _sanitize_log(session_id),
+                e,
             )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,

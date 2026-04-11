@@ -143,7 +143,7 @@ class TestNvimLuaParser:
 
 class TestEmacsParser:
     def test_parse_global_set_key(self) -> None:
-        content = "(global-set-key (kbd \"C-h\") 'evil-window-left)\n"
+        content = '(global-set-key (kbd "C-h") \'evil-window-left)\n'
         result = EmacsParser().parse(content)
         assert "C-h" in result
         assert result["C-h"] == "evil-window-left"
@@ -162,7 +162,7 @@ class TestEmacsParser:
 
     def test_apply_to_map_adds_known_binding(self, tmp_path: Path) -> None:
         init_el = tmp_path / "init.el"
-        init_el.write_text("(global-set-key (kbd \"C-h\") 'evil-window-left)\n")
+        init_el.write_text('(global-set-key (kbd "C-h") \'evil-window-left)\n')
         kb = KeybindingMap()
         added = EmacsParser().apply_to_map(init_el, kb)
         assert added == 1
@@ -170,7 +170,7 @@ class TestEmacsParser:
 
     def test_apply_to_map_ignores_unknown_command(self, tmp_path: Path) -> None:
         init_el = tmp_path / "init.el"
-        init_el.write_text("(global-set-key (kbd \"C-z\") 'some-custom-command)\n")
+        init_el.write_text('(global-set-key (kbd "C-z") \'some-custom-command)\n')
         kb = KeybindingMap()
         added = EmacsParser().apply_to_map(init_el, kb)
         assert added == 0
@@ -182,7 +182,7 @@ class TestEmacsParser:
 
     def test_apply_to_map_vanilla_emacs_next_line(self, tmp_path: Path) -> None:
         init_el = tmp_path / "init.el"
-        init_el.write_text("(global-set-key (kbd \"C-n\") 'next-line)\n")
+        init_el.write_text('(global-set-key (kbd "C-n") \'next-line)\n')
         kb = KeybindingMap()
         added = EmacsParser().apply_to_map(init_el, kb)
         assert added == 1

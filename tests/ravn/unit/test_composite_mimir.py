@@ -57,9 +57,7 @@ def _mock_port(
     pages = pages or []
 
     port.search = AsyncMock(return_value=pages)
-    port.query = AsyncMock(
-        return_value=MimirQueryResult(question="q", answer="", sources=pages)
-    )
+    port.query = AsyncMock(return_value=MimirQueryResult(question="q", answer="", sources=pages))
     port.list_pages = AsyncMock(return_value=[p.meta for p in pages])
     port.ingest = AsyncMock(return_value=[])
     port.upsert_page = AsyncMock(return_value=None)
@@ -72,6 +70,7 @@ def _mock_port(
         port.read_page = AsyncMock(side_effect=FileNotFoundError("not found"))
         port.get_page = AsyncMock(side_effect=FileNotFoundError("not found"))
     else:
+
         async def _read(path: str) -> str:
             return f"content of {path}"
 
@@ -449,8 +448,12 @@ async def test_ingest_exception_in_one_mount_continues_others() -> None:
     good = MimirMount(name="good", port=good_port, role="shared", read_priority=1)
     adapter = CompositeMimirAdapter(mounts=[bad, good])
     source = MimirSource(
-        source_id="s1", title="T", content="c", source_type="document",
-        ingested_at=datetime.now(UTC), content_hash=compute_content_hash("c"),
+        source_id="s1",
+        title="T",
+        content="c",
+        source_type="document",
+        ingested_at=datetime.now(UTC),
+        content_hash=compute_content_hash("c"),
     )
     result = await adapter.ingest(source)
     good_port.ingest.assert_called_once()

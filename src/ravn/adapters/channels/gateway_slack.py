@@ -35,8 +35,7 @@ logger = logging.getLogger(__name__)
 # Slack slash commands → agent prompts.
 # Uses ravn- prefixed variants to avoid collisions with other Slack apps.
 _SLASH_PROMPTS: dict[str, str] = {
-    f"/ravn-{cmd.lstrip('/')}": prompt
-    for cmd, prompt in GATEWAY_SLASH_PROMPTS.items()
+    f"/ravn-{cmd.lstrip('/')}": prompt for cmd, prompt in GATEWAY_SLASH_PROMPTS.items()
 }
 
 # Mention pattern prefix that triggers the agent (e.g. "<@UBOT123> hello")
@@ -181,9 +180,7 @@ class SlackGateway(GatewayHttpMixin, GatewayChannelPort):
             params={"types": "public_channel,private_channel,im,mpim", "exclude_archived": "true"},
         )
         channels = data.get("channels", [])
-        self._watched_channels = [
-            c["id"] for c in channels if c.get("is_member")
-        ]
+        self._watched_channels = [c["id"] for c in channels if c.get("is_member")]
         # Seed cursors to current time so we only process new messages
         now = str(time.time())
         for cid in self._watched_channels:
@@ -286,9 +283,7 @@ class SlackGateway(GatewayHttpMixin, GatewayChannelPort):
         url = f"{self._config.api_base}/{method}"
         return await self._http_post(url, headers=self._slack_headers(), **kwargs)
 
-    async def _api_get(
-        self, method: str, params: dict[str, str] | None = None
-    ) -> dict[str, Any]:
+    async def _api_get(self, method: str, params: dict[str, str] | None = None) -> dict[str, Any]:
         """GET from the Slack Web API."""
         url = f"{self._config.api_base}/{method}"
         return await self._http_get(url, headers=self._slack_headers(), params=params)

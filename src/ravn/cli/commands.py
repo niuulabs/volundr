@@ -404,6 +404,7 @@ def _build_tools(
     # from those tool names so only the relevant groups are loaded.
     if persona_config is not None and getattr(persona_config, "allowed_tools", None):
         from ravn.config import ToolGroupConfig  # noqa: PLC0415
+
         profile_cfg = ToolGroupConfig(
             include_groups=_groups_for_persona(persona_config),
             include_mcp=profile_cfg.include_mcp,
@@ -510,7 +511,8 @@ def _filter_tools(
 
     if allowed_groups or enabled_names:
         tools = [
-            t for t in tools
+            t
+            for t in tools
             if t.name in enabled_names or (allowed_groups and _in_groups(t.name, allowed_groups))
         ]
 
@@ -846,9 +848,7 @@ def _apply_profile(
         settings.checkpoint.enabled = True
 
     if profile.mcp_servers:
-        settings.mcp_servers = [
-            s for s in settings.mcp_servers if s.name in profile.mcp_servers
-        ]
+        settings.mcp_servers = [s for s in settings.mcp_servers if s.name in profile.mcp_servers]
 
     return system_prompt, max_iterations, max_tokens
 
@@ -1541,19 +1541,13 @@ def _make_channel_tasks(
 
     pairs: list[tuple[Any, str]] = []
     if channels_cfg.discord.enabled:
-        task = asyncio.create_task(
-            DiscordGateway(channels_cfg.discord, gw).run(), name="discord"
-        )
+        task = asyncio.create_task(DiscordGateway(channels_cfg.discord, gw).run(), name="discord")
         pairs.append((task, "discord"))
     if channels_cfg.slack.enabled:
-        task = asyncio.create_task(
-            SlackGateway(channels_cfg.slack, gw).run(), name="slack"
-        )
+        task = asyncio.create_task(SlackGateway(channels_cfg.slack, gw).run(), name="slack")
         pairs.append((task, "slack"))
     if channels_cfg.matrix.enabled:
-        task = asyncio.create_task(
-            MatrixGateway(channels_cfg.matrix, gw).run(), name="matrix"
-        )
+        task = asyncio.create_task(MatrixGateway(channels_cfg.matrix, gw).run(), name="matrix")
         pairs.append((task, "matrix"))
     if channels_cfg.whatsapp.enabled:
         task = asyncio.create_task(
@@ -1842,6 +1836,7 @@ async def _run_daemon(
         resolved_max_tokens = settings.effective_max_tokens()
         if task_persona and task_persona != (persona_config.name if persona_config else None):
             from ravn.adapters.personas.loader import PersonaLoader
+
             task_persona_cfg = PersonaLoader().load(task_persona)
             if task_persona_cfg is not None:
                 resolved_persona = task_persona_cfg
@@ -2350,9 +2345,7 @@ def _build_discovery(
     pub_address = settings.mesh.nng.pub_sub_address.replace("*", "127.0.0.1")
 
     persona_name = (
-        getattr(persona_config, "name", None)
-        or settings.agent.system_prompt[:30]
-        or "ravn"
+        getattr(persona_config, "name", None) or settings.agent.system_prompt[:30] or "ravn"
     )
     capabilities = _derive_capabilities(settings, persona_config, profile_name)
 
@@ -2369,7 +2362,9 @@ def _build_discovery(
 
     handshake_port = settings.discovery.mdns.handshake_port
     return _build_discovery_adapter(
-        settings.discovery.adapter, settings, identity,
+        settings.discovery.adapter,
+        settings,
+        identity,
         handshake_port=handshake_port,
     )
 
@@ -2586,6 +2581,7 @@ def tui(
     mimir_urls: list[tuple[str, str]] = []
     try:
         from ravn.config import Settings
+
         settings = Settings()
         for inst in sorted(settings.mimir.instances, key=lambda i: i.read_priority):
             if inst.url:
@@ -2709,9 +2705,7 @@ def _build_single_mimir(settings: Settings, name: str) -> Any:
         return MarkdownMimirAdapter(root=settings.mimir.path)
 
     available = [inst.name for inst in settings.mimir.instances] or ["local"]
-    typer.echo(
-        f"Unknown Mímir instance {name!r}. Available: {', '.join(available)}", err=True
-    )
+    typer.echo(f"Unknown Mímir instance {name!r}. Available: {', '.join(available)}", err=True)
     raise typer.Exit(1)
 
 

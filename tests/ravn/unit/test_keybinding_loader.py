@@ -181,8 +181,10 @@ class TestKeybindingLoaderLoad:
         """load(source=...) overrides config.source."""
         cfg = KeybindingConfig(source="emacs")
         loader = KeybindingLoader(config=cfg)
-        with patch.object(loader, "_load_vim", return_value=0) as mock_vim, \
-             patch.object(loader, "_load_emacs", return_value=0) as mock_emacs:
+        with (
+            patch.object(loader, "_load_vim", return_value=0) as mock_vim,
+            patch.object(loader, "_load_emacs", return_value=0) as mock_emacs,
+        ):
             loader.load(source="vim")
         mock_vim.assert_called_once()
         mock_emacs.assert_not_called()
@@ -224,8 +226,10 @@ class TestKeybindingLoaderLoadVim:
         cfg = KeybindingConfig(source="vim")
         loader = KeybindingLoader(config=cfg)
         kb = KeybindingMap()
-        with patch("ravn.tui.keybindings.vim.find_vimrc", return_value=None), \
-             patch("ravn.tui.keybindings.nvim.find_nvim_config", return_value=None):
+        with (
+            patch("ravn.tui.keybindings.vim.find_vimrc", return_value=None),
+            patch("ravn.tui.keybindings.nvim.find_nvim_config", return_value=None),
+        ):
             added = loader._load_vim(kb)
         assert added == 0
 

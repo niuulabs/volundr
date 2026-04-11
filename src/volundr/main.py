@@ -781,7 +781,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # endpoints (/issues/search) find it in the DB.
             if settings.linear.enabled and settings.linear.api_key:
                 await _seed_linear_integration(
-                    integration_repo, credential_store,
+                    integration_repo,
+                    credential_store,
                     api_key=settings.linear.api_key,
                 )
                 logger.info("Linear integration seeded from config")

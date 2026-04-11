@@ -338,10 +338,7 @@ async def test_postgres_query_complex_pattern_filters_results():
 
 async def test_postgres_query_complex_pattern_truncates_to_limit():
     """Results after fnmatch filtering must be capped at q.limit."""
-    rows = [
-        _make_row(event_id=f"evt-{i}", event_type="ravn.tool.complete")
-        for i in range(20)
-    ]
+    rows = [_make_row(event_id=f"evt-{i}", event_type="ravn.tool.complete") for i in range(20)]
     pool = AsyncMock()
     pool.fetch = AsyncMock(return_value=rows)
     repo = PostgresAuditRepository(pool)

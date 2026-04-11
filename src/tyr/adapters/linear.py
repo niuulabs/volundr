@@ -397,9 +397,7 @@ class LinearTrackerAdapter(TrackerPort):
     async def create_saga(self, saga: Saga, *, description: str = "") -> str:
         team_id = await self._get_team_id()
         project_desc = description or (
-            f"Saga: {saga.slug}\n"
-            f"Repos: {', '.join(saga.repos)}\n"
-            f"Branch: {saga.feature_branch}"
+            f"Saga: {saga.slug}\nRepos: {', '.join(saga.repos)}\nBranch: {saga.feature_branch}"
         )
         data = await self._gql.query(
             _CREATE_PROJECT_QUERY,
@@ -431,9 +429,7 @@ class LinearTrackerAdapter(TrackerPort):
             {"issueId": issue_id, "body": body},
         )
 
-    async def attach_issue_document(
-        self, issue_id: str, title: str, content: str
-    ) -> str:
+    async def attach_issue_document(self, issue_id: str, title: str, content: str) -> str:
         """Attach a document to an issue (shows as a resource)."""
         data = await self._gql.query(
             _CREATE_ISSUE_DOCUMENT_QUERY,
@@ -460,9 +456,7 @@ class LinearTrackerAdapter(TrackerPort):
         self._gql.invalidate_cache("milestones")
         return milestone["id"]
 
-    async def create_raid(
-        self, raid: Raid, *, project_id: str = "", milestone_id: str = ""
-    ) -> str:
+    async def create_raid(self, raid: Raid, *, project_id: str = "", milestone_id: str = "") -> str:
         description = raid.description
         if raid.acceptance_criteria:
             criteria = "\n".join(f"- [ ] {c}" for c in raid.acceptance_criteria)

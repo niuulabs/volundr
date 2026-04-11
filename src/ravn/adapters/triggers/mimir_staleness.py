@@ -108,9 +108,7 @@ class MimirStalenessTrigger(TriggerPort):
                         stale_sources.append(source_id)
                         break
                 except Exception as exc:
-                    logger.warning(
-                        "MimirStalenessTrigger: lint check failed for %r: %s", path, exc
-                    )
+                    logger.warning("MimirStalenessTrigger: lint check failed for %r: %s", path, exc)
                     break
 
             if not stale_sources:
@@ -146,7 +144,5 @@ class MimirStalenessTrigger(TriggerPort):
                 priority=9,
                 max_tokens=self._config.max_tokens,
             )
-            logger.info(
-                "MimirStalenessTrigger: enqueuing refresh for stale page %r", path
-            )
+            logger.info("MimirStalenessTrigger: enqueuing refresh for stale page %r", path)
             await enqueue(task)

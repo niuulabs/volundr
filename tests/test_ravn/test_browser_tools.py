@@ -37,7 +37,7 @@ from ravn.ports.browser import PageSummary
 def make_mock_browser(
     *,
     nav_summary: PageSummary | None = None,
-    snapshot_text: str = "[button \"Submit\" @e1]",
+    snapshot_text: str = '[button "Submit" @e1]',
     screenshot_bytes: bytes = b"\x89PNG\r\n",
     evaluate_result: Any = "result",
 ) -> AsyncMock:

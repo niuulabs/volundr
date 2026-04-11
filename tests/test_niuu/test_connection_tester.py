@@ -40,9 +40,7 @@ async def test_code_forge_uses_user_id_fallback():
 @pytest.mark.asyncio
 @respx.mock
 async def test_code_forge_uses_authenticated_fallback():
-    respx.get("http://my-server/api/v1/volundr/me").mock(
-        return_value=httpx.Response(200, json={})
-    )
+    respx.get("http://my-server/api/v1/volundr/me").mock(return_value=httpx.Response(200, json={}))
     result = await _ct.test_code_forge(url="http://my-server", token="tok")
     assert result.success is True
     assert result.user == "authenticated"
@@ -114,9 +112,7 @@ async def test_telegram_bot_empty_token():
 @pytest.mark.asyncio
 @respx.mock
 async def test_telegram_bot_network_error():
-    respx.get("https://api.telegram.org/bottok/getMe").mock(
-        side_effect=Exception("network error")
-    )
+    respx.get("https://api.telegram.org/bottok/getMe").mock(side_effect=Exception("network error"))
     result = await _ct.test_telegram_bot(bot_token="tok")
     assert result.success is False
 

@@ -112,7 +112,7 @@ def test_chat_endpoint_streams_events():
 
     # Each line must be valid JSON with the new payload format
     for line in lines:
-        payload = json.loads(line[len("data: "):])
+        payload = json.loads(line[len("data: ") :])
         assert "type" in payload
         assert "payload" in payload
 
@@ -122,7 +122,7 @@ def test_chat_endpoint_includes_thought_and_response():
     resp = client.post("/chat", json={"message": "hi"})
 
     lines = [ln for ln in resp.text.splitlines() if ln.startswith("data: ")]
-    types = [json.loads(ln[len("data: "):])["type"] for ln in lines]
+    types = [json.loads(ln[len("data: ") :])["type"] for ln in lines]
 
     assert "thought" in types
     assert "response" in types
@@ -159,13 +159,15 @@ def test_events_endpoint_returns_sse():
     # Patch _broadcast_stream to yield one event and return so the
     # TestClient receives a finite response instead of blocking forever.
     async def finite_broadcast():
-        payload = json.dumps({
-            "type": "response",
-            "payload": {"text": "hi"},
-            "source": _SRC,
-            "session_id": _SID,
-            "timestamp": "2026-04-06T00:00:00+00:00",
-        })
+        payload = json.dumps(
+            {
+                "type": "response",
+                "payload": {"text": "hi"},
+                "source": _SRC,
+                "session_id": _SID,
+                "timestamp": "2026-04-06T00:00:00+00:00",
+            }
+        )
         yield f"data: {payload}\n\n"
 
     ht._broadcast_stream = finite_broadcast
@@ -216,7 +218,7 @@ def test_sse_payload_contains_source_and_timestamp():
 
     lines = [ln for ln in resp.text.splitlines() if ln.startswith("data: ")]
     for line in lines:
-        payload = json.loads(line[len("data: "):])
+        payload = json.loads(line[len("data: ") :])
         assert "source" in payload
         assert "timestamp" in payload
 
@@ -247,7 +249,7 @@ async def test_broadcast_stream_yields_events_from_queue():
 
     gw.unsubscribe.assert_called_once_with(q)
     assert len(lines) == 1
-    payload = json.loads(lines[0][len("data: "):])
+    payload = json.loads(lines[0][len("data: ") :])
     assert payload["payload"]["text"] == "broadcast msg"
 
 
@@ -373,7 +375,8 @@ def test_ws_endpoint_tool_produces_tool_use_block():
                 break
 
     tool_starts = [
-        e for e in events
+        e
+        for e in events
         if e["type"] == "content_block_start"
         and e.get("content_block", {}).get("type") == "tool_use"
     ]

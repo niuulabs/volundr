@@ -223,9 +223,7 @@ class MatrixGateway(GatewayHttpMixin, GatewayChannelPort):
     ) -> dict[str, Any]:
         url = f"{self._config.homeserver}{path}"
         timeout = self._config.sync_timeout_ms / 1000.0 + 10.0
-        return await self._http_get(
-            url, headers=self._cs_headers(), params=params, timeout=timeout
-        )
+        return await self._http_get(url, headers=self._cs_headers(), params=params, timeout=timeout)
 
     async def _cs_put(self, path: str, json: dict[str, Any]) -> dict[str, Any]:
         url = f"{self._config.homeserver}{path}"
@@ -240,8 +238,7 @@ class MatrixGateway(GatewayHttpMixin, GatewayChannelPort):
     ) -> str:
         """Upload *data* to the homeserver media repo; returns the mxc:// URL."""
         url = (
-            f"{self._config.homeserver}/_matrix/media/v3/upload"
-            f"?filename={quote(filename, safe='')}"
+            f"{self._config.homeserver}/_matrix/media/v3/upload?filename={quote(filename, safe='')}"
         )
         headers = {
             "Authorization": f"Bearer {self._access_token}",

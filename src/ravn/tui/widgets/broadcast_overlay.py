@@ -167,9 +167,7 @@ class BroadcastOverlay(ModalScreen[None]):
             check = "[bold #10b981]✓[/]" if checked else "[#52525b]·[/]"
             info = conn.ravn_info or {}
             state = info.get("state", conn.status)
-            log.write(
-                f"{accent}{check} [#fafafa]{conn.name}[/]  [#3f3f46]{state}[/]"
-            )
+            log.write(f"{accent}{check} [#fafafa]{conn.name}[/]  [#3f3f46]{state}[/]")
         n_sel = len(self._selected)
         n_tot = len(self._ravns)
         log.write(f"\n[#52525b]  {n_sel}/{n_tot} selected  [#3f3f46]a[/] to toggle all[/]")

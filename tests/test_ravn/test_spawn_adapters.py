@@ -76,9 +76,7 @@ class TestSubprocessSpawnAdapter:
         mock_proc.pid = 12345
         mock_proc.returncode = None
 
-        with patch(
-            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)
-        ):
+        with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)):
             with patch(
                 "ravn.adapters.spawn.subprocess_spawn.SubprocessSpawnAdapter._write_config"
             ) as mock_write:
@@ -107,9 +105,7 @@ class TestSubprocessSpawnAdapter:
         mock_proc.returncode = None
         mock_proc.terminate = MagicMock()
 
-        with patch(
-            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)
-        ):
+        with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)):
             with patch(
                 "ravn.adapters.spawn.subprocess_spawn.SubprocessSpawnAdapter._write_config"
             ) as mock_write:

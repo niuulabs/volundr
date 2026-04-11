@@ -704,9 +704,7 @@ def create_sagas_router() -> APIRouter:
         # 1. Create saga in tracker — this MUST succeed or we abort
         tracker_type = type(tracker).__name__
         try:
-            tracker_saga_id = await tracker.create_saga(
-                saga, description=body.description
-            )
+            tracker_saga_id = await tracker.create_saga(saga, description=body.description)
         except Exception as exc:
             logger.error(
                 "Tracker create_saga failed for slug=%s",
@@ -739,9 +737,7 @@ def create_sagas_router() -> APIRouter:
             )
 
             try:
-                tracker_phase_id = await tracker.create_phase(
-                    phase, project_id=saga.tracker_id
-                )
+                tracker_phase_id = await tracker.create_phase(phase, project_id=saga.tracker_id)
             except Exception as exc:
                 logger.error(
                     "Tracker create_phase failed for phase=%s", phase_spec.name, exc_info=True
@@ -841,9 +837,7 @@ def create_sagas_router() -> APIRouter:
                     body.transcript,
                 )
             except Exception:
-                logger.warning(
-                    "Failed to attach transcript for saga %s", saga.slug, exc_info=True
-                )
+                logger.warning("Failed to attach transcript for saga %s", saga.slug, exc_info=True)
 
         return CommittedSagaResponse(
             id=str(saga.id),

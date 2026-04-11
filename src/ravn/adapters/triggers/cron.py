@@ -469,45 +469,45 @@ class CronTrigger(TriggerPort):
 
                     # -- Store-defined (runtime) jobs --
                     if self._store is not None:
-                    for record in self._store.list():
-                        if not record.enabled:
-                            continue
-                        canonical = parse_schedule(record.schedule)
-                        if not self._is_due_canonical(canonical, record.job_id, now, state):
-                            continue
+                        for record in self._store.list():
+                            if not record.enabled:
+                                continue
+                            canonical = parse_schedule(record.schedule)
+                            if not self._is_due_canonical(canonical, record.job_id, now, state):
+                                continue
 
-                        context = record.context
-                        output_mode = _DELIVERY_TO_OUTPUT_MODE.get(
-                            record.delivery, OutputMode.SILENT
-                        )
-                        # [SILENT] marker overrides delivery to local-only
-                        if context.startswith(_SILENT_MARKER):
-                            context = context[len(_SILENT_MARKER) :].strip()
-                            output_mode = OutputMode.SILENT
+                            context = record.context
+                            output_mode = _DELIVERY_TO_OUTPUT_MODE.get(
+                                record.delivery, OutputMode.SILENT
+                            )
+                            # [SILENT] marker overrides delivery to local-only
+                            if context.startswith(_SILENT_MARKER):
+                                context = context[len(_SILENT_MARKER) :].strip()
+                                output_mode = OutputMode.SILENT
 
-                        timestamp_str = now.strftime("%Y%m%dT%H%M%S")
-                        output_path = _OUTPUT_BASE / record.job_id / f"{timestamp_str}.md"
+                            timestamp_str = now.strftime("%Y%m%dT%H%M%S")
+                            output_path = _OUTPUT_BASE / record.job_id / f"{timestamp_str}.md"
 
-                        task_id = self._make_task_id()
-                        task = AgentTask(
-                            task_id=task_id,
-                            title=record.name,
-                            initiative_context=context,
-                            triggered_by=f"cron:{record.job_id}",
-                            output_mode=output_mode,
-                            persona=record.persona or None,
-                            priority=record.priority,
-                            output_path=output_path,
-                        )
-                        logger.info(
-                            "cron: firing store job %r/%s (task_id=%s)",
-                            record.name,
-                            record.job_id,
-                            task_id,
-                        )
-                        await enqueue(task)
-                        state[record.job_id] = now.isoformat()
-                        changed = True
+                            task_id = self._make_task_id()
+                            task = AgentTask(
+                                task_id=task_id,
+                                title=record.name,
+                                initiative_context=context,
+                                triggered_by=f"cron:{record.job_id}",
+                                output_mode=output_mode,
+                                persona=record.persona or None,
+                                priority=record.priority,
+                                output_path=output_path,
+                            )
+                            logger.info(
+                                "cron: firing store job %r/%s (task_id=%s)",
+                                record.name,
+                                record.job_id,
+                                task_id,
+                            )
+                            await enqueue(task)
+                            state[record.job_id] = now.isoformat()
+                            changed = True
 
                 if changed:
                     self._save_state(state)

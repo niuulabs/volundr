@@ -191,9 +191,7 @@ class CompositeMimirAdapter(MimirPort):
                         meta.mount_name = mount.name
                         results.append(meta)
             except Exception as exc:
-                logger.debug(
-                    "composite mimir: list_sources failed on %r: %s", mount.name, exc
-                )
+                logger.debug("composite mimir: list_sources failed on %r: %s", mount.name, exc)
 
         return results
 

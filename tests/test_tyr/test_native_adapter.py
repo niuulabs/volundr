@@ -57,7 +57,7 @@ def _make_saga(
         status=SagaStatus.ACTIVE,
         confidence=0.8,
         created_at=NOW,
-    base_branch="dev",
+        base_branch="dev",
     )
 
 

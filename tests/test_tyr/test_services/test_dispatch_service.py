@@ -628,9 +628,7 @@ class TestActiveSagaFiltering:
                 feature_branch="feat/done",
                 status=SagaStatus.COMPLETE,
                 confidence=0.0,
-                created_at=__import__("datetime").datetime.now(
-                    __import__("datetime").timezone.utc
-                ),
+                created_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
                 base_branch="dev",
             )
         )
@@ -685,9 +683,7 @@ class TestActiveSagaFiltering:
             feature_branch="feat/done",
             status=SagaStatus.ACTIVE,
             confidence=0.0,
-            created_at=__import__("datetime").datetime.now(
-                __import__("datetime").timezone.utc
-            ),
+            created_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
             base_branch="dev",
         )
         repo.sagas.append(saga)
