@@ -263,7 +263,9 @@ class CompositeMimirAdapter(MimirPort):
                             return results
             except Exception as exc:
                 logger.warning(
-                    "composite mimir: get_thread_queue failed on %r: %s", mount.name, exc
+                    "composite mimir: get_thread_queue failed on %r: %s",
+                    mount.name,
+                    exc,
                 )
 
         results.sort(key=lambda p: p.meta.thread_weight or 0.0, reverse=True)
