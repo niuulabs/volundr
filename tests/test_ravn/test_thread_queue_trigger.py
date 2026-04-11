@@ -375,11 +375,11 @@ class TestSelectPersona:
     def test_case_insensitive_matching(self) -> None:
         assert _select_persona("Draft a quick NOTE") == "draft-a-note"
 
-    def test_unrecognised_hint_returns_none(self) -> None:
-        assert _select_persona("process the backlog items") is None
+    def test_unrecognised_hint_returns_default(self) -> None:
+        assert _select_persona("process the backlog items") == "research-and-distill"
 
-    def test_empty_hint_returns_none(self) -> None:
-        assert _select_persona("") is None
+    def test_empty_hint_returns_default(self) -> None:
+        assert _select_persona("") == "research-and-distill"
 
 
 # ---------------------------------------------------------------------------
@@ -402,7 +402,7 @@ class TestPersonaSelection:
         assert enqueued[0].persona == "draft-a-note"
 
     @pytest.mark.asyncio
-    async def test_unrecognised_hint_leaves_persona_none(self) -> None:
+    async def test_unrecognised_hint_uses_default_persona(self) -> None:
         mimir = AsyncMock()
         page = _thread_page(summary="process the next batch of items")
         mimir.get_thread_queue = AsyncMock(return_value=[page])
@@ -412,10 +412,10 @@ class TestPersonaSelection:
 
         enqueued = await _collect_enqueued(trigger)
 
-        assert enqueued[0].persona is None
+        assert enqueued[0].persona == "research-and-distill"
 
     @pytest.mark.asyncio
-    async def test_no_hint_leaves_persona_none(self) -> None:
+    async def test_no_hint_uses_default_persona(self) -> None:
         mimir = AsyncMock()
         page = _thread_page(summary="")
         mimir.get_thread_queue = AsyncMock(return_value=[page])
@@ -425,7 +425,7 @@ class TestPersonaSelection:
 
         enqueued = await _collect_enqueued(trigger)
 
-        assert enqueued[0].persona is None
+        assert enqueued[0].persona == "research-and-distill"
 
     @pytest.mark.asyncio
     async def test_capture_hint_sets_draft_a_note_persona(self) -> None:
