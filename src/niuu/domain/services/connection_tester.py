@@ -90,10 +90,10 @@ async def test_telegram_bot(bot_token: str) -> ConnectionTestResult:
         )
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            from urllib.parse import quote
-
-            safe_token = quote(bot_token, safe="")
-            resp = await client.get(f"https://api.telegram.org/bot{safe_token}/getMe")
+            resp = await client.get(
+                "https://api.telegram.org/bot/getMe",
+                params={"token": bot_token},
+            )
             if resp.status_code == 200 and resp.json().get("ok"):
                 bot_name = resp.json()["result"].get("username", "bot")
                 return ConnectionTestResult(
