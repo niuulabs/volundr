@@ -1951,7 +1951,10 @@ async def _run_daemon(
 
         # Wire cascade tools when enabled (Mode 1 local + optional mesh/spawn)
         if settings.cascade.enabled:
-            _cascade_mesh, _cascade_discovery = _wire_cascade(drive_loop, settings)
+            _active_profile_name = profile.name if profile else "default"
+            _cascade_mesh, _cascade_discovery = _wire_cascade(
+                drive_loop, settings, persona_config, _active_profile_name
+            )
             if _cascade_discovery is not None:
                 await _cascade_discovery.start()
             if _cascade_mesh is not None:
@@ -2094,7 +2097,34 @@ def _wire_task_dispatch(drive_loop: Any, sleipnir_config: Any) -> None:
     logger.info("task_dispatch: registered ravn.task.dispatch subscription")
 
 
-def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
+def _derive_capabilities(
+    settings: Settings,
+    persona_config: Any | None = None,
+    profile_name: str = "default",
+) -> list[str]:
+    """Derive the capability strings advertised in the mesh peer identity.
+
+    If the active persona has an explicit ``allowed_tools`` list, those group
+    names are used directly (minus any ``forbidden_tools``).  Otherwise the
+    profile's ``include_groups`` are used so that peers without a persona still
+    advertise a meaningful capability set.
+    """
+    if persona_config is not None:
+        allowed = list(getattr(persona_config, "allowed_tools", None) or [])
+        if allowed:
+            forbidden = set(getattr(persona_config, "forbidden_tools", None) or [])
+            return [c for c in allowed if c not in forbidden]
+
+    profile_cfg = _get_tool_group(settings, profile_name)
+    return list(profile_cfg.include_groups)
+
+
+def _wire_cascade(
+    drive_loop: Any,
+    settings: Settings,
+    persona_config: Any | None = None,
+    profile_name: str = "default",
+) -> None:
     """Wire cascade tools and mesh RPC handler onto the drive loop.
 
     This wires up:
@@ -2111,7 +2141,7 @@ def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
 
     if settings.discovery.enabled:
         try:
-            discovery = _build_discovery(settings)
+            discovery = _build_discovery(settings, persona_config, profile_name)
         except Exception as exc:
             logger.warning("cascade: failed to build discovery adapter: %s", exc)
 
@@ -2248,7 +2278,11 @@ def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
     raise ValueError(f"Unknown mesh adapter: {mesh_cfg.adapter!r}")
 
 
-def _build_discovery(settings: Settings) -> Any:
+def _build_discovery(
+    settings: Settings,
+    persona_config: Any | None = None,
+    profile_name: str = "default",
+) -> Any:
     """Build the discovery adapter from config, wiring the own identity."""
     import importlib.metadata
     import socket
@@ -2274,11 +2308,18 @@ def _build_discovery(settings: Settings) -> Any:
     rep_address = settings.mesh.nng.req_rep_address.replace("*", "127.0.0.1")
     pub_address = settings.mesh.nng.pub_sub_address.replace("*", "127.0.0.1")
 
+    persona_name = (
+        getattr(persona_config, "name", None)
+        or settings.agent.system_prompt[:30]
+        or "ravn"
+    )
+    capabilities = _derive_capabilities(settings, persona_config, profile_name)
+
     identity = RavnIdentity(
         peer_id=peer_id,
         realm_id=realm_id,
-        persona=settings.agent.system_prompt[:30] if settings.agent.system_prompt else "ravn",
-        capabilities=[],
+        persona=persona_name,
+        capabilities=capabilities,
         permission_mode=settings.permission.mode,
         version=version,
         rep_address=rep_address,

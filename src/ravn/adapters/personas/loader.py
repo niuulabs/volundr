@@ -114,6 +114,20 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
         llm=PersonaLLMConfig(primary_alias="powerful", thinking_enabled=True),
         iteration_budget=20,
     ),
+    "coordinator": PersonaConfig(
+        name="coordinator",
+        system_prompt_template=(
+            "You are a coordinator agent responsible for orchestrating work across a flock of Ravens.\n"
+            "When given a complex task, break it into subtasks and delegate each to the most capable\n"
+            "idle peer using task_create. Use task_collect to gather results and synthesise a final answer.\n"
+            "Prefer delegation over doing work yourself — you are the conductor, not the musician."
+        ),
+        allowed_tools=["cascade", "file", "introspection", "todo"],
+        forbidden_tools=["terminal"],
+        permission_mode="workspace-write",
+        llm=PersonaLLMConfig(primary_alias="powerful", thinking_enabled=True),
+        iteration_budget=30,
+    ),
     "autonomous-agent": PersonaConfig(
         name="autonomous-agent",
         system_prompt_template=(
