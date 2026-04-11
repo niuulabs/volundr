@@ -173,6 +173,7 @@ class MockTrackerFactory:
         return list(self._adapters)
 
 
+
 class MockDispatcherRepo(DispatcherRepository):
     """In-memory mock for DispatcherRepository."""
 
@@ -359,6 +360,11 @@ def _make_test_app(
     app.dependency_overrides[resolve_dispatcher_repo] = lambda: dispatcher_repo
     app.dependency_overrides[resolve_dispatch_service] = lambda: svc
     return app
+
+
+@pytest.fixture
+def mock_dispatcher_repo() -> MockDispatcherRepo:
+    return MockDispatcherRepo()
 
 
 @pytest.fixture

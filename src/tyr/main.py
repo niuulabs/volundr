@@ -30,6 +30,7 @@ from tyr.adapters.postgres_notification_subscriptions import (
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.tracker_factory import TrackerAdapterFactory
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
+from tyr.adapters.volundr_http import VolundrHTTPAdapter
 from tyr.api.dispatch import (
     create_dispatch_router,
     resolve_dispatch_service,

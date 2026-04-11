@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 
 from niuu.domain.models import IntegrationType, Principal
 from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
+from tyr.api.tracker import resolve_trackers
+from tyr.domain.models import RaidStatus, TrackerIssue
 from tyr.domain.services.dispatch_service import (
     DispatchItem as ServiceDispatchItem,
 )
@@ -181,6 +183,11 @@ async def resolve_dispatcher_repo() -> DispatcherRepository:
     )
 
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
 async def resolve_dispatch_service() -> DispatchService:
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -226,8 +233,12 @@ def create_dispatch_router() -> APIRouter:
         body: DispatchRequest,
         principal: Principal = Depends(extract_principal),
         service: DispatchService = Depends(resolve_dispatch_service),
+        dispatcher_repo: DispatcherRepository = Depends(resolve_dispatcher_repo),
     ) -> list[DispatchResultResponse]:
         """Approve and dispatch selected issues — spawns Volundr sessions."""
+        # Ensure dispatcher state exists so the activity subscriber picks up this owner
+        await dispatcher_repo.get_or_create(principal.user_id)
+
         auth_token = extract_bearer_token(request)
         settings = request.app.state.settings
 
