@@ -448,27 +448,27 @@ class CronTrigger(TriggerPort):
                     changed = False
 
                     # -- Config-defined jobs --
-                for job in self._jobs:
-                    if not self._is_due(job, now, state):
-                        continue
+                    for job in self._jobs:
+                        if not self._is_due(job, now, state):
+                            continue
 
-                    task_id = self._make_task_id()
-                    task = AgentTask(
-                        task_id=task_id,
-                        title=job.name,
-                        initiative_context=job.context,
-                        triggered_by=f"cron:{job.name}",
-                        output_mode=job.output_mode,
-                        persona=job.persona,
-                        priority=job.priority,
-                    )
-                    logger.info("cron: firing job %r (task_id=%s)", job.name, task_id)
-                    await enqueue(task)
-                    state[job.name] = now.isoformat()
-                    changed = True
+                        task_id = self._make_task_id()
+                        task = AgentTask(
+                            task_id=task_id,
+                            title=job.name,
+                            initiative_context=job.context,
+                            triggered_by=f"cron:{job.name}",
+                            output_mode=job.output_mode,
+                            persona=job.persona,
+                            priority=job.priority,
+                        )
+                        logger.info("cron: firing job %r (task_id=%s)", job.name, task_id)
+                        await enqueue(task)
+                        state[job.name] = now.isoformat()
+                        changed = True
 
-                # -- Store-defined (runtime) jobs --
-                if self._store is not None:
+                    # -- Store-defined (runtime) jobs --
+                    if self._store is not None:
                     for record in self._store.list():
                         if not record.enabled:
                             continue
