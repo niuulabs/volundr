@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from urllib.parse import urlparse
 
 import httpx
 import pytest
@@ -17,7 +18,8 @@ class TestAnthropicAdapterInit:
     def test_defaults(self) -> None:
         adapter = AnthropicAdapter(api_key="test")
         assert adapter._api_key == "test"
-        assert "api.anthropic.com" in adapter._base_url
+        parsed = urlparse(adapter._base_url)
+        assert parsed.hostname == "api.anthropic.com"
         assert adapter._default_max_tokens > 0
         assert adapter._max_retries >= 0
 
