@@ -34,6 +34,7 @@ class ThreadState(StrEnum):
 
     open = "open"
     assigned = "assigned"
+    pulling = "pulling"  # actively being worked by a Ravn instance
     closed = "closed"
     dissolved = "dissolved"
 
