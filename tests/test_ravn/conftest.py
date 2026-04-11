@@ -102,6 +102,10 @@ def _make_drive_loop(
     )
     settings = MagicMock()
     settings.cascade.enabled = False
+    settings.budget.daily_cap_usd = 1.0
+    settings.budget.warn_at_percent = 80
+    settings.budget.input_token_cost_per_million = 3.0
+    settings.budget.output_token_cost_per_million = 15.0
     kwargs: dict = {"agent_factory": agent_factory, "config": cfg, "settings": settings}
     if event_publisher is not None:
         kwargs["event_publisher"] = event_publisher

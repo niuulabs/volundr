@@ -13,8 +13,9 @@ import pytest
 
 from ravn.adapters.memory.outcome import SQLiteOutcomeAdapter, _format_lessons, _sanitise_fts_query
 from ravn.adapters.permission.allow_deny import AllowAllPermission
-from ravn.agent import RavnAgent, _compute_cost
+from ravn.agent import RavnAgent
 from ravn.config import OutcomeConfig
+from ravn.domain.budget import compute_cost as _compute_cost
 from ravn.domain.models import (
     LLMResponse,
     Outcome,
@@ -100,21 +101,17 @@ def make_agent(
 
 class TestComputeCost:
     def test_zero_tokens(self) -> None:
-        usage = TokenUsage(input_tokens=0, output_tokens=0)
-        assert _compute_cost(usage, 3.0, 15.0) == 0.0
+        assert _compute_cost(0, 0, 3.0, 15.0) == 0.0
 
     def test_one_million_input(self) -> None:
-        usage = TokenUsage(input_tokens=1_000_000, output_tokens=0)
-        assert _compute_cost(usage, 3.0, 15.0) == pytest.approx(3.0)
+        assert _compute_cost(1_000_000, 0, 3.0, 15.0) == pytest.approx(3.0)
 
     def test_one_million_output(self) -> None:
-        usage = TokenUsage(input_tokens=0, output_tokens=1_000_000)
-        assert _compute_cost(usage, 3.0, 15.0) == pytest.approx(15.0)
+        assert _compute_cost(0, 1_000_000, 3.0, 15.0) == pytest.approx(15.0)
 
     def test_mixed(self) -> None:
-        usage = TokenUsage(input_tokens=100_000, output_tokens=50_000)
         expected = 100_000 * 3.0 / 1_000_000 + 50_000 * 15.0 / 1_000_000
-        assert _compute_cost(usage, 3.0, 15.0) == pytest.approx(expected)
+        assert _compute_cost(100_000, 50_000, 3.0, 15.0) == pytest.approx(expected)
 
 
 # ---------------------------------------------------------------------------

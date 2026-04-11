@@ -13,6 +13,7 @@ from typing import Any
 from ravn.budget import IterationBudget, TokenEstimator
 from ravn.compression import CompressionResult, ContextCompressor
 from ravn.config import ExtendedThinkingConfig, OutcomeConfig
+from ravn.domain.budget import compute_cost as _compute_cost_usd
 from ravn.domain.checkpoint import (
     DESTRUCTIVE_TOOL_NAMES,
     Checkpoint,
@@ -676,8 +677,9 @@ class RavnAgent:
         tags = _infer_tags(tools_used)
         errors = [r.content for r in turn_result.tool_results if r.is_error]
 
-        cost_usd = _compute_cost(
-            turn_result.usage,
+        cost_usd = _compute_cost_usd(
+            turn_result.usage.input_tokens,
+            turn_result.usage.output_tokens,
             self._input_token_cost_per_million,
             self._output_token_cost_per_million,
         )
@@ -1088,18 +1090,6 @@ def _extract_episode(
         outcome=outcome,
         tags=tags,
         embedding=None,
-    )
-
-
-def _compute_cost(
-    usage: TokenUsage,
-    input_per_million: float,
-    output_per_million: float,
-) -> float:
-    """Estimate USD cost from token usage using per-million-token rates."""
-    return (
-        usage.input_tokens * input_per_million / 1_000_000
-        + usage.output_tokens * output_per_million / 1_000_000
     )
 
 

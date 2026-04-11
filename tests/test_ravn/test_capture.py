@@ -54,6 +54,10 @@ def _make_drive_loop(cascade_enabled: bool = False) -> DriveLoop:
     cfg = InitiativeConfig(enabled=True, max_concurrent_tasks=3, task_queue_max=50)
     settings = MagicMock()
     settings.cascade.enabled = cascade_enabled
+    settings.budget.daily_cap_usd = 1.0
+    settings.budget.warn_at_percent = 80
+    settings.budget.input_token_cost_per_million = 3.0
+    settings.budget.output_token_cost_per_million = 15.0
     return DriveLoop(agent_factory=agent_factory, config=cfg, settings=settings)
 
 

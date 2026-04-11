@@ -357,3 +357,13 @@ async def test_flush_with_multiple_subscribers():
 
     assert a == [str(i) for i in range(5)]
     assert b == [str(i) for i in range(5)]
+
+
+def test_remove_subscription_silently_ignores_missing_sub():
+    """_remove_subscription does not raise when the sub is not in the list."""
+    from unittest.mock import MagicMock
+
+    bus = InProcessBus()
+    # No subscriptions registered — calling _remove_subscription should not raise.
+    fake_sub = MagicMock()
+    bus._remove_subscription(fake_sub)  # should not raise ValueError
