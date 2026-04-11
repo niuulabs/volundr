@@ -124,7 +124,6 @@ class ThreadQueueTrigger(TriggerPort):
             f"Thread: {path}\n"
             f"Weight: {weight:.2f}\n"
             f"Next action: {next_action_hint}\n"
-            f"Page summary: {thread.meta.summary}\n"
         )
 
         priority = max(_PRIORITY_MIN, min(_PRIORITY_MAX, int(_PRIORITY_MAX - weight)))
