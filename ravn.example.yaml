@@ -34,7 +34,7 @@
 # Thread enrichment queue (NIU-558)
 #
 # The thread enricher scores Mímir pages and queues them for wakefulness
-# processing.  It is DISABLED by default (M1 safe).  M2 sets enabled: true.
+# processing.  Enabled in M2.
 #
 # All weight fields contribute to the composite thread score:
 #   score = (recency_weight * recency_signal)
@@ -44,18 +44,35 @@
 #         + (sub_thread_weight * sub_thread_signal)
 #   score *= exp(-decay_rate_per_day * days_since_last_activity)
 # ---------------------------------------------------------------------------
-# thread:
-#   enabled: false                      # flip to true in M2 deployment YAML
-#   max_queue_size: 200
-#   enricher_poll_interval_seconds: 300 # check Mímir every 5 minutes
-#   enricher_llm_alias: fast            # use cheapest/fastest model alias
-#   decay_rate_per_day: 0.05
-#   recency_weight: 1.0
-#   mention_weight: 0.3
-#   engagement_weight: 0.5
-#   peer_weight: 0.2
-#   sub_thread_weight: 0.4
-#   owner_id: null                      # defaults to this instance's own ID
+thread:
+  enabled: true
+  max_queue_size: 200
+  enricher_poll_interval_seconds: 300 # check Mímir every 5 minutes
+  enricher_llm_alias: fast            # use cheapest/fastest model alias
+  decay_rate_per_day: 0.05
+  recency_weight: 1.0
+  mention_weight: 0.3
+  engagement_weight: 0.5
+  peer_weight: 0.2
+  sub_thread_weight: 0.4
+  owner_id: null                      # defaults to this instance's own ID
+
+# ---------------------------------------------------------------------------
+# Wakefulness trigger (NIU-565)
+#
+# Detects operator silence and runs a cheap LLM reflection to emit follow-up
+# intents as threads into Mímir.  Enabled in M2.
+# ---------------------------------------------------------------------------
+wakefulness:
+  enabled: true
+  silence_threshold_seconds: 1800         # 30 min of silence triggers shallow reflection
+  reflection_cooldown_seconds: 3600       # at most one shallow reflection per hour
+  deep_reflection_threshold_seconds: 7200 # 2 h silence triggers deep reflection
+  deep_reflection_cooldown_seconds: 14400 # at most one deep reflection per 4 h
+  llm_alias: fast
+  max_intents_per_reflection: 5
+  initial_thread_weight: 5.0
+  poll_interval_seconds: 60
 
 # ---------------------------------------------------------------------------
 # Recap trigger (NIU-569)
@@ -68,15 +85,27 @@
 #      after a gap longer than absence_threshold_seconds.
 #   2. Scheduled fallback — scheduled_recap_cron fires at a daily time.
 # ---------------------------------------------------------------------------
-# recap:
-#   enabled: false                          # flip to true to activate
-#   absence_threshold_seconds: 3600         # 1 h gap = "was away"
-#   return_detection_window_seconds: 300    # within 5 min = "just returned"
-#   scheduled_recap_cron: ""               # e.g. "0 7 * * *" for 07:00 daily
-#   max_threads_in_recap: 10
-#   persona: produce-recap
-#   channel: ""                            # empty = TUI only
-#   poll_interval_seconds: 60
+recap:
+  enabled: true
+  absence_threshold_seconds: 3600         # 1 h gap = "was away"
+  return_detection_window_seconds: 300    # within 5 min = "just returned"
+  scheduled_recap_cron: ""               # e.g. "0 7 * * *" for 07:00 daily
+  max_threads_in_recap: 10
+  persona: produce-recap
+  channel: ""                            # empty = TUI only
+  poll_interval_seconds: 60
+
+# ---------------------------------------------------------------------------
+# Daily budget (NIU-570)
+#
+# Gates new initiative tasks when the configured daily USD spend cap is reached.
+# Budget resets at UTC midnight.
+# ---------------------------------------------------------------------------
+budget:
+  daily_cap_usd: 1.0
+  input_token_cost_per_million: 3.0
+  output_token_cost_per_million: 15.0
+  warn_at_percent: 80
 
 # ---------------------------------------------------------------------------
 # Trust gradient (NIU-571)
@@ -87,19 +116,19 @@
 #   "approval" — tool forbidden; agent writes an approval request to approvals/
 #   "never"    — tool unconditionally forbidden
 # ---------------------------------------------------------------------------
-# trust:
-#   reading: free
-#   writing_notes: free
-#   sandbox_experiments: free
-#   consulting_peers: free
-#   drafting_tickets: free
-#   producing_recaps: free
-#   opening_tickets: approval
-#   closing_tickets: approval
-#   pushing_branches: approval
-#   pushing_main: never
-#   external_messages: approval
-#   spending_beyond_cap: approval
+trust:
+  reading: free
+  writing_notes: free
+  sandbox_experiments: free
+  consulting_peers: free
+  drafting_tickets: free
+  producing_recaps: free
+  opening_tickets: approval
+  closing_tickets: approval
+  pushing_branches: approval
+  pushing_main: never
+  external_messages: approval
+  spending_beyond_cap: approval
 
 # ---------------------------------------------------------------------------
 # Memory
