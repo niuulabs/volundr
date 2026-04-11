@@ -293,7 +293,7 @@ class CompositeMimirAdapter(MimirPort):
                 )
                 continue
             try:
-                await mount.port.upsert_page(path, content)
+                await mount.port.upsert_page(path, content, meta=meta)
                 logger.debug("composite mimir: wrote %r to mount %r", path, name)
             except Exception as exc:
                 logger.warning("composite mimir: upsert_page failed on %r: %s", name, exc)
