@@ -24,7 +24,11 @@ import pytest
 
 from niuu.domain.mimir import ThreadOwnershipError, ThreadState
 from niuu.ports.mimir import MimirPage, MimirPageMeta
-from ravn.adapters.triggers.thread_queue import ThreadQueueTrigger, _title_from_path
+from ravn.adapters.triggers.thread_queue import (
+    ThreadQueueTrigger,
+    _select_persona,
+    _title_from_path,
+)
 from ravn.config import ThreadConfig
 from ravn.domain.models import AgentTask, OutputMode
 
@@ -453,3 +457,113 @@ def test_owner_id_uses_config_when_set() -> None:
     config = ThreadConfig(enabled=True, owner_id="my-ravn")
     trigger = ThreadQueueTrigger(mimir=mimir, config=config)
     assert trigger._owner_id == "my-ravn"
+
+
+# ---------------------------------------------------------------------------
+# _select_persona helper
+# ---------------------------------------------------------------------------
+
+
+def test_select_persona_empty_hint_returns_research_and_distill() -> None:
+    assert _select_persona("") == "research-and-distill"
+
+
+def test_select_persona_generic_hint_returns_research_and_distill() -> None:
+    assert _select_persona("Compare HNSW vs flat index") == "research-and-distill"
+
+
+@pytest.mark.parametrize(
+    "hint",
+    [
+        "draft a summary",
+        "write a note about this",
+        "capture the key points",
+        "observe and record findings",
+        "Draft the outline",
+        "quick NOTE for later",
+    ],
+)
+def test_select_persona_draft_keywords_return_draft_a_note(hint: str) -> None:
+    assert _select_persona(hint) == "draft-a-note"
+
+
+# ---------------------------------------------------------------------------
+# persona field set on enqueued task
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_enqueued_task_has_persona_set() -> None:
+    mimir = AsyncMock()
+    page = _thread_page(summary="Compare HNSW vs flat")
+    mimir.get_thread_queue = AsyncMock(return_value=[page])
+    mimir.assign_thread_owner = AsyncMock()
+    mimir.update_thread_state = AsyncMock()
+    trigger = _make_trigger(mimir=mimir)
+    enqueued: list[AgentTask] = []
+
+    async def _enqueue(task: AgentTask) -> None:
+        enqueued.append(task)
+
+    await trigger._poll_once(_enqueue)
+
+    assert enqueued[0].persona == "research-and-distill"
+
+
+@pytest.mark.asyncio
+async def test_enqueued_task_persona_draft_a_note_for_draft_hint() -> None:
+    mimir = AsyncMock()
+    page = _thread_page(summary="draft outline for the new auth flow")
+    mimir.get_thread_queue = AsyncMock(return_value=[page])
+    mimir.assign_thread_owner = AsyncMock()
+    mimir.update_thread_state = AsyncMock()
+    trigger = _make_trigger(mimir=mimir)
+    enqueued: list[AgentTask] = []
+
+    async def _enqueue(task: AgentTask) -> None:
+        enqueued.append(task)
+
+    await trigger._poll_once(_enqueue)
+
+    assert enqueued[0].persona == "draft-a-note"
+
+
+# ---------------------------------------------------------------------------
+# initiative_context includes title
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_initiative_context_contains_title() -> None:
+    mimir = AsyncMock()
+    page = _thread_page(path="threads/retrieval-architecture", title="Retrieval Architecture")
+    mimir.get_thread_queue = AsyncMock(return_value=[page])
+    mimir.assign_thread_owner = AsyncMock()
+    mimir.update_thread_state = AsyncMock()
+    trigger = _make_trigger(mimir=mimir)
+    enqueued: list[AgentTask] = []
+
+    async def _enqueue(task: AgentTask) -> None:
+        enqueued.append(task)
+
+    await trigger._poll_once(_enqueue)
+
+    assert "Retrieval Architecture" in enqueued[0].initiative_context
+
+
+@pytest.mark.asyncio
+async def test_initiative_context_contains_produced_by_thread_instruction() -> None:
+    mimir = AsyncMock()
+    page = _thread_page()
+    mimir.get_thread_queue = AsyncMock(return_value=[page])
+    mimir.assign_thread_owner = AsyncMock()
+    mimir.update_thread_state = AsyncMock()
+    trigger = _make_trigger(mimir=mimir)
+    enqueued: list[AgentTask] = []
+
+    async def _enqueue(task: AgentTask) -> None:
+        enqueued.append(task)
+
+    await trigger._poll_once(_enqueue)
+
+    assert "produced_by_thread" in enqueued[0].initiative_context

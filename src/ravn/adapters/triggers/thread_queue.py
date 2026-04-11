@@ -50,6 +50,8 @@ _PERSONA_KEYWORDS: list[tuple[str, list[str]]] = [
     ("draft-a-note", ["draft", "note", "capture", "observe"]),
 ]
 
+_DEFAULT_PERSONA = "research-and-distill"
+
 
 class ThreadQueueTrigger(TriggerPort):
     """TriggerPort that polls the Mímir thread queue and enqueues wakefulness tasks.
@@ -125,10 +127,30 @@ class ThreadQueueTrigger(TriggerPort):
         # For thread MimirPages, meta.summary stores the next_action_hint
         # (populated by MarkdownMimirAdapter._schema_to_page and _parse_thread_page).
         next_action_hint = thread.meta.summary or ""
-        title = next_action_hint or _title_from_path(path)
+        thread_title = thread.meta.title or _title_from_path(path)
+        title = next_action_hint or thread_title
+
+        persona = _select_persona(next_action_hint)
+
+        if persona == "research-and-distill":
+            action_instruction = (
+                "Read relevant sources, synthesise findings, and write a distilled Mímir page "
+                "under research/ that answers the thread's open question. "
+                "Mark the output with produced_by_thread: true."
+            )
+        else:
+            action_instruction = (
+                "Draft a concise note capturing the thread's key points. "
+                "Mark the output with produced_by_thread: true."
+            )
 
         initiative_context = (
-            f"Thread: {path}\nWeight: {weight:.2f}\nNext action: {next_action_hint}\n"
+            f"Thread: {path}\n"
+            f"Title: {thread_title}\n"
+            f"Weight: {weight:.2f}\n"
+            f"Next action: {next_action_hint}\n"
+            f"\n"
+            f"{action_instruction}\n"
         )
 
         priority = max(_PRIORITY_MIN, min(_PRIORITY_MAX, int(_PRIORITY_MAX - weight)))
@@ -141,7 +163,7 @@ class ThreadQueueTrigger(TriggerPort):
             triggered_by=f"thread:{path}",
             output_mode=OutputMode.AMBIENT,
             priority=priority,
-            persona=_select_persona(next_action_hint),
+            persona=persona,
         )
         logger.info(
             "ThreadQueueTrigger: enqueuing task for thread %r (weight=%.2f, priority=%d)",
@@ -157,19 +179,19 @@ def _generate_owner_id() -> str:
     return f"ravn-{uuid.uuid4().hex[:8]}"
 
 
-def _select_persona(hint: str) -> str | None:
+def _select_persona(hint: str) -> str:
     """Map a next_action_hint to a persona name via keyword matching.
 
     Iterates ``_PERSONA_KEYWORDS`` in order; returns the first persona whose
     keyword list contains any word present in *hint* (case-insensitive).
-    Returns ``None`` when no keyword matches — the drive loop then falls back
-    to the default agent settings.
+    Falls back to ``_DEFAULT_PERSONA`` (``"research-and-distill"``) when no
+    keyword matches.
     """
     hint_lower = hint.lower()
     for persona_name, keywords in _PERSONA_KEYWORDS:
         if any(kw in hint_lower for kw in keywords):
             return persona_name
-    return None
+    return _DEFAULT_PERSONA
 
 
 def _title_from_path(path: str) -> str:

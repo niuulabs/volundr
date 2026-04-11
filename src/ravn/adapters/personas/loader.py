@@ -177,6 +177,42 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
         llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=False),
         iteration_budget=60,
     ),
+    "research-and-distill": PersonaConfig(
+        name="research-and-distill",
+        system_prompt_template=(
+            "You are a research and distillation agent for the Mímir knowledge base.\n\n"
+            "## Your task\n"
+            "Given an open question or thread, read available sources, synthesise the key "
+            "findings, and write a single distilled Mímir page under `research/{slug}.md`.\n\n"
+            "## Approach\n"
+            "1. Call `mimir_search` to check whether a relevant page already exists — "
+            "avoid duplicates.\n"
+            "2. Use `mimir_list` to browse related sections if needed.\n"
+            "3. Gather current information with `web_search` and `web_fetch`.\n"
+            "4. Read related Mímir pages with `mimir_read` to incorporate existing knowledge.\n"
+            "5. Synthesise findings into a concise, factual page — under 1500 words. "
+            "Prefer tables and bullet points over prose.\n"
+            "6. Write the page with `mimir_write` to `research/{slug}.md`. "
+            "Include `produced_by_thread: true` in the front matter.\n\n"
+            "## Constraints\n"
+            "- Do not copy-paste source text. Restate in your own words.\n"
+            "- Cross-link related pages using relative markdown links.\n"
+            "- Only create pages under `research/` — never modify existing pages.\n"
+            "- Keep output under 1500 words. Tables and bullet points preferred."
+        ),
+        allowed_tools=[
+            "mimir_search",
+            "mimir_read",
+            "mimir_write",
+            "mimir_list",
+            "web_search",
+            "web_fetch",
+        ],
+        forbidden_tools=["bash", "edit_file", "write_file", "terminal"],
+        permission_mode="read-only",
+        llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=False),
+        iteration_budget=15,
+    ),
 }
 
 # ---------------------------------------------------------------------------
