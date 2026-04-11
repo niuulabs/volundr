@@ -464,10 +464,6 @@ def test_owner_id_uses_config_when_set() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_select_persona_default_returns_research_and_distill() -> None:
-    assert _select_persona("") == "research-and-distill"
-
-
 def test_select_persona_empty_hint_returns_research_and_distill() -> None:
     assert _select_persona("") == "research-and-distill"
 

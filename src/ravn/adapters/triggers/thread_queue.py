@@ -46,12 +46,6 @@ _PRIORITY_MAX = 10
 # Keyword → persona mapping for wakefulness action shapes.
 # Keywords are matched case-insensitively against the next_action_hint.
 # Order matters: first match wins.
-# Note: "draft-a-note" is a forward reference — it does not exist in
-# ``_BUILTIN_PERSONAS`` yet and will be added in a follow-up ticket (NIU-567).
-# ``PersonaLoader.load("draft-a-note")`` returns ``None`` until then, causing
-# the DriveLoop to fall back to default settings.  This is intentional:
-# routing is wired ahead of the persona definition so the trigger does not
-# need to change when the persona lands.
 _PERSONA_KEYWORDS: list[tuple[str, list[str]]] = [
     ("draft-a-note", ["draft", "note", "capture", "observe"]),
 ]
