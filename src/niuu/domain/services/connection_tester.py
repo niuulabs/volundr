@@ -7,6 +7,7 @@ Used by both Tyr and Volundr integration management APIs.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -15,6 +16,12 @@ import httpx
 logger = logging.getLogger(__name__)
 
 _ALLOWED_SCHEMES = {"http", "https"}
+_TELEGRAM_BOT_TOKEN_RE = re.compile(r"^[0-9]{6,}:[A-Za-z0-9_-]{20,}$")
+
+
+def _is_valid_telegram_bot_token(bot_token: str) -> bool:
+    """Validate Telegram bot token format before using it in URL construction."""
+    return bool(_TELEGRAM_BOT_TOKEN_RE.fullmatch(bot_token))
 
 
 @dataclass(frozen=True)
@@ -75,6 +82,12 @@ async def test_telegram_bot(bot_token: str) -> ConnectionTestResult:
     """Test a Telegram bot token via getMe endpoint."""
     if not bot_token:
         return ConnectionTestResult(success=False, message="No bot token")
+    if not _is_valid_telegram_bot_token(bot_token):
+        return ConnectionTestResult(
+            success=False,
+            message="Invalid bot token format",
+            provider="telegram",
+        )
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             from urllib.parse import quote
