@@ -1029,7 +1029,8 @@ def create_router(
             body = await raw_request.json()
             oai_request = OpenAIChatRequest.model_validate(body)
         except Exception as exc:
-            return openai_error_response(422, str(exc), "invalid_request_error")
+            logger.warning("Invalid OpenAI chat completion request: %s", exc)
+            return openai_error_response(422, "Invalid request body.", "invalid_request_error")
 
         request = openai_request_to_anthropic(oai_request)
 
@@ -1256,7 +1257,7 @@ def create_router(
                     request=request,
                 )
             )
-            return openai_error_response(502, str(exc), "server_error")
+            return openai_error_response(502, "Upstream routing failed.", "server_error")
 
     # -----------------------------------------------------------------------
     # Ollama-compatible endpoints
