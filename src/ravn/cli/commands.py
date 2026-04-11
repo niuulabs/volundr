@@ -14,7 +14,14 @@ from typing import Any
 import typer
 
 from ravn.agent import PostToolHook, PreToolHook, RavnAgent
-from ravn.config import InitiativeConfig, OutcomeConfig, ProjectConfig, Settings, ToolGroupConfig
+from ravn.config import (
+    InitiativeConfig,
+    OutcomeConfig,
+    ProjectConfig,
+    Settings,
+    ToolGroupConfig,
+    resolve_trust_tools,
+)
 from ravn.domain.checkpoint import InterruptReason
 from ravn.domain.models import (
     Message,
@@ -467,6 +474,15 @@ def _build_tools(
     return tools
 
 
+def _in_groups(name: str, groups: set[str]) -> bool:
+    """Return True if *name* matches any group prefix in *groups*.
+
+    A match means either an exact hit (``name == group``) or a prefixed
+    hit (``name`` starts with ``group_``).
+    """
+    return any(name == g or name.startswith(g + "_") for g in groups)
+
+
 def _filter_tools(
     tools: list[Any],
     settings: Settings,
@@ -488,9 +504,6 @@ def _filter_tools(
             allowed_groups = set(persona_config.allowed_tools)
         if persona_config.forbidden_tools:
             forbidden_groups = set(persona_config.forbidden_tools)
-
-    def _in_groups(name: str, groups: set[str]) -> bool:
-        return any(name == g or name.startswith(g + "_") for g in groups)
 
     if allowed_groups or enabled_names:
         tools = [
@@ -1865,25 +1878,10 @@ async def _run_daemon(
 
         # NIU-571: Apply trust gradient constraints for thread-triggered tasks
         if triggered_by and triggered_by.startswith("thread:"):
-            from ravn.config import resolve_trust_tools
-
-            persona_allowed = resolved_persona.allowed_tools if resolved_persona else None
-            persona_forbidden = resolved_persona.forbidden_tools if resolved_persona else None
-            _trust_allowed, trust_forbidden = resolve_trust_tools(
-                settings.trust,
-                persona_allowed=persona_allowed,
-                persona_forbidden=persona_forbidden,
-            )
+            _trust_allowed, trust_forbidden = resolve_trust_tools(settings.trust)
             if trust_forbidden:
                 forbidden_set = set(trust_forbidden)
-                tools = [
-                    t
-                    for t in tools
-                    if not any(
-                        t.name == prefix or t.name.startswith(prefix + "_")
-                        for prefix in forbidden_set
-                    )
-                ]
+                tools = [t for t in tools if not _in_groups(t.name, forbidden_set)]
 
         return RavnAgent(
             llm=llm,

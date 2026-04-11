@@ -2038,7 +2038,7 @@ def resolve_trust_tools(
     if persona_allowed:
         # Intersection: only tools allowed by BOTH persona and trust gradient
         trust_allowed_set = set(trust_allowed)
-        all_trust = _all_trust_tools()
+        all_trust = _ALL_TRUST_TOOLS
         merged_allowed = [
             t for t in persona_allowed if t in trust_allowed_set or t not in all_trust
         ]
@@ -2054,12 +2054,7 @@ def _iter_trust_categories(config: TrustGradientConfig):
         yield field_name, getattr(config, field_name)
 
 
-def _all_trust_tools() -> set[str]:
-    """Return the set of all tool prefixes governed by the trust gradient."""
-    result: set[str] = set()
-    for tools in TRUST_CATEGORY_TOOLS.values():
-        result.update(tools)
-    return result
+_ALL_TRUST_TOOLS: set[str] = {t for tools in TRUST_CATEGORY_TOOLS.values() for t in tools}
 
 
 # ---------------------------------------------------------------------------

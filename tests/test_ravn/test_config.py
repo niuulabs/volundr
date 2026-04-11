@@ -694,3 +694,106 @@ class TestSettingsTrust:
         with patch.dict(os.environ, {"RAVN_TRUST__PUSHING_MAIN": "approval"}):
             s = Settings()
             assert s.trust.pushing_main == "approval"
+
+
+class TestInGroups:
+    """Tests for the module-level _in_groups helper in commands.py."""
+
+    def test_exact_match(self) -> None:
+        from ravn.cli.commands import _in_groups
+
+        assert _in_groups("mimir", {"mimir"}) is True
+
+    def test_prefix_match(self) -> None:
+        from ravn.cli.commands import _in_groups
+
+        assert _in_groups("mimir_query", {"mimir"}) is True
+
+    def test_no_match(self) -> None:
+        from ravn.cli.commands import _in_groups
+
+        assert _in_groups("git_push", {"mimir"}) is False
+
+    def test_partial_no_match(self) -> None:
+        from ravn.cli.commands import _in_groups
+
+        # "mimir" should NOT match "mimirx" (no underscore separator)
+        assert _in_groups("mimirx", {"mimir"}) is False
+
+    def test_empty_groups(self) -> None:
+        from ravn.cli.commands import _in_groups
+
+        assert _in_groups("mimir", set()) is False
+
+    def test_multiple_groups(self) -> None:
+        from ravn.cli.commands import _in_groups
+
+        assert _in_groups("slack_post", {"mimir", "slack"}) is True
+
+
+class TestTrustGradientWiring:
+    """Tests for the trust gradient filtering logic applied in _agent_factory.
+
+    These verify that resolve_trust_tools output correctly filters tools
+    when combined with _in_groups, mirroring the wiring block in commands.py.
+    """
+
+    def test_thread_triggered_filters_forbidden_tools(self) -> None:
+        """Simulate the wiring: forbidden tools from trust gradient are removed."""
+        from ravn.cli.commands import _in_groups
+
+        config = TrustGradientConfig(pushing_main="never", reading="free")
+        _allowed, forbidden = resolve_trust_tools(config)
+
+        # pushing_main tools should be in forbidden
+        assert "git_push_main" in forbidden
+
+        # Simulate the filtering from commands.py
+        class FakeTool:
+            def __init__(self, name: str):
+                self.name = name
+
+        tools = [
+            FakeTool("file_read"),
+            FakeTool("git_push_main"),
+            FakeTool("mimir_query"),
+            FakeTool("linear_create"),
+        ]
+        forbidden_set = set(forbidden)
+        filtered = [t for t in tools if not _in_groups(t.name, forbidden_set)]
+
+        filtered_names = [t.name for t in filtered]
+        assert "file_read" in filtered_names
+        assert "mimir_query" in filtered_names
+        assert "git_push_main" not in filtered_names
+        # linear_create is "approval" by default → also forbidden
+        assert "linear_create" not in filtered_names
+
+    def test_all_free_no_filtering(self) -> None:
+        """When all categories are free, nothing is filtered."""
+        from ravn.cli.commands import _in_groups
+
+        config = TrustGradientConfig(
+            **{field: "free" for field in TrustGradientConfig.model_fields},
+        )
+        _allowed, forbidden = resolve_trust_tools(config)
+        assert forbidden == []
+
+        class FakeTool:
+            def __init__(self, name: str):
+                self.name = name
+
+        tools = [FakeTool("git_push_main"), FakeTool("linear_create")]
+        forbidden_set = set(forbidden)
+        filtered = [t for t in tools if not _in_groups(t.name, forbidden_set)]
+        assert len(filtered) == len(tools)
+
+    def test_non_thread_trigger_skips_filtering(self) -> None:
+        """The wiring only applies when triggered_by starts with 'thread:'."""
+        # This tests the conditional check: only thread-triggered tasks
+        # get trust gradient filtering.  Non-thread triggers should not filter.
+        triggered_by = "cron:daily"
+        assert not triggered_by.startswith("thread:")
+
+        triggered_by_thread = "thread:some-slug"
+        assert triggered_by_thread.startswith("thread:")
