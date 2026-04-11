@@ -1,0 +1,20 @@
+apiVersion: v2
+name: mimir
+description: "Mímir — standalone knowledge service for the ODIN platform"
+type: application
+version: 0.0.0
+appVersion: "0.0.0"
+keywords:
+  - knowledge
+  - wiki
+  - odin
+  - ravn
+  - ai
+  - kubernetes
+maintainers:
+  - name: Niuu Labs
+    url: https://github.com/niuulabs
+home: https://github.com/niuulabs/volundr
+sources:
+  - https://github.com/niuulabs/volundr
+dependencies: []

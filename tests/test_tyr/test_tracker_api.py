@@ -72,7 +72,7 @@ class MockTracker(TrackerPort):
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
-        base_branch="dev",
+            base_branch="dev",
         )
 
     async def get_phase(self, tracker_id: str) -> Phase:
@@ -336,6 +336,9 @@ class MockSagaRepo(SagaRepository):
             if not (s.id == saga_id and (owner_id is None or s.owner_id == owner_id))
         ]
         return len(self.sagas) < before
+
+    async def update_saga_status(self, saga_id: UUID, status: SagaStatus) -> None:
+        pass
 
 
 @pytest.fixture

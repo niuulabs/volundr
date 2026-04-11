@@ -10,6 +10,7 @@ interface UseDispatcherResult {
   pause: () => Promise<void>;
   resume: () => Promise<void>;
   setThreshold: (threshold: number) => Promise<void>;
+  setAutoContinue: (autoContinue: boolean) => Promise<void>;
   refresh: () => void;
 }
 
@@ -79,5 +80,21 @@ export function useDispatcher(): UseDispatcherResult {
     setState(updated);
   }, []);
 
-  return { state, log, loading, error, pause, resume, setThreshold, refresh: fetchState };
+  const setAutoContinue = useCallback(async (autoContinue: boolean) => {
+    await dispatcherService.setAutoContinue(autoContinue);
+    const updated = await dispatcherService.getState();
+    setState(updated);
+  }, []);
+
+  return {
+    state,
+    log,
+    loading,
+    error,
+    pause,
+    resume,
+    setThreshold,
+    setAutoContinue,
+    refresh: fetchState,
+  };
 }

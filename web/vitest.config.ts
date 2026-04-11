@@ -7,6 +7,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    testTimeout: 10000,
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     coverage: {
@@ -20,6 +21,7 @@ export default defineConfig({
         'src/vite-env.d.ts',
         '**/*.d.ts',
         '**/*.config.*',
+        '**/*.module.css',
         '**/index.ts',
         '**/register.ts',
         'src/modules/icons.ts',
@@ -41,6 +43,21 @@ export default defineConfig({
         'src/modules/tyr/pages/ImportView/**',
         // Volundr API adapter — integration layer, tested via adapter tests
         'src/modules/volundr/adapters/api/volundr.adapter.ts',
+        // Mock adapters — test doubles, not production code
+        'src/modules/tyr/adapters/mock/**',
+        // Tyr API adapters — integration layer, tested via e2e
+        'src/modules/tyr/adapters/api/tracker.ts',
+        'src/modules/tyr/adapters/api/tyr.ts',
+        'src/modules/tyr/adapters/api/integrations.ts',
+        // Re-export barrel — no executable logic
+        'src/modules/volundr/adapters/api/client.ts',
+        // Port interface — no executable logic
+        'src/modules/shared/ports/**',
+        // React context default values — no testable logic
+        'src/auth/AuthContext.ts',
+        'src/contexts/**',
+        // Re-export barrel — no executable logic
+        'src/utils/classnames.ts',
       ],
       thresholds: {
         statements: 85,

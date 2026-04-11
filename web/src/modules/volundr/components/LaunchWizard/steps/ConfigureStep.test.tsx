@@ -698,7 +698,7 @@ describe('ConfigureStep', () => {
       isDefault: false,
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
-      cliTool: 'claude' as const,
+      cliTool: 'claude',
       workloadType: 'coding',
       model: 'claude-opus',
       systemPrompt: 'Be concise.',

@@ -25,6 +25,14 @@ export class MockDispatcherService implements IDispatcherService {
     };
   }
 
+  async setAutoContinue(autoContinue: boolean): Promise<void> {
+    this.state = {
+      ...this.state,
+      auto_continue: autoContinue,
+      updated_at: new Date().toISOString(),
+    };
+  }
+
   async getLog(): Promise<string[]> {
     return [...mockDispatcherLog];
   }

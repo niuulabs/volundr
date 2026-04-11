@@ -13,6 +13,7 @@ from tyr.ports.dispatcher_repository import DispatcherRepository
 _DEFAULT_RUNNING = True
 _DEFAULT_THRESHOLD = 0.75
 _DEFAULT_MAX_CONCURRENT_RAIDS = 3
+_DEFAULT_AUTO_CONTINUE = False
 
 
 class PostgresDispatcherRepository(DispatcherRepository):
@@ -25,8 +26,8 @@ class PostgresDispatcherRepository(DispatcherRepository):
         row = await self._pool.fetchrow(
             """
             INSERT INTO dispatcher_state
-                (owner_id, running, threshold, max_concurrent_raids, updated_at)
-            VALUES ($1, $2, $3, $4, NOW())
+                (owner_id, running, threshold, max_concurrent_raids, auto_continue, updated_at)
+            VALUES ($1, $2, $3, $4, $5, NOW())
             ON CONFLICT (owner_id)
             DO UPDATE SET owner_id = dispatcher_state.owner_id
             RETURNING *
@@ -35,11 +36,12 @@ class PostgresDispatcherRepository(DispatcherRepository):
             _DEFAULT_RUNNING,
             _DEFAULT_THRESHOLD,
             _DEFAULT_MAX_CONCURRENT_RAIDS,
+            _DEFAULT_AUTO_CONTINUE,
         )
         return self._row_to_state(row)
 
     async def update(self, owner_id: str, **fields: object) -> DispatcherState:
-        allowed = {"running", "threshold", "max_concurrent_raids"}
+        allowed = {"running", "threshold", "max_concurrent_raids", "auto_continue"}
         to_set = {k: v for k, v in fields.items() if k in allowed and v is not None}
 
         if not to_set:
@@ -79,5 +81,6 @@ class PostgresDispatcherRepository(DispatcherRepository):
             running=row["running"],
             threshold=row["threshold"],
             max_concurrent_raids=row["max_concurrent_raids"],
+            auto_continue=row["auto_continue"],
             updated_at=row["updated_at"] or datetime.now(UTC),
         )

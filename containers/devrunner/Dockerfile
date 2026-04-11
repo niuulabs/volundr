@@ -1,4 +1,4 @@
-FROM python:3.14-slim@sha256:fb83750094b46fd6b8adaa80f66e2302ecbe45d513f6cece637a841e1025b4ca
+FROM python:3.14-slim@sha256:5e59aae31ff0e87511226be8e2b94d78c58f05216efda3b07dbbed938ec8583b
 
 
 LABEL org.opencontainers.image.title="devrunner"
@@ -39,6 +39,9 @@ RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
     && apt-get update && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Upgrade bundled npm to fix GHSA-qffp-2rhf-9h96 (tar) and GHSA-*-minimatch CVEs
+RUN npm install -g npm@11.3.0
+
 # Install Claude Code CLI globally via npm (same method as skuld pod)
 RUN npm install -g @anthropic-ai/claude-code@2.1.81
 
@@ -53,6 +56,9 @@ RUN echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg ma
     && apt-get update \
     && apt-get install -y --no-install-recommends postgresql-16 \
     && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip to fix GHSA-4xh5-x5gv-qwph / GHSA-6vgw-5pg2-w6jp
+RUN pip install --no-cache-dir --upgrade pip==25.0.1
 
 # Common Python packages for web dev
 RUN pip install --no-cache-dir \

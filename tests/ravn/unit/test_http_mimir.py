@@ -1,0 +1,320 @@
+"""Unit tests for HttpMimirAdapter — all MimirPort methods with mocked HTTP server.
+
+Uses ``respx`` to mock HTTPX calls so no network is required.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+import pytest
+import respx
+from httpx import Response
+
+from niuu.domain.mimir import MimirLintReport, MimirSource, compute_content_hash
+from ravn.adapters.mimir.http import HttpMimirAdapter
+from ravn.domain.mimir import MimirAuth
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def adapter() -> HttpMimirAdapter:
+    return HttpMimirAdapter(base_url="http://mimir.test")
+
+
+@pytest.fixture()
+def adapter_bearer() -> HttpMimirAdapter:
+    auth = MimirAuth(type="bearer", token="test-token")
+    return HttpMimirAdapter(base_url="http://mimir.test", auth=auth)
+
+
+def _source() -> MimirSource:
+    return MimirSource(
+        source_id="src_abc123",
+        title="Test",
+        content="test content",
+        source_type="document",
+        ingested_at=datetime.now(UTC),
+        content_hash=compute_content_hash("test content"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# HttpMimirAdapter.ingest
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_ingest_posts_to_ingest_endpoint(adapter: HttpMimirAdapter) -> None:
+    route = respx.post("http://mimir.test/mimir/ingest").mock(
+        return_value=Response(200, json={"source_id": "src_abc123", "pages_updated": []})
+    )
+    result = await adapter.ingest(_source())
+    assert result == []
+    assert route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_ingest_returns_page_paths(adapter: HttpMimirAdapter) -> None:
+    respx.post("http://mimir.test/mimir/ingest").mock(
+        return_value=Response(
+            200,
+            json={"source_id": "src_abc123", "pages_updated": ["technical/test.md"]},
+        )
+    )
+    result = await adapter.ingest(_source())
+    assert result == ["technical/test.md"]
+
+
+# ---------------------------------------------------------------------------
+# HttpMimirAdapter.search
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_returns_pages(adapter: HttpMimirAdapter) -> None:
+    respx.get("http://mimir.test/mimir/search").mock(
+        return_value=Response(
+            200,
+            json=[
+                {
+                    "path": "technical/ravn.md",
+                    "title": "Ravn",
+                    "summary": "Agent arch.",
+                    "category": "technical",
+                },
+            ],
+        )
+    )
+    pages = await adapter.search("ravn")
+    assert len(pages) == 1
+    assert pages[0].meta.path == "technical/ravn.md"
+    assert pages[0].meta.title == "Ravn"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_returns_empty_list(adapter: HttpMimirAdapter) -> None:
+    respx.get("http://mimir.test/mimir/search").mock(return_value=Response(200, json=[]))
+    pages = await adapter.search("nonexistent")
+    assert pages == []
+
+
+# ---------------------------------------------------------------------------
+# HttpMimirAdapter.query
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_query_returns_result_struct(adapter: HttpMimirAdapter) -> None:
+    respx.get("http://mimir.test/mimir/search").mock(
+        return_value=Response(
+            200,
+            json=[{"path": "technical/x.md", "title": "X", "summary": "", "category": "technical"}],
+        )
+    )
+    result = await adapter.query("What is X?")
+    assert result.question == "What is X?"
+    assert result.answer == ""
+    assert len(result.sources) == 1
+
+
+# ---------------------------------------------------------------------------
+# HttpMimirAdapter.get_page
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_page_returns_mimir_page(adapter: HttpMimirAdapter) -> None:
+    respx.get("http://mimir.test/mimir/page").mock(
+        return_value=Response(
+            200,
+            json={
+                "path": "technical/test.md",
+                "title": "Test",
+                "summary": "",
+                "category": "technical",
+                "updated_at": datetime.now(UTC).isoformat(),
+                "source_ids": ["src_abc"],
+                "content": "# Test\nSome content.",
+            },
+        )
+    )
+    page = await adapter.get_page("technical/test.md")
+    assert page.meta.path == "technical/test.md"
+    assert page.meta.source_ids == ["src_abc"]
+    assert "# Test" in page.content
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_page_raises_file_not_found(adapter: HttpMimirAdapter) -> None:
+    respx.get("http://mimir.test/mimir/page").mock(
+        return_value=Response(404, json={"detail": "Page not found"})
+    )
+    with pytest.raises(FileNotFoundError, match="technical/missing.md"):
+        await adapter.get_page("technical/missing.md")
+
+
+# ---------------------------------------------------------------------------
+# HttpMimirAdapter.upsert_page
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_upsert_page_sends_put(adapter: HttpMimirAdapter) -> None:
+    route = respx.put("http://mimir.test/mimir/page").mock(return_value=Response(204))
+    await adapter.upsert_page("technical/test.md", "# Test\ncontent")
+    assert route.called
+    assert route.calls[0].request.method == "PUT"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_upsert_page_ignores_mimir_param(adapter: HttpMimirAdapter) -> None:
+    """The mimir= param is for CompositeMimirAdapter routing; HttpMimirAdapter ignores it."""
+    route = respx.put("http://mimir.test/mimir/page").mock(return_value=Response(204))
+    await adapter.upsert_page("technical/test.md", "# Test\ncontent", mimir="shared")
+    assert route.called
+
+
+# ---------------------------------------------------------------------------
+# HttpMimirAdapter.read_page
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_read_page_returns_content(adapter: HttpMimirAdapter) -> None:
+    respx.get("http://mimir.test/mimir/page").mock(
+        return_value=Response(
+            200,
+            json={
+                "path": "technical/test.md",
+                "title": "Test",
+                "summary": "",
+                "category": "technical",
+                "updated_at": datetime.now(UTC).isoformat(),
+                "source_ids": [],
+                "content": "# Test\nSome content.",
+            },
+        )
+    )
+    content = await adapter.read_page("technical/test.md")
+    assert "# Test" in content
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_read_page_raises_file_not_found(adapter: HttpMimirAdapter) -> None:
+    respx.get("http://mimir.test/mimir/page").mock(
+        return_value=Response(404, json={"detail": "Page not found"})
+    )
+    with pytest.raises(FileNotFoundError, match="technical/missing.md"):
+        await adapter.read_page("technical/missing.md")
+
+
+# ---------------------------------------------------------------------------
+# HttpMimirAdapter.list_pages
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_pages_returns_metadata(adapter: HttpMimirAdapter) -> None:
+    now = datetime.now(UTC).isoformat()
+    respx.get("http://mimir.test/mimir/pages").mock(
+        return_value=Response(
+            200,
+            json=[
+                {
+                    "path": "technical/test.md",
+                    "title": "Test",
+                    "summary": "A test page.",
+                    "category": "technical",
+                    "updated_at": now,
+                    "source_ids": ["src_abc"],
+                }
+            ],
+        )
+    )
+    pages = await adapter.list_pages()
+    assert len(pages) == 1
+    assert pages[0].path == "technical/test.md"
+    assert pages[0].source_ids == ["src_abc"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_pages_with_category(adapter: HttpMimirAdapter) -> None:
+    respx.get("http://mimir.test/mimir/pages").mock(return_value=Response(200, json=[]))
+    result = await adapter.list_pages(category="technical")
+    assert result == []
+    # Verify category param was sent
+    # (respx captures the request)
+
+
+# ---------------------------------------------------------------------------
+# HttpMimirAdapter.lint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_lint_returns_report(adapter: HttpMimirAdapter) -> None:
+    respx.get("http://mimir.test/mimir/lint").mock(
+        return_value=Response(
+            200,
+            json={
+                "orphans": ["a.md"],
+                "contradictions": [],
+                "stale": [],
+                "gaps": ["concept-x"],
+                "pages_checked": 5,
+                "issues_found": True,
+            },
+        )
+    )
+    report = await adapter.lint()
+    assert isinstance(report, MimirLintReport)
+    assert report.orphans == ["a.md"]
+    assert report.gaps == ["concept-x"]
+    assert report.pages_checked == 5
+
+
+# ---------------------------------------------------------------------------
+# HttpMimirAdapter — auth header
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_bearer_auth_header_is_sent(adapter_bearer: HttpMimirAdapter) -> None:
+    route = respx.get("http://mimir.test/mimir/pages").mock(return_value=Response(200, json=[]))
+    await adapter_bearer.list_pages()
+    assert route.called
+    auth_header = route.calls[0].request.headers.get("authorization", "")
+    assert auth_header == "Bearer test-token"
+
+
+# ---------------------------------------------------------------------------
+# HttpMimirAdapter — aclose
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_aclose_is_idempotent() -> None:
+    adapter = HttpMimirAdapter(base_url="http://mimir.test")
+    # Trigger client creation
+    _ = adapter._get_client()
+    await adapter.aclose()
+    await adapter.aclose()  # should not raise

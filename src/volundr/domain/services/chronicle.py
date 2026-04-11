@@ -27,12 +27,43 @@ from .session import SessionNotFoundError, SessionService
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 class ChronicleNotFoundError(Exception):
     """Raised when a chronicle is not found."""
 
     def __init__(self, chronicle_id: UUID):
         self.chronicle_id = chronicle_id
         super().__init__(f"Chronicle not found: {chronicle_id}")
+
+
+def _detect_git_info(path: str) -> dict[str, str]:
+    """Detect git remote, branch, and project name from a local path.
+
+    Uses GitPython to inspect the repo. Returns empty dict if not a git repo.
+    """
+    result: dict[str, str] = {}
+    try:
+        from git import InvalidGitRepositoryError, Repo
+
+        repo = Repo(path, search_parent_directories=True)
+
+        try:
+            result["branch"] = repo.active_branch.name
+        except TypeError:
+            # Detached HEAD
+            pass
+
+        if repo.remotes:
+            url = repo.remotes[0].url
+            result["remote"] = url
+            result["project"] = url.rstrip("/").split("/")[-1].replace(".git", "")
+    except (InvalidGitRepositoryError, Exception):
+        pass
+    return result
 
 
 class ChronicleService:
@@ -59,22 +90,34 @@ class ChronicleService:
         if session is None:
             raise SessionNotFoundError(session_id)
 
-        # Derive project name from repo URL
-        project = session.repo.rstrip("/").split("/")[-1].replace(".git", "")
+        # Derive project/repo/branch from source type
+        from volundr.domain.models import LocalMountSource
+
+        if isinstance(session.source, LocalMountSource) and session.source.local_path:
+            local_path = session.source.local_path
+            git_info = _detect_git_info(local_path)
+            dir_name = local_path.rstrip("/").split("/")[-1]
+            project = git_info.get("project") or dir_name or session.name
+            repo = git_info.get("remote") or local_path
+            branch = git_info.get("branch") or "local"
+        else:
+            repo = session.repo or session.name
+            branch = session.branch or "main"
+            project = repo.rstrip("/").split("/")[-1].replace(".git", "") or session.name
 
         config_snapshot = {
             "name": session.name,
             "model": session.model,
-            "repo": session.repo,
-            "branch": session.branch,
+            "repo": repo,
+            "branch": branch,
         }
 
         chronicle = Chronicle(
             session_id=session_id,
             status=ChronicleStatus.DRAFT,
             project=project,
-            repo=session.repo,
-            branch=session.branch,
+            repo=repo,
+            branch=branch,
             model=session.model,
             config_snapshot=config_snapshot,
             token_usage=session.tokens_used,
@@ -83,9 +126,9 @@ class ChronicleService:
         created = await self._chronicle_repository.create(chronicle)
         logger.info(
             "Chronicle created: id=%s, session=%s, project=%s",
-            created.id,
-            session_id,
-            project,
+            _sanitize_log(created.id),
+            _sanitize_log(session_id),
+            _sanitize_log(project),
         )
         return created
 
@@ -144,14 +187,14 @@ class ChronicleService:
 
         updated = chronicle.model_copy(update=updates)
         result = await self._chronicle_repository.update(updated)
-        logger.info("Chronicle updated: id=%s", chronicle_id)
+        logger.info("Chronicle updated: id=%s", _sanitize_log(chronicle_id))
         return result
 
     async def delete_chronicle(self, chronicle_id: UUID) -> bool:
         """Delete a chronicle."""
         deleted = await self._chronicle_repository.delete(chronicle_id)
         if deleted:
-            logger.info("Chronicle deleted: id=%s", chronicle_id)
+            logger.info("Chronicle deleted: id=%s", _sanitize_log(chronicle_id))
         return deleted
 
     async def create_or_update_from_broker(
@@ -188,8 +231,8 @@ class ChronicleService:
             result = await self._chronicle_repository.update(updated)
             logger.info(
                 "Chronicle enriched from broker: id=%s, session=%s",
-                result.id,
-                session_id,
+                _sanitize_log(result.id),
+                _sanitize_log(session_id),
             )
             return result
 
@@ -213,8 +256,8 @@ class ChronicleService:
 
         logger.info(
             "Chronicle created from broker: id=%s, session=%s",
-            chronicle.id,
-            session_id,
+            _sanitize_log(chronicle.id),
+            _sanitize_log(session_id),
         )
         return chronicle
 
@@ -242,8 +285,8 @@ class ChronicleService:
 
         logger.info(
             "Session reforged: chronicle=%s -> session=%s",
-            chronicle_id,
-            session.id,
+            _sanitize_log(chronicle_id),
+            _sanitize_log(session.id),
         )
         return session
 
@@ -263,8 +306,8 @@ class ChronicleService:
         stored = await self._timeline_repository.add_event(event)
         logger.info(
             "Timeline event added: session=%s, type=%s, t=%d",
-            session_id,
-            event.type.value,
+            _sanitize_log(session_id),
+            _sanitize_log(event.type.value),
             event.t,
         )
 

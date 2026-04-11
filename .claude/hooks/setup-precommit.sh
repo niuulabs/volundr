@@ -6,14 +6,6 @@ set -e
 
 cd "$CLAUDE_PROJECT_DIR"
 
-# ── PATH setup ───────────────────────────────────────────────────
-# Ensure GOPATH/bin is in PATH so `go install` binaries are found
-# by pre-commit hooks (which run via bash -c with a clean PATH).
-GOBIN="${GOPATH:-$HOME/go}/bin"
-if [[ ":$PATH:" != *":$GOBIN:"* ]]; then
-    export PATH="$GOBIN:$PATH"
-fi
-
 # Use python -m pre_commit to avoid PATH issues with pip-installed binaries
 _pre_commit() {
     python -m pre_commit "$@"
@@ -27,24 +19,19 @@ if ! python -c "import pre_commit" &> /dev/null; then
     pip install pre-commit==4.5.1 --quiet
 fi
 
-# ruff (Python linter + formatter)
+# ruff (Python linter + formatter) — version pinned for reproducibility
 if ! command -v ruff &> /dev/null; then
     echo "Installing ruff..."
-    pip install ruff --quiet
+    pip install ruff==0.11.2 --quiet
 fi
 
-# golangci-lint (Go linter)
-if ! command -v golangci-lint &> /dev/null; then
-    echo "Installing golangci-lint..."
-    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-fi
-
-# trufflehog (secret scanner) — installed via release binary because
-# go install fails due to replace directives in trufflehog's go.mod.
+# trufflehog (secret scanner) — pinned to specific release, not main branch
 if ! command -v trufflehog &> /dev/null; then
     echo "Installing trufflehog..."
-    curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
-        | sh -s -- -b "$GOBIN"
+    TRUFFLEHOG_VERSION="v3.88.1"
+    TRUFFLEHOG_BIN="${GOPATH:-$HOME/go}/bin"
+    curl -sSfL "https://raw.githubusercontent.com/trufflesecurity/trufflehog/${TRUFFLEHOG_VERSION}/scripts/install.sh" \
+        | sh -s -- -b "$TRUFFLEHOG_BIN" "${TRUFFLEHOG_VERSION}"
 fi
 
 # web dependencies (prettier, eslint)

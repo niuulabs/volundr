@@ -1,0 +1,33 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "mimir.fullname" . }}
+  labels:
+    {{- include "mimir.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if or (and (kindIs "bool" .Values.ingress.tls) .Values.ingress.tls) (and (kindIs "map" .Values.ingress.tls) .Values.ingress.tls.enabled) }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      secretName: {{ if and (kindIs "map" .Values.ingress.tls) .Values.ingress.tls.secretName }}{{ .Values.ingress.tls.secretName }}{{ else }}{{ include "mimir.fullname" . }}-tls{{ end }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /mimir
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "mimir.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

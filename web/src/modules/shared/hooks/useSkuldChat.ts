@@ -68,6 +68,36 @@ interface CliStreamEvent {
   input?: Record<string, unknown>;
 }
 
+export interface TransportCapabilities {
+  readonly send_message: boolean;
+  readonly cli_websocket: boolean;
+  readonly session_resume: boolean;
+  readonly interrupt: boolean;
+  readonly set_model: boolean;
+  readonly set_thinking_tokens: boolean;
+  readonly set_permission_mode: boolean;
+  readonly rewind_files: boolean;
+  readonly mcp_set_servers: boolean;
+  readonly permission_requests: boolean;
+  readonly slash_commands: boolean;
+  readonly skills: boolean;
+}
+
+export const DEFAULT_CAPABILITIES: TransportCapabilities = {
+  send_message: true,
+  cli_websocket: false,
+  session_resume: false,
+  interrupt: false,
+  set_model: false,
+  set_thinking_tokens: false,
+  set_permission_mode: false,
+  rewind_files: false,
+  mcp_set_servers: false,
+  permission_requests: false,
+  slash_commands: false,
+  skills: false,
+};
+
 export type ChatMessageRole = 'user' | 'assistant' | 'system';
 
 export type SkuldChatMessagePart =
@@ -209,6 +239,7 @@ interface UseSkuldChatReturn {
   historyLoaded: boolean;
   pendingPermissions: readonly PermissionRequest[];
   availableCommands: readonly SlashCommand[];
+  capabilities: TransportCapabilities;
   sendMessage: (
     text: string,
     attachments?: ContentBlock[],
@@ -257,6 +288,7 @@ export function useSkuldChat(
   const [isRunning, setIsRunning] = useState(false);
   const [pendingPermissions, setPendingPermissions] = useState<PermissionRequest[]>([]);
   const [availableCommands, setAvailableCommands] = useState<SlashCommand[]>([]);
+  const [capabilities, setCapabilities] = useState<TransportCapabilities>(DEFAULT_CAPABILITIES);
   // Track which URL we've loaded history for. When the URL changes,
   // historyLoadedForUrl will no longer match, triggering a re-fetch.
   const [historyLoadedForUrl, setHistoryLoadedForUrl] = useState<string | null>(null);
@@ -285,7 +317,8 @@ export function useSkuldChat(
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    fetch(`${httpBase}/api/conversation/history`, { headers })
+    const historyUrl = new URL('/api/conversation/history', httpBase);
+    fetch(historyUrl.href, { headers })
       .then(res => res.json())
       .then(data => {
         if (cancelled) return;
@@ -718,6 +751,26 @@ export function useSkuldChat(
           continue;
         }
 
+        // ── capabilities: update transport capabilities ──
+        if (eventType === 'capabilities') {
+          const caps = event as unknown as Record<string, unknown>;
+          setCapabilities({
+            send_message: caps.send_message !== false,
+            cli_websocket: caps.cli_websocket === true,
+            session_resume: caps.session_resume === true,
+            interrupt: caps.interrupt === true,
+            set_model: caps.set_model === true,
+            set_thinking_tokens: caps.set_thinking_tokens === true,
+            set_permission_mode: caps.set_permission_mode === true,
+            rewind_files: caps.rewind_files === true,
+            mcp_set_servers: caps.mcp_set_servers === true,
+            permission_requests: caps.permission_requests === true,
+            slash_commands: caps.slash_commands === true,
+            skills: caps.skills === true,
+          });
+          continue;
+        }
+
         // ── user_confirmed: broker echo confirming message reached session ──
         if (eventType === 'user_confirmed') {
           // The broker confirmed the message was sent to the CLI.
@@ -954,6 +1007,7 @@ export function useSkuldChat(
   const stableMessages = useMemo(() => messages, [messages]);
   const stablePermissions = useMemo(() => pendingPermissions, [pendingPermissions]);
   const stableCommands = useMemo(() => availableCommands, [availableCommands]);
+  const stableCapabilities = useMemo(() => capabilities, [capabilities]);
 
   return {
     messages: stableMessages,
@@ -962,6 +1016,7 @@ export function useSkuldChat(
     historyLoaded,
     pendingPermissions: stablePermissions,
     availableCommands: stableCommands,
+    capabilities: stableCapabilities,
     sendMessage,
     respondToPermission,
     sendInterrupt,

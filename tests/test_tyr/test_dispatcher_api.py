@@ -30,6 +30,7 @@ from tyr.ports.event_bus import TyrEvent
 _DEFAULT_RUNNING = True
 _DEFAULT_THRESHOLD = 0.75
 _DEFAULT_MAX_CONCURRENT_RAIDS = 3
+_DEFAULT_AUTO_CONTINUE = False
 
 
 class MockDispatcherRepo(DispatcherRepository):
@@ -47,6 +48,7 @@ class MockDispatcherRepo(DispatcherRepository):
             running=_DEFAULT_RUNNING,
             threshold=_DEFAULT_THRESHOLD,
             max_concurrent_raids=_DEFAULT_MAX_CONCURRENT_RAIDS,
+            auto_continue=_DEFAULT_AUTO_CONTINUE,
             updated_at=datetime.now(UTC),
         )
         self.states[owner_id] = state
@@ -54,7 +56,7 @@ class MockDispatcherRepo(DispatcherRepository):
 
     async def update(self, owner_id: str, **fields: object) -> DispatcherState:
         current = await self.get_or_create(owner_id)
-        allowed = {"running", "threshold", "max_concurrent_raids"}
+        allowed = {"running", "threshold", "max_concurrent_raids", "auto_continue"}
         updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
         if not updates:
             return current
@@ -64,6 +66,7 @@ class MockDispatcherRepo(DispatcherRepository):
             running=updates.get("running", current.running),
             threshold=updates.get("threshold", current.threshold),
             max_concurrent_raids=updates.get("max_concurrent_raids", current.max_concurrent_raids),
+            auto_continue=updates.get("auto_continue", current.auto_continue),
             updated_at=datetime.now(UTC),
         )
         self.states[owner_id] = new_state
@@ -114,6 +117,7 @@ class TestGetDispatcherState:
         assert data["running"] is True
         assert data["threshold"] == 0.75
         assert data["max_concurrent_raids"] == 3
+        assert data["auto_continue"] is False
         assert "id" in data
         assert "updated_at" in data
 
@@ -125,6 +129,7 @@ class TestGetDispatcherState:
             running=False,
             threshold=0.5,
             max_concurrent_raids=5,
+            auto_continue=True,
             updated_at=datetime.now(UTC),
         )
         mock_repo.states["user-1"] = existing
@@ -195,6 +200,19 @@ class TestPatchDispatcherState:
         assert resp.status_code == 200
         assert resp.json()["max_concurrent_raids"] == 10
 
+    def test_updates_auto_continue(self, client: TestClient):
+        client.get("/api/v1/tyr/dispatcher", headers=_auth_headers())
+
+        resp = client.patch(
+            "/api/v1/tyr/dispatcher",
+            json={"auto_continue": True},
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["auto_continue"] is True
+        assert data["running"] is True  # unchanged
+
     def test_validates_threshold_range_too_high(self, client: TestClient):
         resp = client.patch(
             "/api/v1/tyr/dispatcher",
@@ -240,11 +258,17 @@ class TestPatchDispatcherState:
         assert data["running"] is True
         assert data["threshold"] == 0.75
         assert data["max_concurrent_raids"] == 3
+        assert data["auto_continue"] is False
 
     def test_multiple_fields_at_once(self, client: TestClient):
         resp = client.patch(
             "/api/v1/tyr/dispatcher",
-            json={"running": False, "threshold": 0.6, "max_concurrent_raids": 7},
+            json={
+                "running": False,
+                "threshold": 0.6,
+                "max_concurrent_raids": 7,
+                "auto_continue": True,
+            },
             headers=_auth_headers(),
         )
         assert resp.status_code == 200
@@ -252,6 +276,7 @@ class TestPatchDispatcherState:
         assert data["running"] is False
         assert data["threshold"] == 0.6
         assert data["max_concurrent_raids"] == 7
+        assert data["auto_continue"] is True
 
 
 # -------------------------------------------------------------------
@@ -271,6 +296,7 @@ def _make_row(
     running: bool = True,
     threshold: float = 0.8,
     max_concurrent_raids: int = 5,
+    auto_continue: bool = False,
     updated_at: datetime | None = None,
 ) -> _FakeRow:
     return _FakeRow(
@@ -279,6 +305,7 @@ def _make_row(
         running=running,
         threshold=threshold,
         max_concurrent_raids=max_concurrent_raids,
+        auto_continue=auto_continue,
         updated_at=updated_at or datetime.now(UTC),
     )
 
@@ -294,6 +321,7 @@ class TestPostgresDispatcherRepository:
         assert state.running is True
         assert state.threshold == 0.8
         assert state.max_concurrent_raids == 5
+        assert state.auto_continue is False
 
     def test_row_to_state_null_updated_at(self):
         from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
@@ -417,7 +445,7 @@ class TestGetActivityLog:
             TyrEvent(event="session.stopped", data={"session_id": "s1"}, owner_id="user-1"),
         ]
         for e in events:
-            asyncio.get_event_loop().run_until_complete(event_bus.emit(e))
+            asyncio.run(event_bus.emit(e))
 
         resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
         assert resp.status_code == 200
@@ -432,9 +460,7 @@ class TestGetActivityLog:
         import asyncio
 
         for i in range(10):
-            asyncio.get_event_loop().run_until_complete(
-                event_bus.emit(TyrEvent(event="session.spawned", data={"i": i}))
-            )
+            asyncio.run(event_bus.emit(TyrEvent(event="session.spawned", data={"i": i})))
 
         resp = client.get("/api/v1/tyr/dispatcher/log?n=3", headers=_auth_headers())
         assert resp.status_code == 200
@@ -453,7 +479,7 @@ class TestGetActivityLog:
             data={"msg": "dispatched"},
             owner_id="user-1",
         )
-        asyncio.get_event_loop().run_until_complete(event_bus.emit(e))
+        asyncio.run(event_bus.emit(e))
 
         resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
         assert resp.status_code == 200
@@ -481,9 +507,7 @@ class TestGetActivityLog:
 
         # Emit 50 events — all should be returned with default n=100
         for i in range(50):
-            asyncio.get_event_loop().run_until_complete(
-                event_bus.emit(TyrEvent(event="session.spawned", data={"i": i}))
-            )
+            asyncio.run(event_bus.emit(TyrEvent(event="session.spawned", data={"i": i})))
 
         resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
         assert resp.status_code == 200

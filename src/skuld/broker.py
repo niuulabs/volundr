@@ -8,6 +8,7 @@ Supports two transport modes (selected via config):
 import asyncio
 import base64
 import collections
+import inspect
 import json
 import logging
 import os
@@ -27,6 +28,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from niuu.domain.logging import LoggingConfig
+from niuu.utils import import_class
 from skuld.channels import (
     ChannelRegistry,
     TelegramChannel,
@@ -39,12 +41,7 @@ from skuld.service_manager import (
     ServiceManager,
     ServiceStatus,
 )
-from skuld.transport import (
-    CLITransport,
-    CodexSubprocessTransport,
-    SdkWebSocketTransport,
-    SubprocessTransport,
-)
+from skuld.transport import CLITransport
 
 # ---------------------------------------------------------------------------
 # In-memory log buffer (Part 2: Pod Log Retrieval)
@@ -94,6 +91,11 @@ def _configure_logging() -> None:
 
 _configure_logging()
 logger = logging.getLogger("skuld.broker")
+
+
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
 
 # ---------------------------------------------------------------------------
@@ -484,43 +486,49 @@ class Broker:
         self._pending_assistant_parts = []
         self._pending_reasoning_text = ""
 
-    def _create_transport(self) -> CLITransport:
-        """Create the configured CLI transport.
+    def _build_transport_kwargs(self) -> dict:
+        """Return superset of kwargs that any transport constructor might need."""
+        return {
+            "workspace_dir": self.workspace_dir,
+            "model": self.model,
+            "sdk_port": self._settings.port,
+            "session_id": self.session_id,
+            "skip_permissions": self._settings.skip_permissions,
+            "agent_teams": self._settings.agent_teams,
+            "system_prompt": self._settings.session.system_prompt,
+            "initial_prompt": self._settings.session.initial_prompt,
+        }
 
-        Dispatch order:
-        1. cli_type selects the CLI backend ("claude" or "codex")
-        2. For Claude, transport selects the protocol ("sdk" or "subprocess")
+    def _create_transport(self) -> CLITransport:
+        """Create the configured CLI transport via dynamic import.
+
+        Uses ``transport_adapter`` from settings (a fully-qualified class path).
+        Legacy ``cli_type`` / ``transport`` fields are resolved to the correct
+        adapter path by the config validator before this method is called.
         """
-        match self._settings.cli_type:
-            case "codex":
-                logger.info("Using CodexSubprocessTransport (model: %s)", self.model)
-                return CodexSubprocessTransport(
-                    workspace_dir=self.workspace_dir,
-                    model=self.model,
-                )
-            case _:
-                # Default: Claude Code
-                match self._settings.transport:
-                    case "subprocess":
-                        logger.info("Using SubprocessTransport (Claude legacy)")
-                        return SubprocessTransport(self.workspace_dir)
-                    case _:
-                        logger.info("Using SdkWebSocketTransport (Claude SDK)")
-                        return SdkWebSocketTransport(
-                            workspace_dir=self.workspace_dir,
-                            sdk_port=self._settings.port,
-                            session_id=self.session_id,
-                            model=self.model,
-                            skip_permissions=self._settings.skip_permissions,
-                            agent_teams=self._settings.agent_teams,
-                            system_prompt=self._settings.session.system_prompt,
-                            initial_prompt=self._settings.session.initial_prompt,
-                        )
+        adapter_path = self._settings.transport_adapter
+        if "." not in adapter_path:
+            raise ValueError(
+                f"Invalid transport_adapter '{adapter_path}': "
+                "must be a fully-qualified class path "
+                "(e.g. 'skuld.transports.sdk_websocket.SdkWebSocketTransport')"
+            )
+
+        try:
+            cls = import_class(adapter_path)
+        except (ImportError, AttributeError) as exc:
+            raise ValueError(f"Cannot load transport adapter '{adapter_path}': {exc}") from exc
+
+        kwargs = self._build_transport_kwargs()
+        sig = inspect.signature(cls)
+        filtered = {k: v for k, v in kwargs.items() if k in sig.parameters}
+        logger.info("Using %s (adapter: %s)", cls.__name__, adapter_path)
+        return cls(**filtered)
 
     async def startup(self) -> None:
         """Initialize the broker on startup."""
         logger.info("Broker starting for session %s", self.session_id)
-        logger.info("Transport: %s", self._settings.transport)
+        logger.info("Transport adapter: %s", self._settings.transport_adapter)
 
         if self.volundr_api_url:
             logger.info("Token usage reporting enabled: %s", self.volundr_api_url)
@@ -846,7 +854,22 @@ class Broker:
                     )
                 )
 
-    async def _dispatch_browser_message(self, data: dict) -> None:
+    # Maps control message types to the TransportCapabilities field that
+    # must be True for the control to be forwarded.
+    _CONTROL_CAPABILITY_MAP: dict[str, str] = {
+        "interrupt": "interrupt",
+        "set_model": "set_model",
+        "set_max_thinking_tokens": "set_thinking_tokens",
+        "set_permission_mode": "set_permission_mode",
+        "rewind_files": "rewind_files",
+        "mcp_set_servers": "mcp_set_servers",
+    }
+
+    async def _dispatch_browser_message(
+        self,
+        data: dict,
+        sender_ws: WebSocket | None = None,
+    ) -> None:
         """Route a browser WebSocket message to the appropriate handler."""
         if not self._transport:
             logger.warning("_dispatch_browser_message: transport is None, dropping message")
@@ -855,9 +878,18 @@ class Broker:
         msg_type = data.get("type")
         logger.info(
             "_dispatch_browser_message: type=%s, transport_alive=%s",
-            msg_type,
+            _sanitize_log(msg_type),
             self._transport.is_alive,
         )
+
+        # Guard: reject control messages the transport does not support.
+        cap_field = self._CONTROL_CAPABILITY_MAP.get(msg_type or "")
+        if cap_field and not getattr(self._transport.capabilities, cap_field):
+            error_msg = f"{msg_type} not supported by this transport"
+            logger.warning("_dispatch_browser_message: %s", _sanitize_log(error_msg))
+            if sender_ws:
+                await sender_ws.send_json({"type": "error", "content": error_msg})
+            return
 
         match msg_type:
             # Phase 2: permission response from browser
@@ -1380,7 +1412,7 @@ class Broker:
         self._user_claims = _decode_jwt_claims(token)
 
         user_id = self._user_claims.get("sub", "unknown")
-        logger.info("JWT updated from WebSocket connection (sub=%s)", user_id)
+        logger.info("JWT updated from WebSocket connection (sub=%s)", _sanitize_log(user_id))
 
         # Propagate new auth headers to the chronicle watcher
         if self._chronicle_watcher is not None:
@@ -1434,6 +1466,13 @@ class Broker:
             )
             logger.debug("handle_websocket: welcome message sent")
 
+            # Send transport capabilities so the frontend knows which
+            # controls to render.
+            if self._transport:
+                caps = {"type": "capabilities", **asdict(self._transport.capabilities)}
+                await websocket.send_json(caps)
+                logger.debug("handle_websocket: capabilities sent")
+
             # Replay conversation history so late-joining browsers see
             # earlier messages (including the initial prompt)
             if self._conversation_turns:
@@ -1453,12 +1492,12 @@ class Broker:
                 data = await websocket.receive_json()
                 logger.debug(
                     "handle_websocket: browser msg: %s",
-                    json.dumps(data)[:500],
+                    _sanitize_log(json.dumps(data)[:500]),
                 )
                 try:
-                    await self._dispatch_browser_message(data)
+                    await self._dispatch_browser_message(data, sender_ws=websocket)
                 except Exception as e:
-                    logger.exception("Error processing browser message: %s", data)
+                    logger.exception("Error processing browser message: %s", _sanitize_log(data))
                     await websocket.send_json({"type": "error", "content": str(e)})
 
         except WebSocketDisconnect:
@@ -1482,11 +1521,11 @@ class Broker:
         """
         logger.info(
             "handle_cli_websocket: incoming CLI connection for session=%s (transport=%s)",
-            session_id,
+            _sanitize_log(session_id),
             type(self._transport).__name__ if self._transport else None,
         )
 
-        if not self._transport or not self._transport.supports_cli_websocket:
+        if not self._transport or not self._transport.capabilities.cli_websocket:
             logger.warning(
                 "CLI WebSocket received but transport %s does not support SDK WebSocket protocol",
                 type(self._transport).__name__ if self._transport else "None",
@@ -1497,8 +1536,8 @@ class Broker:
         if session_id != self.session_id:
             logger.warning(
                 "CLI WebSocket session mismatch: expected %s, got %s",
-                self.session_id,
-                session_id,
+                _sanitize_log(self.session_id),
+                _sanitize_log(session_id),
             )
             await websocket.close(code=1008, reason="Session ID mismatch")
             return
@@ -1617,6 +1656,17 @@ async def get_conversation_history() -> dict:
         "is_active": is_active,
         "last_activity": last_activity,
     }
+
+
+# --- Capabilities API ---
+
+
+@app.get("/api/capabilities")
+async def get_capabilities() -> dict:
+    """Return transport capabilities so the frontend knows which controls to render."""
+    if not broker._transport:
+        raise HTTPException(status_code=503, detail="Transport not initialized")
+    return asdict(broker._transport.capabilities)
 
 
 # --- Service Management API ---
@@ -2020,7 +2070,7 @@ async def get_diff(
 
     if proc.returncode not in (0, 1):
         detail = stderr.decode(errors="replace").strip()
-        logger.warning("git diff failed for %s: %s", file, detail)
+        logger.warning("git diff failed for %s: %s", _sanitize_log(file), _sanitize_log(detail))
         raise HTTPException(502, f"git diff failed: {detail}")
 
     raw = stdout.decode(errors="replace")

@@ -37,6 +37,11 @@ from tyr.ports.volundr import SpawnRequest, VolundrPort
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 # ---------------------------------------------------------------------------
 # Response models
 # ---------------------------------------------------------------------------
@@ -101,6 +106,10 @@ class DecomposeRequest(BaseModel):
     spec: str = Field(min_length=1)
     repo: str = Field(min_length=1)
     model: str = Field(default="")
+
+
+class UpdateSagaRequest(BaseModel):
+    status: str
 
 
 class RaidSpecResponse(BaseModel):
@@ -560,6 +569,49 @@ def create_sagas_router() -> APIRouter:
             ),
         )
 
+    @router.patch("/{saga_id}", response_model=SagaListItem)
+    async def update_saga(
+        saga_id: str,
+        body: UpdateSagaRequest,
+        principal: Principal = Depends(extract_principal),
+        repo: SagaRepository = Depends(resolve_saga_repo),
+        adapters: list[TrackerPort] = Depends(resolve_trackers),
+    ) -> SagaListItem:
+        """Update a saga's status (e.g. archive a completed project)."""
+        try:
+            parsed_id = UUID(saga_id)
+            new_status = SagaStatus(body.status.upper())
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid saga_id or status: {saga_id!r} / {body.status!r}",
+            )
+
+        saga = await repo.get_saga(parsed_id, owner_id=principal.user_id)
+        if saga is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Saga not found: {saga_id}",
+            )
+
+        await repo.update_saga_status(parsed_id, new_status)
+
+        project = await _find_project(saga.tracker_id, adapters)
+        return SagaListItem(
+            id=str(saga.id),
+            tracker_id=saga.tracker_id,
+            tracker_type=saga.tracker_type,
+            slug=saga.slug,
+            name=project.name if project else saga.name,
+            repos=saga.repos,
+            feature_branch=saga.feature_branch,
+            status=project.status if project else new_status.value,
+            progress=project.progress if project else 0.0,
+            milestone_count=project.milestone_count if project else 0,
+            issue_count=project.issue_count if project else 0,
+            url=project.url if project else "",
+        )
+
     @router.delete("/{saga_id}", status_code=204)
     async def delete_saga(
         saga_id: str,
@@ -652,12 +704,12 @@ def create_sagas_router() -> APIRouter:
         # 1. Create saga in tracker — this MUST succeed or we abort
         tracker_type = type(tracker).__name__
         try:
-            tracker_saga_id = await tracker.create_saga(
-                saga, description=body.description
-            )
+            tracker_saga_id = await tracker.create_saga(saga, description=body.description)
         except Exception as exc:
             logger.error(
-                "Tracker create_saga failed for slug=%s", body.slug, exc_info=True
+                "Tracker create_saga failed for slug=%s",
+                _sanitize_log(body.slug),
+                exc_info=True,
             )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
@@ -685,9 +737,7 @@ def create_sagas_router() -> APIRouter:
             )
 
             try:
-                tracker_phase_id = await tracker.create_phase(
-                    phase, project_id=saga.tracker_id
-                )
+                tracker_phase_id = await tracker.create_phase(phase, project_id=saga.tracker_id)
             except Exception as exc:
                 logger.error(
                     "Tracker create_phase failed for phase=%s", phase_spec.name, exc_info=True
@@ -774,7 +824,7 @@ def create_sagas_router() -> APIRouter:
             try:
                 await git.create_branch(repo, feature_branch, base=body.base_branch)
             except Exception:
-                msg = f"Failed to create branch '{feature_branch}' in {repo}"
+                msg = f"Failed to create branch '{feature_branch}' in {_sanitize_log(repo)}"
                 logger.warning(msg, exc_info=True)
                 warnings.append(msg)
 
@@ -787,9 +837,7 @@ def create_sagas_router() -> APIRouter:
                     body.transcript,
                 )
             except Exception:
-                logger.warning(
-                    "Failed to attach transcript for saga %s", saga.slug, exc_info=True
-                )
+                logger.warning("Failed to attach transcript for saga %s", saga.slug, exc_info=True)
 
         return CommittedSagaResponse(
             id=str(saga.id),

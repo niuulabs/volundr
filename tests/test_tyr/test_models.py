@@ -173,7 +173,7 @@ class TestSaga:
             status=SagaStatus.ACTIVE,
             confidence=0.9,
             created_at=NOW,
-        base_branch="dev",
+            base_branch="dev",
         )
         assert saga.tracker_id == "LIN-100"
         assert saga.name == "My Saga"
@@ -194,7 +194,7 @@ class TestSaga:
             status=SagaStatus.ACTIVE,
             confidence=0.5,
             created_at=NOW,
-        base_branch="dev",
+            base_branch="dev",
         )
         with pytest.raises(AttributeError):
             saga.slug = "changed"  # type: ignore[misc]
@@ -266,12 +266,14 @@ class TestDispatcherState:
             running=True,
             threshold=0.7,
             max_concurrent_raids=3,
+            auto_continue=False,
             updated_at=NOW,
         )
         assert state.running is True
         assert state.threshold == 0.7
         assert state.owner_id == "user-1"
         assert state.max_concurrent_raids == 3
+        assert state.auto_continue is False
 
 
 class TestSessionInfo:

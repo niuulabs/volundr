@@ -80,6 +80,7 @@ class StatefulMockTracker(MockTracker):
             if raid.tracker_id == tracker_id:
                 return raid
         from tyr.domain.exceptions import RaidNotFoundError
+
         raise RaidNotFoundError(f"Raid not found: {tracker_id}")
 
     async def get_raid_by_id(self, raid_id: UUID) -> Raid | None:
@@ -316,7 +317,7 @@ def _make_saga() -> Saga:
         status=SagaStatus.ACTIVE,
         confidence=0.0,
         created_at=datetime.now(UTC),
-    base_branch="dev",
+        base_branch="dev",
     )
 
 
@@ -724,6 +725,9 @@ class MockSagaRepository(SagaRepository):
 
     async def delete_saga(self, saga_id, *, owner_id=None) -> bool:
         return False
+
+    async def update_saga_status(self, saga_id, status) -> None:
+        pass
 
 
 # ---------------------------------------------------------------------------

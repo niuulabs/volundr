@@ -12,6 +12,7 @@ Environment variable override format:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -23,10 +24,20 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
-CONFIG_PATHS = [
-    Path("./tyr.yaml"),
-    Path("/etc/tyr/config.yaml"),
-]
+
+# Config file search paths (in order of priority).
+# NIUU_CONFIG env var (set by the CLI --config flag) takes precedence.
+def _config_paths() -> list[Path]:
+    env = os.environ.get("NIUU_CONFIG")
+    if env:
+        return [Path(env)]
+    return [
+        Path("./tyr.yaml"),
+        Path("/etc/tyr/config.yaml"),
+    ]
+
+
+CONFIG_PATHS = _config_paths()
 
 
 class DatabaseConfig(BaseModel):
@@ -56,7 +67,7 @@ class LoggingConfig(BaseModel):
 class VolundrConfig(BaseModel):
     """Volundr API connection configuration."""
 
-    url: str = Field(default="http://localhost:8000")
+    url: str = Field(default="http://localhost:8080")
 
 
 class CredentialStoreConfig(BaseModel):
@@ -453,6 +464,10 @@ class AuthConfig(BaseModel):
             "identity. Must be False in production."
         ),
     )
+    default_user_id: str = Field(
+        default="dev-user",
+        description="User ID for anonymous dev mode fallback.",
+    )
 
 
 class TelegramConfig(BaseModel):
@@ -502,6 +517,39 @@ class LLMConfig(BaseModel):
             "When empty, the built-in DECOMPOSITION_PROMPT in bifrost.py is used."
         ),
     )
+    budget_tokens: int = Field(
+        default=0,
+        description=(
+            "Cumulative token budget per BifrostAdapter instance. "
+            "0 means unlimited. When exceeded, bifrost.quota.exceeded is emitted."
+        ),
+    )
+    quota_warning_threshold: float = Field(
+        default=0.8,
+        description=(
+            "Fraction of budget_tokens at which bifrost.quota.warning is emitted. "
+            "Must be between 0.0 and 1.0. Default: 0.8 (80%)."
+        ),
+    )
+    agent_id: str = Field(
+        default="",
+        description=(
+            "Optional identifier for the agent/saga making LLM calls. "
+            "Used as correlation_id in Sleipnir events."
+        ),
+    )
+
+
+class LinearConfig(BaseModel):
+    """Linear tracker configuration for mini/local mode.
+
+    When api_key is set, a Linear integration is auto-seeded on startup
+    so the tracker factory can resolve it without manual UI setup.
+    Matches the Go CLI's ``linear:`` config block.
+    """
+
+    api_key: str = Field(default="", description="Linear API key.")
+    team_id: str = Field(default="", description="Optional Linear team ID filter.")
 
 
 class TrackerConfig(BaseModel):
@@ -568,6 +616,33 @@ class EventBusConfig(BaseModel):
     kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
+class SleipnirConfig(BaseModel):
+    """Sleipnir platform event bus integration (optional).
+
+    When ``enabled`` is True, Tyr creates a Sleipnir adapter and starts a
+    :class:`~tyr.adapters.sleipnir_event_bridge.TyrSleipnirBridge` that
+    republishes all Tyr events to the platform-wide bus.
+
+    Example YAML::
+
+        sleipnir:
+          enabled: true
+          adapter: "sleipnir.adapters.nats_transport.NatsTransport"
+          kwargs:
+            servers: ["nats://nats:4222"]
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable Sleipnir platform event bus integration.",
+    )
+    adapter: str = Field(
+        default="sleipnir.adapters.in_process.InProcessBus",
+        description="Fully-qualified class path for the Sleipnir adapter.",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+
+
 class NotificationConfig(BaseModel):
     """Notification service configuration."""
 
@@ -606,6 +681,7 @@ class Settings(BaseSettings):
         yaml_file=CONFIG_PATHS,
         yaml_file_encoding="utf-8",
         env_nested_delimiter="__",
+        extra="ignore",
     )
 
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
@@ -619,6 +695,7 @@ class Settings(BaseSettings):
         ]
     )
     git: GitConfig = Field(default_factory=GitConfig)
+    linear: LinearConfig = Field(default_factory=LinearConfig)
     review: ReviewConfig = Field(default_factory=ReviewConfig)
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     dispatch: DispatchConfig = Field(default_factory=DispatchConfig)
@@ -633,6 +710,7 @@ class Settings(BaseSettings):
     events: EventsConfig = Field(default_factory=EventsConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     notification: NotificationConfig = Field(default_factory=NotificationConfig)
+    sleipnir: SleipnirConfig = Field(default_factory=SleipnirConfig)
 
     @classmethod
     def settings_customise_sources(
