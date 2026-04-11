@@ -273,6 +273,36 @@ class TestBuiltinPersonas:
         assert cfg.allowed_tools == []
         assert cfg.forbidden_tools == []
 
+    def test_draft_a_note_exists(self) -> None:
+        cfg = _BUILTIN_PERSONAS["draft-a-note"]
+        assert cfg.name == "draft-a-note"
+        assert cfg.permission_mode == "read-only"
+        assert cfg.iteration_budget == 5
+        assert cfg.llm.thinking_enabled is False
+        assert "mimir_search" in cfg.allowed_tools
+        assert "mimir_read" in cfg.allowed_tools
+        assert "mimir_write" in cfg.allowed_tools
+
+    def test_draft_a_note_forbids_external_tools(self) -> None:
+        cfg = _BUILTIN_PERSONAS["draft-a-note"]
+        assert "bash" in cfg.forbidden_tools
+        assert "web_search" in cfg.forbidden_tools
+        assert "web_fetch" in cfg.forbidden_tools
+        assert "terminal" in cfg.forbidden_tools
+
+    def test_draft_a_note_lower_budget_than_research_agent(self) -> None:
+        draft = _BUILTIN_PERSONAS["draft-a-note"]
+        research = _BUILTIN_PERSONAS["research-agent"]
+        assert draft.iteration_budget < research.iteration_budget
+
+    def test_draft_a_note_system_prompt_mentions_produced_by_thread(self) -> None:
+        cfg = _BUILTIN_PERSONAS["draft-a-note"]
+        assert "produced_by_thread" in cfg.system_prompt_template
+
+    def test_draft_a_note_system_prompt_mentions_notes_path(self) -> None:
+        cfg = _BUILTIN_PERSONAS["draft-a-note"]
+        assert "notes/" in cfg.system_prompt_template
+
     def test_all_builtins_have_system_prompts(self) -> None:
         for name, cfg in _BUILTIN_PERSONAS.items():
             assert cfg.system_prompt_template, f"{name} has empty system_prompt_template"

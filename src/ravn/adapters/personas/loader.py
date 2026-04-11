@@ -127,6 +127,26 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
         llm=PersonaLLMConfig(primary_alias="powerful", thinking_enabled=True),
         iteration_budget=100,
     ),
+    "draft-a-note": PersonaConfig(
+        name="draft-a-note",
+        system_prompt_template=(
+            "You are a note-drafting agent. Your job is to crystallise observations "
+            "and half-formed thoughts into a single, well-structured Mímir page.\n\n"
+            "## Rules\n"
+            "- Write ONE page to Mímir under `notes/{slug}.md`.\n"
+            "- Include `produced_by_thread: true` in the page frontmatter.\n"
+            "- Length: 200–500 words.\n"
+            "- Structure: what the observation is, why it matters, what to do next.\n"
+            "- Do NOT research externally — work only with what is already in context.\n"
+            "- Use `mimir_search` and `mimir_read` to check for related notes first, "
+            "then `mimir_write` to create the page."
+        ),
+        allowed_tools=["mimir_search", "mimir_read", "mimir_write"],
+        forbidden_tools=["bash", "edit_file", "write_file", "terminal", "web_search", "web_fetch"],
+        permission_mode="read-only",
+        llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=False),
+        iteration_budget=5,
+    ),
     "mimir-curator": PersonaConfig(
         name="mimir-curator",
         system_prompt_template=(
