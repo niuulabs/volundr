@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from unittest.mock import patch
-from urllib.parse import urlparse
 
 from ravn.config import (
     AgentConfig,
@@ -31,7 +30,7 @@ class TestAnthropicConfig:
     def test_defaults(self) -> None:
         c = AnthropicConfig()
         assert c.api_key == ""
-        assert urlparse(c.base_url).hostname == "api.anthropic.com"
+        assert c.base_url.startswith("https://api.anthropic.com")
 
 
 class TestAgentConfig:

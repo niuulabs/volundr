@@ -307,7 +307,7 @@ class TestActivityEventHandling:
         )
 
         q = event_bus.subscribe()
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, OWNER_ID)
 
         # Wait for debounced evaluation (delay=0)
         await asyncio.sleep(0.1)
@@ -330,7 +330,7 @@ class TestActivityEventHandling:
             owner_id=OWNER_ID,
         )
 
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, OWNER_ID)
         await asyncio.sleep(0.1)
 
         assert pool.sessions[SESSION_ID]["status"] == "running"
@@ -347,7 +347,7 @@ class TestActivityEventHandling:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id=OWNER_ID,
         )
-        await sub._on_activity_event(idle_event, volundr)
+        await sub._on_activity_event(idle_event, volundr, OWNER_ID)
         assert SESSION_ID in sub._pending_evaluations
 
         # Active event cancels it
@@ -357,7 +357,7 @@ class TestActivityEventHandling:
             metadata={},
             owner_id=OWNER_ID,
         )
-        await sub._on_activity_event(active_event, volundr)
+        await sub._on_activity_event(active_event, volundr, OWNER_ID)
         assert SESSION_ID not in sub._pending_evaluations
         assert pool.sessions[SESSION_ID]["status"] == "running"
 
@@ -373,7 +373,7 @@ class TestActivityEventHandling:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id=OWNER_ID,
         )
-        await sub._on_activity_event(idle_event, volundr)
+        await sub._on_activity_event(idle_event, volundr, OWNER_ID)
 
         tool_event = ActivityEvent(
             session_id=SESSION_ID,
@@ -381,7 +381,7 @@ class TestActivityEventHandling:
             metadata={},
             owner_id=OWNER_ID,
         )
-        await sub._on_activity_event(tool_event, volundr)
+        await sub._on_activity_event(tool_event, volundr, OWNER_ID)
         assert SESSION_ID not in sub._pending_evaluations
 
     @pytest.mark.asyncio
@@ -395,7 +395,7 @@ class TestActivityEventHandling:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id=OWNER_ID,
         )
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, OWNER_ID)
         await asyncio.sleep(0.1)
         # No crash, no transitions
 
@@ -593,7 +593,7 @@ class TestDispatcherPauseFiltering:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id="user-paused",
         )
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, OWNER_ID)
         await asyncio.sleep(0.1)
 
         assert pool.sessions[SESSION_ID]["status"] == "running"
@@ -613,7 +613,7 @@ class TestDispatcherPauseFiltering:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id="user-active",
         )
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, OWNER_ID)
         await asyncio.sleep(0.1)
 
         assert pool.sessions[SESSION_ID]["status"] == "complete"
@@ -639,7 +639,7 @@ class TestFailureDetection:
         )
 
         q = event_bus.subscribe()
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, OWNER_ID)
 
         assert pool.sessions[SESSION_ID]["status"] == "failed"
 
@@ -660,7 +660,7 @@ class TestFailureDetection:
             session_status="failed",
         )
 
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, OWNER_ID)
 
         assert pool.sessions[SESSION_ID]["status"] == "failed"
 
@@ -677,7 +677,7 @@ class TestFailureDetection:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id=OWNER_ID,
         )
-        await sub._on_activity_event(idle_event, volundr)
+        await sub._on_activity_event(idle_event, volundr, OWNER_ID)
         assert SESSION_ID in sub._pending_evaluations
 
         # Session crashes
@@ -688,7 +688,7 @@ class TestFailureDetection:
             owner_id=OWNER_ID,
             session_status="failed",
         )
-        await sub._on_activity_event(fail_event, volundr)
+        await sub._on_activity_event(fail_event, volundr, OWNER_ID)
 
         assert SESSION_ID not in sub._pending_evaluations
         assert pool.sessions[SESSION_ID]["status"] == "failed"
@@ -707,7 +707,7 @@ class TestFailureDetection:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id=OWNER_ID,
         )
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, OWNER_ID)
         await asyncio.sleep(0.1)
 
         assert pool.sessions[SESSION_ID]["status"] == "failed"
@@ -728,7 +728,7 @@ class TestFailureDetection:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id=OWNER_ID,
         )
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, OWNER_ID)
         await asyncio.sleep(0.1)
 
         assert pool.sessions[SESSION_ID]["status"] == "failed"
@@ -745,7 +745,7 @@ class TestFailureDetection:
             owner_id=OWNER_ID,
             session_status="stopped",
         )
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, OWNER_ID)
         # No crash, no transitions
 
     @pytest.mark.asyncio

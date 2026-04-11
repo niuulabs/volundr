@@ -509,10 +509,10 @@ class CronTrigger(TriggerPort):
                             state[record.job_id] = now.isoformat()
                             changed = True
 
-                if changed:
-                    self._save_state(state)
+                    if changed:
+                        self._save_state(state)
 
-                await asyncio.sleep(self._tick)
+                    await asyncio.sleep(self._tick)
             finally:
                 try:
                     fcntl.flock(lock_fd, fcntl.LOCK_UN)

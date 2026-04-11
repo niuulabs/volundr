@@ -670,7 +670,8 @@ def create_router(
             body = await raw_request.json()
             request = AnthropicRequest.model_validate(body)
         except Exception as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            logger.debug("Request validation failed: %s", exc)
+            raise HTTPException(status_code=422, detail="Invalid request body.") from exc
 
         # Resolve permissions once — used by both access control and quota checks.
         agent_perms = config.permissions_for_agent(identity.agent_id)
@@ -886,7 +887,7 @@ def create_router(
                     request=request,
                 )
             )
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            raise HTTPException(status_code=502, detail="Upstream routing failed.") from exc
 
     @api_router.get("/v1/usage")
     async def usage_endpoint(
