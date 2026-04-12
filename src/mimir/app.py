@@ -26,6 +26,7 @@ from fastapi import FastAPI
 
 from mimir.adapters.markdown import MarkdownMimirAdapter
 from mimir.config import MimirServiceConfig
+from mimir.mcp import MimirMcpServer
 from mimir.router import MimirRouter
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,7 @@ def create_app(config: MimirServiceConfig) -> FastAPI:
 
     adapter = MarkdownMimirAdapter(root=config.path, search_port=search_port)
     mimir_router = MimirRouter(adapter=adapter, name=config.name, role=config.role)
+    mcp_server = MimirMcpServer(adapter=adapter, name=config.name)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -124,5 +126,6 @@ def create_app(config: MimirServiceConfig) -> FastAPI:
     )
 
     app.include_router(mimir_router.router, prefix="/mimir")
+    app.include_router(mcp_server.router(), prefix="/mcp")
 
     return app
