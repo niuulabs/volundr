@@ -145,7 +145,8 @@ class TestWebSearchToolExecute:
         tool = WebSearchTool(provider=provider)
         result = await tool.execute({"query": "find me"})
         assert "MyTitle" in result.content
-        assert "https://myurl.io" in result.content
+        content_lines = result.content.splitlines()
+        assert any(line.strip() == "https://myurl.io" for line in content_lines)
         assert "MySummary" in result.content
 
     async def test_uses_tool_default_num_results(self) -> None:

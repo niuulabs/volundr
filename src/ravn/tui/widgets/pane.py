@@ -105,9 +105,7 @@ class PaneHeader(Widget):
         self._view_type = view_type
         self._target = target
         try:
-            self.query_one("#ph-title", Static).update(
-                self._title_markup(active=self._active)
-            )
+            self.query_one("#ph-title", Static).update(self._title_markup(active=self._active))
         except Exception:
             pass
 

@@ -49,6 +49,11 @@ from volundr.domain.services import (
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 _RFC1123_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 
@@ -1291,28 +1296,26 @@ def create_router(
 
         logger.info(
             "Activity report: session=%s state=%s metadata=%s",
-            session_id,
-            data.state,
-            data.metadata,
+            _sanitize_log(session_id),
+            _sanitize_log(data.state),
+            _sanitize_log(data.metadata),
         )
         try:
-            updated = await service.update_activity(
-                session_id, activity_state, data.metadata
-            )
+            updated = await service.update_activity(session_id, activity_state, data.metadata)
             logger.info(
                 "Activity updated: session=%s state=%s broadcaster=%s",
-                session_id,
+                _sanitize_log(session_id),
                 updated.activity_state,
                 service._broadcaster is not None,
             )
         except SessionNotFoundError:
-            logger.warning("Activity report for unknown session: %s", session_id)
+            logger.warning("Activity report for unknown session: %s", _sanitize_log(session_id))
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session not found: {session_id}",
             )
         except Exception:
-            logger.exception("Activity update failed for session %s", session_id)
+            logger.exception("Activity update failed for session %s", _sanitize_log(session_id))
 
     @router.patch(
         "/sessions/{session_id}/archive",
@@ -1536,13 +1539,17 @@ def create_router(
                 response.raise_for_status()
                 return response.json()
         except httpx.HTTPStatusError as e:
-            logger.warning("Log proxy failed for session %s: %s", session_id, e)
+            logger.warning("Log proxy failed for session %s: %s", _sanitize_log(session_id), e)
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Failed to fetch logs from session pod: {e.response.status_code}",
             )
         except httpx.RequestError as e:
-            logger.warning("Log proxy connection failed for session %s: %s", session_id, e)
+            logger.warning(
+                "Log proxy connection failed for session %s: %s",
+                _sanitize_log(session_id),
+                e,
+            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Could not connect to session pod: {e}",
@@ -2217,7 +2224,7 @@ def create_router(
         except httpx.HTTPStatusError as e:
             logger.warning(
                 "Diff proxy failed for session %s: %s",
-                session_id,
+                _sanitize_log(session_id),
                 e,
             )
             raise HTTPException(
@@ -2227,7 +2234,7 @@ def create_router(
         except httpx.RequestError as e:
             logger.warning(
                 "Diff proxy connection failed for session %s: %s",
-                session_id,
+                _sanitize_log(session_id),
                 e,
             )
             raise HTTPException(
@@ -2352,7 +2359,7 @@ def create_router(
                 else:
                     failed.append({"session_id": sid, "error": "Not found"})
             except Exception:
-                logger.error("Failed to delete workspace for session %s", sid)
+                logger.error("Failed to delete workspace for session %s", _sanitize_log(sid))
                 failed.append({"session_id": sid, "error": "Internal error"})
         return {"deleted": deleted, "failed": failed}
 
@@ -2382,7 +2389,7 @@ def create_router(
                 else:
                     failed.append({"session_id": sid, "error": "Not found"})
             except Exception:
-                logger.error("Failed to delete workspace for session %s", sid)
+                logger.error("Failed to delete workspace for session %s", _sanitize_log(sid))
                 failed.append({"session_id": sid, "error": "Internal error"})
         return {"deleted": deleted, "failed": failed}
 

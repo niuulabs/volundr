@@ -138,18 +138,20 @@ class FlokkView(Widget):
             for i, conn in enumerate(conns):
                 widgets.append(_RavnRow(conn, selected=(i == self._selected_idx), idx=i))
         else:
-            widgets.append(Static(
-                "  [#3f3f46]no ravens connected[/]\n"
-                "\n"
-                "  [#52525b]connect a ravn:[/]\n"
-                "  [#3f3f46]:[/][#71717a]connect host:7477[/]\n"
-                "\n"
-                "  [#3f3f46]j/k[/] [#52525b]navigate[/]  "
-                "[#3f3f46]↵[/] [#52525b]open chat[/]\n"
-                "  [#3f3f46]^w v[/] [#52525b]vsplit[/]  "
-                "[#3f3f46]^w s[/] [#52525b]hsplit[/]",
-                classes="fv-empty",
-            ))
+            widgets.append(
+                Static(
+                    "  [#3f3f46]no ravens connected[/]\n"
+                    "\n"
+                    "  [#52525b]connect a ravn:[/]\n"
+                    "  [#3f3f46]:[/][#71717a]connect host:7477[/]\n"
+                    "\n"
+                    "  [#3f3f46]j/k[/] [#52525b]navigate[/]  "
+                    "[#3f3f46]↵[/] [#52525b]open chat[/]\n"
+                    "  [#3f3f46]^w v[/] [#52525b]vsplit[/]  "
+                    "[#3f3f46]^w s[/] [#52525b]hsplit[/]",
+                    classes="fv-empty",
+                )
+            )
 
         scroll.remove_children()
         scroll.mount(*widgets)
@@ -255,8 +257,7 @@ def _build_ravn_markup(conn: Any, selected: bool) -> str:
 
     # Line 1 — rune · dot · name · location
     name_line = (
-        f"{accent}[bold]{rune}[/] {dot} "
-        f"[#fafafa]{display_name}{ghost_mark}[/]{location_mark}"
+        f"{accent}[bold]{rune}[/] {dot} [#fafafa]{display_name}{ghost_mark}[/]{location_mark}"
     )
 
     # Line 2 — iter progress bar or idle/uptime

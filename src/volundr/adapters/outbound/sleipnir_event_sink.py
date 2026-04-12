@@ -106,11 +106,7 @@ class SleipnirEventSink(EventSink):
 
     async def emit_batch(self, events: list[SessionEvent]) -> None:
         """Translate and publish a batch of ``SessionEvent`` records."""
-        sleipnir_events = [
-            mapped
-            for ev in events
-            if (mapped := self._to_sleipnir(ev)) is not None
-        ]
+        sleipnir_events = [mapped for ev in events if (mapped := self._to_sleipnir(ev)) is not None]
         if not sleipnir_events:
             return
         try:

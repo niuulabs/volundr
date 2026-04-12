@@ -33,6 +33,12 @@ from tyr.ports.volundr import VolundrPort
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 # ---------------------------------------------------------------------------
 # Response / request models
 # ---------------------------------------------------------------------------
@@ -306,11 +312,11 @@ def create_raids_router() -> APIRouter:
             try:
                 pr_status = await volundr.get_pr_status(raid.session_id)
                 if pr_status.ci_passed is False:
-                    logger.warning("Approving raid %s with failing CI", raid_id)
+                    logger.warning("Approving raid %s with failing CI", _sanitize_log(raid_id))
             except Exception:
                 logger.warning(
                     "Could not verify CI status for raid %s",
-                    raid_id,
+                    _sanitize_log(raid_id),
                     exc_info=True,
                 )
 
@@ -355,7 +361,11 @@ def create_raids_router() -> APIRouter:
             await tracker.update_raid_state(result.raid.tracker_id, RaidStatus.MERGED)
             await tracker.close_raid(result.raid.tracker_id)
         except Exception:
-            logger.warning("Failed to update tracker for raid %s", raid_id, exc_info=True)
+            logger.warning(
+                "Failed to update tracker for raid %s",
+                _sanitize_log(raid_id),
+                exc_info=True,
+            )
 
         return _raid_response(result.raid)
 
@@ -391,7 +401,11 @@ def create_raids_router() -> APIRouter:
         try:
             await tracker.update_raid_state(result.raid.tracker_id, result.raid.status)
         except Exception:
-            logger.warning("Failed to update tracker for raid %s", raid_id, exc_info=True)
+            logger.warning(
+                "Failed to update tracker for raid %s",
+                _sanitize_log(raid_id),
+                exc_info=True,
+            )
 
         return _raid_response(result.raid, reason=reason)
 
@@ -424,7 +438,11 @@ def create_raids_router() -> APIRouter:
         try:
             await tracker.update_raid_state(result.raid.tracker_id, result.raid.status)
         except Exception:
-            logger.warning("Failed to update tracker for raid %s", raid_id, exc_info=True)
+            logger.warning(
+                "Failed to update tracker for raid %s",
+                _sanitize_log(raid_id),
+                exc_info=True,
+            )
 
         return _raid_response(result.raid)
 
@@ -459,7 +477,11 @@ def create_raids_router() -> APIRouter:
                 detail="Raid has no active session",
             )
         except Exception as exc:
-            logger.warning("Failed to send message to raid %s: %s", raid_id, exc)
+            logger.warning(
+                "Failed to send message to raid %s: %s",
+                _sanitize_log(raid_id),
+                _sanitize_log(exc),
+            )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Session unavailable: {exc}",

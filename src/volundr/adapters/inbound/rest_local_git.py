@@ -110,7 +110,24 @@ def _resolve_workspace(session_id: UUID, sessions_base: str) -> Path:
     Raises HTTPException 404 if the workspace does not exist on the
     local filesystem.
     """
-    workspace = Path(sessions_base) / str(session_id) / "workspace"
+    base = Path(sessions_base).resolve()
+    try:
+        canonical_session_id = UUID(str(session_id))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid session identifier.",
+        ) from None
+    workspace = (base / str(canonical_session_id) / "workspace").resolve()
+
+    try:
+        workspace.relative_to(base)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid workspace path.",
+        ) from None
+
     if not workspace.is_dir():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

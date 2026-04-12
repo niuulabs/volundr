@@ -167,9 +167,7 @@ class TestMimirSourceTrigger:
     @pytest.mark.asyncio
     async def test_poll_once_includes_mount_tag_when_present(self) -> None:
         mimir = AsyncMock()
-        mimir.list_sources = AsyncMock(
-            return_value=[_source_meta(mount_name="gimle-wiki")]
-        )
+        mimir.list_sources = AsyncMock(return_value=[_source_meta(mount_name="gimle-wiki")])
         mimir.read_source = AsyncMock(return_value=_full_source())
         trigger = self._make_trigger(mimir=mimir)
         enqueued: list[AgentTask] = []

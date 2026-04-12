@@ -24,6 +24,11 @@ from volundr.domain.services.tracker_factory import TrackerFactory
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 # --- Request/Response models ---
 
 
@@ -255,8 +260,8 @@ def create_integrations_router(
         saved = await integration_repo.save_connection(connection)
         logger.info(
             "Created integration: type=%s adapter=%s user=%s",
-            data.integration_type,
-            data.adapter,
+            _sanitize_log(data.integration_type),
+            _sanitize_log(data.adapter),
             principal.user_id,
         )
         return IntegrationResponse.from_connection(saved)
@@ -374,7 +379,7 @@ def create_integrations_router(
                 error=f"Test not supported for integration type: {existing.integration_type}",
             )
         except Exception as exc:
-            logger.exception("Integration test failed for %s", connection_id)
+            logger.exception("Integration test failed for %s", _sanitize_log(connection_id))
             return IntegrationTestResult(
                 success=False,
                 provider=existing.adapter.rsplit(".", 1)[-1],

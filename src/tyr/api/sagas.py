@@ -42,6 +42,11 @@ from tyr.ports.volundr import SpawnRequest, VolundrPort
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 # ---------------------------------------------------------------------------
 # Response models
 # ---------------------------------------------------------------------------
@@ -706,7 +711,11 @@ def create_sagas_router() -> APIRouter:
         try:
             tracker_saga_id = await tracker.create_saga(saga, description=body.description)
         except Exception as exc:
-            logger.error("Tracker create_saga failed for slug=%s", body.slug, exc_info=True)
+            logger.error(
+                "Tracker create_saga failed for slug=%s",
+                _sanitize_log(body.slug),
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Failed to create project in tracker: {exc}",
@@ -820,7 +829,7 @@ def create_sagas_router() -> APIRouter:
             try:
                 await git.create_branch(repo, feature_branch, base=body.base_branch)
             except Exception:
-                msg = f"Failed to create branch '{feature_branch}' in {repo}"
+                msg = f"Failed to create branch '{feature_branch}' in {_sanitize_log(repo)}"
                 logger.warning(msg, exc_info=True)
                 warnings.append(msg)
 

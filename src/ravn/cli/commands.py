@@ -49,6 +49,10 @@ approvals_app = typer.Typer(
 )
 app.add_typer(approvals_app, name="approvals")
 
+from ravn.cli.flock import flock_app  # noqa: E402 — must be after app is defined
+
+app.add_typer(flock_app, name="flock")
+
 
 def approvals_main() -> None:
     approvals_app()
@@ -364,6 +368,7 @@ def _build_tools(
     no_tools: bool = False,
     persona_config: Any | None = None,
     profile: str = "default",
+    discovery: Any | None = None,
 ) -> list[Any]:
     """Build the tool list from the built-in registry, filtered by profile.
 
@@ -380,6 +385,17 @@ def _build_tools(
     from ravn.ports.tool import ToolPort
 
     profile_cfg = _get_tool_group(settings, profile)
+
+    # When the persona declares explicit allowed_tools, derive include_groups
+    # from those tool names so only the relevant groups are loaded.
+    if persona_config is not None and getattr(persona_config, "allowed_tools", None):
+        from ravn.config import ToolGroupConfig  # noqa: PLC0415
+
+        profile_cfg = ToolGroupConfig(
+            include_groups=_groups_for_persona(persona_config),
+            include_mcp=profile_cfg.include_mcp,
+        )
+
     include_groups = set(profile_cfg.include_groups)
 
     persona_prefix: str = (
@@ -395,6 +411,7 @@ def _build_tools(
         "memory": memory,
         "iteration_budget": iteration_budget,
         "persona_prefix": persona_prefix,
+        "discovery": discovery,
     }
 
     # Pre-build shared skill port so both skill_list and skill_run reuse one instance
@@ -513,6 +530,28 @@ def _filter_tools(
         tools = [t for t in tools if not _in_groups(t.name, forbidden_groups)]
 
     return tools
+
+
+def _groups_for_persona(persona_config: Any) -> list[str]:
+    """Derive include_groups from a persona's allowed_tools.
+
+    Reverse-maps each allowed tool name/prefix to the groups it belongs to in
+    BUILTIN_TOOLS, so only the groups actually needed by the persona are loaded.
+    ``core`` is always included as a baseline.
+    """
+    from ravn.adapters.tools.builtin_registry import BUILTIN_TOOLS  # noqa: PLC0415
+
+    allowed: set[str] = set(persona_config.allowed_tools or [])
+    forbidden: set[str] = set(persona_config.forbidden_tools or [])
+
+    groups: set[str] = {"core"}
+    for key, tool_def in BUILTIN_TOOLS.items():
+        # Use the same prefix-match logic as _filter_tools
+        if any(key == a or key.startswith(a + "_") for a in allowed):
+            if not any(key == f or key.startswith(f + "_") for f in forbidden):
+                groups.update(tool_def.groups)
+
+    return sorted(groups)
 
 
 # ---------------------------------------------------------------------------
@@ -1759,14 +1798,6 @@ async def _run_daemon(
     from ravn.drive_loop import DriveLoop
     from ravn.ports.channel import ChannelPort
 
-    api_key = settings.effective_api_key()
-    if not api_key:
-        typer.echo(
-            "Error: No API key found. Set ANTHROPIC_API_KEY or configure ravn.yaml.",
-            err=True,
-        )
-        raise typer.Exit(1)
-
     if profile is not None:
         system_prompt, max_iterations, _max_tokens_d = _apply_profile(
             profile, settings, persona_config=persona_config
@@ -1835,13 +1866,16 @@ async def _run_daemon(
             persona_config=resolved_persona,
         )
 
-        # Cascade sub-tasks (task_id set by cascade dispatcher) use the 'worker'
-        # profile: core tools only.  Triggered tasks from the drive loop also
-        # receive a task_id but need the full tool set — use 'default' for those.
-        # Cascade workers are identified by the absence of a task-level persona
-        # (drive-loop triggered tasks always carry one).
-        profile = "worker" if (task_id is not None and not task_persona) else "default"
+        # Determine the profile for this task:
+        #   - Anonymous cascade subtasks (no persona, no task_persona) → "worker" (core only)
+        #   - Tasks on a node with a configured persona → derive include_groups from
+        #     the resolved persona's allowed_tools so the tool set matches exactly
+        #     what the persona permits, regardless of how the task was triggered.
+        #   - Everything else → "default"
+        is_anonymous_cascade = task_id is not None and not task_persona and resolved_persona is None
+        profile = "worker" if is_anonymous_cascade else "default"
         profile_cfg = _get_tool_group(settings, profile)
+
         tools = _build_tools(
             settings,
             workspace,
@@ -1852,6 +1886,7 @@ async def _run_daemon(
             mimir=daemon_mimir,
             persona_config=resolved_persona,
             profile=profile,
+            discovery=_cascade_discovery,
         )
         if profile_cfg.include_mcp:
             tools.extend(_filter_tools(mcp_tools, settings, resolved_persona))
@@ -1945,6 +1980,8 @@ async def _run_daemon(
     event_publisher: EventPublisherPort = NoOpEventPublisher()
     trigger_names: list[str] = []
     drive_loop: Any = None
+    _cascade_mesh: Any = None
+    _cascade_discovery: Any = None
     if settings.initiative.enabled or task_dispatch:
         if settings.sleipnir.enabled:
             event_publisher = RabbitMQEventPublisher(settings.sleipnir)
@@ -1982,7 +2019,14 @@ async def _run_daemon(
 
         # Wire cascade tools when enabled (Mode 1 local + optional mesh/spawn)
         if settings.cascade.enabled:
-            _wire_cascade(drive_loop, settings)
+            _active_profile_name = profile.name if profile else "default"
+            _cascade_mesh, _cascade_discovery = _wire_cascade(
+                drive_loop, settings, persona_config, _active_profile_name
+            )
+            if _cascade_discovery is not None:
+                await _cascade_discovery.start()
+            if _cascade_mesh is not None:
+                await _cascade_mesh.start()
 
         trigger_names = [t.name for t in drive_loop._triggers]
         tasks.append(asyncio.create_task(drive_loop.run(), name="drive_loop"))
@@ -2014,6 +2058,10 @@ async def _run_daemon(
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        if _cascade_mesh is not None:
+            await _cascade_mesh.stop()
+        if _cascade_discovery is not None:
+            await _cascade_discovery.stop()
         await event_publisher.close()
         await _shutdown_mcp(mcp_manager)
 
@@ -2190,7 +2238,34 @@ def _wire_task_dispatch(drive_loop: Any, sleipnir_config: Any) -> None:
     logger.info("task_dispatch: registered ravn.task.dispatch subscription")
 
 
-def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
+def _derive_capabilities(
+    settings: Settings,
+    persona_config: Any | None = None,
+    profile_name: str = "default",
+) -> list[str]:
+    """Derive the capability strings advertised in the mesh peer identity.
+
+    If the active persona has an explicit ``allowed_tools`` list, those group
+    names are used directly (minus any ``forbidden_tools``).  Otherwise the
+    profile's ``include_groups`` are used so that peers without a persona still
+    advertise a meaningful capability set.
+    """
+    if persona_config is not None:
+        allowed = list(getattr(persona_config, "allowed_tools", None) or [])
+        if allowed:
+            forbidden = set(getattr(persona_config, "forbidden_tools", None) or [])
+            return [c for c in allowed if c not in forbidden]
+
+    profile_cfg = _get_tool_group(settings, profile_name)
+    return list(profile_cfg.include_groups)
+
+
+def _wire_cascade(
+    drive_loop: Any,
+    settings: Settings,
+    persona_config: Any | None = None,
+    profile_name: str = "default",
+) -> None:
     """Wire cascade tools and mesh RPC handler onto the drive loop.
 
     This wires up:
@@ -2201,21 +2276,21 @@ def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
     """
     from ravn.adapters.tools.cascade_tools import build_cascade_tools  # noqa: PLC0415
 
-    # Build optional mesh and discovery adapters
+    # Build optional mesh and discovery adapters (discovery first — mesh needs it)
     mesh: Any = None
     discovery: Any = None
 
-    if settings.mesh.enabled if hasattr(settings.mesh, "enabled") else False:
+    if settings.discovery.enabled:
         try:
-            mesh = _build_mesh(settings)
-        except Exception as exc:
-            logger.warning("cascade: failed to build mesh adapter: %s", exc)
-
-    if settings.discovery.enabled if hasattr(settings.discovery, "enabled") else False:
-        try:
-            discovery = _build_discovery(settings)
+            discovery = _build_discovery(settings, persona_config, profile_name)
         except Exception as exc:
             logger.warning("cascade: failed to build discovery adapter: %s", exc)
+
+    if settings.mesh.enabled:
+        try:
+            mesh = _build_mesh(settings, discovery)
+        except Exception as exc:
+            logger.warning("cascade: failed to build mesh adapter: %s", exc)
 
     # Build cascade tools (Mode 1 always; Mode 2/3 when mesh/discovery available)
     cascade_tools = build_cascade_tools(
@@ -2297,36 +2372,105 @@ def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
     if mesh is not None and hasattr(mesh, "set_rpc_handler"):
         mesh.set_rpc_handler(drive_loop.handle_rpc)
 
+    return mesh, discovery
 
-def _build_mesh(settings: Settings) -> Any:
+
+def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
     """Build the mesh adapter from config."""
+    import socket
+
+    from ravn.adapters.mesh.nng_mesh import NngMeshAdapter
+    from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
+
     mesh_cfg = settings.mesh
-    adapter_path = getattr(mesh_cfg, "adapter", "nng")
+    own_peer_id = mesh_cfg.own_peer_id or socket.gethostname()
 
-    adapter_map = {
-        "nng": "ravn.adapters.mesh.nng_mesh.NngMeshAdapter",
-        "sleipnir": "ravn.adapters.mesh.sleipnir_mesh.SleipnirMeshAdapter",
-        "composite": "ravn.adapters.mesh.composite_mesh.CompositeMeshAdapter",
-    }
-    dotted = adapter_map.get(adapter_path, adapter_path)
-    cls = _import_class(dotted)
-    return cls(settings)
+    if mesh_cfg.adapter == "nng":
+        return NngMeshAdapter(
+            config=mesh_cfg.nng,
+            discovery=discovery,
+            own_peer_id=own_peer_id,
+        )
+
+    if mesh_cfg.adapter == "sleipnir":
+        return SleipnirMeshAdapter(
+            sleipnir_config=settings.sleipnir,
+            mesh_sleipnir_config=mesh_cfg.sleipnir,
+            own_peer_id=own_peer_id,
+            discovery=discovery,
+        )
+
+    if mesh_cfg.adapter == "composite":
+        from ravn.adapters.mesh.composite import CompositeMeshAdapter
+
+        preferred = SleipnirMeshAdapter(
+            sleipnir_config=settings.sleipnir,
+            mesh_sleipnir_config=mesh_cfg.sleipnir,
+            own_peer_id=own_peer_id,
+            discovery=discovery,
+        )
+        fallback = NngMeshAdapter(
+            config=mesh_cfg.nng,
+            discovery=discovery,
+            own_peer_id=own_peer_id,
+        )
+        return CompositeMeshAdapter(preferred=preferred, fallback=fallback)
+
+    raise ValueError(f"Unknown mesh adapter: {mesh_cfg.adapter!r}")
 
 
-def _build_discovery(settings: Settings) -> Any:
-    """Build the discovery adapter from config."""
-    disc_cfg = settings.discovery
-    adapter_path = getattr(disc_cfg, "adapter", "mdns")
+def _build_discovery(
+    settings: Settings,
+    persona_config: Any | None = None,
+    profile_name: str = "default",
+) -> Any:
+    """Build the discovery adapter from config, wiring the own identity."""
+    import importlib.metadata
 
-    adapter_map = {
-        "mdns": "ravn.adapters.discovery.mdns.MdnsDiscoveryAdapter",
-        "sleipnir": "ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter",
-        "k8s": "ravn.adapters.discovery.k8s.K8sDiscoveryAdapter",
-        "composite": "ravn.adapters.discovery.composite.CompositeDiscoveryAdapter",
-    }
-    dotted = adapter_map.get(adapter_path, adapter_path)
-    cls = _import_class(dotted)
-    return cls(settings)
+    from ravn.adapters.discovery._identity import (
+        load_or_create_peer_id,
+        load_or_create_realm_key,
+        realm_id_from_key,
+    )
+    from ravn.domain.models import RavnIdentity
+
+    peer_id = settings.mesh.own_peer_id or load_or_create_peer_id()
+    realm_key = load_or_create_realm_key()
+    realm_id = realm_id_from_key(realm_key)
+
+    try:
+        version = importlib.metadata.version("ravn")
+    except Exception:
+        version = "0.0.0"
+
+    # Advertise addresses that remote peers can connect to.
+    # Replace nng wildcard listen address (*) with 127.0.0.1 for same-host meshes.
+    rep_address = settings.mesh.nng.req_rep_address.replace("*", "127.0.0.1")
+    pub_address = settings.mesh.nng.pub_sub_address.replace("*", "127.0.0.1")
+
+    persona_name = (
+        getattr(persona_config, "name", None) or settings.agent.system_prompt[:30] or "ravn"
+    )
+    capabilities = _derive_capabilities(settings, persona_config, profile_name)
+
+    identity = RavnIdentity(
+        peer_id=peer_id,
+        realm_id=realm_id,
+        persona=persona_name,
+        capabilities=capabilities,
+        permission_mode=settings.permission.mode,
+        version=version,
+        rep_address=rep_address,
+        pub_address=pub_address,
+    )
+
+    handshake_port = settings.discovery.mdns.handshake_port
+    return _build_discovery_adapter(
+        settings.discovery.adapter,
+        settings,
+        identity,
+        handshake_port=handshake_port,
+    )
 
 
 @app.command()
@@ -2394,6 +2538,10 @@ async def _run_peers(settings: Settings, *, verbose: bool, force_scan: bool) -> 
 
     await discovery.start()
 
+    # Wait for mDNS announcements from peers to arrive before querying the table.
+    convergence_wait = getattr(settings.discovery.mdns, "convergence_wait_s", 3.0)
+    await asyncio.sleep(convergence_wait)
+
     if force_scan:
         candidates = await discovery.scan()
         typer.echo(f"Scan found {len(candidates)} candidate(s).")
@@ -2412,7 +2560,7 @@ async def _run_peers(settings: Settings, *, verbose: bool, force_scan: bool) -> 
     typer.echo(f"Flock members ({len(verified)}):")
     for pid, peer in sorted(verified.items()):
         caps = ", ".join(peer.capabilities) if peer.capabilities else "—"
-        line = f"  {pid[:8]}  {peer.persona:<20} [{peer.status}]  caps={caps}"
+        line = f"  {pid:<20}  {peer.persona:<20} [{peer.status}]  caps={caps}"
         if verbose:
             rep = peer.rep_address or "—"
             pub = peer.pub_address or "—"
@@ -2435,7 +2583,9 @@ _DISCOVERY_ALIASES: dict[str, str] = {
 _SLEIPNIR_KWARGS_ADAPTERS = {"ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter"}
 
 
-def _build_discovery_adapter(name: str, settings: Settings, identity: Any) -> Any:
+def _build_discovery_adapter(
+    name: str, settings: Settings, identity: Any, *, handshake_port: int = 7482
+) -> Any:
     """Instantiate a discovery adapter by short name or fully-qualified class path.
 
     Single-backend adapters are resolved via dynamic import (dynamic-adapters pattern).
@@ -2449,7 +2599,11 @@ def _build_discovery_adapter(name: str, settings: Settings, identity: Any) -> An
         mdns_cls = _import_class(_DISCOVERY_ALIASES["mdns"])
         sleipnir_cls = _import_class(_DISCOVERY_ALIASES["sleipnir"])
         backends: list[Any] = [
-            mdns_cls(config=settings.discovery, own_identity=identity),
+            mdns_cls(
+                config=settings.discovery,
+                own_identity=identity,
+                handshake_port=handshake_port,
+            ),
             sleipnir_cls(
                 config=settings.discovery,
                 sleipnir_config=settings.sleipnir,
@@ -2462,6 +2616,8 @@ def _build_discovery_adapter(name: str, settings: Settings, identity: Any) -> An
     kwargs: dict[str, Any] = {"config": settings.discovery, "own_identity": identity}
     if fq_class in _SLEIPNIR_KWARGS_ADAPTERS:
         kwargs["sleipnir_config"] = settings.sleipnir
+    if fq_class == _DISCOVERY_ALIASES["mdns"]:
+        kwargs["handshake_port"] = handshake_port
     return cls(**kwargs)
 
 

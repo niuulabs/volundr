@@ -195,8 +195,8 @@ database:
   passwordKey: password
   # -- Username (only if createSecret is true)
   username: ""
-  # -- Password (only if createSecret is true)
-  password: ""
+  # -- Password (only if createSecret is true) — MUST be overridden for production
+  password: "CHANGE_ME"
   # -- Extra secret data
   extraSecretData: {}
   # -- Secret annotations

@@ -371,12 +371,15 @@ class CronTrigger(TriggerPort):
 
     def _acquire_lock(self) -> IO[str] | None:
         """Try to acquire the cron lock.  Returns fd on success, None on failure."""
+        fd = None
         try:
             self._lock_path.parent.mkdir(parents=True, exist_ok=True)
             fd = open(self._lock_path, "w")  # noqa: SIM115
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             return fd
         except (OSError, BlockingIOError):
+            if fd is not None:
+                fd.close()
             return None
 
     # ------------------------------------------------------------------
@@ -437,84 +440,84 @@ class CronTrigger(TriggerPort):
             logger.warning("cron: another instance holds the lock — skipping")
             return
 
-        try:
-            while True:
-                now = datetime.now(UTC)
-                state = self._load_state()
-                changed = False
+        with lock_fd:
+            try:
+                while True:
+                    now = datetime.now(UTC)
+                    state = self._load_state()
+                    changed = False
 
-                # -- Config-defined jobs --
-                for job in self._jobs:
-                    if not self._is_due(job, now, state):
-                        continue
-
-                    task_id = self._make_task_id()
-                    task = AgentTask(
-                        task_id=task_id,
-                        title=job.name,
-                        initiative_context=job.context,
-                        triggered_by=f"cron:{job.name}",
-                        output_mode=job.output_mode,
-                        persona=job.persona,
-                        priority=job.priority,
-                    )
-                    logger.info("cron: firing job %r (task_id=%s)", job.name, task_id)
-                    await enqueue(task)
-                    state[job.name] = now.isoformat()
-                    changed = True
-
-                # -- Store-defined (runtime) jobs --
-                if self._store is not None:
-                    for record in self._store.list():
-                        if not record.enabled:
+                    # -- Config-defined jobs --
+                    for job in self._jobs:
+                        if not self._is_due(job, now, state):
                             continue
-                        canonical = parse_schedule(record.schedule)
-                        if not self._is_due_canonical(canonical, record.job_id, now, state):
-                            continue
-
-                        context = record.context
-                        output_mode = _DELIVERY_TO_OUTPUT_MODE.get(
-                            record.delivery, OutputMode.SILENT
-                        )
-                        # [SILENT] marker overrides delivery to local-only
-                        if context.startswith(_SILENT_MARKER):
-                            context = context[len(_SILENT_MARKER) :].strip()
-                            output_mode = OutputMode.SILENT
-
-                        timestamp_str = now.strftime("%Y%m%dT%H%M%S")
-                        output_path = _OUTPUT_BASE / record.job_id / f"{timestamp_str}.md"
 
                         task_id = self._make_task_id()
                         task = AgentTask(
                             task_id=task_id,
-                            title=record.name,
-                            initiative_context=context,
-                            triggered_by=f"cron:{record.job_id}",
-                            output_mode=output_mode,
-                            persona=record.persona or None,
-                            priority=record.priority,
-                            output_path=output_path,
+                            title=job.name,
+                            initiative_context=job.context,
+                            triggered_by=f"cron:{job.name}",
+                            output_mode=job.output_mode,
+                            persona=job.persona,
+                            priority=job.priority,
                         )
-                        logger.info(
-                            "cron: firing store job %r/%s (task_id=%s)",
-                            record.name,
-                            record.job_id,
-                            task_id,
-                        )
+                        logger.info("cron: firing job %r (task_id=%s)", job.name, task_id)
                         await enqueue(task)
-                        state[record.job_id] = now.isoformat()
+                        state[job.name] = now.isoformat()
                         changed = True
 
-                if changed:
-                    self._save_state(state)
+                    # -- Store-defined (runtime) jobs --
+                    if self._store is not None:
+                        for record in self._store.list():
+                            if not record.enabled:
+                                continue
+                            canonical = parse_schedule(record.schedule)
+                            if not self._is_due_canonical(canonical, record.job_id, now, state):
+                                continue
 
-                await asyncio.sleep(self._tick)
-        finally:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                lock_fd.close()
-            except Exception:
-                pass
+                            context = record.context
+                            output_mode = _DELIVERY_TO_OUTPUT_MODE.get(
+                                record.delivery, OutputMode.SILENT
+                            )
+                            # [SILENT] marker overrides delivery to local-only
+                            if context.startswith(_SILENT_MARKER):
+                                context = context[len(_SILENT_MARKER) :].strip()
+                                output_mode = OutputMode.SILENT
+
+                            timestamp_str = now.strftime("%Y%m%dT%H%M%S")
+                            output_path = _OUTPUT_BASE / record.job_id / f"{timestamp_str}.md"
+
+                            task_id = self._make_task_id()
+                            task = AgentTask(
+                                task_id=task_id,
+                                title=record.name,
+                                initiative_context=context,
+                                triggered_by=f"cron:{record.job_id}",
+                                output_mode=output_mode,
+                                persona=record.persona or None,
+                                priority=record.priority,
+                                output_path=output_path,
+                            )
+                            logger.info(
+                                "cron: firing store job %r/%s (task_id=%s)",
+                                record.name,
+                                record.job_id,
+                                task_id,
+                            )
+                            await enqueue(task)
+                            state[record.job_id] = now.isoformat()
+                            changed = True
+
+                    if changed:
+                        self._save_state(state)
+
+                    await asyncio.sleep(self._tick)
+            finally:
+                try:
+                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                except Exception:
+                    pass
 
 
 # ---------------------------------------------------------------------------

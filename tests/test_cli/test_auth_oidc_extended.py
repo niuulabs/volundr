@@ -216,9 +216,7 @@ class TestOIDCClientLogin:
             redirect = params["redirect_uri"][0]
             redirect_parsed = urlparse(redirect)
 
-            conn = http.client.HTTPConnection(
-                redirect_parsed.hostname, redirect_parsed.port
-            )
+            conn = http.client.HTTPConnection(redirect_parsed.hostname, redirect_parsed.port)
             conn.request(
                 "GET",
                 f"/callback?error=access_denied&error_description=User+denied&state={state}",
@@ -256,9 +254,7 @@ class TestOIDCClientLogin:
             redirect = params["redirect_uri"][0]
             redirect_parsed = urlparse(redirect)
 
-            conn = http.client.HTTPConnection(
-                redirect_parsed.hostname, redirect_parsed.port
-            )
+            conn = http.client.HTTPConnection(redirect_parsed.hostname, redirect_parsed.port)
             conn.request(
                 "GET",
                 f"/callback?code=auth-code-success&state={state}",
@@ -297,9 +293,7 @@ class TestOIDCClientRefreshEdgeCases:
     @pytest.mark.asyncio
     async def test_refresh_no_refresh_token(self, tmp_path: Path) -> None:
         store = CredentialStore(path=tmp_path / "creds")
-        store.store(
-            StoredTokens(access_token="old", refresh_token="", issuer="x")
-        )
+        store.store(StoredTokens(access_token="old", refresh_token="", issuer="x"))
         client = OIDCClient(issuer="x", client_id="cli", credential_store=store)
         result = await client.refresh()
         assert result is None

@@ -28,6 +28,12 @@ from tyr.ports.volundr import VolundrPort
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 TELEGRAM_API = "https://api.telegram.org"
 
 HELP_TEXT = (
@@ -65,7 +71,11 @@ class TelegramReplyClient:
         try:
             await self._client.post(url, json={"chat_id": chat_id, "text": text})
         except Exception:
-            logger.warning("Failed to send Telegram reply to %s", chat_id, exc_info=True)
+            logger.warning(
+                "Failed to send Telegram reply to %s",
+                _sanitize_log(chat_id),
+                exc_info=True,
+            )
 
     async def close(self) -> None:
         await self._client.aclose()

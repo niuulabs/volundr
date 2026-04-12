@@ -117,9 +117,7 @@ class MimirView(Widget):
     def _update_instance_bar(self, suffix: str = "") -> None:
         name = self._current_name
         n = len(self._mimir_urls)
-        switch_hint = (
-            f"  [#3f3f46][tab] {self._instance_idx + 1}/{n}[/]" if n > 1 else ""
-        )
+        switch_hint = f"  [#3f3f46][tab] {self._instance_idx + 1}/{n}[/]" if n > 1 else ""
         if suffix:
             text = f"[#52525b]  {name}  ·  {suffix}[/]{switch_hint}"
         else:
@@ -230,10 +228,7 @@ class MimirView(Widget):
         source_ids: list[str] = page.get("source_ids", [])
         content = str(page.get("content", ""))
 
-        log.write(
-            f"[bold #fafafa]{title}[/]"
-            + (f"  [#52525b]{category}[/]" if category else "")
-        )
+        log.write(f"[bold #fafafa]{title}[/]" + (f"  [#52525b]{category}[/]" if category else ""))
         log.write(f"[#3f3f46]  updated {updated}  ·  {len(source_ids)} source(s)[/]")
         log.write("")
 

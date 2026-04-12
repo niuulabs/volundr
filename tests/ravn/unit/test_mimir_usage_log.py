@@ -35,13 +35,16 @@ class TestLogBasedUsageAdapter:
 
     @pytest.mark.asyncio
     async def test_parse_log_counts_links(self, tmp_path: Path) -> None:
-        self._write_log(tmp_path, """\
+        self._write_log(
+            tmp_path,
+            """\
 ## [2024-01-01] query | cloud infrastructure
 Found results: [AWS Guide](wiki/aws.md) and [GCP Guide](wiki/gcp.md)
 
 ## [2024-01-02] query | kubernetes
 Found: [K8s Basics](wiki/k8s.md)
-""")
+""",
+        )
         adapter = self._make_adapter(tmp_path)
         top = await adapter.top_pages()
         paths = [p for p, _ in top]
@@ -51,13 +54,16 @@ Found: [K8s Basics](wiki/k8s.md)
 
     @pytest.mark.asyncio
     async def test_parse_log_skips_non_query_lines(self, tmp_path: Path) -> None:
-        self._write_log(tmp_path, """\
+        self._write_log(
+            tmp_path,
+            """\
 ## [2024-01-01] index | page listing
 - [Some page](wiki/index.md)
 
 ## [2024-01-02] query | real query
 Results: [Target page](wiki/result.md)
-""")
+""",
+        )
         adapter = self._make_adapter(tmp_path)
         top = await adapter.top_pages()
         paths = [p for p, _ in top]
@@ -83,10 +89,13 @@ Results: [Target page](wiki/result.md)
 
     @pytest.mark.asyncio
     async def test_log_and_session_counts_combined(self, tmp_path: Path) -> None:
-        self._write_log(tmp_path, """\
+        self._write_log(
+            tmp_path,
+            """\
 ## [2024-01-01] query | test
 Found: [Page A](wiki/a.md)
-""")
+""",
+        )
         adapter = self._make_adapter(tmp_path)
         await adapter.record_access("wiki/a.md")  # adds 1 more to log's 1
         top = await adapter.top_pages()

@@ -72,15 +72,15 @@ class RavnProfile:
 
     name: str
     rune: str = "ᚱ"
-    location: str = ""                  # "gimle", "sindri", "iphone", …
-    deployment: str = "ephemeral"       # "k8s" | "systemd" | "pi" | "mobile" | "ephemeral"
+    location: str = ""  # "gimle", "sindri", "iphone", …
+    deployment: str = "ephemeral"  # "k8s" | "systemd" | "pi" | "mobile" | "ephemeral"
 
     # ------------------------------------------------------------------
     # Role reference — points to a PersonaConfig by name
     # ------------------------------------------------------------------
 
     persona: str = "autonomous-agent"
-    system_prompt_extra: str = ""       # injected after persona template, before context
+    system_prompt_extra: str = ""  # injected after persona template, before context
     specialisations: list[str] = field(default_factory=list)  # ["infrastructure", "coding"]
 
     # ------------------------------------------------------------------
@@ -88,16 +88,16 @@ class RavnProfile:
     # (primary model + thinking/tokens are PersonaConfig's responsibility)
     # ------------------------------------------------------------------
 
-    fallback_model: str = ""            # local model for Pi/offline mode
+    fallback_model: str = ""  # local model for Pi/offline mode
 
     # ------------------------------------------------------------------
     # Per-agent infrastructure — subset of what global Settings exposes
     # ------------------------------------------------------------------
 
-    mcp_servers: list[str] = field(default_factory=list)       # named MCP server refs
+    mcp_servers: list[str] = field(default_factory=list)  # named MCP server refs
     gateway_channels: list[str] = field(default_factory=list)  # ["telegram", "skuld"]
-    sleipnir_topics: list[str] = field(default_factory=list)   # event routing-key patterns
-    output_mode: str = "ambient"        # "silent" | "ambient" | "surface"
+    sleipnir_topics: list[str] = field(default_factory=list)  # event routing-key patterns
+    output_mode: str = "ambient"  # "silent" | "ambient" | "surface"
 
     # ------------------------------------------------------------------
     # Knowledge wiring
@@ -110,7 +110,7 @@ class RavnProfile:
     # Autonomy
     # ------------------------------------------------------------------
 
-    cascade_mode: str = "local"         # "local" | "networked" | "ephemeral"
+    cascade_mode: str = "local"  # "local" | "networked" | "ephemeral"
     trigger_names: list[str] = field(default_factory=list)  # refs to InitiativeConfig.triggers
 
     # ------------------------------------------------------------------
@@ -141,8 +141,7 @@ class RavnProfile:
             "sleipnir_topics": list(self.sleipnir_topics),
             "output_mode": self.output_mode,
             "mimir_mounts": [
-                {"name": m.name, "role": m.role, "priority": m.priority}
-                for m in self.mimir_mounts
+                {"name": m.name, "role": m.role, "priority": m.priority} for m in self.mimir_mounts
             ],
             "mimir_write_routing": dict(self.mimir_write_routing),
             "cascade_mode": self.cascade_mode,

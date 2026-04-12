@@ -350,19 +350,32 @@ class DispatchService:
         async with self._locks[owner_id]:
             state = await self._dispatcher_repo.get_or_create(owner_id)
             if not state.running or not state.auto_continue:
+                logger.info(
+                    "Auto-continue skipped for owner %s: running=%s, auto_continue=%s",
+                    owner_id[:8], state.running, state.auto_continue,
+                )
                 return []
 
             adapters = await self._tracker_factory.for_owner(owner_id)
             if not adapters:
+                logger.info("Auto-continue skipped for owner %s: no tracker adapters", owner_id[:8])
                 return []
 
             running_raids = await adapters[0].list_raids_by_status(RaidStatus.RUNNING)
             available_slots = state.max_concurrent_raids - len(running_raids)
             if available_slots <= 0:
+                logger.info(
+                    "Auto-continue skipped for owner %s: no slots (%d running, max %d)",
+                    owner_id[:8], len(running_raids), state.max_concurrent_raids,
+                )
                 return []
 
             ready = await self.find_ready_issues(owner_id, saga_tracker_id=saga_tracker_id)
             if not ready:
+                logger.info(
+                    "Auto-continue skipped for owner %s: no ready issues (saga=%s)",
+                    owner_id[:8], saga_tracker_id,
+                )
                 return []
 
             items = [

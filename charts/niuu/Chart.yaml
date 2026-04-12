@@ -2,8 +2,8 @@ apiVersion: v2
 name: niuu
 description: "Niuu AI Platform — umbrella chart"
 type: application
-version: 0.0.0-tyr.243
-appVersion: "0.0.0-tyr.243"
+version: 0.0.0-tyr.159
+appVersion: "0.0.0-tyr.159"
 keywords:
   - niuu
   - ai
@@ -23,26 +23,3 @@ dependencies:
     version: ">=0.0.0-0"
     repository: "file://../tyr"
     condition: tyr.enabled
-  - name: niuu-shared
-    version: ">=0.0.0-0"
-    repository: "file://../niuu-shared"
-    condition: niuu-shared.enabled
-  - name: bifrost
-    version: ">=0.0.0-0"
-    repository: "file://../bifrost"
-    condition: bifrost.enabled
-  - name: mimir
-    version: ">=0.0.0-0"
-    repository: "file://../mimir"
-    alias: mimir-shared
-    condition: mimir-shared.enabled
-  - name: mimir
-    version: ">=0.0.0-0"
-    repository: "file://../mimir"
-    alias: mimir-kanuck
-    condition: mimir-kanuck.enabled
-  - name: mimir
-    version: ">=0.0.0-0"
-    repository: "file://../mimir"
-    alias: mimir-research
-    condition: mimir-research.enabled

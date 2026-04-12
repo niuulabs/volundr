@@ -129,11 +129,7 @@ class StatusBar(Widget):
             if len(parts) == 2 and parts[1]:
                 self._flokk_name = parts[1]
         # Count ravens with an active task
-        running = sum(
-            1
-            for c in conns
-            if c.ravn_info and c.ravn_info.get("state") == "running"
-        )
+        running = sum(1 for c in conns if c.ravn_info and c.ravn_info.get("state") == "running")
         tag = f"flokk:{self._flokk_name} · {count} ravens · {running} tasks"
         try:
             self.query_one("#sb-flokk-tag", Label).update(f"[#f59e0b]{tag}[/]")

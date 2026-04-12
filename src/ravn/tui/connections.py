@@ -148,7 +148,8 @@ class FlokkManager:
         """Send message to a specific subset of Ravens. Returns {name: task_id}."""
         name_set = set(names)
         eligible = [
-            c for c in self.connections()
+            c
+            for c in self.connections()
             if c.name in name_set and c.status == "connected" and not c.ghost
         ]
         tasks = [self._send_message(conn, message) for conn in eligible]

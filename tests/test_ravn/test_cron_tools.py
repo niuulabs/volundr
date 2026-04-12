@@ -191,7 +191,8 @@ class TestCronJobStore:
 
     def test_delete_missing(self, tmp_path):
         store = _make_store(tmp_path)
-        assert store.delete("ghost") is False
+        removed = store.delete("ghost")
+        assert removed is False
 
     def test_duplicate_job_id_raises(self, tmp_path):
         store = _make_store(tmp_path)

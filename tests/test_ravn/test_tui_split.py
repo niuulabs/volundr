@@ -297,8 +297,11 @@ def test_rotate_swaps_children() -> None:
     tree.split_vertical(pid)
     root = tree.root
     assert isinstance(root, SplitNode)
+    original_left = root.left
+    original_right = root.right
     tree.rotate(pid)
-    assert root.left is not root.left or True  # children swapped
+    assert root.left is original_right
+    assert root.right is original_left
 
 
 def test_rotate_single_pane_returns_false() -> None:

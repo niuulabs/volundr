@@ -23,13 +23,9 @@ class TestWebDistDir:
         dist.mkdir(parents=True)
         (dist / "index.html").write_text("<html></html>")
 
-        # Patch the repo-root fallback to point to tmp_path
-        with patch("cli.resources.Path") as mock_path:
-            # Make importlib.resources path fail (not a dir)
-            mock_path.return_value.is_dir.return_value = False
-            # But the __file__ parents fallback should work
-            # We test via the actual function with a real directory
-            pass
+        # Verify the dist directory was created successfully
+        assert dist.is_dir()
+        assert (dist / "index.html").exists()
 
     def test_raises_when_no_dist_found(self):
         with patch("cli.resources.importlib.resources.files") as mock_files:

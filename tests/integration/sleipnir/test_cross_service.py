@@ -176,18 +176,22 @@ async def test_correlation_id_filtering(transport):
     await bridge.start()
 
     # Publish events for two different sessions
-    await transport.publish(make_event(
-        event_type="volundr.session.started",
-        correlation_id=target_session,
-        payload={"session_id": target_session},
-        summary="target session",
-    ))
-    await transport.publish(make_event(
-        event_type="volundr.session.started",
-        correlation_id=other_session,
-        payload={"session_id": other_session},
-        summary="other session",
-    ))
+    await transport.publish(
+        make_event(
+            event_type="volundr.session.started",
+            correlation_id=target_session,
+            payload={"session_id": target_session},
+            summary="target session",
+        )
+    )
+    await transport.publish(
+        make_event(
+            event_type="volundr.session.started",
+            correlation_id=other_session,
+            payload={"session_id": other_session},
+            summary="other session",
+        )
+    )
 
     deadline = asyncio.get_event_loop().time() + 3.0
     while not channel.events:
@@ -218,17 +222,21 @@ async def test_multi_publisher_single_subscriber(transport):
     await transport.subscribe(["*"], handler)
 
     # Simulate Volundr publishing
-    await transport.publish(make_event(
-        event_type="volundr.session.started",
-        source="volundr:event-sink",
-        summary="from-volundr",
-    ))
+    await transport.publish(
+        make_event(
+            event_type="volundr.session.started",
+            source="volundr:event-sink",
+            summary="from-volundr",
+        )
+    )
     # Simulate Tyr publishing
-    await transport.publish(make_event(
-        event_type="tyr.saga.created",
-        source="tyr:event-bridge",
-        summary="from-tyr",
-    ))
+    await transport.publish(
+        make_event(
+            event_type="tyr.saga.created",
+            source="tyr:event-bridge",
+            summary="from-tyr",
+        )
+    )
 
     await collect_events(2, received)
 

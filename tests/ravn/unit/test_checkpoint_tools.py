@@ -105,6 +105,7 @@ class TestCheckpointSaveTool:
         port.save_snapshot = AsyncMock(return_value="ckpt_x")
         session = _make_session()
         from ravn.domain.models import Message
+
         session.messages.append(Message(role="user", content="hi"))
         tool = self._make_tool(port=port, session=session)
         await tool.execute({})
@@ -127,9 +128,7 @@ class TestCheckpointSaveTool:
 
 
 class TestCheckpointListTool:
-    def _make_tool(
-        self, port: object | None = None, task_id: str = "task-1"
-    ) -> CheckpointListTool:
+    def _make_tool(self, port: object | None = None, task_id: str = "task-1") -> CheckpointListTool:
         if port is None:
             port = AsyncMock()
             port.list_for_task = AsyncMock(return_value=[])

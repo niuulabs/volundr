@@ -90,7 +90,7 @@ class HTTPTransport(MCPTransport):
         """Extract the first JSON-RPC result from an SSE response body."""
         for line in text.splitlines():
             if line.startswith("data:"):
-                data = line[len("data:"):].strip()
+                data = line[len("data:") :].strip()
                 if data:
                     return json.loads(data)
         raise MCPTransportError("No data event found in SSE response")

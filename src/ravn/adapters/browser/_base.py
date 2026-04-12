@@ -44,7 +44,7 @@ def _ax_node_to_line(node: dict, counter: list[int]) -> str | None:
     if "type" in node:
         extra.append(f"type={node['type']}")
     if "placeholder" in node:
-        extra.append(f"placeholder=\"{node['placeholder']}\"")
+        extra.append(f'placeholder="{node["placeholder"]}"')
     if node.get("checked") is not None:
         extra.append(f"checked={str(node['checked']).lower()}")
     if node.get("disabled"):

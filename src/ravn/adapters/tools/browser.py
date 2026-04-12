@@ -35,13 +35,15 @@ logger = logging.getLogger(__name__)
 _ALLOWED_SCHEMES = {"http", "https"}
 
 # JS expressions that are always considered safe (read-only exact matches).
-_SAFE_JS_PATTERNS: frozenset[str] = frozenset({
-    "document.title",
-    "document.URL",
-    "window.location",
-    "document.body.innerText",
-    "document.readyState",
-})
+_SAFE_JS_PATTERNS: frozenset[str] = frozenset(
+    {
+        "document.title",
+        "document.URL",
+        "window.location",
+        "document.body.innerText",
+        "document.readyState",
+    }
+)
 
 
 def _validate_browser_url(
@@ -262,7 +264,7 @@ class BrowserSnapshotTool(_BrowserToolBase):
     def description(self) -> str:
         return (
             "Return the accessibility tree of the current page as compact text. "
-            "Elements are listed as [role \"label\" @eN]. "
+            'Elements are listed as [role "label" @eN]. '
             "Use @eN handles in browser_click and browser_type to reference elements. "
             "Call browser_navigate first to load a page."
         )

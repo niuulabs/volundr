@@ -143,6 +143,7 @@ async def test_send_image_posts_multipart(monkeypatch):
     assert data == b"\x89PNG"
     assert mime == "image/png"
     import json as _json
+
     payload_json = _json.loads(call_kwargs["data"]["payload_json"])
     assert payload_json["content"] == "test cap"
 

@@ -604,6 +604,7 @@ data:
     CREATE INDEX IF NOT EXISTS idx_integration_connections_user
         ON integration_connections(user_id, integration_type);
 
+
   000025_sleipnir_events.up.sql: |
     -- Sleipnir audit log — persistent record of every event on the bus.
     CREATE TABLE IF NOT EXISTS sleipnir_events (

@@ -91,9 +91,7 @@ class TestIssueToken:
     @pytest.mark.asyncio
     async def test_success_returns_issued_token(self) -> None:
         raw_token = _make_jwt(sub="user-42", jti="jti-abc")
-        respx.post(TOKEN_URL).mock(
-            return_value=Response(200, json={"access_token": raw_token})
-        )
+        respx.post(TOKEN_URL).mock(return_value=Response(200, json={"access_token": raw_token}))
 
         issuer = KeycloakTokenIssuer(
             token_url=TOKEN_URL,
@@ -112,9 +110,7 @@ class TestIssueToken:
     @pytest.mark.asyncio
     async def test_success_without_audience(self) -> None:
         raw_token = _make_jwt()
-        respx.post(TOKEN_URL).mock(
-            return_value=Response(200, json={"access_token": raw_token})
-        )
+        respx.post(TOKEN_URL).mock(return_value=Response(200, json={"access_token": raw_token}))
 
         issuer = KeycloakTokenIssuer(
             token_url=TOKEN_URL,
@@ -127,9 +123,7 @@ class TestIssueToken:
     @respx.mock
     @pytest.mark.asyncio
     async def test_non_200_raises_runtime_error(self) -> None:
-        respx.post(TOKEN_URL).mock(
-            return_value=Response(400, text="invalid_grant")
-        )
+        respx.post(TOKEN_URL).mock(return_value=Response(400, text="invalid_grant"))
 
         issuer = KeycloakTokenIssuer(
             token_url=TOKEN_URL,

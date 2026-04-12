@@ -17,7 +17,7 @@ class TestAnthropicAdapterInit:
     def test_defaults(self) -> None:
         adapter = AnthropicAdapter(api_key="test")
         assert adapter._api_key == "test"
-        assert "api.anthropic.com" in adapter._base_url
+        assert adapter._base_url == "https://api.anthropic.com"
         assert adapter._default_max_tokens > 0
         assert adapter._max_retries >= 0
 

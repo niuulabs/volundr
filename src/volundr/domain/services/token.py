@@ -22,6 +22,11 @@ from .session import SessionNotFoundError
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 class SessionNotRunningError(Exception):
     """Raised when trying to report usage for a non-running session."""
 
@@ -120,10 +125,10 @@ class TokenService:
         )
         logger.info(
             "Token usage recorded: session=%s, tokens=%d, provider=%s, model=%s, cost=%s",
-            session_id,
+            _sanitize_log(session_id),
             tokens,
             provider.value,
-            model,
+            _sanitize_log(model),
             final_cost,
         )
 
@@ -137,14 +142,14 @@ class TokenService:
         if self._broadcaster is not None:
             logger.info(
                 "SSE: publishing session_updated for session=%s, tokens_used=%d",
-                session_id,
+                _sanitize_log(session_id),
                 updated_session.tokens_used,
             )
             await self._broadcaster.publish_session_updated(updated_session)
         else:
             logger.warning(
                 "SSE: no broadcaster configured, session_updated not sent for session=%s",
-                session_id,
+                _sanitize_log(session_id),
             )
 
         return record

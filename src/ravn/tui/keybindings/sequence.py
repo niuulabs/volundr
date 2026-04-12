@@ -71,10 +71,7 @@ class KeySequenceBuffer:
                 return action, True
 
         # Check whether *candidate* is a prefix of any registered sequence
-        is_prefix = any(
-            seq[: len(candidate)] == candidate
-            for seq, _ in self._sequences
-        )
+        is_prefix = any(seq[: len(candidate)] == candidate for seq, _ in self._sequences)
         if is_prefix:
             self._buffer = candidate
             # Guard against infinite buffering

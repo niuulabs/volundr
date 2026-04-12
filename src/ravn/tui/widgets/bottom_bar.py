@@ -42,11 +42,7 @@ _VIEW_HINTS: dict[str, str] = {
         f"{_kbd('^w q')} {_lbl('close')}  "
         f"[#3f3f46]│[/]  "
     ),
-    "chat": (
-        f"{_kbd('↵')} {_lbl('send')}  "
-        f"{_kbd('g/G')} {_lbl('scroll')}  "
-        f"[#3f3f46]│[/]  "
-    ),
+    "chat": (f"{_kbd('↵')} {_lbl('send')}  {_kbd('g/G')} {_lbl('scroll')}  [#3f3f46]│[/]  "),
     "events": (
         f"{_kbd('f')} {_lbl('filter')}  "
         f"{_kbd('G')} {_lbl('bottom')}  "
@@ -71,11 +67,7 @@ _VIEW_HINTS: dict[str, str] = {
         f"{_kbd('d')} {_lbl('delete')}  "
         f"[#3f3f46]│[/]  "
     ),
-    "checkpoints": (
-        f"{_kbd('r')} {_lbl('resume')}  "
-        f"{_kbd('d')} {_lbl('delete')}  "
-        f"[#3f3f46]│[/]  "
-    ),
+    "checkpoints": (f"{_kbd('r')} {_lbl('resume')}  {_kbd('d')} {_lbl('delete')}  [#3f3f46]│[/]  "),
 }
 
 

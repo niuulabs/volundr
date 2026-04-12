@@ -92,22 +92,26 @@ class CliFormatTranslator(EventTranslatorPort):
             if not self._in_thinking_block:
                 out.append(self._make_block_start("thinking"))
                 self._in_thinking_block = True
-            out.append({
-                "type": "content_block_delta",
-                "index": self._block_index,
-                "delta": {"type": "thinking_delta", "thinking": text},
-            })
+            out.append(
+                {
+                    "type": "content_block_delta",
+                    "index": self._block_index,
+                    "delta": {"type": "thinking_delta", "thinking": text},
+                }
+            )
         else:
             # Close thinking block if open.
             out.extend(self._close_thinking_block())
             if not self._in_text_block:
                 out.append(self._make_block_start("text"))
                 self._in_text_block = True
-            out.append({
-                "type": "content_block_delta",
-                "index": self._block_index,
-                "delta": {"type": "text_delta", "text": text},
-            })
+            out.append(
+                {
+                    "type": "content_block_delta",
+                    "index": self._block_index,
+                    "delta": {"type": "text_delta", "text": text},
+                }
+            )
 
         return out
 
@@ -128,31 +132,37 @@ class CliFormatTranslator(EventTranslatorPort):
         tool_input = event.payload.get("input", {})
 
         # content_block_start
-        out.append({
-            "type": "content_block_start",
-            "index": self._block_index,
-            "content_block": {
-                "type": "tool_use",
-                "id": tool_id,
-                "name": tool_name,
-            },
-        })
+        out.append(
+            {
+                "type": "content_block_start",
+                "index": self._block_index,
+                "content_block": {
+                    "type": "tool_use",
+                    "id": tool_id,
+                    "name": tool_name,
+                },
+            }
+        )
 
         # Emit full input JSON in one delta (Ravn has complete input upfront).
-        out.append({
-            "type": "content_block_delta",
-            "index": self._block_index,
-            "delta": {
-                "type": "input_json_delta",
-                "partial_json": json.dumps(tool_input),
-            },
-        })
+        out.append(
+            {
+                "type": "content_block_delta",
+                "index": self._block_index,
+                "delta": {
+                    "type": "input_json_delta",
+                    "partial_json": json.dumps(tool_input),
+                },
+            }
+        )
 
         # content_block_stop
-        out.append({
-            "type": "content_block_stop",
-            "index": self._block_index,
-        })
+        out.append(
+            {
+                "type": "content_block_stop",
+                "index": self._block_index,
+            }
+        )
 
         self._block_index += 1
         return out
@@ -165,13 +175,15 @@ class CliFormatTranslator(EventTranslatorPort):
         out: list[dict] = []
         out.extend(self._close_text_block())
         out.extend(self._close_thinking_block())
-        out.append({
-            "type": "result",
-            "subtype": "success",
-            "is_error": False,
-            "result": event.payload["text"],
-            "duration_ms": 0,
-        })
+        out.append(
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "result": event.payload["text"],
+                "duration_ms": 0,
+            }
+        )
         return out
 
     # ------------------------------------------------------------------
@@ -182,10 +194,12 @@ class CliFormatTranslator(EventTranslatorPort):
         out: list[dict] = []
         out.extend(self._close_text_block())
         out.extend(self._close_thinking_block())
-        out.append({
-            "type": "error",
-            "error": {"message": event.payload["message"]},
-        })
+        out.append(
+            {
+                "type": "error",
+                "error": {"message": event.payload["message"]},
+            }
+        )
         return out
 
     # ------------------------------------------------------------------
@@ -197,11 +211,13 @@ class CliFormatTranslator(EventTranslatorPort):
         out.extend(self._close_text_block())
         out.extend(self._close_thinking_block())
         success = event.payload.get("success", True)
-        out.append({
-            "type": "result",
-            "subtype": "success" if success else "error",
-            "is_error": not success,
-        })
+        out.append(
+            {
+                "type": "result",
+                "subtype": "success" if success else "error",
+                "is_error": not success,
+            }
+        )
         return out
 
     # ------------------------------------------------------------------

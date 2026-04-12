@@ -136,9 +136,12 @@ async def bus(
         except ImportError:
             pytest.skip("pynng not installed")
 
+        import tempfile
+
         from sleipnir.adapters.nng_transport import NngTransport
 
-        addr = f"ipc://{tmp_path}/ravn_integration.sock"
+        short_dir = tempfile.mkdtemp(prefix="nng_")
+        addr = f"ipc://{short_dir}/s.sock"
         transport = NngTransport(address=addr)
         await transport.start()
         try:

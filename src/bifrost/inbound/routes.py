@@ -721,7 +721,8 @@ def create_router(
             body = await raw_request.json()
             request = AnthropicRequest.model_validate(body)
         except Exception as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            logger.debug("Request validation failed: %s", exc)
+            raise HTTPException(status_code=422, detail="Invalid request body.") from exc
 
         # Resolve permissions once — used by both access control and quota checks.
         agent_perms = config.permissions_for_agent(identity.agent_id)
@@ -941,7 +942,7 @@ def create_router(
                     request=request,
                 )
             )
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            raise HTTPException(status_code=502, detail="Upstream routing failed.") from exc
 
     @api_router.get("/v1/usage")
     async def usage_endpoint(
@@ -1084,7 +1085,8 @@ def create_router(
             body = await raw_request.json()
             oai_request = OpenAIChatRequest.model_validate(body)
         except Exception as exc:
-            return openai_error_response(422, str(exc), "invalid_request_error")
+            logger.warning("Invalid OpenAI chat completion request: %s", exc)
+            return openai_error_response(422, "Invalid request body.", "invalid_request_error")
 
         request = openai_request_to_anthropic(oai_request)
 
@@ -1315,7 +1317,7 @@ def create_router(
                     request=request,
                 )
             )
-            return openai_error_response(502, str(exc), "server_error")
+            return openai_error_response(502, "Upstream routing failed.", "server_error")
 
     # -----------------------------------------------------------------------
     # Ollama-compatible endpoints
@@ -1352,7 +1354,8 @@ def create_router(
             body = await raw_request.json()
             ollama_req = parse_fn(body)
         except Exception as exc:
-            return ollama_error_response(422, str(exc))
+            logger.warning("Ollama request parse error: %s", exc)
+            return ollama_error_response(422, "Invalid request body")
 
         request = translate_fn(ollama_req)
 
@@ -1579,7 +1582,7 @@ def create_router(
                     request=request,
                 )
             )
-            return ollama_error_response(502, str(exc))
+            return ollama_error_response(502, "Upstream provider error")
 
     @api_router.get("/api/tags")
     async def ollama_tags() -> dict:

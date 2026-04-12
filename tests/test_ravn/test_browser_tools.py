@@ -37,7 +37,7 @@ from ravn.ports.browser import PageSummary
 def make_mock_browser(
     *,
     nav_summary: PageSummary | None = None,
-    snapshot_text: str = "[button \"Submit\" @e1]",
+    snapshot_text: str = '[button "Submit" @e1]',
     screenshot_bytes: bytes = b"\x89PNG\r\n",
     evaluate_result: Any = "result",
 ) -> AsyncMock:
@@ -339,7 +339,7 @@ class TestBrowserNavigateTool:
         tool = self._make_tool(browser)
         result = await tool.execute({"url": "https://example.com"})
         assert not result.is_error
-        assert "https://example.com" in result.content
+        assert result.content.startswith("URL: https://example.com\n")
         assert "200" in result.content
 
     @pytest.mark.asyncio

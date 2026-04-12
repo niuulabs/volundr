@@ -97,7 +97,7 @@ class _LockedFile:
 
     def __enter__(self):
         if self._write:
-            fd = os.open(str(self._path), os.O_RDWR | os.O_CREAT, 0o644)
+            fd = os.open(str(self._path), os.O_RDWR | os.O_CREAT, 0o600)
             self._fh = os.fdopen(fd, "r+b")
             fcntl.flock(self._fh, fcntl.LOCK_EX)
         else:

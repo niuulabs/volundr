@@ -317,38 +317,24 @@ class TestExtractStructure:
 
 
 class TestUpdateSaga:
-    def test_updates_status_returns_saga(
-        self, client: TestClient, saga_repo: MockSagaRepo
-    ):
+    def test_updates_status_returns_saga(self, client: TestClient, saga_repo: MockSagaRepo):
         saga_id = str(saga_repo.sagas[0].id)
-        resp = client.patch(
-            f"/api/v1/tyr/sagas/{saga_id}", json={"status": "COMPLETE"}
-        )
+        resp = client.patch(f"/api/v1/tyr/sagas/{saga_id}", json={"status": "COMPLETE"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["id"] == saga_id
         assert data["slug"] == "alpha"
 
-    def test_lowercase_status_accepted(
-        self, client: TestClient, saga_repo: MockSagaRepo
-    ):
+    def test_lowercase_status_accepted(self, client: TestClient, saga_repo: MockSagaRepo):
         saga_id = str(saga_repo.sagas[0].id)
-        resp = client.patch(
-            f"/api/v1/tyr/sagas/{saga_id}", json={"status": "complete"}
-        )
+        resp = client.patch(f"/api/v1/tyr/sagas/{saga_id}", json={"status": "complete"})
         assert resp.status_code == 200
 
-    def test_invalid_status_returns_422(
-        self, client: TestClient, saga_repo: MockSagaRepo
-    ):
+    def test_invalid_status_returns_422(self, client: TestClient, saga_repo: MockSagaRepo):
         saga_id = str(saga_repo.sagas[0].id)
-        resp = client.patch(
-            f"/api/v1/tyr/sagas/{saga_id}", json={"status": "INVALID_STATUS"}
-        )
+        resp = client.patch(f"/api/v1/tyr/sagas/{saga_id}", json={"status": "INVALID_STATUS"})
         assert resp.status_code == 422
 
     def test_not_found_returns_404(self, client: TestClient):
-        resp = client.patch(
-            f"/api/v1/tyr/sagas/{uuid4()}", json={"status": "COMPLETE"}
-        )
+        resp = client.patch(f"/api/v1/tyr/sagas/{uuid4()}", json={"status": "COMPLETE"})
         assert resp.status_code == 404

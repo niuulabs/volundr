@@ -91,7 +91,7 @@ async def test_start_returns_early_when_no_api_key(caplog):
     with caplog.at_level(logging.ERROR):
         await adapter.start()
 
-    assert "WA_MISSING_KEY_XYZ" in caplog.text
+    assert "WhatsApp API key is not set" in caplog.text
     assert adapter._server_task is None
 
 
