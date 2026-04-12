@@ -131,6 +131,15 @@ trust:
   spending_beyond_cap: approval
 
 # ---------------------------------------------------------------------------
+# Mímir
+# ---------------------------------------------------------------------------
+# mimir:
+#   ingest:
+#     entity_detection: true           # enable LLM entity extraction on ingest
+#     entity_model: claude-haiku-4-5-20251001  # cheap/fast model for extraction
+#     entity_max_tokens: 1024
+
+# ---------------------------------------------------------------------------
 # Memory
 # ---------------------------------------------------------------------------
 # memory:

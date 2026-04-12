@@ -430,9 +430,15 @@ def _build_tools(
 
     # -- Mímir tools (injected when adapter is wired and "mimir" group is active) --
     if mimir is not None and "mimir" in include_groups:
+        from ravn.adapters.tools.entity_extractor import EntityExtractor
         from ravn.adapters.tools.mimir_tools import build_mimir_tools
 
-        tools.extend(build_mimir_tools(mimir))
+        entity_extractor = None
+        if settings.mimir.ingest.entity_detection and llm is not None:
+            entity_extractor = EntityExtractor(
+                mimir=mimir, llm=llm, config=settings.mimir.ingest
+            )
+        tools.extend(build_mimir_tools(mimir, entity_extractor=entity_extractor))
 
     # -- Custom tools from config --
     for ct in settings.tools.custom:

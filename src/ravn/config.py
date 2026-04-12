@@ -1509,7 +1509,7 @@ class MimirConfig(BaseModel):
         description="Scheduled staleness refresh for frequently-used pages.",
     )
     ingest: MimirIngestConfig = Field(
-        default_factory=lambda: MimirIngestConfig(),
+        default_factory=MimirIngestConfig,
         description="Entity detection settings for ingest.",
     )
 
