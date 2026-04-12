@@ -1,19 +1,20 @@
-# Saga template: ship
+# Saga template: ship (pipeline format)
 # Triggered by: manual dispatch or Tyr API
-# Creates a 4-phase ship saga to test, review, version-bump, and open a release PR.
-# Phase 1: Run tests   (persona: qa-agent)
-# Phase 2: Code review (persona: reviewer)
-# Phase 3: Version bump + changelog (persona: ship-agent)
-# Phase 4: Create release PR (persona: ship-agent)
+# Stage 1: Run tests  (persona: qa-agent)
+# Stage 2: Pre-ship code review (persona: reviewer)
+# Stage 3: Version bump + changelog (persona: ship-agent)
+# Stage 4: Create release PR (persona: ship-agent)
 name: "Ship: {event.repo}"
 feature_branch: "{event.branch}"
 base_branch: "{event.base_branch}"
 repos:
   - "{event.repo}"
-phases:
-  - name: Test Suite
-    raids:
+
+stages:
+  - name: test-suite
+    sequential:
       - name: "Run test suite for {event.repo}"
+        persona: qa-agent
         description: |
           Run the full test suite for {event.repo} on branch {event.branch} to verify it is release-ready.
         acceptance_criteria:
@@ -24,7 +25,6 @@ phases:
           - CI is green on the feature branch
         declared_files: []
         estimate_hours: 0.5
-        persona: qa-agent
         prompt: |
           # Test Suite Task
 
@@ -39,10 +39,12 @@ phases:
           5. Fix any failures before proceeding.
 
           Report: PASS or FAIL with details of any failures.
+          Output verdict: "pass" or "fail" in your outcome block.
 
-  - name: Pre-ship Code Review
-    raids:
+  - name: pre-ship-review
+    sequential:
       - name: "Pre-ship review of {event.repo}"
+        persona: reviewer
         description: |
           Review the changes accumulated on {event.branch} since the last release of {event.repo}.
         acceptance_criteria:
@@ -52,7 +54,6 @@ phases:
           - No unintentional breaking changes
         declared_files: []
         estimate_hours: 1.0
-        persona: reviewer
         prompt: |
           # Pre-ship Code Review Task
 
@@ -68,10 +69,13 @@ phases:
           5. Flag any security concerns.
 
           Report all findings. Block shipping if any blocking issues remain.
+          Output verdict: "pass" or "fail" in your outcome block.
+    condition: "stages.test-suite.verdict == pass"
 
-  - name: Version Bump and Changelog
-    raids:
+  - name: version-bump
+    sequential:
       - name: "Bump version and update changelog for {event.repo}"
+        persona: ship-agent
         description: |
           Determine the next version for {event.repo} following semantic versioning, update the changelog, and commit.
         acceptance_criteria:
@@ -82,7 +86,6 @@ phases:
         declared_files:
           - CHANGELOG.md
         estimate_hours: 0.5
-        persona: ship-agent
         prompt: |
           # Version Bump and Changelog Task
 
@@ -102,10 +105,12 @@ phases:
           5. Commit: `chore(release): bump version to X.Y.Z`
           6. Create a git tag: `git tag -a vX.Y.Z -m "Release X.Y.Z"`
           7. Push the tag: `git push origin vX.Y.Z`
+    condition: "stages.pre-ship-review.verdict == pass"
 
-  - name: Create Release PR
-    raids:
+  - name: release-pr
+    sequential:
       - name: "Create release PR for {event.repo}"
+        persona: ship-agent
         description: |
           Open a pull request from {event.branch} to {event.base_branch} for the release of {event.repo}.
         acceptance_criteria:
@@ -116,7 +121,6 @@ phases:
           - PR is ready for merge
         declared_files: []
         estimate_hours: 0.25
-        persona: ship-agent
         prompt: |
           # Create Release PR Task
 

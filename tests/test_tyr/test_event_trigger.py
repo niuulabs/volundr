@@ -130,12 +130,12 @@ class TestLoadTemplate:
         tpl = load_template("review", BUNDLED_TEMPLATES_DIR, payload)
 
         assert "99" in tpl.name
-        # review.yaml has 4 phases: Code Review, Security Audit, QA Test Run, Human Approval
-        assert len(tpl.phases) == 4
-        assert tpl.phases[0].name == "Code Review"
-        assert tpl.phases[3].name == "Human Approval"
-        assert tpl.phases[3].needs_approval is True
-        assert len(tpl.phases[0].raids) == 1
+        # review.yaml has 3 stages: parallel-review, qa-test, human-approval
+        assert len(tpl.phases) == 3
+        assert tpl.phases[0].name == "parallel-review"
+        assert tpl.phases[2].name == "human-approval"
+        assert tpl.phases[2].needs_approval is True
+        assert len(tpl.phases[0].raids) == 2  # parallel: reviewer + security-auditor
         assert tpl.phases[0].raids[0].persona == "reviewer"
 
     def test_missing_template_raises(self, tmp_path):
@@ -1547,10 +1547,10 @@ class TestBundledShipRetroTemplates:
         tpl = load_template("ship", BUNDLED_TEMPLATES_DIR, payload)
         assert tpl.name
         assert len(tpl.phases) == 4
-        assert tpl.phases[0].name == "Test Suite"
-        assert tpl.phases[1].name == "Pre-ship Code Review"
-        assert tpl.phases[2].name == "Version Bump and Changelog"
-        assert tpl.phases[3].name == "Create Release PR"
+        assert tpl.phases[0].name == "test-suite"
+        assert tpl.phases[1].name == "pre-ship-review"
+        assert tpl.phases[2].name == "version-bump"
+        assert tpl.phases[3].name == "release-pr"
         # All phases have personas
         for phase in tpl.phases:
             for raid in phase.raids:
@@ -1562,8 +1562,8 @@ class TestBundledShipRetroTemplates:
         assert tpl.name
         assert "2026-W15" in tpl.name
         assert len(tpl.phases) == 2
-        assert tpl.phases[0].name == "Retrospective Analysis"
-        assert tpl.phases[1].name == "Write to Mimir"
+        assert tpl.phases[0].name == "retrospective-analysis"
+        assert tpl.phases[1].name == "write-to-mimir"
         for phase in tpl.phases:
             for raid in phase.raids:
                 assert raid.persona == "retro-analyst"
@@ -1579,9 +1579,9 @@ class TestBundledShipRetroTemplates:
         }
         tpl = load_template("deploy", BUNDLED_TEMPLATES_DIR, payload)
         assert len(tpl.phases) == 3
-        assert tpl.phases[0].name == "Smoke Test"
-        assert tpl.phases[1].name == "Monitor"
-        assert tpl.phases[2].name == "Release Documentation"
+        assert tpl.phases[0].name == "smoke-test"
+        assert tpl.phases[1].name == "monitor"
+        assert tpl.phases[2].name == "release-docs"
 
     def test_review_template_has_4_phases_with_approval_gate(self):
         payload = {
@@ -1594,8 +1594,9 @@ class TestBundledShipRetroTemplates:
             "pr_url": "https://github.com/niuulabs/v/pull/42",
         }
         tpl = load_template("review", BUNDLED_TEMPLATES_DIR, payload)
-        assert len(tpl.phases) == 4
-        assert tpl.phases[3].needs_approval is True
+        # review.yaml has 3 stages: parallel-review, qa-test, human-approval
+        assert len(tpl.phases) == 3
+        assert tpl.phases[2].needs_approval is True
         assert tpl.phases[0].raids[0].persona == "reviewer"
-        assert tpl.phases[1].raids[0].persona == "security-auditor"
-        assert tpl.phases[2].raids[0].persona == "qa-agent"
+        assert tpl.phases[0].raids[1].persona == "security-auditor"
+        assert tpl.phases[1].raids[0].persona == "qa-agent"
