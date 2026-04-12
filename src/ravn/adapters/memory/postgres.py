@@ -73,6 +73,12 @@ def _row_to_episode(row: asyncpg.Record | dict[str, Any]) -> Episode:
         elif isinstance(embedding_raw, list):
             embedding = embedding_raw
 
+    errors_raw = row.get("errors") if hasattr(row, "get") else None
+    try:
+        errors: list[str] = json.loads(errors_raw) if errors_raw else []
+    except (json.JSONDecodeError, TypeError):
+        errors = []
+
     return Episode(
         episode_id=row["episode_id"],
         session_id=row["session_id"],
@@ -83,6 +89,10 @@ def _row_to_episode(row: asyncpg.Record | dict[str, Any]) -> Episode:
         outcome=Outcome(row["outcome"]),
         tags=list(tags),
         embedding=embedding,
+        reflection=row.get("reflection") if hasattr(row, "get") else None,
+        errors=errors,
+        cost_usd=row.get("cost_usd") if hasattr(row, "get") else None,
+        duration_seconds=row.get("duration_seconds") if hasattr(row, "get") else None,
     )
 
 
@@ -174,8 +184,9 @@ class PostgresMemoryAdapter(MemoryPort):
                 """
                 INSERT INTO ravn_episodes
                     (episode_id, session_id, timestamp, summary,
-                     task_description, tools_used, outcome, tags, embedding)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                     task_description, tools_used, outcome, tags, embedding,
+                     reflection, errors, cost_usd, duration_seconds)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 ON CONFLICT (episode_id) DO UPDATE SET
                     session_id       = EXCLUDED.session_id,
                     timestamp        = EXCLUDED.timestamp,
@@ -184,7 +195,11 @@ class PostgresMemoryAdapter(MemoryPort):
                     tools_used       = EXCLUDED.tools_used,
                     outcome          = EXCLUDED.outcome,
                     tags             = EXCLUDED.tags,
-                    embedding        = EXCLUDED.embedding
+                    embedding        = EXCLUDED.embedding,
+                    reflection       = EXCLUDED.reflection,
+                    errors           = EXCLUDED.errors,
+                    cost_usd         = EXCLUDED.cost_usd,
+                    duration_seconds = EXCLUDED.duration_seconds
                 """,
                 episode.episode_id,
                 episode.session_id,
@@ -195,6 +210,10 @@ class PostgresMemoryAdapter(MemoryPort):
                 episode.outcome.value,
                 episode.tags,
                 json.dumps(episode.embedding) if episode.embedding is not None else None,
+                episode.reflection,
+                json.dumps(episode.errors) if episode.errors else None,
+                episode.cost_usd,
+                episode.duration_seconds,
             )
 
     async def query_episodes(
@@ -215,6 +234,7 @@ class PostgresMemoryAdapter(MemoryPort):
                 SELECT
                     episode_id, session_id, timestamp, summary,
                     task_description, tools_used, outcome, tags, embedding,
+                    reflection, errors, cost_usd, duration_seconds,
                     ts_rank(search_vector, q.tsq) AS rank_score
                 FROM ravn_episodes, q
                 WHERE search_vector @@ q.tsq
@@ -255,6 +275,13 @@ class PostgresMemoryAdapter(MemoryPort):
         budget_chars = self._prefetch_budget * _CHARS_PER_TOKEN
         return build_prefetch_context(matches, budget_chars)
 
+    async def count_episodes(self) -> int:
+        """Return the total number of stored episodes."""
+        pool = self._require_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT COUNT(*) AS cnt FROM ravn_episodes")
+        return int(row["cnt"]) if row else 0
+
     async def search_sessions(
         self,
         query: str,
@@ -271,7 +298,8 @@ class PostgresMemoryAdapter(MemoryPort):
                 WITH q AS (SELECT websearch_to_tsquery('english', $1) AS tsq)
                 SELECT
                     episode_id, session_id, timestamp, summary,
-                    task_description, tools_used, outcome, tags, embedding
+                    task_description, tools_used, outcome, tags, embedding,
+                    reflection, errors, cost_usd, duration_seconds
                 FROM ravn_episodes, q
                 WHERE search_vector @@ q.tsq
                 ORDER BY ts_rank(search_vector, q.tsq) DESC

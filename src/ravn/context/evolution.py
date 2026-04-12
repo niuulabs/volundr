@@ -1,10 +1,10 @@
 """Pattern extraction and prompt evolution for Ravn self-improvement.
 
-Analyses accumulated task outcomes and episodic memory to surface three kinds
-of signal that could improve future performance:
+Analyses episodic memory to surface three kinds of signal that could improve
+future performance:
 
 * **Recurring tool sequences** (SUCCESS episodes) → suggest as new skills
-* **Systematic errors** (FAILURE/PARTIAL outcomes) → add as system-prompt warnings
+* **Systematic errors** (FAILURE/PARTIAL episodes) → add as system-prompt warnings
 * **Effective strategies** (SUCCESS episodes grouped by domain tag) → inject in
   relevant persona prompts
 
@@ -19,10 +19,10 @@ Usage::
 
     config = EvolutionConfig()
     state = load_state(Path(config.state_path).expanduser())
-    current_count = await outcome_port.count_all_outcomes()
+    current_count = await memory.count_episodes()
 
     if should_run(state, current_count, min_new=config.min_new_outcomes):
-        extractor = PatternExtractor(memory, outcome_port, config=config)
+        extractor = PatternExtractor(memory, config=config)
         evolution = await extractor.extract()
         if not evolution.is_empty():
             print(evolution.as_diff())
@@ -40,9 +40,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from ravn.domain.models import Episode, Outcome, TaskOutcome
+from ravn.domain.models import Episode, Outcome
 from ravn.ports.memory import MemoryPort
-from ravn.ports.outcome import OutcomePort
 
 logger = logging.getLogger(__name__)
 
@@ -280,21 +279,21 @@ def _describe_skill(pattern: tuple[str, ...], episodes: list[Episode]) -> str:
     return f"Recurring workflow using {tools_str} across multiple successful tasks."
 
 
-def _describe_warning(keyword: str, outcomes: list[TaskOutcome]) -> str:
+def _describe_warning(keyword: str, episodes: list[Episode]) -> str:
     """Generate a short warning message from recurring error patterns."""
     example_errors = []
-    for outcome in outcomes[:3]:
-        for err in outcome.errors[:1]:
+    for episode in episodes[:3]:
+        for err in episode.errors[:1]:
             if keyword in err.lower():
                 example_errors.append(err[:80])
     if example_errors:
         example = example_errors[0]
         return (
-            f"Recurring '{keyword}' errors detected across {len(outcomes)} failed tasks. "
+            f"Recurring '{keyword}' errors detected across {len(episodes)} failed tasks. "
             f"Example: {example!r}. Check for this pattern before proceeding."
         )
     return (
-        f"Recurring '{keyword}' errors detected across {len(outcomes)} failed tasks. "
+        f"Recurring '{keyword}' errors detected across {len(episodes)} failed tasks. "
         f"Verify preconditions when this error type may occur."
     )
 
@@ -320,13 +319,11 @@ def _describe_strategy(tag: str, episodes: list[Episode]) -> str:
 
 
 class PatternExtractor:
-    """Analyse episodic memory and task outcomes to surface improvement signals.
+    """Analyse episodic memory to surface improvement signals.
 
     Args:
         memory: Episodic memory backend (``MemoryPort``).
-        outcome_port: Task outcome backend (``OutcomePort``).
         max_episodes_to_analyze: Maximum episodes loaded per pass.
-        max_outcomes_to_analyze: Maximum outcomes loaded per pass.
         skill_suggestion_min_occurrences: Minimum times a tool pattern must appear
             before a skill suggestion is produced.
         error_warning_min_occurrences: Minimum times an error keyword must appear
@@ -341,10 +338,8 @@ class PatternExtractor:
     def __init__(
         self,
         memory: MemoryPort,
-        outcome_port: OutcomePort,
         *,
         max_episodes_to_analyze: int = 100,
-        max_outcomes_to_analyze: int = 50,
         skill_suggestion_min_occurrences: int = 3,
         error_warning_min_occurrences: int = 3,
         strategy_min_occurrences: int = 3,
@@ -353,9 +348,7 @@ class PatternExtractor:
         max_strategy_injections: int = 3,
     ) -> None:
         self._memory = memory
-        self._outcome_port = outcome_port
         self._max_episodes = max_episodes_to_analyze
-        self._max_outcomes = max_outcomes_to_analyze
         self._skill_min = skill_suggestion_min_occurrences
         self._error_min = error_warning_min_occurrences
         self._strategy_min = strategy_min_occurrences
@@ -366,16 +359,16 @@ class PatternExtractor:
     async def extract(self) -> PromptEvolution:
         """Run the full pattern extraction pass and return proposed changes."""
         episodes = await self._load_episodes()
-        outcomes = await self._load_outcomes()
+        failure_eps = [e for e in episodes if e.outcome in (Outcome.FAILURE, Outcome.PARTIAL)]
 
         skills = self._extract_skill_patterns(episodes)
-        warnings = self._extract_error_patterns(outcomes)
+        warnings = self._extract_error_patterns(failure_eps)
         strategies = self._extract_strategy_patterns(episodes)
 
         return PromptEvolution(
             extracted_at=datetime.now(UTC),
             episodes_analyzed=len(episodes),
-            outcomes_analyzed=len(outcomes),
+            outcomes_analyzed=len(failure_eps),
             suggested_skills=skills,
             system_warnings=warnings,
             strategy_injections=strategies,
@@ -406,17 +399,6 @@ class PatternExtractor:
 
         return episodes
 
-    async def _load_outcomes(self) -> list[TaskOutcome]:
-        """Load recent outcomes from the outcome port."""
-        try:
-            return await self._outcome_port.list_recent_outcomes(self._max_outcomes)
-        except NotImplementedError:
-            logger.debug("evolution: outcome port does not support list_recent_outcomes")
-            return []
-        except Exception:
-            logger.warning("evolution: failed to load recent outcomes")
-            return []
-
     def _extract_skill_patterns(self, episodes: list[Episode]) -> list[SkillSuggestion]:
         """Find recurring tool combinations in successful episodes."""
         success_eps = [e for e in episodes if e.outcome == Outcome.SUCCESS and e.tools_used]
@@ -445,26 +427,26 @@ class PatternExtractor:
 
         return suggestions
 
-    def _extract_error_patterns(self, outcomes: list[TaskOutcome]) -> list[SystemWarning]:
-        """Find recurring error keywords in failed/partial outcomes."""
-        failure_outcomes = [o for o in outcomes if o.outcome in (Outcome.FAILURE, Outcome.PARTIAL)]
-
-        keyword_groups: dict[str, list[TaskOutcome]] = defaultdict(list)
-        for outcome in failure_outcomes:
-            combined = " ".join(outcome.errors).lower() + " " + outcome.reflection.lower()
+    def _extract_error_patterns(self, episodes: list[Episode]) -> list[SystemWarning]:
+        """Find recurring error keywords in failed/partial episodes."""
+        keyword_groups: dict[str, list[Episode]] = defaultdict(list)
+        for episode in episodes:
+            combined = " ".join(episode.errors).lower()
+            if episode.reflection:
+                combined += " " + episode.reflection.lower()
             for kw in _ERROR_KEYWORDS:
                 if kw in combined:
-                    keyword_groups[kw].append(outcome)
+                    keyword_groups[kw].append(episode)
 
         warnings: list[SystemWarning] = []
-        for kw, outs in sorted(keyword_groups.items(), key=lambda x: -len(x[1])):
-            if len(outs) < self._error_min:
+        for kw, eps in sorted(keyword_groups.items(), key=lambda x: -len(x[1])):
+            if len(eps) < self._error_min:
                 continue
             warnings.append(
                 SystemWarning(
-                    warning_text=_describe_warning(kw, outs),
-                    source_outcome_ids=[o.task_id for o in outs[:5]],
-                    occurrence_count=len(outs),
+                    warning_text=_describe_warning(kw, eps),
+                    source_outcome_ids=[e.episode_id for e in eps[:5]],
+                    occurrence_count=len(eps),
                 )
             )
             if len(warnings) >= self._max_warnings:

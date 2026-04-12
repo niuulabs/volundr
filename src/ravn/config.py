@@ -456,6 +456,27 @@ class MemoryConfig(BaseModel):
         default=100_000,
         description="Maximum characters of episode content returned per session in session_search.",
     )
+    # Reflection config (merged from OutcomeConfig, NIU-574)
+    reflection_model: str = Field(
+        default="claude-haiku-4-5-20251001",
+        description="Model alias used for the compact post-task reflection call.",
+    )
+    reflection_max_tokens: int = Field(
+        default=512,
+        description="Maximum tokens for the reflection LLM call.",
+    )
+    task_summary_max_chars: int = Field(
+        default=200,
+        description="Maximum characters of the user input stored as the task description.",
+    )
+    input_token_cost_per_million: float = Field(
+        default=3.0,
+        description="Input token cost in USD per million tokens (used to estimate cost_usd).",
+    )
+    output_token_cost_per_million: float = Field(
+        default=15.0,
+        description="Output token cost in USD per million tokens (used to estimate cost_usd).",
+    )
 
 
 class PermissionRuleConfig(BaseModel):
@@ -666,47 +687,6 @@ class ContextConfig(BaseModel):
     )
 
 
-class OutcomeConfig(BaseModel):
-    """Task outcome recording and post-task reflection configuration."""
-
-    enabled: bool = Field(
-        default=True,
-        description="Enable outcome recording and self-reflection after each task.",
-    )
-    path: str = Field(
-        default="~/.ravn/memory.db",
-        description="SQLite database path for outcome storage (can share with memory backend).",
-    )
-    reflection_model: str = Field(
-        default="claude-haiku-4-5-20251001",
-        description="Model alias used for the compact post-task reflection call ('fast').",
-    )
-    reflection_max_tokens: int = Field(
-        default=512,
-        description="Maximum tokens for the reflection LLM call.",
-    )
-    lessons_limit: int = Field(
-        default=3,
-        description="Number of past outcomes injected as 'lessons learned' per turn.",
-    )
-    task_summary_max_chars: int = Field(
-        default=200,
-        description="Maximum characters of the user input stored as the task summary.",
-    )
-    lessons_token_budget: int = Field(
-        default=1500,
-        description="Maximum approximate tokens of lessons-learned content injected per turn.",
-    )
-    input_token_cost_per_million: float = Field(
-        default=3.0,
-        description="Input token cost in USD per million tokens (used to estimate cost_usd).",
-    )
-    output_token_cost_per_million: float = Field(
-        default=15.0,
-        description="Output token cost in USD per million tokens (used to estimate cost_usd).",
-    )
-
-
 class AgentConfig(BaseModel):
     """Core agent behaviour configuration."""
 
@@ -726,10 +706,6 @@ class AgentConfig(BaseModel):
     episode_task_max_chars: int = Field(
         default=200,
         description="Maximum characters of the user input stored as the episode task description.",
-    )
-    outcome: OutcomeConfig = Field(
-        default_factory=OutcomeConfig,
-        description="Task outcome recording and self-reflection configuration.",
     )
 
 
@@ -1667,7 +1643,7 @@ class BuriConfig(BaseModel):
     extraction_model: str = Field(
         default="",
         description=(
-            "Model to use for fact extraction. Empty = use settings.agent.outcome.reflection_model."
+            "Model to use for fact extraction. Empty = use settings.memory.reflection_model."
         ),
     )
     min_confidence: float = Field(

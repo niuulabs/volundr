@@ -88,11 +88,14 @@ def _format_episode_block(episode: Episode) -> str:
     outcome = episode.outcome.upper()
     tags_str = ", ".join(episode.tags) if episode.tags else "general"
     tools_str = ", ".join(episode.tools_used) if episode.tools_used else "none"
-    return (
+    block = (
         f"[{ts}] [{outcome}] {episode.task_description}\n"
         f"Tags: {tags_str} | Tools: {tools_str}\n"
         f"{episode.summary}"
     )
+    if episode.reflection:
+        block += f"\nReflection: {episode.reflection}"
+    return block
 
 
 def build_prefetch_context(matches: list[EpisodeMatch], budget_chars: int) -> str:
@@ -115,7 +118,7 @@ def build_prefetch_context(matches: list[EpisodeMatch], budget_chars: int) -> st
 
     separator = "\n\n---\n\n"
     body = separator.join(blocks)
-    return f"## Relevant Past Context\n\n{body}"
+    return f"## Past Context\n\n{body}"
 
 
 def build_session_summaries(

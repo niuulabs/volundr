@@ -386,7 +386,8 @@ class TestRecordEpisode:
         ep = _ep(embedding=[0.1, 0.2, 0.3])
         await adapter.record_episode(ep)
         args = conn.execute.call_args[0]
-        embedding_arg = args[-1]
+        # args[0] = SQL, args[1..8] = episode fields, args[9] = embedding
+        embedding_arg = args[9]
         assert embedding_arg == json.dumps([0.1, 0.2, 0.3])
 
     async def test_null_embedding_passed_as_none(self) -> None:
@@ -395,7 +396,8 @@ class TestRecordEpisode:
         ep = _ep(embedding=None)
         await adapter.record_episode(ep)
         args = conn.execute.call_args[0]
-        assert args[-1] is None
+        # args[0] = SQL, args[1..8] = episode fields, args[9] = embedding
+        assert args[9] is None
 
 
 # ---------------------------------------------------------------------------
@@ -493,7 +495,7 @@ class TestPrefetch:
         conn = _make_conn(fetch_result=[_make_row(ep, rank_score=0.9)])
         adapter = _make_adapter(conn)
         result = await adapter.prefetch("python error")
-        assert "Relevant Past Context" in result
+        assert "Past Context" in result
         assert "debugged python import error" in result
 
     async def test_respects_budget(self) -> None:

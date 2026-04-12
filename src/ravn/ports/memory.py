@@ -102,6 +102,14 @@ class MemoryPort(ABC):
         """
         return []
 
+    async def count_episodes(self) -> int:
+        """Return the total number of stored episodes.
+
+        Returns 0 when the backend does not support counting.  Override in
+        concrete adapters to provide an accurate count.
+        """
+        return 0
+
     async def on_turn_complete(
         self,
         session_id: str,

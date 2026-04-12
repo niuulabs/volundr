@@ -324,7 +324,7 @@ class TestPrefetch:
     async def test_returns_context_block(self, mem: SqliteMemoryAdapter) -> None:
         await mem.record_episode(_ep(summary="debugged python import error"))
         result = await mem.prefetch("python error")
-        assert "Relevant Past Context" in result
+        assert "Past Context" in result
 
     async def test_respects_budget(self, tmp_path: Path) -> None:
         adapter = SqliteMemoryAdapter(
