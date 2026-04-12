@@ -238,3 +238,6 @@ coverage.json
 .skuld/
 
 threads/*.lock
+
+# reference notes
+references*
