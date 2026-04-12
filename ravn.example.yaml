@@ -139,11 +139,11 @@ trust:
 #
 #   # LLM used to generate per-turn episode reflections (NIU-574).
 #   # reflection_model: claude-haiku-4-5-20251001
-#   # reflection_max_tokens: 256
+#   # reflection_max_tokens: 512
 #
 #   # Maximum characters kept from the agent's response when generating the
 #   # task summary written into each episode.
-#   # task_summary_max_chars: 500
+#   # task_summary_max_chars: 200
 #
 #   # Token cost constants used to compute episode.cost_usd.
 #   # These should match your billing plan for the model in use.
