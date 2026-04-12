@@ -191,34 +191,6 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
             return None
         return PostgresMemoryAdapter(dsn=dsn)
 
-    if backend == "buri":
-        from ravn.adapters.memory.buri import BuriMemoryAdapter
-
-        dsn = os.environ.get(settings.memory.dsn_env, "") if settings.memory.dsn_env else ""
-        dsn = dsn or settings.memory.dsn
-        if not dsn:
-            logger.warning(
-                "Buri memory backend configured but no DSN provided — memory disabled",
-            )
-            return None
-        bc = settings.buri
-        reflection_model = settings.memory.reflection_model
-        return BuriMemoryAdapter(
-            dsn=dsn,
-            prefetch_budget=settings.memory.prefetch_budget,
-            prefetch_limit=settings.memory.prefetch_limit,
-            prefetch_min_relevance=settings.memory.prefetch_min_relevance,
-            recency_half_life_days=settings.memory.recency_half_life_days,
-            session_search_truncate_chars=settings.memory.session_search_truncate_chars,
-            cluster_merge_threshold=bc.cluster_merge_threshold,
-            extraction_model=bc.extraction_model,
-            reflection_model=reflection_model,
-            min_confidence=bc.min_confidence,
-            session_summary_max_tokens=bc.session_summary_max_tokens,
-            supersession_cosine_threshold=bc.supersession_cosine_threshold,
-            llm=llm,
-        )
-
     # Custom backend via fully-qualified class path
     try:
         cls = _import_class(backend)
@@ -960,6 +932,7 @@ def _build_agent(
         post_tool_hooks=post_hooks or None,
         user_input_fn=_cli_user_input,
         memory=memory,
+        mimir=mimir,
         episode_summary_max_chars=settings.agent.episode_summary_max_chars,
         episode_task_max_chars=settings.agent.episode_task_max_chars,
         iteration_budget=iteration_budget,
@@ -1883,6 +1856,7 @@ async def _run_daemon(
             post_tool_hooks=post_hooks or None,
             user_input_fn=None,
             memory=memory,
+            mimir=daemon_mimir,
             episode_summary_max_chars=settings.agent.episode_summary_max_chars,
             episode_task_max_chars=settings.agent.episode_task_max_chars,
             iteration_budget=budget,
