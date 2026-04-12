@@ -188,6 +188,14 @@ def test_validate_wrong_type_for_number(simple_schema: OutcomeSchema) -> None:
     assert any("findings_count" in e for e in result.errors)
 
 
+def test_validate_boolean_rejected_for_number_field(simple_schema: OutcomeSchema) -> None:
+    text = "---outcome---\nverdict: pass\nfindings_count: true\nsummary: ok\n---end---"
+    result = parse_outcome_block(text, simple_schema)
+    assert result is not None
+    assert result.valid is False
+    assert any("findings_count" in e for e in result.errors)
+
+
 def test_validate_boolean_field() -> None:
     schema = OutcomeSchema(
         fields={

@@ -113,6 +113,10 @@ def _validate_field(
             errors.append(f"field '{name}': value {value!r} not in allowed values {allowed}")
         return
 
+    if field_def.type == "number" and isinstance(value, bool):
+        errors.append(f"field '{name}': expected number, got boolean")
+        return
+
     expected = _TYPE_VALIDATORS.get(field_def.type)
     if expected is None:
         return
