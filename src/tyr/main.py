@@ -269,6 +269,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.dependency_overrides[resolve_dispatcher_repo] = _resolve_dispatcher_repo
             app.dependency_overrides[dispatch_resolve_dispatcher_repo] = _resolve_dispatcher_repo
 
+            # Wire Sleipnir publisher early (bus only — bridge wired after event_bus is ready)
+            sleipnir_bus = None
+            if settings.sleipnir.enabled:
+                sl_cls = import_class(settings.sleipnir.adapter)
+                sleipnir_bus = sl_cls(**settings.sleipnir.kwargs)
+
             # Wire DispatchService
             dispatch_svc = DispatchService(
                 tracker_factory=app.state.tracker_factory,
@@ -280,6 +286,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     default_model=settings.dispatch.default_model,
                     dispatch_prompt_template=settings.dispatch.dispatch_prompt_template,
                 ),
+                sleipnir_publisher=sleipnir_bus,
             )
             app.state.dispatch_service = dispatch_svc
 
@@ -380,14 +387,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
             app.dependency_overrides[dispatcher_resolve_event_bus] = _resolve_event_bus
 
-            # Wire Sleipnir bridge (optional — enabled via sleipnir.enabled config)
+            # Wire Sleipnir bridge (sleipnir_bus already created above; bridge needs event_bus)
             tyr_sleipnir_bridge = None
-            sleipnir_bus = None
-            if settings.sleipnir.enabled:
+            if sleipnir_bus is not None:
                 from tyr.adapters.sleipnir_event_bridge import TyrSleipnirBridge  # noqa: PLC0415
 
-                sl_cls = import_class(settings.sleipnir.adapter)
-                sleipnir_bus = sl_cls(**settings.sleipnir.kwargs)
                 tyr_sleipnir_bridge = TyrSleipnirBridge(
                     event_bus=event_bus,
                     publisher=sleipnir_bus,
@@ -397,6 +401,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "Tyr Sleipnir bridge started: adapter=%s",
                     settings.sleipnir.adapter.rsplit(".", 1)[-1],
                 )
+            # Store publisher on app.state for route handlers
+            app.state.sleipnir_publisher = sleipnir_bus
 
             # Wire Telegram reply client (shared httpx.AsyncClient)
             from tyr.adapters.inbound.rest_telegram_webhook import (
@@ -480,6 +486,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 event_bus=event_bus,
                 config=settings.watcher,
                 review_engine=review_engine,
+                sleipnir_publisher=sleipnir_bus,
             )
             app.state.subscriber = subscriber
             await subscriber.start()

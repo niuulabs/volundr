@@ -33,6 +33,13 @@ from ravn.ports.event_publisher import EventPublisherPort
 from ravn.ports.trigger import TriggerPort
 from ravn.prompt_builder import build_initiative_prompt
 
+try:
+    from sleipnir.domain.catalog import ravn_task_completed as _sleipnir_task_completed
+    from sleipnir.ports.events import SleipnirPublisher as _SleipnirPublisher
+except ImportError:
+    _SleipnirPublisher = None  # type: ignore[assignment,misc]
+    _sleipnir_task_completed = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 # Type alias for the mesh RPC handler callable
@@ -64,6 +71,7 @@ class DriveLoop:
         resume: bool = False,
         budget: DailyBudgetTracker | None = None,
         mimir: MimirPort | None = None,
+        sleipnir_publisher: object | None = None,
     ) -> None:
         self._agent_factory = agent_factory
         self._config = config
@@ -71,6 +79,7 @@ class DriveLoop:
         self._event_publisher: EventPublisherPort = event_publisher or NoOpEventPublisher()
         self._resume = resume
         self._mimir = mimir
+        self._sleipnir_publisher = sleipnir_publisher
         self._triggers: list[TriggerPort] = []
         # (priority, counter, AgentTask)
         self._queue: asyncio.PriorityQueue = asyncio.PriorityQueue(maxsize=config.task_queue_max)
@@ -360,6 +369,13 @@ class DriveLoop:
                     task_id=task.task_id,
                 )
             )
+            emit_fn = getattr(agent, "emit_session_ended", None)
+            if emit_fn is not None and asyncio.iscoroutinefunction(emit_fn):
+                try:
+                    await emit_fn("interrupted")
+                except Exception:
+                    logger.warning("emit_session_ended failed; continuing", exc_info=True)
+            await self._emit_sleipnir_task_completed(task, "interrupted")
             if task.triggered_by and task.triggered_by.startswith("thread:"):
                 thread_path = task.triggered_by.removeprefix("thread:")
                 await self._finalise_thread(thread_path, False)
@@ -367,6 +383,15 @@ class DriveLoop:
         except Exception as exc:
             logger.error("drive_loop: task %s failed: %s", task.task_id, exc)
             self._result_store.set_status(task.task_id, "failed")
+
+        outcome = "success" if success else "error"
+        emit_fn = getattr(agent, "emit_session_ended", None)
+        if emit_fn is not None and asyncio.iscoroutinefunction(emit_fn):
+            try:
+                await emit_fn(outcome)
+            except Exception:
+                logger.warning("emit_session_ended failed; continuing", exc_info=True)
+        await self._emit_sleipnir_task_completed(task, outcome)
 
         await self._event_publisher.publish(
             RavnEvent(
@@ -387,6 +412,23 @@ class DriveLoop:
         if task.triggered_by and task.triggered_by.startswith("thread:"):
             thread_path = task.triggered_by.removeprefix("thread:")
             await self._finalise_thread(thread_path, success)
+
+    async def _emit_sleipnir_task_completed(self, task: AgentTask, outcome: str) -> None:
+        """Publish ravn.task.completed to Sleipnir (no-op when publisher absent)."""
+        if self._sleipnir_publisher is None or _sleipnir_task_completed is None:
+            return
+        try:
+            persona = getattr(task, "persona", "") or ""
+            event = _sleipnir_task_completed(
+                task_id=task.task_id,
+                persona=persona,
+                outcome=outcome,
+                source=self._source_id,
+                correlation_id=task.task_id,
+            )
+            await self._sleipnir_publisher.publish(event)
+        except Exception:
+            logger.warning("Failed to emit ravn.task.completed; continuing.", exc_info=True)
 
     def _save_task_output(self, task: AgentTask, channel: ChannelPort) -> None:
         """Persist agent response to ``task.output_path`` when set (cron tasks)."""

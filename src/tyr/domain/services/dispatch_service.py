@@ -12,6 +12,11 @@ import string
 from collections import defaultdict
 from dataclasses import dataclass
 
+try:
+    from sleipnir.domain.catalog import tyr_saga_completed as _catalog_saga_completed
+except ImportError:
+    _catalog_saga_completed = None  # type: ignore[assignment]
+
 from tyr.domain.models import RaidStatus, Saga, SagaStatus, TrackerIssue, TrackerProject
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.saga_repository import SagaRepository
@@ -178,6 +183,7 @@ class DispatchService:
         saga_repo: SagaRepository,
         dispatcher_repo: DispatcherRepository,
         config: DispatchConfig,
+        sleipnir_publisher: object | None = None,
     ) -> None:
         self._tracker_factory = tracker_factory
         self._volundr_factory = volundr_factory
@@ -185,6 +191,7 @@ class DispatchService:
         self._dispatcher_repo = dispatcher_repo
         self._config = config
         self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._sleipnir_publisher = sleipnir_publisher
 
     async def find_ready_issues(
         self,
@@ -232,6 +239,21 @@ class DispatchService:
                     "Auto-archived saga %s — Linear project is completed/cancelled",
                     saga.slug,
                 )
+                # NIU-582: emit tyr.saga.completed (best-effort)
+                if self._sleipnir_publisher is not None and _catalog_saga_completed is not None:
+                    try:
+                        _event = _catalog_saga_completed(
+                            saga_id=str(saga.id),
+                            outcome="auto_archived",
+                            phases_completed=0,
+                            source="tyr:dispatch",
+                            correlation_id=str(saga.id),
+                        )
+                        await self._sleipnir_publisher.publish(_event)
+                    except Exception:
+                        logger.warning(
+                            "Failed to emit tyr.saga.completed; continuing.", exc_info=True
+                        )
                 continue
             queue.extend(items)
 
@@ -409,9 +431,7 @@ class DispatchService:
                             saga_slug=saga.slug,
                             repos=saga.repos,
                             feature_branch=saga.feature_branch,
-                            phase_name=milestone_names.get(
-                                issue.milestone_id or "", "Unassigned"
-                            ),
+                            phase_name=milestone_names.get(issue.milestone_id or "", "Unassigned"),
                             issue_id=issue.id,
                             identifier=issue.identifier,
                             title=issue.title,
