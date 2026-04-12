@@ -27,7 +27,6 @@ from pathlib import Path
 
 from sleipnir.domain.events import SleipnirEvent
 from sleipnir.ports.events import SleipnirSubscriber, Subscription
-from tyr.api.tracker import _slugify
 from tyr.domain.models import (
     Phase,
     PhaseStatus,
@@ -43,28 +42,12 @@ from tyr.domain.templates import (
     TemplateRaid,
     load_template,
 )
+from tyr.domain.utils import _slugify
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrPort
 
 logger = logging.getLogger(__name__)
-
-# Re-export load_template and related names so existing import paths keep working.
-__all__ = [
-    "EventTriggerAdapter",
-    "build_event_trigger_adapter",
-    "load_template",
-    "matches_filter",
-    "SagaTemplate",
-    "TemplatePhase",
-    "TemplateRaid",
-    "BUNDLED_TEMPLATES_DIR",
-    "_TriggerRule",
-    "_BUNDLED_TEMPLATES_DIR",
-]
-
-# Backward-compat alias (tests import this name).
-_BUNDLED_TEMPLATES_DIR = BUNDLED_TEMPLATES_DIR
 
 
 # ---------------------------------------------------------------------------
@@ -435,8 +418,9 @@ class EventTriggerAdapter:
         """
         phases = self._saga_phases.get(saga_id)
         if not phases:
-            logger.debug(
-                "EventTriggerAdapter.advance_phase: saga %s not tracked in memory, skipping",
+            logger.warning(
+                "EventTriggerAdapter.advance_phase: saga %s not in in-memory tracking "
+                "(adapter may have restarted); cannot advance phase without DB query",
                 saga_id,
             )
             return
@@ -488,6 +472,21 @@ class EventTriggerAdapter:
             next_tpl.needs_approval,
         )
         await self._activate_phase(saga, activated, next_raids, next_tpl)
+
+        # Keep in-memory status in sync with DB: if the phase was gated,
+        # update the entry from ACTIVE → GATED so subsequent advance_phase
+        # calls reflect the real state.
+        if next_tpl.needs_approval:
+            gated = Phase(
+                id=activated.id,
+                saga_id=activated.saga_id,
+                tracker_id=activated.tracker_id,
+                number=activated.number,
+                name=activated.name,
+                status=PhaseStatus.GATED,
+                confidence=activated.confidence,
+            )
+            phases[idx] = (gated, next_raids, next_tpl)
 
     # ------------------------------------------------------------------
     # Dispatch helpers

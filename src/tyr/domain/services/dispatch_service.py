@@ -21,7 +21,6 @@ try:
 except ImportError:
     _catalog_saga_completed = None  # type: ignore[assignment]
 
-from tyr.api.tracker import _slugify
 from tyr.domain.models import (
     Phase,
     PhaseStatus,
@@ -32,7 +31,8 @@ from tyr.domain.models import (
     TrackerIssue,
     TrackerProject,
 )
-from tyr.domain.templates import BUNDLED_TEMPLATES_DIR, load_template
+from tyr.domain.templates import BUNDLED_TEMPLATES_DIR, TemplatePhase, load_template
+from tyr.domain.utils import _slugify
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.saga_repository import SagaRepository
@@ -523,7 +523,7 @@ class DispatchService:
         saga: Saga,
         phase: Phase,
         raids: list[Raid],
-        tpl_phase: object,
+        tpl_phase: TemplatePhase,
         owner_id: str,
     ) -> None:
         """Spawn Volundr sessions for all raids in a template phase."""
@@ -537,7 +537,7 @@ class DispatchService:
             return
 
         repo = saga.repos[0] if saga.repos else ""
-        for raid, tpl_raid in zip(raids, tpl_phase.raids):  # type: ignore[union-attr]
+        for raid, tpl_raid in zip(raids, tpl_phase.raids):
             session_name = re.sub(r"[^a-z0-9]+", "-", raid.name.lower()).strip("-")[:48]
             try:
                 session = await volundr.spawn_session(

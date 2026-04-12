@@ -4,165 +4,31 @@ from __future__ import annotations
 
 import asyncio
 import textwrap
-from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
-from uuid import UUID
 
 import pytest
 
 from sleipnir.adapters.in_process import InProcessBus
 from sleipnir.domain.events import SleipnirEvent
+from tests.test_tyr.stubs import InMemorySagaRepository, StubVolundrFactory, StubVolundrPort
 from tyr.adapters.event_trigger import (
     EventTriggerAdapter,
     _TriggerRule,
-    load_template,
     matches_filter,
 )
 from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.domain.models import Phase, Raid, RaidStatus, Saga, SagaStatus
+from tyr.domain.templates import BUNDLED_TEMPLATES_DIR, load_template
 from tyr.ports.event_bus import TyrEvent
 from tyr.ports.saga_repository import SagaRepository
-from tyr.ports.volundr import (
-    ActivityEvent,
-    PRStatus,
-    SpawnRequest,
-    VolundrPort,
-    VolundrSession,
-)
 
 # ---------------------------------------------------------------------------
-# Stubs
+# Constants
 # ---------------------------------------------------------------------------
 
 _TS = datetime(2026, 4, 12, 10, 0, 0, tzinfo=UTC)
 _OWNER = "test-owner"
-
-
-class InMemorySagaRepository(SagaRepository):
-    """In-memory saga repository for tests."""
-
-    def __init__(self) -> None:
-        self.sagas: dict[UUID, Saga] = {}
-        self.phases: dict[UUID, Phase] = {}
-        self.raids: dict[UUID, Raid] = {}
-
-    async def save_saga(self, saga: Saga, *, conn: Any = None) -> None:
-        self.sagas[saga.id] = saga
-
-    async def save_phase(self, phase: Phase, *, conn: Any = None) -> None:
-        self.phases[phase.id] = phase
-
-    async def save_raid(self, raid: Raid, *, conn: Any = None) -> None:
-        self.raids[raid.id] = raid
-
-    async def list_sagas(self, *, owner_id: str | None = None) -> list[Saga]:
-        if owner_id is None:
-            return list(self.sagas.values())
-        return [s for s in self.sagas.values() if s.owner_id == owner_id]
-
-    async def get_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> Saga | None:
-        return self.sagas.get(saga_id)
-
-    async def get_saga_by_slug(self, slug: str) -> Saga | None:
-        return next((s for s in self.sagas.values() if s.slug == slug), None)
-
-    async def delete_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> bool:
-        return self.sagas.pop(saga_id, None) is not None
-
-    async def update_saga_status(self, saga_id: UUID, status: SagaStatus) -> None:
-        saga = self.sagas.get(saga_id)
-        if saga:
-            self.sagas[saga_id] = Saga(
-                id=saga.id,
-                tracker_id=saga.tracker_id,
-                tracker_type=saga.tracker_type,
-                slug=saga.slug,
-                name=saga.name,
-                repos=saga.repos,
-                feature_branch=saga.feature_branch,
-                base_branch=saga.base_branch,
-                status=status,
-                confidence=saga.confidence,
-                created_at=saga.created_at,
-                owner_id=saga.owner_id,
-            )
-
-    async def count_by_status(self) -> dict[str, int]:
-        return {}
-
-
-class StubVolundrPort(VolundrPort):
-    """Stub Volundr port that records spawn requests."""
-
-    def __init__(self, session_id: str = "sess-001") -> None:
-        self._session_id = session_id
-        self.spawned: list[SpawnRequest] = []
-
-    async def spawn_session(
-        self, request: SpawnRequest, *, auth_token: str | None = None
-    ) -> VolundrSession:
-        self.spawned.append(request)
-        return VolundrSession(
-            id=self._session_id,
-            name=request.name,
-            status="running",
-            tracker_issue_id=request.tracker_issue_id,
-        )
-
-    async def get_session(
-        self, session_id: str, *, auth_token: str | None = None
-    ) -> VolundrSession | None:
-        return None
-
-    async def list_sessions(self, *, auth_token: str | None = None) -> list[VolundrSession]:
-        return []
-
-    async def get_pr_status(self, session_id: str) -> PRStatus:
-        return PRStatus(exists=False, merged=False, url=None, ci_passed=False)
-
-    async def get_chronicle_summary(self, session_id: str) -> str:
-        return ""
-
-    async def send_message(
-        self, session_id: str, message: str, *, auth_token: str | None = None
-    ) -> None:
-        pass
-
-    async def stop_session(self, session_id: str, *, auth_token: str | None = None) -> None:
-        pass
-
-    async def list_integration_ids(self, *, auth_token: str | None = None) -> list[str]:
-        return []
-
-    async def list_repos(self, *, auth_token: str | None = None) -> list[dict]:
-        return []
-
-    async def get_last_assistant_message(self, session_id: str) -> str:
-        return ""
-
-    async def get_conversation(self, session_id: str) -> dict:
-        return {}
-
-    async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
-        return
-        yield  # type: ignore[misc]
-
-
-class StubVolundrFactory:
-    """Factory that always returns the same stub adapter."""
-
-    def __init__(self, volundr: VolundrPort | None = None) -> None:
-        self._volundr = volundr or StubVolundrPort()
-
-    async def for_owner(self, owner_id: str) -> list[VolundrPort]:
-        if self._volundr is None:
-            return []
-        return [self._volundr]
-
-    async def primary_for_owner(self, owner_id: str) -> VolundrPort | None:
-        return self._volundr
 
 
 def _make_sleipnir_event(
@@ -206,15 +72,13 @@ def _make_adapter(
     rules: list[_TriggerRule] | None = None,
     templates_dir: Path | None = None,
 ) -> EventTriggerAdapter:
-    from tyr.adapters.event_trigger import _BUNDLED_TEMPLATES_DIR
-
     return EventTriggerAdapter(
         subscriber=subscriber or InProcessBus(),
         saga_repo=saga_repo or InMemorySagaRepository(),
         volundr_factory=volundr_factory or StubVolundrFactory(),
         event_bus=event_bus or InMemoryEventBus(),
         rules=rules if rules is not None else [_make_rule()],
-        templates_dir=templates_dir or _BUNDLED_TEMPLATES_DIR,
+        templates_dir=templates_dir or BUNDLED_TEMPLATES_DIR,
         owner_id=_OWNER,
     )
 
@@ -254,8 +118,6 @@ class TestMatchesFilter:
 
 class TestLoadTemplate:
     def test_loads_bundled_review_template(self, tmp_path):
-        from tyr.adapters.event_trigger import _BUNDLED_TEMPLATES_DIR
-
         payload = {
             "repo": "niuulabs/volundr",
             "pr_number": "99",
@@ -265,7 +127,7 @@ class TestLoadTemplate:
             "author": "alice",
             "pr_url": "https://github.com/niuulabs/volundr/pull/99",
         }
-        tpl = load_template("review", _BUNDLED_TEMPLATES_DIR, payload)
+        tpl = load_template("review", BUNDLED_TEMPLATES_DIR, payload)
 
         assert "99" in tpl.name
         # review.yaml has 4 phases: Code Review, Security Audit, QA Test Run, Human Approval
@@ -803,8 +665,6 @@ class TestEventTriggerMissingTemplate:
 
 class TestBundledTemplates:
     def test_review_template_loads(self):
-        from tyr.adapters.event_trigger import _BUNDLED_TEMPLATES_DIR
-
         payload = {
             "repo": "niuulabs/v",
             "pr_number": "1",
@@ -814,13 +674,11 @@ class TestBundledTemplates:
             "author": "bob",
             "pr_url": "https://github.com/niuulabs/v/pull/1",
         }
-        tpl = load_template("review", _BUNDLED_TEMPLATES_DIR, payload)
+        tpl = load_template("review", BUNDLED_TEMPLATES_DIR, payload)
         assert tpl.name
         assert len(tpl.phases) >= 1
 
     def test_deploy_template_loads(self):
-        from tyr.adapters.event_trigger import _BUNDLED_TEMPLATES_DIR
-
         payload = {
             "repo": "niuulabs/v",
             "sha": "abc123def456",
@@ -829,12 +687,10 @@ class TestBundledTemplates:
             "pr_url": "https://github.com/niuulabs/v/pull/1",
             "author": "bob",
         }
-        tpl = load_template("deploy", _BUNDLED_TEMPLATES_DIR, payload)
+        tpl = load_template("deploy", BUNDLED_TEMPLATES_DIR, payload)
         assert tpl.name
 
     def test_investigate_template_loads(self):
-        from tyr.adapters.event_trigger import _BUNDLED_TEMPLATES_DIR
-
         payload = {
             "repo": "niuulabs/v",
             "issue_number": "42",
@@ -843,19 +699,17 @@ class TestBundledTemplates:
             "issue_url": "https://github.com/niuulabs/v/issues/42",
             "body": "It crashes on startup.",
         }
-        tpl = load_template("investigate", _BUNDLED_TEMPLATES_DIR, payload)
+        tpl = load_template("investigate", BUNDLED_TEMPLATES_DIR, payload)
         assert tpl.name
 
     def test_reflect_template_loads(self):
-        from tyr.adapters.event_trigger import _BUNDLED_TEMPLATES_DIR
-
         payload = {
             "session_id": "sess-xyz",
             "repo": "niuulabs/v",
             "outcome": "success",
             "duration_seconds": "120",
         }
-        tpl = load_template("reflect", _BUNDLED_TEMPLATES_DIR, payload)
+        tpl = load_template("reflect", BUNDLED_TEMPLATES_DIR, payload)
         assert tpl.name
 
 
@@ -898,10 +752,7 @@ class TestBuildEventTriggerAdapter:
         assert adapter._default_model == "claude-haiku-4-5-20251001"
 
     def test_build_with_default_templates_dir(self):
-        from tyr.adapters.event_trigger import (
-            _BUNDLED_TEMPLATES_DIR,
-            build_event_trigger_adapter,
-        )
+        from tyr.adapters.event_trigger import build_event_trigger_adapter
         from tyr.config import EventTriggerConfig
 
         cfg = EventTriggerConfig(enabled=True)
@@ -913,7 +764,7 @@ class TestBuildEventTriggerAdapter:
             config=cfg,
             initial_confidence=0.5,
         )
-        assert adapter._templates_dir == _BUNDLED_TEMPLATES_DIR
+        assert adapter._templates_dir == BUNDLED_TEMPLATES_DIR
 
 
 # ---------------------------------------------------------------------------
@@ -1617,7 +1468,7 @@ class TestPersonaPassedToSpawnRequest:
         import uuid
         from datetime import UTC, datetime
 
-        from tyr.domain.models import Phase, PhaseStatus, Raid, RaidStatus, Saga, SagaStatus
+        from tyr.domain.models import PhaseStatus, RaidStatus, SagaStatus
 
         now = datetime.now(UTC)
         saga_id = uuid.uuid4()
@@ -1688,14 +1539,12 @@ class TestPersonaPassedToSpawnRequest:
 
 class TestBundledShipRetroTemplates:
     def test_ship_template_loads(self):
-        from tyr.adapters.event_trigger import _BUNDLED_TEMPLATES_DIR
-
         payload = {
             "repo": "niuulabs/volundr",
             "branch": "feat/release",
             "base_branch": "main",
         }
-        tpl = load_template("ship", _BUNDLED_TEMPLATES_DIR, payload)
+        tpl = load_template("ship", BUNDLED_TEMPLATES_DIR, payload)
         assert tpl.name
         assert len(tpl.phases) == 4
         assert tpl.phases[0].name == "Test Suite"
@@ -1708,10 +1557,8 @@ class TestBundledShipRetroTemplates:
                 assert raid.persona
 
     def test_retro_template_loads(self):
-        from tyr.adapters.event_trigger import _BUNDLED_TEMPLATES_DIR
-
         payload = {"week": "2026-W15"}
-        tpl = load_template("retro", _BUNDLED_TEMPLATES_DIR, payload)
+        tpl = load_template("retro", BUNDLED_TEMPLATES_DIR, payload)
         assert tpl.name
         assert "2026-W15" in tpl.name
         assert len(tpl.phases) == 2
@@ -1722,8 +1569,6 @@ class TestBundledShipRetroTemplates:
                 assert raid.persona == "retro-analyst"
 
     def test_deploy_template_has_3_phases(self):
-        from tyr.adapters.event_trigger import _BUNDLED_TEMPLATES_DIR
-
         payload = {
             "repo": "niuulabs/v",
             "sha": "abc123def456",
@@ -1732,15 +1577,13 @@ class TestBundledShipRetroTemplates:
             "pr_url": "https://github.com/niuulabs/v/pull/1",
             "author": "bob",
         }
-        tpl = load_template("deploy", _BUNDLED_TEMPLATES_DIR, payload)
+        tpl = load_template("deploy", BUNDLED_TEMPLATES_DIR, payload)
         assert len(tpl.phases) == 3
         assert tpl.phases[0].name == "Smoke Test"
         assert tpl.phases[1].name == "Monitor"
         assert tpl.phases[2].name == "Release Documentation"
 
     def test_review_template_has_4_phases_with_approval_gate(self):
-        from tyr.adapters.event_trigger import _BUNDLED_TEMPLATES_DIR
-
         payload = {
             "repo": "niuulabs/v",
             "pr_number": "42",
@@ -1750,7 +1593,7 @@ class TestBundledShipRetroTemplates:
             "author": "bob",
             "pr_url": "https://github.com/niuulabs/v/pull/42",
         }
-        tpl = load_template("review", _BUNDLED_TEMPLATES_DIR, payload)
+        tpl = load_template("review", BUNDLED_TEMPLATES_DIR, payload)
         assert len(tpl.phases) == 4
         assert tpl.phases[3].needs_approval is True
         assert tpl.phases[0].raids[0].persona == "reviewer"
