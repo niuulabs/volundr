@@ -2092,6 +2092,11 @@ async def _run_daemon(
 
     if not tasks:
         typer.echo("No channels or triggers enabled — daemon has nothing to do.", err=True)
+        if daemon_bus is not None:
+            try:
+                await daemon_bus.flush()
+            except Exception:
+                pass
         if daemon_reflection_svc is not None:
             await daemon_reflection_svc.stop()
         return
@@ -2112,7 +2117,12 @@ async def _run_daemon(
             await _cascade_discovery.stop()
         await event_publisher.close()
         await _shutdown_mcp(mcp_manager)
-        # NIU-598: tear down daemon reflection service.
+        # NIU-598: flush pending events before tearing down daemon reflection service.
+        if daemon_bus is not None:
+            try:
+                await daemon_bus.flush()
+            except Exception:
+                pass
         if daemon_reflection_svc is not None:
             await daemon_reflection_svc.stop()
 

@@ -300,6 +300,7 @@ class TestRunDaemonReflectionWiring:
             await _run_daemon(settings)
 
         mock_svc.start.assert_awaited_once()
+        mock_bus.flush.assert_awaited_once()
         mock_svc.stop.assert_awaited_once()
 
     @pytest.mark.asyncio
