@@ -30,11 +30,10 @@ def _open(path: Path) -> sqlite3.Connection:
 def migrate(db_path: Path, *, dry_run: bool = False) -> int:
     """Copy task_outcomes data into the episodes table.
 
-    Matches each outcome to the episode with the same session_id and the
-    closest timestamp (within 60 seconds).  Copies reflection, errors,
-    cost_usd, and duration_seconds.
+    Matches each outcome to the episode with the closest timestamp (within
+    60 seconds).  Copies reflection, errors, cost_usd, and duration_seconds.
 
-    Returns the number of episodes updated.
+    Returns the number of episodes actually updated (dry_run counts matches).
     """
     conn = _open(db_path)
     try:
@@ -66,7 +65,7 @@ def migrate(db_path: Path, *, dry_run: bool = False) -> int:
             except (ValueError, TypeError):
                 oc_ts = datetime.now(UTC)
 
-            # Find the closest episode in the same session (within 60 s).
+            # Find the closest episode by timestamp (within 60 s).
             ep_row = conn.execute(
                 """
                 SELECT episode_id,
@@ -86,29 +85,33 @@ def migrate(db_path: Path, *, dry_run: bool = False) -> int:
             episode_id = ep_row["episode_id"]
             errors_json = oc["errors"] if oc["errors"] else "[]"
 
-            if not dry_run:
-                conn.execute(
-                    """
-                    UPDATE episodes SET
-                        reflection       = ?,
-                        errors           = ?,
-                        cost_usd         = ?,
-                        duration_seconds = ?
-                    WHERE episode_id = ?
-                      AND reflection IS NULL
-                    """,
-                    (
-                        oc["reflection"],
-                        errors_json,
-                        oc["cost_usd"],
-                        oc["duration_seconds"],
-                        episode_id,
-                    ),
-                )
-                conn.commit()
+            if dry_run:
+                updated += 1
+                print(f"  [dry-run] Would update episode {episode_id}")
+                continue
 
-            updated += 1
-            print(f"  {'[dry-run] ' if dry_run else ''}Updated episode {episode_id}")
+            cur = conn.execute(
+                """
+                UPDATE episodes SET
+                    reflection       = ?,
+                    errors           = ?,
+                    cost_usd         = ?,
+                    duration_seconds = ?
+                WHERE episode_id = ?
+                  AND reflection IS NULL
+                """,
+                (
+                    oc["reflection"],
+                    errors_json,
+                    oc["cost_usd"],
+                    oc["duration_seconds"],
+                    episode_id,
+                ),
+            )
+            conn.commit()
+            if cur.rowcount:
+                updated += 1
+                print(f"  Updated episode {episode_id}")
 
         return updated
     finally:
