@@ -248,13 +248,13 @@ class TestAgentMemoryIntegration:
         assert mem.recorded_episodes[0].session_id == str(agent.session.id)
 
     async def test_run_turn_calls_prefetch(self) -> None:
-        mem = RecordingMemory(prefetch_result="## Relevant Past Context\n\npast stuff")
+        mem = RecordingMemory(prefetch_result="## Past Context\n\npast stuff")
         agent, _ = make_agent(make_simple_llm(), memory=mem)
         await agent.run_turn("do something")
         assert mem.prefetch_calls == ["do something"]
 
     async def test_prefetch_context_passed_to_llm(self) -> None:
-        mem = RecordingMemory(prefetch_result="## Relevant Past Context\n\npast data")
+        mem = RecordingMemory(prefetch_result="## Past Context\n\npast data")
         llm = make_simple_llm()
         agent, _ = make_agent(llm, memory=mem)
 
@@ -269,7 +269,7 @@ class TestAgentMemoryIntegration:
 
         llm.stream = capturing_stream
         await agent.run_turn("help me")
-        assert any("Relevant Past Context" in s for s in captured_system)
+        assert any("Past Context" in s for s in captured_system)
 
     async def test_no_memory_works_normally(self) -> None:
         agent, _ = make_agent(make_simple_llm(), memory=None)

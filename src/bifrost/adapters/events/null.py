@@ -5,7 +5,12 @@ Used in Pi / local mode where no event backbone is available.
 
 from __future__ import annotations
 
-from bifrost.ports.events import BudgetWarningEvent, CostEventEmitter, RequestCompletedEvent
+from bifrost.ports.events import (
+    BudgetDegradedEvent,
+    BudgetWarningEvent,
+    CostEventEmitter,
+    RequestCompletedEvent,
+)
 
 
 class NullEventEmitter(CostEventEmitter):
@@ -15,4 +20,7 @@ class NullEventEmitter(CostEventEmitter):
         pass
 
     async def emit_budget_warning(self, event: BudgetWarningEvent) -> None:
+        pass
+
+    async def emit_budget_degraded(self, event: BudgetDegradedEvent) -> None:
         pass

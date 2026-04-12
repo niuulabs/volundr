@@ -92,7 +92,8 @@ def _build_web_search_kwargs(settings: Settings, _ctx: dict[str, Any]) -> dict[s
         try:
             cls = _import_class(ws_cfg.provider.adapter)
             merged = _inject_secrets(
-                dict(ws_cfg.provider.kwargs), ws_cfg.provider.secret_kwargs_env,
+                dict(ws_cfg.provider.kwargs),
+                ws_cfg.provider.secret_kwargs_env,
             )
             provider = cls(**merged)
         except Exception as exc:
@@ -258,8 +259,8 @@ BUILTIN_TOOLS: dict[str, BuiltinToolDef] = {
         kwargs_fn=lambda s, ctx: {
             "llm": ctx["llm"],
             "session": ctx["session"],
-            "model": s.agent.outcome.reflection_model,
-            "max_tokens": s.agent.outcome.reflection_max_tokens,
+            "model": s.memory.reflection_model,
+            "max_tokens": s.memory.reflection_max_tokens,
         },
     ),
     "ravn_memory_search": BuiltinToolDef(
