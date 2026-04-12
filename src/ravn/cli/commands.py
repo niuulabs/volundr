@@ -2092,6 +2092,8 @@ async def _run_daemon(
 
     if not tasks:
         typer.echo("No channels or triggers enabled — daemon has nothing to do.", err=True)
+        if daemon_reflection_svc is not None:
+            await daemon_reflection_svc.stop()
         return
 
     try:
