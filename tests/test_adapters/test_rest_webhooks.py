@@ -6,7 +6,6 @@ import hashlib
 import hmac
 import json
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -19,7 +18,6 @@ from volundr.adapters.inbound.rest_webhooks import (
     create_webhooks_router,
 )
 from volundr.config import GitHubWebhookConfig
-
 
 # ---------------------------------------------------------------------------
 # Fake publisher
