@@ -984,6 +984,13 @@ class ReviewEngine:
         """Delegate auto-continue to DispatchService if available."""
         if self._dispatch_service is None:
             return
+        # TODO(linear-race): Linear's API is eventually consistent — the issue
+        # state we just set to Done may not be visible yet when
+        # get_blocked_identifiers queries relations.  A short delay avoids the
+        # race where dependent issues still appear blocked.  Replace with a
+        # proper "known-completed" identifier pass-through once we refactor
+        # the blocking resolution.
+        await asyncio.sleep(2)
         try:
             await self._dispatch_service.try_auto_continue(owner_id, saga_tracker_id)
         except Exception:
