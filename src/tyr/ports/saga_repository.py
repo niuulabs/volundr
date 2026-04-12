@@ -68,6 +68,13 @@ class SagaRepository(ABC):
         """
         ...
 
+    async def get_phase(self, phase_id: UUID) -> Phase | None:
+        """Get a single phase by ID. Returns None if not found.
+
+        Subclasses should override this method.
+        """
+        raise NotImplementedError(f"{type(self).__name__}.get_phase not implemented")
+
     async def get_raid(self, raid_id: UUID) -> Raid | None:
         """Get a single raid by ID. Returns None if not found.
 

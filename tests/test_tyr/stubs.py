@@ -70,6 +70,9 @@ class InMemorySagaRepository(SagaRepository):
     async def count_by_status(self) -> dict[str, int]:
         return {}
 
+    async def get_phase(self, phase_id: UUID) -> Phase | None:
+        return self.phases.get(phase_id)
+
     async def get_raid(self, raid_id: UUID) -> Raid | None:
         return self.raids.get(raid_id)
 

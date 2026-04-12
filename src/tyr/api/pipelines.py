@@ -111,7 +111,7 @@ def create_pipelines_router() -> APIRouter:
                 detail=f"Pipeline creation failed: {exc}",
             )
 
-        phases = await executor._saga_repo.get_phases_by_saga(saga.id)
+        phases = await executor.get_phases(saga.id)
 
         return CreatePipelineResponse(
             saga_id=str(saga.id),

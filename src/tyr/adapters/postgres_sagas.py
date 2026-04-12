@@ -163,6 +163,15 @@ class PostgresSagaRepository(SagaRepository):
             saga_id,
         )
 
+    async def get_phase(self, phase_id: UUID) -> Phase | None:
+        row = await self._pool.fetchrow(
+            "SELECT * FROM phases WHERE id = $1",
+            phase_id,
+        )
+        if row is None:
+            return None
+        return self._row_to_phase(row)
+
     async def get_raid(self, raid_id: UUID) -> Raid | None:
         row = await self._pool.fetchrow(
             "SELECT * FROM raids WHERE id = $1",

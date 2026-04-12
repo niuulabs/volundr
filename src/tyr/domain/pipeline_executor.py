@@ -31,8 +31,8 @@ Usage::
 from __future__ import annotations
 
 import logging
-import re
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -47,7 +47,7 @@ from tyr.domain.models import (
     SagaStatus,
 )
 from tyr.domain.templates import SagaTemplate, TemplatePhase, load_template_from_string
-from tyr.domain.utils import _slugify
+from tyr.domain.utils import _session_name, _slugify
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.volundr import SpawnRequest, VolundrFactory
@@ -154,6 +154,10 @@ class PipelineExecutor:
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
+
+    async def get_phases(self, saga_id: UUID) -> list[Phase]:
+        """Return all phases for *saga_id*, ordered by phase number."""
+        return await self._saga_repo.get_phases_by_saga(saga_id)
 
     async def create_from_yaml(
         self,
@@ -350,7 +354,7 @@ class PipelineExecutor:
 
         raids = await self._saga_repo.get_raids_by_phase(phase.id)
         for raid, tpl_raid in zip(raids, tpl_phase.raids):
-            session_name = re.sub(r"[^a-z0-9]+", "-", raid.name.lower()).strip("-")[:48]
+            session_name = _session_name(raid.name)
             repo = saga.repos[0] if saga.repos else ""
             try:
                 session = await volundr.spawn_session(
@@ -368,24 +372,10 @@ class PipelineExecutor:
                         integration_ids=[],
                     ),
                 )
-                updated = Raid(
-                    id=raid.id,
-                    phase_id=raid.phase_id,
-                    tracker_id=raid.tracker_id,
-                    name=raid.name,
-                    description=raid.description,
-                    acceptance_criteria=raid.acceptance_criteria,
-                    declared_files=raid.declared_files,
-                    estimate_hours=raid.estimate_hours,
+                updated = replace(
+                    raid,
                     status=RaidStatus.RUNNING,
-                    confidence=raid.confidence,
                     session_id=session.id,
-                    branch=raid.branch,
-                    chronicle_summary=raid.chronicle_summary,
-                    pr_url=raid.pr_url,
-                    pr_id=raid.pr_id,
-                    retry_count=raid.retry_count,
-                    created_at=raid.created_at,
                     updated_at=datetime.now(UTC),
                 )
                 await self._saga_repo.save_raid(updated)
@@ -475,37 +465,25 @@ class PipelineExecutor:
     async def _finalize_phase(self, phase_id: UUID, *, raids: list[Raid]) -> None:
         """Finalize a completed phase: evaluate fan-in and advance."""
         # Find the phase and saga
-        all_phases: list[Phase] | None = None
-        saga: Saga | None = None
+        saga_id = await self._get_saga_id_for_phase(phase_id)
+        if saga_id is None:
+            return
 
-        for raid in raids:
-            phases = await self._saga_repo.get_phases_by_saga(
-                await self._get_saga_id_for_phase(phase_id)
-            )
-            saga_id = phases[0].saga_id if phases else None
-            if saga_id is None:
-                return
-            all_phases = phases
-            saga = await self._saga_repo.get_saga(saga_id)
-            break
+        all_phases = await self._saga_repo.get_phases_by_saga(saga_id)
+        if not all_phases:
+            return
 
-        if all_phases is None or saga is None:
+        saga = await self._saga_repo.get_saga(all_phases[0].saga_id)
+        if saga is None:
             return
 
         current_phase = next((p for p in all_phases if p.id == phase_id), None)
         if current_phase is None:
             return
 
-        # Evaluate fan-in
+        # Evaluate fan-in using "merge" strategy (base class has no template context)
         outcomes = [r.structured_outcome or {} for r in raids]
-        # We need the fan_in strategy from the template — fall back to "merge"
-        # (fan_in is stored in memory from template, not in DB).
-        # Use "all_must_pass" if any raid FAILED status.
-        has_failed = any(r.status == RaidStatus.FAILED for r in raids)
-        if has_failed:
-            fan_in_passed = False
-        else:
-            fan_in_passed = True
+        fan_in_passed = evaluate_fan_in("merge", outcomes)
 
         # Mark current phase COMPLETE
         completed_phase = Phase(
@@ -585,7 +563,7 @@ class PipelineExecutor:
         raids = await self._saga_repo.get_raids_by_phase(next_phase.id)
         repo = saga.repos[0] if saga.repos else ""
         for raid in raids:
-            session_name = re.sub(r"[^a-z0-9]+", "-", raid.name.lower()).strip("-")[:48]
+            session_name = _session_name(raid.name)
             try:
                 session = await volundr.spawn_session(
                     request=SpawnRequest(
@@ -602,24 +580,10 @@ class PipelineExecutor:
                         integration_ids=[],
                     ),
                 )
-                updated = Raid(
-                    id=raid.id,
-                    phase_id=raid.phase_id,
-                    tracker_id=raid.tracker_id,
-                    name=raid.name,
-                    description=raid.description,
-                    acceptance_criteria=raid.acceptance_criteria,
-                    declared_files=raid.declared_files,
-                    estimate_hours=raid.estimate_hours,
+                updated = replace(
+                    raid,
                     status=RaidStatus.RUNNING,
-                    confidence=raid.confidence,
                     session_id=session.id,
-                    branch=raid.branch,
-                    chronicle_summary=raid.chronicle_summary,
-                    pr_url=raid.pr_url,
-                    pr_id=raid.pr_id,
-                    retry_count=raid.retry_count,
-                    created_at=raid.created_at,
                     updated_at=datetime.now(UTC),
                 )
                 await self._saga_repo.save_raid(updated)
@@ -639,26 +603,12 @@ class PipelineExecutor:
             except Exception:
                 logger.exception("PipelineExecutor: failed to spawn session for raid %s", raid.name)
 
-    async def _get_saga_id_for_phase(self, phase_id: UUID) -> UUID:
-        """Resolve the saga_id for a phase by inspecting its raids."""
-        # We can only look this up if we query phases directly. Since we only
-        # have get_phases_by_saga, we use a workaround: grab any raid and
-        # follow the phase_id → saga join via the repo.
-        raids = await self._saga_repo.get_raids_by_phase(phase_id)
-        if not raids:
-            # Fallback: raid lookup
-            return phase_id  # caller handles None gracefully
-
-        # Find phase in any saga (linear scan acceptable for small sets)
-        # We'll leverage get_phases_by_saga on the saga found from a raid
-        # We cannot find saga_id without a phase lookup — but phase has saga_id.
-        # We need to get the phase record itself.  Use get_phases_by_saga approach:
-        # Instead, store saga_id on the first raid's phase.  Since we can't query
-        # phases directly, we store the saga_id in raid's phase_id join.
-        # Actually: raids have phase_id, phases have saga_id. We need a
-        # get_phase method. For now, look up via get_phases_by_saga scanning.
-        # This is a best-effort; the caller handles failure.
-        return phase_id  # will be replaced by actual lookup below
+    async def _get_saga_id_for_phase(self, phase_id: UUID) -> UUID | None:
+        """Resolve the saga_id for a phase using the repository."""
+        phase = await self._saga_repo.get_phase(phase_id)
+        if phase is None:
+            return None
+        return phase.saga_id
 
     async def _complete_saga(self, saga: Saga) -> None:
         await self._saga_repo.update_saga_status(saga.id, SagaStatus.COMPLETE)
@@ -806,7 +756,7 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
             None,
         )
         if next_tpl and next_tpl.condition:
-            condition_ctx = self._build_condition_context(saga_id, all_phases, template_pairs)
+            condition_ctx = await self._build_condition_context(saga_id, all_phases, template_pairs)
             condition_ctx.setdefault("stages", {})[current_phase.name] = merged
             try:
                 passes = evaluate_condition(next_tpl.condition, condition_ctx)
@@ -838,7 +788,87 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
         )
         await self._advance_phase(saga, next_phase=next_phase)
 
-    def _build_condition_context(
+    async def _advance_phase(self, saga: Saga, *, next_phase: Phase) -> None:
+        """Template-aware advance: uses stored template prompt and persona."""
+        active = Phase(
+            id=next_phase.id,
+            saga_id=next_phase.saga_id,
+            tracker_id=next_phase.tracker_id,
+            number=next_phase.number,
+            name=next_phase.name,
+            status=PhaseStatus.ACTIVE,
+            confidence=next_phase.confidence,
+        )
+        await self._saga_repo.save_phase(active)
+
+        volundr = await self._volundr_factory.primary_for_owner(self._owner_id)
+        if volundr is None:
+            logger.error(
+                "PipelineExecutor: no Volundr adapter for owner %s, cannot dispatch phase '%s'",
+                self._owner_id,
+                next_phase.name,
+            )
+            return
+
+        template_pairs = self._saga_templates.get(str(saga.id), [])
+        tpl_phase = next(
+            (tpl for ph, tpl in template_pairs if ph.id == next_phase.id),
+            None,
+        )
+
+        raids = await self._saga_repo.get_raids_by_phase(next_phase.id)
+        repo = saga.repos[0] if saga.repos else ""
+        for i, raid in enumerate(raids):
+            tpl_raid = tpl_phase.raids[i] if tpl_phase and i < len(tpl_phase.raids) else None
+            session_name = _session_name(raid.name)
+            initial_prompt = tpl_raid.prompt if tpl_raid else raid.description
+            persona = tpl_raid.persona or None if tpl_raid else None
+            try:
+                session = await volundr.spawn_session(
+                    request=SpawnRequest(
+                        name=session_name,
+                        repo=repo,
+                        branch=saga.feature_branch,
+                        base_branch=saga.base_branch,
+                        model=self._default_model,
+                        tracker_issue_id=raid.tracker_id,
+                        tracker_issue_url="",
+                        system_prompt="",
+                        initial_prompt=initial_prompt,
+                        profile=persona,
+                        integration_ids=[],
+                    ),
+                )
+                updated = replace(
+                    raid,
+                    status=RaidStatus.RUNNING,
+                    session_id=session.id,
+                    updated_at=datetime.now(UTC),
+                )
+                await self._saga_repo.save_raid(updated)
+                await self._event_bus.emit(
+                    TyrEvent(
+                        event="raid.state_changed",
+                        data={
+                            "raid_id": str(raid.id),
+                            "new_status": RaidStatus.RUNNING.value,
+                            "session_id": session.id,
+                            "saga_id": str(saga.id),
+                            "owner_id": self._owner_id,
+                        },
+                        owner_id=self._owner_id,
+                    )
+                )
+                logger.info(
+                    "PipelineExecutor: dispatched raid %s → session %s (persona=%s)",
+                    raid.name,
+                    session.id,
+                    persona or "(none)",
+                )
+            except Exception:
+                logger.exception("PipelineExecutor: failed to spawn session for raid %s", raid.name)
+
+    async def _build_condition_context(
         self,
         saga_id: UUID,
         all_phases: list[Phase],
@@ -849,7 +879,9 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
         for phase in all_phases:
             if phase.status != PhaseStatus.COMPLETE:
                 continue
-            ctx["stages"][phase.name] = {}
+            raids = await self._saga_repo.get_raids_by_phase(phase.id)
+            outcomes = [r.structured_outcome or {} for r in raids]
+            ctx["stages"][phase.name] = merge_outcomes(outcomes)
         return ctx
 
     async def _find_saga_id(self, phase_id: UUID) -> UUID | None:
