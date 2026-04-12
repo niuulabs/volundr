@@ -890,6 +890,7 @@ def _build_agent(
     profile: RavnProfile | None = None,
     session: Session | None = None,
     task_id: str | None = None,
+    sleipnir_publisher: object | None = None,
 ) -> tuple[RavnAgent, Any]:
     api_key = settings.effective_api_key()
     if not api_key:
@@ -999,6 +1000,10 @@ def _build_agent(
         checkpoint_every_n_tools=cp_cfg.checkpoint_every_n_tools,
         auto_checkpoint_before_destructive=cp_cfg.auto_before_destructive,
         budget_milestone_fractions=cp_cfg.budget_milestone_fractions,
+        # NIU-598: session lifecycle events + learnings injection
+        sleipnir_publisher=sleipnir_publisher,
+        reflection_config=settings.reflection,
+        persona=persona_config.name if persona_config else "",
     )
 
     return agent, channel
@@ -1093,6 +1098,13 @@ async def _run_with_signals(
             checkpoint_id=resume_checkpoint_id,
         )
 
+    # NIU-598: create in-process bus for post-session reflection (standalone CLI mode).
+    in_process_bus: Any | None = None
+    if settings.reflection.enabled:
+        from sleipnir.adapters.in_process import InProcessBus
+
+        in_process_bus = InProcessBus()
+
     agent, channel = _build_agent(
         settings,
         no_tools=no_tools,
@@ -1100,7 +1112,23 @@ async def _run_with_signals(
         profile=profile,
         session=restored_session,
         task_id=resume_task_id,
+        sleipnir_publisher=in_process_bus,
     )
+
+    # NIU-598: start post-session reflection service after agent is built.
+    reflection_svc: Any | None = None
+    if in_process_bus is not None:
+        _refl_mimir = _build_mimir(settings)
+        if _refl_mimir is not None:
+            from ravn.adapters.reflection.post_session import PostSessionReflectionService
+
+            reflection_svc = PostSessionReflectionService(
+                subscriber=in_process_bus,
+                mimir=_refl_mimir,
+                llm=_build_llm(settings),
+                config=settings.reflection,
+            )
+            await reflection_svc.start()
 
     # Register signal handlers after agent is built so they can call agent.interrupt().
     def _on_signal(reason: InterruptReason) -> None:
@@ -1131,6 +1159,14 @@ async def _run_with_signals(
                 f"\n[ravn] State saved. Resume with: ravn --resume {agent.task_id}",
                 err=True,
             )
+        # NIU-598: flush pending events then tear down the reflection service.
+        if in_process_bus is not None:
+            try:
+                await in_process_bus.flush()
+            except Exception:
+                pass
+        if reflection_svc is not None:
+            await reflection_svc.stop()
 
 
 async def _load_checkpoint_session(
@@ -1814,6 +1850,14 @@ async def _run_daemon(
     # Populated by _wire_cron after drive_loop is created; captured by _agent_factory.
     cron_tools: list[Any] = []
 
+    # NIU-598: shared in-process bus for post-session reflection (daemon mode).
+    # Captured by _agent_factory so each agent created by the daemon publishes to it.
+    daemon_bus: Any | None = None
+    if settings.reflection.enabled:
+        from sleipnir.adapters.in_process import InProcessBus
+
+        daemon_bus = InProcessBus()
+
     def _agent_factory(
         channel: ChannelPort,
         task_id: str | None = None,
@@ -1914,6 +1958,10 @@ async def _run_daemon(
             input_token_cost_per_million=settings.memory.input_token_cost_per_million,
             output_token_cost_per_million=settings.memory.output_token_cost_per_million,
             extended_thinking=extended_thinking,
+            # NIU-598: session lifecycle events + learnings injection
+            sleipnir_publisher=daemon_bus,
+            reflection_config=settings.reflection,
+            persona=resolved_persona.name if resolved_persona else "",
         )
 
     tasks: list[asyncio.Task] = []
@@ -2016,6 +2064,19 @@ async def _run_daemon(
         trigger_names = [t.name for t in drive_loop._triggers]
         tasks.append(asyncio.create_task(drive_loop.run(), name="drive_loop"))
 
+    # NIU-598: start post-session reflection service for daemon mode.
+    daemon_reflection_svc: Any | None = None
+    if daemon_bus is not None and daemon_mimir is not None:
+        from ravn.adapters.reflection.post_session import PostSessionReflectionService
+
+        daemon_reflection_svc = PostSessionReflectionService(
+            subscriber=daemon_bus,
+            mimir=daemon_mimir,
+            llm=llm,
+            config=settings.reflection,
+        )
+        await daemon_reflection_svc.start()
+
     channels_str = ", ".join(gw_tasks) if gw_tasks else "none"
     triggers_str = ", ".join(trigger_names) if trigger_names else "none"
     concurrent = settings.initiative.max_concurrent_tasks if settings.initiative.enabled else 0
@@ -2049,6 +2110,9 @@ async def _run_daemon(
             await _cascade_discovery.stop()
         await event_publisher.close()
         await _shutdown_mcp(mcp_manager)
+        # NIU-598: tear down daemon reflection service.
+        if daemon_reflection_svc is not None:
+            await daemon_reflection_svc.stop()
 
 
 def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> list[Any]:
