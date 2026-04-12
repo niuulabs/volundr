@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import json
 import logging
 import time
 from collections import deque
@@ -30,6 +31,9 @@ from volundr.config import GitHubWebhookConfig
 logger = logging.getLogger(__name__)
 
 _GITHUB_SOURCE = "volundr:github-webhook"
+
+# Strong references to background tasks prevent premature GC.
+_background_tasks: set[asyncio.Task] = set()
 
 
 # ---------------------------------------------------------------------------
@@ -217,12 +221,6 @@ def create_webhooks_router(
         if not config.enabled:
             return {"status": "ignored", "reason": "webhook ingestion disabled"}
 
-        if not rate_limiter.allow():
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Rate limit exceeded",
-            )
-
         if config.secret:
             if not _verify_signature(config.secret, body, x_hub_signature_256):
                 raise HTTPException(
@@ -230,8 +228,14 @@ def create_webhooks_router(
                     detail="Invalid webhook signature",
                 )
 
+        if not rate_limiter.allow():
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit exceeded",
+            )
+
         try:
-            payload = await request.json()
+            payload = json.loads(body)
         except Exception:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -258,7 +262,9 @@ def create_webhooks_router(
             )
             return {"status": "accepted", "event_type": event.event_type, "published": False}
 
-        asyncio.create_task(_publish(publisher, event, delivery_id))
+        task = asyncio.create_task(_publish(publisher, event, delivery_id))
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
 
         logger.info(
             "GitHub webhook: queued %s delivery=%s",

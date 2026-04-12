@@ -134,7 +134,7 @@ class GitHubPrMergedPayload:
 @dataclass(frozen=True)
 class GitHubPushMainPayload:
     repo: str
-    commits: list
+    commits: list[dict]
     pusher: str
 
 
@@ -143,7 +143,7 @@ class GitHubIssueOpenedPayload:
     repo: str
     title: str
     body: str
-    labels: list
+    labels: list[str]
     author: str
 
 
@@ -527,7 +527,7 @@ def github_pr_merged(
 def github_push_main(
     *,
     repo: str,
-    commits: list,
+    commits: list[dict],
     pusher: str,
     source: str,
     correlation_id: str | None = None,
@@ -536,7 +536,13 @@ def github_push_main(
     return SleipnirEvent(
         event_type=registry.GITHUB_PUSH_MAIN,
         source=source,
-        payload={"repo": repo, "commits": commits, "pusher": pusher},
+        payload=dataclasses.asdict(
+            GitHubPushMainPayload(
+                repo=repo,
+                commits=commits,
+                pusher=pusher,
+            )
+        ),
         summary=f"GitHub push to main on {repo} by {pusher} ({len(commits)} commit(s))",
         urgency=0.5,
         domain="code",
@@ -550,7 +556,7 @@ def github_issue_opened(
     repo: str,
     title: str,
     body: str,
-    labels: list,
+    labels: list[str],
     author: str,
     source: str,
     correlation_id: str | None = None,
