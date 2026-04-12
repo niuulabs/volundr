@@ -115,6 +115,38 @@ class MimirDreamCompletedPayload:
     lint_fixes: int
 
 
+@dataclass(frozen=True)
+class GitHubPrOpenedPayload:
+    repo: str
+    branch: str
+    author: str
+    pr_url: str
+    title: str
+
+
+@dataclass(frozen=True)
+class GitHubPrMergedPayload:
+    repo: str
+    branch: str
+    merge_sha: str
+
+
+@dataclass(frozen=True)
+class GitHubPushMainPayload:
+    repo: str
+    commits: list[dict]
+    pusher: str
+
+
+@dataclass(frozen=True)
+class GitHubIssueOpenedPayload:
+    repo: str
+    title: str
+    body: str
+    labels: list[str]
+    author: str
+
+
 # ---------------------------------------------------------------------------
 # Factory functions
 # ---------------------------------------------------------------------------
@@ -428,6 +460,122 @@ def mimir_dream_completed(
             f"{entities_created} entities, {lint_fixes} lint fixes"
         ),
         urgency=0.1,
+        domain="code",
+        timestamp=datetime.now(UTC),
+        correlation_id=correlation_id,
+    )
+
+
+def github_pr_opened(
+    *,
+    repo: str,
+    branch: str,
+    author: str,
+    pr_url: str,
+    title: str,
+    source: str,
+    correlation_id: str | None = None,
+) -> SleipnirEvent:
+    """Emit when a GitHub pull request is opened."""
+    return SleipnirEvent(
+        event_type=registry.GITHUB_PR_OPENED,
+        source=source,
+        payload=dataclasses.asdict(
+            GitHubPrOpenedPayload(
+                repo=repo,
+                branch=branch,
+                author=author,
+                pr_url=pr_url,
+                title=title,
+            )
+        ),
+        summary=f"GitHub PR opened: {title} by {author} on {repo}",
+        urgency=0.4,
+        domain="code",
+        timestamp=datetime.now(UTC),
+        correlation_id=correlation_id,
+    )
+
+
+def github_pr_merged(
+    *,
+    repo: str,
+    branch: str,
+    merge_sha: str,
+    source: str,
+    correlation_id: str | None = None,
+) -> SleipnirEvent:
+    """Emit when a GitHub pull request is merged."""
+    return SleipnirEvent(
+        event_type=registry.GITHUB_PR_MERGED,
+        source=source,
+        payload=dataclasses.asdict(
+            GitHubPrMergedPayload(
+                repo=repo,
+                branch=branch,
+                merge_sha=merge_sha,
+            )
+        ),
+        summary=f"GitHub PR merged into {branch} on {repo} ({merge_sha[:7]})",
+        urgency=0.5,
+        domain="code",
+        timestamp=datetime.now(UTC),
+        correlation_id=correlation_id,
+    )
+
+
+def github_push_main(
+    *,
+    repo: str,
+    commits: list[dict],
+    pusher: str,
+    source: str,
+    correlation_id: str | None = None,
+) -> SleipnirEvent:
+    """Emit when a push is made to the main branch on GitHub."""
+    return SleipnirEvent(
+        event_type=registry.GITHUB_PUSH_MAIN,
+        source=source,
+        payload=dataclasses.asdict(
+            GitHubPushMainPayload(
+                repo=repo,
+                commits=commits,
+                pusher=pusher,
+            )
+        ),
+        summary=f"GitHub push to main on {repo} by {pusher} ({len(commits)} commit(s))",
+        urgency=0.5,
+        domain="code",
+        timestamp=datetime.now(UTC),
+        correlation_id=correlation_id,
+    )
+
+
+def github_issue_opened(
+    *,
+    repo: str,
+    title: str,
+    body: str,
+    labels: list[str],
+    author: str,
+    source: str,
+    correlation_id: str | None = None,
+) -> SleipnirEvent:
+    """Emit when a GitHub issue is opened."""
+    return SleipnirEvent(
+        event_type=registry.GITHUB_ISSUE_OPENED,
+        source=source,
+        payload=dataclasses.asdict(
+            GitHubIssueOpenedPayload(
+                repo=repo,
+                title=title,
+                body=body,
+                labels=labels,
+                author=author,
+            )
+        ),
+        summary=f"GitHub issue opened: {title} by {author} on {repo}",
+        urgency=0.3,
         domain="code",
         timestamp=datetime.now(UTC),
         correlation_id=correlation_id,

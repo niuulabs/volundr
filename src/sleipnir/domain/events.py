@@ -25,6 +25,7 @@ EVENT_NAMESPACES: dict[str, str] = {
     "system": "Infrastructure and lifecycle events (health, config, restart)",
     "skuld": "Skuld broker events (session pod activity, tool use, token updates)",
     "mimir": "Mimir knowledge-base events (page writes, dream cycles)",
+    "github": "GitHub webhook events (PR opened/merged, push to main, issue opened)",
 }
 
 #: Known high-level domain tags for events.
