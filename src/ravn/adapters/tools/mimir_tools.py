@@ -419,37 +419,37 @@ class MimirLintTool(ToolPort):
     async def execute(self, input: dict) -> ToolResult:
         report = await self._adapter.lint()
 
-        issue_count = (
-            len(report.orphans) + len(report.contradictions) + len(report.stale) + len(report.gaps)
-        )
         lines = [
             f"## Mímir lint — {report.pages_checked} pages checked\n",
-            f"Issues found: {issue_count}",
+            f"Issues found: {len(report.issues)}",
             "",
         ]
 
-        if report.orphans:
-            lines.append(f"### Orphans ({len(report.orphans)})")
-            lines.append("Pages not linked from index.md:")
-            lines.extend(f"  - {p}" for p in report.orphans)
-            lines.append("")
+        check_labels: dict[str, str] = {
+            "L01": "Orphans",
+            "L02": "Contradictions",
+            "L04": "Concept Gaps",
+            "L05": "Broken Wikilinks",
+            "L06": "Missing Source Attribution",
+            "L07": "Thin Pages",
+            "L08": "Stale Content",
+            "L09": "Timeline Edits",
+            "L10": "Empty Compiled Truth",
+            "L11": "Stale Index",
+            "L12": "Invalid Frontmatter",
+        }
 
-        if report.contradictions:
-            lines.append(f"### Contradictions ({len(report.contradictions)})")
-            lines.append("Pages with contradiction markers:")
-            lines.extend(f"  - {p}" for p in report.contradictions)
-            lines.append("")
+        by_check: dict[str, list] = {}
+        for issue in report.issues:
+            by_check.setdefault(issue.id, []).append(issue)
 
-        if report.stale:
-            lines.append(f"### Stale ({len(report.stale)})")
-            lines.append("Pages whose source content hash has changed:")
-            lines.extend(f"  - {p}" for p in report.stale)
-            lines.append("")
-
-        if report.gaps:
-            lines.append(f"### Gaps ({len(report.gaps)})")
-            lines.append("Concepts mentioned frequently but lacking a page:")
-            lines.extend(f"  - {p}" for p in report.gaps)
+        for check_id in sorted(by_check):
+            group = by_check[check_id]
+            label = check_labels.get(check_id, check_id)
+            lines.append(f"### {label} ({len(group)})")
+            for issue in group:
+                fix_tag = " [auto-fixable]" if issue.auto_fixable else ""
+                lines.append(f"  - [{issue.severity}] {issue.page_path}: {issue.message}{fix_tag}")
             lines.append("")
 
         if not report.issues_found:

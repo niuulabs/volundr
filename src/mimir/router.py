@@ -1,4 +1,4 @@
-"""MimirRouter — FastAPI router exposing all nine Mímir HTTP endpoints.
+"""MimirRouter — FastAPI router exposing all Mímir HTTP endpoints.
 
 Mountable on any FastAPI application::
 
@@ -17,7 +17,8 @@ GET  /mimir/pages          — list all pages with metadata
 GET  /mimir/page           — read a specific page (?path=...)
 GET  /mimir/search         — full-text search (?q=...)
 GET  /mimir/log            — last N log entries (?n=50)
-GET  /mimir/lint           — current lint report
+GET  /mimir/lint           — current lint report (12 check types, L01–L12)
+POST /mimir/lint/fix       — run lint and apply auto-fixes (L05, L11, L12)
 GET  /mimir/graph          — nodes + edges for MimirExplorer visualiser
 PUT  /mimir/page           — upsert a page (requires write auth)
 POST /mimir/ingest         — ingest URL or text (requires write auth)
@@ -79,13 +80,19 @@ class SearchResult(BaseModel):
     category: str
 
 
+class LintIssueResponse(BaseModel):
+    id: str
+    severity: str
+    message: str
+    page_path: str
+    auto_fixable: bool
+
+
 class LintResponse(BaseModel):
-    orphans: list[str]
-    contradictions: list[str]
-    stale: list[str]
-    gaps: list[str]
+    issues: list[LintIssueResponse]
     pages_checked: int
     issues_found: bool
+    summary: dict[str, int]
 
 
 class GraphNode(BaseModel):
@@ -240,6 +247,11 @@ class MimirRouter:
             report = await adapter.lint()
             return _lint_to_response(report)
 
+        @router.post("/lint/fix", response_model=LintResponse)
+        async def lint_fix() -> LintResponse:
+            report = await adapter.lint(fix=True)
+            return _lint_to_response(report)
+
         @router.get("/graph", response_model=GraphResponse)
         async def graph() -> GraphResponse:
             pages = await adapter.list_pages()
@@ -337,10 +349,17 @@ def _meta_to_response(meta: MimirPageMeta) -> PageMetaResponse:
 
 def _lint_to_response(report: MimirLintReport) -> LintResponse:
     return LintResponse(
-        orphans=report.orphans,
-        contradictions=report.contradictions,
-        stale=report.stale,
-        gaps=report.gaps,
+        issues=[
+            LintIssueResponse(
+                id=issue.id,
+                severity=issue.severity,
+                message=issue.message,
+                page_path=issue.page_path,
+                auto_fixable=issue.auto_fixable,
+            )
+            for issue in report.issues
+        ],
         pages_checked=report.pages_checked,
         issues_found=report.issues_found,
+        summary=report.summary,
     )
