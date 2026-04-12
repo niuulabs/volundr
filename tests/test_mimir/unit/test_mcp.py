@@ -382,8 +382,10 @@ class TestLintTool:
         result = json.loads(result_content[0]["text"])
         assert result["pages_checked"] == 0
         assert result["issues_found"] is False
+        assert "summary" in result
+        assert isinstance(result["issues"], list)
 
-    def test_lint_detects_orphans(self, tmp_path: Path) -> None:
+    def test_lint_detects_issues(self, tmp_path: Path) -> None:
         _seed_page(tmp_path)
         client = _make_client(tmp_path)
         resp = client.post(
@@ -396,6 +398,7 @@ class TestLintTool:
         result_content = resp.json()["result"]["content"]
         result = json.loads(result_content[0]["text"])
         assert result["pages_checked"] >= 1
+        assert "issues" in result
 
 
 # ---------------------------------------------------------------------------

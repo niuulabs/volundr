@@ -460,14 +460,22 @@ class MimirMcpServer:
         return [{"type": "text", "text": json.dumps(result, indent=2)}]
 
     async def _tool_lint(self, args: dict[str, Any]) -> list[dict[str, Any]]:
-        report = await self._adapter.lint()
+        fix: bool = bool(args.get("fix", False))
+        report = await self._adapter.lint(fix=fix)
         result = {
-            "orphans": report.orphans,
-            "contradictions": report.contradictions,
-            "stale": report.stale,
-            "gaps": report.gaps,
+            "issues": [
+                {
+                    "id": issue.id,
+                    "severity": issue.severity,
+                    "message": issue.message,
+                    "page_path": issue.page_path,
+                    "auto_fixable": issue.auto_fixable,
+                }
+                for issue in report.issues
+            ],
             "pages_checked": report.pages_checked,
             "issues_found": report.issues_found,
+            "summary": report.summary,
         }
         return [{"type": "text", "text": json.dumps(result, indent=2)}]
 
