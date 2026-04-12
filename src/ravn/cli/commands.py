@@ -414,9 +414,7 @@ def _build_tools(
 
         entity_extractor = None
         if settings.mimir.ingest.entity_detection and llm is not None:
-            entity_extractor = EntityExtractor(
-                mimir=mimir, llm=llm, config=settings.mimir.ingest
-            )
+            entity_extractor = EntityExtractor(mimir=mimir, llm=llm, config=settings.mimir.ingest)
         tools.extend(build_mimir_tools(mimir, entity_extractor=entity_extractor))
 
     # -- Custom tools from config --
@@ -2135,6 +2133,19 @@ def _wire_mimir_triggers(
                 settings.recap.scheduled_recap_cron,
                 settings.recap.poll_interval_seconds,
             )
+
+    # Dream cycle trigger (NIU-587) — nightly Mímir enrichment, lint, cross-reference.
+    if settings.dream_cycle.enabled:
+        from ravn.adapters.triggers.dream_cycle import DreamCycleTrigger
+
+        drive_loop.register_trigger(DreamCycleTrigger(config=settings.dream_cycle))
+        logger.info(
+            "dream_cycle: trigger registered (cron=%r, persona=%r, budget=$%.2f, poll=%ds)",
+            settings.dream_cycle.cron_expression,
+            settings.dream_cycle.persona,
+            settings.dream_cycle.token_budget_usd,
+            settings.dream_cycle.poll_interval_seconds,
+        )
 
 
 def _wire_cron(

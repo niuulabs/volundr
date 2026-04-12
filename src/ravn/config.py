@@ -1980,6 +1980,66 @@ class RecapConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# NIU-587: Dream cycle trigger — nightly Mímir enrichment, lint, cross-reference
+# ---------------------------------------------------------------------------
+
+
+class DreamCycleTriggerConfig(BaseModel):
+    """Dream cycle trigger configuration (NIU-587).
+
+    Fires the ``mimir-curator`` persona on a cron schedule to run a nightly
+    enrichment pass over the Mímir knowledge base:
+
+    1. Query Mímir log entries since the last dream cycle.
+    2. Detect entities in new/modified raw sources.
+    3. Update compiled truth pages where evidence has changed.
+    4. Run ``mimir_lint --fix`` to auto-fix safe issues.
+    5. Cross-reference pages that mention the same entities without links.
+    6. Emit a ``mimir.dream.completed`` Sleipnir event with summary counts.
+
+    Disabled by default — enable via ``dream_cycle.enabled: true`` in ravn.yaml.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable the dream cycle trigger.  Off until explicitly activated; "
+            "flip to true in the deployment ravn.yaml."
+        ),
+    )
+    cron_expression: str = Field(
+        default="0 3 * * *",
+        description=(
+            "Cron expression controlling when the dream cycle fires "
+            "(default: 3 am daily).  Supports standard 5-field cron syntax."
+        ),
+    )
+    persona: str = Field(
+        default="mimir-curator",
+        description="Persona used when running the dream cycle agent task.",
+    )
+    task_description: str = Field(
+        default="Nightly dream cycle: enrich, lint, cross-reference",
+        description="Human-readable title for the enqueued agent task.",
+    )
+    token_budget_usd: float = Field(
+        default=0.50,
+        description=(
+            "Approximate USD token budget for the dream cycle run.  "
+            "The agent is instructed to stay within this budget."
+        ),
+    )
+    poll_interval_seconds: int = Field(
+        default=60,
+        description="How often (seconds) the trigger polls the cron schedule.",
+    )
+    state_dir: str = Field(
+        default="~/.ravn/daemon",
+        description="Directory where dream cycle state (last_run timestamp) is persisted.",
+    )
+
+
+# ---------------------------------------------------------------------------
 # NIU-571: Trust gradient — constrains tool availability per category
 # ---------------------------------------------------------------------------
 
@@ -2295,6 +2355,9 @@ class Settings(BaseSettings):
 
     # NIU-569: recap trigger
     recap: RecapConfig = Field(default_factory=RecapConfig)
+
+    # NIU-587: dream cycle trigger — nightly Mímir enrichment
+    dream_cycle: DreamCycleTriggerConfig = Field(default_factory=DreamCycleTriggerConfig)
 
     # NIU-588: post-session reflection → Mímir learnings
     reflection: PostSessionReflectionConfig = Field(default_factory=PostSessionReflectionConfig)
