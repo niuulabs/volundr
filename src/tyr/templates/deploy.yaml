@@ -1,0 +1,43 @@
+# Saga template: deploy
+# Triggered by: github.pr.merged (filter: branch=main)
+# Creates a deployment verification saga after a merge to main.
+name: "Deploy: {event.repo}@{event.sha_short}"
+feature_branch: "main"
+base_branch: "main"
+repos:
+  - "{event.repo}"
+phases:
+  - name: Deploy
+    raids:
+      - name: "Verify deployment of {event.sha_short}"
+        description: |
+          Verify the deployment triggered by merging {event.title} into main.
+
+          Repository: {event.repo}
+          Commit: {event.sha}
+          Merged PR: {event.pr_url}
+          Author: {event.author}
+        acceptance_criteria:
+          - Deployment succeeded without errors
+          - All health checks pass post-deployment
+          - No regressions introduced by the merged changes
+        declared_files: []
+        estimate_hours: 0.5
+        prompt: |
+          # Deployment Verification Task
+
+          A PR was merged to main — please verify the deployment succeeded.
+
+          **Repository**: {event.repo}
+          **Commit**: {event.sha}
+          **PR**: {event.pr_url}
+          **Title**: {event.title}
+
+          ## Instructions
+
+          1. Check the CI/CD pipeline status for this commit.
+          2. Verify all health checks pass.
+          3. Look for any error reports or regression signals.
+          4. If the deployment failed, open an incident issue and escalate.
+
+          Report your findings in a summary.

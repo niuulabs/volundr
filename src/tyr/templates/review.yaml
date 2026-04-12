@@ -1,0 +1,53 @@
+# Saga template: review
+# Triggered by: github.pr.opened
+# Creates a code review saga for an open pull request.
+name: "Review: {event.repo}#{event.pr_number}"
+feature_branch: "{event.branch}"
+base_branch: "{event.base_branch}"
+repos:
+  - "{event.repo}"
+phases:
+  - name: Review
+    raids:
+      - name: "Review PR #{event.pr_number}"
+        description: |
+          Review the pull request opened against {event.repo}.
+
+          PR URL: {event.pr_url}
+          Author: {event.author}
+          Branch: {event.branch} → {event.base_branch}
+          Title: {event.title}
+        acceptance_criteria:
+          - All changed files have been read and understood
+          - Code follows project conventions (CLAUDE.md and .claude/rules/)
+          - Tests are present and coverage meets the 85% threshold
+          - CI is passing on the PR
+          - All review findings have been addressed or acknowledged
+        declared_files: []
+        estimate_hours: 1.0
+        prompt: |
+          # Code Review Task
+
+          Please review the following pull request:
+
+          **PR**: {event.pr_url}
+          **Repository**: {event.repo}
+          **Branch**: {event.branch} → {event.base_branch}
+          **Title**: {event.title}
+          **Author**: {event.author}
+
+          ## Instructions
+
+          1. Read CLAUDE.md and `.claude/rules/` for project conventions.
+          2. Fetch the full PR diff: `gh pr diff {event.pr_number} --repo {event.repo}`
+          3. Read every changed file (not just the diff lines) to understand context.
+          4. Check CI status: `gh pr checks {event.pr_number} --repo {event.repo}`
+          5. Verify all acceptance criteria are met.
+          6. If changes are needed, push fixes; otherwise approve and merge.
+
+          ## Completion
+
+          When satisfied, merge the PR:
+          ```bash
+          gh pr merge {event.pr_number} --repo {event.repo} --squash --delete-branch
+          ```

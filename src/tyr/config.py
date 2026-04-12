@@ -643,6 +643,64 @@ class SleipnirConfig(BaseModel):
     kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
+class EventTriggerRule(BaseModel):
+    """A single event-trigger rule mapping a Sleipnir event to a saga template."""
+
+    event: str = Field(description="Sleipnir event type pattern (fnmatch syntax).")
+    saga_template: str = Field(description="Name of the saga template to instantiate.")
+    auto_start: bool = Field(
+        default=True,
+        description="When True, saga raids are dispatched immediately. "
+        "When False, raids are created in PENDING state and tyr.raid.needs_approval is emitted.",
+    )
+    filter: dict[str, str] = Field(
+        default_factory=dict,
+        description="Payload key/value pairs that must all match for the rule to fire.",
+    )
+
+
+class EventTriggerConfig(BaseModel):
+    """Configuration for the Sleipnir event trigger adapter.
+
+    Example YAML::
+
+        event_triggers:
+          owner_id: dev-user
+          templates_dir: ""   # empty = bundled src/tyr/templates/
+          rules:
+            - event: "github.pr.opened"
+              saga_template: review
+              auto_start: true
+            - event: "github.pr.merged"
+              saga_template: deploy
+              auto_start: true
+              filter:
+                branch: main
+    """
+
+    enabled: bool = Field(default=False, description="Enable the event trigger adapter.")
+    owner_id: str = Field(
+        default="dev-user",
+        description="Owner ID used when creating event-triggered sagas.",
+    )
+    templates_dir: str = Field(
+        default="",
+        description="Path to saga template YAML files. Empty means the bundled templates.",
+    )
+    default_model: str = Field(
+        default="claude-sonnet-4-6",
+        description="Default AI model for event-triggered saga sessions.",
+    )
+    dedup_cache_size: int = Field(
+        default=10_000,
+        description="Maximum number of correlation IDs held in the deduplication cache.",
+    )
+    rules: list[EventTriggerRule] = Field(
+        default_factory=list,
+        description="List of event-trigger rules.",
+    )
+
+
 class NotificationConfig(BaseModel):
     """Notification service configuration."""
 
@@ -711,6 +769,7 @@ class Settings(BaseSettings):
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     notification: NotificationConfig = Field(default_factory=NotificationConfig)
     sleipnir: SleipnirConfig = Field(default_factory=SleipnirConfig)
+    event_triggers: EventTriggerConfig = Field(default_factory=EventTriggerConfig)
 
     @classmethod
     def settings_customise_sources(

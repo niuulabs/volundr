@@ -491,10 +491,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.subscriber = subscriber
             await subscriber.start()
 
+            # Wire EventTriggerAdapter (requires Sleipnir subscriber)
+            event_trigger_adapter = None
+            if settings.event_triggers.enabled and sleipnir_bus is not None:
+                from tyr.adapters.event_trigger import build_event_trigger_adapter  # noqa: PLC0415
+
+                if not hasattr(sleipnir_bus, "subscribe"):
+                    logger.warning(
+                        "EventTriggerAdapter: sleipnir adapter does not support subscribe(), "
+                        "skipping event trigger setup"
+                    )
+                else:
+                    et_cfg = settings.event_triggers
+                    event_trigger_adapter = build_event_trigger_adapter(
+                        subscriber=sleipnir_bus,
+                        saga_repo=saga_repo,
+                        volundr_factory=app.state.volundr_factory,
+                        event_bus=event_bus,
+                        config=et_cfg,
+                    )
+                    await event_trigger_adapter.start()
+                    app.state.event_trigger_adapter = event_trigger_adapter
+                    logger.info(
+                        "EventTriggerAdapter started: %d rule(s)",
+                        len(et_cfg.rules),
+                    )
+
             logger.info("Tyr started — database pool ready")
             yield
 
             # Lifecycle cleanup
+            if event_trigger_adapter is not None:
+                await event_trigger_adapter.stop()
             if tyr_sleipnir_bridge is not None:
                 await tyr_sleipnir_bridge.stop()
             await review_engine.stop()
