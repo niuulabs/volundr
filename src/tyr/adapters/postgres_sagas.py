@@ -33,7 +33,7 @@ class PostgresSagaRepository(SagaRepository):
             """
             INSERT INTO phases (id, saga_id, tracker_id, number, name, status, confidence)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (id) DO NOTHING
+            ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status
             """,
             phase.id,
             phase.saga_id,

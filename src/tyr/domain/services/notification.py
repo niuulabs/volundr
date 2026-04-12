@@ -143,6 +143,8 @@ class NotificationService:
                 return self._map_saga_pr_created(event.data)
             case "phase.unlocked":
                 return self._map_phase_unlocked(event.data)
+            case "raid.needs_approval":
+                return self._map_raid_needs_approval(event.data)
             case _:
                 return None
 
@@ -232,6 +234,32 @@ class NotificationService:
             owner_id=owner_id,
             event_type="saga.complete",
             metadata=metadata,
+        )
+
+    @staticmethod
+    def _map_raid_needs_approval(data: dict[str, Any]) -> Notification | None:
+        """Map a raid.needs_approval event to a notification."""
+        owner_id = data.get("owner_id", "")
+        if not owner_id:
+            return None
+
+        raid_name = data.get("raid_name", data.get("raid_id", ""))
+        saga_name = data.get("saga_name", "")
+
+        body = f'Raid "{raid_name}" is waiting for your approval before it can start.'
+        if saga_name:
+            body += f'\nSaga: "{saga_name}"'
+
+        return Notification(
+            title="Raid awaiting approval",
+            body=body,
+            urgency=NotificationUrgency.HIGH,
+            owner_id=owner_id,
+            event_type="raid.needs_approval",
+            metadata={
+                "raid_id": str(data.get("raid_id", "")),
+                "saga_id": str(data.get("saga_id", "")),
+            },
         )
 
     @staticmethod

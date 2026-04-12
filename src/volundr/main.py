@@ -902,6 +902,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.include_router(events_router)
 
+            # GitHub webhook ingestion
+            from volundr.adapters.inbound.rest_webhooks import create_webhooks_router
+
+            webhooks_router = create_webhooks_router(
+                publisher=sleipnir_bus,
+                config=settings.webhooks.github,
+            )
+            app.include_router(webhooks_router)
+
             # Store for access in routes if needed
             app.state.session_service = session_service
             app.state.stats_service = stats_service

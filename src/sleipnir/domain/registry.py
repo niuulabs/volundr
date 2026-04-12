@@ -315,3 +315,19 @@ MIMIR_PAGE_WRITTEN: str = "mimir.page.written"
 
 #: A dream cycle completed — pages updated, entities created, lint fixes applied.
 MIMIR_DREAM_COMPLETED: str = "mimir.dream.completed"
+
+# ---------------------------------------------------------------------------
+# github — GitHub webhook events
+# ---------------------------------------------------------------------------
+
+#: A pull request was opened on GitHub.
+GITHUB_PR_OPENED: str = "github.pr.opened"
+
+#: A pull request was merged on GitHub.
+GITHUB_PR_MERGED: str = "github.pr.merged"
+
+#: A push was made to the main branch on GitHub.
+GITHUB_PUSH_MAIN: str = "github.push.main"
+
+#: An issue was opened on GitHub.
+GITHUB_ISSUE_OPENED: str = "github.issue.opened"

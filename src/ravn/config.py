@@ -401,10 +401,10 @@ class SkillConfig(BaseModel):
 class MemoryConfig(BaseModel):
     """Conversation memory / persistence backend configuration."""
 
-    backend: Literal["sqlite", "postgres", "buri"] | str = Field(
+    backend: Literal["sqlite", "postgres"] | str = Field(
         default="sqlite",
         description=(
-            "Backend to use: 'sqlite', 'postgres', 'buri', or a fully-qualified class path "
+            "Backend to use: 'sqlite', 'postgres', or a fully-qualified class path "
             "for a custom backend adapter."
         ),
     )
@@ -476,6 +476,13 @@ class MemoryConfig(BaseModel):
     output_token_cost_per_million: float = Field(
         default=15.0,
         description="Output token cost in USD per million tokens (used to estimate cost_usd).",
+    )
+    rolling_summary_max_chars: int = Field(
+        default=2_000,
+        description=(
+            "Maximum characters kept in the in-memory rolling session summary "
+            "maintained by MemoryPort.on_turn_complete()."
+        ),
     )
 
 
@@ -1424,6 +1431,23 @@ class MimirStalenessTriggerConfig(BaseModel):
     )
 
 
+class MimirIngestConfig(BaseModel):
+    """Configuration for the Mímir ingest entity detection step (NIU-578)."""
+
+    entity_detection: bool = Field(
+        default=True,
+        description="Enable LLM-based entity extraction during ingest.",
+    )
+    entity_model: str = Field(
+        default="claude-haiku-4-5-20251001",
+        description="LLM model alias used for entity extraction (prefer cheap/fast).",
+    )
+    entity_max_tokens: int = Field(
+        default=1024,
+        description="Maximum output tokens for the entity extraction LLM call.",
+    )
+
+
 class MimirConfig(BaseModel):
     """Mímir persistent compounding knowledge base configuration (NIU-540).
 
@@ -1495,6 +1519,10 @@ class MimirConfig(BaseModel):
     staleness_trigger: MimirStalenessTriggerConfig = Field(
         default_factory=MimirStalenessTriggerConfig,
         description="Scheduled staleness refresh for frequently-used pages.",
+    )
+    ingest: MimirIngestConfig = Field(
+        default_factory=MimirIngestConfig,
+        description="Entity detection settings for ingest.",
     )
 
 
@@ -1643,50 +1671,6 @@ class MeshConfig(BaseModel):
     )
     nng: NngMeshConfig = Field(default_factory=NngMeshConfig)
     sleipnir: MeshSleipnirConfig = Field(default_factory=MeshSleipnirConfig)
-
-
-class BuriConfig(BaseModel):
-    """Búri knowledge memory substrate configuration (NIU-541).
-
-    Controls typed fact graph, proto-RWKV session state, and proto-vMF
-    embedding cluster behaviour.  Active when ``memory.backend = 'buri'``.
-    """
-
-    enabled: bool = Field(
-        default=True,
-        description="Enable Búri knowledge memory features.",
-    )
-    cluster_merge_threshold: float = Field(
-        default=0.15,
-        description=(
-            "Cosine distance below which a new fact is merged into an existing cluster "
-            "rather than creating a new one.  Lower = tighter clusters."
-        ),
-    )
-    extraction_model: str = Field(
-        default="",
-        description=(
-            "Model to use for fact extraction. Empty = use settings.memory.reflection_model."
-        ),
-    )
-    min_confidence: float = Field(
-        default=0.6,
-        description=(
-            "Facts classified with confidence below this threshold are stored as "
-            "'observation' regardless of the inferred type."
-        ),
-    )
-    session_summary_max_tokens: int = Field(
-        default=400,
-        description="Maximum tokens for the proto-RWKV rolling session summary.",
-    )
-    supersession_cosine_threshold: float = Field(
-        default=0.85,
-        description=(
-            "Cosine similarity threshold above which an existing fact is considered "
-            "superseded by a new one (requires type match + entity overlap)."
-        ),
-    )
 
 
 class BrowserbaseConfig(BaseModel):
@@ -1929,6 +1913,44 @@ class WakefulnessConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class PostSessionReflectionConfig(BaseModel):
+    """Post-session reflection configuration (NIU-588).
+
+    Controls the service that writes operational learnings to Mímir after
+    each ``ravn.session.ended`` event.
+
+    Disabled by default — enable via ``reflection.enabled: true`` in the
+    deployment YAML.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable post-session reflection.  Off until explicitly activated; "
+            "flip to true in the deployment ravn.yaml."
+        ),
+    )
+    llm_alias: str = Field(
+        default="fast",
+        description=(
+            "LLM alias for the reflection call.  Should resolve to a cheap/fast "
+            "model in the LLM aliases map."
+        ),
+    )
+    max_tokens: int = Field(
+        default=1024,
+        description="Maximum tokens the reflection LLM call may produce.",
+    )
+    learning_token_budget: int = Field(
+        default=500,
+        description=("Maximum tokens of injected learnings in the session-start system prompt."),
+    )
+    max_learnings_injected: int = Field(
+        default=5,
+        description="Maximum number of learning pages injected at session start.",
+    )
+
+
 class RecapConfig(BaseModel):
     """Recap trigger configuration (NIU-569).
 
@@ -1977,6 +1999,66 @@ class RecapConfig(BaseModel):
     poll_interval_seconds: int = Field(
         default=60,
         description="How often (seconds) the trigger checks for operator return.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# NIU-587: Dream cycle trigger — nightly Mímir enrichment, lint, cross-reference
+# ---------------------------------------------------------------------------
+
+
+class DreamCycleTriggerConfig(BaseModel):
+    """Dream cycle trigger configuration (NIU-587).
+
+    Fires the ``mimir-curator`` persona on a cron schedule to run a nightly
+    enrichment pass over the Mímir knowledge base:
+
+    1. Query Mímir log entries since the last dream cycle.
+    2. Detect entities in new/modified raw sources.
+    3. Update compiled truth pages where evidence has changed.
+    4. Run ``mimir_lint --fix`` to auto-fix safe issues.
+    5. Cross-reference pages that mention the same entities without links.
+    6. Emit a ``mimir.dream.completed`` Sleipnir event with summary counts.
+
+    Disabled by default — enable via ``dream_cycle.enabled: true`` in ravn.yaml.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable the dream cycle trigger.  Off until explicitly activated; "
+            "flip to true in the deployment ravn.yaml."
+        ),
+    )
+    cron_expression: str = Field(
+        default="0 3 * * *",
+        description=(
+            "Cron expression controlling when the dream cycle fires "
+            "(default: 3 am daily).  Supports standard 5-field cron syntax."
+        ),
+    )
+    persona: str = Field(
+        default="mimir-curator",
+        description="Persona used when running the dream cycle agent task.",
+    )
+    task_description: str = Field(
+        default="Nightly dream cycle: enrich, lint, cross-reference",
+        description="Human-readable title for the enqueued agent task.",
+    )
+    token_budget_usd: float = Field(
+        default=0.50,
+        description=(
+            "Approximate USD token budget for the dream cycle run.  "
+            "The agent is instructed to stay within this budget."
+        ),
+    )
+    poll_interval_seconds: int = Field(
+        default=60,
+        description="How often (seconds) the trigger polls the cron schedule.",
+    )
+    state_dir: str = Field(
+        default="~/.ravn/daemon",
+        description="Directory where dream cycle state (last_run timestamp) is persisted.",
     )
 
 
@@ -2297,11 +2379,14 @@ class Settings(BaseSettings):
     # NIU-569: recap trigger
     recap: RecapConfig = Field(default_factory=RecapConfig)
 
+    # NIU-587: dream cycle trigger — nightly Mímir enrichment
+    dream_cycle: DreamCycleTriggerConfig = Field(default_factory=DreamCycleTriggerConfig)
+
+    # NIU-588: post-session reflection → Mímir learnings
+    reflection: PostSessionReflectionConfig = Field(default_factory=PostSessionReflectionConfig)
+
     # NIU-571: trust gradient — constrains wakefulness tool availability
     trust: TrustGradientConfig = Field(default_factory=TrustGradientConfig)
-
-    # NIU-541: Búri knowledge memory substrate
-    buri: BuriConfig = Field(default_factory=BuriConfig)
 
     # NIU-540: Mímir persistent knowledge base
     mimir: MimirConfig = Field(default_factory=MimirConfig)

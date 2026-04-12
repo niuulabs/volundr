@@ -10,9 +10,11 @@ from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
 from typing import Any
 
+from niuu.ports.mimir import MimirPort
+from ravn.adapters.memory.inline_facts import detect_and_write as _detect_and_write_facts
 from ravn.budget import IterationBudget, TokenEstimator
 from ravn.compression import CompressionResult, ContextCompressor
-from ravn.config import ExtendedThinkingConfig
+from ravn.config import ExtendedThinkingConfig, PostSessionReflectionConfig
 from ravn.domain.budget import compute_cost as _compute_cost_usd
 from ravn.domain.checkpoint import (
     DESTRUCTIVE_TOOL_NAMES,
@@ -115,6 +117,9 @@ class RavnAgent:
         sleipnir_publisher: object | None = None,
         persona: str = "",
         repo_slug: str = "",
+        # NIU-588: learnings injection at session start
+        mimir: MimirPort | None = None,
+        reflection_config: PostSessionReflectionConfig | None = None,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -128,6 +133,7 @@ class RavnAgent:
         self._post_tool_hooks: list[PostToolHook] = post_tool_hooks or []
         self._user_input_fn = user_input_fn
         self._memory = memory
+        self._mimir = mimir
         self._episode_summary_max_chars = episode_summary_max_chars
         self._episode_task_max_chars = episode_task_max_chars
         self._iteration_budget = iteration_budget
@@ -157,6 +163,9 @@ class RavnAgent:
         self._repo_slug = repo_slug
         self._turn_count: int = 0
         self._session_wall_start: float = time.monotonic()
+        # NIU-588: learnings injection at session start
+        self._mimir = mimir
+        self._reflection_config = reflection_config
 
     @property
     def session(self) -> Session:
@@ -249,6 +258,7 @@ class RavnAgent:
                 token_count=total_tokens,
                 duration_s=duration_s,
                 source=self._source_id,
+                repo_slug=self._repo_slug,
                 correlation_id=self._task_id,
             )
             await self._sleipnir_publisher.publish(event)
@@ -311,7 +321,12 @@ class RavnAgent:
         # Determine whether explicit thinking was requested for this turn.
         explicit_thinking, user_input = _parse_think_flag(user_input)
 
-        if self._memory is not None:
+        if self._mimir is not None:
+            try:
+                await _detect_and_write_facts(user_input, self._mimir)
+            except Exception:
+                logger.warning("Inline fact detection failed; continuing.", exc_info=True)
+        elif self._memory is not None:
             try:
                 await self._memory.process_inline_facts(str(self._session.id), user_input)
             except Exception:
@@ -507,6 +522,9 @@ class RavnAgent:
                     logger.warning(
                         "Memory prefetch failed; continuing without context.", exc_info=True
                     )
+            # NIU-588: inject Mímir learnings on the first turn only.
+            if self._turn_count == 1 and self._mimir is not None:
+                await self._inject_learnings()
             return self._prompt_builder.render_blocks()
 
         # Legacy: plain-string system prompt with optional memory suffix.
@@ -519,6 +537,33 @@ class RavnAgent:
             except Exception:
                 logger.warning("Memory prefetch failed; continuing without context.", exc_info=True)
         return effective
+
+    async def _inject_learnings(self) -> None:
+        """Fetch Mímir learnings for the current repo and inject into the prompt.
+
+        Best-effort — logs a warning and does nothing if Mímir is unavailable
+        or the reflection config is not provided.
+        """
+        if self._mimir is None or self._prompt_builder is None:
+            return
+
+        cfg = self._reflection_config
+        max_pages = cfg.max_learnings_injected if cfg is not None else 5
+        token_budget = cfg.learning_token_budget if cfg is not None else 500
+
+        try:
+            from ravn.adapters.reflection.post_session import fetch_relevant_learnings
+
+            learnings_text = await fetch_relevant_learnings(
+                self._mimir,
+                repo_slug=self._repo_slug,
+                max_pages=max_pages,
+                token_budget=token_budget,
+            )
+            if learnings_text:
+                self._prompt_builder.set_learnings_context(learnings_text)
+        except Exception:
+            logger.warning("Learnings injection failed; continuing without.", exc_info=True)
 
     async def _maybe_compress(
         self,

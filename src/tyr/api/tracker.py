@@ -8,7 +8,6 @@ via a FastAPI dependency. Supports multiple trackers in parallel.
 from __future__ import annotations
 
 import logging
-import re
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -18,17 +17,11 @@ from pydantic import BaseModel, Field
 from niuu.domain.models import Principal
 from tyr.adapters.inbound.auth import extract_principal
 from tyr.domain.models import Saga, SagaStatus, TrackerIssue, TrackerMilestone, TrackerProject
+from tyr.domain.utils import _slugify
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 
 logger = logging.getLogger(__name__)
-
-
-def _slugify(name: str) -> str:
-    """Convert a project name to a clean slug for branch names."""
-    slug = name.lower()
-    slug = re.sub(r"[^a-z0-9]+", "-", slug)
-    return slug.strip("-")
 
 
 # ---------------------------------------------------------------------------
