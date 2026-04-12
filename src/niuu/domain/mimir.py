@@ -18,6 +18,41 @@ from typing import Literal
 
 import yaml
 
+# ---------------------------------------------------------------------------
+# Compiled-truth page taxonomy enums
+# ---------------------------------------------------------------------------
+
+
+class PageType(StrEnum):
+    """Controlled vocabulary for the ``type`` frontmatter field."""
+
+    directive = "directive"
+    decision = "decision"
+    goal = "goal"
+    preference = "preference"
+    observation = "observation"
+    entity = "entity"
+    topic = "topic"
+
+
+class PageConfidence(StrEnum):
+    """Epistemic confidence level for a Mímir page."""
+
+    high = "high"
+    medium = "medium"
+    low = "low"
+
+
+class EntityType(StrEnum):
+    """Sub-type for pages whose ``type`` is ``entity``."""
+
+    person = "person"
+    project = "project"
+    concept = "concept"
+    technology = "technology"
+    organization = "organization"
+    strategy = "strategy"
+
 
 def compute_content_hash(content: str) -> str:
     """Return the SHA-256 hex digest of *content*."""
@@ -226,6 +261,11 @@ class MimirPageMeta:
     category: str  # top-level category: "technical", "projects", "threads", etc.
     updated_at: datetime
     source_ids: list[str] = field(default_factory=list)
+    # Compiled-truth frontmatter fields (additive — all optional for backwards compat)
+    page_type: PageType | None = None
+    confidence: PageConfidence | None = None
+    entity_type: EntityType | None = None
+    related_entities: list[str] = field(default_factory=list)
     # Thread-specific fields (None for wiki pages)
     thread_state: ThreadState | None = None
     thread_weight: float | None = None
