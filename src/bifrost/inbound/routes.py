@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 import bifrost.metrics as _metrics
 from bifrost.auth import AgentIdentity
-from bifrost.config import AgentPermissions, AuditDetailLevel, BifrostConfig
+from bifrost.config import AgentPermissions, AuditDetailLevel, BifrostConfig, BudgetGuardrailConfig
 from bifrost.domain.models import RequestLog, TokenUsage
 from bifrost.domain.routing import RuleRejectError
 from bifrost.inbound.chat_completions import (
@@ -329,21 +329,8 @@ def _check_model_access(
 # ---------------------------------------------------------------------------
 
 
-def _resolve_degraded_model(current_model: str, budget_cfg) -> str:  # noqa: ANN001
-    """Return the next cheaper model in the degradation chain for *current_model*.
-
-    When the degradation chain is configured, the current model is looked up
-    and the next entry (one step cheaper) is returned.  If the model is not
-    found or is already the last in the chain, the chain's final entry is
-    returned.  Falls back to ``budget_cfg.warn_target`` when the chain is empty.
-
-    Args:
-        current_model: The model ID from the inbound request.
-        budget_cfg:    ``BudgetGuardrailConfig`` with chain and fallback.
-
-    Returns:
-        The model ID to route to.
-    """
+def _resolve_degraded_model(current_model: str, budget_cfg: BudgetGuardrailConfig) -> str:
+    """Return the next cheaper model in the degradation chain, or warn_target if chain is empty."""
     chain = budget_cfg.degradation_chain
     if not chain:
         return budget_cfg.warn_target

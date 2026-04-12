@@ -32,7 +32,12 @@ from bifrost.config import (
     QuotaConfig,
 )
 from bifrost.inbound.tracking import _compute_budget_pct, emit_cost_events
-from bifrost.ports.events import BudgetWarningEvent, CostEventEmitter, RequestCompletedEvent
+from bifrost.ports.events import (
+    BudgetDegradedEvent,
+    BudgetWarningEvent,
+    CostEventEmitter,
+    RequestCompletedEvent,
+)
 from bifrost.ports.usage_store import UsageRecord
 
 # ---------------------------------------------------------------------------
@@ -393,7 +398,7 @@ class TestEmitCostEvents:
             async def emit_budget_warning(self, event: BudgetWarningEvent) -> None:
                 pass
 
-            async def emit_budget_degraded(self, event) -> None:
+            async def emit_budget_degraded(self, event: BudgetDegradedEvent) -> None:
                 pass
 
         store = MemoryUsageStore()
@@ -486,7 +491,7 @@ class TestEndToEndEventEmission:
             async def emit_budget_warning(self, event: BudgetWarningEvent) -> None:
                 captured_warnings.append(event)
 
-            async def emit_budget_degraded(self, event) -> None:
+            async def emit_budget_degraded(self, event: BudgetDegradedEvent) -> None:
                 pass
 
         cfg = BifrostConfig(
@@ -539,7 +544,7 @@ class TestEndToEndEventEmission:
             async def emit_budget_warning(self, event: BudgetWarningEvent) -> None:
                 captured_warnings.append(event)
 
-            async def emit_budget_degraded(self, event) -> None:
+            async def emit_budget_degraded(self, event: BudgetDegradedEvent) -> None:
                 pass
 
         # Agent has a $1.00 daily limit; store already has $0.95 spent

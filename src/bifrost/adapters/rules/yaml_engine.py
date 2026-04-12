@@ -238,6 +238,8 @@ class YamlRuleEngine(RuleEnginePort):
                 return False
 
         if condition.agent_id is not None:
+            if not context.agent_id:
+                return False
             if not fnmatch.fnmatch(context.agent_id, condition.agent_id):
                 return False
 

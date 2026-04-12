@@ -243,6 +243,15 @@ class BudgetGuardrailConfig(BaseModel):
         ),
     )
 
+    @model_validator(mode="after")
+    def _validate_degradation_chain(self) -> BudgetGuardrailConfig:
+        seen: set[str] = set()
+        for model_id in self.degradation_chain:
+            if model_id in seen:
+                raise ValueError(f"degradation_chain contains duplicate model ID: {model_id!r}")
+            seen.add(model_id)
+        return self
+
 
 class ContextWindowGuardrailConfig(BaseModel):
     """Context-window guardrail: reject requests that exceed a message count threshold."""

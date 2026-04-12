@@ -193,6 +193,12 @@ class TestYamlRuleEngineAgentIdCondition:
         ctx = RoutingContext(agent_id="anything-at-all")
         assert engine.evaluate(_req(), ctx) is not None
 
+    def test_wildcard_star_does_not_match_empty_agent_id(self):
+        """fnmatch('', '*') is True, but an absent header must never match."""
+        engine = self._engine("*")
+        ctx = RoutingContext(agent_id="")
+        assert engine.evaluate(_req(), ctx) is None
+
     def test_agent_id_combined_with_model_condition(self):
         cfg = _cfg()
         engine = YamlRuleEngine(
@@ -328,6 +334,14 @@ class TestBudgetGuardrailConfigDegradationChain:
             }
         )
         assert cfg.degradation_chain == _CHAIN
+
+    def test_duplicate_in_chain_raises(self):
+        import pytest
+
+        with pytest.raises(Exception, match="duplicate"):
+            BudgetGuardrailConfig(
+                degradation_chain=["claude-opus-4-6", "claude-sonnet-4-6", "claude-opus-4-6"]
+            )
 
 
 # ---------------------------------------------------------------------------
