@@ -166,15 +166,35 @@ def test_lint_empty_wiki(client: TestClient) -> None:
     data = resp.json()
     assert data["pages_checked"] == 0
     assert data["issues_found"] is False
+    assert data["issues"] == []
+    assert "summary" in data
 
 
-def test_lint_finds_orphan(client_with_page: TestClient) -> None:
-    # The page exists but may not be in index → orphan
+def test_lint_finds_issues_with_page(client_with_page: TestClient) -> None:
+    # The page exists and is indexed; new structural checks (e.g. L12) may fire
     resp = client_with_page.get("/mimir/lint")
     assert resp.status_code == 200
     data = resp.json()
     assert "pages_checked" in data
-    assert "orphans" in data
+    assert data["pages_checked"] >= 1
+    assert "issues" in data
+    assert "summary" in data
+    # Every issue must have the required fields
+    for issue in data["issues"]:
+        assert "id" in issue
+        assert "severity" in issue
+        assert issue["severity"] in ("error", "warning", "info")
+        assert "message" in issue
+        assert "page_path" in issue
+        assert "auto_fixable" in issue
+
+
+def test_lint_fix_endpoint(client_with_page: TestClient) -> None:
+    resp = client_with_page.post("/mimir/lint/fix")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "issues" in data
+    assert "summary" in data
 
 
 # ---------------------------------------------------------------------------

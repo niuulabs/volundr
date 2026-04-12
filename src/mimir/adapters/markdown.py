@@ -27,6 +27,7 @@ derived wiki pages should be reviewed and updated.
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import re
@@ -34,18 +35,28 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import yaml
+
+from mimir.compiled_truth import (
+    extract_wikilinks,
+)
+from mimir.compiled_truth import (
+    parse_page as parse_compiled_truth_page,
+)
+
 try:
     from sleipnir.domain.catalog import mimir_page_written as _catalog_page_written
 except ImportError:
     _catalog_page_written = None  # type: ignore[assignment]
-
 from niuu.domain.mimir import (
+    LintIssue,
     MimirLintReport,
     MimirPage,
     MimirPageMeta,
     MimirQueryResult,
     MimirSource,
     MimirSourceMeta,
+    PageType,
     ThreadContextRef,
     ThreadOwnershipError,
     ThreadState,
@@ -174,6 +185,27 @@ _LOG_QUERY_PREFIX = "query"
 _LOG_LINT_PREFIX = "lint"
 
 _MIN_GAP_MENTION_COUNT = 3  # mentions before a concept is flagged as a gap
+_MIN_KEY_FACTS = 3  # minimum key facts in a Compiled Truth zone before flagging as thin
+_STALE_CONTENT_DAYS = 60  # days without update before a page is flagged as stale content
+_LINT_CACHE_FILE = ".lint-cache.json"  # stores timeline hashes for L09 detection
+
+# Page types that must have Compiled Truth + Timeline zones
+_MANDATORY_COMPILED_TRUTH_TYPES: frozenset[PageType] = frozenset(
+    {PageType.entity, PageType.directive, PageType.decision}
+)
+
+# Infer page type from top-level directory when frontmatter type is absent
+_CATEGORY_TO_PAGE_TYPE: dict[str, str] = {
+    "technical": "topic",
+    "projects": "entity",
+    "research": "topic",
+    "household": "observation",
+    "self": "preference",
+}
+
+_COMPILED_TRUTH_HEADING = "## Compiled Truth"
+_FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
+_WIKILINK_RE = re.compile(r"\[\[([^\[\]]+)\]\]")
 
 
 # ---------------------------------------------------------------------------
@@ -295,39 +327,61 @@ class MarkdownMimirAdapter(MimirPort):
             sources=pages,
         )
 
-    async def lint(self) -> MimirLintReport:
-        """Scan the wiki and return a health-check report.
+    async def lint(self, fix: bool = False) -> MimirLintReport:
+        """Scan the wiki and return a structured health-check report (L01–L12).
 
-        The ``stale`` field of the returned report is always empty — staleness
-        detection requires re-fetching source URLs, which the lint pass does
-        not do.  Use ``is_source_stale()`` during re-ingest instead.
+        When *fix* is ``True``, auto-fixable issues are corrected in-place:
+
+        - L05 broken wikilinks → replaced with the closest fuzzy-match slug
+        - L11 stale index     → index.md rebuilt from the current page set
+        - L12 invalid frontmatter → missing ``type`` field inferred from path
+
+        Staleness detection (L03) requires re-fetching remote URLs and is
+        therefore not performed here; use ``is_source_stale()`` during re-ingest.
         """
         pages_with_content = self._list_pages_with_content()
         all_pages = [meta for meta, _ in pages_with_content]
         content_map = {meta.path: content for meta, content in pages_with_content}
         indexed = self._read_indexed_paths()
+        lint_cache = self._load_lint_cache()
 
-        orphans = self._find_orphans(all_pages, indexed)
-        contradictions = self._find_contradictions(content_map)
-        gaps = self._find_gaps(all_pages, content_map)
+        issues: list[LintIssue] = []
+        issues.extend(self._check_orphans(all_pages, indexed))
+        issues.extend(self._check_contradictions(content_map))
+        # L03 (stale sources) requires remote re-fetch — skipped in lint pass
+        issues.extend(self._check_gaps(all_pages, content_map))
+        issues.extend(self._check_broken_wikilinks(content_map))
+        issues.extend(self._check_missing_source_attribution(content_map))
+        issues.extend(self._check_thin_pages(content_map))
+        issues.extend(self._check_stale_content(all_pages))
+        issues.extend(self._check_timeline_edits(content_map, lint_cache))
+        issues.extend(self._check_empty_compiled_truth(content_map))
+        issues.extend(self._check_stale_index(all_pages, indexed))
+        issues.extend(self._check_invalid_frontmatter(content_map))
 
-        report = MimirLintReport(
-            orphans=orphans,
-            contradictions=contradictions,
-            stale=[],  # populated by re-ingest flow, not lint pass
-            gaps=gaps,
-            pages_checked=len(all_pages),
-        )
+        if fix:
+            issues = self._apply_fixes(issues, content_map, all_pages)
+            # Re-read content map after in-place fixes so the cache is accurate
+            pages_with_content = self._list_pages_with_content()
+            content_map = {meta.path: c for meta, c in pages_with_content}
 
-        issues = len(orphans) + len(contradictions) + len(gaps)
+        self._update_timeline_cache(content_map, lint_cache)
+        self._save_lint_cache(lint_cache)
+
+        report = MimirLintReport(issues=issues, pages_checked=len(all_pages))
+        sev = report.summary
         self._append_log(
             _LOG_LINT_PREFIX,
-            f"{len(all_pages)} pages checked, {issues} issues found",
+            f"{len(all_pages)} pages checked, {len(issues)} issues found",
+            f"errors={sev['error']} warnings={sev['warning']} info={sev['info']}",
         )
         logger.info(
-            "mimir: lint complete — %d pages checked, %d issues",
+            "mimir: lint complete — %d pages checked, %d issues (errors=%d warnings=%d info=%d)",
             len(all_pages),
-            issues,
+            len(issues),
+            sev["error"],
+            sev["warning"],
+            sev["info"],
         )
         return report
 
@@ -888,23 +942,41 @@ class MarkdownMimirAdapter(MimirPort):
             f.write(entry)
 
     # ------------------------------------------------------------------
-    # Lint helpers
+    # Lint helpers — L01–L12
     # ------------------------------------------------------------------
 
-    def _find_orphans(self, pages: list[MimirPageMeta], indexed: set[str]) -> list[str]:
-        """Return paths of pages not linked in index.md."""
-        return [p.path for p in pages if p.path not in indexed]
-
-    def _find_contradictions(self, content_map: dict[str, str]) -> list[str]:
-        """Return paths of pages that contain a contradiction flag marker."""
+    def _check_orphans(self, pages: list[MimirPageMeta], indexed: set[str]) -> list[LintIssue]:
+        """L01 — pages not linked in index.md."""
         return [
-            path
+            LintIssue(
+                id="L01",
+                severity="warning",
+                message="Page is not linked in index.md",
+                page_path=p.path,
+                auto_fixable=False,
+            )
+            for p in pages
+            if p.path not in indexed
+        ]
+
+    def _check_contradictions(self, content_map: dict[str, str]) -> list[LintIssue]:
+        """L02 — pages containing a [CONTRADICTION] flag marker."""
+        return [
+            LintIssue(
+                id="L02",
+                severity="warning",
+                message="Page contains a contradiction flag marker",
+                page_path=path,
+                auto_fixable=False,
+            )
             for path, content in content_map.items()
             if "[CONTRADICTION]" in content or "⚠️ contradiction" in content.lower()
         ]
 
-    def _find_gaps(self, pages: list[MimirPageMeta], content_map: dict[str, str]) -> list[str]:
-        """Return concept names mentioned ≥ N times across wiki but without a page."""
+    def _check_gaps(
+        self, pages: list[MimirPageMeta], content_map: dict[str, str]
+    ) -> list[LintIssue]:
+        """L04 — concepts mentioned ≥ N times without a dedicated page."""
         existing_titles = {p.title.lower() for p in pages}
         mention_counts: dict[str, int] = {}
 
@@ -915,8 +987,366 @@ class MarkdownMimirAdapter(MimirPort):
                     mention_counts[key] = mention_counts.get(key, 0) + 1
 
         return [
-            concept for concept, count in mention_counts.items() if count >= _MIN_GAP_MENTION_COUNT
+            LintIssue(
+                id="L04",
+                severity="info",
+                message=(f"Concept '{concept}' mentioned {count} times but has no dedicated page"),
+                page_path=concept,
+                auto_fixable=False,
+            )
+            for concept, count in mention_counts.items()
+            if count >= _MIN_GAP_MENTION_COUNT
         ]
+
+    def _check_broken_wikilinks(self, content_map: dict[str, str]) -> list[LintIssue]:
+        """L05 — [[slug]] references whose target page does not exist."""
+        known_slugs = {Path(path).stem for path in content_map}
+        issues: list[LintIssue] = []
+
+        for page_path, content in content_map.items():
+            for link in extract_wikilinks(content):
+                slug = link.strip()
+                if slug not in known_slugs:
+                    suggestions = difflib.get_close_matches(slug, known_slugs, n=1, cutoff=0.6)
+                    hint = f" (closest match: '{suggestions[0]}')" if suggestions else ""
+                    issues.append(
+                        LintIssue(
+                            id="L05",
+                            severity="warning",
+                            message=f"Broken wikilink [[{link}]] — no matching page found{hint}",
+                            page_path=page_path,
+                            auto_fixable=bool(suggestions),
+                        )
+                    )
+        return issues
+
+    def _check_missing_source_attribution(self, content_map: dict[str, str]) -> list[LintIssue]:
+        """L06 — timeline entries lacking [Source: ...] attribution."""
+        issues: list[LintIssue] = []
+
+        for page_path, content in content_map.items():
+            page = parse_compiled_truth_page(content)
+            for entry in page.timeline_entries:
+                if not entry.has_source:
+                    issues.append(
+                        LintIssue(
+                            id="L06",
+                            severity="error",
+                            message=f"Timeline entry missing [Source: ...]: {entry.raw!r}",
+                            page_path=page_path,
+                            auto_fixable=False,
+                        )
+                    )
+        return issues
+
+    def _check_thin_pages(self, content_map: dict[str, str]) -> list[LintIssue]:
+        """L07 — compiled-truth pages with fewer than _MIN_KEY_FACTS key facts."""
+        issues: list[LintIssue] = []
+
+        for page_path, content in content_map.items():
+            page = parse_compiled_truth_page(content)
+            if page.page_type not in _MANDATORY_COMPILED_TRUTH_TYPES:
+                continue
+            ct = page.compiled_truth
+            if not ct:
+                continue
+            fact_count = len(re.findall(r"^#{3,}|^[-*]\s+", ct, re.MULTILINE))
+            if fact_count < _MIN_KEY_FACTS:
+                issues.append(
+                    LintIssue(
+                        id="L07",
+                        severity="warning",
+                        message=(
+                            f"Compiled Truth has {fact_count} key fact(s) "
+                            f"(minimum is {_MIN_KEY_FACTS})"
+                        ),
+                        page_path=page_path,
+                        auto_fixable=False,
+                    )
+                )
+        return issues
+
+    def _check_stale_content(self, pages: list[MimirPageMeta]) -> list[LintIssue]:
+        """L08 — pages not updated in _STALE_CONTENT_DAYS days."""
+        now = datetime.now(UTC)
+        issues: list[LintIssue] = []
+
+        for meta in pages:
+            age_days = (now - meta.updated_at).days
+            if age_days >= _STALE_CONTENT_DAYS:
+                issues.append(
+                    LintIssue(
+                        id="L08",
+                        severity="info",
+                        message=(
+                            f"Page not updated in {age_days} days "
+                            f"(threshold: {_STALE_CONTENT_DAYS})"
+                        ),
+                        page_path=meta.path,
+                        auto_fixable=False,
+                    )
+                )
+        return issues
+
+    def _check_timeline_edits(
+        self, content_map: dict[str, str], lint_cache: dict
+    ) -> list[LintIssue]:
+        """L09 — detect when a timeline section was edited rather than appended to."""
+        timeline_cache = lint_cache.get("timeline_hashes", {})
+        issues: list[LintIssue] = []
+
+        for page_path, content in content_map.items():
+            page = parse_compiled_truth_page(content)
+            if not page.timeline_entries:
+                continue
+
+            current_entries = [e.raw for e in page.timeline_entries]
+            stored = timeline_cache.get(page_path)
+            if stored is None:
+                continue
+
+            stored_entries: list[str] = stored.get("entries", [])
+            stored_hash: str = stored.get("hash", "")
+            current_hash = compute_content_hash("\n".join(current_entries))
+
+            if current_hash == stored_hash:
+                continue
+
+            # Append-only check: stored entries must be an exact prefix of current
+            is_append_only = (
+                len(current_entries) >= len(stored_entries)
+                and current_entries[: len(stored_entries)] == stored_entries
+            )
+
+            if not is_append_only:
+                issues.append(
+                    LintIssue(
+                        id="L09",
+                        severity="error",
+                        message=(
+                            "Timeline section was edited (not just appended to) since last lint"
+                        ),
+                        page_path=page_path,
+                        auto_fixable=False,
+                    )
+                )
+        return issues
+
+    def _check_empty_compiled_truth(self, content_map: dict[str, str]) -> list[LintIssue]:
+        """L10 — pages with an empty ## Compiled Truth section."""
+        issues: list[LintIssue] = []
+
+        for page_path, content in content_map.items():
+            page = parse_compiled_truth_page(content)
+            if page.page_type not in _MANDATORY_COMPILED_TRUTH_TYPES:
+                continue
+            if _COMPILED_TRUTH_HEADING not in content:
+                continue
+            if not page.compiled_truth.strip():
+                issues.append(
+                    LintIssue(
+                        id="L10",
+                        severity="warning",
+                        message="Compiled Truth section is present but empty",
+                        page_path=page_path,
+                        auto_fixable=False,
+                    )
+                )
+        return issues
+
+    def _check_stale_index(self, pages: list[MimirPageMeta], indexed: set[str]) -> list[LintIssue]:
+        """L11 — index.md out of sync with wiki/ directory."""
+        all_paths = {p.path for p in pages}
+        extra = indexed - all_paths
+        missing = all_paths - indexed
+        if not extra and not missing:
+            return []
+        count = len(extra) + len(missing)
+        return [
+            LintIssue(
+                id="L11",
+                severity="warning",
+                message=(
+                    f"index.md is out of sync with wiki/ ({count} discrepancy/discrepancies: "
+                    f"{len(missing)} missing, {len(extra)} stale)"
+                ),
+                page_path="index.md",
+                auto_fixable=True,
+            )
+        ]
+
+    def _check_invalid_frontmatter(self, content_map: dict[str, str]) -> list[LintIssue]:
+        """L12 — pages missing the required 'type' frontmatter field."""
+        issues: list[LintIssue] = []
+
+        for page_path, content in content_map.items():
+            page = parse_compiled_truth_page(content)
+            if page.page_type is None:
+                inferred = self._infer_page_type(page_path)
+                issues.append(
+                    LintIssue(
+                        id="L12",
+                        severity="warning",
+                        message=(
+                            f"Missing required 'type' frontmatter field (suggested: '{inferred}')"
+                        ),
+                        page_path=page_path,
+                        auto_fixable=True,
+                    )
+                )
+        return issues
+
+    # ------------------------------------------------------------------
+    # Auto-fix helpers
+    # ------------------------------------------------------------------
+
+    def _apply_fixes(
+        self,
+        issues: list[LintIssue],
+        content_map: dict[str, str],
+        pages: list[MimirPageMeta],
+    ) -> list[LintIssue]:
+        """Apply in-place fixes for auto-fixable issues; return remaining issues.
+
+        All fixes for a given page are applied to the same in-memory content
+        before the file is written, so multiple fix types on the same page
+        do not overwrite each other.
+        """
+        known_slugs = {Path(path).stem for path in content_map}
+        remaining: list[LintIssue] = []
+
+        # Collect fixable issue IDs per page
+        page_fixes: dict[str, set[str]] = {}  # page_path → set of fix IDs
+        fix_l11 = False
+
+        for issue in issues:
+            if issue.id == "L05" and issue.auto_fixable:
+                page_fixes.setdefault(issue.page_path, set()).add("L05")
+            elif issue.id == "L11":
+                fix_l11 = True
+            elif issue.id == "L12":
+                page_fixes.setdefault(issue.page_path, set()).add("L12")
+            else:
+                remaining.append(issue)
+
+        # Apply all fixes for each page in a single write
+        for page_path, fix_ids in page_fixes.items():
+            content = content_map.get(page_path, "")
+            original = content
+
+            if "L05" in fix_ids:
+                content = self._fix_broken_wikilinks(content, known_slugs)
+                if content == original:
+                    # No match found — keep the issue
+                    remaining.append(
+                        LintIssue(
+                            id="L05",
+                            severity="warning",
+                            message="Broken wikilinks could not be resolved (no close match)",
+                            page_path=page_path,
+                            auto_fixable=False,
+                        )
+                    )
+
+            if "L12" in fix_ids:
+                content = self._fix_invalid_frontmatter(page_path, content)
+
+            if content != original:
+                page_file = self._wiki / page_path
+                page_file.write_text(content, encoding="utf-8")
+                logger.info(
+                    "mimir: auto-fixed %s in %s",
+                    ", ".join(sorted(fix_ids)),
+                    page_path,
+                )
+
+        if fix_l11:
+            self._rebuild_index(pages, content_map)
+            logger.info("mimir: L11 auto-fixed stale index.md (rebuilt)")
+
+        return remaining
+
+    def _fix_broken_wikilinks(self, content: str, known_slugs: set[str]) -> str:
+        """Replace broken [[slug]] links with the closest fuzzy-match slug."""
+
+        def replace_link(match: re.Match) -> str:
+            link = match.group(1).strip()
+            if link in known_slugs:
+                return match.group(0)
+            suggestions = difflib.get_close_matches(link, known_slugs, n=1, cutoff=0.6)
+            if suggestions:
+                return f"[[{suggestions[0]}]]"
+            return match.group(0)
+
+        return _WIKILINK_RE.sub(replace_link, content)
+
+    def _fix_invalid_frontmatter(self, page_path: str, content: str) -> str:
+        """Add an inferred 'type' field to pages with missing frontmatter."""
+        inferred = self._infer_page_type(page_path)
+        fm_match = _FRONTMATTER_RE.match(content)
+        if fm_match:
+            try:
+                fm = yaml.safe_load(fm_match.group(1)) or {}
+            except yaml.YAMLError:
+                fm = {}
+            fm["type"] = inferred
+            fm_yaml = yaml.dump(
+                fm, default_flow_style=False, allow_unicode=True, sort_keys=False
+            ).strip()
+            return f"---\n{fm_yaml}\n---\n{content[fm_match.end() :]}"
+        # No frontmatter at all — prepend a minimal block
+        return f"---\ntype: {inferred}\n---\n{content}"
+
+    def _rebuild_index(self, pages: list[MimirPageMeta], content_map: dict[str, str]) -> None:
+        """Rewrite index.md from the current page set."""
+        header = "# Mímir — content catalog\n\n"
+        lines: list[str] = []
+        for meta in sorted(pages, key=lambda p: p.path):
+            content = content_map.get(meta.path, "")
+            summary = _extract_summary(content)
+            date_str = meta.updated_at.strftime("%Y-%m-%d")
+            lines.append(
+                f"- [{meta.title}]({meta.path}) — {summary} *(updated {date_str}, {meta.category})*"
+            )
+        self._index.write_text(header + "\n".join(lines) + "\n", encoding="utf-8")
+
+    def _infer_page_type(self, page_path: str) -> str:
+        """Infer a page type from its top-level directory."""
+        category = page_path.split("/")[0] if "/" in page_path else ""
+        return _CATEGORY_TO_PAGE_TYPE.get(category, "topic")
+
+    # ------------------------------------------------------------------
+    # Lint cache — used by L09 timeline edit detection
+    # ------------------------------------------------------------------
+
+    def _load_lint_cache(self) -> dict:
+        """Load the persisted lint cache, or return an empty dict."""
+        cache_path = self._wiki / _LINT_CACHE_FILE
+        if not cache_path.exists():
+            return {}
+        try:
+            return json.loads(cache_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+
+    def _save_lint_cache(self, cache: dict) -> None:
+        """Persist the lint cache to disk."""
+        cache_path = self._wiki / _LINT_CACHE_FILE
+        cache_path.write_text(json.dumps(cache, indent=2), encoding="utf-8")
+
+    def _update_timeline_cache(self, content_map: dict[str, str], cache: dict) -> None:
+        """Update the timeline_hashes section of the lint cache."""
+        timeline_cache: dict[str, dict] = {}
+        for page_path, content in content_map.items():
+            page = parse_compiled_truth_page(content)
+            if not page.timeline_entries:
+                continue
+            current_entries = [e.raw for e in page.timeline_entries]
+            timeline_cache[page_path] = {
+                "hash": compute_content_hash("\n".join(current_entries)),
+                "entries": current_entries,
+            }
+        cache["timeline_hashes"] = timeline_cache
 
     # ------------------------------------------------------------------
     # Metadata helpers

@@ -111,24 +111,21 @@ def test_mimir_query_result_empty_answer() -> None:
 
 
 def test_mimir_lint_report_issues_found() -> None:
+    from niuu.domain.mimir import LintIssue
+
     report = MimirLintReport(
-        orphans=["a.md"],
-        contradictions=[],
-        stale=[],
-        gaps=[],
+        issues=[
+            LintIssue(
+                id="L01", severity="warning", message="Orphan", page_path="a.md"
+            )
+        ],
         pages_checked=5,
     )
     assert report.issues_found is True
 
 
 def test_mimir_lint_report_no_issues() -> None:
-    report = MimirLintReport(
-        orphans=[],
-        contradictions=[],
-        stale=[],
-        gaps=[],
-        pages_checked=3,
-    )
+    report = MimirLintReport(issues=[], pages_checked=3)
     assert report.issues_found is False
 
 
@@ -364,7 +361,8 @@ async def test_lint_finds_orphan_pages(tmp_path: Path) -> None:
         "# Orphan\n\nNot in index.", encoding="utf-8"
     )
     report = await adapter.lint()
-    assert "research/orphan.md" in report.orphans
+    orphan_paths = [i.page_path for i in report.issues if i.id == "L01"]
+    assert "research/orphan.md" in orphan_paths
 
 
 @pytest.mark.asyncio
@@ -373,7 +371,8 @@ async def test_lint_finds_contradictions(tmp_path: Path) -> None:
     content = "# Auth\n\n[CONTRADICTION] This conflicts with the session model."
     await adapter.upsert_page("technical/auth.md", content)
     report = await adapter.lint()
-    assert "technical/auth.md" in report.contradictions
+    contradiction_paths = [i.page_path for i in report.issues if i.id == "L02"]
+    assert "technical/auth.md" in contradiction_paths
 
 
 @pytest.mark.asyncio
@@ -397,10 +396,14 @@ async def test_lint_appends_to_log(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_lint_no_issues(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
-    await adapter.upsert_page("technical/page.md", "# Page\n\nClean content.")
+    await adapter.upsert_page(
+        "technical/page.md",
+        "---\ntype: topic\n---\n# Page\n\nClean content.",
+    )
     report = await adapter.lint()
-    # page was indexed by upsert_page, so no orphans
-    assert "technical/page.md" not in report.orphans
+    # page was indexed by upsert_page, so no L01 orphan
+    orphan_paths = [i.page_path for i in report.issues if i.id == "L01"]
+    assert "technical/page.md" not in orphan_paths
     assert report.pages_checked == 1
 
 
@@ -439,7 +442,7 @@ def test_is_source_stale_returns_false_for_unknown_source(tmp_path: Path) -> Non
 
 @pytest.mark.asyncio
 async def test_lint_stale_always_empty(tmp_path: Path) -> None:
-    """Lint never populates the stale field.
+    """Lint never populates L03 (stale sources).
 
     Staleness requires re-fetching source URLs, which the lint pass does not do.
     Use is_source_stale() before re-ingesting a source to detect changes.
@@ -451,14 +454,15 @@ async def test_lint_stale_always_empty(tmp_path: Path) -> None:
     page_content = f"# Stale\n\nDerived from source.\n<!-- sources: {src.source_id} -->"
     await adapter.upsert_page("research/stale.md", page_content)
 
-    # Even if the raw JSON hash is tampered with, lint always returns stale=[]
+    # Even if the raw JSON hash is tampered with, lint never emits L03
     raw_path = tmp_path / "mimir" / "raw" / f"{src.source_id}.json"
     data = json.loads(raw_path.read_text())
     data["content_hash"] = "badhash"
     raw_path.write_text(json.dumps(data))
 
     report = await adapter.lint()
-    assert report.stale == []
+    l03_issues = [i for i in report.issues if i.id == "L03"]
+    assert l03_issues == []
 
 
 # ---------------------------------------------------------------------------

@@ -95,7 +95,6 @@ class RavnAgent:
         post_tool_hooks: list[PostToolHook] | None = None,
         user_input_fn: UserInputFn | None = None,
         memory: MemoryPort | None = None,
-        mimir: object | None = None,
         episode_summary_max_chars: int = 500,
         episode_task_max_chars: int = 200,
         iteration_budget: IterationBudget | None = None,
