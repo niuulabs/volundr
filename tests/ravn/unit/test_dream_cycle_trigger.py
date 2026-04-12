@@ -6,7 +6,7 @@ import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -106,7 +106,6 @@ class TestDreamCycleTriggerPollOnce:
         async def _enqueue(task: AgentTask) -> None:
             enqueued.append(task)
 
-        now = datetime(2026, 4, 12, 3, 0, tzinfo=UTC)
         with patch.object(trigger, "_is_due", return_value=True):
             await trigger._poll_once(_enqueue)
 
