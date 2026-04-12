@@ -336,6 +336,11 @@ def test_merge_timeline_appends_new_entry():
 
     assert "sess-new" in updated
     assert "New evidence." in updated
+    # Structural correctness: page must still start with frontmatter.
+    assert updated.startswith("---\n")
+    # New entry must appear inside the frontmatter block (before body).
+    fm_close = updated.index("\n---\n", 3)  # closing delimiter
+    assert "sess-new" in updated[:fm_close]
 
 
 # ---------------------------------------------------------------------------
@@ -809,9 +814,33 @@ async def test_find_existing_page_returns_none_when_no_title_matches():
 
 
 def test_insert_timeline_entry_without_any_frontmatter():
+    # Content with no "---" delimiters at all — entry appended at end.
     content = "# Some page\n\nSome body text without any dashes."
     result = _insert_timeline_entry(content, "new entry line")
     assert "new entry line" in result
+
+
+def test_insert_timeline_entry_places_entry_inside_frontmatter():
+    content = _build_page_content(
+        title="Structural test",
+        learning="The learning.",
+        page_type="observation",
+        tags=[],
+        evidence="First evidence.",
+        repo_slug="",
+        session_id="sess-A",
+        date=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+
+    result = _insert_timeline_entry(content, "  - source: ravn_reflection\n    session_id: sess-B")
+
+    # Page must still open with frontmatter.
+    assert result.startswith("---\n")
+    # The new entry must be inside the frontmatter, not after the closing ---.
+    fm_close_pos = result.index("\n---\n", 3)
+    assert "sess-B" in result[:fm_close_pos]
+    # Body section must still follow the closing delimiter.
+    assert "# Learning: Structural test" in result[fm_close_pos:]
 
 
 # ---------------------------------------------------------------------------

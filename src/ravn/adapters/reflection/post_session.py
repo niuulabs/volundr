@@ -26,6 +26,7 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from niuu.domain.mimir import MimirPage
 from niuu.ports.mimir import MimirPort
 from ravn.config import PostSessionReflectionConfig
 from ravn.ports.llm import LLMPort
@@ -265,7 +266,7 @@ class PostSessionReflectionService:
                 exc,
             )
 
-    async def _find_existing_page(self, title: str, repo_slug: str) -> object | None:
+    async def _find_existing_page(self, title: str, repo_slug: str) -> MimirPage | None:
         """Search Mímir for an existing learning page matching *title*.
 
         Returns the first :class:`~niuu.domain.mimir.MimirPage` whose title
@@ -480,15 +481,16 @@ def _merge_timeline_entry(
 
 def _insert_timeline_entry(content: str, new_entry: str) -> str:
     """Insert *new_entry* after the last ``source: ravn_reflection`` block."""
-    # Find the position of the closing frontmatter "---" line.
-    # We want to insert before it but after existing timeline entries.
-    match = re.search(r"^---\s*$", content, flags=re.MULTILINE)
-    if match is None:
-        # No frontmatter closing delimiter; append at end of file.
+    # Find the CLOSING frontmatter "---" delimiter (the second occurrence).
+    # re.search would match the opening "---" at position 0, so we collect
+    # all matches and use the second one.
+    matches = list(re.finditer(r"^---\s*$", content, flags=re.MULTILINE))
+    if len(matches) < 2:
+        # No closing delimiter; append at end of file.
         return content.rstrip() + "\n" + new_entry + "\n"
 
     # Find the last "note:" line inside the frontmatter.
-    fm_end = match.start()
+    fm_end = matches[1].start()
     frontmatter = content[:fm_end]
     rest = content[fm_end:]
 
@@ -557,7 +559,12 @@ def _escape_yaml(text: str) -> str:
 
 
 def _strip_frontmatter(content: str) -> str:
-    """Remove YAML frontmatter block (``---…---``) from *content*."""
+    """Remove YAML frontmatter block (``---…---``) from *content*.
+
+    Note: a functionally equivalent copy lives in ``mimir.compiled_truth``.
+    When ``mimir`` is extracted to ``niuu``, consolidate both into a shared
+    ``niuu.utils.frontmatter`` utility.
+    """
     if not content.startswith("---"):
         return content
     # Find closing delimiter.
