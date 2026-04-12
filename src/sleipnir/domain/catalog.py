@@ -48,6 +48,7 @@ class RavnSessionEndedPayload:
     outcome: str
     token_count: int
     duration_s: float
+    repo_slug: str = ""
 
 
 @dataclass(frozen=True)
@@ -187,6 +188,7 @@ def ravn_session_ended(
     token_count: int,
     duration_s: float,
     source: str,
+    repo_slug: str = "",
     correlation_id: str | None = None,
 ) -> SleipnirEvent:
     """Emit when a Ravn agent session exits (normal, interrupt, or error)."""
@@ -200,6 +202,7 @@ def ravn_session_ended(
                 outcome=outcome,
                 token_count=token_count,
                 duration_s=duration_s,
+                repo_slug=repo_slug,
             )
         ),
         summary=f"Ravn session ended: {session_id} outcome={outcome} tokens={token_count}",
