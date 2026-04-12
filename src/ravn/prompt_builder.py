@@ -124,6 +124,10 @@ class PromptBuilder:
         """Set shared Layer-3 context from parent (dynamic, not cached)."""
         self._replace_or_add(PromptSection(name="shared_context", content=text, cacheable=False))
 
+    def set_learnings_context(self, text: str) -> None:
+        """Set past learnings from Mímir (dynamic, not cached — NIU-588)."""
+        self._replace_or_add(PromptSection(name="learnings_context", content=text, cacheable=False))
+
     # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------

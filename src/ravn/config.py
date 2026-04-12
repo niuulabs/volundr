@@ -1890,6 +1890,44 @@ class WakefulnessConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class PostSessionReflectionConfig(BaseModel):
+    """Post-session reflection configuration (NIU-588).
+
+    Controls the service that writes operational learnings to Mímir after
+    each ``ravn.session.ended`` event.
+
+    Disabled by default — enable via ``reflection.enabled: true`` in the
+    deployment YAML.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable post-session reflection.  Off until explicitly activated; "
+            "flip to true in the deployment ravn.yaml."
+        ),
+    )
+    llm_alias: str = Field(
+        default="fast",
+        description=(
+            "LLM alias for the reflection call.  Should resolve to a cheap/fast "
+            "model in the LLM aliases map."
+        ),
+    )
+    max_tokens: int = Field(
+        default=1024,
+        description="Maximum tokens the reflection LLM call may produce.",
+    )
+    learning_token_budget: int = Field(
+        default=500,
+        description=("Maximum tokens of injected learnings in the session-start system prompt."),
+    )
+    max_learnings_injected: int = Field(
+        default=5,
+        description="Maximum number of learning pages injected at session start.",
+    )
+
+
 class RecapConfig(BaseModel):
     """Recap trigger configuration (NIU-569).
 
@@ -2257,6 +2295,9 @@ class Settings(BaseSettings):
 
     # NIU-569: recap trigger
     recap: RecapConfig = Field(default_factory=RecapConfig)
+
+    # NIU-588: post-session reflection → Mímir learnings
+    reflection: PostSessionReflectionConfig = Field(default_factory=PostSessionReflectionConfig)
 
     # NIU-571: trust gradient — constrains wakefulness tool availability
     trust: TrustGradientConfig = Field(default_factory=TrustGradientConfig)
