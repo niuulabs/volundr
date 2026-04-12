@@ -4,9 +4,9 @@ Uses asyncpg for connection pooling, tsvector/tsquery for full-text search,
 and pgvector for embedding similarity search when the extension is available.
 Designed for infra-mode deployments (e.g. on-cluster Kubernetes).
 
-Scoring: ts_rank (PostgreSQL FTS relevance) × recency decay × outcome weight.
-The same recency and outcome formulas as the SQLite adapter are used so that
-scores are comparable across backends.
+Search is delegated to ``PostgresSearchAdapter`` from ``niuu.adapters.search``
+which manages its own ``niuu_search_index`` table.  Episode-specific scoring
+(recency decay × outcome weight) is applied on top of the raw search scores.
 """
 
 from __future__ import annotations
@@ -18,6 +18,8 @@ from typing import Any
 
 import asyncpg
 
+from niuu.adapters.search.postgres import PostgresSearchAdapter
+from niuu.ports.search import SearchPort
 from ravn.adapters.memory.scoring import (
     _AVG_EPISODE_CHARS,
     _CHARS_PER_TOKEN,
@@ -35,15 +37,15 @@ from ravn.ports.memory import MemoryPort
 
 
 def _combined_score(
-    ts_rank: float,
+    relevance: float,
     timestamp: datetime,
     outcome: Outcome,
     half_life_days: float,
 ) -> float:
-    """Combine ts_rank relevance, recency decay, and outcome weight into [0, 1]."""
+    """Combine normalised relevance, recency decay, and outcome weight into [0, 1]."""
     recency = _recency_score(timestamp, half_life_days)
     weight = _OUTCOME_WEIGHTS.get(outcome, 0.5)
-    return ts_rank * recency * weight
+    return relevance * recency * weight
 
 
 def _row_to_episode(row: asyncpg.Record | dict[str, Any]) -> Episode:
@@ -102,12 +104,16 @@ def _row_to_episode(row: asyncpg.Record | dict[str, Any]) -> Episode:
 
 
 class PostgresMemoryAdapter(MemoryPort):
-    """Episodic memory backed by PostgreSQL with tsvector FTS and pgvector support.
+    """Episodic memory backed by PostgreSQL.
+
+    Search is delegated to ``PostgresSearchAdapter`` which provides tsvector
+    FTS-only or hybrid (tsvector + pgvector) retrieval via the shared ``niuu``
+    search port.  Episode-specific scoring (recency decay × outcome weight) is
+    applied on top of the raw search scores.
 
     Requires the schema created by migration 000025_ravn_episodes.up.sql.
-    pgvector is detected at initialisation; if present, the extension is used
-    for future embedding-similarity queries (the flag is exposed via the
-    ``pgvector_available`` property).
+    pgvector is detected at initialisation via the search adapter; if present,
+    the extension is used for hybrid embedding-similarity queries.
 
     Example configuration (ravn.yaml)::
 
@@ -130,6 +136,9 @@ class PostgresMemoryAdapter(MemoryPort):
         prefetch_min_relevance: float = 0.3,
         recency_half_life_days: float = 14.0,
         session_search_truncate_chars: int = 100_000,
+        rrf_k: int = 60,
+        semantic_candidate_limit: int = 200,
+        search_port: SearchPort | None = None,
     ) -> None:
         resolved_dsn = os.environ.get(dsn_env, dsn) if dsn_env else dsn
         if not resolved_dsn:
@@ -146,32 +155,42 @@ class PostgresMemoryAdapter(MemoryPort):
         self._recency_half_life_days = recency_half_life_days
         self._session_search_truncate_chars = session_search_truncate_chars
         self._pool: asyncpg.Pool | None = None
-        self._pgvector_available: bool = False
         self._shared_context: SharedContext | None = None
+
+        self._search: SearchPort = search_port or PostgresSearchAdapter(
+            dsn=resolved_dsn,
+            rrf_k=rrf_k,
+            semantic_candidate_limit=semantic_candidate_limit,
+            pool_min_size=pool_min_size,
+            pool_max_size=pool_max_size,
+        )
 
     @property
     def pgvector_available(self) -> bool:
         """True if the pgvector extension was detected at initialisation."""
-        return self._pgvector_available
+        return getattr(self._search, "pgvector_available", False)
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     async def initialize(self) -> None:
-        """Create the connection pool and detect pgvector availability."""
+        """Create the connection pool, ensure tables exist, and detect pgvector."""
         self._pool = await asyncpg.create_pool(
             self._dsn,
             min_size=self._pool_min_size,
             max_size=self._pool_max_size,
         )
-        self._pgvector_available = await self._detect_pgvector()
+        if hasattr(self._search, "initialize"):
+            await self._search.initialize()  # type: ignore[union-attr]
 
     async def close(self) -> None:
-        """Close the connection pool gracefully."""
+        """Close the connection pools gracefully."""
         if self._pool is not None:
             await self._pool.close()
             self._pool = None
+        if hasattr(self._search, "close"):
+            await self._search.close()  # type: ignore[union-attr]
 
     # ------------------------------------------------------------------
     # MemoryPort implementation
@@ -216,6 +235,20 @@ class PostgresMemoryAdapter(MemoryPort):
                 episode.duration_seconds,
             )
 
+        # Index the episode in the search adapter for future retrieval.
+        content = f"{episode.task_description} {episode.summary} {' '.join(episode.tags)}"
+        metadata = {
+            "session_id": episode.session_id,
+            "timestamp": episode.timestamp.isoformat(),
+            "outcome": episode.outcome.value,
+        }
+        await self._search.index(
+            episode.episode_id,
+            content,
+            metadata,
+            embedding=episode.embedding,
+        )
+
     async def query_episodes(
         self,
         query: str,
@@ -226,40 +259,43 @@ class PostgresMemoryAdapter(MemoryPort):
         if not query.strip():
             return []
 
+        # Get raw search results from the shared search adapter.
+        search_results = await self._search.search(query, limit=limit * 3)
+
+        if not search_results:
+            return []
+
+        # Load full episode objects from ravn_episodes by ID.
+        episode_ids = [r.id for r in search_results]
         pool = self._require_pool()
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                WITH q AS (SELECT websearch_to_tsquery('english', $1) AS tsq)
-                SELECT
-                    episode_id, session_id, timestamp, summary,
-                    task_description, tools_used, outcome, tags, embedding,
-                    reflection, errors, cost_usd, duration_seconds,
-                    ts_rank(search_vector, q.tsq) AS rank_score
-                FROM ravn_episodes, q
-                WHERE search_vector @@ q.tsq
-                ORDER BY rank_score DESC
-                LIMIT $2
+                SELECT episode_id, session_id, timestamp, summary,
+                       task_description, tools_used, outcome, tags, embedding,
+                       reflection, errors, cost_usd, duration_seconds
+                FROM ravn_episodes
+                WHERE episode_id = ANY($1::text[])
                 """,
-                query,
-                limit * 3,  # fetch extra for post-filter
+                episode_ids,
             )
 
-        if not rows:
-            return []
+        episodes_by_id = {row["episode_id"]: _row_to_episode(row) for row in rows}
 
+        # Apply episode-specific scoring: recency decay × outcome weight.
         matches: list[EpisodeMatch] = []
-        for row in rows:
-            episode = _row_to_episode(row)
-            ts_rank_val = float(row["rank_score"])
+        for result in search_results:
+            ep = episodes_by_id.get(result.id)
+            if ep is None:
+                continue
             score = _combined_score(
-                ts_rank_val,
-                episode.timestamp,
-                episode.outcome,
+                result.score,
+                ep.timestamp,
+                ep.outcome,
                 self._recency_half_life_days,
             )
             if score >= min_relevance:
-                matches.append(EpisodeMatch(episode=episode, relevance=score))
+                matches.append(EpisodeMatch(episode=ep, relevance=score))
 
         matches.sort(key=lambda m: m.relevance, reverse=True)
         return matches[:limit]
@@ -291,22 +327,27 @@ class PostgresMemoryAdapter(MemoryPort):
         if not query.strip():
             return []
 
+        # Use the search adapter for FTS and load full episodes for grouping.
+        search_results = await self._search.search(
+            query,
+            limit=self._session_search_truncate_chars // _AVG_EPISODE_CHARS,
+        )
+
+        if not search_results:
+            return []
+
+        episode_ids = [r.id for r in search_results]
         pool = self._require_pool()
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                WITH q AS (SELECT websearch_to_tsquery('english', $1) AS tsq)
-                SELECT
-                    episode_id, session_id, timestamp, summary,
-                    task_description, tools_used, outcome, tags, embedding,
-                    reflection, errors, cost_usd, duration_seconds
-                FROM ravn_episodes, q
-                WHERE search_vector @@ q.tsq
-                ORDER BY ts_rank(search_vector, q.tsq) DESC
-                LIMIT $2
+                SELECT episode_id, session_id, timestamp, summary,
+                       task_description, tools_used, outcome, tags, embedding,
+                       reflection, errors, cost_usd, duration_seconds
+                FROM ravn_episodes
+                WHERE episode_id = ANY($1::text[])
                 """,
-                query,
-                self._session_search_truncate_chars // _AVG_EPISODE_CHARS,
+                episode_ids,
             )
 
         if not rows:
@@ -330,10 +371,3 @@ class PostgresMemoryAdapter(MemoryPort):
         if self._pool is None:
             raise RuntimeError("PostgresMemoryAdapter not initialized. Call initialize() first.")
         return self._pool
-
-    async def _detect_pgvector(self) -> bool:
-        """Return True if the pgvector extension is installed in this database."""
-        pool = self._require_pool()
-        async with pool.acquire() as conn:
-            row = await conn.fetchrow("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
-        return row is not None

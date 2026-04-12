@@ -122,24 +122,25 @@ class TestRecencyScore:
 class TestCombinedScore:
     def test_perfect_recent_success(self) -> None:
         ts = datetime.now(UTC)
-        score = _combined_score(-5.0, 5.0, ts, Outcome.SUCCESS, half_life_days=14.0)
+        # relevance=1.0 (normalised), recent timestamp, success outcome
+        score = _combined_score(1.0, ts, Outcome.SUCCESS, half_life_days=14.0)
         assert score > 0.9
 
     def test_failure_lower_than_success(self) -> None:
         ts = datetime.now(UTC)
-        success = _combined_score(-5.0, 5.0, ts, Outcome.SUCCESS, half_life_days=14.0)
-        failure = _combined_score(-5.0, 5.0, ts, Outcome.FAILURE, half_life_days=14.0)
+        success = _combined_score(1.0, ts, Outcome.SUCCESS, half_life_days=14.0)
+        failure = _combined_score(1.0, ts, Outcome.FAILURE, half_life_days=14.0)
         assert success > failure
 
-    def test_zero_bm25_gives_zero(self) -> None:
+    def test_zero_relevance_gives_zero(self) -> None:
         ts = datetime.now(UTC)
-        score = _combined_score(0.0, 5.0, ts, Outcome.SUCCESS, half_life_days=14.0)
+        score = _combined_score(0.0, ts, Outcome.SUCCESS, half_life_days=14.0)
         assert score == pytest.approx(0.0)
 
-    def test_zero_max_abs_bm25_safe(self) -> None:
+    def test_partial_relevance_gives_partial_score(self) -> None:
         ts = datetime.now(UTC)
-        score = _combined_score(0.0, 0.0, ts, Outcome.SUCCESS, half_life_days=14.0)
-        assert score == pytest.approx(0.0)
+        score = _combined_score(0.5, ts, Outcome.SUCCESS, half_life_days=14.0)
+        assert 0.0 < score < 1.0
 
 
 class TestFormatEpisodeBlock:
@@ -185,12 +186,12 @@ class TestSqliteInit:
         conn.close()
         assert row[0] == "wal"
 
-    async def test_fts5_table_exists(self, tmp_path: Path) -> None:
+    async def test_search_index_fts_table_exists(self, tmp_path: Path) -> None:
         adapter = SqliteMemoryAdapter(path=str(tmp_path / "memory.db"))
         await adapter.initialize()
         conn = sqlite3.connect(str(tmp_path / "memory.db"))
         rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='episodes_fts'"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='search_index_fts'"
         ).fetchall()
         conn.close()
         assert len(rows) == 1
