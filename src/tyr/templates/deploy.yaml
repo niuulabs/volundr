@@ -1,18 +1,19 @@
-# Saga template: deploy
+# Saga template: deploy (pipeline format)
 # Triggered by: github.pr.merged (filter: branch=main)
-# Creates a 3-phase deployment saga after a merge to main.
-# Phase 1: Smoke test against staging (persona: qa-agent)
-# Phase 2: Monitor health endpoint for 10 minutes (persona: qa-agent)
-# Phase 3: Document release in Mimir (persona: retro-analyst)
+# Stage 1: Smoke test (persona: qa-agent, condition: fan-in pass)
+# Stage 2: Monitor health (persona: qa-agent)
+# Stage 3: Release documentation (persona: retro-analyst)
 name: "Deploy: {event.repo}@{event.sha_short}"
 feature_branch: "main"
 base_branch: "main"
 repos:
   - "{event.repo}"
-phases:
-  - name: Smoke Test
-    raids:
+
+stages:
+  - name: smoke-test
+    sequential:
       - name: "Smoke test after deploying {event.sha_short}"
+        persona: qa-agent
         description: |
           Run smoke tests against the staging/production environment after deploying the merge of {event.title} into main.
 
@@ -27,7 +28,6 @@ phases:
           - No error spikes in logs within 2 minutes of deployment
         declared_files: []
         estimate_hours: 0.25
-        persona: qa-agent
         prompt: |
           # Smoke Test Task
 
@@ -49,10 +49,12 @@ phases:
           If deployment failed, open an incident issue immediately and escalate.
 
           Report: PASS (deployment healthy) or FAIL (with details).
+          Output verdict: "pass" or "fail" in your outcome block.
 
-  - name: Monitor
-    raids:
+  - name: monitor
+    sequential:
       - name: "Monitor health for {event.repo}@{event.sha_short}"
+        persona: qa-agent
         description: |
           Monitor the health endpoint and error rates for 10 minutes following the deployment of {event.sha_short} to {event.repo}.
 
@@ -65,7 +67,6 @@ phases:
           - P95 response time remains within acceptable bounds
         declared_files: []
         estimate_hours: 0.25
-        persona: qa-agent
         prompt: |
           # Health Monitoring Task
 
@@ -84,10 +85,13 @@ phases:
           If any check fails, stop polling and escalate immediately.
 
           Report a summary table of all 10 health checks with timestamps.
+          Output verdict: "pass" or "fail" in your outcome block.
+    condition: "stages.smoke-test.verdict == pass"
 
-  - name: Release Documentation
-    raids:
+  - name: release-docs
+    sequential:
       - name: "Document release {event.sha_short} in Mimir"
+        persona: retro-analyst
         description: |
           Write structured release notes to Mimir for the deployment of {event.sha_short} to {event.repo}.
 
@@ -100,7 +104,6 @@ phases:
           - Searchable by repo, sha, and date in Mimir
         declared_files: []
         estimate_hours: 0.25
-        persona: retro-analyst
         prompt: |
           # Release Documentation Task
 
@@ -122,3 +125,4 @@ phases:
           5. Tag the entry with: repo={event.repo}, sha={event.sha}, type=release
 
           Output the Mimir entry content before writing it.
+    condition: "stages.monitor.verdict == pass"

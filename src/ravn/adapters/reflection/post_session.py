@@ -373,8 +373,8 @@ def _build_page_path(title: str, repo_slug: str) -> str:
     slug = _slugify(title)
     if repo_slug:
         safe_repo = re.sub(r"[^a-z0-9_-]", "-", repo_slug.lower())
-        return f"learnings/{safe_repo}/{slug}"
-    return f"learnings/general/{slug}"
+        return f"learnings/{safe_repo}/{slug}.md"
+    return f"learnings/general/{slug}.md"
 
 
 def _build_page_content(

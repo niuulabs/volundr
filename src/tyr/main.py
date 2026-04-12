@@ -42,6 +42,7 @@ from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.dispatcher import resolve_event_bus as dispatcher_resolve_event_bus
 from tyr.api.events import create_events_router, resolve_event_bus
 from tyr.api.health import create_health_router
+from tyr.api.pipelines import create_pipelines_router, resolve_pipeline_executor
 from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
 from tyr.api.raids import resolve_tracker as resolve_raids_tracker
 from tyr.api.raids import resolve_volundr as resolve_raids_volundr
@@ -173,6 +174,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_dispatch_router())
     app.include_router(create_dispatcher_router())
     app.include_router(create_events_router(settings.events.keepalive_interval))
+    app.include_router(create_pipelines_router())
     from tyr.adapters.inbound.auth import extract_principal as _extract_principal
 
     app.include_router(create_pats_router(_extract_principal))
@@ -517,6 +519,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         "EventTriggerAdapter started: %d rule(s)",
                         len(et_cfg.rules),
                     )
+
+            # Wire PipelineExecutor (dynamic pipeline creation via API)
+            from tyr.domain.pipeline_executor import TemplateAwarePipelineExecutor  # noqa: PLC0415
+
+            pipeline_executor = TemplateAwarePipelineExecutor(
+                saga_repo=saga_repo,
+                volundr_factory=app.state.volundr_factory,
+                event_bus=event_bus,
+                owner_id=settings.event_triggers.owner_id
+                if settings.event_triggers.enabled
+                else "api",
+                default_model=settings.dispatch.default_model,
+                initial_confidence=settings.review.initial_confidence,
+            )
+            app.state.pipeline_executor = pipeline_executor
+
+            async def _resolve_pipeline_executor() -> TemplateAwarePipelineExecutor:
+                return pipeline_executor
+
+            app.dependency_overrides[resolve_pipeline_executor] = _resolve_pipeline_executor
 
             logger.info("Tyr started — database pool ready")
             yield

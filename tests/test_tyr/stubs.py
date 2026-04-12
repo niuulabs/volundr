@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from tyr.domain.models import Phase, Raid, Saga, SagaStatus
+from tyr.domain.models import Phase, Raid, RaidStatus, Saga, SagaStatus
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.volundr import (
     ActivityEvent,
@@ -68,6 +69,58 @@ class InMemorySagaRepository(SagaRepository):
 
     async def count_by_status(self) -> dict[str, int]:
         return {}
+
+    async def get_phase(self, phase_id: UUID) -> Phase | None:
+        return self.phases.get(phase_id)
+
+    async def get_raid(self, raid_id: UUID) -> Raid | None:
+        return self.raids.get(raid_id)
+
+    async def get_raids_by_phase(self, phase_id: UUID) -> list[Raid]:
+        return [r for r in self.raids.values() if r.phase_id == phase_id]
+
+    async def get_phases_by_saga(self, saga_id: UUID) -> list[Phase]:
+        return sorted(
+            [p for p in self.phases.values() if p.saga_id == saga_id],
+            key=lambda p: p.number,
+        )
+
+    async def update_raid_outcome(
+        self,
+        raid_id: UUID,
+        outcome: dict[str, Any],
+        event_type: str,
+        status: RaidStatus,
+    ) -> None:
+        raid = self.raids.get(raid_id)
+        if raid is None:
+            return
+        self.raids[raid_id] = Raid(
+            id=raid.id,
+            phase_id=raid.phase_id,
+            tracker_id=raid.tracker_id,
+            name=raid.name,
+            description=raid.description,
+            acceptance_criteria=raid.acceptance_criteria,
+            declared_files=raid.declared_files,
+            estimate_hours=raid.estimate_hours,
+            status=status,
+            confidence=raid.confidence,
+            session_id=raid.session_id,
+            branch=raid.branch,
+            chronicle_summary=raid.chronicle_summary,
+            pr_url=raid.pr_url,
+            pr_id=raid.pr_id,
+            retry_count=raid.retry_count,
+            created_at=raid.created_at,
+            updated_at=datetime.now(UTC),
+            identifier=raid.identifier,
+            url=raid.url,
+            reviewer_session_id=raid.reviewer_session_id,
+            review_round=raid.review_round,
+            structured_outcome=outcome,
+            outcome_event_type=event_type,
+        )
 
 
 class StubVolundrPort(VolundrPort):

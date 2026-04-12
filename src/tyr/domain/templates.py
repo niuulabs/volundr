@@ -4,7 +4,9 @@ Templates describe predefined saga workflows as YAML files.  The loader
 parses a template, substitutes ``{event.field}`` placeholders, validates the
 structure, and returns a :class:`SagaTemplate` ready for execution.
 
-Template format (YAML)::
+Supports two template formats:
+
+**Legacy format** (phases with raids)::
 
     name: "Review: {event.repo}#{event.pr_number}"
     feature_branch: "{event.branch}"
@@ -15,30 +17,39 @@ Template format (YAML)::
       - name: Code Review
         raids:
           - name: "Review PR #{event.pr_number}"
-            description: "..."
-            acceptance_criteria:
-              - "All files reviewed"
-            declared_files: []
-            estimate_hours: 1.0
             persona: reviewer
-            prompt: |
-              ...
-      - name: Human Approval
-        needs_approval: true
-        raids:
-          - name: "Approve PR #{event.pr_number}"
-            description: "Human sign-off gate."
-            acceptance_criteria: []
-            declared_files: []
-            estimate_hours: 0.0
-            persona: ""
-            prompt: ""
+            prompt: "..."
+
+**Pipeline format** (stages with parallel/sequential participants)::
+
+    name: "Review: {event.repo}#{event.pr_number}"
+    feature_branch: "{event.branch}"
+    base_branch: "{event.base_branch}"
+    repos:
+      - "{event.repo}"
+    stages:
+      - name: parallel-review
+        parallel:
+          - persona: reviewer
+            prompt: "Review the diff"
+          - persona: security-auditor
+            prompt: "Security audit"
+        fan_in: all_must_pass
+      - name: test
+        sequential:
+          - persona: qa-agent
+            prompt: "Run tests"
+        condition: "stages.parallel-review.verdict == pass"
+      - name: approval
+        gate: human
+        notify: [slack]
+        condition: "stages.test.verdict == pass"
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +84,11 @@ class TemplatePhase:
     name: str
     raids: list[TemplateRaid]
     needs_approval: bool = False
+    parallel: bool = False
+    fan_in: str = "merge"  # all_must_pass | any_pass | majority | merge
+    condition: str | None = None
+    gate: str | None = None  # "human" for human approval gate
+    notify: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -125,6 +141,119 @@ def _interpolate_value(value: Any, payload: dict) -> Any:
 
 
 # ---------------------------------------------------------------------------
+# Parsing helpers
+# ---------------------------------------------------------------------------
+
+
+def _parse_raid_from_dict(r: dict, phase_name: str) -> TemplateRaid:
+    """Parse a single raid dict into a TemplateRaid."""
+    return TemplateRaid(
+        name=r.get("name", ""),
+        description=r.get("description", ""),
+        acceptance_criteria=r.get("acceptance_criteria", []),
+        declared_files=r.get("declared_files", []),
+        estimate_hours=float(r.get("estimate_hours", 2.0)),
+        prompt=r.get("prompt", ""),
+        persona=r.get("persona", ""),
+    )
+
+
+def _parse_participant_as_raid(p: dict, stage_name: str) -> TemplateRaid:
+    """Convert a pipeline participant dict to a TemplateRaid."""
+    persona = p.get("persona", "")
+    name = p.get("name") or f"{persona} in {stage_name}"
+    return TemplateRaid(
+        name=name,
+        description=p.get("description", ""),
+        acceptance_criteria=p.get("acceptance_criteria", []),
+        declared_files=p.get("declared_files", []),
+        estimate_hours=float(p.get("estimate_hours", 1.0)),
+        prompt=p.get("prompt", ""),
+        persona=persona,
+    )
+
+
+def _parse_stages(data: dict) -> list[TemplatePhase]:
+    """Parse pipeline-format ``stages`` key into TemplatePhase list."""
+    phases: list[TemplatePhase] = []
+    for stage in data.get("stages", []):
+        name = stage.get("name", "")
+        fan_in = stage.get("fan_in", "merge")
+        condition = stage.get("condition") or None
+        gate = stage.get("gate") or None
+        notify = stage.get("notify", [])
+        needs_approval = gate == "human"
+
+        parallel_list = stage.get("parallel")
+        sequential_list = stage.get("sequential")
+
+        if gate == "human" and not parallel_list and not sequential_list:
+            # Human gate with no participants: create a placeholder raid
+            raids = [
+                TemplateRaid(
+                    name=f"Human approval: {name}",
+                    description=f"Human approval gate for stage '{name}'.",
+                    acceptance_criteria=[],
+                    declared_files=[],
+                    estimate_hours=0.25,
+                    prompt="",
+                    persona="",
+                )
+            ]
+            phases.append(
+                TemplatePhase(
+                    name=name,
+                    raids=raids,
+                    needs_approval=True,
+                    parallel=False,
+                    fan_in=fan_in,
+                    condition=condition,
+                    gate=gate,
+                    notify=list(notify),
+                )
+            )
+            continue
+
+        participants = parallel_list or sequential_list or []
+        is_parallel = parallel_list is not None
+        raids = [_parse_participant_as_raid(p, name) for p in participants]
+
+        phases.append(
+            TemplatePhase(
+                name=name,
+                raids=raids,
+                needs_approval=needs_approval,
+                parallel=is_parallel,
+                fan_in=fan_in,
+                condition=condition,
+                gate=gate,
+                notify=list(notify),
+            )
+        )
+    return phases
+
+
+def _parse_phases(data: dict) -> list[TemplatePhase]:
+    """Parse legacy-format ``phases`` key into TemplatePhase list."""
+    phases: list[TemplatePhase] = []
+    for p in data.get("phases", []):
+        raids = [_parse_raid_from_dict(r, p.get("name", "")) for r in p.get("raids", [])]
+        phases.append(
+            TemplatePhase(
+                name=p["name"],
+                raids=raids,
+                needs_approval=bool(p.get("needs_approval", False)),
+                parallel=bool(p.get("parallel", False)),
+                fan_in=p.get("fan_in", "merge"),
+                condition=p.get("condition") or None,
+                gate=p.get("gate") or None,
+                notify=list(p.get("notify", [])),
+            )
+        )
+    return phases
+
+
+# ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
 
@@ -138,8 +267,27 @@ def _validate_template(data: dict) -> None:
     if not data.get("name"):
         raise ValueError("Template is missing required field 'name'")
 
-    phases = data.get("phases", [])
-    for phase_idx, phase in enumerate(phases):
+    has_phases = "phases" in data
+    has_stages = "stages" in data
+
+    if has_stages:
+        for stage_idx, stage in enumerate(data.get("stages", [])):
+            stage_name = stage.get("name") or f"stage[{stage_idx}]"
+            if not stage.get("name"):
+                raise ValueError(f"Stage at index {stage_idx} is missing required field 'name'")
+            gate = stage.get("gate")
+            parallel = stage.get("parallel")
+            sequential = stage.get("sequential")
+            if gate != "human" and not parallel and not sequential:
+                raise ValueError(
+                    f"Stage '{stage_name}' must have 'parallel', 'sequential', or 'gate: human'"
+                )
+        return
+
+    if not has_phases:
+        raise ValueError("Template must have 'phases' or 'stages'")
+
+    for phase_idx, phase in enumerate(data.get("phases", [])):
         phase_name = phase.get("name") or f"phase[{phase_idx}]"
         if not phase.get("name"):
             raise ValueError(f"Phase at index {phase_idx} is missing required field 'name'")
@@ -196,28 +344,40 @@ def load_template(name: str, templates_dir: Path, payload: dict) -> SagaTemplate
 
     _validate_template(data)
 
-    phases = [
-        TemplatePhase(
-            name=p["name"],
-            needs_approval=bool(p.get("needs_approval", False)),
-            raids=[
-                TemplateRaid(
-                    name=r["name"],
-                    description=r.get("description", ""),
-                    acceptance_criteria=r.get("acceptance_criteria", []),
-                    declared_files=r.get("declared_files", []),
-                    estimate_hours=float(r.get("estimate_hours", 2.0)),
-                    prompt=r.get("prompt", ""),
-                    persona=r.get("persona", ""),
-                )
-                for r in p.get("raids", [])
-            ],
-        )
-        for p in data.get("phases", [])
-    ]
+    if "stages" in data:
+        phases = _parse_stages(data)
+    else:
+        phases = _parse_phases(data)
 
     return SagaTemplate(
         name=data["name"],
+        feature_branch=data.get("feature_branch", "main"),
+        base_branch=data.get("base_branch", "main"),
+        repos=data.get("repos", []),
+        phases=phases,
+    )
+
+
+def load_template_from_string(yaml_str: str, payload: dict) -> SagaTemplate:
+    """Load and interpolate a YAML saga template from a string.
+
+    Behaves like :func:`load_template` but reads from *yaml_str* directly
+    instead of a file.  Used by the dynamic pipeline API.
+
+    :param yaml_str: Raw YAML template string.
+    :param payload: Context payload used for ``{event.*}`` substitution.
+    :raises ValueError: When the template fails validation.
+    """
+    data = _interpolate_value(yaml.safe_load(yaml_str), payload)
+    _validate_template(data)
+
+    if "stages" in data:
+        phases = _parse_stages(data)
+    else:
+        phases = _parse_phases(data)
+
+    return SagaTemplate(
+        name=data.get("name", "pipeline"),
         feature_branch=data.get("feature_branch", "main"),
         base_branch=data.get("base_branch", "main"),
         repos=data.get("repos", []),

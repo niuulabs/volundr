@@ -1,16 +1,17 @@
-# Saga template: retro
+# Saga template: retro (pipeline format)
 # Triggered by: cron.weekly (0 9 * * 1 — Monday 9am)
-# Creates a 2-phase weekly retrospective saga.
-# Phase 1: Retrospective analysis (persona: retro-analyst)
-# Phase 2: Write retrospective to Mimir (persona: retro-analyst)
+# Stage 1: Retrospective analysis (persona: retro-analyst)
+# Stage 2: Write retrospective to Mimir (persona: retro-analyst)
 name: "Weekly Retro: {event.week}"
 feature_branch: "main"
 base_branch: "main"
 repos: []
-phases:
-  - name: Retrospective Analysis
-    raids:
+
+stages:
+  - name: retrospective-analysis
+    sequential:
       - name: "Retrospective analysis for week {event.week}"
+        persona: retro-analyst
         description: |
           Analyse the past week's engineering activity, identify patterns, blockers, and learnings.
 
@@ -23,7 +24,6 @@ phases:
           - Action items for the coming week drafted
         declared_files: []
         estimate_hours: 1.0
-        persona: retro-analyst
         prompt: |
           # Weekly Retrospective Analysis Task
 
@@ -50,9 +50,10 @@ phases:
           - Learnings
           - Action Items
 
-  - name: Write to Mimir
-    raids:
+  - name: write-to-mimir
+    sequential:
       - name: "Write retro for week {event.week} to Mimir"
+        persona: retro-analyst
         description: |
           Write the completed retrospective for week {event.week} to Mimir for long-term storage and searchability.
         acceptance_criteria:
@@ -62,7 +63,6 @@ phases:
           - Action items tagged for follow-up
         declared_files: []
         estimate_hours: 0.25
-        persona: retro-analyst
         prompt: |
           # Write Retrospective to Mimir Task
 

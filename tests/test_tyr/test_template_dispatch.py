@@ -271,7 +271,6 @@ class TestDispatchServiceBundledTemplates:
     """Smoke-load each bundled template through DispatchService."""
 
     async def test_ship_template_via_dispatch_service(self):
-
         saga_repo = InMemorySagaRepository()
         svc = _make_service(saga_repo=saga_repo)
         payload = {"repo": "niuulabs/volundr", "branch": "feat/release", "base_branch": "main"}

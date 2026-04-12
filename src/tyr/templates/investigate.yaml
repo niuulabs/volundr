@@ -1,15 +1,17 @@
-# Saga template: investigate
+# Saga template: investigate (pipeline format)
 # Triggered by: github.issue.opened (filter: label=bug)
-# Creates an investigation saga for bug reports. auto_start: false by default.
+# Stage 1: Triage and fix (persona: qa-agent)
 name: "Investigate: {event.title}"
 feature_branch: "fix/issue-{event.issue_number}"
 base_branch: "main"
 repos:
   - "{event.repo}"
-phases:
-  - name: Triage
-    raids:
+
+stages:
+  - name: triage
+    sequential:
       - name: "Triage issue #{event.issue_number}"
+        persona: qa-agent
         description: |
           Investigate the bug report and produce a root-cause analysis.
 
@@ -28,7 +30,6 @@ phases:
           - PR created and CI passing
         declared_files: []
         estimate_hours: 2.0
-        persona: qa-agent
         prompt: |
           # Bug Investigation Task
 

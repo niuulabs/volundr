@@ -372,7 +372,9 @@ class DispatchService:
             if not state.running or not state.auto_continue:
                 logger.info(
                     "Auto-continue skipped for owner %s: running=%s, auto_continue=%s",
-                    owner_id[:8], state.running, state.auto_continue,
+                    owner_id[:8],
+                    state.running,
+                    state.auto_continue,
                 )
                 return []
 
@@ -386,7 +388,9 @@ class DispatchService:
             if available_slots <= 0:
                 logger.info(
                     "Auto-continue skipped for owner %s: no slots (%d running, max %d)",
-                    owner_id[:8], len(running_raids), state.max_concurrent_raids,
+                    owner_id[:8],
+                    len(running_raids),
+                    state.max_concurrent_raids,
                 )
                 return []
 
@@ -394,7 +398,8 @@ class DispatchService:
             if not ready:
                 logger.info(
                     "Auto-continue skipped for owner %s: no ready issues (saga=%s)",
-                    owner_id[:8], saga_tracker_id,
+                    owner_id[:8],
+                    saga_tracker_id,
                 )
                 return []
 
