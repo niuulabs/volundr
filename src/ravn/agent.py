@@ -8,7 +8,7 @@ import time
 import uuid
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from niuu.ports.mimir import MimirPort
 from ravn.adapters.memory.inline_facts import detect_and_write as _detect_and_write_facts
@@ -43,6 +43,10 @@ from ravn.ports.memory import MemoryPort
 from ravn.ports.permission import PermissionPort
 from ravn.ports.tool import ToolPort
 from ravn.prompt_builder import PromptBuilder
+
+if TYPE_CHECKING:
+    from niuu.domain.outcome import ParsedOutcome
+    from ravn.adapters.personas.loader import PersonaConfig
 
 try:
     from sleipnir.domain.catalog import ravn_session_ended, ravn_session_started
@@ -121,7 +125,7 @@ class RavnAgent:
         mimir: MimirPort | None = None,
         reflection_config: PostSessionReflectionConfig | None = None,
         # NIU-594: persona config for outcome block parsing
-        persona_config: object | None = None,
+        persona_config: PersonaConfig | None = None,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -243,6 +247,25 @@ class RavnAgent:
         except Exception:
             logger.warning("Failed to emit ravn.session.started; continuing.", exc_info=True)
 
+    def _build_session_ended_event(self, outcome: str) -> object:
+        """Build a ravn.session.ended SleipnirEvent with the given outcome string.
+
+        Centralises the token/duration computation and ravn_session_ended() call
+        so both emit_session_ended() and _emit_session_ended_with_outcome() stay DRY.
+        """
+        total_tokens = self._session.total_usage.total_tokens
+        duration_s = round(time.monotonic() - self._session_wall_start, 3)
+        return ravn_session_ended(
+            session_id=str(self._session.id),
+            persona=self._persona,
+            outcome=outcome,
+            token_count=total_tokens,
+            duration_s=duration_s,
+            source=self._source_id,
+            repo_slug=self._repo_slug,
+            correlation_id=self._task_id,
+        )
+
     async def emit_session_ended(self, outcome: str) -> None:
         """Publish ravn.session.ended to Sleipnir.
 
@@ -257,23 +280,13 @@ class RavnAgent:
         if self._session_ended_emitted:
             return
         try:
-            total_tokens = self._session.total_usage.total_tokens
-            duration_s = round(time.monotonic() - self._session_wall_start, 3)
-            event = ravn_session_ended(
-                session_id=str(self._session.id),
-                persona=self._persona,
-                outcome=outcome,
-                token_count=total_tokens,
-                duration_s=duration_s,
-                source=self._source_id,
-                repo_slug=self._repo_slug,
-                correlation_id=self._task_id,
-            )
+            event = self._build_session_ended_event(outcome)
             await self._sleipnir_publisher.publish(event)
+            self._session_ended_emitted = True
         except Exception:
             logger.warning("Failed to emit ravn.session.ended; continuing.", exc_info=True)
 
-    async def _emit_session_ended_with_outcome(self, parsed_outcome: object) -> None:
+    async def _emit_session_ended_with_outcome(self, parsed_outcome: ParsedOutcome) -> None:
         """Publish ravn.session.ended enriched with structured outcome fields.
 
         Called from run_turn() when the agent produces a valid outcome block.
@@ -283,24 +296,12 @@ class RavnAgent:
         if self._sleipnir_publisher is None or ravn_session_ended is None:
             return
         try:
-            total_tokens = self._session.total_usage.total_tokens
-            duration_s = round(time.monotonic() - self._session_wall_start, 3)
-            outcome_str = "success" if getattr(parsed_outcome, "valid", False) else "partial"
-            event = ravn_session_ended(
-                session_id=str(self._session.id),
-                persona=self._persona,
-                outcome=outcome_str,
-                token_count=total_tokens,
-                duration_s=duration_s,
-                source=self._source_id,
-                repo_slug=self._repo_slug,
-                correlation_id=self._task_id,
-            )
-            event.payload["structured_outcome"] = getattr(parsed_outcome, "fields", {})
-            event.payload["outcome_valid"] = getattr(parsed_outcome, "valid", False)
-            produces = getattr(self._persona_config, "produces", None)
-            if produces is not None:
-                event.payload["outcome_event_type"] = getattr(produces, "event_type", "")
+            outcome_str = "success" if parsed_outcome.valid else "partial"
+            event = self._build_session_ended_event(outcome_str)
+            event.payload["structured_outcome"] = parsed_outcome.fields
+            event.payload["outcome_valid"] = parsed_outcome.valid
+            if self._persona_config is not None:
+                event.payload["outcome_event_type"] = self._persona_config.produces.event_type
             await self._sleipnir_publisher.publish(event)
             self._session_ended_emitted = True
         except Exception:
@@ -1235,8 +1236,8 @@ def _extract_episode(
 
 def _parse_outcome_block_for_persona(
     text: str,
-    persona_config: object | None,
-) -> object | None:
+    persona_config: PersonaConfig | None,
+) -> ParsedOutcome | None:
     """Parse the ---outcome--- block from *text* using the persona's declared schema.
 
     Returns a :class:`niuu.domain.outcome.ParsedOutcome` when an outcome block is
@@ -1244,10 +1245,10 @@ def _parse_outcome_block_for_persona(
     """
     if persona_config is None:
         return None
-    produces = getattr(persona_config, "produces", None)
+    produces = persona_config.produces
     if produces is None:
         return None
-    schema_fields = getattr(produces, "schema", None)
+    schema_fields = produces.schema
     if not schema_fields:
         return None
     try:
