@@ -159,6 +159,14 @@ class RuleCondition(BaseModel):
         default=None,
         description="Match when the request contains image blocks (true) or not (false).",
     )
+    agent_id: str | None = Field(
+        default=None,
+        description=(
+            "fnmatch pattern matched against the X-Ravn-Agent-Id header value. "
+            "Use '*' as a wildcard (e.g. 'reviewer*' matches 'reviewer', 'reviewer-bot'). "
+            "Non-empty patterns only match when the header is present."
+        ),
+    )
 
     @model_validator(mode="after")
     def _validate_regex_fields(self) -> RuleCondition:
@@ -222,6 +230,16 @@ class BudgetGuardrailConfig(BaseModel):
         default="reject",
         description=(
             "Action to take when the budget is fully exhausted (100%). Only 'reject' is supported."
+        ),
+    )
+    degradation_chain: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Ordered list of model IDs (most capable → cheapest) for automatic downgrade. "
+            "When the warn threshold is reached, the request model is looked up in this list "
+            "and downgraded to the next cheaper entry. "
+            "Example: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001']. "
+            "When empty, warn_target is used instead (legacy behaviour)."
         ),
     )
 
@@ -378,8 +396,7 @@ class AuditConfig(BaseModel):
     adapter: AuditAdapter = Field(
         default=AuditAdapter.NULL,
         description=(
-            "Audit backend. Accepted values: 'null' (default, no-op), "
-            "'postgres', 'sqlite', 'otel'."
+            "Audit backend. Accepted values: 'null' (default, no-op), 'postgres', 'sqlite', 'otel'."
         ),
     )
     level: AuditDetailLevel = Field(

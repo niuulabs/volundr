@@ -18,7 +18,12 @@ import json
 import logging
 from dataclasses import asdict
 
-from bifrost.ports.events import BudgetWarningEvent, CostEventEmitter, RequestCompletedEvent
+from bifrost.ports.events import (
+    BudgetDegradedEvent,
+    BudgetWarningEvent,
+    CostEventEmitter,
+    RequestCompletedEvent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +86,9 @@ class SleipnirEventEmitter(CostEventEmitter):
         await self._publish(event.type, asdict(event))
 
     async def emit_budget_warning(self, event: BudgetWarningEvent) -> None:
+        await self._publish(event.type, asdict(event))
+
+    async def emit_budget_degraded(self, event: BudgetDegradedEvent) -> None:
         await self._publish(event.type, asdict(event))
 
     async def close(self) -> None:

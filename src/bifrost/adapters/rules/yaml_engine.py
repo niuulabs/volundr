@@ -17,6 +17,7 @@ Supported conditions
 * ``system_prompt_matches`` — regex applied to the system prompt text.
 * ``message_count``         — numeric comparison on the number of messages.
 * ``has_image``             — request contains image blocks (bool).
+* ``agent_id``              — fnmatch pattern on the X-Ravn-Agent-Id header (e.g. ``'reviewer*'``).
 
 Numeric comparison expressions
 -------------------------------
@@ -26,6 +27,7 @@ A plain number is treated as an equality check (``== N``).
 
 from __future__ import annotations
 
+import fnmatch
 import re
 
 from bifrost.config import BifrostConfig, RuleCondition, RuleConfig
@@ -233,6 +235,10 @@ class YamlRuleEngine(RuleEnginePort):
         if condition.has_image is not None:
             req_has_image = _request_has_image(request)
             if req_has_image != condition.has_image:
+                return False
+
+        if condition.agent_id is not None:
+            if not fnmatch.fnmatch(context.agent_id, condition.agent_id):
                 return False
 
         return True

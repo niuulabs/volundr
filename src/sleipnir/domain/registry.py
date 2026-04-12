@@ -265,6 +265,9 @@ BIFROST_PROVIDER_DOWN: str = "bifrost.provider.down"
 #: The upstream LLM provider recovered and is healthy again.
 BIFROST_PROVIDER_RECOVERED: str = "bifrost.provider.recovered"
 
+#: A request was automatically routed to a cheaper model due to budget pressure.
+BIFROST_BUDGET_DEGRADED: str = "bifrost.budget.degraded"
+
 # ---------------------------------------------------------------------------
 # system — Infrastructure and lifecycle events
 # ---------------------------------------------------------------------------

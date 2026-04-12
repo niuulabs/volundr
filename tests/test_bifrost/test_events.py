@@ -393,6 +393,9 @@ class TestEmitCostEvents:
             async def emit_budget_warning(self, event: BudgetWarningEvent) -> None:
                 pass
 
+            async def emit_budget_degraded(self, event) -> None:
+                pass
+
         store = MemoryUsageStore()
         identity = _identity(agent_id="agt", session_id="sess-abc")
 
@@ -483,6 +486,9 @@ class TestEndToEndEventEmission:
             async def emit_budget_warning(self, event: BudgetWarningEvent) -> None:
                 captured_warnings.append(event)
 
+            async def emit_budget_degraded(self, event) -> None:
+                pass
+
         cfg = BifrostConfig(
             providers={"anthropic": ProviderConfig(models=["claude-sonnet-4-6"])},
         )
@@ -532,6 +538,9 @@ class TestEndToEndEventEmission:
 
             async def emit_budget_warning(self, event: BudgetWarningEvent) -> None:
                 captured_warnings.append(event)
+
+            async def emit_budget_degraded(self, event) -> None:
+                pass
 
         # Agent has a $1.00 daily limit; store already has $0.95 spent
         cfg = BifrostConfig(
