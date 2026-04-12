@@ -251,7 +251,7 @@ class RavnAgent:
 
         if self._mimir is not None:
             try:
-                await _detect_and_write_facts(user_input, self._mimir, str(self._session.id))
+                await _detect_and_write_facts(user_input, self._mimir)
             except Exception:
                 logger.warning("Inline fact detection failed; continuing.", exc_info=True)
         elif self._memory is not None:

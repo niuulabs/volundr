@@ -136,7 +136,6 @@ def _build_retraction_page(content: str, retracted_at: datetime) -> str:
 async def detect_and_write(
     user_input: str,
     mimir: MimirPort,
-    session_id: str,
 ) -> None:
     """Detect inline fact patterns in *user_input* and write Mímir pages.
 

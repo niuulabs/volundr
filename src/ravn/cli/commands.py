@@ -160,10 +160,12 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
         except Exception as exc:
             logger.warning("Failed to load embedding adapter: %s — falling back to FTS-only", exc)
 
+    adapter = None
+
     if backend == "sqlite":
         from ravn.adapters.memory.sqlite import SqliteMemoryAdapter
 
-        return SqliteMemoryAdapter(
+        adapter = SqliteMemoryAdapter(
             path=settings.memory.path,
             max_retries=settings.memory.max_retries,
             min_jitter_ms=settings.memory.min_retry_jitter_ms,
@@ -179,7 +181,7 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
             semantic_candidate_limit=settings.embedding.semantic_candidate_limit,
         )
 
-    if backend == "postgres":
+    elif backend == "postgres":
         from ravn.adapters.memory.postgres import PostgresMemoryAdapter
 
         dsn = os.environ.get(settings.memory.dsn_env, "") if settings.memory.dsn_env else ""
@@ -189,15 +191,20 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
                 "Postgres memory backend configured but no DSN provided — memory disabled",
             )
             return None
-        return PostgresMemoryAdapter(dsn=dsn)
+        adapter = PostgresMemoryAdapter(dsn=dsn)
 
-    # Custom backend via fully-qualified class path
-    try:
-        cls = _import_class(backend)
-        return cls(path=settings.memory.path)
-    except Exception as exc:
-        logger.warning("Failed to load custom memory backend %r: %s", backend, exc)
-        return None
+    else:
+        # Custom backend via fully-qualified class path
+        try:
+            cls = _import_class(backend)
+            adapter = cls(path=settings.memory.path)
+        except Exception as exc:
+            logger.warning("Failed to load custom memory backend %r: %s", backend, exc)
+            return None
+
+    if adapter is not None:
+        adapter._rolling_summary_max_chars = settings.memory.rolling_summary_max_chars
+    return adapter
 
 
 # ---------------------------------------------------------------------------

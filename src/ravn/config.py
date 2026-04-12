@@ -477,6 +477,13 @@ class MemoryConfig(BaseModel):
         default=15.0,
         description="Output token cost in USD per million tokens (used to estimate cost_usd).",
     )
+    rolling_summary_max_chars: int = Field(
+        default=2_000,
+        description=(
+            "Maximum characters kept in the in-memory rolling session summary "
+            "maintained by MemoryPort.on_turn_complete()."
+        ),
+    )
 
 
 class PermissionRuleConfig(BaseModel):

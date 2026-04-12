@@ -183,7 +183,7 @@ class TestDetectAndWrite:
     @pytest.mark.asyncio
     async def test_preference_writes_to_mimir(self) -> None:
         mimir = _make_mimir()
-        await detect_and_write("I prefer early returns", mimir, "sess-1")
+        await detect_and_write("I prefer early returns", mimir)
 
         mimir.upsert_page.assert_awaited_once()
         path, content = mimir.upsert_page.call_args[0]
@@ -194,7 +194,7 @@ class TestDetectAndWrite:
     @pytest.mark.asyncio
     async def test_decision_writes_to_mimir(self) -> None:
         mimir = _make_mimir()
-        await detect_and_write("We decided to use SQLite", mimir, "sess-1")
+        await detect_and_write("We decided to use SQLite", mimir)
 
         path, content = mimir.upsert_page.call_args[0]
         assert path.startswith("memory/decisions/")
@@ -203,7 +203,7 @@ class TestDetectAndWrite:
     @pytest.mark.asyncio
     async def test_directive_writes_to_mimir(self) -> None:
         mimir = _make_mimir()
-        await detect_and_write("Remember that we need a down migration", mimir, "sess-1")
+        await detect_and_write("Remember that we need a down migration", mimir)
 
         path, content = mimir.upsert_page.call_args[0]
         assert path.startswith("memory/directives/")
@@ -212,7 +212,7 @@ class TestDetectAndWrite:
     @pytest.mark.asyncio
     async def test_retraction_writes_to_retractions(self) -> None:
         mimir = _make_mimir()
-        await detect_and_write("Forget that, I changed my mind", mimir, "sess-1")
+        await detect_and_write("Forget that, I changed my mind", mimir)
 
         path, content = mimir.upsert_page.call_args[0]
         assert path.startswith("memory/retractions/")
@@ -221,7 +221,7 @@ class TestDetectAndWrite:
     @pytest.mark.asyncio
     async def test_no_match_does_not_write(self) -> None:
         mimir = _make_mimir()
-        await detect_and_write("How does the connection pool work?", mimir, "sess-1")
+        await detect_and_write("How does the connection pool work?", mimir)
 
         mimir.upsert_page.assert_not_awaited()
 
@@ -231,7 +231,7 @@ class TestDetectAndWrite:
         mimir.upsert_page = AsyncMock(side_effect=RuntimeError("storage unavailable"))
 
         # Must not raise
-        await detect_and_write("I prefer early returns", mimir, "sess-1")
+        await detect_and_write("I prefer early returns", mimir)
 
 
 # ---------------------------------------------------------------------------

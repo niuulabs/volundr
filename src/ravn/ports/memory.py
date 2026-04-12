@@ -15,7 +15,9 @@ from ravn.domain.models import (
 if TYPE_CHECKING:
     from ravn.ports.tool import ToolPort
 
-# Maximum characters kept in the in-memory rolling session summary.
+# Default maximum characters for the in-memory rolling session summary.
+# Override per-instance by setting ``adapter._rolling_summary_max_chars``
+# after construction (done by ``_build_memory`` from the loaded config).
 _ROLLING_SUMMARY_MAX_CHARS = 2_000
 
 
@@ -126,11 +128,12 @@ class MemoryPort(ABC):
         may override to persist the summary across process restarts.
         """
         summaries: dict[str, str] = self.__dict__.setdefault("_rolling_summaries", {})
+        max_chars: int = self.__dict__.get("_rolling_summary_max_chars", _ROLLING_SUMMARY_MAX_CHARS)
         existing = summaries.get(session_id, "")
         entry = f"U: {user_input[:200]}\nA: {response_summary[:400]}"
         updated = f"{existing}\n\n{entry}".strip() if existing else entry
-        if len(updated) > _ROLLING_SUMMARY_MAX_CHARS:
-            updated = updated[-_ROLLING_SUMMARY_MAX_CHARS:]
+        if len(updated) > max_chars:
+            updated = updated[-max_chars:]
         summaries[session_id] = updated
 
     def get_rolling_summary(self, session_id: str) -> str:
