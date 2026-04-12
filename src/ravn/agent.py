@@ -8,7 +8,7 @@ import time
 import uuid
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from niuu.ports.mimir import MimirPort
 from ravn.adapters.memory.inline_facts import detect_and_write as _detect_and_write_facts
@@ -43,6 +43,10 @@ from ravn.ports.memory import MemoryPort
 from ravn.ports.permission import PermissionPort
 from ravn.ports.tool import ToolPort
 from ravn.prompt_builder import PromptBuilder
+
+if TYPE_CHECKING:
+    from niuu.domain.outcome import ParsedOutcome
+    from ravn.adapters.personas.loader import PersonaConfig
 
 try:
     from sleipnir.domain.catalog import ravn_session_ended, ravn_session_started
@@ -120,6 +124,8 @@ class RavnAgent:
         # NIU-588: learnings injection at session start
         mimir: MimirPort | None = None,
         reflection_config: PostSessionReflectionConfig | None = None,
+        # NIU-594: persona config for outcome block parsing
+        persona_config: PersonaConfig | None = None,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -163,9 +169,12 @@ class RavnAgent:
         self._repo_slug = repo_slug
         self._turn_count: int = 0
         self._session_wall_start: float = time.monotonic()
+        self._session_ended_emitted: bool = False
         # NIU-588: learnings injection at session start
         self._mimir = mimir
         self._reflection_config = reflection_config
+        # NIU-594: persona config for outcome block parsing
+        self._persona_config = persona_config
 
     @property
     def session(self) -> Session:
@@ -238,32 +247,67 @@ class RavnAgent:
         except Exception:
             logger.warning("Failed to emit ravn.session.started; continuing.", exc_info=True)
 
+    def _build_session_ended_event(self, outcome: str) -> object:
+        """Build a ravn.session.ended SleipnirEvent with the given outcome string.
+
+        Centralises the token/duration computation and ravn_session_ended() call
+        so both emit_session_ended() and _emit_session_ended_with_outcome() stay DRY.
+        """
+        total_tokens = self._session.total_usage.total_tokens
+        duration_s = round(time.monotonic() - self._session_wall_start, 3)
+        return ravn_session_ended(
+            session_id=str(self._session.id),
+            persona=self._persona,
+            outcome=outcome,
+            token_count=total_tokens,
+            duration_s=duration_s,
+            source=self._source_id,
+            repo_slug=self._repo_slug,
+            correlation_id=self._task_id,
+        )
+
     async def emit_session_ended(self, outcome: str) -> None:
         """Publish ravn.session.ended to Sleipnir.
 
         Call this once the entire session is complete (all turns done, normal
-        exit, interrupt, or error).  No-op when no publisher is configured.
+        exit, interrupt, or error).  No-op when no publisher is configured or
+        when the event was already emitted (e.g. by outcome block capture).
 
         :param outcome: One of ``"success"``, ``"interrupted"``, or ``"error"``.
         """
         if self._sleipnir_publisher is None or ravn_session_ended is None:
             return
+        if self._session_ended_emitted:
+            return
         try:
-            total_tokens = self._session.total_usage.total_tokens
-            duration_s = round(time.monotonic() - self._session_wall_start, 3)
-            event = ravn_session_ended(
-                session_id=str(self._session.id),
-                persona=self._persona,
-                outcome=outcome,
-                token_count=total_tokens,
-                duration_s=duration_s,
-                source=self._source_id,
-                repo_slug=self._repo_slug,
-                correlation_id=self._task_id,
-            )
+            event = self._build_session_ended_event(outcome)
             await self._sleipnir_publisher.publish(event)
+            self._session_ended_emitted = True
         except Exception:
             logger.warning("Failed to emit ravn.session.ended; continuing.", exc_info=True)
+
+    async def _emit_session_ended_with_outcome(self, parsed_outcome: ParsedOutcome) -> None:
+        """Publish ravn.session.ended enriched with structured outcome fields.
+
+        Called from run_turn() when the agent produces a valid outcome block.
+        Sets ``_session_ended_emitted`` so the external emit_session_ended()
+        becomes a no-op and no double-emission occurs.
+        """
+        if self._sleipnir_publisher is None or ravn_session_ended is None:
+            return
+        try:
+            outcome_str = "success" if parsed_outcome.valid else "partial"
+            event = self._build_session_ended_event(outcome_str)
+            event.payload["structured_outcome"] = parsed_outcome.fields
+            event.payload["outcome_valid"] = parsed_outcome.valid
+            if self._persona_config is not None:
+                event.payload["outcome_event_type"] = self._persona_config.produces.event_type
+            await self._sleipnir_publisher.publish(event)
+            self._session_ended_emitted = True
+        except Exception:
+            logger.warning(
+                "Failed to emit ravn.session.ended with outcome; continuing.", exc_info=True
+            )
 
     async def run_turn(self, user_input: str) -> TurnResult:
         """Process one user turn and return the result.
@@ -468,31 +512,43 @@ class RavnAgent:
         self._session.record_turn(cumulative_usage)
         duration_seconds = time.monotonic() - start_time
 
-        result = TurnResult(
+        # NIU-594: build a partial result to pass into episode extraction
+        partial_result = TurnResult(
             response=final_response,
             tool_calls=turn_tool_calls,
             tool_results=turn_tool_results,
             usage=cumulative_usage,
         )
 
-        if self._memory is not None:
-            try:
-                episode = _extract_episode(
-                    session_id=str(self._session.id),
-                    user_input=user_input,
-                    turn_result=result,
-                    summary_max_chars=self._episode_summary_max_chars,
-                    task_max_chars=self._episode_task_max_chars,
-                )
+        # NIU-594: parse ---outcome--- block from final response when persona declares a schema
+        parsed_outcome = _parse_outcome_block_for_persona(final_response, self._persona_config)
+
+        # Extract episode (always, so TurnResult.episode is populated for outcome capture)
+        recorded_episode: Episode | None = None
+        try:
+            episode = _extract_episode(
+                session_id=str(self._session.id),
+                user_input=user_input,
+                turn_result=partial_result,
+                summary_max_chars=self._episode_summary_max_chars,
+                task_max_chars=self._episode_task_max_chars,
+            )
+            # Attach structured outcome to episode before enrichment/recording
+            if parsed_outcome is not None:
+                episode.structured_outcome = parsed_outcome.fields
+                episode.outcome_valid = parsed_outcome.valid
+
+            if self._memory is not None:
                 episode = await self._enrich_episode(
                     episode=episode,
-                    turn_result=result,
+                    turn_result=partial_result,
                     duration_seconds=duration_seconds,
                     past_context=memory_ctx,
                 )
                 await self._memory.record_episode(episode)
-            except Exception:
-                logger.warning("Memory episode recording failed; continuing.", exc_info=True)
+            recorded_episode = episode
+        except Exception:
+            logger.warning("Episode extraction/recording failed; continuing.", exc_info=True)
 
         if self._memory is not None:
             try:
@@ -504,7 +560,17 @@ class RavnAgent:
             except Exception:
                 logger.warning("Memory on_turn_complete failed; continuing.", exc_info=True)
 
-        return result
+        # NIU-594: emit ravn.session.ended enriched with structured outcome
+        if parsed_outcome is not None:
+            await self._emit_session_ended_with_outcome(parsed_outcome)
+
+        return TurnResult(
+            response=final_response,
+            tool_calls=turn_tool_calls,
+            tool_results=turn_tool_results,
+            usage=cumulative_usage,
+            episode=recorded_episode,
+        )
 
     async def _build_effective_system(self, user_input: str) -> SystemPrompt:
         """Build the effective system prompt for this turn.
@@ -1166,6 +1232,33 @@ def _extract_episode(
         tags=tags,
         embedding=None,
     )
+
+
+def _parse_outcome_block_for_persona(
+    text: str,
+    persona_config: PersonaConfig | None,
+) -> ParsedOutcome | None:
+    """Parse the ---outcome--- block from *text* using the persona's declared schema.
+
+    Returns a :class:`niuu.domain.outcome.ParsedOutcome` when an outcome block is
+    found, or ``None`` when no persona schema is configured or no block is present.
+    """
+    if persona_config is None:
+        return None
+    produces = persona_config.produces
+    if produces is None:
+        return None
+    schema_fields = produces.schema
+    if not schema_fields:
+        return None
+    try:
+        from niuu.domain.outcome import OutcomeSchema, parse_outcome_block
+
+        schema = OutcomeSchema(fields=schema_fields)
+        return parse_outcome_block(text, schema)
+    except Exception:
+        logger.warning("Outcome block parsing failed; continuing without.", exc_info=True)
+        return None
 
 
 _THINK_PREFIXES = ("think:", "think: ")
