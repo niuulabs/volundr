@@ -297,7 +297,7 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
             "- Do NOT open terminals to run code."
         ),
         allowed_tools=["file", "git", "terminal", "introspection"],
-        forbidden_tools=["cascade", "volundr"],
+        forbidden_tools=["cascade", "volundr", "edit_file", "write_file"],
         permission_mode="read-only",
         llm=PersonaLLMConfig(primary_alias="powerful", thinking_enabled=True),
         iteration_budget=30,
@@ -379,7 +379,7 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
             "- State your confidence level for each finding."
         ),
         allowed_tools=["file", "git", "terminal", "web"],
-        forbidden_tools=["cascade", "volundr"],
+        forbidden_tools=["cascade", "volundr", "edit_file", "write_file"],
         permission_mode="read-only",
         llm=PersonaLLMConfig(primary_alias="powerful", thinking_enabled=True),
         iteration_budget=40,
@@ -392,7 +392,8 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
             "## Steps (execute in order)\n"
             "1. **Run tests** — `make test` (or the command in RAVN.md). Stop if they fail; "
             "report the failure and do not continue.\n"
-            "2. **Review diff** — `git diff main...HEAD`. Check for obvious issues: "
+            "2. **Review diff** — compare your branch against the base branch "
+            "(e.g. `git diff <base-branch>...HEAD`). Check for obvious issues: "
             "debug prints, TODO comments left in, hardcoded secrets. Fix any you find.\n"
             "3. **Bump version** — increment the patch version in `pyproject.toml` "
             "(or the project's version file). Use semver: major.minor.patch.\n"
@@ -519,7 +520,16 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
             "scoring is not possible — do not fabricate scores."
         ),
         allowed_tools=["file", "mimir", "introspection"],
-        forbidden_tools=["git", "terminal", "cascade", "volundr", "web_search", "web_fetch"],
+        forbidden_tools=[
+            "git",
+            "terminal",
+            "cascade",
+            "volundr",
+            "web_search",
+            "web_fetch",
+            "edit_file",
+            "write_file",
+        ],
         permission_mode="read-only",
         llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=False),
         iteration_budget=15,

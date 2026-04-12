@@ -366,6 +366,8 @@ class TestBuiltinPersonas:
         cfg = _BUILTIN_PERSONAS["reviewer"]
         assert "cascade" in cfg.forbidden_tools
         assert "volundr" in cfg.forbidden_tools
+        assert "edit_file" in cfg.forbidden_tools
+        assert "write_file" in cfg.forbidden_tools
 
     def test_reviewer_system_prompt_mentions_sql_safety(self) -> None:
         cfg = _BUILTIN_PERSONAS["reviewer"]
@@ -421,6 +423,8 @@ class TestBuiltinPersonas:
         cfg = _BUILTIN_PERSONAS["security-auditor"]
         assert "cascade" in cfg.forbidden_tools
         assert "volundr" in cfg.forbidden_tools
+        assert "edit_file" in cfg.forbidden_tools
+        assert "write_file" in cfg.forbidden_tools
 
     def test_security_auditor_system_prompt_mentions_owasp(self) -> None:
         cfg = _BUILTIN_PERSONAS["security-auditor"]
@@ -461,6 +465,11 @@ class TestBuiltinPersonas:
     def test_ship_agent_system_prompt_forbids_main_push(self) -> None:
         cfg = _BUILTIN_PERSONAS["ship-agent"]
         assert "main" in cfg.system_prompt_template
+
+    def test_ship_agent_diff_uses_generic_base_branch(self) -> None:
+        cfg = _BUILTIN_PERSONAS["ship-agent"]
+        assert "git diff main...HEAD" not in cfg.system_prompt_template
+        assert "base-branch" in cfg.system_prompt_template
 
     def test_retro_analyst_exists(self) -> None:
         cfg = _BUILTIN_PERSONAS["retro-analyst"]
@@ -513,6 +522,8 @@ class TestBuiltinPersonas:
         assert "terminal" in cfg.forbidden_tools
         assert "cascade" in cfg.forbidden_tools
         assert "volundr" in cfg.forbidden_tools
+        assert "edit_file" in cfg.forbidden_tools
+        assert "write_file" in cfg.forbidden_tools
 
     def test_memory_evaluator_system_prompt_mentions_precision(self) -> None:
         cfg = _BUILTIN_PERSONAS["memory-evaluator"]
