@@ -1419,6 +1419,23 @@ class MimirStalenessTriggerConfig(BaseModel):
     )
 
 
+class MimirIngestConfig(BaseModel):
+    """Configuration for the Mímir ingest entity detection step (NIU-578)."""
+
+    entity_detection: bool = Field(
+        default=True,
+        description="Enable LLM-based entity extraction during ingest.",
+    )
+    entity_model: str = Field(
+        default="claude-haiku-4-5-20251001",
+        description="LLM model alias used for entity extraction (prefer cheap/fast).",
+    )
+    entity_max_tokens: int = Field(
+        default=1024,
+        description="Maximum output tokens for the entity extraction LLM call.",
+    )
+
+
 class MimirConfig(BaseModel):
     """Mímir persistent compounding knowledge base configuration (NIU-540).
 
@@ -1490,6 +1507,10 @@ class MimirConfig(BaseModel):
     staleness_trigger: MimirStalenessTriggerConfig = Field(
         default_factory=MimirStalenessTriggerConfig,
         description="Scheduled staleness refresh for frequently-used pages.",
+    )
+    ingest: MimirIngestConfig = Field(
+        default_factory=lambda: MimirIngestConfig(),
+        description="Entity detection settings for ingest.",
     )
 
 
