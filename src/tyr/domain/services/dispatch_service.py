@@ -8,17 +8,33 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import string
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 
 try:
     from sleipnir.domain.catalog import tyr_saga_completed as _catalog_saga_completed
 except ImportError:
     _catalog_saga_completed = None  # type: ignore[assignment]
 
-from tyr.domain.models import RaidStatus, Saga, SagaStatus, TrackerIssue, TrackerProject
+from tyr.domain.models import (
+    Phase,
+    PhaseStatus,
+    Raid,
+    RaidStatus,
+    Saga,
+    SagaStatus,
+    TrackerIssue,
+    TrackerProject,
+)
+from tyr.domain.templates import BUNDLED_TEMPLATES_DIR, TemplatePhase, load_template
+from tyr.domain.utils import _slugify
 from tyr.ports.dispatcher_repository import DispatcherRepository
+from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerFactory, TrackerPort
 from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrPort
@@ -167,6 +183,8 @@ class DispatchConfig:
     default_model: str = "claude-sonnet-4-6"
     dispatch_prompt_template: str = ""
     max_cached_issues: int = 10_000
+    templates_dir: Path = BUNDLED_TEMPLATES_DIR
+    initial_confidence: float = 0.5
 
 
 class DispatchService:
@@ -184,6 +202,7 @@ class DispatchService:
         dispatcher_repo: DispatcherRepository,
         config: DispatchConfig,
         sleipnir_publisher: object | None = None,
+        event_bus: EventBusPort | None = None,
     ) -> None:
         self._tracker_factory = tracker_factory
         self._volundr_factory = volundr_factory
@@ -192,6 +211,7 @@ class DispatchService:
         self._config = config
         self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._sleipnir_publisher = sleipnir_publisher
+        self._event_bus = event_bus
 
     async def find_ready_issues(
         self,
@@ -381,6 +401,191 @@ class DispatchService:
                 saga_tracker_id,
             )
             return results
+
+    async def create_saga_from_template(
+        self,
+        template_name: str,
+        payload: dict,
+        owner_id: str,
+        *,
+        auto_start: bool = True,
+    ) -> str:
+        """Create a saga from a YAML template and dispatch Phase 1.
+
+        Loads the named template, substitutes ``{event.*}`` placeholders from
+        *payload*, persists the saga + phases + raids, and — when
+        *auto_start* is True — spawns Volundr sessions for all raids in the
+        first phase.
+
+        :param template_name: Template name without extension (e.g. ``"ship"``).
+        :param payload: Key/value pairs substituted into ``{event.field}`` placeholders.
+        :param owner_id: Owner for the created saga.
+        :param auto_start: Dispatch Phase 1 raids immediately when True.
+        :returns: The new saga ID as a string.
+        :raises FileNotFoundError: When the template cannot be found.
+        :raises ValueError: When the template fails validation.
+        """
+        template = load_template(template_name, self._config.templates_dir, payload)
+
+        now = datetime.now(UTC)
+        saga_id = uuid.uuid4()
+        slug = _slugify(template.name)[:60]
+
+        saga = Saga(
+            id=saga_id,
+            tracker_id=str(saga_id),
+            tracker_type="native",
+            slug=slug,
+            name=template.name,
+            repos=template.repos,
+            feature_branch=template.feature_branch,
+            base_branch=template.base_branch,
+            status=SagaStatus.ACTIVE,
+            confidence=self._config.initial_confidence,
+            created_at=now,
+            owner_id=owner_id,
+        )
+        await self._saga_repo.save_saga(saga)
+
+        phases_data = []
+        for phase_num, tpl_phase in enumerate(template.phases, start=1):
+            phase_status = PhaseStatus.ACTIVE if phase_num == 1 else PhaseStatus.PENDING
+            phase_id = uuid.uuid4()
+            phase = Phase(
+                id=phase_id,
+                saga_id=saga_id,
+                tracker_id=str(phase_id),
+                number=phase_num,
+                name=tpl_phase.name,
+                status=phase_status,
+                confidence=self._config.initial_confidence,
+            )
+            await self._saga_repo.save_phase(phase)
+
+            raids: list[Raid] = []
+            for tpl_raid in tpl_phase.raids:
+                raid_id = uuid.uuid4()
+                raid = Raid(
+                    id=raid_id,
+                    phase_id=phase_id,
+                    tracker_id=str(raid_id),
+                    name=tpl_raid.name,
+                    description=tpl_raid.description,
+                    acceptance_criteria=tpl_raid.acceptance_criteria,
+                    declared_files=tpl_raid.declared_files,
+                    estimate_hours=tpl_raid.estimate_hours,
+                    status=RaidStatus.PENDING,
+                    confidence=self._config.initial_confidence,
+                    session_id=None,
+                    branch=None,
+                    chronicle_summary=None,
+                    pr_url=None,
+                    pr_id=None,
+                    retry_count=0,
+                    created_at=now,
+                    updated_at=now,
+                )
+                await self._saga_repo.save_raid(raid)
+                raids.append(raid)
+            phases_data.append((phase, raids, tpl_phase))
+
+        if self._event_bus is not None:
+            await self._event_bus.emit(
+                TyrEvent(
+                    event="saga.created",
+                    data={
+                        "saga_id": str(saga_id),
+                        "saga_name": saga.name,
+                        "slug": slug,
+                        "template": template_name,
+                        "auto_start": auto_start,
+                        "owner_id": owner_id,
+                    },
+                    owner_id=owner_id,
+                )
+            )
+
+        logger.info(
+            "DispatchService: created saga %s from template '%s' (phases=%d)",
+            slug,
+            template_name,
+            len(template.phases),
+        )
+
+        if auto_start and phases_data:
+            first_phase, first_raids, first_tpl = phases_data[0]
+            await self._dispatch_template_phase(saga, first_phase, first_raids, first_tpl, owner_id)
+
+        return str(saga_id)
+
+    async def _dispatch_template_phase(
+        self,
+        saga: Saga,
+        phase: Phase,
+        raids: list[Raid],
+        tpl_phase: TemplatePhase,
+        owner_id: str,
+    ) -> None:
+        """Spawn Volundr sessions for all raids in a template phase."""
+        volundr = await self._volundr_factory.primary_for_owner(owner_id)
+        if volundr is None:
+            logger.error(
+                "DispatchService: no Volundr adapter for owner %s, cannot dispatch phase '%s'",
+                owner_id,
+                phase.name,
+            )
+            return
+
+        repo = saga.repos[0] if saga.repos else ""
+        for raid, tpl_raid in zip(raids, tpl_phase.raids):
+            session_name = re.sub(r"[^a-z0-9]+", "-", raid.name.lower()).strip("-")[:48]
+            try:
+                session = await volundr.spawn_session(
+                    request=SpawnRequest(
+                        name=session_name,
+                        repo=repo,
+                        branch=saga.feature_branch,
+                        base_branch=saga.base_branch,
+                        model=self._config.default_model,
+                        tracker_issue_id=raid.tracker_id,
+                        tracker_issue_url="",
+                        system_prompt=self._config.default_system_prompt,
+                        initial_prompt=tpl_raid.prompt,
+                        profile=tpl_raid.persona or None,
+                        integration_ids=[],
+                    ),
+                )
+                updated = Raid(
+                    id=raid.id,
+                    phase_id=raid.phase_id,
+                    tracker_id=raid.tracker_id,
+                    name=raid.name,
+                    description=raid.description,
+                    acceptance_criteria=raid.acceptance_criteria,
+                    declared_files=raid.declared_files,
+                    estimate_hours=raid.estimate_hours,
+                    status=RaidStatus.RUNNING,
+                    confidence=raid.confidence,
+                    session_id=session.id,
+                    branch=raid.branch,
+                    chronicle_summary=raid.chronicle_summary,
+                    pr_url=raid.pr_url,
+                    pr_id=raid.pr_id,
+                    retry_count=raid.retry_count,
+                    created_at=raid.created_at,
+                    updated_at=datetime.now(UTC),
+                )
+                await self._saga_repo.save_raid(updated)
+                logger.info(
+                    "DispatchService: dispatched template raid %s → session %s (persona=%s)",
+                    raid.name,
+                    session.id,
+                    tpl_raid.persona or "(none)",
+                )
+            except Exception:
+                logger.exception(
+                    "DispatchService: failed to spawn session for template raid %s", raid.name
+                )
 
     # -------------------------------------------------------------------
     # Private helpers

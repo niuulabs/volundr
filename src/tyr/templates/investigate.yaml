@@ -28,6 +28,7 @@ phases:
           - PR created and CI passing
         declared_files: []
         estimate_hours: 2.0
+        persona: qa-agent
         prompt: |
           # Bug Investigation Task
 

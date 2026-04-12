@@ -24,6 +24,7 @@ phases:
           - Any patterns worth remembering are captured
         declared_files: []
         estimate_hours: 0.5
+        persona: retro-analyst
         prompt: |
           # Post-Session Reflection Task
 

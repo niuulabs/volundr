@@ -1,43 +1,124 @@
 # Saga template: deploy
 # Triggered by: github.pr.merged (filter: branch=main)
-# Creates a deployment verification saga after a merge to main.
+# Creates a 3-phase deployment saga after a merge to main.
+# Phase 1: Smoke test against staging (persona: qa-agent)
+# Phase 2: Monitor health endpoint for 10 minutes (persona: qa-agent)
+# Phase 3: Document release in Mimir (persona: retro-analyst)
 name: "Deploy: {event.repo}@{event.sha_short}"
 feature_branch: "main"
 base_branch: "main"
 repos:
   - "{event.repo}"
 phases:
-  - name: Deploy
+  - name: Smoke Test
     raids:
-      - name: "Verify deployment of {event.sha_short}"
+      - name: "Smoke test after deploying {event.sha_short}"
         description: |
-          Verify the deployment triggered by merging {event.title} into main.
+          Run smoke tests against the staging/production environment after deploying the merge of {event.title} into main.
 
           Repository: {event.repo}
           Commit: {event.sha}
           Merged PR: {event.pr_url}
           Author: {event.author}
         acceptance_criteria:
-          - Deployment succeeded without errors
-          - All health checks pass post-deployment
-          - No regressions introduced by the merged changes
+          - Deployment pipeline succeeded without errors
+          - All health check endpoints return 200 OK
+          - Critical user flows respond correctly (no 5xx errors)
+          - No error spikes in logs within 2 minutes of deployment
         declared_files: []
-        estimate_hours: 0.5
+        estimate_hours: 0.25
+        persona: qa-agent
         prompt: |
-          # Deployment Verification Task
+          # Smoke Test Task
 
-          A PR was merged to main — please verify the deployment succeeded.
+          Verify the deployment triggered by merging {event.title} into main.
 
           **Repository**: {event.repo}
           **Commit**: {event.sha}
           **PR**: {event.pr_url}
-          **Title**: {event.title}
 
           ## Instructions
 
-          1. Check the CI/CD pipeline status for this commit.
-          2. Verify all health checks pass.
-          3. Look for any error reports or regression signals.
-          4. If the deployment failed, open an incident issue and escalate.
+          1. Check CI/CD pipeline status for this commit:
+             `gh run list --repo {event.repo} --commit {event.sha} --limit 5`
+          2. Verify the deployment step succeeded (look for deploy job status).
+          3. Hit the health endpoint and verify 200 OK.
+          4. Check application logs for error spikes in the 2 minutes post-deploy.
+          5. Run a quick smoke test of critical endpoints.
 
-          Report your findings in a summary.
+          If deployment failed, open an incident issue immediately and escalate.
+
+          Report: PASS (deployment healthy) or FAIL (with details).
+
+  - name: Monitor
+    raids:
+      - name: "Monitor health for {event.repo}@{event.sha_short}"
+        description: |
+          Monitor the health endpoint and error rates for 10 minutes following the deployment of {event.sha_short} to {event.repo}.
+
+          Commit: {event.sha}
+          PR: {event.pr_url}
+        acceptance_criteria:
+          - Health endpoint returns 200 OK throughout the monitoring window
+          - Error rate does not exceed baseline by more than 5%
+          - No critical alerts fired during the monitoring window
+          - P95 response time remains within acceptable bounds
+        declared_files: []
+        estimate_hours: 0.25
+        persona: qa-agent
+        prompt: |
+          # Health Monitoring Task
+
+          Monitor the deployment of {event.sha_short} to {event.repo} for 10 minutes.
+
+          **Commit**: {event.sha}
+          **PR**: {event.pr_url}
+
+          ## Instructions
+
+          1. Poll the health endpoint every 60 seconds for 10 minutes (10 checks).
+          2. After each check, record: status code, response time, timestamp.
+          3. Watch for any alerting or error-rate anomalies.
+          4. After 10 minutes, summarise: all-green, degraded, or incident.
+
+          If any check fails, stop polling and escalate immediately.
+
+          Report a summary table of all 10 health checks with timestamps.
+
+  - name: Release Documentation
+    raids:
+      - name: "Document release {event.sha_short} in Mimir"
+        description: |
+          Write structured release notes to Mimir for the deployment of {event.sha_short} to {event.repo}.
+
+          PR: {event.pr_url}
+          Author: {event.author}
+        acceptance_criteria:
+          - Release notes written to Mimir with correct metadata (repo, sha, date)
+          - Changes summary extracted from PR description and commits
+          - Deployment health outcome recorded (smoke test + monitor results)
+          - Searchable by repo, sha, and date in Mimir
+        declared_files: []
+        estimate_hours: 0.25
+        persona: retro-analyst
+        prompt: |
+          # Release Documentation Task
+
+          Write release notes for the deployment of {event.sha_short} to {event.repo}.
+
+          **Repository**: {event.repo}
+          **Commit**: {event.sha}
+          **PR**: {event.pr_url}
+          **Author**: {event.author}
+
+          ## Instructions
+
+          1. Read the PR description: `gh pr view {event.pr_url} --json body,title,commits`
+          2. Summarise the changes (features, fixes, breaking changes).
+          3. Note the deployment outcome from the previous monitoring phase.
+          4. Write structured release notes to Mimir:
+             - Title: `Release {event.repo}@{event.sha_short} — {event.title}`
+             - Sections: Summary, Changes, Deployment Health, Rollback Steps
+          5. Tag the entry with: repo={event.repo}, sha={event.sha}, type=release
+
+          Output the Mimir entry content before writing it.
