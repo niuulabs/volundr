@@ -36,7 +36,7 @@ class TestAnthropicConfig:
     def test_defaults(self) -> None:
         c = AnthropicConfig()
         assert c.api_key == ""
-        assert "api.anthropic.com" in c.base_url
+        assert c.base_url == "https://api.anthropic.com"
 
 
 class TestAgentConfig:

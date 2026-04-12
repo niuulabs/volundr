@@ -33,6 +33,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 class SkuldPortRegistry:
     """Maps session IDs to their Skuld subprocess ports.
 
@@ -265,7 +270,7 @@ class RootServer(Service):
                     for t in pending:
                         t.cancel()
             except Exception:
-                logger.debug("Skuld WS proxy ended for session %s", session_id)
+                logger.debug("Skuld WS proxy ended for session %s", _sanitize_log(session_id))
             finally:
                 try:
                     await websocket.close()
@@ -283,9 +288,25 @@ class RootServer(Service):
             if port is None:
                 return JSONResponse({"detail": "Session not found"}, status_code=404)
 
+            import re
+            from urllib.parse import quote
+
             import httpx
 
-            url = f"http://127.0.0.1:{port}/api/{path}"
+            # Validate user-controlled path to prevent path traversal / path confusion
+            # when proxying to internal service endpoints.
+            allowed_segment = re.compile(r"^[A-Za-z0-9._~-]+$")
+            raw_segments = path.split("/")
+            normalized_segments: list[str] = []
+            for seg in raw_segments:
+                if seg in ("", ".", ".."):
+                    return JSONResponse({"detail": "Invalid path"}, status_code=400)
+                if "\\" in seg or not allowed_segment.fullmatch(seg):
+                    return JSONResponse({"detail": "Invalid path"}, status_code=400)
+                normalized_segments.append(seg)
+
+            sanitized_path = "/".join(quote(seg, safe="") for seg in normalized_segments)
+            url = f"http://127.0.0.1:{port}/api/{sanitized_path}"
             params = dict(request.query_params)
             headers = {
                 k: v

@@ -251,6 +251,7 @@ BUILTIN_TOOLS: dict[str, BuiltinToolDef] = {
             "persona": ctx.get("persona_prefix", ""),
             "iteration_budget": ctx.get("iteration_budget"),
             "memory": ctx.get("memory"),
+            "discovery": ctx.get("discovery"),
         },
     ),
     "ravn_reflect": BuiltinToolDef(
@@ -302,6 +303,7 @@ BUILTIN_TOOLS: dict[str, BuiltinToolDef] = {
         kwargs_fn=lambda s, ctx: {
             "base_url": s.gateway.platform.base_url,
             "timeout": s.gateway.platform.timeout,
+            "pat_token": s.gateway.platform.pat_token,
         },
     ),
     "volundr_git": BuiltinToolDef(
@@ -311,6 +313,7 @@ BUILTIN_TOOLS: dict[str, BuiltinToolDef] = {
         kwargs_fn=lambda s, ctx: {
             "base_url": s.gateway.platform.base_url,
             "timeout": s.gateway.platform.timeout,
+            "pat_token": s.gateway.platform.pat_token,
         },
     ),
     "tyr_saga": BuiltinToolDef(
@@ -320,6 +323,7 @@ BUILTIN_TOOLS: dict[str, BuiltinToolDef] = {
         kwargs_fn=lambda s, ctx: {
             "base_url": s.gateway.platform.base_url,
             "timeout": s.gateway.platform.timeout,
+            "pat_token": s.gateway.platform.pat_token,
         },
     ),
     "tracker_issue": BuiltinToolDef(
@@ -329,6 +333,7 @@ BUILTIN_TOOLS: dict[str, BuiltinToolDef] = {
         kwargs_fn=lambda s, ctx: {
             "base_url": s.gateway.platform.base_url,
             "timeout": s.gateway.platform.timeout,
+            "pat_token": s.gateway.platform.pat_token,
         },
     ),
 }

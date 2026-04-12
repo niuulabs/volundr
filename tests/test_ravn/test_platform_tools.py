@@ -72,7 +72,7 @@ class TestVolundrSessionTool:
     async def test_stop_session(self):
         session_id = "sess-123"
         respx.post(f"{BASE_URL}/api/v1/volundr/sessions/{session_id}/stop").mock(
-            return_value=httpx.Response(200, json={})
+            return_value=httpx.Response(200, json={"status": "stopped"})
         )
         result = await self.tool.execute({"action": "stop", "session_id": session_id})
         assert not result.is_error
@@ -128,60 +128,66 @@ class TestVolundrGitTool:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_list_repos(self):
-        respx.get(f"{BASE_URL}/api/v1/volundr/git/repos").mock(
-            return_value=httpx.Response(200, json=[{"name": "myrepo"}])
-        )
-        result = await self.tool.execute({"action": "list_repos"})
-        assert not result.is_error
-
-    @pytest.mark.asyncio
-    @respx.mock
-    async def test_create_branch(self):
-        respx.post(f"{BASE_URL}/api/v1/volundr/git/branches").mock(
-            return_value=httpx.Response(200, json={"branch": "feature/x"})
+    async def test_list_branches(self):
+        respx.get(f"{BASE_URL}/api/v1/volundr/repos/branches").mock(
+            return_value=httpx.Response(200, json=[{"name": "main"}])
         )
         result = await self.tool.execute(
-            {"action": "create_branch", "repo": "myrepo", "branch": "feature/x"}
+            {"action": "list_branches", "repo_url": "https://github.com/org/repo"}
         )
         assert not result.is_error
+        data = json.loads(result.content)
+        assert data[0]["name"] == "main"
 
     @pytest.mark.asyncio
-    async def test_create_branch_missing_fields(self):
-        result = await self.tool.execute({"action": "create_branch", "repo": "r"})
+    async def test_list_branches_missing_repo_url(self):
+        result = await self.tool.execute({"action": "list_branches"})
         assert result.is_error
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_create_pr(self):
-        respx.post(f"{BASE_URL}/api/v1/volundr/git/pull-requests").mock(
+        respx.post(f"{BASE_URL}/api/v1/volundr/repos/prs").mock(
             return_value=httpx.Response(200, json={"url": "https://github.com/pr/1"})
         )
         result = await self.tool.execute(
             {
                 "action": "create_pr",
-                "repo": "myrepo",
-                "branch": "feature/x",
+                "session_id": "sess-123",
                 "title": "My PR",
             }
         )
         assert not result.is_error
+        data = json.loads(result.content)
+        assert data["url"] == "https://github.com/pr/1"
 
     @pytest.mark.asyncio
-    async def test_create_pr_missing_title(self):
-        result = await self.tool.execute({"action": "create_pr", "repo": "r", "branch": "b"})
+    async def test_create_pr_missing_session_id(self):
+        result = await self.tool.execute({"action": "create_pr", "title": "My PR"})
         assert result.is_error
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_ci_status(self):
-        respx.get(f"{BASE_URL}/api/v1/volundr/git/ci-status").mock(
+        respx.get(f"{BASE_URL}/api/v1/volundr/repos/prs/42/ci").mock(
             return_value=httpx.Response(200, json={"status": "passing"})
         )
         result = await self.tool.execute(
-            {"action": "ci_status", "repo": "myrepo", "branch": "main"}
+            {
+                "action": "ci_status",
+                "pr_number": 42,
+                "repo_url": "https://github.com/org/repo",
+                "branch": "main",
+            }
         )
         assert not result.is_error
+        data = json.loads(result.content)
+        assert data["status"] == "passing"
+
+    @pytest.mark.asyncio
+    async def test_ci_status_missing_fields(self):
+        result = await self.tool.execute({"action": "ci_status", "pr_number": 42})
+        assert result.is_error
 
     @pytest.mark.asyncio
     async def test_unknown_action(self):
@@ -213,52 +219,68 @@ class TestTyrSagaTool:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_create_saga(self):
+    async def test_commit_saga(self):
         respx.post(f"{BASE_URL}/api/v1/tyr/sagas/commit").mock(
             return_value=httpx.Response(200, json={"id": "saga-1"})
         )
         result = await self.tool.execute(
-            {"action": "create", "name": "my saga", "spec": "do the thing"}
+            {
+                "action": "commit",
+                "name": "my saga",
+                "slug": "my-saga",
+                "repos": ["org/repo"],
+                "base_branch": "main",
+                "phases": [{"name": "phase-1", "raids": [{"name": "raid-1"}]}],
+            }
         )
         assert not result.is_error
+        data = json.loads(result.content)
+        assert data["id"] == "saga-1"
 
     @pytest.mark.asyncio
-    async def test_create_saga_missing_name(self):
-        result = await self.tool.execute({"action": "create"})
+    async def test_commit_saga_missing_fields(self):
+        result = await self.tool.execute({"action": "commit"})
         assert result.is_error
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_dispatch_saga(self):
         respx.post(f"{BASE_URL}/api/v1/tyr/dispatch/approve").mock(
-            return_value=httpx.Response(200, json={})
+            return_value=httpx.Response(200, json={"dispatched": 1})
         )
-        result = await self.tool.execute({"action": "dispatch", "saga_id": "saga-1"})
+        result = await self.tool.execute(
+            {
+                "action": "dispatch",
+                "items": [{"saga_id": "saga-1", "issue_id": "NIU-1", "repo": "org/repo"}],
+            }
+        )
         assert not result.is_error
         data = json.loads(result.content)
-        assert data["status"] == "dispatched"
+        assert data["dispatched"] == 1
 
     @pytest.mark.asyncio
-    async def test_dispatch_missing_saga_id(self):
+    async def test_dispatch_missing_items(self):
         result = await self.tool.execute({"action": "dispatch"})
         assert result.is_error
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_saga_status(self):
+    async def test_get_saga(self):
         respx.get(f"{BASE_URL}/api/v1/tyr/sagas/saga-1").mock(
             return_value=httpx.Response(200, json={"id": "saga-1", "status": "ACTIVE"})
         )
-        result = await self.tool.execute({"action": "status", "saga_id": "saga-1"})
+        result = await self.tool.execute({"action": "get", "saga_id": "saga-1"})
         assert not result.is_error
+        data = json.loads(result.content)
+        assert data["id"] == "saga-1"
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_saga_raids(self):
-        respx.get(f"{BASE_URL}/api/v1/tyr/sagas/saga-1/raids").mock(
+    async def test_list_raids(self):
+        respx.get(f"{BASE_URL}/api/v1/tyr/raids/active").mock(
             return_value=httpx.Response(200, json=[])
         )
-        result = await self.tool.execute({"action": "raids", "saga_id": "saga-1"})
+        result = await self.tool.execute({"action": "raids"})
         assert not result.is_error
 
     @pytest.mark.asyncio
@@ -284,52 +306,49 @@ class TestTrackerIssueTool:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_create_issue(self):
-        respx.post(f"{BASE_URL}/api/v1/tyr/tracker/issues").mock(
-            return_value=httpx.Response(200, json={"id": "NIU-1", "title": "Fix bug"})
+    async def test_search_issues(self):
+        respx.get(f"{BASE_URL}/api/v1/volundr/issues/search").mock(
+            return_value=httpx.Response(200, json=[{"id": "NIU-1", "title": "Fix bug"}])
         )
-        result = await self.tool.execute(
-            {"action": "create", "title": "Fix bug", "priority": "high"}
-        )
+        result = await self.tool.execute({"action": "search", "query": "Fix bug"})
         assert not result.is_error
         data = json.loads(result.content)
-        assert data["id"] == "NIU-1"
+        assert data[0]["id"] == "NIU-1"
 
     @pytest.mark.asyncio
-    async def test_create_issue_missing_title(self):
-        result = await self.tool.execute({"action": "create"})
+    async def test_search_issues_missing_query(self):
+        result = await self.tool.execute({"action": "search"})
         assert result.is_error
-        assert "title" in result.content
+        assert "query" in result.content
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_update_issue(self):
-        respx.patch(f"{BASE_URL}/api/v1/tyr/tracker/issues/NIU-1").mock(
+    async def test_update_status(self):
+        respx.post(f"{BASE_URL}/api/v1/volundr/issues/NIU-1/status").mock(
             return_value=httpx.Response(200, json={"id": "NIU-1", "status": "Done"})
         )
         result = await self.tool.execute(
-            {"action": "update", "issue_id": "NIU-1", "status": "Done"}
+            {"action": "update_status", "issue_id": "NIU-1", "status": "Done"}
         )
         assert not result.is_error
+        data = json.loads(result.content)
+        assert data["status"] == "Done"
 
     @pytest.mark.asyncio
-    async def test_update_issue_missing_id(self):
-        result = await self.tool.execute({"action": "update", "status": "Done"})
-        assert result.is_error
-
-    @pytest.mark.asyncio
-    async def test_update_issue_no_fields(self):
-        result = await self.tool.execute({"action": "update", "issue_id": "NIU-1"})
+    async def test_update_status_missing_fields(self):
+        result = await self.tool.execute({"action": "update_status", "status": "Done"})
         assert result.is_error
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_get_issue(self):
-        respx.get(f"{BASE_URL}/api/v1/tyr/tracker/issues/NIU-1").mock(
+        respx.get(f"{BASE_URL}/api/v1/volundr/issues/NIU-1").mock(
             return_value=httpx.Response(200, json={"id": "NIU-1"})
         )
         result = await self.tool.execute({"action": "get", "issue_id": "NIU-1"})
         assert not result.is_error
+        data = json.loads(result.content)
+        assert data["id"] == "NIU-1"
 
     @pytest.mark.asyncio
     async def test_get_issue_missing_id(self):

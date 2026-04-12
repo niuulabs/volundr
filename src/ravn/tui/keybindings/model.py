@@ -47,7 +47,7 @@ _VIM_SPECIALS: dict[str, str] = {
     "<F10>": "f10",
     "<F11>": "f11",
     "<F12>": "f12",
-    "<leader>": None,   # cannot map leader to a single Textual key
+    "<leader>": None,  # cannot map leader to a single Textual key
     "<LocalLeader>": None,
 }
 
@@ -176,6 +176,7 @@ def emacs_kbd_to_textual(kbd_string: str) -> list[str] | None:
 # -------------------------------------------------------------------------
 # KeybindingMap
 # -------------------------------------------------------------------------
+
 
 @dataclass
 class KeybindingMap:

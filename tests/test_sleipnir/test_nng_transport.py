@@ -48,8 +48,20 @@ pynng = pytest.importorskip("pynng", reason="pynng not installed; skipping nng t
 
 @pytest.fixture
 def ipc_address(tmp_path):
-    """Unique IPC address per test — avoids cross-test socket leaks."""
-    return f"ipc://{tmp_path}/sleipnir_test.sock"
+    """Unique IPC address per test — avoids cross-test socket leaks.
+
+    Uses a short path under /tmp to stay within the macOS 104-char Unix socket
+    limit.  The pytest tmp_path hierarchy can exceed that limit on macOS.
+    """
+    import tempfile
+
+    short_dir = tempfile.mkdtemp(prefix="nng_")
+    sock_path = f"{short_dir}/s.sock"
+    yield f"ipc://{sock_path}"
+    # Cleanup — the socket file is removed by nng, but remove the temp dir.
+    import shutil
+
+    shutil.rmtree(short_dir, ignore_errors=True)
 
 
 @pytest.fixture

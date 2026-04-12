@@ -170,14 +170,6 @@ class TestRavnAgentToolUse:
     async def test_unknown_tool_returns_error(self) -> None:
         tool_call = ToolCall(id="tc1", name="nonexistent", input={})
 
-        async def _stream(*args, **kwargs) -> AsyncIterator[StreamEvent]:
-            yield StreamEvent(type=StreamEventType.TOOL_CALL, tool_call=tool_call)
-            yield StreamEvent(
-                type=StreamEventType.MESSAGE_DONE,
-                usage=TokenUsage(input_tokens=5, output_tokens=2),
-            )
-            # Need a second pass to end:
-
         call_count = 0
 
         async def _stream2(*args, **kwargs) -> AsyncIterator[StreamEvent]:

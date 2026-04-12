@@ -232,9 +232,7 @@ class TestRootServerBuildApp:
 
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
-            mock_client.request = AsyncMock(
-                side_effect=httpx.ConnectError("Connection refused")
-            )
+            mock_client.request = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=False)
             mock_client_cls.return_value = mock_client
@@ -278,9 +276,7 @@ class TestRootServerBuildApp:
 
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
-            mock_client.get = AsyncMock(
-                side_effect=httpx.ConnectError("Connection refused")
-            )
+            mock_client.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=False)
             mock_client_cls.return_value = mock_client
@@ -429,6 +425,7 @@ class TestRootServerStartStop:
         # Create a real completed task
         async def _noop():
             pass
+
         loop = asyncio.get_event_loop()
         mock_task = loop.create_task(_noop())
         await mock_task  # let it complete
@@ -575,9 +572,11 @@ class TestRootServerStartEmbeddedDb:
         server = RootServer(registry=registry)
 
         mock_db = AsyncMock()
-        mock_db.start = AsyncMock(return_value=ConnectionInfo(
-            host="localhost", port=5433, dbname="testdb", user="testuser"
-        ))
+        mock_db.start = AsyncMock(
+            return_value=ConnectionInfo(
+                host="localhost", port=5433, dbname="testdb", user="testuser"
+            )
+        )
 
         with patch(
             "niuu.adapters.embedded_postgres.EmbeddedPostgresDatabase",

@@ -133,9 +133,7 @@ class HttpGateway:
                     if not content:
                         continue
                     translator.reset()
-                    async for event in self._gateway.handle_message_stream(
-                        session_id, content
-                    ):
+                    async for event in self._gateway.handle_message_stream(session_id, content):
                         for wire_event in translator.translate(event):
                             await ws.send_text(json.dumps(wire_event))
             except WebSocketDisconnect:

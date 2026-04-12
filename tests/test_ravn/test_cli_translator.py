@@ -90,9 +90,7 @@ class TestThought:
 class TestToolStart:
     def test_emits_start_delta_stop(self) -> None:
         t = make_translator()
-        events = t.translate(
-            RavnEvent.tool_start(_SRC, "Bash", {"command": "ls"}, _CID, _SID)
-        )
+        events = t.translate(RavnEvent.tool_start(_SRC, "Bash", {"command": "ls"}, _CID, _SID))
         # Remove assistant start
         events = [e for e in events if e["type"] != "assistant"]
         types = [e["type"] for e in events]
@@ -100,9 +98,7 @@ class TestToolStart:
 
     def test_tool_use_block_has_name_and_id(self) -> None:
         t = make_translator()
-        events = t.translate(
-            RavnEvent.tool_start(_SRC, "Bash", {"command": "ls"}, _CID, _SID)
-        )
+        events = t.translate(RavnEvent.tool_start(_SRC, "Bash", {"command": "ls"}, _CID, _SID))
         start = next(e for e in events if e["type"] == "content_block_start")
         assert start["content_block"]["type"] == "tool_use"
         assert start["content_block"]["name"] == "Bash"
@@ -110,9 +106,7 @@ class TestToolStart:
 
     def test_input_json_delta_contains_full_input(self) -> None:
         t = make_translator()
-        events = t.translate(
-            RavnEvent.tool_start(_SRC, "Bash", {"command": "ls"}, _CID, _SID)
-        )
+        events = t.translate(RavnEvent.tool_start(_SRC, "Bash", {"command": "ls"}, _CID, _SID))
         delta = next(e for e in events if e["type"] == "content_block_delta")
         assert delta["delta"]["type"] == "input_json_delta"
         parsed = json.loads(delta["delta"]["partial_json"])
@@ -128,9 +122,7 @@ class TestToolStart:
     def test_tool_after_text_closes_text_block(self) -> None:
         t = make_translator()
         t.translate(RavnEvent.thought(_SRC, "thinking", _CID, _SID))
-        events = t.translate(
-            RavnEvent.tool_start(_SRC, "Bash", {}, _CID, _SID)
-        )
+        events = t.translate(RavnEvent.tool_start(_SRC, "Bash", {}, _CID, _SID))
         # Should contain a content_block_stop for the text block
         stops = [e for e in events if e["type"] == "content_block_stop"]
         assert len(stops) >= 1  # text block stop + tool block stop
@@ -140,9 +132,7 @@ class TestToolResult:
     def test_tool_result_is_skipped(self) -> None:
         t = make_translator()
         t.translate(RavnEvent.thought(_SRC, "a", _CID, _SID))
-        events = t.translate(
-            RavnEvent.tool_result(_SRC, "Bash", "output", _CID, _SID)
-        )
+        events = t.translate(RavnEvent.tool_result(_SRC, "Bash", "output", _CID, _SID))
         assert events == []
 
 

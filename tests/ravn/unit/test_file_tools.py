@@ -91,9 +91,7 @@ class TestWriteFileToolDiffPreview:
         f = tmp_path / "agent.py"
         f.write_text("def run(self):\n    pass\n", encoding="utf-8")
         tool = WriteFileTool(workspace=tmp_path)
-        result = tool.diff_preview(
-            {"path": str(f), "content": "def run(self, ctx):\n    pass\n"}
-        )
+        result = tool.diff_preview({"path": str(f), "content": "def run(self, ctx):\n    pass\n"})
         assert result is not None
         assert "-def run(self):" in result
         assert "+def run(self, ctx):" in result
@@ -131,9 +129,7 @@ class TestEditFileToolDiffPreview:
 
     def test_returns_none_on_security_violation(self, tmp_path: Path) -> None:
         tool = EditFileTool(workspace=tmp_path)
-        result = tool.diff_preview(
-            {"path": "/tmp/evil.py", "old_string": "x", "new_string": "y"}
-        )
+        result = tool.diff_preview({"path": "/tmp/evil.py", "old_string": "x", "new_string": "y"})
         assert result is None
 
     def test_returns_none_when_old_string_not_found(self, tmp_path: Path) -> None:
@@ -212,7 +208,11 @@ class TestRavnEventToolStart:
 
     def test_diff_key_present_when_diff_provided(self) -> None:
         event = RavnEvent.tool_start(
-            _SRC, "write_file", {"path": "f.py"}, _CID, _SID,
+            _SRC,
+            "write_file",
+            {"path": "f.py"},
+            _CID,
+            _SID,
             diff="--- f.py\n+++ f.py\n@@ -1 +1 @@\n-old\n+new\n",
         )
         assert "diff" in event.payload
@@ -241,7 +241,11 @@ class TestCliChannelDiffRendering:
         buf = io.StringIO()
         cli = CliChannel(file=buf)
         event = RavnEvent.tool_start(
-            _SRC, "write_file", {"path": "f.py"}, _CID, _SID,
+            _SRC,
+            "write_file",
+            {"path": "f.py"},
+            _CID,
+            _SID,
             diff="--- f.py\n+++ f.py\n@@ -1 +1 @@\n-old\n+new\n",
         )
         await cli.emit(event)
@@ -345,9 +349,7 @@ class TestEditFileToolExecute:
         f = tmp_path / "code.py"
         f.write_text("hello world\n")
         tool = EditFileTool(workspace=tmp_path)
-        result = await tool.execute(
-            {"path": str(f), "old_string": "missing", "new_string": "x"}
-        )
+        result = await tool.execute({"path": str(f), "old_string": "missing", "new_string": "x"})
         assert result.is_error
 
     async def test_error_when_multiple_occurrences_without_replace_all(
@@ -372,9 +374,7 @@ class TestEditFileToolExecute:
 
     async def test_error_on_security_violation(self, tmp_path: Path) -> None:
         tool = EditFileTool(workspace=tmp_path)
-        result = await tool.execute(
-            {"path": "/tmp/evil.py", "old_string": "x", "new_string": "y"}
-        )
+        result = await tool.execute({"path": "/tmp/evil.py", "old_string": "x", "new_string": "y"})
         assert result.is_error
 
     async def test_error_when_file_not_found(self, tmp_path: Path) -> None:

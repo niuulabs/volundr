@@ -40,9 +40,7 @@ async def test_code_forge_uses_user_id_fallback():
 @pytest.mark.asyncio
 @respx.mock
 async def test_code_forge_uses_authenticated_fallback():
-    respx.get("http://my-server/api/v1/volundr/me").mock(
-        return_value=httpx.Response(200, json={})
-    )
+    respx.get("http://my-server/api/v1/volundr/me").mock(return_value=httpx.Response(200, json={}))
     result = await _ct.test_code_forge(url="http://my-server", token="tok")
     assert result.success is True
     assert result.user == "authenticated"
@@ -85,10 +83,10 @@ async def test_code_forge_connection_error():
 @pytest.mark.asyncio
 @respx.mock
 async def test_telegram_bot_success():
-    respx.get("https://api.telegram.org/botMY_TOKEN/getMe").mock(
+    respx.get("https://api.telegram.org/bot123456:ABCdefGHIjklMNOpqrsTUVwxyz/getMe").mock(
         return_value=httpx.Response(200, json={"ok": True, "result": {"username": "mybot"}})
     )
-    result = await _ct.test_telegram_bot(bot_token="MY_TOKEN")
+    result = await _ct.test_telegram_bot(bot_token="123456:ABCdefGHIjklMNOpqrsTUVwxyz")
     assert result.success is True
     assert "@mybot" in result.message
     assert result.provider == "telegram"
@@ -114,9 +112,7 @@ async def test_telegram_bot_empty_token():
 @pytest.mark.asyncio
 @respx.mock
 async def test_telegram_bot_network_error():
-    respx.get("https://api.telegram.org/bottok/getMe").mock(
-        side_effect=Exception("network error")
-    )
+    respx.get("https://api.telegram.org/bottok/getMe").mock(side_effect=Exception("network error"))
     result = await _ct.test_telegram_bot(bot_token="tok")
     assert result.success is False
 
@@ -139,10 +135,11 @@ async def test_connection_code_forge():
 @pytest.mark.asyncio
 @respx.mock
 async def test_connection_messaging():
-    respx.get("https://api.telegram.org/botMY_TOKEN/getMe").mock(
+    respx.get("https://api.telegram.org/bot123456:ABCdefGHIjklMNOpqrsTUVwxyz/getMe").mock(
         return_value=httpx.Response(200, json={"ok": True, "result": {"username": "bot"}})
     )
-    result = await _ct.test_connection("messaging", {}, {"bot_token": "MY_TOKEN"})
+    token = "123456:ABCdefGHIjklMNOpqrsTUVwxyz"
+    result = await _ct.test_connection("messaging", {}, {"bot_token": token})
     assert result.success is True
 
 

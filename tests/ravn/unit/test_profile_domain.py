@@ -134,12 +134,23 @@ class TestRavnProfileToDict:
         p = RavnProfile(name="x")
         d = p.to_dict()
         expected_keys = {
-            "name", "rune", "location", "deployment",
-            "persona", "system_prompt_extra", "specialisations",
+            "name",
+            "rune",
+            "location",
+            "deployment",
+            "persona",
+            "system_prompt_extra",
+            "specialisations",
             "fallback_model",
-            "mcp_servers", "gateway_channels", "sleipnir_topics", "output_mode",
-            "mimir_mounts", "mimir_write_routing",
-            "cascade_mode", "trigger_names",
-            "checkpoint_enabled", "checkpoint_strategy",
+            "mcp_servers",
+            "gateway_channels",
+            "sleipnir_topics",
+            "output_mode",
+            "mimir_mounts",
+            "mimir_write_routing",
+            "cascade_mode",
+            "trigger_names",
+            "checkpoint_enabled",
+            "checkpoint_strategy",
         }
         assert expected_keys == set(d.keys())

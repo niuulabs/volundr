@@ -72,7 +72,7 @@ class MockTracker(TrackerPort):
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
-        base_branch="dev",
+            base_branch="dev",
         )
 
     async def get_phase(self, tracker_id: str) -> Phase:

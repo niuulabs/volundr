@@ -409,9 +409,7 @@ class DispatchService:
                             saga_slug=saga.slug,
                             repos=saga.repos,
                             feature_branch=saga.feature_branch,
-                            phase_name=milestone_names.get(
-                                issue.milestone_id or "", "Unassigned"
-                            ),
+                            phase_name=milestone_names.get(issue.milestone_id or "", "Unassigned"),
                             issue_id=issue.id,
                             identifier=issue.identifier,
                             title=issue.title,

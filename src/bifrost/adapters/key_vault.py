@@ -99,17 +99,17 @@ class SecretsFileKeyVault(KeyVaultPort):
         loaded: list[str] = []
         raw = _read_secret_file(self._path)
         if not raw:
-            logger.warning("KeyVault: secrets file '%s' is empty or missing", self._path)
+            logger.warning("KeyVault: secrets file is empty or missing")
             return
 
         try:
             data: dict = yaml.safe_load(raw)
         except yaml.YAMLError as exc:
-            logger.error("KeyVault: failed to parse secrets file '%s': %s", self._path, exc)
+            logger.error("KeyVault: failed to parse secrets file: %s", type(exc).__name__)
             return
 
         if not isinstance(data, dict):
-            logger.error("KeyVault: secrets file '%s' must be a YAML mapping", self._path)
+            logger.error("KeyVault: secrets file must be a YAML mapping")
             return
 
         for provider, key in data.items():

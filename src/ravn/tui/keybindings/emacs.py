@@ -75,16 +75,12 @@ _QUOTE_END = r"(?:\))?"  # closing paren for (quote ...) form, optional
 
 # (global-set-key (kbd "...") 'command)  or  (global-set-key (kbd "...") (quote command))
 _GLOBAL_SET_RE = re.compile(
-    r"""\(\s*global-set-key\s+\(kbd\s+["']([^"']+)["']\)\s+"""
-    + _QUOTE
-    + r"""([\w-]+)""",
+    r"""\(\s*global-set-key\s+\(kbd\s+["']([^"']+)["']\)\s+""" + _QUOTE + r"""([\w-]+)""",
 )
 
 # (define-key <map> (kbd "...") 'command)
 _DEFINE_KEY_RE = re.compile(
-    r"""\(\s*define-key\s+\S+\s+\(kbd\s+["']([^"']+)["']\)\s+"""
-    + _QUOTE
-    + r"""([\w-]+)""",
+    r"""\(\s*define-key\s+\S+\s+\(kbd\s+["']([^"']+)["']\)\s+""" + _QUOTE + r"""([\w-]+)""",
 )
 
 # (evil-define-key 'normal <map> (kbd "...") 'command)

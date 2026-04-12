@@ -317,7 +317,8 @@ export function useSkuldChat(
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    fetch(`${httpBase}/api/conversation/history`, { headers })
+    const historyUrl = new URL('/api/conversation/history', httpBase);
+    fetch(historyUrl.href, { headers })
       .then(res => res.json())
       .then(data => {
         if (cancelled) return;

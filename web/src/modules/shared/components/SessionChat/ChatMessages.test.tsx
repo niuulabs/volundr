@@ -102,14 +102,14 @@ describe('UserMessage', () => {
     const msg = createMessage({ role: 'user', content: 'No attachments here' });
     render(<UserMessage message={msg} />);
 
-    expect(screen.queryByText(/KB|MB|B$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/(?:KB|MB|B)$/)).not.toBeInTheDocument();
   });
 
   it('does not render attachments section when attachments array is empty', () => {
     const msg = createMessage({ role: 'user', content: 'Empty array', attachments: [] });
     render(<UserMessage message={msg} />);
 
-    expect(screen.queryByText(/KB|MB|B$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/(?:KB|MB|B)$/)).not.toBeInTheDocument();
   });
 
   it('formats file sizes: bytes < 1024 as XB', () => {

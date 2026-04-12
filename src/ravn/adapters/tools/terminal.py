@@ -89,7 +89,6 @@ async def run_sentinel_command(
     await process.stdin.drain()
 
     output_lines: list[str] = []
-    exit_code = 1
     try:
         async with asyncio.timeout(timeout):
             while True:

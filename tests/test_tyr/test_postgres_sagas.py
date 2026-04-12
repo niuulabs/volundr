@@ -192,9 +192,7 @@ class TestDeleteSaga:
 
 class TestUpdateSagaStatus:
     @pytest.mark.asyncio
-    async def test_executes_update_query(
-        self, repo: PostgresSagaRepository, mock_pool: MagicMock
-    ):
+    async def test_executes_update_query(self, repo: PostgresSagaRepository, mock_pool: MagicMock):
         saga_id = uuid4()
         await repo.update_saga_status(saga_id, SagaStatus.COMPLETE)
         mock_pool.execute.assert_called_once()

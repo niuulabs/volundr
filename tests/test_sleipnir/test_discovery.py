@@ -263,6 +263,29 @@ _skip_without_pynng = pytest.mark.skipif(not _pynng_available, reason="pynng not
 
 
 @pytest.fixture
+def short_ipc(tmp_path: Path):
+    """Return a factory that creates short IPC addresses safe for macOS.
+
+    The pytest ``tmp_path`` hierarchy can exceed the 104-char Unix socket
+    limit on macOS, so we create sockets under a short /tmp prefix instead.
+    """
+    import shutil
+    import tempfile
+
+    dirs: list[str] = []
+
+    def _make(name: str = "s") -> str:
+        d = tempfile.mkdtemp(prefix="disc_")
+        dirs.append(d)
+        return f"ipc://{d}/{name}.sock"
+
+    yield _make
+
+    for d in dirs:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+@pytest.fixture
 def mock_registry() -> MagicMock:
     reg = MagicMock(spec=ServiceRegistry)
     reg.list_services.return_value = []
@@ -271,11 +294,11 @@ def mock_registry() -> MagicMock:
 
 @_skip_without_pynng
 @pytest.mark.asyncio
-async def test_publisher_registers_on_start(tmp_path: Path):
+async def test_publisher_registers_on_start(short_ipc):
     """NngPublisher calls registry.register() after binding."""
     from sleipnir.adapters.nng_transport import NngPublisher
 
-    address = f"ipc://{tmp_path}/pub.sock"
+    address = short_ipc("pub")
     reg = MagicMock(spec=ServiceRegistry)
 
     async with NngPublisher(address=address, service_id="svc-a", registry=reg):
@@ -284,11 +307,11 @@ async def test_publisher_registers_on_start(tmp_path: Path):
 
 @_skip_without_pynng
 @pytest.mark.asyncio
-async def test_publisher_deregisters_on_stop(tmp_path: Path):
+async def test_publisher_deregisters_on_stop(short_ipc):
     """NngPublisher calls registry.deregister() on stop."""
     from sleipnir.adapters.nng_transport import NngPublisher
 
-    address = f"ipc://{tmp_path}/pub_dereg.sock"
+    address = short_ipc("pub_dereg")
     reg = MagicMock(spec=ServiceRegistry)
 
     async with NngPublisher(address=address, service_id="svc-a", registry=reg):
@@ -299,11 +322,11 @@ async def test_publisher_deregisters_on_stop(tmp_path: Path):
 
 @_skip_without_pynng
 @pytest.mark.asyncio
-async def test_publisher_no_registry_no_registration(tmp_path: Path):
+async def test_publisher_no_registry_no_registration(short_ipc):
     """NngPublisher without registry does not attempt registration."""
     from sleipnir.adapters.nng_transport import NngPublisher
 
-    address = f"ipc://{tmp_path}/pub_noreg.sock"
+    address = short_ipc("pub_noreg")
     # No registry passed — should bind without any discovery call.
     async with NngPublisher(address=address):
         pass  # no AttributeError expected
@@ -311,12 +334,12 @@ async def test_publisher_no_registry_no_registration(tmp_path: Path):
 
 @_skip_without_pynng
 @pytest.mark.asyncio
-async def test_subscriber_dials_discovered_addresses(tmp_path: Path):
+async def test_subscriber_dials_discovered_addresses(short_ipc):
     """NngSubscriber with registry dials all discovered sockets."""
     from sleipnir.adapters.nng_transport import NngSubscriber
 
-    address_a = f"ipc://{tmp_path}/disc_a.sock"
-    address_b = f"ipc://{tmp_path}/disc_b.sock"
+    address_a = short_ipc("disc_a")
+    address_b = short_ipc("disc_b")
 
     # Start two publishers so the sockets exist.
     import pynng as _pynng
@@ -342,11 +365,11 @@ async def test_subscriber_dials_discovered_addresses(tmp_path: Path):
 
 @_skip_without_pynng
 @pytest.mark.asyncio
-async def test_subscriber_falls_back_to_address_when_registry_empty(tmp_path: Path):
+async def test_subscriber_falls_back_to_address_when_registry_empty(short_ipc):
     """NngSubscriber falls back to address when registry returns no services."""
     from sleipnir.adapters.nng_transport import NngSubscriber
 
-    address = f"ipc://{tmp_path}/fallback.sock"
+    address = short_ipc("fallback")
 
     import pynng as _pynng
 
@@ -365,11 +388,11 @@ async def test_subscriber_falls_back_to_address_when_registry_empty(tmp_path: Pa
 
 @_skip_without_pynng
 @pytest.mark.asyncio
-async def test_subscriber_no_registry_uses_address(tmp_path: Path):
+async def test_subscriber_no_registry_uses_address(short_ipc):
     """NngSubscriber without registry dials the single address (baseline)."""
     from sleipnir.adapters.nng_transport import NngSubscriber
 
-    address = f"ipc://{tmp_path}/noreg.sock"
+    address = short_ipc("noreg")
 
     import pynng as _pynng
 
@@ -384,11 +407,11 @@ async def test_subscriber_no_registry_uses_address(tmp_path: Path):
 
 @_skip_without_pynng
 @pytest.mark.asyncio
-async def test_transport_passes_registry_to_both_components(tmp_path: Path):
+async def test_transport_passes_registry_to_both_components(short_ipc):
     """NngTransport propagates service_id and registry to publisher and subscriber."""
     from sleipnir.adapters.nng_transport import NngTransport
 
-    address = f"ipc://{tmp_path}/transport.sock"
+    address = short_ipc("transport")
     reg = MagicMock(spec=ServiceRegistry)
     reg.list_services.return_value = []
 

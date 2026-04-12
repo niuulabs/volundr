@@ -97,9 +97,7 @@ class NativeTrackerAdapter(TrackerPort):
         )
         return tracker_id
 
-    async def create_raid(
-        self, raid: Raid, *, project_id: str = "", milestone_id: str = ""
-    ) -> str:
+    async def create_raid(self, raid: Raid, *, project_id: str = "", milestone_id: str = "") -> str:
         tracker_id = str(raid.id)
         await self._pool.execute(
             """

@@ -15,15 +15,15 @@ from ravn.tui.widgets.pane import PaneMetaUpdate
 
 # Fixed-width badge markup per event type
 _BADGE: dict[str, str] = {
-    "thought":       "[#71717a on #131313] THOUGHT  [/]",
-    "tool_start":    "[#06b6d4 on #071a1e] TOOL_START[/]",
-    "tool_result":   "[#10b981 on #071a12] TOOL_RES  [/]",
-    "response":      "[#f59e0b on #1a1200] RESPONSE  [/]",
-    "task_start":    "[#a855f7 on #130d1f] TASK_START[/]",
+    "thought": "[#71717a on #131313] THOUGHT  [/]",
+    "tool_start": "[#06b6d4 on #071a1e] TOOL_START[/]",
+    "tool_result": "[#10b981 on #071a12] TOOL_RES  [/]",
+    "response": "[#f59e0b on #1a1200] RESPONSE  [/]",
+    "task_start": "[#a855f7 on #130d1f] TASK_START[/]",
     "task_complete": "[#a855f7 on #130d1f] TASK_DONE [/]",
-    "task_error":    "[#ef4444 on #1a0909] TASK_ERR  [/]",
-    "heartbeat":     "[#52525b on #111111] HEARTBEAT [/]",
-    "decision":      "[#f59e0b on #1a1200] DECISION  [/]",
+    "task_error": "[#ef4444 on #1a0909] TASK_ERR  [/]",
+    "heartbeat": "[#52525b on #111111] HEARTBEAT [/]",
+    "decision": "[#f59e0b on #1a1200] DECISION  [/]",
 }
 
 _EVENT_CYCLE = ["all", "thought", "tool", "response", "task", "heartbeat"]
@@ -126,11 +126,8 @@ class EventStreamView(Widget):
         source = (conn.name if hasattr(conn, "name") else str(conn))[:12]
 
         src_color = _source_color(source)
-        line = (
-            f"[#3f3f46]{ts}[/] "
-            f"{badge} "
-            f"[{src_color}]{source}[/]"
-            + (f"  [#71717a]{detail}[/]" if detail else "")
+        line = f"[#3f3f46]{ts}[/] {badge} [{src_color}]{source}[/]" + (
+            f"  [#71717a]{detail}[/]" if detail else ""
         )
         log.write(line)
 

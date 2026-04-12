@@ -280,7 +280,6 @@ class PricingProvider(ABC):
         """
 
 
-
 # GitProvider, GitWorkflowProvider, GitAuthError, GitRepoNotFoundError
 # are re-exported from niuu.ports.git at the top of this file.
 
@@ -432,8 +431,6 @@ class SessionEventRepository(ABC):
     @abstractmethod
     async def delete_by_session(self, session_id: UUID) -> int:
         """Delete all events for a session. Returns count deleted."""
-
-
 
 
 class SavedPromptRepository(ABC):

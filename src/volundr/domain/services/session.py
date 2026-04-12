@@ -43,6 +43,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe log output (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 class SessionNotFoundError(Exception):
     """Raised when a session is not found."""
 
@@ -153,7 +158,7 @@ class SessionService:
         if template_name and self._template_provider:
             template = self._template_provider.get(template_name)
             if template is not None:
-                logger.info("Applying workspace template: %s", template_name)
+                logger.info("Applying workspace template: %s", _sanitize_log(template_name))
                 # Use first repo from template if caller didn't provide one
                 if isinstance(source, GitSource) and not source.repo and template.repos:
                     first_repo = template.repos[0]
@@ -169,10 +174,10 @@ class SessionService:
 
         logger.info(
             "Creating session: name=%s, model=%s, source_type=%s, repo=%s",
-            name,
-            model,
-            source.type,
-            repo,
+            _sanitize_log(name),
+            _sanitize_log(model),
+            _sanitize_log(source.type),
+            _sanitize_log(repo),
         )
         logger.debug(
             "Session creation config: git_registry=%s, validate_repos=%s",
@@ -215,12 +220,12 @@ class SessionService:
         Raises:
             RepoValidationError: If validation fails.
         """
-        logger.info("Starting repository validation for: %s", repo)
+        logger.info("Starting repository validation for: %s", _sanitize_log(repo))
 
         if self._git_registry is None:
             logger.warning(
                 "Git registry not configured, skipping repository validation for: %s",
-                repo,
+                _sanitize_log(repo),
             )
             return
 
@@ -233,7 +238,7 @@ class SessionService:
         if provider is None:
             logger.error(
                 "No git provider supports repository URL: %s (registered providers: %s)",
-                repo,
+                _sanitize_log(repo),
                 ", ".join(
                     f"{p.name} ({p.provider_type.value})" for p in self._git_registry.providers
                 )
@@ -246,21 +251,21 @@ class SessionService:
             "Found provider %s (%s) for repository: %s",
             provider.name,
             provider.provider_type.value,
-            repo,
+            _sanitize_log(repo),
         )
 
         is_valid = await self._git_registry.validate_repo(repo)
         if not is_valid:
             logger.error(
                 "Repository validation failed for %s using provider %s",
-                repo,
+                _sanitize_log(repo),
                 provider.name,
             )
             raise RepoValidationError(repo, "repository does not exist or is not accessible")
 
         logger.info(
             "Repository validation successful for %s (provider: %s)",
-            repo,
+            _sanitize_log(repo),
             provider.name,
         )
 
@@ -439,8 +444,8 @@ class SessionService:
                 logger.warning(
                     "Failed to stop pods for session %s during deletion: %s. "
                     "Proceeding with session deletion.",
-                    session_id,
-                    e,
+                    _sanitize_log(session_id),
+                    _sanitize_log(e),
                 )
 
         # Run contributor cleanup in reverse order
@@ -480,16 +485,16 @@ class SessionService:
         if self._storage is None:
             logger.warning(
                 "Workspace storage cleanup requested for session %s but no storage port configured",
-                session_id,
+                _sanitize_log(session_id),
             )
             return
         try:
             await self._storage.delete_workspace(str(session_id))
-            logger.info("Deleted workspace PVC for session %s", session_id)
+            logger.info("Deleted workspace PVC for session %s", _sanitize_log(session_id))
         except Exception:
             logger.warning(
                 "Failed to delete workspace PVC for session %s",
-                session_id,
+                _sanitize_log(session_id),
                 exc_info=True,
             )
 
@@ -497,7 +502,7 @@ class SessionService:
         if self._chronicle_repository is None:
             logger.warning(
                 "Chronicle cleanup requested for session %s but no chronicle repository configured",
-                session_id,
+                _sanitize_log(session_id),
             )
             return
         try:
@@ -506,13 +511,13 @@ class SessionService:
                 await self._chronicle_repository.delete(chronicle.id)
                 logger.info(
                     "Deleted chronicle %s for session %s",
-                    chronicle.id,
-                    session_id,
+                    _sanitize_log(chronicle.id),
+                    _sanitize_log(session_id),
                 )
         except Exception:
             logger.warning(
                 "Failed to delete chronicles for session %s",
-                session_id,
+                _sanitize_log(session_id),
                 exc_info=True,
             )
 
@@ -551,10 +556,7 @@ class SessionService:
         port = os.environ.get("NIUU_SERVER_PORT", "8080")
         chat_endpoint = f"ws://{host}:{port}/s/{session_id}/session"
 
-        starting = (
-            session.with_status(SessionStatus.STARTING)
-            .with_endpoints(chat_endpoint, None)
-        )
+        starting = session.with_status(SessionStatus.STARTING).with_endpoints(chat_endpoint, None)
         await self._repository.update(starting)
 
         if self._broadcaster is not None:
@@ -625,9 +627,7 @@ class SessionService:
             # Launch readiness poller
             poll_task = asyncio.create_task(self._poll_readiness(final))
             self._provisioning_tasks[final.id] = poll_task
-            poll_task.add_done_callback(
-                lambda t: self._provisioning_tasks.pop(final.id, None)
-            )
+            poll_task.add_done_callback(lambda t: self._provisioning_tasks.pop(final.id, None))
 
         except Exception as e:
             logger.error("Provisioning failed for session %s: %s", session.id, e)
@@ -790,7 +790,7 @@ class SessionService:
                 logger.warning(
                     "Pod manager could not find/cancel pods for session %s "
                     "(may already be stopped or task ID mismatch)",
-                    session_id,
+                    _sanitize_log(session_id),
                 )
 
             # Run contributor cleanup in reverse order

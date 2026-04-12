@@ -173,7 +173,7 @@ class TestSaga:
             status=SagaStatus.ACTIVE,
             confidence=0.9,
             created_at=NOW,
-        base_branch="dev",
+            base_branch="dev",
         )
         assert saga.tracker_id == "LIN-100"
         assert saga.name == "My Saga"
@@ -194,7 +194,7 @@ class TestSaga:
             status=SagaStatus.ACTIVE,
             confidence=0.5,
             created_at=NOW,
-        base_branch="dev",
+            base_branch="dev",
         )
         with pytest.raises(AttributeError):
             saga.slug = "changed"  # type: ignore[misc]

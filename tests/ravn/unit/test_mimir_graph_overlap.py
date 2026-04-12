@@ -25,40 +25,48 @@ class TestSourceOverlapGraphAdapter:
     @pytest.mark.asyncio
     async def test_shared_source_creates_edge(self) -> None:
         adapter = SourceOverlapGraphAdapter()
-        graph = await adapter.build_graph({
-            "wiki/a.md": ["src-1"],
-            "wiki/b.md": ["src-1"],
-        })
+        graph = await adapter.build_graph(
+            {
+                "wiki/a.md": ["src-1"],
+                "wiki/b.md": ["src-1"],
+            }
+        )
         assert len(graph.edges) == 1
         assert set(graph.edges[0]) == {"wiki/a.md", "wiki/b.md"}
 
     @pytest.mark.asyncio
     async def test_no_shared_source_no_edge(self) -> None:
         adapter = SourceOverlapGraphAdapter()
-        graph = await adapter.build_graph({
-            "wiki/a.md": ["src-1"],
-            "wiki/b.md": ["src-2"],
-        })
+        graph = await adapter.build_graph(
+            {
+                "wiki/a.md": ["src-1"],
+                "wiki/b.md": ["src-2"],
+            }
+        )
         assert graph.edges == []
 
     @pytest.mark.asyncio
     async def test_multiple_shared_sources_single_edge(self) -> None:
         adapter = SourceOverlapGraphAdapter()
-        graph = await adapter.build_graph({
-            "wiki/a.md": ["src-1", "src-2"],
-            "wiki/b.md": ["src-1", "src-2"],
-        })
+        graph = await adapter.build_graph(
+            {
+                "wiki/a.md": ["src-1", "src-2"],
+                "wiki/b.md": ["src-1", "src-2"],
+            }
+        )
         # Should produce exactly one edge (deduplication)
         assert len(graph.edges) == 1
 
     @pytest.mark.asyncio
     async def test_three_pages_shared_source_three_edges(self) -> None:
         adapter = SourceOverlapGraphAdapter()
-        graph = await adapter.build_graph({
-            "wiki/a.md": ["src-shared"],
-            "wiki/b.md": ["src-shared"],
-            "wiki/c.md": ["src-shared"],
-        })
+        graph = await adapter.build_graph(
+            {
+                "wiki/a.md": ["src-shared"],
+                "wiki/b.md": ["src-shared"],
+                "wiki/c.md": ["src-shared"],
+            }
+        )
         assert len(graph.edges) == 3
 
     @pytest.mark.asyncio
@@ -79,11 +87,13 @@ class TestSourceOverlapGraphAdapter:
     @pytest.mark.asyncio
     async def test_related_pages_returns_neighbours(self) -> None:
         adapter = SourceOverlapGraphAdapter()
-        await adapter.build_graph({
-            "wiki/a.md": ["src-1"],
-            "wiki/b.md": ["src-1"],
-            "wiki/c.md": ["src-1"],
-        })
+        await adapter.build_graph(
+            {
+                "wiki/a.md": ["src-1"],
+                "wiki/b.md": ["src-1"],
+                "wiki/c.md": ["src-1"],
+            }
+        )
         related = await adapter.related_pages("wiki/a.md")
         assert set(related) == {"wiki/b.md", "wiki/c.md"}
 

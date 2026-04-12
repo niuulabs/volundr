@@ -73,7 +73,7 @@ def create_observability_router(
             await store.summarise()
         except Exception as exc:
             logger.warning("readyz: usage store check failed: %s", exc)
-            failures.append(f"usage_store: {exc}")
+            failures.append("usage_store: check failed")
 
         # ── Provider reachability check ───────────────────────────────────
         # We just need at least one provider base URL to accept a connection.

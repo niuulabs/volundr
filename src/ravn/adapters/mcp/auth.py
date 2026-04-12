@@ -646,7 +646,7 @@ class MCPAuthSession:
 
         await self._store.save(server_name, token)
         self._cache[server_name] = _SessionEntry(token=token, auth_type=auth_type)
-        logger.info("Authenticated MCP server %r via %s", server_name, auth_type)
+        logger.info("Authenticated MCP server %r", server_name)
         return token, message
 
     async def revoke(self, server_name: str) -> None:
