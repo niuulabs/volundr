@@ -140,7 +140,7 @@
     "@codingame/monaco-vscode-task-service-override": "^28.4.1",
     "@codingame/monaco-vscode-terminal-service-override": "^28.4.1",
     "@codingame/monaco-vscode-testing-service-override": "^28.4.1",
-    "@codingame/monaco-vscode-textmate-service-override": "^28.4.1",
+    "@codingame/monaco-vscode-textmate-service-override": "^30.0.0",
     "@codingame/monaco-vscode-theme-defaults-default-extension": "^28.4.1",
     "@codingame/monaco-vscode-theme-service-override": "^28.4.1",
     "@codingame/monaco-vscode-theme-seti-default-extension": "^28.4.1",
