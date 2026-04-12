@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 from uuid import UUID
 
-from tyr.domain.models import Phase, Raid, Saga, SagaStatus
+from tyr.domain.models import Phase, PhaseStatus, Raid, Saga, SagaStatus
 
 
 class SagaRepository(ABC):
@@ -26,7 +26,7 @@ class SagaRepository(ABC):
 
     @abstractmethod
     async def save_phase(self, phase: Phase, *, conn: Any | None = None) -> None:
-        """Persist a phase. Uses *conn* when inside a transaction."""
+        """Persist a phase (insert-or-update). Uses *conn* when inside a transaction."""
         ...
 
     @abstractmethod

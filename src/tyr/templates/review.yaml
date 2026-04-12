@@ -1,17 +1,21 @@
 # Saga template: review
 # Triggered by: github.pr.opened
-# Creates a code review saga for an open pull request.
+# Creates a 4-phase code-review saga for an open pull request.
+# Phase 1: Code review  (persona: reviewer)
+# Phase 2: Security audit (persona: security-auditor)
+# Phase 3: QA test run  (persona: qa-agent)
+# Phase 4: Human approval gate (needs_approval: true)
 name: "Review: {event.repo}#{event.pr_number}"
 feature_branch: "{event.branch}"
 base_branch: "{event.base_branch}"
 repos:
   - "{event.repo}"
 phases:
-  - name: Review
+  - name: Code Review
     raids:
-      - name: "Review PR #{event.pr_number}"
+      - name: "Code review for PR #{event.pr_number}"
         description: |
-          Review the pull request opened against {event.repo}.
+          Review code quality, conventions, and architecture for PR #{event.pr_number} in {event.repo}.
 
           PR URL: {event.pr_url}
           Author: {event.author}
@@ -21,10 +25,11 @@ phases:
           - All changed files have been read and understood
           - Code follows project conventions (CLAUDE.md and .claude/rules/)
           - Tests are present and coverage meets the 85% threshold
-          - CI is passing on the PR
-          - All review findings have been addressed or acknowledged
+          - Architecture boundaries are respected (no layer violations)
+          - Review findings addressed or acknowledged
         declared_files: []
         estimate_hours: 1.0
+        persona: reviewer
         prompt: |
           # Code Review Task
 
@@ -43,11 +48,120 @@ phases:
           3. Read every changed file (not just the diff lines) to understand context.
           4. Check CI status: `gh pr checks {event.pr_number} --repo {event.repo}`
           5. Verify all acceptance criteria are met.
-          6. If changes are needed, push fixes; otherwise approve and merge.
+          6. If changes are needed, push fixes; otherwise note findings for escalation.
 
-          ## Completion
+          Report your findings clearly, including file:line references.
 
-          When satisfied, merge the PR:
+  - name: Security Audit
+    raids:
+      - name: "Security audit for PR #{event.pr_number}"
+        description: |
+          Perform a security review of the changes in PR #{event.pr_number} ({event.repo}).
+
+          PR URL: {event.pr_url}
+          Branch: {event.branch}
+        acceptance_criteria:
+          - OWASP Top 10 vulnerabilities checked (injection, XSS, auth bypass, etc.)
+          - No secrets, tokens, or credentials hardcoded in changed files
+          - Input validation present at system boundaries
+          - No unsafe deserialization or unsafe direct object references
+          - Dependencies introduced have no known critical CVEs
+        declared_files: []
+        estimate_hours: 0.5
+        persona: security-auditor
+        prompt: |
+          # Security Audit Task
+
+          Perform a security review of PR #{event.pr_number} in {event.repo}.
+
+          **PR**: {event.pr_url}
+          **Branch**: {event.branch}
+
+          ## Instructions
+
+          1. Fetch the PR diff: `gh pr diff {event.pr_number} --repo {event.repo}`
+          2. Check for OWASP Top 10 issues (injection, XSS, CSRF, insecure direct object refs, etc.).
+          3. Search for hardcoded secrets, API keys, or passwords in changed files.
+          4. Verify input validation at system boundaries (API endpoints, user input handlers).
+          5. Review any new dependencies for known CVEs.
+          6. Document all findings with severity (CRITICAL / HIGH / MEDIUM / LOW).
+
+          Report findings with file:line references and suggested fixes.
+
+  - name: QA Test Run
+    raids:
+      - name: "QA test run for PR #{event.pr_number}"
+        description: |
+          Run the full test suite and verify quality gates for PR #{event.pr_number} ({event.repo}).
+
+          Branch: {event.branch}
+        acceptance_criteria:
+          - All backend tests pass (pytest with zero warnings)
+          - All frontend tests pass (vitest)
+          - Coverage is at or above 85% (codecov/patch is green)
+          - No regressions introduced by the changes
+          - Linting is clean (ruff check + ruff format)
+        declared_files: []
+        estimate_hours: 0.5
+        persona: qa-agent
+        prompt: |
+          # QA Test Run Task
+
+          Run the test suite for PR #{event.pr_number} in {event.repo}.
+
+          **Branch**: {event.branch}
+
+          ## Instructions
+
+          1. Check out or verify the PR branch is current.
+          2. Run backend tests: `make test` (or `pytest -v`).
+          3. Run frontend tests: `cd web && npm run test:coverage`.
+          4. Run linting: `make verify` (ruff check + ruff format).
+          5. Check CI status: `gh pr checks {event.pr_number} --repo {event.repo}`.
+          6. Verify `codecov/patch` is green (85% coverage gate).
+
+          Report pass/fail for each suite with any failure details.
+
+  - name: Human Approval
+    needs_approval: true
+    raids:
+      - name: "Human approval gate for PR #{event.pr_number}"
+        description: |
+          All automated checks have completed for PR #{event.pr_number} ({event.repo}).
+          Awaiting human review and final approval before merging.
+
+          PR URL: {event.pr_url}
+          Branch: {event.branch} → {event.base_branch}
+        acceptance_criteria:
+          - Human reviewer has read the code review findings
+          - Human reviewer has read the security audit findings
+          - Human reviewer has confirmed all tests pass
+          - PR is approved and ready to merge
+        declared_files: []
+        estimate_hours: 0.25
+        persona: reviewer
+        prompt: |
+          # Human Approval Gate
+
+          All automated phases have completed for PR #{event.pr_number}.
+
+          **PR**: {event.pr_url}
+          **Repository**: {event.repo}
+          **Branch**: {event.branch} → {event.base_branch}
+
+          ## Summary
+
+          - Code review: complete
+          - Security audit: complete
+          - QA test run: complete
+
+          ## Instructions
+
+          Review the findings from the previous phases and either:
+          - Approve the PR if all checks pass and no blockers remain.
+          - Request changes if any blocking issues were found.
+
+          When approved, merge the PR:
           ```bash
           gh pr merge {event.pr_number} --repo {event.repo} --squash --delete-branch
           ```
