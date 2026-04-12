@@ -270,9 +270,76 @@ class PipelineExecutor:
     # Public interface
     # ------------------------------------------------------------------
 
+    async def get_saga(self, saga_id: UUID) -> Saga | None:
+        """Return the saga with *saga_id*, or None if not found."""
+        return await self._saga_repo.get_saga(saga_id)
+
+    async def get_phase(self, phase_id: UUID) -> Phase | None:
+        """Return the phase with *phase_id*, or None if not found."""
+        return await self._saga_repo.get_phase(phase_id)
+
     async def get_phases(self, saga_id: UUID) -> list[Phase]:
         """Return all phases for *saga_id*, ordered by phase number."""
         return await self._saga_repo.get_phases_by_saga(saga_id)
+
+    async def approve_gate(self, saga_id: UUID, phase_id: UUID) -> None:
+        """Approve a human-gated phase and advance the pipeline.
+
+        Marks the GATED phase COMPLETE, then either advances to the next
+        pending phase or completes the saga when no pending phases remain.
+
+        :param saga_id: ID of the saga containing the gated phase.
+        :param phase_id: ID of the GATED phase to approve.
+        """
+        phase = await self._saga_repo.get_phase(phase_id)
+        if phase is None:
+            logger.warning("approve_gate: phase %s not found", phase_id)
+            return
+        if phase.status != PhaseStatus.GATED:
+            logger.warning(
+                "approve_gate: phase %s is not GATED (status=%s)", phase_id, phase.status
+            )
+            return
+
+        saga = await self._saga_repo.get_saga(saga_id)
+        if saga is None:
+            logger.warning("approve_gate: saga %s not found", saga_id)
+            return
+
+        completed = Phase(
+            id=phase.id,
+            saga_id=phase.saga_id,
+            tracker_id=phase.tracker_id,
+            number=phase.number,
+            name=phase.name,
+            status=PhaseStatus.COMPLETE,
+            confidence=phase.confidence,
+        )
+        await self._saga_repo.save_phase(completed)
+
+        await self._event_bus.emit(
+            TyrEvent(
+                event="phase.approved",
+                data={
+                    "phase_id": str(phase_id),
+                    "phase_name": phase.name,
+                    "saga_id": str(saga_id),
+                    "owner_id": self._owner_id,
+                },
+                owner_id=self._owner_id,
+            )
+        )
+
+        all_phases = await self._saga_repo.get_phases_by_saga(saga_id)
+        next_phase = next(
+            (p for p in all_phases if p.status == PhaseStatus.PENDING),
+            None,
+        )
+        if next_phase is None:
+            await self._complete_saga(saga)
+            return
+
+        await self._advance_phase(saga, next_phase=next_phase)
 
     async def create_from_yaml(
         self,
@@ -856,52 +923,7 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
             )
             return
 
-        # Find next PENDING phase
-        next_phase = next(
-            (p for p in all_phases if p.status == PhaseStatus.PENDING),
-            None,
-        )
-        if next_phase is None:
-            await self._complete_saga(saga)
-            return
-
-        # Check condition on next phase
-        next_tpl = next(
-            (tpl for ph, tpl in template_pairs if ph.id == next_phase.id),
-            None,
-        )
-        if next_tpl and next_tpl.condition:
-            condition_ctx = await self._build_condition_context(saga_id, all_phases, template_pairs)
-            condition_ctx.setdefault("stages", {})[current_phase.name] = merged
-            try:
-                passes = evaluate_condition(next_tpl.condition, condition_ctx)
-            except ConditionError as exc:
-                logger.error(
-                    "PipelineExecutor: condition eval failed for phase '%s': %s",
-                    next_phase.name,
-                    exc,
-                )
-                passes = False
-
-            if not passes:
-                await self._fail_saga(
-                    saga,
-                    reason=(
-                        f"Condition for phase '{next_phase.name}' not met: {next_tpl.condition!r}"
-                    ),
-                )
-                return
-
-        if next_tpl and next_tpl.gate == "human":
-            await self._gate_phase(saga, phase_num=next_phase.number, tpl_phase=next_tpl)
-            return
-
-        logger.info(
-            "PipelineExecutor: advancing saga %s to phase '%s'",
-            saga.slug,
-            next_phase.name,
-        )
-        await self._advance_phase(saga, next_phase=next_phase)
+        await self._transition_to_next_phase(saga, template_pairs=template_pairs)
 
     async def _advance_phase(self, saga: Saga, *, next_phase: Phase) -> None:
         """Template-aware advance: injects prior stage context and uses stored template."""
@@ -1031,3 +1053,104 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
                 if phase.id == phase_id:
                     return phase.saga_id
         return None
+
+    async def _transition_to_next_phase(
+        self,
+        saga: Saga,
+        *,
+        template_pairs: list[tuple[Phase, TemplatePhase]],
+    ) -> None:
+        """Find the next PENDING phase and advance, gate, or complete the saga.
+
+        Evaluates the next phase's condition (if any) and detects ``gate: human``
+        before dispatching — so both _finalize_phase and approve_gate share the
+        same promotion logic.
+        """
+        all_phases = await self._saga_repo.get_phases_by_saga(saga.id)
+        next_phase = next(
+            (p for p in all_phases if p.status == PhaseStatus.PENDING),
+            None,
+        )
+        if next_phase is None:
+            await self._complete_saga(saga)
+            return
+
+        next_tpl = next(
+            (tpl for ph, tpl in template_pairs if ph.id == next_phase.id),
+            None,
+        )
+
+        if next_tpl and next_tpl.condition:
+            condition_ctx = await self._build_condition_context(saga.id, all_phases, template_pairs)
+            try:
+                passed = evaluate_condition(next_tpl.condition, condition_ctx)
+            except ConditionError as exc:
+                logger.error(
+                    "PipelineExecutor: condition eval failed for phase '%s': %s",
+                    next_phase.name,
+                    exc,
+                )
+                passed = False
+            if not passed:
+                await self._fail_saga(
+                    saga,
+                    reason=(
+                        f"Condition for phase '{next_phase.name}' not met: {next_tpl.condition!r}"
+                    ),
+                )
+                return
+
+        if next_tpl and next_tpl.gate == "human":
+            await self._gate_phase(saga, phase_num=next_phase.number, tpl_phase=next_tpl)
+            return
+
+        logger.info(
+            "PipelineExecutor: advancing saga %s to phase '%s'",
+            saga.slug,
+            next_phase.name,
+        )
+        await self._advance_phase(saga, next_phase=next_phase)
+
+    async def approve_gate(self, saga_id: UUID, phase_id: UUID) -> None:
+        """Template-aware approve: evaluates conditions and gate detection after approval."""
+        phase = await self._saga_repo.get_phase(phase_id)
+        if phase is None:
+            logger.warning("approve_gate: phase %s not found", phase_id)
+            return
+        if phase.status != PhaseStatus.GATED:
+            logger.warning(
+                "approve_gate: phase %s is not GATED (status=%s)", phase_id, phase.status
+            )
+            return
+
+        saga = await self._saga_repo.get_saga(saga_id)
+        if saga is None:
+            logger.warning("approve_gate: saga %s not found", saga_id)
+            return
+
+        completed = Phase(
+            id=phase.id,
+            saga_id=phase.saga_id,
+            tracker_id=phase.tracker_id,
+            number=phase.number,
+            name=phase.name,
+            status=PhaseStatus.COMPLETE,
+            confidence=phase.confidence,
+        )
+        await self._saga_repo.save_phase(completed)
+
+        await self._event_bus.emit(
+            TyrEvent(
+                event="phase.approved",
+                data={
+                    "phase_id": str(phase_id),
+                    "phase_name": phase.name,
+                    "saga_id": str(saga_id),
+                    "owner_id": self._owner_id,
+                },
+                owner_id=self._owner_id,
+            )
+        )
+
+        template_pairs = self._saga_templates.get(str(saga_id), [])
+        await self._transition_to_next_phase(saga, template_pairs=template_pairs)
