@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID, uuid4
 
 from niuu.domain.mimir import (  # noqa: F401 — re-exported for existing importers
@@ -84,6 +84,9 @@ class Episode:
     errors: list[str] = field(default_factory=list)
     cost_usd: float | None = None
     duration_seconds: float | None = None
+    # NIU-594: structured outcome parsed from ---outcome--- block
+    structured_outcome: dict[str, Any] | None = None
+    outcome_valid: bool = False
 
 
 @dataclass(frozen=True)
@@ -241,6 +244,8 @@ class TurnResult:
     tool_calls: list[ToolCall]
     tool_results: list[ToolResult]
     usage: TokenUsage
+    # NIU-594: episode recorded for this turn (None if no memory configured and no outcome block)
+    episode: Episode | None = None
 
 
 # ---------------------------------------------------------------------------
