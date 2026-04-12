@@ -270,9 +270,76 @@ class PipelineExecutor:
     # Public interface
     # ------------------------------------------------------------------
 
+    async def get_saga(self, saga_id: UUID) -> Saga | None:
+        """Return the saga with *saga_id*, or None if not found."""
+        return await self._saga_repo.get_saga(saga_id)
+
+    async def get_phase(self, phase_id: UUID) -> Phase | None:
+        """Return the phase with *phase_id*, or None if not found."""
+        return await self._saga_repo.get_phase(phase_id)
+
     async def get_phases(self, saga_id: UUID) -> list[Phase]:
         """Return all phases for *saga_id*, ordered by phase number."""
         return await self._saga_repo.get_phases_by_saga(saga_id)
+
+    async def approve_gate(self, saga_id: UUID, phase_id: UUID) -> None:
+        """Approve a human-gated phase and advance the pipeline.
+
+        Marks the GATED phase COMPLETE, then either advances to the next
+        pending phase or completes the saga when no pending phases remain.
+
+        :param saga_id: ID of the saga containing the gated phase.
+        :param phase_id: ID of the GATED phase to approve.
+        """
+        phase = await self._saga_repo.get_phase(phase_id)
+        if phase is None:
+            logger.warning("approve_gate: phase %s not found", phase_id)
+            return
+        if phase.status != PhaseStatus.GATED:
+            logger.warning(
+                "approve_gate: phase %s is not GATED (status=%s)", phase_id, phase.status
+            )
+            return
+
+        saga = await self._saga_repo.get_saga(saga_id)
+        if saga is None:
+            logger.warning("approve_gate: saga %s not found", saga_id)
+            return
+
+        completed = Phase(
+            id=phase.id,
+            saga_id=phase.saga_id,
+            tracker_id=phase.tracker_id,
+            number=phase.number,
+            name=phase.name,
+            status=PhaseStatus.COMPLETE,
+            confidence=phase.confidence,
+        )
+        await self._saga_repo.save_phase(completed)
+
+        await self._event_bus.emit(
+            TyrEvent(
+                event="phase.approved",
+                data={
+                    "phase_id": str(phase_id),
+                    "phase_name": phase.name,
+                    "saga_id": str(saga_id),
+                    "owner_id": self._owner_id,
+                },
+                owner_id=self._owner_id,
+            )
+        )
+
+        all_phases = await self._saga_repo.get_phases_by_saga(saga_id)
+        next_phase = next(
+            (p for p in all_phases if p.status == PhaseStatus.PENDING),
+            None,
+        )
+        if next_phase is None:
+            await self._complete_saga(saga)
+            return
+
+        await self._advance_phase(saga, next_phase=next_phase)
 
     async def create_from_yaml(
         self,
