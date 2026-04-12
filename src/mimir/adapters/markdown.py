@@ -32,6 +32,7 @@ import logging
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 try:
     from sleipnir.domain.catalog import mimir_page_written as _catalog_page_written
@@ -53,8 +54,13 @@ from niuu.domain.mimir import (
     slugify,
 )
 from niuu.ports.mimir import MimirPort
+from niuu.ports.search import SearchPort
 
 logger = logging.getLogger(__name__)
+
+# Maximum characters per search chunk (~500 tokens).
+_CHUNK_MAX_CHARS = 2000
+_SEARCH_RESULT_LIMIT = 20
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -189,12 +195,18 @@ class MarkdownMimirAdapter(MimirPort):
 
     Args:
         root: Root directory for the Mímir store (e.g. ``~/.ravn/mimir``).
+        search_port: Optional SearchPort for hybrid FTS/semantic search.
+            When provided, ``search()`` delegates to it and pages are
+            automatically indexed on write.  When ``None``, the adapter
+            falls back to its built-in keyword-counting search.
     """
 
     def __init__(
         self,
         root: str | Path = "~/.ravn/mimir",
         sleipnir_publisher: object | None = None,
+        *,
+        search_port: SearchPort | None = None,
     ) -> None:
         self._root = Path(root).expanduser()
         self._wiki = self._root / "wiki"
@@ -204,6 +216,10 @@ class MarkdownMimirAdapter(MimirPort):
         self._index = self._wiki / "index.md"
         self._log = self._wiki / "log.md"
         self._sleipnir_publisher = sleipnir_publisher
+        self._search_port = search_port
+        # Tracks how many chunks were indexed per page path so we can remove
+        # them before re-indexing on update.  Populated lazily on first write.
+        self._page_chunk_counts: dict[str, int] = {}
         self._ensure_layout()
 
     # ------------------------------------------------------------------
@@ -316,10 +332,43 @@ class MarkdownMimirAdapter(MimirPort):
         return report
 
     async def search(self, query: str) -> list[MimirPage]:
-        """Full-text search over wiki pages, ranked by keyword hits."""
+        """Search wiki pages ranked by relevance.
+
+        When a SearchPort is configured, hybrid FTS/semantic search is used
+        and results include relevance scores in ``meta.summary``.  Falls back
+        to built-in keyword counting when no SearchPort is present.
+        """
         if not query.strip():
             return []
 
+        if self._search_port is not None:
+            return await self._search_via_port(query)
+
+        return await self._search_keywords(query)
+
+    async def _search_via_port(self, query: str) -> list[MimirPage]:
+        """Delegate search to the configured SearchPort."""
+        search_results = await self._search_port.search(query, limit=_SEARCH_RESULT_LIMIT)  # type: ignore[union-attr]
+
+        seen_paths: dict[str, tuple[float, MimirPage]] = {}
+        for result in search_results:
+            page_path = result.metadata.get("page_path", "")
+            if not page_path:
+                continue
+            md_path = self._wiki / page_path
+            if not md_path.exists():
+                continue
+            # Keep only the best-scoring chunk per page.
+            if page_path in seen_paths and seen_paths[page_path][0] >= result.score:
+                continue
+            content = md_path.read_text(encoding="utf-8")
+            meta = self._build_page_meta(md_path, content)
+            seen_paths[page_path] = (result.score, MimirPage(meta=meta, content=content))
+
+        return [page for _, page in sorted(seen_paths.values(), key=lambda t: t[0], reverse=True)]
+
+    async def _search_keywords(self, query: str) -> list[MimirPage]:
+        """Built-in keyword-counting fallback search."""
         keywords = set(re.split(r"\W+", query.lower())) - {"", "the", "a", "an", "is", "in"}
         results: list[tuple[int, MimirPage]] = []
 
@@ -349,6 +398,7 @@ class MarkdownMimirAdapter(MimirPort):
         The *mimir* and *meta* parameters are accepted for interface
         compatibility but are ignored here — this adapter always writes to its
         own filesystem root and does not persist metadata separately.
+        When a SearchPort is configured, the page is automatically re-indexed.
         """
         page_path = self._safe_wiki_path(path)
         page_path.parent.mkdir(parents=True, exist_ok=True)
@@ -376,6 +426,9 @@ class MarkdownMimirAdapter(MimirPort):
                 await self._sleipnir_publisher.publish(_event)
             except Exception:
                 logger.warning("Failed to emit mimir.page.written; continuing.", exc_info=True)
+
+        if self._search_port is not None:
+            await self._reindex_page(path, content)
 
     async def get_page(self, path: str) -> MimirPage:
         """Return content and metadata for the wiki page at *path* in one call."""
@@ -678,6 +731,57 @@ class MarkdownMimirAdapter(MimirPort):
         return MimirPage(meta=meta, content=content)
 
     # ------------------------------------------------------------------
+    # Search index management
+    # ------------------------------------------------------------------
+
+    async def rebuild_search_index(self) -> int:
+        """Re-index all wiki pages from the filesystem.
+
+        Idempotent — clears any previously tracked chunk counts and rebuilds
+        the entire search index from the current ``wiki/`` directory.
+
+        Returns:
+            Number of pages indexed.
+        """
+        if self._search_port is None:
+            return 0
+
+        # Wipe the index before re-indexing to avoid stale orphan chunks.
+        await self._search_port.rebuild()
+        self._page_chunk_counts.clear()
+        count = 0
+        for md_path in self._wiki.rglob("*.md"):
+            if md_path.name in {"index.md", "log.md"}:
+                continue
+            content = md_path.read_text(encoding="utf-8")
+            rel = str(md_path.relative_to(self._wiki))
+            await self._reindex_page(rel, content)
+            count += 1
+
+        logger.info("mimir: rebuilt search index — %d pages", count)
+        return count
+
+    async def _reindex_page(self, path: str, content: str) -> None:
+        """Remove old chunks for *path* and index fresh ones."""
+        assert self._search_port is not None  # noqa: S101 — caller-checked
+
+        # Remove previously indexed chunks for this page.
+        old_count = self._page_chunk_counts.get(path, 0)
+        for i in range(old_count):
+            await self._search_port.remove(f"{path}::{i}")
+
+        # Derive metadata from path.
+        parts = path.split("/")
+        category = parts[0] if len(parts) > 1 else "uncategorised"
+        page_type = "thread" if path.startswith("threads/") else "wiki"
+
+        chunks = _chunk_markdown(content, path, category, page_type)
+        for i, (chunk_content, chunk_meta) in enumerate(chunks):
+            await self._search_port.index(f"{path}::{i}", chunk_content, chunk_meta)
+
+        self._page_chunk_counts[path] = len(chunks)
+
+    # ------------------------------------------------------------------
     # Raw source storage
     # ------------------------------------------------------------------
 
@@ -916,3 +1020,106 @@ def _extract_summary(content: str) -> str:
         if heading_seen:
             return stripped[:120]
     return ""
+
+
+def _chunk_markdown(
+    content: str,
+    page_path: str,
+    category: str,
+    page_type: str = "wiki",
+    *,
+    max_chars: int = _CHUNK_MAX_CHARS,
+) -> list[tuple[str, dict[str, Any]]]:
+    """Split markdown content into searchable chunks.
+
+    Strategy:
+    1. Split on ``## `` headings — each H2 section becomes a candidate chunk.
+    2. Everything before the first ``## `` heading is the intro chunk.
+    3. Sections exceeding *max_chars* are split further on ``### `` headings
+       or blank-line-delimited paragraphs.
+
+    Returns:
+        List of ``(chunk_text, metadata)`` pairs where metadata contains
+        ``page_path``, ``section_heading``, ``category``, and ``page_type``.
+    """
+    base_meta: dict[str, Any] = {
+        "page_path": page_path,
+        "category": category,
+        "page_type": page_type,
+    }
+
+    # Split on H2 boundaries, keeping the heading with each section.
+    h2_pattern = re.compile(r"(?=^## )", re.MULTILINE)
+    raw_sections = h2_pattern.split(content)
+
+    chunks: list[tuple[str, dict[str, Any]]] = []
+    for section in raw_sections:
+        if not section.strip():
+            continue
+
+        # Extract the section heading (first line starting with ##).
+        first_line = section.splitlines()[0].strip() if section.strip() else ""
+        heading = first_line.lstrip("#").strip() if first_line.startswith("#") else ""
+
+        if len(section) <= max_chars:
+            meta = {**base_meta, "section_heading": heading}
+            chunks.append((section.strip(), meta))
+            continue
+
+        # Section too large — try splitting on H3 headings first.
+        h3_pattern = re.compile(r"(?=^### )", re.MULTILINE)
+        sub_sections = h3_pattern.split(section)
+
+        if len(sub_sections) > 1:
+            for sub in sub_sections:
+                if not sub.strip():
+                    continue
+                sub_first = sub.splitlines()[0].strip() if sub.strip() else ""
+                sub_heading = (
+                    sub_first.lstrip("#").strip() if sub_first.startswith("#") else heading
+                )
+                _append_paragraphs(sub, sub_heading, base_meta, max_chars, chunks)
+        else:
+            _append_paragraphs(section, heading, base_meta, max_chars, chunks)
+
+    # Always return at least one chunk containing the full content.
+    if not chunks:
+        meta = {**base_meta, "section_heading": _extract_title(content)}
+        chunks.append((content.strip(), meta))
+
+    return chunks
+
+
+def _append_paragraphs(
+    text: str,
+    heading: str,
+    base_meta: dict[str, Any],
+    max_chars: int,
+    out: list[tuple[str, dict[str, Any]]],
+) -> None:
+    """Split *text* on blank lines and append paragraph-level chunks to *out*."""
+    if len(text) <= max_chars:
+        meta = {**base_meta, "section_heading": heading}
+        out.append((text.strip(), meta))
+        return
+
+    paragraphs = re.split(r"\n{2,}", text)
+    current_parts: list[str] = []
+    current_len = 0
+
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+        if current_len + len(para) > max_chars and current_parts:
+            meta = {**base_meta, "section_heading": heading}
+            out.append(("\n\n".join(current_parts), meta))
+            current_parts = [para]
+            current_len = len(para)
+        else:
+            current_parts.append(para)
+            current_len += len(para)
+
+    if current_parts:
+        meta = {**base_meta, "section_heading": heading}
+        out.append(("\n\n".join(current_parts), meta))
