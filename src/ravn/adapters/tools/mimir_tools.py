@@ -15,6 +15,7 @@ import logging
 from datetime import UTC, datetime
 
 from niuu.domain.mimir import MimirSource, compute_content_hash
+from ravn.adapters.tools.entity_extractor import EntityExtractor
 from ravn.domain.models import ToolResult
 from ravn.ports.mimir import MimirPort
 from ravn.ports.tool import ToolPort
@@ -37,8 +38,13 @@ def _source_id_from_content(title: str, content: str) -> str:
 class MimirIngestTool(ToolPort):
     """Ingest a URL or raw text as a Mímir source document."""
 
-    def __init__(self, adapter: MimirPort) -> None:
+    def __init__(
+        self,
+        adapter: MimirPort,
+        entity_extractor: EntityExtractor | None = None,
+    ) -> None:
         self._adapter = adapter
+        self._entity_extractor = entity_extractor
 
     @property
     def name(self) -> str:
@@ -104,6 +110,11 @@ class MimirIngestTool(ToolPort):
         )
 
         page_paths = await self._adapter.ingest(source)
+
+        if self._entity_extractor is not None:
+            entity_paths = await self._entity_extractor.run(source)
+            page_paths = page_paths + entity_paths
+
         result = f"Ingested source '{title}' (id={source.source_id})"
         if page_paths:
             result += f"\nPages updated: {', '.join(page_paths)}"
@@ -452,10 +463,17 @@ class MimirLintTool(ToolPort):
 # ---------------------------------------------------------------------------
 
 
-def build_mimir_tools(adapter: MimirPort) -> list[ToolPort]:
-    """Return all six Mímir tools wired to *adapter*."""
+def build_mimir_tools(
+    adapter: MimirPort,
+    entity_extractor: EntityExtractor | None = None,
+) -> list[ToolPort]:
+    """Return all six Mímir tools wired to *adapter*.
+
+    When *entity_extractor* is provided it is wired into :class:`MimirIngestTool`
+    so that LLM-based entity detection runs automatically on every ingest.
+    """
     return [
-        MimirIngestTool(adapter),
+        MimirIngestTool(adapter, entity_extractor=entity_extractor),
         MimirQueryTool(adapter),
         MimirReadTool(adapter),
         MimirWriteTool(adapter),
