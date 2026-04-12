@@ -12,8 +12,11 @@ from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.domain.models import PhaseStatus, RaidStatus, SagaStatus
 from tyr.domain.pipeline_executor import (
     TemplateAwarePipelineExecutor,
+    build_stage_context_from_outcomes,
     evaluate_fan_in,
+    interpolate_stage_refs,
     merge_outcomes,
+    merge_stage_outcomes,
 )
 
 # ---------------------------------------------------------------------------
@@ -735,3 +738,323 @@ class TestConditionBasedAdvancement:
 
         saga = await executor.create_from_yaml(_SINGLE_STAGE_PIPELINE, auto_start=False)
         assert saga.id in repo.sagas
+
+
+# ---------------------------------------------------------------------------
+# NIU-597: Stage context injection
+# ---------------------------------------------------------------------------
+
+_STAGE_REF_PIPELINE = textwrap.dedent(
+    """
+    name: "ref-pipeline"
+    feature_branch: "feat/refs"
+    base_branch: "main"
+    repos:
+      - "test/repo"
+    stages:
+      - name: review
+        sequential:
+          - name: "Reviewer"
+            persona: reviewer
+            prompt: "Review the code"
+      - name: test
+        sequential:
+          - name: "Tester"
+            persona: qa-agent
+            prompt: "Run tests. Review verdict: {stages.review.verdict}"
+    """
+)
+
+
+class TestBuildStageContextFromOutcomes:
+    def test_participant_names_in_context(self):
+        outcomes = {
+            "reviewer": {"verdict": "pass", "findings_count": 3, "summary": "Minor issues only"},
+            "security-auditor": {
+                "verdict": "pass",
+                "critical_findings": 0,
+                "summary": "No security issues",
+            },
+        }
+        context = build_stage_context_from_outcomes("review", outcomes)
+        assert "reviewer" in context
+        assert "security-auditor" in context
+
+    def test_verdict_in_context(self):
+        outcomes = {"reviewer": {"verdict": "pass"}}
+        context = build_stage_context_from_outcomes("review", outcomes)
+        assert "verdict: pass" in context
+
+    def test_summary_in_context(self):
+        outcomes = {"reviewer": {"summary": "Minor issues only"}}
+        context = build_stage_context_from_outcomes("review", outcomes)
+        assert "Minor issues only" in context
+
+    def test_stage_name_in_context(self):
+        context = build_stage_context_from_outcomes("stage-one", {"agent": {"verdict": "pass"}})
+        assert "stage-one" in context
+
+    def test_empty_outcome_shows_completed_message(self):
+        outcomes = {"reviewer": {}}
+        context = build_stage_context_from_outcomes("review", outcomes)
+        assert "completed (no structured outcome)" in context
+
+    def test_header_present(self):
+        context = build_stage_context_from_outcomes("s", {"a": {"x": "y"}})
+        assert "## Previous Stage Outcomes" in context
+
+
+class TestMergeStageOutcomes:
+    def test_verdicts_aggregated_pass(self):
+        outcomes = {
+            "reviewer": {"verdict": "pass"},
+            "auditor": {"verdict": "pass"},
+        }
+        merged = merge_stage_outcomes(outcomes)
+        assert merged["verdict"] == "pass"
+
+    def test_any_fail_gives_fail_merge(self):
+        outcomes = {
+            "reviewer": {"verdict": "pass"},
+            "auditor": {"verdict": "fail"},
+        }
+        merged = merge_stage_outcomes(outcomes)
+        assert merged["verdict"] == "fail"
+
+    def test_summaries_concatenated_with_participant_prefix(self):
+        outcomes = {
+            "reviewer": {"summary": "Minor issues"},
+            "auditor": {"summary": "No security issues"},
+        }
+        merged = merge_stage_outcomes(outcomes)
+        assert "reviewer: Minor issues" in merged["summary"]
+        assert "auditor: No security issues" in merged["summary"]
+
+    def test_summary_joined_by_pipe(self):
+        outcomes = {
+            "a": {"summary": "first"},
+            "b": {"summary": "second"},
+        }
+        merged = merge_stage_outcomes(outcomes)
+        assert " | " in merged["summary"]
+
+    def test_numeric_fields_summed(self):
+        outcomes = {
+            "reviewer": {"findings_count": 3},
+            "auditor": {"findings_count": 2},
+        }
+        merged = merge_stage_outcomes(outcomes)
+        assert merged["findings_count"] == 5
+
+    def test_non_numeric_fields_last_writer_wins(self):
+        outcomes = {
+            "a": {"tag": "alpha"},
+            "b": {"tag": "beta"},
+        }
+        merged = merge_stage_outcomes(outcomes)
+        assert merged["tag"] == "beta"
+
+    def test_all_must_pass_fan_in_one_fail(self):
+        outcomes = {
+            "a": {"verdict": "pass"},
+            "b": {"verdict": "fail"},
+        }
+        merged = merge_stage_outcomes(outcomes, fan_in="all_must_pass")
+        assert merged["verdict"] == "fail"
+
+    def test_all_must_pass_fan_in_all_pass(self):
+        outcomes = {
+            "a": {"verdict": "pass"},
+            "b": {"verdict": "pass"},
+        }
+        merged = merge_stage_outcomes(outcomes, fan_in="all_must_pass")
+        assert merged["verdict"] == "pass"
+
+    def test_any_pass_fan_in_one_pass(self):
+        outcomes = {
+            "a": {"verdict": "fail"},
+            "b": {"verdict": "pass"},
+        }
+        merged = merge_stage_outcomes(outcomes, fan_in="any_pass")
+        assert merged["verdict"] == "pass"
+
+    def test_any_pass_fan_in_all_fail(self):
+        outcomes = {
+            "a": {"verdict": "fail"},
+            "b": {"verdict": "fail"},
+        }
+        merged = merge_stage_outcomes(outcomes, fan_in="any_pass")
+        assert merged["verdict"] == "fail"
+
+    def test_majority_fan_in_majority_pass(self):
+        outcomes = {
+            "a": {"verdict": "pass"},
+            "b": {"verdict": "pass"},
+            "c": {"verdict": "fail"},
+        }
+        merged = merge_stage_outcomes(outcomes, fan_in="majority")
+        assert merged["verdict"] == "pass"
+
+    def test_majority_fan_in_exactly_half(self):
+        outcomes = {
+            "a": {"verdict": "pass"},
+            "b": {"verdict": "fail"},
+        }
+        merged = merge_stage_outcomes(outcomes, fan_in="majority")
+        assert merged["verdict"] == "fail"
+
+    def test_empty_outcomes_returns_empty_dict(self):
+        assert merge_stage_outcomes({}) == {}
+
+    def test_internal_accumulators_not_in_result(self):
+        outcomes = {
+            "a": {"verdict": "pass", "summary": "ok"},
+            "b": {"verdict": "pass", "summary": "fine"},
+        }
+        merged = merge_stage_outcomes(outcomes)
+        assert "verdicts" not in merged
+        assert "summaries" not in merged
+
+    def test_float_numeric_fields_summed(self):
+        outcomes = {
+            "a": {"score": 1.5},
+            "b": {"score": 2.5},
+        }
+        merged = merge_stage_outcomes(outcomes)
+        assert merged["score"] == pytest.approx(4.0)
+
+
+class TestInterpolateStageRefs:
+    def test_basic_interpolation(self):
+        prompt = "Result: {stages.review.verdict}"
+        resolved = interpolate_stage_refs(prompt, {"review": {"verdict": "pass"}})
+        assert resolved == "Result: pass"
+
+    def test_missing_field_becomes_empty_string(self):
+        prompt = "Result: {stages.review.missing_field}"
+        resolved = interpolate_stage_refs(prompt, {"review": {"verdict": "pass"}})
+        assert resolved == "Result: "
+
+    def test_missing_stage_becomes_empty_string(self):
+        prompt = "Result: {stages.nonexistent.verdict}"
+        resolved = interpolate_stage_refs(prompt, {})
+        assert resolved == "Result: "
+
+    def test_multiple_refs_resolved(self):
+        prompt = "{stages.review.verdict} - {stages.review.summary}"
+        resolved = interpolate_stage_refs(
+            prompt, {"review": {"verdict": "pass", "summary": "All good"}}
+        )
+        assert "pass" in resolved
+        assert "All good" in resolved
+
+    def test_no_refs_unchanged(self):
+        prompt = "No stage refs here."
+        resolved = interpolate_stage_refs(prompt, {"review": {"verdict": "pass"}})
+        assert resolved == "No stage refs here."
+
+    def test_numeric_value_converted_to_string(self):
+        prompt = "Count: {stages.review.findings_count}"
+        resolved = interpolate_stage_refs(prompt, {"review": {"findings_count": 5}})
+        assert resolved == "Count: 5"
+
+
+class TestContextInjectionE2E:
+    @pytest.mark.asyncio
+    async def test_stage2_receives_stage1_outcomes_in_prompt(self):
+        """Stage 2 persona gets stage 1 outcomes injected into its initial_prompt."""
+        volundr = StubVolundrPort()
+        executor, repo, _ = _make_executor(volundr=volundr)
+        saga = await executor.create_from_yaml(_PARALLEL_PIPELINE, auto_start=True)
+
+        phases = await repo.get_phases_by_saga(saga.id)
+        phase1 = phases[0]
+        raids = await repo.get_raids_by_phase(phase1.id)
+
+        # Complete both stage 1 raids
+        await executor.receive_outcome(
+            raid_id=raids[0].id,
+            outcome={"verdict": "pass", "summary": "Minor issues only"},
+        )
+        await executor.receive_outcome(
+            raid_id=raids[1].id,
+            outcome={"verdict": "pass", "critical_findings": 0},
+        )
+
+        # Phase 1 spawned 2 raids, phase 2 spawns 1 raid → 3 total
+        assert len(volundr.spawned) == 3
+        stage2_prompt = volundr.spawned[2].initial_prompt
+        assert "## Previous Stage Outcomes" in stage2_prompt
+        assert "review" in stage2_prompt
+
+    @pytest.mark.asyncio
+    async def test_stage2_context_includes_stage1_verdicts(self):
+        """The context block contains participant verdicts from stage 1."""
+        volundr = StubVolundrPort()
+        executor, repo, _ = _make_executor(volundr=volundr)
+        saga = await executor.create_from_yaml(_PARALLEL_PIPELINE, auto_start=True)
+
+        phases = await repo.get_phases_by_saga(saga.id)
+        raids = await repo.get_raids_by_phase(phases[0].id)
+
+        await executor.receive_outcome(
+            raid_id=raids[0].id, outcome={"verdict": "pass", "summary": "looks good"}
+        )
+        await executor.receive_outcome(
+            raid_id=raids[1].id, outcome={"verdict": "pass", "critical_findings": 0}
+        )
+
+        stage2_prompt = volundr.spawned[2].initial_prompt
+        assert "verdict: pass" in stage2_prompt
+
+    @pytest.mark.asyncio
+    async def test_stage_ref_interpolation_in_template_prompt(self):
+        """Template {stages.review.verdict} is resolved to the actual verdict value."""
+        volundr = StubVolundrPort()
+        executor, repo, _ = _make_executor(volundr=volundr)
+        saga = await executor.create_from_yaml(_STAGE_REF_PIPELINE, auto_start=True)
+
+        phases = await repo.get_phases_by_saga(saga.id)
+        raids = await repo.get_raids_by_phase(phases[0].id)
+
+        await executor.receive_outcome(raid_id=raids[0].id, outcome={"verdict": "pass"})
+
+        # Stage 2 dispatched — prompt should have {stages.review.verdict} resolved
+        assert len(volundr.spawned) == 2
+        stage2_prompt = volundr.spawned[1].initial_prompt
+        assert "pass" in stage2_prompt
+        assert "{stages.review.verdict}" not in stage2_prompt
+
+    @pytest.mark.asyncio
+    async def test_no_context_injected_for_first_phase(self):
+        """First phase dispatched without any context block."""
+        volundr = StubVolundrPort()
+        executor, repo, _ = _make_executor(volundr=volundr)
+        await executor.create_from_yaml(_SINGLE_STAGE_PIPELINE, auto_start=True)
+
+        assert len(volundr.spawned) == 1
+        # First phase has no prior stages → no context block
+        assert "## Previous Stage Outcomes" not in volundr.spawned[0].initial_prompt
+
+    @pytest.mark.asyncio
+    async def test_context_injection_e2e(self):
+        """E2E: Stage 2 persona gets stage 1 outcomes injected (spec test case)."""
+        stage1_outcomes = {
+            "reviewer": {"verdict": "pass", "findings_count": 3, "summary": "Minor issues only"},
+            "security-auditor": {
+                "verdict": "pass",
+                "critical_findings": 0,
+                "summary": "No security issues",
+            },
+        }
+
+        context = build_stage_context_from_outcomes("review", stage1_outcomes)
+        assert "reviewer" in context
+        assert "verdict: pass" in context
+        assert "Minor issues only" in context
+        assert "security-auditor" in context
+
+        prompt = "Run tests. Review result: {stages.review.verdict}. {stages.review.summary}"
+        resolved = interpolate_stage_refs(prompt, {"review": merge_stage_outcomes(stage1_outcomes)})
+        assert "pass" in resolved
+        assert "Minor issues only" in resolved

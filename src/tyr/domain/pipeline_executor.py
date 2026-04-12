@@ -31,6 +31,7 @@ Usage::
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -118,6 +119,120 @@ def merge_outcomes(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
             break
 
     return merged
+
+
+# ---------------------------------------------------------------------------
+# Stage context injection (NIU-597)
+# ---------------------------------------------------------------------------
+
+_STAGE_REF_RE = re.compile(r"\{stages\.[^}]+\}")
+
+
+def _evaluate_verdict(verdicts: list[str], fan_in: str) -> str:
+    """Compute aggregate verdict from multiple participants based on fan-in strategy."""
+    if not verdicts:
+        return "pass"
+    if fan_in == "all_must_pass":
+        return "fail" if any(v == "fail" for v in verdicts) else "pass"
+    if fan_in == "any_pass":
+        return "pass" if any(v == "pass" for v in verdicts) else "fail"
+    if fan_in == "majority":
+        passing = sum(1 for v in verdicts if v == "pass")
+        return "pass" if passing > len(verdicts) / 2 else "fail"
+    # "merge" default: fail if any fail
+    return "fail" if any(v == "fail" for v in verdicts) else "pass"
+
+
+def build_stage_context_from_outcomes(
+    stage_name: str,
+    outcomes: dict[str, dict[str, Any]],
+) -> str:
+    """Build a context block summarising one completed stage.
+
+    :param stage_name: Human-readable stage name (e.g. ``"review"``).
+    :param outcomes: Mapping of participant name → structured outcome dict.
+    :returns: Markdown-formatted context block.
+    """
+    return _build_full_stage_context([(stage_name, outcomes)])
+
+
+def merge_stage_outcomes(
+    outcomes: dict[str, dict[str, Any]],
+    fan_in: str = "merge",
+) -> dict[str, Any]:
+    """Merge parallel participant outcomes into a single stage outcome dict.
+
+    Handles:
+
+    - ``verdict``: aggregated across participants using *fan_in* strategy
+    - ``summary``: concatenated as ``"participant: summary"`` joined by `` | ``
+    - Numeric fields: summed across participants
+    - Other string/misc fields: last-writer wins
+
+    :param outcomes: Mapping of participant name → structured outcome dict.
+    :param fan_in: Aggregation strategy for verdict (``merge``, ``all_must_pass``,
+        ``any_pass``, ``majority``).
+    :returns: Merged outcome dict suitable for ``{stages.name.field}`` interpolation.
+    """
+    merged: dict[str, Any] = {}
+    for participant, outcome in outcomes.items():
+        for k, v in outcome.items():
+            if k == "verdict":
+                merged.setdefault("verdicts", []).append(v)
+                merged["verdict"] = _evaluate_verdict(merged["verdicts"], fan_in)
+            elif k == "summary":
+                merged.setdefault("summaries", []).append(f"{participant}: {v}")
+                merged["summary"] = " | ".join(merged["summaries"])
+            elif isinstance(v, (int, float)):
+                merged[k] = merged.get(k, 0) + v
+            else:
+                merged[k] = v
+    merged.pop("verdicts", None)
+    merged.pop("summaries", None)
+    return merged
+
+
+def interpolate_stage_refs(
+    prompt: str,
+    stage_outcomes: dict[str, dict[str, Any]],
+) -> str:
+    """Replace ``{stages.<name>.<field>}`` placeholders with actual outcome values.
+
+    Unknown ``{stages.*}`` references are replaced with an empty string so
+    downstream text is always clean.
+
+    :param prompt: Prompt template that may contain ``{stages.*}`` refs.
+    :param stage_outcomes: Mapping of stage name → merged outcome dict.
+    :returns: Interpolated prompt with all ``{stages.*}`` refs resolved.
+    """
+    for stage_name, outcome in stage_outcomes.items():
+        for field_name, value in outcome.items():
+            prompt = prompt.replace(f"{{stages.{stage_name}.{field_name}}}", str(value))
+    return _STAGE_REF_RE.sub("", prompt)
+
+
+def _build_full_stage_context(
+    stage_data: list[tuple[str, dict[str, dict[str, Any]]]],
+) -> str:
+    """Build a combined context block from multiple completed stages.
+
+    :param stage_data: Ordered list of ``(stage_name, {participant: outcome})`` pairs.
+    :returns: Combined markdown context block, or empty string when *stage_data* is empty.
+    """
+    if not stage_data:
+        return ""
+    lines: list[str] = ["## Previous Stage Outcomes\n"]
+    for stage_name, outcomes in stage_data:
+        lines.append(f"### {stage_name}")
+        for participant, outcome in outcomes.items():
+            if outcome:
+                lines.append(f"**{participant}**:")
+                for k, v in outcome.items():
+                    lines.append(f"  - {k}: {v}")
+            else:
+                lines.append(f"**{participant}**: completed (no structured outcome)")
+        lines.append("")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -789,7 +904,7 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
         await self._advance_phase(saga, next_phase=next_phase)
 
     async def _advance_phase(self, saga: Saga, *, next_phase: Phase) -> None:
-        """Template-aware advance: uses stored template prompt and persona."""
+        """Template-aware advance: injects prior stage context and uses stored template."""
         active = Phase(
             id=next_phase.id,
             saga_id=next_phase.saga_id,
@@ -816,12 +931,37 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
             None,
         )
 
+        # Build stage context from all completed phases for injection into prompts.
+        all_phases = await self._saga_repo.get_phases_by_saga(saga.id)
+        completed_phases = [p for p in all_phases if p.status == PhaseStatus.COMPLETE]
+
+        stage_data: list[tuple[str, dict[str, dict[str, Any]]]] = []
+        stage_outcomes_for_interp: dict[str, dict[str, Any]] = {}
+
+        for phase in completed_phases:
+            phase_raids = await self._saga_repo.get_raids_by_phase(phase.id)
+            raid_outcomes: dict[str, dict[str, Any]] = {
+                r.name: (r.structured_outcome or {}) for r in phase_raids
+            }
+            tpl_for_phase = next(
+                (tpl for ph, tpl in template_pairs if ph.id == phase.id),
+                None,
+            )
+            fan_in = tpl_for_phase.fan_in if tpl_for_phase else "merge"
+            stage_data.append((phase.name, raid_outcomes))
+            stage_outcomes_for_interp[phase.name] = merge_stage_outcomes(raid_outcomes, fan_in)
+
+        context_block = _build_full_stage_context(stage_data)
+
         raids = await self._saga_repo.get_raids_by_phase(next_phase.id)
         repo = saga.repos[0] if saga.repos else ""
         for i, raid in enumerate(raids):
             tpl_raid = tpl_phase.raids[i] if tpl_phase and i < len(tpl_phase.raids) else None
             session_name = _session_name(raid.name)
-            initial_prompt = tpl_raid.prompt if tpl_raid else raid.description
+            base_prompt = tpl_raid.prompt if tpl_raid else raid.description
+            prompt = interpolate_stage_refs(base_prompt, stage_outcomes_for_interp)
+            if context_block:
+                prompt = f"{context_block}\n\n{prompt}"
             persona = tpl_raid.persona or None if tpl_raid else None
             try:
                 session = await volundr.spawn_session(
@@ -834,7 +974,7 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
                         tracker_issue_id=raid.tracker_id,
                         tracker_issue_url="",
                         system_prompt="",
-                        initial_prompt=initial_prompt,
+                        initial_prompt=prompt,
                         profile=persona,
                         integration_ids=[],
                     ),
