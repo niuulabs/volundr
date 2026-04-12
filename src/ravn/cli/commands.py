@@ -16,7 +16,6 @@ import typer
 from ravn.agent import PostToolHook, PreToolHook, RavnAgent
 from ravn.config import (
     InitiativeConfig,
-    OutcomeConfig,
     ProjectConfig,
     Settings,
     ToolGroupConfig,
@@ -203,7 +202,7 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
             )
             return None
         bc = settings.buri
-        reflection_model = settings.agent.outcome.reflection_model
+        reflection_model = settings.memory.reflection_model
         return BuriMemoryAdapter(
             dsn=dsn,
             prefetch_budget=settings.memory.prefetch_budget,
@@ -227,26 +226,6 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
     except Exception as exc:
         logger.warning("Failed to load custom memory backend %r: %s", backend, exc)
         return None
-
-
-# ---------------------------------------------------------------------------
-# Builder: Outcome
-# ---------------------------------------------------------------------------
-
-
-def _build_outcome(settings: Settings) -> tuple[Any, OutcomeConfig | None]:
-    """Build the outcome adapter, or (None, None) if disabled."""
-    oc = settings.agent.outcome
-    if not oc.enabled:
-        return None, None
-
-    from ravn.adapters.memory.outcome import SQLiteOutcomeAdapter
-
-    adapter = SQLiteOutcomeAdapter(
-        path=oc.path,
-        lessons_token_budget=oc.lessons_token_budget,
-    )
-    return adapter, oc
 
 
 # ---------------------------------------------------------------------------
@@ -942,7 +921,6 @@ def _build_agent(
     )
     memory = _build_memory(settings, llm=llm)
     mimir = _build_mimir(settings)
-    outcome_port, outcome_config = _build_outcome(settings)
     iteration_budget = IterationBudget(
         total=settings.iteration_budget.total,
         near_limit_threshold=settings.iteration_budget.near_limit_threshold,
@@ -987,8 +965,11 @@ def _build_agent(
         iteration_budget=iteration_budget,
         compressor=compressor,
         prompt_builder=prompt_builder,
-        outcome_port=outcome_port,
-        outcome_config=outcome_config,
+        reflection_model=settings.memory.reflection_model,
+        reflection_max_tokens=settings.memory.reflection_max_tokens,
+        task_summary_max_chars=settings.memory.task_summary_max_chars,
+        input_token_cost_per_million=settings.memory.input_token_cost_per_million,
+        output_token_cost_per_million=settings.memory.output_token_cost_per_million,
         extended_thinking=extended_thinking,
         checkpoint_port=checkpoint_port if cp_cfg.enabled else None,
         task_id=task_id,
@@ -1395,33 +1376,26 @@ async def _run_evolve(settings: Settings) -> None:
         typer.echo("Memory backend not available — evolution requires memory.", err=True)
         raise typer.Exit(1)
 
-    outcome_port, _ = _build_outcome(settings)
-    if outcome_port is None:
-        typer.echo("Outcome recording not enabled — evolution requires outcomes.", err=True)
-        raise typer.Exit(1)
-
     evo = settings.evolution
     state_path = Path(evo.state_path).expanduser()
     state = load_state(state_path)
-    current_count = await outcome_port.count_all_outcomes()
+    current_count = await memory.count_episodes()
 
     if not should_run(state, current_count, min_new=evo.min_new_outcomes):
         typer.echo(
-            f"Not enough new outcomes ({current_count - state.outcome_count_at_last_run} "
+            f"Not enough new episodes ({current_count - state.outcome_count_at_last_run} "
             f"since last run, need {evo.min_new_outcomes})."
         )
         return
 
     typer.echo(
-        f"Analysing {current_count} outcomes "
+        f"Analysing {current_count} episodes "
         f"({current_count - state.outcome_count_at_last_run} new)..."
     )
 
     extractor = PatternExtractor(
         memory,
-        outcome_port,
         max_episodes_to_analyze=evo.max_episodes_to_analyze,
-        max_outcomes_to_analyze=evo.max_outcomes_to_analyze,
         skill_suggestion_min_occurrences=evo.skill_suggestion_min_occurrences,
         error_warning_min_occurrences=evo.error_warning_min_occurrences,
         strategy_min_occurrences=evo.strategy_min_occurrences,
@@ -1588,7 +1562,6 @@ async def _run_gateway(
     workspace = _resolve_workspace(settings)
     llm = _build_llm(settings)
     memory = _build_memory(settings, llm=llm)
-    outcome_port, outcome_config = _build_outcome(settings)
     compressor = _build_compressor(settings, llm)
     prompt_builder = _build_prompt_builder(settings)
     pre_hooks, post_hooks = _build_hooks(settings)
@@ -1657,8 +1630,11 @@ async def _run_gateway(
             iteration_budget=budget,
             compressor=compressor,
             prompt_builder=prompt_builder,
-            outcome_port=outcome_port,
-            outcome_config=outcome_config,
+            reflection_model=settings.memory.reflection_model,
+            reflection_max_tokens=settings.memory.reflection_max_tokens,
+            task_summary_max_chars=settings.memory.task_summary_max_chars,
+            input_token_cost_per_million=settings.memory.input_token_cost_per_million,
+            output_token_cost_per_million=settings.memory.output_token_cost_per_million,
             extended_thinking=extended_thinking,
         )
 
@@ -1807,7 +1783,6 @@ async def _run_daemon(
     workspace = _resolve_workspace(settings)
     llm = _build_llm(settings)
     memory = _build_memory(settings)
-    outcome_port, outcome_config = _build_outcome(settings)
     compressor = _build_compressor(settings, llm)
     prompt_builder = _build_prompt_builder(settings)
     pre_hooks, post_hooks = _build_hooks(settings)
@@ -1913,8 +1888,11 @@ async def _run_daemon(
             iteration_budget=budget,
             compressor=compressor,
             prompt_builder=prompt_builder,
-            outcome_port=outcome_port,
-            outcome_config=outcome_config,
+            reflection_model=settings.memory.reflection_model,
+            reflection_max_tokens=settings.memory.reflection_max_tokens,
+            task_summary_max_chars=settings.memory.task_summary_max_chars,
+            input_token_cost_per_million=settings.memory.input_token_cost_per_million,
+            output_token_cost_per_million=settings.memory.output_token_cost_per_million,
             extended_thinking=extended_thinking,
         )
 

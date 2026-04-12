@@ -58,7 +58,11 @@ CREATE TABLE IF NOT EXISTS episodes (
     tools_used      TEXT NOT NULL,
     outcome         TEXT NOT NULL,
     tags            TEXT NOT NULL,
-    embedding       TEXT
+    embedding       TEXT,
+    reflection      TEXT,
+    errors          TEXT,
+    cost_usd        REAL,
+    duration_seconds REAL
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS episodes_fts USING fts5(
@@ -89,6 +93,14 @@ AFTER UPDATE ON episodes BEGIN
     VALUES (new.rowid, new.summary, new.task_description, new.tags);
 END;
 """
+
+# ALTER TABLE statements applied once to existing databases.
+_MIGRATIONS = [
+    "ALTER TABLE episodes ADD COLUMN reflection TEXT",
+    "ALTER TABLE episodes ADD COLUMN errors TEXT",
+    "ALTER TABLE episodes ADD COLUMN cost_usd REAL",
+    "ALTER TABLE episodes ADD COLUMN duration_seconds REAL",
+]
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -127,6 +139,9 @@ def _row_to_episode(row: sqlite3.Row) -> Episode:
     emb_raw = row["embedding"]
     embedding: list[float] | None = json.loads(emb_raw) if emb_raw else None
 
+    errors_raw = row["errors"] if "errors" in row.keys() else None
+    errors: list[str] = json.loads(errors_raw) if errors_raw else []
+
     return Episode(
         episode_id=row["episode_id"],
         session_id=row["session_id"],
@@ -137,6 +152,10 @@ def _row_to_episode(row: sqlite3.Row) -> Episode:
         outcome=Outcome(row["outcome"]),
         tags=tags,
         embedding=embedding,
+        reflection=row["reflection"] if "reflection" in row.keys() else None,
+        errors=errors,
+        cost_usd=row["cost_usd"] if "cost_usd" in row.keys() else None,
+        duration_seconds=row["duration_seconds"] if "duration_seconds" in row.keys() else None,
     )
 
 
@@ -234,6 +253,10 @@ class SqliteMemoryAdapter(MemoryPort):
         budget_chars = self._prefetch_budget * _CHARS_PER_TOKEN
         return build_prefetch_context(matches, budget_chars)
 
+    async def count_episodes(self) -> int:
+        """Return the total number of stored episodes."""
+        return await asyncio.to_thread(self._count_episodes_sync)
+
     async def search_sessions(
         self,
         query: str,
@@ -265,6 +288,13 @@ class SqliteMemoryAdapter(MemoryPort):
         try:
             conn.executescript(_SCHEMA)
             conn.commit()
+            # Apply migrations for existing databases (idempotent — ignore if column exists).
+            for stmt in _MIGRATIONS:
+                try:
+                    conn.execute(stmt)
+                    conn.commit()
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
         finally:
             conn.close()
 
@@ -291,8 +321,9 @@ class SqliteMemoryAdapter(MemoryPort):
                     """
                     INSERT OR REPLACE INTO episodes
                         (episode_id, session_id, timestamp, summary,
-                         task_description, tools_used, outcome, tags, embedding)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         task_description, tools_used, outcome, tags, embedding,
+                         reflection, errors, cost_usd, duration_seconds)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         episode.episode_id,
@@ -304,6 +335,10 @@ class SqliteMemoryAdapter(MemoryPort):
                         episode.outcome.value,
                         json.dumps(episode.tags),
                         json.dumps(episode.embedding) if episode.embedding else None,
+                        episode.reflection,
+                        json.dumps(episode.errors) if episode.errors else None,
+                        episode.cost_usd,
+                        episode.duration_seconds,
                     ),
                 )
                 conn.commit()
@@ -477,6 +512,19 @@ class SqliteMemoryAdapter(MemoryPort):
 
         matches.sort(key=lambda m: m.relevance, reverse=True)
         return matches[:limit]
+
+    def _count_episodes_sync(self) -> int:
+        def _do_count() -> int:
+            conn = self._connect()
+            try:
+                row = conn.execute("SELECT COUNT(*) FROM episodes").fetchone()
+                return int(row[0]) if row else 0
+            except sqlite3.OperationalError:
+                return 0
+            finally:
+                conn.close()
+
+        return self._with_retry(_do_count)
 
     def _search_sessions_sync(self, query: str, limit: int) -> list[SessionSummary]:
         safe_query = _sanitize_fts_query(query)
