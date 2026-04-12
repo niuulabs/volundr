@@ -1281,6 +1281,14 @@ class MimirSearchConfig(BaseModel):
         default="fts",
         description="Search backend: 'fts' (full-text search) or 'vector' (embedding-based).",
     )
+    embedding_model: str | None = Field(
+        default=None,
+        description=(
+            "sentence-transformers model name for semantic search "
+            "(e.g. 'all-MiniLM-L6-v2'). "
+            "Set to null for FTS-only mode (no sentence-transformers required)."
+        ),
+    )
 
 
 class MimirAuthConfig(BaseModel):

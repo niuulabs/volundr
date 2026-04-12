@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -28,6 +29,39 @@ from mimir.config import MimirServiceConfig
 from mimir.router import MimirRouter
 
 logger = logging.getLogger(__name__)
+
+
+def _build_embed_fn(model_name: str):  # type: ignore[return]
+    """Return an async embed function backed by sentence-transformers.
+
+    The model is loaded lazily on the first call and cached.  If
+    sentence-transformers is not installed the function returns ``None`` and
+    the adapter falls back to FTS-only search.
+    """
+    try:
+        from sentence_transformers import SentenceTransformer  # type: ignore[import]
+    except ImportError:
+        logger.warning(
+            "mimir: sentence-transformers not installed — "
+            "falling back to FTS-only search (embedding_model=%r ignored)",
+            model_name,
+        )
+        return None
+
+    _model: SentenceTransformer | None = None
+
+    async def _embed(text: str) -> list[float]:
+        nonlocal _model
+        if _model is None:
+            import asyncio
+
+            _model = await asyncio.to_thread(SentenceTransformer, model_name)
+        import asyncio
+
+        vector = await asyncio.to_thread(_model.encode, text, normalize_embeddings=True)
+        return vector.tolist()
+
+    return _embed
 
 
 def create_app(config: MimirServiceConfig) -> FastAPI:
@@ -40,11 +74,24 @@ def create_app(config: MimirServiceConfig) -> FastAPI:
         A configured FastAPI application with the Mímir router mounted at
         ``/mimir``.
     """
-    adapter = MarkdownMimirAdapter(root=config.path)
+    from niuu.adapters.search.sqlite import SqliteSearchAdapter
+
+    search_db = config.search_db or str(Path(config.path).expanduser() / "search.db")
+    embed_fn = _build_embed_fn(config.embedding_model) if config.embedding_model else None
+    search_port = SqliteSearchAdapter(path=search_db, embed_fn=embed_fn)
+
+    adapter = MarkdownMimirAdapter(root=config.path, search_port=search_port)
     mimir_router = MimirRouter(adapter=adapter, name=config.name, role=config.role)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # Rebuild the search index from the filesystem on startup.
+        try:
+            n = await adapter.rebuild_search_index()
+            logger.info("mimir[%s]: search index ready (%d pages)", config.name, n)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("mimir[%s]: search index rebuild failed: %s", config.name, exc)
+
         if config.announce_url:
             logger.info(
                 "mimir[%s]: announcing at %s (role=%s)",
