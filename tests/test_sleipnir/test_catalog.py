@@ -14,6 +14,10 @@ from sleipnir.adapters.in_process import InProcessBus
 from sleipnir.domain import registry
 from sleipnir.domain.catalog import (
     bifrost_budget_degraded,
+    github_issue_opened,
+    github_pr_merged,
+    github_pr_opened,
+    github_push_main,
     mimir_dream_completed,
     mimir_page_written,
     ravn_session_ended,
@@ -349,3 +353,159 @@ async def test_integration_all_catalog_events_subscribed_via_wildcard():
         registry.MIMIR_DREAM_COMPLETED,
     }
     assert set(received_types) == expected_types
+
+
+# ---------------------------------------------------------------------------
+# github.pr.opened
+# ---------------------------------------------------------------------------
+
+
+def test_github_pr_opened_fields():
+    evt = github_pr_opened(
+        repo="org/repo",
+        branch="feature/foo",
+        author="alice",
+        pr_url="https://github.com/org/repo/pull/1",
+        title="Add feature foo",
+        source="volundr:github-webhook",
+    )
+    assert evt.event_type == registry.GITHUB_PR_OPENED
+    assert evt.payload["repo"] == "org/repo"
+    assert evt.payload["branch"] == "feature/foo"
+    assert evt.payload["author"] == "alice"
+    assert evt.payload["pr_url"] == "https://github.com/org/repo/pull/1"
+    assert evt.payload["title"] == "Add feature foo"
+    assert evt.domain == "code"
+    assert evt.urgency == pytest.approx(0.4)
+    assert "alice" in evt.summary
+    assert "org/repo" in evt.summary
+
+
+def test_github_pr_opened_correlation_id_explicit():
+    evt = github_pr_opened(
+        repo="org/repo",
+        branch="main",
+        author="bob",
+        pr_url="...",
+        title="T",
+        source="s",
+        correlation_id="delivery-abc",
+    )
+    assert evt.correlation_id == "delivery-abc"
+
+
+# ---------------------------------------------------------------------------
+# github.pr.merged
+# ---------------------------------------------------------------------------
+
+
+def test_github_pr_merged_fields():
+    evt = github_pr_merged(
+        repo="org/repo",
+        branch="main",
+        merge_sha="abc1234567890",
+        source="volundr:github-webhook",
+        correlation_id="delivery-xyz",
+    )
+    assert evt.event_type == registry.GITHUB_PR_MERGED
+    assert evt.payload["repo"] == "org/repo"
+    assert evt.payload["branch"] == "main"
+    assert evt.payload["merge_sha"] == "abc1234567890"
+    assert evt.domain == "code"
+    assert evt.urgency == pytest.approx(0.5)
+    assert "abc1234" in evt.summary
+    assert evt.correlation_id == "delivery-xyz"
+
+
+# ---------------------------------------------------------------------------
+# github.push.main
+# ---------------------------------------------------------------------------
+
+
+def test_github_push_main_fields():
+    commits = [{"id": "abc", "message": "fix something"}]
+    evt = github_push_main(
+        repo="org/repo",
+        commits=commits,
+        pusher="carol",
+        source="volundr:github-webhook",
+    )
+    assert evt.event_type == registry.GITHUB_PUSH_MAIN
+    assert evt.payload["repo"] == "org/repo"
+    assert evt.payload["pusher"] == "carol"
+    assert evt.payload["commits"] == commits
+    assert evt.domain == "code"
+    assert evt.urgency == pytest.approx(0.5)
+    assert "carol" in evt.summary
+    assert "1 commit" in evt.summary
+
+
+# ---------------------------------------------------------------------------
+# github.issue.opened
+# ---------------------------------------------------------------------------
+
+
+def test_github_issue_opened_fields():
+    evt = github_issue_opened(
+        repo="org/repo",
+        title="Something broke",
+        body="It broke like this...",
+        labels=["bug", "help wanted"],
+        author="dave",
+        source="volundr:github-webhook",
+    )
+    assert evt.event_type == registry.GITHUB_ISSUE_OPENED
+    assert evt.payload["repo"] == "org/repo"
+    assert evt.payload["title"] == "Something broke"
+    assert evt.payload["body"] == "It broke like this..."
+    assert evt.payload["labels"] == ["bug", "help wanted"]
+    assert evt.payload["author"] == "dave"
+    assert evt.domain == "code"
+    assert evt.urgency == pytest.approx(0.3)
+    assert "dave" in evt.summary
+
+
+def test_github_issue_opened_empty_body():
+    evt = github_issue_opened(
+        repo="org/repo",
+        title="No body",
+        body="",
+        labels=[],
+        author="eve",
+        source="s",
+    )
+    assert evt.payload["body"] == ""
+    assert evt.payload["labels"] == []
+
+
+# ---------------------------------------------------------------------------
+# Integration: GitHub events via InProcessBus
+# ---------------------------------------------------------------------------
+
+
+async def test_integration_github_pr_opened_via_bus():
+    """Emit github.pr.opened via InProcessBus and verify subscriber receives it."""
+    bus = InProcessBus()
+    received: list[SleipnirEvent] = []
+
+    async def handler(evt: SleipnirEvent) -> None:
+        received.append(evt)
+
+    await bus.subscribe(["github.*"], handler)
+
+    event = github_pr_opened(
+        repo="org/repo",
+        branch="feature/x",
+        author="frank",
+        pr_url="https://github.com/org/repo/pull/5",
+        title="New feature",
+        source="volundr:github-webhook",
+        correlation_id="delivery-001",
+    )
+    await bus.publish(event)
+    await bus.flush()
+
+    assert len(received) == 1
+    assert received[0].event_type == registry.GITHUB_PR_OPENED
+    assert received[0].payload["author"] == "frank"
+    assert received[0].correlation_id == "delivery-001"
