@@ -44,6 +44,14 @@ from ravn.ports.permission import PermissionPort
 from ravn.ports.tool import ToolPort
 from ravn.prompt_builder import PromptBuilder
 
+try:
+    from sleipnir.domain.catalog import ravn_session_ended, ravn_session_started
+    from sleipnir.ports.events import SleipnirPublisher as _SleipnirPublisher
+except ImportError:  # sleipnir not available in all environments
+    _SleipnirPublisher = None  # type: ignore[assignment,misc]
+    ravn_session_started = None  # type: ignore[assignment]
+    ravn_session_ended = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 # Hook type: async callable receiving the tool call and (for post) the result.
@@ -102,6 +110,10 @@ class RavnAgent:
         checkpoint_every_n_tools: int = 0,
         auto_checkpoint_before_destructive: bool = False,
         budget_milestone_fractions: list[float] | None = None,
+        # NIU-582: Sleipnir lifecycle events
+        sleipnir_publisher: object | None = None,
+        persona: str = "",
+        repo_slug: str = "",
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -141,6 +153,12 @@ class RavnAgent:
         self._budget_milestones: list[float] = budget_milestone_fractions or []
         self._tool_call_count: int = 0
         self._fired_milestones: set[float] = set()
+        # NIU-582: Sleipnir lifecycle event support
+        self._sleipnir_publisher = sleipnir_publisher
+        self._persona = persona
+        self._repo_slug = repo_slug
+        self._turn_count: int = 0
+        self._session_wall_start: float = time.monotonic()
 
     @property
     def session(self) -> Session:
@@ -197,6 +215,48 @@ class RavnAgent:
         """Convert session messages to the API format."""
         return [{"role": m.role, "content": m.content} for m in self._session.messages]
 
+    async def _emit_session_started(self) -> None:
+        """Publish ravn.session.started to Sleipnir (no-op when publisher absent)."""
+        if self._sleipnir_publisher is None or ravn_session_started is None:
+            return
+        try:
+            event = ravn_session_started(
+                session_id=str(self._session.id),
+                persona=self._persona,
+                repo_slug=self._repo_slug,
+                source=self._source_id,
+                correlation_id=self._task_id,
+            )
+            await self._sleipnir_publisher.publish(event)
+        except Exception:
+            logger.warning("Failed to emit ravn.session.started; continuing.", exc_info=True)
+
+    async def emit_session_ended(self, outcome: str) -> None:
+        """Publish ravn.session.ended to Sleipnir.
+
+        Call this once the entire session is complete (all turns done, normal
+        exit, interrupt, or error).  No-op when no publisher is configured.
+
+        :param outcome: One of ``"success"``, ``"interrupted"``, or ``"error"``.
+        """
+        if self._sleipnir_publisher is None or ravn_session_ended is None:
+            return
+        try:
+            total_tokens = self._session.total_usage.total_tokens
+            duration_s = round(time.monotonic() - self._session_wall_start, 3)
+            event = ravn_session_ended(
+                session_id=str(self._session.id),
+                persona=self._persona,
+                outcome=outcome,
+                token_count=total_tokens,
+                duration_s=duration_s,
+                source=self._source_id,
+                correlation_id=self._task_id,
+            )
+            await self._sleipnir_publisher.publish(event)
+        except Exception:
+            logger.warning("Failed to emit ravn.session.ended; continuing.", exc_info=True)
+
     async def run_turn(self, user_input: str) -> TurnResult:
         """Process one user turn and return the result.
 
@@ -221,6 +281,11 @@ class RavnAgent:
         - A TaskOutcome (with LLM reflection) is recorded after the turn.
         """
         start_time = time.monotonic()
+
+        # NIU-582: emit session.started on the first turn only.
+        if self._turn_count == 0:
+            await self._emit_session_started()
+        self._turn_count += 1
 
         # Check budget before starting the turn.
         if self._iteration_budget is not None and self._iteration_budget.exhausted:

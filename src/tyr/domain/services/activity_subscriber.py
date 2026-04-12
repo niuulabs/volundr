@@ -20,6 +20,11 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+try:
+    from sleipnir.domain.catalog import tyr_raid_needs_approval as _catalog_raid_needs_approval
+except ImportError:
+    _catalog_raid_needs_approval = None  # type: ignore[assignment]
+
 from tyr.config import WatcherConfig
 from tyr.domain.models import Raid, RaidStatus
 from tyr.ports.dispatcher_repository import DispatcherRepository
@@ -60,6 +65,7 @@ class SessionActivitySubscriber:
         event_bus: EventBusPort,
         config: WatcherConfig,
         review_engine: ReviewEngine | None = None,
+        sleipnir_publisher: object | None = None,
     ) -> None:
         self._factory = volundr_factory
         self._tracker_factory = tracker_factory
@@ -67,6 +73,7 @@ class SessionActivitySubscriber:
         self._event_bus = event_bus
         self._config = config
         self._review_engine = review_engine
+        self._sleipnir_publisher = sleipnir_publisher
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._owner_tasks: dict[str, list[asyncio.Task[None]]] = {}
@@ -430,6 +437,22 @@ class SessionActivitySubscriber:
             )
 
         await self._emit_state_changed(raid, owner_id, "REVIEW", pr_id=pr_id, pr_url=pr_url)
+
+        # NIU-582: emit tyr.raid.needs_approval to Sleipnir catalog (best-effort)
+        if self._sleipnir_publisher is not None and _catalog_raid_needs_approval is not None:
+            try:
+                description = f"PR {pr_url or pr_id or 'ready'} — {raid.tracker_id}"
+                _event = _catalog_raid_needs_approval(
+                    raid_id=raid.tracker_id,
+                    saga_id="",
+                    description=description,
+                    source="tyr:activity_subscriber",
+                    correlation_id=raid.session_id or raid.tracker_id,
+                )
+                await self._sleipnir_publisher.publish(_event)
+            except Exception:
+                logger.warning("Failed to emit tyr.raid.needs_approval; continuing.", exc_info=True)
+
         logger.info(
             "Session %s completed (tracker=%s, pr=%s, chronicle=%s)",
             raid.session_id,

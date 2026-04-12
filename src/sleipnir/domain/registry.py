@@ -57,6 +57,15 @@ RAVN_TASK_COMPLETE: str = "ravn.task.complete"
 #: The agent requires a human decision before proceeding (urgency ≥ 0.8).
 RAVN_DECISION_REQUIRED: str = "ravn.decision.required"
 
+#: An agent session started (first turn received by the agent).
+RAVN_SESSION_STARTED: str = "ravn.session.started"
+
+#: An agent session ended — normal exit, interrupt, or error.
+RAVN_SESSION_ENDED: str = "ravn.session.ended"
+
+#: A Ravn task completed (all turns done; includes outcome and token cost).
+RAVN_TASK_COMPLETED: str = "ravn.task.completed"
+
 # ---------------------------------------------------------------------------
 # tyr — Tyr autonomous dispatcher events
 # ---------------------------------------------------------------------------
@@ -111,6 +120,12 @@ TYR_DISPATCHER_STATE: str = "tyr.dispatcher.state"
 
 #: A notification was sent to a channel.
 TYR_NOTIFICATION_SENT: str = "tyr.notification.sent"
+
+#: A Saga completed all phases (distinct from TYR_SAGA_COMPLETE for consistency with catalog).
+TYR_SAGA_COMPLETED: str = "tyr.saga.completed"
+
+#: A raid requires human approval before it can proceed.
+TYR_RAID_NEEDS_APPROVAL: str = "tyr.raid.needs_approval"
 
 # ---------------------------------------------------------------------------
 # skuld — Skuld broker events (session pod activity)
@@ -265,6 +280,9 @@ BIFROST_PROVIDER_DOWN: str = "bifrost.provider.down"
 #: The upstream LLM provider recovered and is healthy again.
 BIFROST_PROVIDER_RECOVERED: str = "bifrost.provider.recovered"
 
+#: A tenant's daily spend crossed 80 % of its configured cap; model downgraded.
+BIFROST_BUDGET_DEGRADED: str = "bifrost.budget.degraded"
+
 # ---------------------------------------------------------------------------
 # system — Infrastructure and lifecycle events
 # ---------------------------------------------------------------------------
@@ -286,3 +304,13 @@ SYSTEM_ERROR: str = "system.error"
 
 #: A metric snapshot was emitted for observability.
 SYSTEM_METRIC: str = "system.metric"
+
+# ---------------------------------------------------------------------------
+# mimir — Mimir knowledge-base events
+# ---------------------------------------------------------------------------
+
+#: A wiki page was written (created or updated) by the Mimir adapter.
+MIMIR_PAGE_WRITTEN: str = "mimir.page.written"
+
+#: A dream cycle completed — pages updated, entities created, lint fixes applied.
+MIMIR_DREAM_COMPLETED: str = "mimir.dream.completed"

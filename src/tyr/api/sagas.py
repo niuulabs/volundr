@@ -12,6 +12,11 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+try:
+    from sleipnir.domain.catalog import tyr_saga_created as _catalog_saga_created
+except ImportError:
+    _catalog_saga_created = None  # type: ignore[assignment]
 from pydantic import BaseModel, Field
 
 from niuu.domain.models import Principal
@@ -699,13 +704,9 @@ def create_sagas_router() -> APIRouter:
         # 1. Create saga in tracker — this MUST succeed or we abort
         tracker_type = type(tracker).__name__
         try:
-            tracker_saga_id = await tracker.create_saga(
-                saga, description=body.description
-            )
+            tracker_saga_id = await tracker.create_saga(saga, description=body.description)
         except Exception as exc:
-            logger.error(
-                "Tracker create_saga failed for slug=%s", body.slug, exc_info=True
-            )
+            logger.error("Tracker create_saga failed for slug=%s", body.slug, exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Failed to create project in tracker: {exc}",
@@ -732,9 +733,7 @@ def create_sagas_router() -> APIRouter:
             )
 
             try:
-                tracker_phase_id = await tracker.create_phase(
-                    phase, project_id=saga.tracker_id
-                )
+                tracker_phase_id = await tracker.create_phase(phase, project_id=saga.tracker_id)
             except Exception as exc:
                 logger.error(
                     "Tracker create_phase failed for phase=%s", phase_spec.name, exc_info=True
@@ -834,9 +833,22 @@ def create_sagas_router() -> APIRouter:
                     body.transcript,
                 )
             except Exception:
-                logger.warning(
-                    "Failed to attach transcript for saga %s", saga.slug, exc_info=True
+                logger.warning("Failed to attach transcript for saga %s", saga.slug, exc_info=True)
+
+        # NIU-582: emit tyr.saga.created (best-effort, non-blocking)
+        publisher = getattr(request.app.state, "sleipnir_publisher", None)
+        if publisher is not None and _catalog_saga_created is not None:
+            try:
+                event = _catalog_saga_created(
+                    saga_id=str(saga.id),
+                    template=body.slug,
+                    trigger_event="api.commit_saga",
+                    source="tyr",
+                    correlation_id=str(saga.id),
                 )
+                await publisher.publish(event)
+            except Exception:
+                logger.warning("Failed to emit tyr.saga.created; continuing.", exc_info=True)
 
         return CommittedSagaResponse(
             id=str(saga.id),

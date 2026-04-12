@@ -33,6 +33,11 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+try:
+    from sleipnir.domain.catalog import mimir_page_written as _catalog_page_written
+except ImportError:
+    _catalog_page_written = None  # type: ignore[assignment]
+
 from niuu.domain.mimir import (
     MimirLintReport,
     MimirPage,
@@ -186,7 +191,11 @@ class MarkdownMimirAdapter(MimirPort):
         root: Root directory for the Mímir store (e.g. ``~/.ravn/mimir``).
     """
 
-    def __init__(self, root: str | Path = "~/.ravn/mimir") -> None:
+    def __init__(
+        self,
+        root: str | Path = "~/.ravn/mimir",
+        sleipnir_publisher: object | None = None,
+    ) -> None:
         self._root = Path(root).expanduser()
         self._wiki = self._root / "wiki"
         self._raw = self._root / "raw"
@@ -194,6 +203,7 @@ class MarkdownMimirAdapter(MimirPort):
         self._schema = self._root / "MIMIR.md"
         self._index = self._wiki / "index.md"
         self._log = self._wiki / "log.md"
+        self._sleipnir_publisher = sleipnir_publisher
         self._ensure_layout()
 
     # ------------------------------------------------------------------
@@ -352,6 +362,20 @@ class MarkdownMimirAdapter(MimirPort):
             self._update_index_entry(path, content)
 
         logger.info("mimir: upserted page %s (new=%s)", path, is_new)
+
+        # NIU-582: emit mimir.page.written to Sleipnir catalog (best-effort)
+        if self._sleipnir_publisher is not None and _catalog_page_written is not None:
+            try:
+                category = path.split("/")[0] if "/" in path else "uncategorised"
+                _event = _catalog_page_written(
+                    page_path=path,
+                    category=category,
+                    author="ravn",
+                    source="mimir:markdown",
+                )
+                await self._sleipnir_publisher.publish(_event)
+            except Exception:
+                logger.warning("Failed to emit mimir.page.written; continuing.", exc_info=True)
 
     async def get_page(self, path: str) -> MimirPage:
         """Return content and metadata for the wiki page at *path* in one call."""

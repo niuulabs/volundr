@@ -397,6 +397,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "Tyr Sleipnir bridge started: adapter=%s",
                     settings.sleipnir.adapter.rsplit(".", 1)[-1],
                 )
+            # NIU-582: store publisher on app.state and inject into services
+            app.state.sleipnir_publisher = sleipnir_bus
+            dispatch_svc._sleipnir_publisher = sleipnir_bus
 
             # Wire Telegram reply client (shared httpx.AsyncClient)
             from tyr.adapters.inbound.rest_telegram_webhook import (
@@ -480,6 +483,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 event_bus=event_bus,
                 config=settings.watcher,
                 review_engine=review_engine,
+                sleipnir_publisher=sleipnir_bus,
             )
             app.state.subscriber = subscriber
             await subscriber.start()
