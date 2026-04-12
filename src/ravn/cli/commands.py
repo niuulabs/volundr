@@ -116,11 +116,6 @@ def _build_llm(settings: Settings) -> Any:
     cls = _import_class(prov.adapter)
     kwargs = _inject_secrets(dict(prov.kwargs), prov.secret_kwargs_env)
 
-    # For the default Anthropic adapter inject well-known top-level settings.
-    if prov.adapter == "ravn.adapters.llm.anthropic.AnthropicAdapter":
-        kwargs.setdefault("api_key", settings.effective_api_key())
-        kwargs.setdefault("base_url", settings.anthropic.base_url)
-
     kwargs.setdefault("model", settings.effective_model())
     kwargs.setdefault("max_tokens", settings.effective_max_tokens())
     kwargs.setdefault("max_retries", settings.llm.max_retries)

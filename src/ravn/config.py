@@ -62,11 +62,6 @@ def _config_paths() -> tuple[Path, ...]:
 # ---------------------------------------------------------------------------
 
 
-class AnthropicConfig(BaseModel):
-    """Anthropic API configuration."""
-
-    api_key: str = Field(default="", description="Anthropic API key (or set ANTHROPIC_API_KEY).")
-    base_url: str = Field(default="https://api.anthropic.com")
 
 
 class LLMProviderConfig(BaseModel):
@@ -2330,7 +2325,6 @@ class Settings(BaseSettings):
     )
 
     # Core sections
-    anthropic: AnthropicConfig = Field(default_factory=AnthropicConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
 
     # New NIU-427 sections
@@ -2439,10 +2433,6 @@ class Settings(BaseSettings):
             YamlConfigSettingsSource(settings_cls, yaml_file=_config_paths()),
             file_secret_settings,
         )
-
-    def effective_api_key(self) -> str:
-        """Return the API key, preferring ANTHROPIC_API_KEY env var."""
-        return os.environ.get("ANTHROPIC_API_KEY", "") or self.anthropic.api_key
 
     def effective_model(self) -> str:
         """Return the resolved model name.
