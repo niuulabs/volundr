@@ -19,7 +19,7 @@ try:
     import msgpack as _msgpack
 
     _MSGPACK_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     _MSGPACK_AVAILABLE = False
 
 SerializationFormat = Literal["msgpack", "json"]

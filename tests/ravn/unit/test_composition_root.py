@@ -605,30 +605,6 @@ class TestBuildPromptBuilder:
 
 
 # ---------------------------------------------------------------------------
-# _build_outcome
-# ---------------------------------------------------------------------------
-
-
-class TestBuildOutcome:
-    def test_disabled_returns_none(self, settings: Settings) -> None:
-        from ravn.cli.commands import _build_outcome
-
-        settings.agent.outcome.enabled = False
-        port, cfg = _build_outcome(settings)
-        assert port is None
-        assert cfg is None
-
-    def test_enabled_returns_adapter(self, settings: Settings) -> None:
-        from ravn.cli.commands import _build_outcome
-
-        settings.agent.outcome.enabled = True
-        settings.agent.outcome.path = "/tmp/test_ravn_outcomes.db"
-        port, cfg = _build_outcome(settings)
-        assert port is not None
-        assert cfg is not None
-
-
-# ---------------------------------------------------------------------------
 # _build_agent (integration)
 # ---------------------------------------------------------------------------
 

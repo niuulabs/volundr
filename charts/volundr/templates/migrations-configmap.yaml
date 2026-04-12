@@ -887,4 +887,20 @@ data:
         DROP COLUMN IF EXISTS label,
         DROP COLUMN IF EXISTS tags,
         DROP COLUMN IF EXISTS memory_context;
+
+  000032_ravn_episodes_reflection.up.sql: |
+    -- NIU-574: Add reflection, errors, cost_usd, duration_seconds columns to ravn_episodes.
+    ALTER TABLE ravn_episodes
+        ADD COLUMN IF NOT EXISTS reflection       TEXT,
+        ADD COLUMN IF NOT EXISTS errors           TEXT,
+        ADD COLUMN IF NOT EXISTS cost_usd         NUMERIC(12, 8),
+        ADD COLUMN IF NOT EXISTS duration_seconds NUMERIC(12, 3);
+
+  000032_ravn_episodes_reflection.down.sql: |
+    -- Rollback NIU-574: remove reflection columns from ravn_episodes.
+    ALTER TABLE ravn_episodes
+        DROP COLUMN IF EXISTS reflection,
+        DROP COLUMN IF EXISTS errors,
+        DROP COLUMN IF EXISTS cost_usd,
+        DROP COLUMN IF EXISTS duration_seconds;
 {{- end }}

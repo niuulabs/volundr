@@ -38,7 +38,7 @@ class InMemoryMemory(MemoryPort):
         if not matches:
             return ""
         lines = [f"- {m.episode.summary}" for m in matches]
-        return "## Relevant Past Context\n\n" + "\n".join(lines)
+        return "## Past Context\n\n" + "\n".join(lines)
 
     async def search_sessions(
         self,
@@ -125,7 +125,7 @@ class TestMemoryPortInterface:
         mem = InMemoryMemory()
         await mem.record_episode(_make_episode(summary="ran pytest suite"))
         result = await mem.prefetch("pytest")
-        assert "Relevant Past Context" in result
+        assert "Past Context" in result
         assert "ran pytest suite" in result
 
     async def test_search_sessions_groups_by_session(self) -> None:

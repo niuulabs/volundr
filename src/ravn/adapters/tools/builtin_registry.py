@@ -260,8 +260,8 @@ BUILTIN_TOOLS: dict[str, BuiltinToolDef] = {
         kwargs_fn=lambda s, ctx: {
             "llm": ctx["llm"],
             "session": ctx["session"],
-            "model": s.agent.outcome.reflection_model,
-            "max_tokens": s.agent.outcome.reflection_max_tokens,
+            "model": s.memory.reflection_model,
+            "max_tokens": s.memory.reflection_max_tokens,
         },
     ),
     "ravn_memory_search": BuiltinToolDef(

@@ -60,7 +60,7 @@ try:
     import aio_pika.abc
 
     _AIO_PIKA_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     _AIO_PIKA_AVAILABLE = False
 
 from sleipnir.adapters._subscriber_support import (
@@ -127,7 +127,7 @@ def _fnmatch_to_amqp(pattern: str) -> str:
 
 
 def _require_aio_pika() -> None:
-    if not _AIO_PIKA_AVAILABLE:
+    if not _AIO_PIKA_AVAILABLE:  # pragma: no cover
         raise ImportError(
             "aio-pika is required for the RabbitMQ transport adapter. "
             "Install it with: pip install aio-pika"

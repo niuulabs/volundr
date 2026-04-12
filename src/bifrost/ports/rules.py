@@ -53,7 +53,7 @@ class RoutingContext:
     """Per-request context passed alongside the request during rule evaluation.
 
     Carries computed values that are not present in the raw request body, such
-    as the remaining agent budget percentage.
+    as the remaining agent budget percentage and the agent identity header.
     """
 
     agent_budget_pct: float | None = field(
@@ -64,6 +64,16 @@ class RoutingContext:
 
     ``None`` when the usage store has not been queried or when there is no
     per-agent budget configured (M4 feature).
+    """
+
+    agent_id: str = field(
+        default="",
+        metadata={"description": "Value of the X-Ravn-Agent-Id header; empty string when absent."},
+    )
+    """Agent identifier from the X-Ravn-Agent-Id request header.
+
+    Used by ``agent_id`` rule conditions to route requests based on the
+    persona name or agent identity set by the Ravn BifrostAdapter.
     """
 
 

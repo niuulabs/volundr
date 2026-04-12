@@ -20,6 +20,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from ravn.agent import RavnAgent
 from ravn.config import GatewayConfig
@@ -132,10 +133,12 @@ class RavnGateway:
         agent_factory: AgentFactory,
         *,
         profile: RavnProfile | None = None,
+        interaction_tracker: Any | None = None,
     ) -> None:
         self._config = config
         self._agent_factory = agent_factory
         self._profile = profile
+        self._interaction_tracker = interaction_tracker
         self._sessions: dict[str, GatewaySession] = {}
         self._broadcast_queues: list[asyncio.Queue[RavnEvent | None]] = []
 
@@ -180,6 +183,8 @@ class RavnGateway:
         Serialises concurrent calls to the same session via a per-session lock.
         Suitable for Telegram where we wait for the full response before sending.
         """
+        if self._interaction_tracker is not None:
+            self._interaction_tracker.touch()
         session = self.get_or_create_session(session_id)
         async with session.lock:
             await session.agent.run_turn(text)
@@ -191,6 +196,8 @@ class RavnGateway:
         The agent turn runs concurrently with the event drain so callers
         receive events in real time.  Suitable for HTTP SSE.
         """
+        if self._interaction_tracker is not None:
+            self._interaction_tracker.touch()
         session = self.get_or_create_session(session_id)
         async with session.lock:
             run_task: asyncio.Task[object] = asyncio.create_task(

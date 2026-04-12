@@ -12,7 +12,8 @@ from typing import Any
 
 from ravn.budget import IterationBudget, TokenEstimator
 from ravn.compression import CompressionResult, ContextCompressor
-from ravn.config import ExtendedThinkingConfig, OutcomeConfig
+from ravn.config import ExtendedThinkingConfig
+from ravn.domain.budget import compute_cost as _compute_cost_usd
 from ravn.domain.checkpoint import (
     DESTRUCTIVE_TOOL_NAMES,
     Checkpoint,
@@ -28,7 +29,6 @@ from ravn.domain.models import (
     Session,
     StopReason,
     StreamEventType,
-    TaskOutcome,
     TokenUsage,
     ToolCall,
     ToolResult,
@@ -38,7 +38,6 @@ from ravn.ports.channel import ChannelPort
 from ravn.ports.checkpoint import CheckpointPort
 from ravn.ports.llm import LLMPort, SystemPrompt
 from ravn.ports.memory import MemoryPort
-from ravn.ports.outcome import OutcomePort
 from ravn.ports.permission import PermissionPort
 from ravn.ports.tool import ToolPort
 from ravn.prompt_builder import PromptBuilder
@@ -91,8 +90,11 @@ class RavnAgent:
         iteration_budget: IterationBudget | None = None,
         compressor: ContextCompressor | None = None,
         prompt_builder: PromptBuilder | None = None,
-        outcome_port: OutcomePort | None = None,
-        outcome_config: OutcomeConfig | None = None,
+        reflection_model: str = "claude-haiku-4-5-20251001",
+        reflection_max_tokens: int = 512,
+        task_summary_max_chars: int = 200,
+        input_token_cost_per_million: float = 3.0,
+        output_token_cost_per_million: float = 15.0,
         extended_thinking: ExtendedThinkingConfig | None = None,
         session: Session | None = None,
         checkpoint_port: CheckpointPort | None = None,
@@ -119,14 +121,11 @@ class RavnAgent:
         self._iteration_budget = iteration_budget
         self._compressor = compressor
         self._prompt_builder = prompt_builder
-        self._outcome_port = outcome_port
-        _oc = outcome_config or OutcomeConfig()
-        self._reflection_model = _oc.reflection_model
-        self._reflection_max_tokens = _oc.reflection_max_tokens
-        self._lessons_limit = _oc.lessons_limit
-        self._task_summary_max_chars = _oc.task_summary_max_chars
-        self._input_token_cost_per_million = _oc.input_token_cost_per_million
-        self._output_token_cost_per_million = _oc.output_token_cost_per_million
+        self._reflection_model = reflection_model
+        self._reflection_max_tokens = reflection_max_tokens
+        self._task_summary_max_chars = task_summary_max_chars
+        self._input_token_cost_per_million = input_token_cost_per_million
+        self._output_token_cost_per_million = output_token_cost_per_million
         self._extended_thinking = extended_thinking
         self._session = session or Session()
         self._source_id = f"ravn-{uuid.uuid4().hex[:8]}"
@@ -217,7 +216,7 @@ class RavnAgent:
 
         If an outcome port is configured:
         - Past lessons learned are injected into the system prompt.
-        - A TaskOutcome (with LLM reflection) is recorded after the turn.
+        - An episode (with LLM reflection) is recorded after the turn.
         """
         start_time = time.monotonic()
 
@@ -244,16 +243,6 @@ class RavnAgent:
                         "Memory prefetch failed; continuing without context.", exc_info=True
                     )
 
-        if self._outcome_port is not None:
-            try:
-                lessons = await self._outcome_port.retrieve_lessons(
-                    user_input, limit=self._lessons_limit
-                )
-                if lessons:
-                    effective_system = f"{effective_system}\n\n{lessons}"
-            except Exception:
-                logger.warning("Outcome lessons retrieval failed; continuing without lessons.")
-
         # Determine whether explicit thinking was requested for this turn.
         explicit_thinking, user_input = _parse_think_flag(user_input)
 
@@ -270,12 +259,9 @@ class RavnAgent:
         cumulative_usage = TokenUsage(input_tokens=0, output_tokens=0)
         final_response = ""
         self._last_compression_result = None
-        iterations_used = 0
         last_had_tool_error = False
 
         for iteration in range(self._max_iterations):
-            iterations_used = iteration + 1
-
             # Check external interruption (SIGINT/SIGTERM/Tyr cancel via interrupt()).
             if self._interrupt_reason is not None:
                 await self._write_checkpoint(
@@ -418,21 +404,15 @@ class RavnAgent:
                     summary_max_chars=self._episode_summary_max_chars,
                     task_max_chars=self._episode_task_max_chars,
                 )
-                await self._memory.record_episode(episode)
-            except Exception:
-                logger.warning("Memory episode recording failed; continuing.", exc_info=True)
-
-        if self._outcome_port is not None:
-            try:
-                await self._record_task_outcome(
-                    user_input=user_input,
+                episode = await self._enrich_episode(
+                    episode=episode,
                     turn_result=result,
-                    iterations_used=iterations_used,
                     duration_seconds=duration_seconds,
                     past_context=memory_ctx,
                 )
+                await self._memory.record_episode(episode)
             except Exception:
-                logger.warning("Outcome recording failed; continuing.")
+                logger.warning("Memory episode recording failed; continuing.", exc_info=True)
 
         if self._memory is not None:
             try:
@@ -658,52 +638,39 @@ class RavnAgent:
         except Exception as exc:
             logger.warning("Checkpoint save failed for task %r: %s", self._task_id, exc)
 
-    async def _record_task_outcome(
+    async def _enrich_episode(
         self,
-        user_input: str,
+        episode: Episode,
         turn_result: TurnResult,
-        iterations_used: int,
         duration_seconds: float,
         past_context: str,
-    ) -> None:
-        """Build a TaskOutcome, run a reflection LLM call, and persist via outcome_port."""
-        task_summary = user_input[: self._task_summary_max_chars]
-        if len(user_input) > self._task_summary_max_chars:
-            task_summary = task_summary.rstrip() + "…"
+    ) -> Episode:
+        """Populate cost, errors, and reflection fields on an episode in-place.
 
-        outcome_str = _determine_outcome(turn_result.tool_results)
-        tools_used = list({tc.name for tc in turn_result.tool_calls})
-        tags = _infer_tags(tools_used)
+        Generates a compact LLM reflection when a reflection model is configured.
+        Returns the enriched episode (same object, mutated).
+        """
         errors = [r.content for r in turn_result.tool_results if r.is_error]
-
-        cost_usd = _compute_cost(
-            turn_result.usage,
+        cost_usd = _compute_cost_usd(
+            turn_result.usage.input_tokens,
+            turn_result.usage.output_tokens,
             self._input_token_cost_per_million,
             self._output_token_cost_per_million,
         )
 
         reflection = await self._run_reflection(
-            task_summary=task_summary,
-            outcome=outcome_str,
-            tools_used=tools_used,
+            task_summary=episode.task_description,
+            outcome=episode.outcome,
+            tools_used=episode.tools_used,
             errors=errors,
             past_context=past_context,
         )
 
-        task_outcome = TaskOutcome(
-            task_id=str(uuid.uuid4()),
-            task_summary=task_summary,
-            outcome=outcome_str,
-            tools_used=tools_used,
-            iterations_used=iterations_used,
-            cost_usd=cost_usd,
-            duration_seconds=duration_seconds,
-            errors=errors,
-            reflection=reflection,
-            tags=tags,
-            timestamp=datetime.now(UTC),
-        )
-        await self._outcome_port.record_outcome(task_outcome)  # type: ignore[union-attr]
+        episode.errors = errors
+        episode.cost_usd = cost_usd
+        episode.duration_seconds = duration_seconds
+        episode.reflection = reflection
+        return episode
 
     async def _run_reflection(
         self,
@@ -1088,18 +1055,6 @@ def _extract_episode(
         outcome=outcome,
         tags=tags,
         embedding=None,
-    )
-
-
-def _compute_cost(
-    usage: TokenUsage,
-    input_per_million: float,
-    output_per_million: float,
-) -> float:
-    """Estimate USD cost from token usage using per-million-token rates."""
-    return (
-        usage.input_tokens * input_per_million / 1_000_000
-        + usage.output_tokens * output_per_million / 1_000_000
     )
 
 

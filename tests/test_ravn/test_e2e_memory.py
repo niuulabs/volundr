@@ -190,7 +190,7 @@ class TestMemoryRecallScenario:
         assert llm.calls, "LLM was never called"
         system = llm.calls[0]["system"]
         system_text = system if isinstance(system, str) else str(system)
-        assert "Relevant Past Context" in system_text or "nginx" in system_text.lower()
+        assert "Past Context" in system_text or "nginx" in system_text.lower()
 
     async def test_prefetch_injects_relevant_episode(self, mem: SqliteMemoryAdapter) -> None:
         """Episode whose summary matches the query must appear in context."""
@@ -215,7 +215,7 @@ class TestMemoryRecallScenario:
         await agent.run_turn("postgresql replication")
 
         combined = "\n".join(captured_systems)
-        assert "Relevant Past Context" in combined or "postgresql" in combined.lower()
+        assert "Past Context" in combined or "postgresql" in combined.lower()
 
     async def test_no_relevant_episodes_no_context_injected(self, mem: SqliteMemoryAdapter) -> None:
         """When no episodes match, system prompt must not contain context header."""
@@ -237,9 +237,9 @@ class TestMemoryRecallScenario:
         # Query is totally unrelated — no FTS5 match.
         await agent.run_turn("python type annotations")
 
-        # Prefetch found no match → no "Relevant Past Context" header.
+        # Prefetch found no match → no "Past Context" header.
         combined = "\n".join(captured_systems)
-        assert "Relevant Past Context" not in combined
+        assert "Past Context" not in combined
 
     async def test_episode_recorded_after_turn(self, mem: SqliteMemoryAdapter) -> None:
         """The turn's episode is recorded in the memory backend."""
@@ -254,7 +254,15 @@ class TestMemoryRecallScenario:
 
     async def test_multiple_episodes_accumulate(self, mem: SqliteMemoryAdapter) -> None:
         """Two turns produce two episodes in memory."""
-        llm = ScriptedLLM([_text_response("First done"), _text_response("Second done")])
+        # Two main responses + two reflection generate() responses (NIU-574).
+        llm = ScriptedLLM(
+            [
+                _text_response("First done"),
+                _text_response("Reflection on first."),
+                _text_response("Second done"),
+                _text_response("Reflection on second."),
+            ]
+        )
         agent, _ = _make_agent(llm, memory=mem)
 
         await agent.run_turn("first task alpha")
