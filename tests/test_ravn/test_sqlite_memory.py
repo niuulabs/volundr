@@ -13,7 +13,6 @@ from ravn.adapters.memory.scoring import _format_episode_block, _recency_score
 from ravn.adapters.memory.sqlite import (
     SqliteMemoryAdapter,
     _combined_score,
-    _sanitize_fts_query,
 )
 from ravn.domain.models import Episode, Outcome, SharedContext
 
@@ -66,36 +65,6 @@ async def mem(tmp_path: Path) -> SqliteMemoryAdapter:
 # ---------------------------------------------------------------------------
 
 
-class TestSanitizeFtsQuery:
-    def test_basic_token(self) -> None:
-        result = _sanitize_fts_query("python")
-        assert result == '"python"'
-
-    def test_multiple_tokens(self) -> None:
-        result = _sanitize_fts_query("run tests")
-        assert result == '"run" "tests"'
-
-    def test_empty_query(self) -> None:
-        result = _sanitize_fts_query("")
-        assert result == '""'
-
-    def test_hyphenated_term(self) -> None:
-        # Hyphen should be treated literally, not as FTS5 NOT operator.
-        result = _sanitize_fts_query("pytest-asyncio")
-        assert result == '"pytest-asyncio"'
-
-    def test_fts5_special_chars_escaped(self) -> None:
-        result = _sanitize_fts_query('AND OR "test"')
-        # Each token wrapped in double quotes; internal quotes escaped.
-        assert '"AND"' in result
-        assert '"OR"' in result
-        assert '"""test"""' in result
-
-    def test_whitespace_only(self) -> None:
-        result = _sanitize_fts_query("   ")
-        assert result == '""'
-
-
 class TestRecencyScore:
     def test_fresh_episode_high_score(self) -> None:
         ts = datetime.now(UTC)
@@ -122,24 +91,25 @@ class TestRecencyScore:
 class TestCombinedScore:
     def test_perfect_recent_success(self) -> None:
         ts = datetime.now(UTC)
-        score = _combined_score(-5.0, 5.0, ts, Outcome.SUCCESS, half_life_days=14.0)
+        # relevance=1.0 (normalised), recent timestamp, success outcome
+        score = _combined_score(1.0, ts, Outcome.SUCCESS, half_life_days=14.0)
         assert score > 0.9
 
     def test_failure_lower_than_success(self) -> None:
         ts = datetime.now(UTC)
-        success = _combined_score(-5.0, 5.0, ts, Outcome.SUCCESS, half_life_days=14.0)
-        failure = _combined_score(-5.0, 5.0, ts, Outcome.FAILURE, half_life_days=14.0)
+        success = _combined_score(1.0, ts, Outcome.SUCCESS, half_life_days=14.0)
+        failure = _combined_score(1.0, ts, Outcome.FAILURE, half_life_days=14.0)
         assert success > failure
 
-    def test_zero_bm25_gives_zero(self) -> None:
+    def test_zero_relevance_gives_zero(self) -> None:
         ts = datetime.now(UTC)
-        score = _combined_score(0.0, 5.0, ts, Outcome.SUCCESS, half_life_days=14.0)
+        score = _combined_score(0.0, ts, Outcome.SUCCESS, half_life_days=14.0)
         assert score == pytest.approx(0.0)
 
-    def test_zero_max_abs_bm25_safe(self) -> None:
+    def test_partial_relevance_gives_partial_score(self) -> None:
         ts = datetime.now(UTC)
-        score = _combined_score(0.0, 0.0, ts, Outcome.SUCCESS, half_life_days=14.0)
-        assert score == pytest.approx(0.0)
+        score = _combined_score(0.5, ts, Outcome.SUCCESS, half_life_days=14.0)
+        assert 0.0 < score < 1.0
 
 
 class TestFormatEpisodeBlock:
@@ -185,12 +155,12 @@ class TestSqliteInit:
         conn.close()
         assert row[0] == "wal"
 
-    async def test_fts5_table_exists(self, tmp_path: Path) -> None:
+    async def test_search_index_fts_table_exists(self, tmp_path: Path) -> None:
         adapter = SqliteMemoryAdapter(path=str(tmp_path / "memory.db"))
         await adapter.initialize()
         conn = sqlite3.connect(str(tmp_path / "memory.db"))
         rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='episodes_fts'"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='search_index_fts'"
         ).fetchall()
         conn.close()
         assert len(rows) == 1

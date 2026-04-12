@@ -4,9 +4,9 @@ Both ``SqliteMemoryAdapter`` and ``PostgresMemoryAdapter`` use identical
 scoring constants, recency/formatting helpers, and response-building logic.
 This module is the single source of truth for those shared pieces.
 
-Also provides hybrid retrieval primitives:
-- ``cosine_similarity`` — dot-product cosine between two float vectors.
-- ``reciprocal_rank_fusion`` — merge multiple ranked lists (RRF algorithm).
+Hybrid retrieval primitives (cosine similarity, RRF) live in
+``niuu.adapters.search.rrf`` and are re-exported here for backwards
+compatibility with any existing importers.
 """
 
 from __future__ import annotations
@@ -15,7 +15,16 @@ import math
 from collections import defaultdict
 from datetime import UTC, datetime
 
+from niuu.adapters.search.rrf import cosine_similarity, reciprocal_rank_fusion
 from ravn.domain.models import Episode, EpisodeMatch, Outcome, SessionSummary
+
+# Re-export so existing ``from ravn.adapters.memory.scoring import ...`` calls work.
+__all__ = [
+    "cosine_similarity",
+    "reciprocal_rank_fusion",
+    "build_prefetch_context",
+    "build_session_summaries",
+]
 
 # Approximate chars per token for budget estimation.
 _CHARS_PER_TOKEN = 4
@@ -30,48 +39,6 @@ _OUTCOME_WEIGHTS: dict[str, float] = {
     Outcome.PARTIAL: 0.7,
     Outcome.FAILURE: 0.3,
 }
-
-
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Compute cosine similarity between two equal-length vectors.
-
-    Returns a value in ``[-1, 1]`` (typically ``[0, 1]`` for non-negative
-    embedding spaces).  Returns ``0.0`` for zero-length or mismatched vectors.
-    """
-    if len(a) != len(b) or not a:
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(y * y for y in b))
-    if norm_a == 0.0 or norm_b == 0.0:
-        return 0.0
-    return dot / (norm_a * norm_b)
-
-
-def reciprocal_rank_fusion(
-    rankings: list[list[str]],
-    *,
-    k: int = 60,
-) -> dict[str, float]:
-    """Merge multiple ranked lists using Reciprocal Rank Fusion (RRF).
-
-    Each inner list in *rankings* is an ordered sequence of episode IDs from
-    best to worst.  The returned dict maps episode ID to its aggregated RRF
-    score — higher is better.
-
-    Args:
-        rankings: One or more ranked lists of episode IDs (best first).
-        k: Smoothing constant.  Typically 60; higher values reduce the
-           advantage of top positions.
-
-    Returns:
-        Dict mapping episode_id to aggregated RRF score.
-    """
-    scores: dict[str, float] = {}
-    for ranking in rankings:
-        for rank, episode_id in enumerate(ranking):
-            scores[episode_id] = scores.get(episode_id, 0.0) + 1.0 / (k + rank + 1)
-    return scores
 
 
 def _recency_score(timestamp: datetime, half_life_days: float) -> float:
