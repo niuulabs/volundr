@@ -10,6 +10,7 @@ from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
 from typing import Any
 
+from ravn.adapters.memory.inline_facts import detect_and_write as _detect_and_write_facts
 from ravn.budget import IterationBudget, TokenEstimator
 from ravn.compression import CompressionResult, ContextCompressor
 from ravn.config import ExtendedThinkingConfig
@@ -93,6 +94,7 @@ class RavnAgent:
         post_tool_hooks: list[PostToolHook] | None = None,
         user_input_fn: UserInputFn | None = None,
         memory: MemoryPort | None = None,
+        mimir: object | None = None,
         episode_summary_max_chars: int = 500,
         episode_task_max_chars: int = 200,
         iteration_budget: IterationBudget | None = None,
@@ -128,6 +130,7 @@ class RavnAgent:
         self._post_tool_hooks: list[PostToolHook] = post_tool_hooks or []
         self._user_input_fn = user_input_fn
         self._memory = memory
+        self._mimir = mimir
         self._episode_summary_max_chars = episode_summary_max_chars
         self._episode_task_max_chars = episode_task_max_chars
         self._iteration_budget = iteration_budget
@@ -311,7 +314,12 @@ class RavnAgent:
         # Determine whether explicit thinking was requested for this turn.
         explicit_thinking, user_input = _parse_think_flag(user_input)
 
-        if self._memory is not None:
+        if self._mimir is not None:
+            try:
+                await _detect_and_write_facts(user_input, self._mimir)
+            except Exception:
+                logger.warning("Inline fact detection failed; continuing.", exc_info=True)
+        elif self._memory is not None:
             try:
                 await self._memory.process_inline_facts(str(self._session.id), user_input)
             except Exception:

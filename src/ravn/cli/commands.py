@@ -160,10 +160,12 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
         except Exception as exc:
             logger.warning("Failed to load embedding adapter: %s — falling back to FTS-only", exc)
 
+    adapter = None
+
     if backend == "sqlite":
         from ravn.adapters.memory.sqlite import SqliteMemoryAdapter
 
-        return SqliteMemoryAdapter(
+        adapter = SqliteMemoryAdapter(
             path=settings.memory.path,
             max_retries=settings.memory.max_retries,
             min_jitter_ms=settings.memory.min_retry_jitter_ms,
@@ -179,7 +181,7 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
             semantic_candidate_limit=settings.embedding.semantic_candidate_limit,
         )
 
-    if backend == "postgres":
+    elif backend == "postgres":
         from ravn.adapters.memory.postgres import PostgresMemoryAdapter
 
         dsn = os.environ.get(settings.memory.dsn_env, "") if settings.memory.dsn_env else ""
@@ -189,43 +191,20 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
                 "Postgres memory backend configured but no DSN provided — memory disabled",
             )
             return None
-        return PostgresMemoryAdapter(dsn=dsn)
+        adapter = PostgresMemoryAdapter(dsn=dsn)
 
-    if backend == "buri":
-        from ravn.adapters.memory.buri import BuriMemoryAdapter
-
-        dsn = os.environ.get(settings.memory.dsn_env, "") if settings.memory.dsn_env else ""
-        dsn = dsn or settings.memory.dsn
-        if not dsn:
-            logger.warning(
-                "Buri memory backend configured but no DSN provided — memory disabled",
-            )
+    else:
+        # Custom backend via fully-qualified class path
+        try:
+            cls = _import_class(backend)
+            adapter = cls(path=settings.memory.path)
+        except Exception as exc:
+            logger.warning("Failed to load custom memory backend %r: %s", backend, exc)
             return None
-        bc = settings.buri
-        reflection_model = settings.memory.reflection_model
-        return BuriMemoryAdapter(
-            dsn=dsn,
-            prefetch_budget=settings.memory.prefetch_budget,
-            prefetch_limit=settings.memory.prefetch_limit,
-            prefetch_min_relevance=settings.memory.prefetch_min_relevance,
-            recency_half_life_days=settings.memory.recency_half_life_days,
-            session_search_truncate_chars=settings.memory.session_search_truncate_chars,
-            cluster_merge_threshold=bc.cluster_merge_threshold,
-            extraction_model=bc.extraction_model,
-            reflection_model=reflection_model,
-            min_confidence=bc.min_confidence,
-            session_summary_max_tokens=bc.session_summary_max_tokens,
-            supersession_cosine_threshold=bc.supersession_cosine_threshold,
-            llm=llm,
-        )
 
-    # Custom backend via fully-qualified class path
-    try:
-        cls = _import_class(backend)
-        return cls(path=settings.memory.path)
-    except Exception as exc:
-        logger.warning("Failed to load custom memory backend %r: %s", backend, exc)
-        return None
+    if adapter is not None:
+        adapter._rolling_summary_max_chars = settings.memory.rolling_summary_max_chars
+    return adapter
 
 
 # ---------------------------------------------------------------------------
@@ -966,6 +945,7 @@ def _build_agent(
         post_tool_hooks=post_hooks or None,
         user_input_fn=_cli_user_input,
         memory=memory,
+        mimir=mimir,
         episode_summary_max_chars=settings.agent.episode_summary_max_chars,
         episode_task_max_chars=settings.agent.episode_task_max_chars,
         iteration_budget=iteration_budget,
@@ -1889,6 +1869,7 @@ async def _run_daemon(
             post_tool_hooks=post_hooks or None,
             user_input_fn=None,
             memory=memory,
+            mimir=daemon_mimir,
             episode_summary_max_chars=settings.agent.episode_summary_max_chars,
             episode_task_max_chars=settings.agent.episode_task_max_chars,
             iteration_budget=budget,
