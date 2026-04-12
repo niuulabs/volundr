@@ -436,3 +436,106 @@ async def test_pipeline_fails_on_fan_in_rejection() -> None:
     failure_events = [e for e in bus.get_log(100) if e.event == "saga.failed"]
     assert len(failure_events) == 1
     assert "all_must_pass" in failure_events[0].data.get("reason", "").lower()
+
+
+# ---------------------------------------------------------------------------
+# Test 4: approve_gate edge cases (branch coverage for glue methods)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_approve_gate_noop_when_phase_not_found() -> None:
+    """approve_gate is a no-op when the phase ID does not exist."""
+    import uuid
+
+    executor, _, _ = _make_executor()
+    # Should not raise
+    await executor.approve_gate(uuid.uuid4(), uuid.uuid4())
+
+
+@pytest.mark.asyncio
+async def test_approve_gate_noop_when_saga_not_found() -> None:
+    """approve_gate is a no-op when the saga has been removed from the repo."""
+    executor, repo, _ = _make_executor()
+
+    saga = await executor.create_from_yaml(_REVIEW_PIPELINE)
+    phases = await repo.get_phases_by_saga(saga.id)
+    # Manually gate phase 3 so approve_gate passes the phase-found and phase-GATED checks
+    from dataclasses import replace as dc_replace
+
+    gated = dc_replace(phases[2], status=PhaseStatus.GATED)
+    await repo.save_phase(gated)
+    # Delete the saga from the repo so get_saga returns None
+    del repo.sagas[saga.id]
+
+    # Should not raise even though saga is missing
+    await executor.approve_gate(saga.id, phases[2].id)
+
+
+@pytest.mark.asyncio
+async def test_approve_gate_noop_when_phase_not_gated() -> None:
+    """approve_gate is a no-op when the phase exists but is not GATED."""
+    executor, repo, _ = _make_executor()
+
+    saga = await executor.create_from_yaml(_REVIEW_PIPELINE, auto_start=False)
+    phases = await repo.get_phases_by_saga(saga.id)
+    # Phase 1 is ACTIVE (created as active), not GATED — approve_gate should be a no-op
+    phase1 = phases[0]
+    initial_status = repo.phases[phase1.id].status
+    await executor.approve_gate(saga.id, phase1.id)
+    # Phase status unchanged after the no-op call
+    assert repo.phases[phase1.id].status == initial_status
+
+
+@pytest.mark.asyncio
+async def test_approve_gate_advances_to_next_pending_phase() -> None:
+    """When a pipeline has gate→phase→gate, approving the first gate activates the middle phase."""
+    # Pipeline: review → gate1 → qa → gate2
+    pipeline = textwrap.dedent(
+        """
+        name: "two-gate"
+        feature_branch: "feat/test"
+        base_branch: "main"
+        repos:
+          - "test/repo"
+        stages:
+          - name: review
+            sequential:
+              - name: "Review"
+                persona: reviewer
+                prompt: "Review"
+          - name: approval-1
+            gate: human
+            notify: []
+          - name: qa
+            sequential:
+              - name: "QA"
+                persona: qa-agent
+                prompt: "Run tests"
+          - name: approval-2
+            gate: human
+            notify: []
+        """
+    )
+    executor, repo, bus = _make_executor()
+
+    saga = await executor.create_from_yaml(pipeline)
+    phases = await repo.get_phases_by_saga(saga.id)
+    assert len(phases) == 4
+
+    # Complete phase 1 → phase 2 (approval-1) becomes GATED
+    phase1_raids = await repo.get_raids_by_phase(phases[0].id)
+    await executor.receive_outcome(raid_id=phase1_raids[0].id, outcome={"verdict": "pass"})
+
+    phase2 = await repo.get_phase(phases[1].id)
+    assert phase2.status == PhaseStatus.GATED
+
+    # Approve gate → phase 3 (qa) should become ACTIVE
+    await executor.approve_gate(saga.id, phases[1].id)
+
+    phase3 = await repo.get_phase(phases[2].id)
+    assert phase3.status == PhaseStatus.ACTIVE
+
+    # Saga still active (approval-2 gate not yet reached)
+    saga_state = await executor.get_saga(saga.id)
+    assert saga_state.status == SagaStatus.ACTIVE
