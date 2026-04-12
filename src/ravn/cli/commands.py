@@ -892,14 +892,6 @@ def _build_agent(
     task_id: str | None = None,
     sleipnir_publisher: object | None = None,
 ) -> tuple[RavnAgent, Any]:
-    api_key = settings.effective_api_key()
-    if not api_key:
-        typer.echo(
-            "Error: No API key found. Set ANTHROPIC_API_KEY or configure ravn.yaml.",
-            err=True,
-        )
-        raise typer.Exit(1)
-
     from ravn.adapters.channels.composite import CompositeChannel
     from ravn.adapters.cli_channel import CliChannel
     from ravn.budget import IterationBudget
@@ -1594,14 +1586,6 @@ async def _run_gateway(
     from ravn.adapters.channels.gateway_telegram import TelegramGateway
     from ravn.budget import IterationBudget
     from ravn.ports.channel import ChannelPort
-
-    api_key = settings.effective_api_key()
-    if not api_key:
-        typer.echo(
-            "Error: No API key found. Set ANTHROPIC_API_KEY or configure ravn.yaml.",
-            err=True,
-        )
-        raise typer.Exit(1)
 
     if profile is not None:
         system_prompt, max_iterations, max_tokens_gw = _apply_profile(
