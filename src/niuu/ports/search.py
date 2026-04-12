@@ -34,7 +34,14 @@ class SearchPort(ABC):
     """
 
     @abstractmethod
-    async def index(self, id: str, content: str, metadata: dict[str, Any]) -> None:
+    async def index(
+        self,
+        id: str,
+        content: str,
+        metadata: dict[str, Any],
+        *,
+        embedding: list[float] | None = None,
+    ) -> None:
         """Add or replace a document in the search index.
 
         Args:
@@ -42,6 +49,21 @@ class SearchPort(ABC):
             content: The text to index and search against.
             metadata: Arbitrary key/value data stored alongside the document
                 and returned in ``SearchResult.metadata``.
+            embedding: Optional pre-computed embedding vector.  When supplied,
+                implementations should store it and use it for hybrid
+                retrieval without recomputing it via an embed function.
+        """
+
+    async def initialize(self) -> None:
+        """Set up any resources required by the adapter (e.g. connection pools).
+
+        Default is a no-op; stateful backends override this.
+        """
+
+    async def close(self) -> None:
+        """Release resources held by the adapter (e.g. connection pools).
+
+        Default is a no-op; stateful backends override this.
         """
 
     @abstractmethod

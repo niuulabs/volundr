@@ -145,7 +145,14 @@ class _MockSearchPort(SearchPort):
         self.last_query: str | None = None
         self.last_limit: int | None = None
 
-    async def index(self, id: str, content: str, metadata: dict, **kwargs: Any) -> None:
+    async def index(
+        self,
+        id: str,
+        content: str,
+        metadata: dict,
+        *,
+        embedding: list[float] | None = None,
+    ) -> None:
         pass
 
     async def search(self, query: str, limit: int = 10) -> list[SearchResult]:

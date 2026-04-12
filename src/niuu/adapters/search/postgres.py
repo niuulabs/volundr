@@ -83,7 +83,17 @@ class PostgresSearchAdapter(SearchPort):
         self._pool_min_size = pool_min_size
         self._pool_max_size = pool_max_size
         self._pool: asyncpg.Pool | None = None
+        self._owns_pool: bool = False
         self._pgvector_available: bool = False
+
+    def set_pool(self, pool: asyncpg.Pool) -> None:
+        """Inject an externally-managed pool to avoid duplicate connections.
+
+        When called before ``initialize()``, the adapter skips pool creation
+        and uses *pool* instead.  The caller remains responsible for closing it.
+        """
+        self._pool = pool
+        self._owns_pool = False
 
     @property
     def pgvector_available(self) -> bool:
@@ -95,21 +105,25 @@ class PostgresSearchAdapter(SearchPort):
     # ------------------------------------------------------------------
 
     async def initialize(self) -> None:
-        """Create the connection pool, ensure the table exists, and detect pgvector."""
-        self._pool = await asyncpg.create_pool(
-            self._dsn,
-            min_size=self._pool_min_size,
-            max_size=self._pool_max_size,
-        )
+        """Create the connection pool (if not already shared), ensure the table
+        exists, and detect pgvector."""
+        if self._pool is None:
+            self._pool = await asyncpg.create_pool(
+                self._dsn,
+                min_size=self._pool_min_size,
+                max_size=self._pool_max_size,
+            )
+            self._owns_pool = True
         async with self._pool.acquire() as conn:
             await conn.execute(_CREATE_TABLE)
         self._pgvector_available = await self._detect_pgvector()
 
     async def close(self) -> None:
-        """Close the connection pool gracefully."""
-        if self._pool is not None:
+        """Close the connection pool gracefully (only if this adapter owns it)."""
+        if self._owns_pool and self._pool is not None:
             await self._pool.close()
-            self._pool = None
+        self._pool = None
+        self._owns_pool = False
 
     # ------------------------------------------------------------------
     # SearchPort implementation
@@ -128,7 +142,7 @@ class PostgresSearchAdapter(SearchPort):
         If *embedding* is supplied it is stored directly, bypassing
         ``embed_fn``.  This allows callers with pre-computed embeddings to
         avoid redundant model inference.
-        """
+        """  # noqa: D401
         resolved_embedding = embedding
         if resolved_embedding is None and self._embed_fn is not None:
             resolved_embedding = await self._embed_fn(content)
@@ -221,7 +235,12 @@ class PostgresSearchAdapter(SearchPort):
         return results
 
     async def _search_hybrid(self, query: str, *, limit: int) -> list[SearchResult]:
-        """Hybrid retrieval: tsvector + pgvector cosine similarity merged via RRF."""
+        """Hybrid retrieval: tsvector + semantic similarity merged via RRF.
+
+        When pgvector is available the database's ``<=>`` cosine-distance
+        operator is used for the semantic leg.  Without pgvector, embeddings
+        are loaded as JSON text and cosine similarity is computed in Python.
+        """
         assert self._embed_fn is not None
 
         pool = self._require_pool()
@@ -242,36 +261,56 @@ class PostgresSearchAdapter(SearchPort):
                 limit * 3,
             )
 
-        # Embed query and fetch candidates with embeddings.
+        # Embed the query once.
         query_vec = await self._embed_fn(query)
 
-        async with pool.acquire() as conn:
-            emb_rows = await conn.fetch(
-                """
-                SELECT id, content, metadata, embedding
-                FROM niuu_search_index
-                WHERE embedding IS NOT NULL
-                ORDER BY id  -- stable ordering
-                LIMIT $1
-                """,
-                self._semantic_candidate_limit,
-            )
-
-        # Compute cosine similarities.
-        sem_scored: list[tuple[str, float]] = []
-        for row in emb_rows:
-            raw = row["embedding"]
-            if raw is None:
-                continue
-            emb: list[float] = json.loads(raw) if isinstance(raw, str) else list(raw)
-            sim = cosine_similarity(query_vec, emb)
-            sem_scored.append((row["id"], sim))
-        sem_scored.sort(key=lambda x: x[1], reverse=True)
-        sem_scored = sem_scored[: limit * 3]
+        # Semantic candidates — use pgvector <=> when the extension is present.
+        sem_doc_map: dict[str, asyncpg.Record] = {}
+        if self._pgvector_available:
+            # Format the query vector as a pgvector literal: [v1,v2,...].
+            # json.dumps produces the same bracket-comma format pgvector accepts.
+            query_vec_str = json.dumps(query_vec)
+            async with pool.acquire() as conn:
+                sem_rows = await conn.fetch(
+                    """
+                    SELECT id, content, metadata
+                    FROM niuu_search_index
+                    WHERE embedding IS NOT NULL
+                    ORDER BY embedding::vector <=> $1::vector
+                    LIMIT $2
+                    """,
+                    query_vec_str,
+                    limit * 3,
+                )
+            sem_ranking = [r["id"] for r in sem_rows]
+            sem_doc_map = {r["id"]: r for r in sem_rows}
+        else:
+            # Fall back: load embeddings as JSON text and rank in Python.
+            async with pool.acquire() as conn:
+                emb_rows = await conn.fetch(
+                    """
+                    SELECT id, content, metadata, embedding
+                    FROM niuu_search_index
+                    WHERE embedding IS NOT NULL
+                    ORDER BY id
+                    LIMIT $1
+                    """,
+                    self._semantic_candidate_limit,
+                )
+            sem_scored: list[tuple[str, float]] = []
+            for row in emb_rows:
+                raw = row["embedding"]
+                if raw is None:
+                    continue
+                emb: list[float] = json.loads(raw) if isinstance(raw, str) else list(raw)
+                sim = cosine_similarity(query_vec, emb)
+                sem_scored.append((row["id"], sim))
+            sem_scored.sort(key=lambda x: x[1], reverse=True)
+            sem_scored = sem_scored[: limit * 3]
+            sem_ranking = [doc_id for doc_id, _ in sem_scored]
+            sem_doc_map = {r["id"]: r for r in emb_rows}
 
         fts_ranking = [r["id"] for r in fts_rows]
-        sem_ranking = [doc_id for doc_id, _ in sem_scored]
-
         all_ids = list(dict.fromkeys(fts_ranking + sem_ranking))
 
         if not all_ids:
@@ -287,8 +326,8 @@ class PostgresSearchAdapter(SearchPort):
         doc_map: dict[str, asyncpg.Record] = {}
         for r in fts_rows:
             doc_map[r["id"]] = r
-        for r in emb_rows:
-            doc_map.setdefault(r["id"], r)
+        for id_, row in sem_doc_map.items():
+            doc_map.setdefault(id_, row)
 
         results: list[SearchResult] = []
         for doc_id, raw_score in rrf_scores.items():

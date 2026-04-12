@@ -77,23 +77,6 @@ _MIGRATIONS = [
 # ---------------------------------------------------------------------------
 
 
-def _sanitize_fts_query(query: str) -> str:
-    """Escape FTS5 special characters and return a safe MATCH expression.
-
-    Each whitespace-delimited token is wrapped in double quotes so that
-    operators (AND, OR, NOT, -, *, ^) and hyphenated terms are treated as
-    literals rather than FTS5 syntax.
-    """
-    tokens = query.split()
-    if not tokens:
-        return '""'
-    sanitized = []
-    for token in tokens:
-        escaped = token.replace('"', '""')
-        sanitized.append(f'"{escaped}"')
-    return " ".join(sanitized)
-
-
 def _row_to_episode(row: sqlite3.Row) -> Episode:
     """Convert a database row to an Episode dataclass."""
     ts_str: str = row["timestamp"]
@@ -286,7 +269,21 @@ class SqliteMemoryAdapter(MemoryPort):
         *,
         limit: int = 3,
     ) -> list[SessionSummary]:
-        return await asyncio.to_thread(self._search_sessions_sync, query, limit)
+        if not query.strip():
+            return []
+
+        search_results = await self._search.search(
+            query,
+            limit=self._session_search_truncate_chars // _AVG_EPISODE_CHARS,
+        )
+
+        if not search_results:
+            return []
+
+        episode_ids = [r.id for r in search_results]
+        episodes_by_id = await asyncio.to_thread(self._load_episodes_by_ids_sync, episode_ids)
+        episodes = [episodes_by_id[eid] for eid in episode_ids if eid in episodes_by_id]
+        return build_session_summaries(episodes, limit, self._session_search_truncate_chars)
 
     def inject_shared_context(self, context: SharedContext) -> None:
         self._shared_context = context
@@ -405,38 +402,3 @@ class SqliteMemoryAdapter(MemoryPort):
                 conn.close()
 
         return self._with_retry(_do_count)
-
-    def _search_sessions_sync(self, query: str, limit: int) -> list[SessionSummary]:
-        # Use search_index_fts (via SqliteSearchAdapter's tables) directly here
-        # because search_sessions needs episode-level grouping, not just IDs.
-        # We run the FTS query against search_index_fts and then load episodes.
-        from niuu.adapters.search.sqlite import _sanitize_fts_query as _sfq
-
-        safe_query = _sfq(query)
-
-        def _do_search() -> list[SessionSummary]:
-            conn = self._connect()
-            try:
-                rows = conn.execute(
-                    """
-                    SELECT s.id
-                    FROM search_index_fts
-                    JOIN search_index s ON s.rowid = search_index_fts.rowid
-                    WHERE search_index_fts MATCH ?
-                    ORDER BY bm25(search_index_fts)
-                    LIMIT ?
-                    """,
-                    (safe_query, self._session_search_truncate_chars // _AVG_EPISODE_CHARS),
-                ).fetchall()
-            finally:
-                conn.close()
-
-            if not rows:
-                return []
-
-            episode_ids = [r["id"] for r in rows]
-            episodes_by_id = self._load_episodes_by_ids_sync(episode_ids)
-            episodes = [episodes_by_id[eid] for eid in episode_ids if eid in episodes_by_id]
-            return build_session_summaries(episodes, limit, self._session_search_truncate_chars)
-
-        return self._with_retry(_do_search)

@@ -13,7 +13,6 @@ from ravn.adapters.memory.scoring import _format_episode_block, _recency_score
 from ravn.adapters.memory.sqlite import (
     SqliteMemoryAdapter,
     _combined_score,
-    _sanitize_fts_query,
 )
 from ravn.domain.models import Episode, Outcome, SharedContext
 
@@ -64,36 +63,6 @@ async def mem(tmp_path: Path) -> SqliteMemoryAdapter:
 # ---------------------------------------------------------------------------
 # Unit helpers
 # ---------------------------------------------------------------------------
-
-
-class TestSanitizeFtsQuery:
-    def test_basic_token(self) -> None:
-        result = _sanitize_fts_query("python")
-        assert result == '"python"'
-
-    def test_multiple_tokens(self) -> None:
-        result = _sanitize_fts_query("run tests")
-        assert result == '"run" "tests"'
-
-    def test_empty_query(self) -> None:
-        result = _sanitize_fts_query("")
-        assert result == '""'
-
-    def test_hyphenated_term(self) -> None:
-        # Hyphen should be treated literally, not as FTS5 NOT operator.
-        result = _sanitize_fts_query("pytest-asyncio")
-        assert result == '"pytest-asyncio"'
-
-    def test_fts5_special_chars_escaped(self) -> None:
-        result = _sanitize_fts_query('AND OR "test"')
-        # Each token wrapped in double quotes; internal quotes escaped.
-        assert '"AND"' in result
-        assert '"OR"' in result
-        assert '"""test"""' in result
-
-    def test_whitespace_only(self) -> None:
-        result = _sanitize_fts_query("   ")
-        assert result == '""'
 
 
 class TestRecencyScore:

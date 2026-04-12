@@ -175,22 +175,27 @@ class PostgresMemoryAdapter(MemoryPort):
     # ------------------------------------------------------------------
 
     async def initialize(self) -> None:
-        """Create the connection pool, ensure tables exist, and detect pgvector."""
+        """Create the connection pool, ensure tables exist, and detect pgvector.
+
+        When the search adapter is a ``PostgresSearchAdapter``, the pool is
+        shared via ``set_pool`` to avoid opening a second set of connections to
+        the same database.
+        """
         self._pool = await asyncpg.create_pool(
             self._dsn,
             min_size=self._pool_min_size,
             max_size=self._pool_max_size,
         )
-        if hasattr(self._search, "initialize"):
-            await self._search.initialize()  # type: ignore[union-attr]
+        if isinstance(self._search, PostgresSearchAdapter):
+            self._search.set_pool(self._pool)
+        await self._search.initialize()
 
     async def close(self) -> None:
-        """Close the connection pools gracefully."""
+        """Close the connection pool gracefully."""
         if self._pool is not None:
             await self._pool.close()
             self._pool = None
-        if hasattr(self._search, "close"):
-            await self._search.close()  # type: ignore[union-attr]
+        await self._search.close()
 
     # ------------------------------------------------------------------
     # MemoryPort implementation
