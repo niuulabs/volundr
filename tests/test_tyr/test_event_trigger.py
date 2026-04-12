@@ -306,6 +306,26 @@ class TestLoadTemplate:
         assert raid.name == "Raid for my-repo"
         assert "my-repo" in raid.prompt
 
+    def test_yaml_metacharacters_in_payload_do_not_inject(self, tmp_path):
+        """Payload values with YAML metacharacters must not alter document structure."""
+        template_file = tmp_path / "safe.yaml"
+        template_file.write_text(
+            textwrap.dedent("""\
+                name: "PR {event.title}"
+                feature_branch: main
+                base_branch: main
+                repos: []
+                phases: []
+            """),
+            encoding="utf-8",
+        )
+        # A crafted title that would break structure if interpolated before parsing
+        malicious_title = 'legit\\ninjected_key: injected_value'
+        tpl = load_template("safe", tmp_path, {"title": malicious_title})
+        # Name should contain the raw string, no injected keys
+        assert malicious_title in tpl.name
+        assert tpl.feature_branch == "main"
+
     def test_unknown_placeholder_left_intact(self, tmp_path):
         template_file = tmp_path / "partial.yaml"
         template_file.write_text(
@@ -863,6 +883,7 @@ class TestBuildEventTriggerAdapter:
             volundr_factory=StubVolundrFactory(),
             event_bus=InMemoryEventBus(),
             config=cfg,
+            initial_confidence=0.5,
         )
         assert len(adapter._rules) == 1
         assert adapter._rules[0].event_pattern == "github.pr.opened"
@@ -884,6 +905,7 @@ class TestBuildEventTriggerAdapter:
             volundr_factory=StubVolundrFactory(),
             event_bus=InMemoryEventBus(),
             config=cfg,
+            initial_confidence=0.5,
         )
         assert adapter._templates_dir == _BUNDLED_TEMPLATES_DIR
 

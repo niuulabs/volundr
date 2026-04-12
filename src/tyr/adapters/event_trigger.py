@@ -22,11 +22,13 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 from sleipnir.domain.events import SleipnirEvent
 from sleipnir.ports.events import SleipnirSubscriber, Subscription
+from tyr.api.tracker import _slugify
 from tyr.domain.models import (
     Phase,
     PhaseStatus,
@@ -46,9 +48,6 @@ _BUNDLED_TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
 # Regex matching {event.field_name} placeholders in template strings.
 _EVENT_PLACEHOLDER_RE = re.compile(r"\{event\.([^}]+)\}")
-
-# Confidence given to event-triggered sagas (not yet reviewed, reasonable start).
-_INITIAL_CONFIDENCE = 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -103,8 +102,20 @@ def _interpolate(text: str, payload: dict) -> str:
     return _EVENT_PLACEHOLDER_RE.sub(_replace, text)
 
 
-def _interpolate_list(items: list[str], payload: dict) -> list[str]:
-    return [_interpolate(item, payload) for item in items]
+def _interpolate_value(value: Any, payload: dict) -> Any:
+    """Recursively interpolate ``{event.*}`` placeholders in parsed YAML data.
+
+    Operates on already-parsed Python objects (dicts, lists, strings) so that
+    payload values containing YAML metacharacters cannot alter the document
+    structure.
+    """
+    if isinstance(value, str):
+        return _interpolate(value, payload)
+    if isinstance(value, dict):
+        return {k: _interpolate_value(v, payload) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_interpolate_value(item, payload) for item in value]
+    return value
 
 
 def load_template(name: str, templates_dir: Path, payload: dict) -> SagaTemplate:
@@ -126,8 +137,9 @@ def load_template(name: str, templates_dir: Path, payload: dict) -> SagaTemplate
         )
 
     raw = path.read_text(encoding="utf-8")
-    interpolated = _interpolate(raw, payload)
-    data = yaml.safe_load(interpolated)
+    # Parse YAML first, then interpolate — prevents payload values with YAML
+    # metacharacters from altering the document structure.
+    data = _interpolate_value(yaml.safe_load(raw), payload)
 
     phases = [
         TemplatePhase(
@@ -218,6 +230,7 @@ class EventTriggerAdapter:
         owner_id: str,
         default_model: str = "claude-sonnet-4-6",
         dedup_cache_size: int = 10_000,
+        initial_confidence: float = 0.5,
     ) -> None:
         self._subscriber = subscriber
         self._saga_repo = saga_repo
@@ -228,10 +241,12 @@ class EventTriggerAdapter:
         self._owner_id = owner_id
         self._default_model = default_model
         self._dedup_cache_size = dedup_cache_size
+        self._initial_confidence = initial_confidence
 
         self._subscription: Subscription | None = None
         self._seen: deque[str] = deque(maxlen=dedup_cache_size)
         self._seen_set: set[str] = set()
+        self._pending_tasks: set[asyncio.Task[None]] = set()
 
     @property
     def is_running(self) -> bool:
@@ -256,10 +271,16 @@ class EventTriggerAdapter:
 
     async def stop(self) -> None:
         """Unsubscribe and release resources."""
-        if self._subscription is None:
-            return
-        await self._subscription.unsubscribe()
-        self._subscription = None
+        if self._subscription is not None:
+            await self._subscription.unsubscribe()
+            self._subscription = None
+
+        for task in list(self._pending_tasks):
+            task.cancel()
+        if self._pending_tasks:
+            await asyncio.gather(*self._pending_tasks, return_exceptions=True)
+        self._pending_tasks.clear()
+
         logger.info("EventTriggerAdapter stopped")
 
     # ------------------------------------------------------------------
@@ -284,10 +305,12 @@ class EventTriggerAdapter:
                 continue
 
             self._add_dedup(dedup_key)
-            asyncio.create_task(
+            task = asyncio.create_task(
                 self._trigger_saga(event, rule),
                 name=f"event-trigger:{rule.saga_template}:{event.event_id}",
             )
+            self._pending_tasks.add(task)
+            task.add_done_callback(self._pending_tasks.discard)
 
     def _dedup_key(self, event: SleipnirEvent, template: str) -> str:
         correlation = event.correlation_id or event.event_id
@@ -317,7 +340,7 @@ class EventTriggerAdapter:
 
         now = datetime.now(UTC)
         saga_id = uuid.uuid4()
-        slug = re.sub(r"[^a-z0-9]+", "-", template.name.lower()).strip("-")[:60]
+        slug = _slugify(template.name)[:60]
 
         saga = Saga(
             id=saga_id,
@@ -329,7 +352,7 @@ class EventTriggerAdapter:
             feature_branch=template.feature_branch,
             base_branch=template.base_branch,
             status=SagaStatus.ACTIVE,
-            confidence=_INITIAL_CONFIDENCE,
+            confidence=self._initial_confidence,
             created_at=now,
             owner_id=self._owner_id,
         )
@@ -347,7 +370,7 @@ class EventTriggerAdapter:
                 number=phase_num,
                 name=tpl_phase.name,
                 status=PhaseStatus.ACTIVE,
-                confidence=_INITIAL_CONFIDENCE,
+                confidence=self._initial_confidence,
             )
             await self._saga_repo.save_phase(phase)
 
@@ -364,7 +387,7 @@ class EventTriggerAdapter:
                     declared_files=tpl_raid.declared_files,
                     estimate_hours=tpl_raid.estimate_hours,
                     status=raid_status,
-                    confidence=_INITIAL_CONFIDENCE,
+                    confidence=self._initial_confidence,
                     session_id=None,
                     branch=None,
                     chronicle_summary=None,
@@ -424,9 +447,9 @@ class EventTriggerAdapter:
             return
 
         for phase_idx, (phase, raids) in enumerate(phases):
-            for tpl_phase in template.phases[phase_idx : phase_idx + 1]:
-                for raid, tpl_raid in zip(raids, tpl_phase.raids):
-                    await self._spawn_raid(volundr, saga, phase, raid, tpl_raid)
+            tpl_phase = template.phases[phase_idx]
+            for raid, tpl_raid in zip(raids, tpl_phase.raids):
+                await self._spawn_raid(volundr, saga, phase, raid, tpl_raid)
 
     async def _spawn_raid(
         self,
@@ -539,6 +562,7 @@ def build_event_trigger_adapter(
     volundr_factory: VolundrFactory,
     event_bus: EventBusPort,
     config: object,  # tyr.config.EventTriggerConfig
+    initial_confidence: float,
 ) -> EventTriggerAdapter:
     """Construct an EventTriggerAdapter from application config.
 
@@ -569,4 +593,5 @@ def build_event_trigger_adapter(
         owner_id=cfg.owner_id,
         default_model=cfg.default_model,
         dedup_cache_size=cfg.dedup_cache_size,
+        initial_confidence=initial_confidence,
     )

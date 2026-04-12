@@ -509,6 +509,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         volundr_factory=app.state.volundr_factory,
                         event_bus=event_bus,
                         config=et_cfg,
+                        initial_confidence=settings.review.initial_confidence,
                     )
                     await event_trigger_adapter.start()
                     app.state.event_trigger_adapter = event_trigger_adapter
