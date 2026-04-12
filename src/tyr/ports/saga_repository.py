@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 from uuid import UUID
 
-from tyr.domain.models import Phase, PhaseStatus, Raid, Saga, SagaStatus
+from tyr.domain.models import Phase, Raid, Saga, SagaStatus
 
 
 class SagaRepository(ABC):
