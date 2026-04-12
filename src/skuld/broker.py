@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
@@ -28,6 +29,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from niuu.domain.logging import LoggingConfig
+from niuu.domain.outcome import parse_outcome_block
 from niuu.utils import import_class
 from skuld.channels import (
     ChannelRegistry,
@@ -42,6 +44,9 @@ from skuld.service_manager import (
     ServiceStatus,
 )
 from skuld.transport import CLITransport
+from sleipnir.adapters.in_process import InProcessBus
+from sleipnir.domain.catalog import ravn_session_ended
+from sleipnir.ports.events import SleipnirPublisher
 
 # ---------------------------------------------------------------------------
 # In-memory log buffer (Part 2: Pod Log Retrieval)
@@ -138,6 +143,11 @@ class SessionArtifacts:
     files_changed: list[str] = field(default_factory=list)
     turn_count: int = 0
     started_at: float = field(default_factory=time.monotonic)
+    total_tokens: int = 0
+    structured_outcome: dict[str, Any] | None = None
+    outcome_valid: bool = False
+    saga_id: str | None = None
+    raid_id: str | None = None
     _known_files: set[str] = field(default_factory=set)
     _pending_tool_results: dict[str, dict] = field(default_factory=dict)
 
@@ -386,7 +396,11 @@ class Broker:
     implementation selected by configuration.
     """
 
-    def __init__(self, settings: SkuldSettings | None = None):
+    def __init__(
+        self,
+        settings: SkuldSettings | None = None,
+        sleipnir_publisher: SleipnirPublisher | None = None,
+    ):
         self._settings = settings or SkuldSettings()
         self.session_id = self._settings.session.id
         self.model = self._settings.session.model
@@ -397,7 +411,11 @@ class Broker:
         self._channels = ChannelRegistry()
         self._http_client: httpx.AsyncClient | None = None
         self._http_client_jwt: str | None = None  # JWT used to create _http_client
-        self._artifacts = SessionArtifacts()
+        self._sleipnir_publisher: SleipnirPublisher = sleipnir_publisher or InProcessBus()
+        self._artifacts = SessionArtifacts(
+            saga_id=self._settings.session.saga_id,
+            raid_id=self._settings.session.raid_id,
+        )
         self._session_start_reported = False
         self._event_sequence = 0
         self._activity_state: str = "idle"
@@ -809,6 +827,7 @@ class Broker:
                     result_cost = (result_cost or 0) + usage["costUSD"]
 
             if total_tokens > 0:
+                self._artifacts.total_tokens += total_tokens
                 asyncio.create_task(
                     self._report_timeline_event(
                         {
@@ -1305,12 +1324,83 @@ class Broker:
             "unfinished_work": None,
         }
 
+    def _build_transcript(self) -> str:
+        """Concatenate all assistant turns to form the session transcript."""
+        return "\n\n".join(
+            turn.content
+            for turn in self._conversation_turns
+            if turn.role == "assistant" and turn.content
+        )
+
+    def _extract_and_store_outcome(self) -> None:
+        """Extract outcome block from the session transcript and store in artifacts.
+
+        No-ops silently when no outcome block is present or parsing fails.
+        """
+        transcript = self._build_transcript()
+        if not transcript:
+            return
+        try:
+            outcome = parse_outcome_block(transcript)
+            if outcome is None:
+                return
+            self._artifacts.structured_outcome = outcome.fields
+            self._artifacts.outcome_valid = outcome.valid
+        except Exception:
+            logger.warning("Failed to extract outcome block from transcript", exc_info=True)
+
+    async def _emit_session_ended_event(self) -> None:
+        """Emit ravn.session.ended via Sleipnir with structured outcome and saga/raid context.
+
+        Always emits the event — even when outcome extraction failed — so that
+        downstream Tyr pipeline executors receive session completion signals.
+        """
+        outcome_str = (
+            "SUCCESS" if self._artifacts.outcome_valid else "PARTIAL"
+        )
+        source = f"ravn:{self.session_id}"
+        persona = self._settings.session.name
+
+        try:
+            event = ravn_session_ended(
+                session_id=self.session_id,
+                persona=persona,
+                outcome=outcome_str,
+                token_count=self._artifacts.total_tokens,
+                duration_s=self._artifacts.duration_seconds,
+                source=source,
+                correlation_id=self.session_id,
+            )
+            if self._artifacts.structured_outcome is not None:
+                event.payload["structured_outcome"] = self._artifacts.structured_outcome
+                event.payload["outcome_valid"] = self._artifacts.outcome_valid
+            if self._artifacts.raid_id:
+                event.payload["raid_id"] = self._artifacts.raid_id
+            if self._artifacts.saga_id:
+                event.payload["saga_id"] = self._artifacts.saga_id
+            await self._sleipnir_publisher.publish(event)
+            logger.info(
+                "Session ended event emitted: session=%s outcome=%s saga=%s raid=%s",
+                self.session_id,
+                outcome_str,
+                self._artifacts.saga_id,
+                self._artifacts.raid_id,
+            )
+        except Exception:
+            logger.warning("Failed to emit session ended event", exc_info=True)
+
     async def _report_chronicle(self) -> None:
         """Report chronicle summary data to the Volundr API on shutdown.
 
         Mirrors ``_report_usage`` — fires once during shutdown, best-effort,
         never raises.
+
+        Also extracts the outcome block from the session transcript and emits
+        the ``ravn.session.ended`` Sleipnir event so Tyr can track raid completion.
         """
+        self._extract_and_store_outcome()
+        await self._emit_session_ended_event()
+
         if not self.volundr_api_url:
             return
 
