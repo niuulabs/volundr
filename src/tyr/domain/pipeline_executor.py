@@ -153,16 +153,7 @@ def build_stage_context_from_outcomes(
     :param outcomes: Mapping of participant name → structured outcome dict.
     :returns: Markdown-formatted context block.
     """
-    lines: list[str] = ["## Previous Stage Outcomes\n", f"### {stage_name}"]
-    for participant, outcome in outcomes.items():
-        if outcome:
-            lines.append(f"**{participant}**:")
-            for k, v in outcome.items():
-                lines.append(f"  - {k}: {v}")
-        else:
-            lines.append(f"**{participant}**: completed (no structured outcome)")
-    lines.append("")
-    return "\n".join(lines)
+    return _build_full_stage_context([(stage_name, outcomes)])
 
 
 def merge_stage_outcomes(
@@ -196,6 +187,8 @@ def merge_stage_outcomes(
                 merged[k] = merged.get(k, 0) + v
             else:
                 merged[k] = v
+    merged.pop("verdicts", None)
+    merged.pop("summaries", None)
     return merged
 
 

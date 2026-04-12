@@ -906,6 +906,15 @@ class TestMergeStageOutcomes:
     def test_empty_outcomes_returns_empty_dict(self):
         assert merge_stage_outcomes({}) == {}
 
+    def test_internal_accumulators_not_in_result(self):
+        outcomes = {
+            "a": {"verdict": "pass", "summary": "ok"},
+            "b": {"verdict": "pass", "summary": "fine"},
+        }
+        merged = merge_stage_outcomes(outcomes)
+        assert "verdicts" not in merged
+        assert "summaries" not in merged
+
     def test_float_numeric_fields_summed(self):
         outcomes = {
             "a": {"score": 1.5},
