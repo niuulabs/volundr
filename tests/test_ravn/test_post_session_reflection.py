@@ -13,7 +13,9 @@ from ravn.adapters.reflection.post_session import (
     PostSessionReflectionService,
     _build_page_content,
     _build_page_path,
+    _insert_timeline_entry,
     _merge_timeline_entry,
+    _strip_frontmatter,
     _titles_similar,
     fetch_relevant_learnings,
 )
@@ -500,3 +502,330 @@ async def test_fetch_relevant_learnings_returns_empty_on_error():
         mimir, repo_slug="myrepo", max_pages=5, token_budget=500
     )
     assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_fetch_relevant_learnings_no_repo_slug_returns_all_pages():
+    meta = MimirPageMeta(
+        path="learnings/general/some-learning",
+        title="Some learning",
+        summary="",
+        category="learnings",
+        updated_at=datetime(2026, 4, 1, tzinfo=UTC),
+    )
+    mimir = AsyncMock()
+    mimir.list_pages.return_value = [meta]
+    mimir.read_page.return_value = "---\ntitle: Some\n---\n\nBody text."
+
+    result = await fetch_relevant_learnings(mimir, repo_slug="", max_pages=5, token_budget=500)
+
+    assert "Body text" in result
+
+
+@pytest.mark.asyncio
+async def test_fetch_relevant_learnings_returns_empty_when_no_matching_repo():
+    meta = MimirPageMeta(
+        path="learnings/other-repo/some-learning",
+        title="Some learning",
+        summary="",
+        category="learnings",
+        updated_at=datetime(2026, 4, 1, tzinfo=UTC),
+    )
+    mimir = AsyncMock()
+    mimir.list_pages.return_value = [meta]
+
+    result = await fetch_relevant_learnings(
+        mimir, repo_slug="my-repo", max_pages=5, token_budget=500
+    )
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_fetch_relevant_learnings_skips_pages_with_read_error():
+    meta = MimirPageMeta(
+        path="learnings/general/some-learning",
+        title="Some learning",
+        summary="",
+        category="learnings",
+        updated_at=datetime(2026, 4, 1, tzinfo=UTC),
+    )
+    mimir = AsyncMock()
+    mimir.list_pages.return_value = [meta]
+    mimir.read_page.side_effect = RuntimeError("read error")
+
+    result = await fetch_relevant_learnings(mimir, repo_slug="", max_pages=5, token_budget=500)
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_fetch_relevant_learnings_skips_pages_with_empty_body():
+    meta = MimirPageMeta(
+        path="learnings/general/some-learning",
+        title="Some learning",
+        summary="",
+        category="learnings",
+        updated_at=datetime(2026, 4, 1, tzinfo=UTC),
+    )
+    mimir = AsyncMock()
+    mimir.list_pages.return_value = [meta]
+    # Body is only whitespace after stripping frontmatter.
+    mimir.read_page.return_value = "---\ntitle: Some\n---\n\n   "
+
+    result = await fetch_relevant_learnings(mimir, repo_slug="", max_pages=5, token_budget=500)
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_fetch_relevant_learnings_stops_at_token_budget():
+    metas = [
+        MimirPageMeta(
+            path=f"learnings/general/learning-{i}",
+            title=f"Learning {i}",
+            summary="",
+            category="learnings",
+            updated_at=datetime(2026, 4, 1, tzinfo=UTC),
+        )
+        for i in range(5)
+    ]
+    mimir = AsyncMock()
+    mimir.list_pages.return_value = metas
+    # Every page has a body that is 200 chars — total budget of 5 tokens (20 chars) exceeded
+    mimir.read_page.return_value = "---\ntitle: foo\n---\n\n" + "X" * 200
+
+    # token_budget=5 → char_budget=20; first entry already exceeds it.
+    result = await fetch_relevant_learnings(mimir, repo_slug="", max_pages=5, token_budget=5)
+    assert result == ""
+
+
+# ---------------------------------------------------------------------------
+# PostSessionReflectionService — lifecycle edge cases
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_stop_when_subscription_is_none_is_noop():
+    bus = InProcessBus()
+    mimir = AsyncMock()
+    llm = AsyncMock()
+    config = _make_config(enabled=True)
+    svc = PostSessionReflectionService(bus, mimir, llm, config)
+
+    # Never called start(), so _subscription is None.
+    await svc.stop()
+    assert svc._subscription is None
+
+
+@pytest.mark.asyncio
+async def test_stop_handles_unsubscribe_exception():
+    bus = InProcessBus()
+    mimir = AsyncMock()
+    llm = AsyncMock()
+    config = _make_config(enabled=True)
+    svc = PostSessionReflectionService(bus, mimir, llm, config)
+    await svc.start()
+
+    # Make unsubscribe raise.
+    svc._subscription.unsubscribe = AsyncMock(side_effect=RuntimeError("network fail"))
+
+    # Must not raise; subscription should still be cleared.
+    await svc.stop()
+    assert svc._subscription is None
+
+
+@pytest.mark.asyncio
+async def test_on_session_ended_catches_exception_from_process():
+    bus = InProcessBus()
+    mimir = AsyncMock()
+    llm = AsyncMock()
+    config = _make_config(enabled=True)
+    svc = PostSessionReflectionService(bus, mimir, llm, config)
+
+    # Patch _process to raise directly, bypassing its own error handling.
+    svc._process = AsyncMock(side_effect=RuntimeError("internal failure"))
+
+    fake_event = ravn_session_ended(
+        session_id="s",
+        persona="p",
+        outcome="error",
+        token_count=0,
+        duration_s=0.0,
+        repo_slug="",
+        source="test",
+    )
+    # Must not raise — _on_session_ended swallows all exceptions.
+    await svc._on_session_ended(fake_event)
+
+
+# ---------------------------------------------------------------------------
+# _run_reflection — non-dict JSON
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_skips_on_llm_returning_json_array():
+    bus = InProcessBus()
+    mimir = AsyncMock()
+    llm = AsyncMock()
+    llm.generate.return_value = _make_llm_response('["a", "b"]')
+    config = _make_config()
+    svc = PostSessionReflectionService(bus, mimir, llm, config)
+
+    await svc._process(
+        {
+            "session_id": "s",
+            "persona": "p",
+            "outcome": "ok",
+            "token_count": 0,
+            "duration_s": 0.0,
+            "repo_slug": "",
+        }
+    )
+    mimir.upsert_page.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# _write_learning — edge cases
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_write_learning_skips_on_empty_title():
+    bus = InProcessBus()
+    mimir = AsyncMock()
+    llm = AsyncMock()
+    config = _make_config()
+    svc = PostSessionReflectionService(bus, mimir, llm, config)
+
+    await svc._write_learning(
+        {"title": "   ", "learning": "foo", "type": "observation", "tags": [], "evidence": "e"},
+        {"session_id": "s", "repo_slug": ""},
+    )
+    mimir.upsert_page.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_write_learning_handles_upsert_error_on_update():
+    existing = _make_mimir_page("learnings/general/some-thing", "Learning: Some thing")
+    bus = InProcessBus()
+    mimir = AsyncMock()
+    mimir.search.return_value = [existing]
+    mimir.upsert_page.side_effect = RuntimeError("write error")
+    llm = AsyncMock()
+    config = _make_config()
+    svc = PostSessionReflectionService(bus, mimir, llm, config)
+
+    learning = {
+        "title": "Some thing", "learning": "foo", "type": "observation",
+        "tags": [], "evidence": "e",
+    }
+    # Must not raise.
+    await svc._write_learning(learning, {"session_id": "s", "repo_slug": ""})
+
+
+@pytest.mark.asyncio
+async def test_write_learning_handles_upsert_error_on_create():
+    bus = InProcessBus()
+    mimir = AsyncMock()
+    mimir.search.return_value = []
+    mimir.upsert_page.side_effect = RuntimeError("write error")
+    llm = AsyncMock()
+    config = _make_config()
+    svc = PostSessionReflectionService(bus, mimir, llm, config)
+
+    learning = {
+        "title": "New thing", "learning": "foo", "type": "observation",
+        "tags": [], "evidence": "e",
+    }
+    # Must not raise.
+    await svc._write_learning(learning, {"session_id": "s", "repo_slug": ""})
+
+
+# ---------------------------------------------------------------------------
+# _find_existing_page — edge cases
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_find_existing_page_returns_none_for_empty_title():
+    bus = InProcessBus()
+    mimir = AsyncMock()
+    llm = AsyncMock()
+    config = _make_config()
+    svc = PostSessionReflectionService(bus, mimir, llm, config)
+
+    result = await svc._find_existing_page("", "")
+    assert result is None
+    mimir.search.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_find_existing_page_returns_none_on_search_error():
+    bus = InProcessBus()
+    mimir = AsyncMock()
+    mimir.search.side_effect = RuntimeError("search failure")
+    llm = AsyncMock()
+    config = _make_config()
+    svc = PostSessionReflectionService(bus, mimir, llm, config)
+
+    result = await svc._find_existing_page("some relevant title", "")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_find_existing_page_skips_non_learnings_category():
+    non_learning = _make_mimir_page("docs/some-doc", "Some doc", category="docs")
+    bus = InProcessBus()
+    mimir = AsyncMock()
+    mimir.search.return_value = [non_learning]
+    llm = AsyncMock()
+    config = _make_config()
+    svc = PostSessionReflectionService(bus, mimir, llm, config)
+
+    result = await svc._find_existing_page("Some doc", "")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_find_existing_page_returns_none_when_no_title_matches():
+    # A learnings page in results that does NOT match the title (different topic).
+    unrelated = _make_mimir_page(
+        "learnings/general/kubernetes-pod-limits",
+        "Learning: Kubernetes pod memory limits",
+    )
+    bus = InProcessBus()
+    mimir = AsyncMock()
+    mimir.search.return_value = [unrelated]
+    llm = AsyncMock()
+    config = _make_config()
+    svc = PostSessionReflectionService(bus, mimir, llm, config)
+
+    result = await svc._find_existing_page("pytest asyncio configuration", "")
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _insert_timeline_entry — no frontmatter delimiter
+# ---------------------------------------------------------------------------
+
+
+def test_insert_timeline_entry_without_any_frontmatter():
+    content = "# Some page\n\nSome body text without any dashes."
+    result = _insert_timeline_entry(content, "new entry line")
+    assert "new entry line" in result
+
+
+# ---------------------------------------------------------------------------
+# _strip_frontmatter — edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_strip_frontmatter_content_without_opening_delimiter():
+    content = "# Just a heading\n\nNo frontmatter here."
+    result = _strip_frontmatter(content)
+    assert result == content
+
+
+def test_strip_frontmatter_content_with_no_closing_delimiter():
+    content = "---\ntitle: Missing closing\nNo closing delimiter anywhere."
+    result = _strip_frontmatter(content)
+    assert result == content
