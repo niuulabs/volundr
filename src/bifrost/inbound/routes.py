@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 import bifrost.metrics as _metrics
 from bifrost.auth import AgentIdentity
-from bifrost.config import AgentPermissions, AuditDetailLevel, BifrostConfig
+from bifrost.config import AgentPermissions, AuditDetailLevel, BifrostConfig, BudgetGuardrailConfig
 from bifrost.domain.models import RequestLog, TokenUsage
 from bifrost.domain.routing import RuleRejectError
 from bifrost.inbound.chat_completions import (
@@ -51,7 +51,7 @@ from bifrost.inbound.tracking import (
 from bifrost.ports.audit import AuditEvent, AuditPort
 from bifrost.ports.auth import AuthPort
 from bifrost.ports.cache import CachePort
-from bifrost.ports.events import CostEventEmitter
+from bifrost.ports.events import BudgetDegradedEvent, CostEventEmitter
 from bifrost.ports.rules import RoutingContext
 from bifrost.ports.usage_store import UsageRecord, UsageStore
 from bifrost.pricing import ModelPricing, calculate_cost
@@ -329,19 +329,37 @@ def _check_model_access(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_degraded_model(current_model: str, budget_cfg: BudgetGuardrailConfig) -> str:
+    """Return the next cheaper model in the degradation chain, or warn_target if chain is empty."""
+    chain = budget_cfg.degradation_chain
+    if not chain:
+        return budget_cfg.warn_target
+
+    try:
+        idx = chain.index(current_model)
+    except ValueError:
+        # Model not in chain — use final (cheapest) entry as safe fallback.
+        return chain[-1]
+
+    next_idx = min(idx + 1, len(chain) - 1)
+    return chain[next_idx]
+
+
 async def _evaluate_guardrails(
     request: AnthropicRequest,
     identity: AgentIdentity,
     config: BifrostConfig,
     store: UsageStore,
     agent_perms: AgentPermissions,
+    event_emitter: CostEventEmitter | None = None,
     agent_cost_today: float | None = None,
 ) -> tuple[AnthropicRequest, RoutingContext, str | None]:
     """Evaluate budget and context-window guardrails before routing.
 
     This runs *after* ``_check_quotas`` so the hard-limit 429 (agent budget
     exhausted) is always raised there first.  This function handles the
-    *soft* budget path: routing to a cheaper model and injecting the
+    *soft* budget path: routing to a cheaper model, emitting a
+    ``bifrost.budget.degraded`` event, and injecting the
     ``X-Bifrost-Budget-Warning`` response header.
 
     Args:
@@ -351,6 +369,7 @@ async def _evaluate_guardrails(
         store:            Usage store (queried only when ``agent_cost_today``
                           is not supplied).
         agent_perms:      Pre-resolved permissions for the caller.
+        event_emitter:    Optional emitter for budget degradation events.
         agent_cost_today: Agent cost already fetched by ``_check_quotas``
                           (avoids a duplicate store round-trip).  When
                           ``None``, the store is queried directly.
@@ -358,9 +377,8 @@ async def _evaluate_guardrails(
     Returns:
         A 3-tuple of:
         - ``request``      — possibly with model overridden (budget warn_action).
-        - ``context``      — ``RoutingContext`` with ``agent_budget_pct`` set so
-                             that declarative budget rules in the rule engine also
-                             fire correctly.
+        - ``context``      — ``RoutingContext`` with ``agent_budget_pct`` and
+                             ``agent_id`` set so that declarative rules fire.
         - ``budget_warn``  — header value for ``X-Bifrost-Budget-Warning``, or
                              ``None`` when no warning is applicable.
 
@@ -394,15 +412,41 @@ async def _evaluate_guardrails(
         agent_budget_pct = pct_consumed
 
         if pct_consumed >= budget_cfg.warn_at_pct:
+            original_model = request.model
+            degraded_model = _resolve_degraded_model(original_model, budget_cfg)
             if budget_cfg.warn_action == "route_to":
-                request = request.model_copy(update={"model": budget_cfg.warn_target})
+                request = request.model_copy(update={"model": degraded_model})
             budget_warn = (
                 f"budget_consumed={pct_consumed:.1f}% "
                 f"(${agent_cost:.4f}/${limit:.4f}); "
-                f"routed_to={budget_cfg.warn_target}"
+                f"routed_to={degraded_model}"
             )
+            logger.info(
+                "Budget degradation: agent=%s pct=%.1f%% model %s -> %s (spent=$%.4f limit=$%.4f)",
+                identity.agent_id,
+                pct_consumed,
+                original_model,
+                degraded_model,
+                agent_cost,
+                limit,
+            )
+            if event_emitter is not None:
+                await event_emitter.emit_budget_degraded(
+                    BudgetDegradedEvent(
+                        agent_id=identity.agent_id,
+                        session_id=identity.session_id,
+                        original_model=original_model,
+                        degraded_model=degraded_model,
+                        budget_pct_consumed=pct_consumed,
+                        daily_limit_usd=limit,
+                        spent_usd=agent_cost,
+                    )
+                )
 
-    context = RoutingContext(agent_budget_pct=agent_budget_pct)
+    context = RoutingContext(
+        agent_budget_pct=agent_budget_pct,
+        agent_id=identity.agent_id,
+    )
     return request, context, budget_warn
 
 
@@ -684,7 +728,7 @@ def create_router(
         # --- Guardrail evaluation (budget + context-window) ---
         # Pass agent_cost_today to avoid a duplicate store query.
         request, routing_ctx, budget_warn = await _evaluate_guardrails(
-            request, identity, config, store, agent_perms, agent_cost_today
+            request, identity, config, store, agent_perms, event_emitter, agent_cost_today
         )
 
         request_id = str(raw_request.state.correlation_id)
@@ -1050,7 +1094,7 @@ def create_router(
         # Pass agent_cost_today to avoid a duplicate store query.
         try:
             request, routing_ctx, budget_warn = await _evaluate_guardrails(
-                request, identity, config, store, agent_perms, agent_cost_today
+                request, identity, config, store, agent_perms, event_emitter, agent_cost_today
             )
         except HTTPException as exc:
             return openai_error_response(exc.status_code, exc.detail, "rate_limit_error")
@@ -1312,7 +1356,7 @@ def create_router(
         # Pass agent_cost_today to avoid a duplicate store query.
         try:
             request, routing_ctx, budget_warn = await _evaluate_guardrails(
-                request, identity, config, store, agent_perms, agent_cost_today
+                request, identity, config, store, agent_perms, event_emitter, agent_cost_today
             )
         except HTTPException as exc:
             return ollama_error_response(exc.status_code, exc.detail)
