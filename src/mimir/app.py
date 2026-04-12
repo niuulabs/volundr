@@ -52,12 +52,10 @@ def _build_embed_fn(model_name: str):  # type: ignore[return]
 
     async def _embed(text: str) -> list[float]:
         nonlocal _model
-        if _model is None:
-            import asyncio
-
-            _model = await asyncio.to_thread(SentenceTransformer, model_name)
         import asyncio
 
+        if _model is None:
+            _model = await asyncio.to_thread(SentenceTransformer, model_name)
         vector = await asyncio.to_thread(_model.encode, text, normalize_embeddings=True)
         return vector.tolist()
 

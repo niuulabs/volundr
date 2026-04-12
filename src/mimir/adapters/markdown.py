@@ -60,6 +60,7 @@ logger = logging.getLogger(__name__)
 
 # Maximum characters per search chunk (~500 tokens).
 _CHUNK_MAX_CHARS = 2000
+_SEARCH_RESULT_LIMIT = 20
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -270,8 +271,6 @@ class MarkdownMimirAdapter(MimirPort):
 
         Returns an empty list — page creation is delegated to the agent via
         ``upsert_page()``.  The raw source is stored for staleness tracking.
-        When a SearchPort is configured the raw source content is also indexed
-        so that ``mimir_query`` can surface it before wiki pages are written.
         """
         self._write_raw_source(source)
         self._append_log(
@@ -280,10 +279,6 @@ class MarkdownMimirAdapter(MimirPort):
             f"source_id={source.source_id} type={source.source_type}",
         )
         logger.info("mimir: ingested source %r (%s)", source.title, source.source_id)
-
-        if self._search_port is not None:
-            await self._index_source(source)
-
         return []
 
     async def query(self, question: str) -> MimirQueryResult:
@@ -353,7 +348,7 @@ class MarkdownMimirAdapter(MimirPort):
 
     async def _search_via_port(self, query: str) -> list[MimirPage]:
         """Delegate search to the configured SearchPort."""
-        search_results = await self._search_port.search(query, limit=20)  # type: ignore[union-attr]
+        search_results = await self._search_port.search(query, limit=_SEARCH_RESULT_LIMIT)  # type: ignore[union-attr]
 
         seen_paths: dict[str, tuple[float, MimirPage]] = {}
         for result in search_results:
@@ -751,6 +746,8 @@ class MarkdownMimirAdapter(MimirPort):
         if self._search_port is None:
             return 0
 
+        # Wipe the index before re-indexing to avoid stale orphan chunks.
+        await self._search_port.rebuild()
         self._page_chunk_counts.clear()
         count = 0
         for md_path in self._wiki.rglob("*.md"):
@@ -783,20 +780,6 @@ class MarkdownMimirAdapter(MimirPort):
             await self._search_port.index(f"{path}::{i}", chunk_content, chunk_meta)
 
         self._page_chunk_counts[path] = len(chunks)
-
-    async def _index_source(self, source: MimirSource) -> None:
-        """Index a raw source's content under its source_id."""
-        assert self._search_port is not None  # noqa: S101 — caller-checked
-
-        chunk_id = f"raw::{source.source_id}"
-        metadata: dict[str, Any] = {
-            "page_path": "",
-            "section_heading": source.title,
-            "category": "raw",
-            "page_type": "source",
-            "source_id": source.source_id,
-        }
-        await self._search_port.index(chunk_id, source.content, metadata)
 
     # ------------------------------------------------------------------
     # Raw source storage

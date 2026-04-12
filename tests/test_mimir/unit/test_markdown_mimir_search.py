@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from mimir.adapters.markdown import (
+    _SEARCH_RESULT_LIMIT,
     MarkdownMimirAdapter,
     _append_paragraphs,
     _chunk_markdown,
@@ -239,6 +240,14 @@ async def test_search_skips_results_for_missing_pages(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_search_uses_search_result_limit_constant(tmp_path: Path) -> None:
+    port = _make_mock_search_port()
+    adapter = _make_adapter(tmp_path, search_port=port)
+    await adapter.search("anything")
+    port.search.assert_called_once_with("anything", limit=_SEARCH_RESULT_LIMIT)
+
+
+@pytest.mark.asyncio
 async def test_search_falls_back_to_keywords_without_port(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path, search_port=None)
     await adapter.upsert_page("technical/memory.md", "# Memory\n\nEpisodic storage.")
@@ -305,30 +314,14 @@ async def test_upsert_page_without_search_port_still_works(tmp_path: Path) -> No
 
 
 @pytest.mark.asyncio
-async def test_ingest_indexes_source_content(tmp_path: Path) -> None:
+async def test_ingest_does_not_call_search_port(tmp_path: Path) -> None:
     port = _make_mock_search_port()
     adapter = _make_adapter(tmp_path, search_port=port)
 
     src = _make_source(content="Deploying services to Kubernetes clusters.", title="K8s Deploy")
     await adapter.ingest(src)
 
-    indexed_ids = [c.args[0] for c in port.index.call_args_list]
-    assert any(id_.startswith("raw::") for id_ in indexed_ids)
-
-
-@pytest.mark.asyncio
-async def test_ingest_source_metadata_contains_source_id(tmp_path: Path) -> None:
-    port = _make_mock_search_port()
-    adapter = _make_adapter(tmp_path, search_port=port)
-
-    src = _make_source(title="My Doc")
-    await adapter.ingest(src)
-
-    raw_calls = [c for c in port.index.call_args_list if c.args[0].startswith("raw::")]
-    assert raw_calls, "Expected at least one raw:: index call"
-    metadata = raw_calls[0].args[2]
-    assert metadata["source_id"] == src.source_id
-    assert metadata["category"] == "raw"
+    port.index.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -353,12 +346,23 @@ async def test_rebuild_indexes_all_wiki_pages(tmp_path: Path) -> None:
     await adapter.upsert_page("projects/b.md", "# B\n\nContent B.")
     port.index.reset_mock()
     port.remove.reset_mock()
+    port.rebuild.reset_mock()
 
-    adapter._page_chunk_counts.clear()
     count = await adapter.rebuild_search_index()
 
     assert count == 2
     assert port.index.called
+    port.rebuild.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_rebuild_calls_port_rebuild_to_wipe_index(tmp_path: Path) -> None:
+    port = _make_mock_search_port()
+    adapter = _make_adapter(tmp_path, search_port=port)
+
+    await adapter.rebuild_search_index()
+
+    port.rebuild.assert_called_once()
 
 
 @pytest.mark.asyncio
