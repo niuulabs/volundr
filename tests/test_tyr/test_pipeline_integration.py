@@ -539,3 +539,68 @@ async def test_approve_gate_advances_to_next_pending_phase() -> None:
     # Saga still active (approval-2 gate not yet reached)
     saga_state = await executor.get_saga(saga.id)
     assert saga_state.status == SagaStatus.ACTIVE
+
+
+# ---------------------------------------------------------------------------
+# Test 8: gate→gate pipeline (regression for approve_gate bug)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_approve_gate_followed_by_second_gate() -> None:
+    """Approving gate1 when gate2 follows immediately must GATE (not ACTIVE) the next phase.
+
+    Regression test for the bug where approve_gate called _advance_phase directly,
+    bypassing gate detection in _transition_to_next_phase.
+    """
+    # Pipeline: review → gate1 → gate2
+    pipeline = textwrap.dedent(
+        """
+        name: "chained-gates"
+        feature_branch: "feat/test"
+        base_branch: "main"
+        repos:
+          - "test/repo"
+        stages:
+          - name: review
+            sequential:
+              - name: "Review"
+                persona: reviewer
+                prompt: "Review"
+          - name: gate1
+            gate: human
+            notify: []
+          - name: gate2
+            gate: human
+            notify: []
+        """
+    )
+    executor, repo, _ = _make_executor()
+
+    saga = await executor.create_from_yaml(pipeline)
+    phases = await repo.get_phases_by_saga(saga.id)
+    assert len(phases) == 3  # review, gate1, gate2
+
+    # Complete review → gate1 should become GATED
+    phase1_raids = await repo.get_raids_by_phase(phases[0].id)
+    await executor.receive_outcome(raid_id=phase1_raids[0].id, outcome={"verdict": "pass"})
+
+    gate1 = await repo.get_phase(phases[1].id)
+    assert gate1.status == PhaseStatus.GATED, "gate1 should be GATED after review completes"
+
+    # Approve gate1 → gate2 must become GATED (not ACTIVE)
+    await executor.approve_gate(saga.id, phases[1].id)
+
+    gate2 = await repo.get_phase(phases[2].id)
+    assert gate2.status == PhaseStatus.GATED, (
+        "gate2 should be GATED after approving gate1 — was ACTIVE before the bug fix"
+    )
+
+    # Saga still active — gate2 not yet approved
+    saga_state = await executor.get_saga(saga.id)
+    assert saga_state.status == SagaStatus.ACTIVE
+
+    # Approve gate2 → saga completes
+    await executor.approve_gate(saga.id, phases[2].id)
+    saga_final = await executor.get_saga(saga.id)
+    assert saga_final.status == SagaStatus.COMPLETE
