@@ -444,7 +444,7 @@ class SessionActivitySubscriber:
                 description = f"PR {pr_url or pr_id or 'ready'} — {raid.tracker_id}"
                 _event = _catalog_raid_needs_approval(
                     raid_id=raid.tracker_id,
-                    saga_id="",
+                    saga_id=str(raid.phase_id),
                     description=description,
                     source="tyr:activity_subscriber",
                     correlation_id=raid.session_id or raid.tracker_id,

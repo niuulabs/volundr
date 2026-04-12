@@ -52,6 +52,7 @@ RAVN_TURN_START: str = "ravn.turn.start"
 RAVN_TOOL_START: str = "ravn.tool.start"
 
 #: A Ravn task completed successfully (all turns and tool calls done).
+#: @deprecated Use RAVN_TASK_COMPLETED ("ravn.task.completed") instead.
 RAVN_TASK_COMPLETE: str = "ravn.task.complete"
 
 #: The agent requires a human decision before proceeding (urgency ≥ 0.8).

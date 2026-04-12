@@ -22,6 +22,7 @@ Usage::
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -131,11 +132,13 @@ def ravn_session_started(
     return SleipnirEvent(
         event_type=registry.RAVN_SESSION_STARTED,
         source=source,
-        payload={
-            "session_id": session_id,
-            "persona": persona,
-            "repo_slug": repo_slug,
-        },
+        payload=dataclasses.asdict(
+            RavnSessionStartedPayload(
+                session_id=session_id,
+                persona=persona,
+                repo_slug=repo_slug,
+            )
+        ),
         summary=f"Ravn session started: {session_id} persona={persona}",
         urgency=0.2,
         domain="code",
@@ -158,13 +161,15 @@ def ravn_session_ended(
     return SleipnirEvent(
         event_type=registry.RAVN_SESSION_ENDED,
         source=source,
-        payload={
-            "session_id": session_id,
-            "persona": persona,
-            "outcome": outcome,
-            "token_count": token_count,
-            "duration_s": duration_s,
-        },
+        payload=dataclasses.asdict(
+            RavnSessionEndedPayload(
+                session_id=session_id,
+                persona=persona,
+                outcome=outcome,
+                token_count=token_count,
+                duration_s=duration_s,
+            )
+        ),
         summary=f"Ravn session ended: {session_id} outcome={outcome} tokens={token_count}",
         urgency=0.3,
         domain="code",
@@ -185,11 +190,13 @@ def ravn_task_completed(
     return SleipnirEvent(
         event_type=registry.RAVN_TASK_COMPLETED,
         source=source,
-        payload={
-            "task_id": task_id,
-            "persona": persona,
-            "outcome": outcome,
-        },
+        payload=dataclasses.asdict(
+            RavnTaskCompletedPayload(
+                task_id=task_id,
+                persona=persona,
+                outcome=outcome,
+            )
+        ),
         summary=f"Ravn task completed: {task_id} outcome={outcome}",
         urgency=0.4 if outcome != "success" else 0.2,
         domain="code",
@@ -211,12 +218,14 @@ def volundr_session_started(
     return SleipnirEvent(
         event_type=registry.VOLUNDR_SESSION_STARTED,
         source=source,
-        payload={
-            "session_id": session_id,
-            "user_id": user_id,
-            "repo": repo,
-            "branch": branch,
-        },
+        payload=dataclasses.asdict(
+            VolundrSessionStartedPayload(
+                session_id=session_id,
+                user_id=user_id,
+                repo=repo,
+                branch=branch,
+            )
+        ),
         summary=f"Volundr session started: {session_id}",
         urgency=0.2,
         domain="code",
@@ -237,11 +246,13 @@ def volundr_session_failed(
     return SleipnirEvent(
         event_type=registry.VOLUNDR_SESSION_FAILED,
         source=source,
-        payload={
-            "session_id": session_id,
-            "error": error,
-            "user_id": user_id,
-        },
+        payload=dataclasses.asdict(
+            VolundrSessionFailedPayload(
+                session_id=session_id,
+                error=error,
+                user_id=user_id,
+            )
+        ),
         summary=f"Volundr session failed: {session_id} — {error[:80]}",
         urgency=0.8,
         domain="infrastructure",
@@ -262,11 +273,13 @@ def tyr_saga_created(
     return SleipnirEvent(
         event_type=registry.TYR_SAGA_CREATED,
         source=source,
-        payload={
-            "saga_id": saga_id,
-            "template": template,
-            "trigger_event": trigger_event,
-        },
+        payload=dataclasses.asdict(
+            TyrSagaCreatedPayload(
+                saga_id=saga_id,
+                template=template,
+                trigger_event=trigger_event,
+            )
+        ),
         summary=f"Tyr saga created: {saga_id} template={template}",
         urgency=0.3,
         domain="code",
@@ -287,11 +300,13 @@ def tyr_saga_completed(
     return SleipnirEvent(
         event_type=registry.TYR_SAGA_COMPLETED,
         source=source,
-        payload={
-            "saga_id": saga_id,
-            "outcome": outcome,
-            "phases_completed": phases_completed,
-        },
+        payload=dataclasses.asdict(
+            TyrSagaCompletedPayload(
+                saga_id=saga_id,
+                outcome=outcome,
+                phases_completed=phases_completed,
+            )
+        ),
         summary=f"Tyr saga completed: {saga_id} outcome={outcome} phases={phases_completed}",
         urgency=0.4,
         domain="code",
@@ -312,11 +327,13 @@ def tyr_raid_needs_approval(
     return SleipnirEvent(
         event_type=registry.TYR_RAID_NEEDS_APPROVAL,
         source=source,
-        payload={
-            "raid_id": raid_id,
-            "saga_id": saga_id,
-            "description": description,
-        },
+        payload=dataclasses.asdict(
+            TyrRaidNeedsApprovalPayload(
+                raid_id=raid_id,
+                saga_id=saga_id,
+                description=description,
+            )
+        ),
         summary=f"Raid needs approval: {raid_id} — {description[:80]}",
         urgency=0.8,
         domain="code",
@@ -336,16 +353,19 @@ def bifrost_budget_degraded(
 ) -> SleipnirEvent:
     """Emit when a tenant's daily spend crosses 80 % of their cap."""
     pct = (current_spend / cap * 100) if cap > 0 else 0.0
+    base = dataclasses.asdict(
+        BifrostBudgetDegradedPayload(
+            tenant_id=tenant_id,
+            current_spend=current_spend,
+            cap=cap,
+            downgraded_to=downgraded_to,
+        )
+    )
+    payload = {**base, "pct_consumed": round(pct, 2)}
     return SleipnirEvent(
         event_type=registry.BIFROST_BUDGET_DEGRADED,
         source=source,
-        payload={
-            "tenant_id": tenant_id,
-            "current_spend": current_spend,
-            "cap": cap,
-            "downgraded_to": downgraded_to,
-            "pct_consumed": round(pct, 2),
-        },
+        payload=payload,
         summary=(
             f"Budget degraded for tenant {tenant_id}: "
             f"${current_spend:.4f}/${cap:.4f} ({pct:.1f}%) → {downgraded_to}"
@@ -369,11 +389,13 @@ def mimir_page_written(
     return SleipnirEvent(
         event_type=registry.MIMIR_PAGE_WRITTEN,
         source=source,
-        payload={
-            "page_path": page_path,
-            "category": category,
-            "author": author,
-        },
+        payload=dataclasses.asdict(
+            MimirPageWrittenPayload(
+                page_path=page_path,
+                category=category,
+                author=author,
+            )
+        ),
         summary=f"Mimir page written: {page_path} by {author}",
         urgency=0.1,
         domain="code",
@@ -394,11 +416,13 @@ def mimir_dream_completed(
     return SleipnirEvent(
         event_type=registry.MIMIR_DREAM_COMPLETED,
         source=source,
-        payload={
-            "pages_updated": pages_updated,
-            "entities_created": entities_created,
-            "lint_fixes": lint_fixes,
-        },
+        payload=dataclasses.asdict(
+            MimirDreamCompletedPayload(
+                pages_updated=pages_updated,
+                entities_created=entities_created,
+                lint_fixes=lint_fixes,
+            )
+        ),
         summary=(
             f"Mimir dream completed: {pages_updated} pages updated, "
             f"{entities_created} entities, {lint_fixes} lint fixes"
