@@ -42,7 +42,7 @@ Configuration example
 
 Transport ladder
 ----------------
-See ``docs/sleipnir-transports.md`` for the full ladder.
+See ``docs/site/ravn/operations/sleipnir-transports.md`` for the full ladder.
 """
 
 from __future__ import annotations
@@ -206,8 +206,9 @@ class WebhookPublisher(SleipnirPublisher):
         if self._client is None:
             raise RuntimeError("WebhookPublisher is not started. Call start() first.")
         body = _encode_event(event)
-        for url in self._publish_urls:
-            await self._post_with_retry(url, body, event)
+        await asyncio.gather(
+            *(self._post_with_retry(url, body, event) for url in self._publish_urls)
+        )
 
     async def publish_batch(self, events: list[SleipnirEvent]) -> None:
         """Publish all *events* in iteration order."""
@@ -325,7 +326,6 @@ class WebhookSubscriber(SleipnirSubscriber):
         self._endpoint_path = endpoint_path
 
         self._subscriptions: list[_BaseSubscription] = []
-        self._server_task: asyncio.Task[None] | None = None
 
         self.router: APIRouter = APIRouter()  # type: ignore[name-defined]
         self.router.add_api_route(
@@ -343,12 +343,7 @@ class WebhookSubscriber(SleipnirSubscriber):
         )
 
     async def stop(self) -> None:
-        """Cancel the uvicorn server task and clean up subscriptions."""
-        if self._server_task is not None:
-            self._server_task.cancel()
-            with suppress(asyncio.CancelledError, Exception):
-                await self._server_task
-            self._server_task = None
+        """Clean up subscriptions."""
         logger.debug("WebhookSubscriber: stopped")
 
     async def __aenter__(self) -> WebhookSubscriber:
