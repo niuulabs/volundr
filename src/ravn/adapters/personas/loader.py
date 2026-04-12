@@ -24,14 +24,30 @@ Persona YAML format::
       primary_alias: balanced
       thinking_enabled: true
     iteration_budget: 40
+    produces:
+      event_type: review.completed
+      schema:
+        verdict:
+          type: enum
+          values: [pass, fail, needs_changes]
+        summary:
+          type: string
+    consumes:
+      event_types: [code.changed, review.requested]
+      injects: [repo, branch, diff_url]
+    fan_in:
+      strategy: all_must_pass
+      contributes_to: review.verdict
 """
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
+from niuu.domain.outcome import OutcomeField, OutcomeSchema, generate_outcome_instruction
 from ravn.config import ProjectConfig, _safe_int
 from ravn.ports.persona import PersonaPort
 
@@ -52,6 +68,30 @@ class PersonaLLMConfig:
 
 
 @dataclass
+class PersonaProduces:
+    """What this persona outputs when it completes."""
+
+    event_type: str = ""
+    schema: dict[str, OutcomeField] = field(default_factory=dict)
+
+
+@dataclass
+class PersonaConsumes:
+    """What input this persona expects from previous stages."""
+
+    event_types: list[str] = field(default_factory=list)
+    injects: list[str] = field(default_factory=list)
+
+
+@dataclass
+class PersonaFanIn:
+    """How this persona's output combines with parallel peers."""
+
+    strategy: Literal["all_must_pass", "any_pass", "majority", "merge"] = "merge"
+    contributes_to: str = ""
+
+
+@dataclass
 class PersonaConfig:
     """A fully-resolved persona configuration.
 
@@ -67,6 +107,9 @@ class PersonaConfig:
     permission_mode: str = ""
     llm: PersonaLLMConfig = field(default_factory=PersonaLLMConfig)
     iteration_budget: int = 0
+    produces: PersonaProduces = field(default_factory=PersonaProduces)
+    consumes: PersonaConsumes = field(default_factory=PersonaConsumes)
+    fan_in: PersonaFanIn = field(default_factory=PersonaFanIn)
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +260,22 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
         permission_mode="workspace-write",
         llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=False),
         iteration_budget=60,
+        produces=PersonaProduces(
+            event_type="dream.completed",
+            schema={
+                "pages_updated": OutcomeField(
+                    type="number", description="number of wiki pages updated"
+                ),
+                "entities_created": OutcomeField(
+                    type="number", description="number of entities created"
+                ),
+                "lint_fixes": OutcomeField(
+                    type="number", description="number of lint fixes applied"
+                ),
+                "summary": OutcomeField(type="string", description="one-line summary"),
+            },
+        ),
+        consumes=PersonaConsumes(event_types=["cron.weekly", "mimir.dream.requested"]),
     ),
     "produce-recap": PersonaConfig(
         name="produce-recap",
@@ -298,6 +357,191 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
         llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=False),
         iteration_budget=15,
     ),
+    # --- Specialist pipeline personas ---
+    "reviewer": PersonaConfig(
+        name="reviewer",
+        system_prompt_template=(
+            "You are a code reviewer. You read diffs, identify issues, and produce a "
+            "structured verdict with detailed findings.\n\n"
+            "## Your responsibilities\n"
+            "- Review the diff or files at the provided repo/branch.\n"
+            "- Count all findings, distinguishing critical from non-critical.\n"
+            "- Apply `pass` when changes are ready to merge with no blocking issues.\n"
+            "- Apply `needs_changes` for non-critical issues requiring revision.\n"
+            "- Apply `fail` for critical issues blocking merge.\n"
+            "- Write a concise one-line summary of the overall review."
+        ),
+        allowed_tools=["file", "git", "web", "ravn"],
+        forbidden_tools=["terminal", "cascade"],
+        permission_mode="read-only",
+        llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=True),
+        iteration_budget=20,
+        produces=PersonaProduces(
+            event_type="review.completed",
+            schema={
+                "verdict": OutcomeField(
+                    type="enum",
+                    description="review verdict",
+                    enum_values=["pass", "fail", "needs_changes"],
+                ),
+                "findings_count": OutcomeField(
+                    type="number", description="total number of findings"
+                ),
+                "critical_count": OutcomeField(
+                    type="number", description="number of critical findings"
+                ),
+                "summary": OutcomeField(type="string", description="one-line review summary"),
+            },
+        ),
+        consumes=PersonaConsumes(
+            event_types=["code.changed", "review.requested"],
+            injects=["repo", "branch", "diff_url"],
+        ),
+        fan_in=PersonaFanIn(strategy="all_must_pass", contributes_to="review.verdict"),
+    ),
+    "security-auditor": PersonaConfig(
+        name="security-auditor",
+        system_prompt_template=(
+            "You are a security auditor. You analyse code changes for security "
+            "vulnerabilities and produce a structured security verdict.\n\n"
+            "## Your responsibilities\n"
+            "- Review the diff or files at the provided repo/branch for security issues.\n"
+            "- Look for OWASP Top 10 vulnerabilities, secrets in code, insecure patterns.\n"
+            "- Count critical security findings (e.g. injection, auth bypass, data exposure).\n"
+            "- Apply `pass` when no security issues are found.\n"
+            "- Apply `needs_review` for issues requiring attention but not blocking.\n"
+            "- Apply `fail` for critical security vulnerabilities blocking merge.\n"
+            "- Write a concise one-line summary of your security assessment."
+        ),
+        allowed_tools=["file", "git", "web", "ravn"],
+        forbidden_tools=["terminal", "cascade"],
+        permission_mode="read-only",
+        llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=True),
+        iteration_budget=20,
+        produces=PersonaProduces(
+            event_type="security.completed",
+            schema={
+                "verdict": OutcomeField(
+                    type="enum",
+                    description="security verdict",
+                    enum_values=["pass", "fail", "needs_review"],
+                ),
+                "critical_findings": OutcomeField(
+                    type="number", description="number of critical security findings"
+                ),
+                "summary": OutcomeField(
+                    type="string", description="one-line security assessment summary"
+                ),
+            },
+        ),
+        consumes=PersonaConsumes(
+            event_types=["code.changed"],
+            injects=["repo", "branch"],
+        ),
+        fan_in=PersonaFanIn(strategy="all_must_pass", contributes_to="review.verdict"),
+    ),
+    "qa-agent": PersonaConfig(
+        name="qa-agent",
+        system_prompt_template=(
+            "You are a QA agent. You validate that code changes pass quality checks "
+            "and produce a structured test verdict.\n\n"
+            "## Your responsibilities\n"
+            "- Run or evaluate tests for the provided repo/branch.\n"
+            "- Report the total number of tests run and how many failed.\n"
+            "- Apply `pass` when all tests pass.\n"
+            "- Apply `fail` when one or more tests fail.\n"
+            "- Write a concise one-line summary of the test results."
+        ),
+        allowed_tools=["file", "git", "terminal", "ravn"],
+        forbidden_tools=["cascade", "volundr"],
+        permission_mode="workspace-write",
+        llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=False),
+        iteration_budget=30,
+        produces=PersonaProduces(
+            event_type="qa.completed",
+            schema={
+                "verdict": OutcomeField(
+                    type="enum",
+                    description="QA verdict",
+                    enum_values=["pass", "fail"],
+                ),
+                "tests_run": OutcomeField(type="number", description="total tests run"),
+                "tests_failed": OutcomeField(type="number", description="tests that failed"),
+                "summary": OutcomeField(type="string", description="one-line test results summary"),
+            },
+        ),
+        consumes=PersonaConsumes(
+            event_types=["review.completed", "test.requested"],
+            injects=["repo", "branch", "previous_verdicts"],
+        ),
+    ),
+    "ship-agent": PersonaConfig(
+        name="ship-agent",
+        system_prompt_template=(
+            "You are a ship agent. You merge approved changes, tag releases, and "
+            "produce a structured shipping verdict.\n\n"
+            "## Your responsibilities\n"
+            "- Verify that all upstream verdicts (review, QA) pass before shipping.\n"
+            "- Merge the branch and create a release tag.\n"
+            "- Record the version and PR URL.\n"
+            "- Apply `shipped` when the change is successfully merged and released.\n"
+            "- Apply `blocked` when any upstream gate has not passed.\n"
+            "- Write a concise one-line summary of the shipping action."
+        ),
+        allowed_tools=["file", "git", "terminal", "web", "ravn"],
+        forbidden_tools=["cascade"],
+        permission_mode="workspace-write",
+        llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=False),
+        iteration_budget=15,
+        produces=PersonaProduces(
+            event_type="ship.completed",
+            schema={
+                "verdict": OutcomeField(
+                    type="enum",
+                    description="ship verdict",
+                    enum_values=["shipped", "blocked"],
+                ),
+                "version": OutcomeField(type="string", description="released version tag"),
+                "pr_url": OutcomeField(type="string", description="pull request URL"),
+                "summary": OutcomeField(type="string", description="one-line shipping summary"),
+            },
+        ),
+        consumes=PersonaConsumes(
+            event_types=["qa.completed", "ship.requested"],
+            injects=["repo", "branch", "previous_verdicts"],
+        ),
+    ),
+    "retro-analyst": PersonaConfig(
+        name="retro-analyst",
+        system_prompt_template=(
+            "You are a retrospective analyst. You review shipped work over a time period, "
+            "identify patterns, and produce a structured retrospective report.\n\n"
+            "## Your responsibilities\n"
+            "- Count the items shipped since the last retrospective.\n"
+            "- Identify recurring patterns (positive and negative) in the work.\n"
+            "- Write a concise one-line summary of the retrospective findings."
+        ),
+        allowed_tools=["mimir", "file", "ravn"],
+        forbidden_tools=["terminal", "cascade"],
+        permission_mode="read-only",
+        llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=False),
+        iteration_budget=15,
+        produces=PersonaProduces(
+            event_type="retro.completed",
+            schema={
+                "items_shipped": OutcomeField(type="number", description="number of items shipped"),
+                "patterns_found": OutcomeField(
+                    type="number", description="number of patterns identified"
+                ),
+                "summary": OutcomeField(
+                    type="string", description="one-line retrospective summary"
+                ),
+            },
+        ),
+        consumes=PersonaConsumes(
+            event_types=["retro.requested", "cron.weekly"],
+        ),
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -312,6 +556,81 @@ def _safe_bool(val: Any, default: bool = False) -> bool:
     if isinstance(val, str):
         return val.lower() in {"true", "yes", "1"}
     return default
+
+
+_VALID_FAN_IN_STRATEGIES = {"all_must_pass", "any_pass", "majority", "merge"}
+
+
+def _parse_outcome_field(name: str, raw: Any) -> OutcomeField | None:
+    """Parse a single outcome field dict from YAML into an OutcomeField."""
+    if not isinstance(raw, dict):
+        return None
+    field_type = str(raw.get("type", "string"))
+    description = str(raw.get("description", name))
+    required = _safe_bool(raw.get("required", True), default=True)
+    enum_values: list[str] | None = None
+    if field_type == "enum":
+        vals = raw.get("values") or raw.get("enum_values")
+        if isinstance(vals, list):
+            enum_values = [str(v) for v in vals]
+    return OutcomeField(
+        type=field_type,  # type: ignore[arg-type]
+        description=description,
+        enum_values=enum_values,
+        required=required,
+    )
+
+
+def _parse_produces(raw: Any) -> PersonaProduces:
+    """Parse the ``produces:`` section of a persona YAML dict."""
+    if not isinstance(raw, dict):
+        return PersonaProduces()
+    event_type = str(raw.get("event_type", ""))
+    schema: dict[str, OutcomeField] = {}
+    schema_raw = raw.get("schema")
+    if isinstance(schema_raw, dict):
+        for fname, fval in schema_raw.items():
+            parsed = _parse_outcome_field(fname, fval)
+            if parsed is not None:
+                schema[fname] = parsed
+    return PersonaProduces(event_type=event_type, schema=schema)
+
+
+def _parse_consumes(raw: Any) -> PersonaConsumes:
+    """Parse the ``consumes:`` section of a persona YAML dict."""
+    if not isinstance(raw, dict):
+        return PersonaConsumes()
+    event_types_raw = raw.get("event_types", [])
+    injects_raw = raw.get("injects", [])
+    event_types = list(event_types_raw) if isinstance(event_types_raw, list) else []
+    injects = list(injects_raw) if isinstance(injects_raw, list) else []
+    return PersonaConsumes(event_types=event_types, injects=injects)
+
+
+def _parse_fan_in(raw: Any) -> PersonaFanIn:
+    """Parse the ``fan_in:`` section of a persona YAML dict."""
+    if not isinstance(raw, dict):
+        return PersonaFanIn()
+    strategy = str(raw.get("strategy", "merge"))
+    if strategy not in _VALID_FAN_IN_STRATEGIES:
+        strategy = "merge"
+    contributes_to = str(raw.get("contributes_to", ""))
+    return PersonaFanIn(
+        strategy=strategy,  # type: ignore[arg-type]
+        contributes_to=contributes_to,
+    )
+
+
+def _apply_outcome_instruction(persona: PersonaConfig) -> PersonaConfig:
+    """Append outcome block instruction to system prompt when schema is declared."""
+    if not persona.produces.schema:
+        return persona
+    schema = OutcomeSchema(fields=persona.produces.schema)
+    instruction = generate_outcome_instruction(schema)
+    return dataclasses.replace(
+        persona,
+        system_prompt_template=persona.system_prompt_template + "\n\n" + instruction,
+    )
 
 
 class PersonaLoader(PersonaPort):
@@ -334,22 +653,33 @@ class PersonaLoader(PersonaPort):
     # ------------------------------------------------------------------
 
     def load(self, name: str) -> PersonaConfig | None:
-        """Load a persona by name.
+        """Load a persona by name, with outcome instruction injected if applicable.
 
         Returns the persona from ``personas_dir/<name>.yaml`` if it exists,
         otherwise falls back to the built-in set.  Returns ``None`` when the
         name cannot be resolved.
+
+        If the persona declares a ``produces.schema``, the outcome block
+        instruction is automatically appended to its system prompt.
         """
         file_path = self._personas_dir / f"{name}.yaml"
         if file_path.is_file():
-            return self.load_from_file(file_path)
-        return _BUILTIN_PERSONAS.get(name)
+            persona = self.load_from_file(file_path)
+        else:
+            persona = _BUILTIN_PERSONAS.get(name)
+
+        if persona is None:
+            return None
+
+        return _apply_outcome_instruction(persona)
 
     def load_from_file(self, path: Path) -> PersonaConfig | None:
-        """Parse a persona YAML file.
+        """Parse a persona YAML file without injecting outcome instructions.
 
         Returns ``None`` when the file is unreadable or malformed rather than
         raising, so callers can treat missing personas as a soft error.
+
+        Note: outcome instruction injection happens in :meth:`load`, not here.
         """
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
@@ -374,6 +704,32 @@ class PersonaLoader(PersonaPort):
         """Return a sorted list of built-in persona names."""
         return sorted(_BUILTIN_PERSONAS)
 
+    def find_consumers(self, event_type: str) -> list[PersonaConfig]:
+        """Return all personas that declare they consume the given event type.
+
+        Used by the pipeline executor to validate pipeline definitions.
+        Returns personas with outcome instructions already injected (via :meth:`load`).
+        """
+        result: list[PersonaConfig] = []
+        for name in self.list_names():
+            persona = self.load(name)
+            if persona and event_type in persona.consumes.event_types:
+                result.append(persona)
+        return result
+
+    def find_producers(self, event_type: str) -> list[PersonaConfig]:
+        """Return all personas that produce the given event type.
+
+        Used by the pipeline executor to validate pipeline definitions.
+        Returns personas with outcome instructions already injected (via :meth:`load`).
+        """
+        result: list[PersonaConfig] = []
+        for name in self.list_names():
+            persona = self.load(name)
+            if persona and persona.produces.event_type == event_type:
+                result.append(persona)
+        return result
+
     # ------------------------------------------------------------------
     # Static helpers
     # ------------------------------------------------------------------
@@ -383,6 +739,7 @@ class PersonaLoader(PersonaPort):
         """Parse a persona YAML *text* string.
 
         Returns ``None`` on empty input or parse failure.
+        Handles ``produces``, ``consumes``, and ``fan_in`` sections.
         """
         import yaml  # PyYAML — present via pydantic-settings[yaml]
 
@@ -422,6 +779,9 @@ class PersonaLoader(PersonaPort):
             permission_mode=str(raw.get("permission_mode", "")),
             llm=llm,
             iteration_budget=_safe_int(raw.get("iteration_budget", 0)),
+            produces=_parse_produces(raw.get("produces")),
+            consumes=_parse_consumes(raw.get("consumes")),
+            fan_in=_parse_fan_in(raw.get("fan_in")),
         )
 
     @staticmethod
@@ -429,8 +789,9 @@ class PersonaLoader(PersonaPort):
         """Return a new PersonaConfig with RAVN.md *project* overrides applied.
 
         Non-empty / non-zero project fields take precedence over persona fields.
-        The persona's ``name`` and ``llm`` settings are never overridden by
-        ProjectConfig (which has no equivalent fields).
+        The persona's ``name``, ``llm``, ``produces``, ``consumes``, and
+        ``fan_in`` settings are never overridden by ProjectConfig (which has no
+        equivalent fields).
         """
         return PersonaConfig(
             name=persona.name,
@@ -446,4 +807,7 @@ class PersonaLoader(PersonaPort):
             iteration_budget=(
                 project.iteration_budget if project.iteration_budget else persona.iteration_budget
             ),
+            produces=persona.produces,
+            consumes=persona.consumes,
+            fan_in=persona.fan_in,
         )
