@@ -153,7 +153,7 @@
     "@codingame/monaco-vscode-view-status-bar-service-override": "^28.4.1",
     "@codingame/monaco-vscode-view-title-bar-service-override": "^28.4.1",
     "@codingame/monaco-vscode-views-service-override": "^28.4.1",
-    "@codingame/monaco-vscode-welcome-service-override": "^28.4.1",
+    "@codingame/monaco-vscode-welcome-service-override": "^30.0.0",
     "@codingame/monaco-vscode-workbench-service-override": "^28.4.1",
     "@codingame/monaco-vscode-working-copy-service-override": "^28.4.1",
     "@codingame/monaco-vscode-workspace-trust-service-override": "^28.4.1",
