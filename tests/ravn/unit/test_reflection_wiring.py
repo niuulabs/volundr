@@ -334,6 +334,85 @@ class TestRunDaemonReflectionWiring:
         mock_svc.start.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_daemon_bus_flushed_in_finally_block(self) -> None:
+        """daemon_bus.flush() is called in the finally block when tasks complete normally."""
+        settings = Settings()
+        settings.reflection.enabled = True
+        settings.initiative.enabled = True  # adds a task → exercises finally block
+        settings.gateway.channels.telegram.enabled = False
+        settings.gateway.channels.http.enabled = False
+        settings.gateway.channels.discord.enabled = False
+        settings.gateway.channels.slack.enabled = False
+        settings.gateway.channels.matrix.enabled = False
+        settings.gateway.channels.whatsapp.enabled = False
+
+        mock_bus = AsyncMock()
+        mock_drive_loop = MagicMock()
+        mock_drive_loop._triggers = []
+        mock_drive_loop.run = AsyncMock(return_value=None)
+
+        with (
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_llm_cls,
+            patch("ravn.cli.commands._build_mimir", return_value=None),
+            patch(
+                "ravn.cli.commands._start_mcp_shared",
+                new_callable=AsyncMock,
+                return_value=(None, []),
+            ),
+            patch("ravn.cli.commands._shutdown_mcp", new_callable=AsyncMock),
+            patch("ravn.cli.commands._wire_triggers", return_value=[]),
+            patch("ravn.cli.commands._wire_cron", return_value=[]),
+            patch("ravn.drive_loop.DriveLoop", return_value=mock_drive_loop),
+            patch("sleipnir.adapters.in_process.InProcessBus", return_value=mock_bus),
+        ):
+            mock_llm_cls.return_value = MagicMock()
+            from ravn.cli.commands import _run_daemon
+
+            await _run_daemon(settings)
+
+        # finally block flush — not the early-exit flush
+        mock_bus.flush.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_daemon_flush_exception_is_swallowed(self) -> None:
+        """flush() raising an exception does not propagate out of daemon teardown."""
+        settings = Settings()
+        settings.reflection.enabled = True
+        settings.initiative.enabled = False
+        settings.gateway.channels.telegram.enabled = False
+        settings.gateway.channels.http.enabled = False
+        settings.gateway.channels.discord.enabled = False
+        settings.gateway.channels.slack.enabled = False
+        settings.gateway.channels.matrix.enabled = False
+        settings.gateway.channels.whatsapp.enabled = False
+
+        mock_bus = AsyncMock()
+        mock_bus.flush = AsyncMock(side_effect=RuntimeError("bus error"))
+        mock_mimir = MagicMock()
+        mock_svc = AsyncMock()
+
+        with (
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_llm_cls,
+            patch("ravn.cli.commands._build_mimir", return_value=mock_mimir),
+            patch("sleipnir.adapters.in_process.InProcessBus", return_value=mock_bus),
+            patch(
+                "ravn.adapters.reflection.post_session.PostSessionReflectionService",
+                return_value=mock_svc,
+            ),
+        ):
+            mock_llm_cls.return_value = MagicMock()
+            from ravn.cli.commands import _run_daemon
+
+            # Must not raise despite flush() blowing up
+            await _run_daemon(settings)
+
+        mock_bus.flush.assert_awaited_once()
+        # stop() is still called even when flush raised
+        mock_svc.stop.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_daemon_no_service_when_mimir_is_none(self) -> None:
         """Reflection service is NOT started in daemon mode when Mímir is disabled."""
         settings = Settings()
