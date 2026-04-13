@@ -38,6 +38,7 @@ from skuld.channels import (
 )
 from skuld.chronicle_watcher import ChronicleWatcher
 from skuld.config import SkuldSettings
+from skuld.room_bridge import RoomBridge
 from skuld.service_manager import (
     ServiceCreateRequest,
     ServiceManager,
@@ -431,6 +432,17 @@ class Broker:
         self._pending_block_type: str = ""
         self._pending_reasoning_text: str = ""
         self._chronicle_watcher: ChronicleWatcher | None = None
+
+        # Room bridge — only active when room.enabled is True
+        self._room_bridge: RoomBridge | None = (
+            RoomBridge(
+                config=self._settings.room,
+                channels=self._channels,
+                append_turn=self._append_turn,
+            )
+            if self._settings.room.enabled
+            else None
+        )
 
         # JWT identity state — populated on first browser WebSocket connection
         self._user_jwt: str | None = None
@@ -966,6 +978,21 @@ class Broker:
                     "mcp_set_servers",
                     servers=servers,
                 )
+
+            # Room: forward a directed message to a specific Ravn participant
+            case "directed_message":
+                if self._room_bridge is None:
+                    logger.warning("directed_message received but room mode is disabled")
+                    if sender_ws:
+                        await sender_ws.send_json(
+                            {"type": "error", "content": "Room mode is not enabled"}
+                        )
+                    return
+                target = data.get("targetPeerId", "")
+                content = data.get("content", "")
+                if not target or not content:
+                    return
+                await self._room_bridge.route_directed_message(target, content)
 
             # Default: treat as user message (backward compat with {"content": "..."})
             case _:
@@ -1580,6 +1607,10 @@ class Broker:
                     }
                 )
 
+            # Send current room state to late-joining browsers when room mode active
+            if self._room_bridge is not None:
+                await websocket.send_json(self._room_bridge.get_room_state_event())
+
             # Handle messages from browser
             while True:
                 data = await websocket.receive_json()
@@ -1643,6 +1674,64 @@ class Broker:
         await self._transport.wait_for_cli_disconnect()
         logger.info("handle_cli_websocket: CLI disconnected, handler returning")
 
+    async def handle_ravn_websocket(self, websocket: WebSocket, peer_id: str) -> None:
+        """Handle a Ravn WebSocket connection at /ws/ravn/{peer_id}.
+
+        Accepts NDJSON frames from Ravn daemons and forwards them to the
+        RoomBridge for translation and broadcast. Only active when room mode
+        is enabled.
+        """
+        if self._room_bridge is None:
+            logger.warning(
+                "handle_ravn_websocket: room mode disabled, rejecting peer_id=%s",
+                peer_id,
+            )
+            await websocket.close(code=1008, reason="Room mode is not enabled")
+            return
+
+        await websocket.accept()
+        logger.info("handle_ravn_websocket: Ravn connected peer_id=%s", peer_id)
+
+        # Use persona from first frame header; fall back to peer_id
+        meta = await self._room_bridge.register(
+            peer_id=peer_id,
+            persona=peer_id,
+            websocket=websocket,
+        )
+
+        try:
+            while True:
+                raw = await websocket.receive_text()
+                for line in raw.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        frame = json.loads(line)
+                    except json.JSONDecodeError:
+                        logger.warning(
+                            "handle_ravn_websocket: invalid JSON from peer_id=%s", peer_id
+                        )
+                        continue
+
+                    # Extract persona from first frame if present
+                    if frame.get("persona") and meta.persona == peer_id:
+                        # Re-register with the actual persona name
+                        meta = await self._room_bridge.register(
+                            peer_id=peer_id,
+                            persona=frame["persona"],
+                            websocket=websocket,
+                        )
+
+                    await self._room_bridge.handle_ravn_frame(peer_id, frame)
+
+        except WebSocketDisconnect:
+            logger.info("handle_ravn_websocket: Ravn disconnected peer_id=%s", peer_id)
+        except Exception:
+            logger.exception("handle_ravn_websocket: error from peer_id=%s", peer_id)
+        finally:
+            await self._room_bridge.unregister(peer_id)
+
 
 # Global broker instance
 broker = Broker()
@@ -1703,6 +1792,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 async def cli_websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
     """WebSocket endpoint for Claude Code CLI (via --sdk-url)."""
     await broker.handle_cli_websocket(websocket, session_id)
+
+
+@app.websocket("/ws/ravn/{peer_id}")
+async def ravn_websocket_endpoint(websocket: WebSocket, peer_id: str) -> None:
+    """WebSocket endpoint for Ravn daemon connections (room mode)."""
+    await broker.handle_ravn_websocket(websocket, peer_id)
 
 
 # --- Broker Log API ---
