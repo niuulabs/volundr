@@ -348,7 +348,8 @@ export function useSkuldChat(
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const historyUrl = new URL('/api/conversation/history', httpBase);
+    const base = httpBase.endsWith('/') ? httpBase : `${httpBase}/`;
+    const historyUrl = new URL('api/conversation/history', base);
     fetch(historyUrl.href, { headers })
       .then(res => res.json())
       .then(data => {
