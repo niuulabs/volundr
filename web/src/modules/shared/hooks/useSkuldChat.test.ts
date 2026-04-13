@@ -16,8 +16,14 @@ vi.mock('@/modules/shared/store/chat.store', () => ({
   })),
 }));
 
+// Mock getAccessToken so we can test Authorization header branch
+vi.mock('@/modules/shared/api/client', () => ({
+  getAccessToken: vi.fn(() => null),
+}));
+
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useChatStore } from '@/modules/shared/store/chat.store';
+import { getAccessToken } from '@/modules/shared/api/client';
 
 type MessageHandler = (raw: string) => void;
 type OpenHandler = () => void;
@@ -1651,6 +1657,63 @@ describe('useSkuldChat', () => {
       expect(result.current.messages[0].content).toBe('Hello');
       expect(result.current.messages[1].role).toBe('assistant');
       expect(result.current.messages[1].content).toBe('Hi there!');
+
+      vi.unstubAllGlobals();
+    });
+
+    it('adds Authorization header when access token is available', async () => {
+      vi.mocked(getAccessToken).mockReturnValue('test-access-token');
+
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ turns: [] }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      setupMock();
+      renderHook(() => useSkuldChat('wss://test-host/session'));
+
+      await vi.waitFor(() => {
+        expect(fetchMock).toHaveBeenCalled();
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-access-token',
+          }),
+        })
+      );
+
+      vi.mocked(getAccessToken).mockReturnValue(null);
+      vi.unstubAllGlobals();
+    });
+
+    it('adds activity-indicator message when session is_active with last_activity', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            turns: [],
+            is_active: true,
+            last_activity: 'Analyzing codebase...',
+          }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test-host/session'));
+
+      await vi.waitFor(() => {
+        expect(result.current.historyLoaded).toBe(true);
+      });
+
+      // The activity-indicator message should be added as a running assistant message
+      const indicator = result.current.messages.find(m => m.id === 'activity-indicator');
+      expect(indicator).toBeDefined();
+      expect(indicator?.status).toBe('running');
+      expect(indicator?.content).toBe('Analyzing codebase...');
 
       vi.unstubAllGlobals();
     });
