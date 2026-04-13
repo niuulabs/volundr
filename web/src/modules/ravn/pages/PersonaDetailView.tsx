@@ -13,6 +13,7 @@ import { PersonaForm } from '../components/PersonaForm';
 import { ToolBadge } from '../components/ToolBadge';
 import { cn } from '@/modules/shared/utils/classnames';
 import styles from './PersonaDetailView.module.css';
+import badgeStyles from '../styles/badges.module.css';
 
 type ViewMode = 'view' | 'edit' | 'fork' | 'create';
 
@@ -74,10 +75,13 @@ export function PersonaDetailView() {
     if (!persona) return;
     if (!window.confirm(`Delete persona "${persona.name}"? This cannot be undone.`)) return;
     setActionError(null);
-    await deletePersona(persona.name).catch(err => {
-      setActionError(err.detail ?? 'Delete failed');
-      return;
-    });
+    const ok = await deletePersona(persona.name)
+      .then(() => true)
+      .catch(err => {
+        setActionError(err.detail ?? 'Delete failed');
+        return false;
+      });
+    if (!ok) return;
     navigate('/ravn/personas');
   }
 
@@ -157,10 +161,10 @@ export function PersonaDetailView() {
           <h2 className={styles.pageTitle}>{persona.name}</h2>
           <div className={styles.titleBadges}>
             {persona.isBuiltin && (
-              <span className={cn(styles.badge, styles.builtinBadge)}>built-in</span>
+              <span className={cn(badgeStyles.badge, badgeStyles.builtinBadge)}>built-in</span>
             )}
             {persona.hasOverride && (
-              <span className={cn(styles.badge, styles.overrideBadge)}>override</span>
+              <span className={cn(badgeStyles.badge, badgeStyles.overrideBadge)}>override</span>
             )}
           </div>
         </div>

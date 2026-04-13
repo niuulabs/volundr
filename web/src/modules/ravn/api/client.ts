@@ -130,8 +130,7 @@ function toRequestBody(req: PersonaCreateRequest): Record<string, unknown> {
 
 /** GET /personas?source= */
 export async function listPersonas(filter: PersonaFilter = 'all'): Promise<PersonaSummary[]> {
-  const source = filter === 'all' ? 'all' : filter === 'builtin' ? 'builtin' : 'custom';
-  const raw = await api.get<RawPersonaSummary[]>(`/personas?source=${source}`);
+  const raw = await api.get<RawPersonaSummary[]>(`/personas?source=${filter}`);
   return raw.map(toSummary);
 }
 

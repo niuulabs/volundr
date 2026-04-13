@@ -3,6 +3,7 @@ import { cn } from '@/modules/shared/utils/classnames';
 import { ToolBadge } from '../ToolBadge';
 import type { PersonaSummary } from '../../api/types';
 import styles from './PersonaCard.module.css';
+import badgeStyles from '../../styles/badges.module.css';
 
 interface PersonaCardProps {
   persona: PersonaSummary;
@@ -22,10 +23,10 @@ export function PersonaCard({ persona }: PersonaCardProps) {
         <span className={styles.name}>{persona.name}</span>
         <div className={styles.badges}>
           {persona.isBuiltin && (
-            <span className={cn(styles.badge, styles.builtinBadge)}>built-in</span>
+            <span className={cn(badgeStyles.badge, badgeStyles.builtinBadge)}>built-in</span>
           )}
           {persona.hasOverride && (
-            <span className={cn(styles.badge, styles.overrideBadge)}>override</span>
+            <span className={cn(badgeStyles.badge, badgeStyles.overrideBadge)}>override</span>
           )}
         </div>
       </div>

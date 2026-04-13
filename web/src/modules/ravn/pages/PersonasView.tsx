@@ -15,20 +15,22 @@ const FILTERS: { key: PersonaFilter; label: string }[] = [
 export function PersonasView() {
   const navigate = useNavigate();
   const [personas, setPersonas] = useState<PersonaSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadedFilter, setLoadedFilter] = useState<PersonaFilter | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<PersonaFilter>('all');
+
+  const loading = loadedFilter !== filter;
 
   useEffect(() => {
     listPersonas(filter)
       .then(data => {
         setPersonas(data);
         setError(null);
-        setLoading(false);
+        setLoadedFilter(filter);
       })
       .catch(() => {
         setError('Failed to load personas');
-        setLoading(false);
+        setLoadedFilter(filter);
       });
   }, [filter]);
 

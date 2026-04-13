@@ -401,6 +401,32 @@ describe('PersonaDetailView', () => {
     });
   });
 
+  it('does not navigate when delete API fails', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        status: 200,
+        ok: true,
+        json: async () => ({ ...mockDetail, is_builtin: false }),
+      })
+      .mockResolvedValueOnce({ status: 200, ok: true, json: async () => 'yaml: content\n' })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ detail: 'Delete failed on server' }),
+      });
+
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    wrap('coding-agent');
+    await waitFor(() => screen.getByRole('button', { name: /delete/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Delete failed on server')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Personas List')).not.toBeInTheDocument();
+  });
+
   it('does not navigate when delete confirm is declined', async () => {
     mockFetch
       .mockResolvedValueOnce({
