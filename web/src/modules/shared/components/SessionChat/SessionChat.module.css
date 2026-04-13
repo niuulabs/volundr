@@ -1,8 +1,23 @@
+/* ── Outer grid — splits into two panes when detail panel is open ── */
+
+.outerGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  transition: grid-template-columns 200ms ease;
+}
+
+.outerGrid[data-detail-open] {
+  grid-template-columns: 1fr 1fr;
+}
+
 .wrapper {
   display: flex;
   flex-direction: column;
-  flex: 1;
   min-height: 0;
+  min-width: 0;
   border-radius: var(--radius-lg);
   overflow: hidden;
   background-color: var(--color-bg-primary);

@@ -744,18 +744,21 @@ async def _cli_user_input(question: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Persona resolution (unchanged)
+# Persona resolution
 # ---------------------------------------------------------------------------
 
 
 def _resolve_persona(
     persona_name: str,
     project_config: ProjectConfig | None,
+    settings: Settings | None = None,
+    cwd: Path | None = None,
 ) -> Any:
     """Load and merge a persona with optional ProjectConfig overrides."""
     from ravn.adapters.personas.loader import PersonaLoader
 
-    loader = PersonaLoader()
+    persona_dirs = list(settings.persona_source.persona_dirs) if settings else []
+    loader = PersonaLoader(persona_dirs or None, cwd=cwd)
 
     name = persona_name.strip() or (
         project_config.persona.strip() if project_config is not None else ""
@@ -1046,7 +1049,7 @@ def run(
     # --persona overrides the profile's persona reference; if neither is given
     # the persona is taken from the profile (or ProjectConfig as fallback).
     effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
-    persona_config = _resolve_persona(effective_persona, project_config)
+    persona_config = _resolve_persona(effective_persona, project_config, settings=settings)
 
     asyncio.run(
         _run_with_signals(
@@ -1355,7 +1358,7 @@ def resume(
     settings = Settings()
     _configure_logging(settings)
     project_config = ProjectConfig.discover()
-    persona_config = _resolve_persona("", project_config)
+    persona_config = _resolve_persona("", project_config, settings=settings)
 
     asyncio.run(
         _run_with_signals(
@@ -1516,7 +1519,7 @@ def gateway(
     project_config = ProjectConfig.discover()
     ravn_profile = _resolve_profile(profile)
     effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
-    persona_config = _resolve_persona(effective_persona, project_config)
+    persona_config = _resolve_persona(effective_persona, project_config, settings=settings)
 
     # CLI flags override config file.
     if telegram:
@@ -1733,7 +1736,7 @@ def daemon(
     project_config = ProjectConfig.discover()
     ravn_profile = _resolve_profile(profile)
     effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
-    persona_config = _resolve_persona(effective_persona, project_config)
+    persona_config = _resolve_persona(effective_persona, project_config, settings=settings)
 
     asyncio.run(
         _run_daemon(settings, persona_config=persona_config, profile=ravn_profile, resume=resume)
@@ -1769,7 +1772,7 @@ def listen(
     project_config = ProjectConfig.discover()
     ravn_profile = _resolve_profile(profile)
     effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
-    persona_config = _resolve_persona(effective_persona, project_config)
+    persona_config = _resolve_persona(effective_persona, project_config, settings=settings)
 
     asyncio.run(
         _run_daemon(
@@ -1849,9 +1852,7 @@ async def _run_daemon(
         resolved_max_iterations = max_iterations
         resolved_max_tokens = settings.effective_max_tokens()
         if task_persona and task_persona != (persona_config.name if persona_config else None):
-            from ravn.adapters.personas.loader import PersonaLoader
-
-            task_persona_cfg = PersonaLoader().load(task_persona)
+            task_persona_cfg = _resolve_persona(task_persona, None, settings=settings)
             if task_persona_cfg is not None:
                 resolved_persona = task_persona_cfg
                 if task_persona_cfg.system_prompt_template:

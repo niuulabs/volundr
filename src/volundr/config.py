@@ -991,6 +991,19 @@ class WebhooksConfig(BaseModel):
     github: GitHubWebhookConfig = Field(default_factory=GitHubWebhookConfig)
 
 
+class RavnConfig(BaseModel):
+    """Ravn agent runtime configuration."""
+
+    persona_dirs: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Additional directories to search for persona YAML files "
+            "(highest priority first). When empty, PersonaLoader uses its "
+            "default two-layer discovery: <cwd>/.ravn/personas/ → ~/.ravn/personas/."
+        ),
+    )
+
+
 class LinearConfig(BaseModel):
     """Linear issue tracker configuration."""
 
@@ -1072,6 +1085,7 @@ class Settings(BaseSettings):
         default_factory=_default_feature_modules,
         description="Feature module catalog — defines available UI modules.",
     )
+    ravn: RavnConfig = Field(default_factory=RavnConfig)
 
     @classmethod
     def settings_customise_sources(

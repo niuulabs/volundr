@@ -1,56 +1,129 @@
-import { MarkdownContent } from '../MarkdownContent';
-import { ToolBlock, ToolGroupBlock, groupContentBlocks } from '../ToolBlock';
-import { partsToContentBlocks } from '../ChatMessages';
-import type {
-  SkuldChatMessage,
-  ParticipantStatus,
-} from '@/modules/shared/hooks/useSkuldChat';
+import { Eye } from 'lucide-react';
+import { cn } from '@/utils';
+import type { SkuldChatMessage, ParticipantMeta } from '@/modules/shared/hooks/useSkuldChat';
+import { resolveParticipantColor } from '@/modules/shared/utils/participantColor';
+import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from '../ChatMessages';
 import styles from './RoomMessage.module.css';
 
 interface RoomMessageProps {
   message: SkuldChatMessage;
-  participantStatus?: ParticipantStatus;
+  /** Called when the user clicks the participant label or the detail button */
+  onSelectAgent?: (peerId: string) => void;
+  /** The peerId of the currently selected agent (for active styling) */
+  selectedAgentId?: string | null;
+  onCopy?: (text: string) => void;
+  onRegenerate?: (messageId: string) => void;
+  onBookmark?: (messageId: string, bookmarked: boolean) => void;
+  bookmarked?: boolean;
 }
 
-const ACTIVE_STATUSES: ParticipantStatus[] = ['thinking', 'tool_executing'];
+interface ParticipantLabelProps {
+  participant: ParticipantMeta;
+  onSelectAgent?: (peerId: string) => void;
+  isSelected?: boolean;
+}
 
-export function RoomMessage({ message, participantStatus }: RoomMessageProps) {
-  const { participant, content, parts } = message;
-  const color = participant?.color ?? 'purple';
-  const persona = participant?.persona ?? 'Ravn';
-  const isActive = participantStatus !== undefined && ACTIVE_STATUSES.includes(participantStatus);
+function ParticipantLabel({ participant, onSelectAgent, isSelected }: ParticipantLabelProps) {
+  const color = resolveParticipantColor(participant.color);
+  const isRavn = participant.participantType === 'ravn';
+  const canSelect = isRavn && participant.gatewayUrl && onSelectAgent;
 
-  const contentBlocks = parts ? partsToContentBlocks(parts) : null;
-  const grouped = contentBlocks ? groupContentBlocks(contentBlocks) : null;
+  const handleClick = () => {
+    onSelectAgent!(participant.peerId);
+  };
 
   return (
-    <div className={styles.message} data-participant-color={color}>
-      <div className={styles.border} />
-      <div className={styles.body}>
-        <div className={styles.header}>
-          <span className={styles.persona}>{persona}</span>
-          {isActive && <span className={styles.activityDot} aria-label="Active" />}
-        </div>
-        <div className={styles.content}>
-          {grouped ? (
-            grouped.map((item, i) => {
-              if (item.kind === 'text') {
-                if (!item.text.trim()) return null;
-                return <MarkdownContent key={i} content={item.text} isStreaming={false} />;
-              }
-              if (item.kind === 'single') {
-                return <ToolBlock key={i} block={item.block} result={item.result} />;
-              }
-              if (item.kind === 'group') {
-                return <ToolGroupBlock key={i} toolName={item.toolName} blocks={item.blocks} />;
-              }
-              return null;
-            })
-          ) : (
-            <MarkdownContent content={content} isStreaming={false} />
-          )}
-        </div>
+    <div className={styles.participantRow}>
+      <button
+        type="button"
+        className={cn(styles.participantLabel, canSelect && styles.participantLabelClickable)}
+        style={{ '--participant-color': color } as React.CSSProperties}
+        onClick={canSelect ? handleClick : undefined}
+        title={canSelect ? `View ${participant.persona} details` : participant.persona}
+        data-selected={isSelected || undefined}
+        data-testid="participant-label"
+      >
+        <span className={styles.participantDot} />
+        <span className={styles.participantName}>{participant.persona}</span>
+      </button>
+
+      {canSelect && (
+        <button
+          type="button"
+          className={cn(styles.detailBtn, isSelected && styles.detailBtnActive)}
+          onClick={handleClick}
+          title={`View ${participant.persona} event stream`}
+          aria-label={`View ${participant.persona} details`}
+          data-testid="view-agent-detail-btn"
+        >
+          <Eye className={styles.detailIcon} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Wraps an existing message component with a participant label for room view.
+ *
+ * Only renders the label when the message carries participant metadata and the
+ * participant is a Ravn agent. Non-participant messages fall through to the
+ * standard message components directly.
+ */
+export function RoomMessage({
+  message,
+  onSelectAgent,
+  selectedAgentId,
+  onCopy,
+  onRegenerate,
+  onBookmark,
+  bookmarked = false,
+}: RoomMessageProps) {
+  const participant = message.participant;
+  const isSelectedAgent = participant ? selectedAgentId === participant.peerId : false;
+
+  const label =
+    participant?.participantType === 'ravn' ? (
+      <ParticipantLabel
+        participant={participant}
+        onSelectAgent={onSelectAgent}
+        isSelected={isSelectedAgent}
+      />
+    ) : null;
+
+  // System messages are always rendered without participant framing
+  if (message.metadata?.messageType === 'system') {
+    return <SystemMessage message={message} />;
+  }
+
+  if (message.role === 'user') {
+    return (
+      <div className={styles.roomMessageWrapper}>
+        {label}
+        <UserMessage message={message} />
       </div>
+    );
+  }
+
+  if (message.status === 'running') {
+    return (
+      <div className={styles.roomMessageWrapper}>
+        {label}
+        <StreamingMessage content={message.content} parts={message.parts} />
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.roomMessageWrapper}>
+      {label}
+      <AssistantMessage
+        message={message}
+        onCopy={onCopy}
+        onRegenerate={onRegenerate}
+        onBookmark={onBookmark}
+        bookmarked={bookmarked}
+      />
     </div>
   );
 }

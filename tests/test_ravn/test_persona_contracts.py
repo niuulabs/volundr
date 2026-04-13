@@ -519,7 +519,7 @@ class TestPersonaLoaderLoadInjection:
     def test_file_persona_with_contract_gets_injection(self, tmp_path: Path) -> None:
         p = tmp_path / "my-persona.yaml"
         p.write_text(_REVIEWER_YAML, encoding="utf-8")
-        loader = PersonaLoader(personas_dir=tmp_path)
+        loader = PersonaLoader([str(tmp_path)])
         persona = loader.load("my-persona")
         assert persona is not None
         assert "---outcome---" in persona.system_prompt_template
@@ -527,7 +527,7 @@ class TestPersonaLoaderLoadInjection:
     def test_file_persona_without_contract_no_injection(self, tmp_path: Path) -> None:
         p = tmp_path / "simple.yaml"
         p.write_text(_NO_CONTRACT_YAML, encoding="utf-8")
-        loader = PersonaLoader(personas_dir=tmp_path)
+        loader = PersonaLoader([str(tmp_path)])
         persona = loader.load("simple")
         assert persona is not None
         assert "---outcome---" not in persona.system_prompt_template
@@ -606,7 +606,7 @@ class TestFindConsumersProducers:
     def test_find_consumers_with_custom_dir_includes_file_personas(self, tmp_path: Path) -> None:
         p = tmp_path / "custom-reviewer.yaml"
         p.write_text(_REVIEWER_YAML.replace("name: reviewer", "name: custom-reviewer"), "utf-8")
-        loader = PersonaLoader(personas_dir=tmp_path)
+        loader = PersonaLoader([str(tmp_path)])
         consumers = loader.find_consumers("code.changed")
         names = [p.name for p in consumers]
         # Built-in reviewer still present, plus our custom one from file

@@ -1,183 +1,176 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { RoomMessage } from './RoomMessage';
-import type { SkuldChatMessage } from '@/modules/shared/hooks/useSkuldChat';
-import { groupContentBlocks } from '../ToolBlock';
+import type { SkuldChatMessage, ParticipantMeta } from '@/modules/shared/hooks/useSkuldChat';
 
-// Mock MarkdownContent to keep tests simple and fast
-vi.mock('../MarkdownContent', () => ({
-  MarkdownContent: ({ content }: { content: string }) => (
-    <div data-testid="markdown">{content}</div>
+// ── Mock child message components ────────────────────────────────────
+
+vi.mock('../ChatMessages', () => ({
+  AssistantMessage: ({ message }: { message: SkuldChatMessage }) => (
+    <div data-testid="assistant-message">{message.content}</div>
+  ),
+  StreamingMessage: ({ content }: { content: string }) => (
+    <div data-testid="streaming-message">{content}</div>
+  ),
+  SystemMessage: ({ message }: { message: SkuldChatMessage }) => (
+    <div data-testid="system-message">{message.content}</div>
+  ),
+  UserMessage: ({ message }: { message: SkuldChatMessage }) => (
+    <div data-testid="user-message">{message.content}</div>
   ),
 }));
 
-// Mock ToolBlock/ToolGroupBlock — default returns empty array (no grouped blocks)
-vi.mock('../ToolBlock', () => ({
-  ToolBlock: ({ block }: { block: { name: string } }) => (
-    <div data-testid={`tool-block-${block.name}`} />
-  ),
-  ToolGroupBlock: ({ toolName }: { toolName: string }) => (
-    <div data-testid={`tool-group-${toolName}`} />
-  ),
-  groupContentBlocks: vi.fn(() => []),
-}));
+// ── Helpers ──────────────────────────────────────────────────────────
+
+function makeParticipant(overrides: Partial<ParticipantMeta> = {}): ParticipantMeta {
+  return {
+    peerId: 'ravn-1',
+    persona: 'Ravn Alpha',
+    color: 'cyan',
+    participantType: 'ravn',
+    gatewayUrl: 'http://ravn-1:8080',
+    ...overrides,
+  };
+}
 
 function makeMessage(overrides: Partial<SkuldChatMessage> = {}): SkuldChatMessage {
   return {
     id: 'msg-1',
     role: 'assistant',
-    content: 'Hello from Ravn',
+    content: 'Hello from agent',
     createdAt: new Date(),
     status: 'complete',
-    participant: {
-      peerId: 'peer-1',
-      persona: 'Ravn-Alpha',
-      color: 'amber',
-      participantType: 'ravn',
-    },
-    participantId: 'peer-1',
     ...overrides,
   };
 }
 
+// ── Tests ─────────────────────────────────────────────────────────────
+
 describe('RoomMessage', () => {
   beforeEach(() => {
-    vi.mocked(groupContentBlocks).mockReturnValue([]);
-  });
-  it('renders persona label', () => {
-    render(<RoomMessage message={makeMessage()} />);
-    expect(screen.getByText('Ravn-Alpha')).toBeInTheDocument();
+    vi.clearAllMocks();
   });
 
-  it('renders markdown content', () => {
-    render(<RoomMessage message={makeMessage()} />);
-    expect(screen.getByTestId('markdown')).toBeInTheDocument();
-    expect(screen.getByTestId('markdown').textContent).toBe('Hello from Ravn');
-  });
-
-  it('sets data-participant-color attribute for colored border', () => {
-    const { container } = render(<RoomMessage message={makeMessage()} />);
-    const wrapper = container.firstChild as HTMLElement;
-    expect(wrapper.getAttribute('data-participant-color')).toBe('amber');
-  });
-
-  it('shows activity dot when participant is thinking', () => {
-    render(<RoomMessage message={makeMessage()} participantStatus="thinking" />);
-    expect(screen.getByLabelText('Active')).toBeInTheDocument();
-  });
-
-  it('shows activity dot when participant is tool_executing', () => {
-    render(<RoomMessage message={makeMessage()} participantStatus="tool_executing" />);
-    expect(screen.getByLabelText('Active')).toBeInTheDocument();
-  });
-
-  it('does not show activity dot when participant is idle', () => {
-    render(<RoomMessage message={makeMessage()} participantStatus="idle" />);
-    expect(screen.queryByLabelText('Active')).not.toBeInTheDocument();
-  });
-
-  it('does not show activity dot when no participantStatus provided', () => {
-    render(<RoomMessage message={makeMessage()} />);
-    expect(screen.queryByLabelText('Active')).not.toBeInTheDocument();
-  });
-
-  it('falls back to "purple" color when no participant color', () => {
-    const msg = makeMessage({ participant: undefined, participantId: undefined });
-    const { container } = render(<RoomMessage message={msg} />);
-    const wrapper = container.firstChild as HTMLElement;
-    expect(wrapper.getAttribute('data-participant-color')).toBe('purple');
-  });
-
-  it('falls back to "Ravn" persona when no participant', () => {
-    const msg = makeMessage({ participant: undefined, participantId: undefined });
-    render(<RoomMessage message={msg} />);
-    expect(screen.getByText('Ravn')).toBeInTheDocument();
-  });
-
-  it('renders text segment from groupContentBlocks', () => {
-    vi.mocked(groupContentBlocks).mockReturnValue([
-      { kind: 'text', text: 'Rendered from parts' },
-    ] as ReturnType<typeof groupContentBlocks>);
-
-    const msg = makeMessage({
-      parts: [{ type: 'text', text: 'Rendered from parts' }],
+  describe('participant label', () => {
+    it('renders participant label for Ravn messages', () => {
+      const msg = makeMessage({ participant: makeParticipant() });
+      render(<RoomMessage message={msg} />);
+      expect(screen.getByTestId('participant-label')).toBeInTheDocument();
     });
-    render(<RoomMessage message={msg} />);
-    expect(screen.getByTestId('markdown')).toHaveTextContent('Rendered from parts');
+
+    it('shows persona name in label', () => {
+      const msg = makeMessage({ participant: makeParticipant({ persona: 'Agent X' }) });
+      render(<RoomMessage message={msg} />);
+      expect(screen.getByTestId('participant-label')).toHaveTextContent('Agent X');
+    });
+
+    it('does not render label for human participants', () => {
+      const msg = makeMessage({
+        participant: makeParticipant({ participantType: 'human' }),
+      });
+      render(<RoomMessage message={msg} />);
+      expect(screen.queryByTestId('participant-label')).not.toBeInTheDocument();
+    });
+
+    it('does not render label when no participant metadata', () => {
+      const msg = makeMessage({ participant: undefined });
+      render(<RoomMessage message={msg} />);
+      expect(screen.queryByTestId('participant-label')).not.toBeInTheDocument();
+    });
   });
 
-  it('skips empty text segments from groupContentBlocks', () => {
-    vi.mocked(groupContentBlocks).mockReturnValue([{ kind: 'text', text: '   ' }] as ReturnType<
-      typeof groupContentBlocks
-    >);
-
-    const msg = makeMessage({
-      parts: [{ type: 'text', text: '   ' }],
+  describe('view detail button', () => {
+    it('renders detail button for Ravn with gatewayUrl and onSelectAgent', () => {
+      const msg = makeMessage({ participant: makeParticipant() });
+      render(<RoomMessage message={msg} onSelectAgent={vi.fn()} />);
+      expect(screen.getByTestId('view-agent-detail-btn')).toBeInTheDocument();
     });
-    const { container } = render(<RoomMessage message={msg} />);
-    expect(container.querySelectorAll('[data-testid="markdown"]')).toHaveLength(0);
+
+    it('does not render detail button when no onSelectAgent prop', () => {
+      const msg = makeMessage({ participant: makeParticipant() });
+      render(<RoomMessage message={msg} />);
+      expect(screen.queryByTestId('view-agent-detail-btn')).not.toBeInTheDocument();
+    });
+
+    it('does not render detail button when participant has no gatewayUrl', () => {
+      const participant = makeParticipant({ gatewayUrl: undefined });
+      const msg = makeMessage({ participant });
+      render(<RoomMessage message={msg} onSelectAgent={vi.fn()} />);
+      expect(screen.queryByTestId('view-agent-detail-btn')).not.toBeInTheDocument();
+    });
+
+    it('calls onSelectAgent with peerId when detail button is clicked', () => {
+      const onSelectAgent = vi.fn();
+      const participant = makeParticipant({ peerId: 'ravn-42' });
+      const msg = makeMessage({ participant });
+      render(<RoomMessage message={msg} onSelectAgent={onSelectAgent} />);
+      fireEvent.click(screen.getByTestId('view-agent-detail-btn'));
+      expect(onSelectAgent).toHaveBeenCalledWith('ravn-42');
+    });
+
+    it('calls onSelectAgent when participant label is clicked', () => {
+      const onSelectAgent = vi.fn();
+      const participant = makeParticipant({ peerId: 'ravn-42' });
+      const msg = makeMessage({ participant });
+      render(<RoomMessage message={msg} onSelectAgent={onSelectAgent} />);
+      fireEvent.click(screen.getByTestId('participant-label'));
+      expect(onSelectAgent).toHaveBeenCalledWith('ravn-42');
+    });
   });
 
-  it('renders single tool block from groupContentBlocks', () => {
-    vi.mocked(groupContentBlocks).mockReturnValue([
-      {
-        kind: 'single',
-        block: { type: 'tool_use', id: 'tool-1', name: 'Bash', input: {} },
-        result: undefined,
-      },
-    ] as ReturnType<typeof groupContentBlocks>);
-
-    const msg = makeMessage({
-      parts: [{ type: 'tool_use', id: 'tool-1', name: 'Bash', input: {} }],
+  describe('message component delegation', () => {
+    it('renders AssistantMessage for complete assistant role', () => {
+      const msg = makeMessage({ role: 'assistant', status: 'complete' });
+      render(<RoomMessage message={msg} />);
+      expect(screen.getByTestId('assistant-message')).toBeInTheDocument();
     });
-    render(<RoomMessage message={msg} />);
-    expect(screen.getByTestId('tool-block-Bash')).toBeInTheDocument();
+
+    it('renders StreamingMessage for running assistant role', () => {
+      const msg = makeMessage({ role: 'assistant', status: 'running' });
+      render(<RoomMessage message={msg} />);
+      expect(screen.getByTestId('streaming-message')).toBeInTheDocument();
+    });
+
+    it('renders UserMessage for user role', () => {
+      const msg = makeMessage({ role: 'user', status: 'complete' });
+      render(<RoomMessage message={msg} />);
+      expect(screen.getByTestId('user-message')).toBeInTheDocument();
+    });
+
+    it('renders SystemMessage for system metadata messages', () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        status: 'complete',
+        metadata: { messageType: 'system' },
+      });
+      render(<RoomMessage message={msg} />);
+      expect(screen.getByTestId('system-message')).toBeInTheDocument();
+    });
   });
 
-  it('renders grouped tool blocks from groupContentBlocks', () => {
-    vi.mocked(groupContentBlocks).mockReturnValue([
-      {
-        kind: 'group',
-        toolName: 'Read',
-        blocks: [],
-      },
-    ] as ReturnType<typeof groupContentBlocks>);
-
-    const msg = makeMessage({
-      parts: [{ type: 'tool_use', id: 'tool-2', name: 'Read', input: {} }],
+  describe('participant color fallback', () => {
+    it('renders with unknown color falling back to secondary', () => {
+      const participant = makeParticipant({ color: 'unknown-color' });
+      const msg = makeMessage({ participant });
+      render(<RoomMessage message={msg} onSelectAgent={vi.fn()} />);
+      // Verify the label still renders even with an unknown color
+      expect(screen.getByTestId('participant-label')).toBeInTheDocument();
     });
-    render(<RoomMessage message={msg} />);
-    expect(screen.getByTestId('tool-group-Read')).toBeInTheDocument();
   });
 
-  it('includes tool_result parts in content blocks', () => {
-    vi.mocked(groupContentBlocks).mockReturnValue([
-      { kind: 'text', text: 'result included' },
-    ] as ReturnType<typeof groupContentBlocks>);
-
-    const msg = makeMessage({
-      parts: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }],
+  describe('selected state', () => {
+    it('marks participant label as selected when selectedAgentId matches', () => {
+      const participant = makeParticipant({ peerId: 'ravn-1' });
+      const msg = makeMessage({ participant });
+      render(<RoomMessage message={msg} onSelectAgent={vi.fn()} selectedAgentId="ravn-1" />);
+      expect(screen.getByTestId('participant-label')).toHaveAttribute('data-selected', 'true');
     });
-    render(<RoomMessage message={msg} />);
-    // groupContentBlocks was called with a tool_result block
-    expect(vi.mocked(groupContentBlocks)).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ type: 'tool_result', tool_use_id: 'tool-1' }),
-      ])
-    );
-  });
 
-  it('returns null for unknown grouped item kind', () => {
-    vi.mocked(groupContentBlocks).mockReturnValue([
-      { kind: 'unknown_future_kind' } as unknown as ReturnType<typeof groupContentBlocks>[number],
-    ]);
-
-    const msg = makeMessage({
-      parts: [{ type: 'text', text: 'x' }],
+    it('does not mark participant label as selected when id differs', () => {
+      const participant = makeParticipant({ peerId: 'ravn-1' });
+      const msg = makeMessage({ participant });
+      render(<RoomMessage message={msg} onSelectAgent={vi.fn()} selectedAgentId="ravn-2" />);
+      expect(screen.getByTestId('participant-label')).not.toHaveAttribute('data-selected');
     });
-    const { container } = render(<RoomMessage message={msg} />);
-    // Content div should be empty — no markdown or tool blocks rendered
-    expect(container.querySelectorAll('[data-testid="markdown"]')).toHaveLength(0);
-    expect(container.querySelectorAll('[data-testid^="tool-"]')).toHaveLength(0);
   });
 });
