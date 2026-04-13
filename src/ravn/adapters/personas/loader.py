@@ -638,16 +638,24 @@ def _apply_outcome_instruction(persona: PersonaConfig) -> PersonaConfig:
 class PersonaLoader(PersonaRegistryPort):
     """Loads persona configurations from YAML files or the built-in set.
 
-    Lookup order for :meth:`load`:
-      1. Project-local: ``.ravn/personas/<name>.yaml``
+    Two operating modes depending on whether *persona_dirs* is supplied:
+
+    **Default mode** (``persona_dirs=None``):
+      1. Project-local: ``<cwd>/.ravn/personas/<name>.yaml``
       2. User-global: ``~/.ravn/personas/<name>.yaml``
-      3. Extra dirs (highest priority first when *persona_dirs* is set)
-      4. Built-in personas
+      3. Built-in personas (if *include_builtin* is ``True``)
+
+    **Explicit mode** (``persona_dirs=[...]``):
+      1. Each directory in *persona_dirs*, in order (highest priority first)
+      2. Built-in personas (if *include_builtin* is ``True``)
+
+      When *persona_dirs* is set, the project-local and user-global paths
+      are **not** added automatically.
 
     Args:
         persona_dirs: Explicit list of directories to search (highest priority
             first).  When ``None``, uses default two-layer discovery:
-            ``.ravn/personas/`` → ``~/.ravn/personas/``.
+            ``<cwd>/.ravn/personas/`` → ``~/.ravn/personas/``.
         include_builtin: Whether to include built-in personas.
         cwd: Working directory used to resolve ``.ravn/personas/``.
              Defaults to the process working directory at construction time.
@@ -755,19 +763,7 @@ class PersonaLoader(PersonaRegistryPort):
         dest_dir = Path.home() / ".ravn" / "personas"
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / f"{config.name}.yaml"
-        payload: dict[str, Any] = {
-            "name": config.name,
-            "system_prompt_template": config.system_prompt_template,
-            "allowed_tools": config.allowed_tools,
-            "forbidden_tools": config.forbidden_tools,
-            "permission_mode": config.permission_mode,
-            "llm": {
-                "primary_alias": config.llm.primary_alias,
-                "thinking_enabled": config.llm.thinking_enabled,
-                "max_tokens": config.llm.max_tokens,
-            },
-            "iteration_budget": config.iteration_budget,
-        }
+        payload: dict[str, Any] = dataclasses.asdict(config)
         dest.write_text(_yaml.dump(payload, allow_unicode=True), encoding="utf-8")
 
     def delete(self, name: str) -> bool:

@@ -7,8 +7,11 @@ from pathlib import Path
 from ravn.adapters.personas.loader import (
     _BUILTIN_PERSONAS,
     PersonaConfig,
+    PersonaConsumes,
+    PersonaFanIn,
     PersonaLLMConfig,
     PersonaLoader,
+    PersonaProduces,
 )
 from ravn.ports.persona import PersonaPort, PersonaRegistryPort
 
@@ -318,6 +321,61 @@ class TestSave:
         assert loaded.permission_mode == "workspace-write"
         assert loaded.llm.thinking_enabled is True
         assert loaded.iteration_budget == 20
+
+    def test_save_load_round_trip_with_event_contracts(self, tmp_path: Path) -> None:
+        """produces/consumes/fan_in survive a save → load cycle."""
+        from niuu.domain.outcome import OutcomeField
+
+        config = PersonaConfig(
+            name="contract-agent",
+            system_prompt_template="Agent with contracts.",
+            produces=PersonaProduces(
+                event_type="review.completed",
+                schema={
+                    "verdict": OutcomeField(
+                        type="enum",
+                        description="Pass or fail",
+                        enum_values=["pass", "fail"],
+                        required=True,
+                    ),
+                    "summary": OutcomeField(type="string", description="Summary", required=True),
+                },
+            ),
+            consumes=PersonaConsumes(
+                event_types=["code.changed", "review.requested"],
+                injects=["repo", "branch"],
+            ),
+            fan_in=PersonaFanIn(strategy="all_must_pass", contributes_to="review.verdict"),
+        )
+        dest_dir = tmp_path / ".ravn" / "personas"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        import unittest.mock as mock
+
+        with mock.patch("ravn.adapters.personas.loader.Path") as mock_path_cls:
+            real_path = Path
+            mock_path_cls.side_effect = real_path
+            mock_path_cls.home.return_value = tmp_path
+            mock_path_cls.cwd = real_path.cwd
+
+            loader = PersonaLoader()
+            loader.save(config)
+
+        loader2 = PersonaLoader([str(dest_dir)], include_builtin=False)
+        loaded = loader2.load("contract-agent")
+        assert loaded is not None
+        # produces round-trips
+        assert loaded.produces.event_type == "review.completed"
+        assert "verdict" in loaded.produces.schema
+        assert loaded.produces.schema["verdict"].type == "enum"
+        assert loaded.produces.schema["verdict"].enum_values == ["pass", "fail"]
+        assert "summary" in loaded.produces.schema
+        # consumes round-trips
+        assert loaded.consumes.event_types == ["code.changed", "review.requested"]
+        assert loaded.consumes.injects == ["repo", "branch"]
+        # fan_in round-trips
+        assert loaded.fan_in.strategy == "all_must_pass"
+        assert loaded.fan_in.contributes_to == "review.verdict"
 
     def test_save_creates_directory_if_missing(self, tmp_path: Path) -> None:
         config = PersonaConfig(name="new-agent", system_prompt_template="Test.")
