@@ -94,6 +94,21 @@ class TestParticipantRegistration:
         assert meta.color == "amber"  # cycles back
 
     @pytest.mark.asyncio
+    async def test_register_reconnect_updates_persona(self):
+        bridge, registry = _make_bridge()
+        ws1 = _fake_ws()
+        ws2 = _fake_ws()
+
+        meta1 = await bridge.register("peer-1", "Alice", ws1)
+        assert meta1.persona == "Alice"
+
+        meta2 = await bridge.register("peer-1", "AliceV2", ws2)
+
+        assert meta2.persona == "AliceV2"
+        assert meta2.color == meta1.color  # color is preserved
+        assert bridge.participants["peer-1"].persona == "AliceV2"
+
+    @pytest.mark.asyncio
     async def test_register_reconnect_reuses_existing_meta(self):
         bridge, registry = _make_bridge()
         ws1 = _fake_ws()

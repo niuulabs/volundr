@@ -64,6 +64,7 @@ class RoomConfig(BaseModel):
     enabled: bool = Field(default=False)
     max_participants: int = Field(default=8)
     participant_colors: list[str] = Field(default_factory=lambda: list(_DEFAULT_PARTICIPANT_COLORS))
+    activity_detail_max_length: int = Field(default=200)
 
 
 class TelegramConfig(BaseModel):

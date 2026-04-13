@@ -19,8 +19,9 @@ import itertools
 import json
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import WebSocket
 
@@ -57,11 +58,11 @@ class RoomBridge:
         self,
         config: RoomConfig,
         channels: ChannelRegistry,
-        append_turn: object = None,
+        append_turn: Callable[[Any], None] | None = None,
     ) -> None:
         self._config = config
         self._channels = channels
-        self._append_turn = append_turn  # Callable[[ConversationTurn], None] | None
+        self._append_turn = append_turn
         self._participants: dict[str, ParticipantMeta] = {}
         self._websockets: dict[str, WebSocket] = {}
         self._color_cycle = itertools.cycle(list(config.participant_colors))
@@ -92,6 +93,14 @@ class RoomBridge:
             self._participants[peer_id] = meta
         else:
             meta = self._participants[peer_id]
+            if meta.persona != persona:
+                meta = ParticipantMeta(
+                    peer_id=peer_id,
+                    persona=persona,
+                    color=meta.color,
+                    participant_type=meta.participant_type,
+                )
+                self._participants[peer_id] = meta
 
         self._websockets[peer_id] = websocket
         logger.info("RoomBridge: participant registered peer_id=%s persona=%s", peer_id, persona)
@@ -192,7 +201,7 @@ class RoomBridge:
             "activityType": activity_type,
         }
         if detail:
-            event["detail"] = detail[:200]
+            event["detail"] = detail[: self._config.activity_detail_max_length]
 
         await self._channels.broadcast(event)
 
