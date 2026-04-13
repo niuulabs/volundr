@@ -44,7 +44,7 @@ function hasToolParts(parts?: readonly SkuldChatMessagePart[]): boolean {
  * Convert message parts to ToolContentBlock array for groupContentBlocks.
  * Filters out reasoning parts (handled separately).
  */
-function partsToContentBlocks(parts: readonly SkuldChatMessagePart[]): ToolContentBlock[] {
+export function partsToContentBlocks(parts: readonly SkuldChatMessagePart[]): ToolContentBlock[] {
   const blocks: ToolContentBlock[] = [];
   for (const part of parts) {
     if (part.type === 'text') {

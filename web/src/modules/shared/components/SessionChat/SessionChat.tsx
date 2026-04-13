@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { Wifi, WifiOff, BrainCircuitIcon, RotateCcwIcon, ArrowDownIcon } from 'lucide-react';
 import { PermissionStack } from '@/modules/shared/components/PermissionDialog';
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
+import { useRoomState } from '@/modules/shared/hooks/useRoomState';
 import type {
   PermissionBehavior,
   ContentBlock,
@@ -10,10 +11,12 @@ import type {
 } from '@/modules/shared/hooks/useSkuldChat';
 import { cn } from '@/utils';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
+import { RoomMessage } from './RoomMessage';
+import { ParticipantFilter } from './ParticipantFilter';
+import { ThreadGroup } from './ThreadGroup';
+import { AgentDetailPanel } from './AgentDetailPanel';
 import { ChatInput } from './ChatInput';
 import { SessionEmptyChat } from './ChatEmptyStates';
-import { RoomMessage } from './RoomMessage';
-import { AgentDetailPanel } from './AgentDetailPanel';
 import type { FileAttachment } from './useFileAttachments';
 import styles from './SessionChat.module.css';
 
@@ -49,6 +52,7 @@ export function SessionChat({
 }: SessionChatProps) {
   const {
     messages,
+    participants,
     connected,
     isRunning,
     historyLoaded,
@@ -62,6 +66,15 @@ export function SessionChat({
     availableCommands,
     capabilities,
   } = useSkuldChat(url);
+
+  const {
+    isRoomMode,
+    activeFilter,
+    setActiveFilter,
+    showInternal,
+    toggleInternal,
+    filteredMessages,
+  } = useRoomState(messages, participants);
 
   const [modelInput, setModelInput] = useState('');
   const [showModelInput, setShowModelInput] = useState(false);
@@ -105,15 +118,54 @@ export function SessionChat({
   );
 
   // Filter system messages to render inline, separate from main flow
+  // In room mode, further filtering by participant/internal is handled by useRoomState
   const visibleMessages = useMemo(
     () =>
-      messages.filter(m => {
+      filteredMessages.filter(m => {
         if (m.role === 'system') return false;
         if (m.role === 'assistant' && m.status === 'complete' && !m.content.trim()) return false;
         return true;
       }),
-    [messages]
+    [filteredMessages]
   );
+
+  // Group consecutive internal messages by threadId for ThreadGroup rendering
+  type MessageGroup =
+    | { type: 'single'; message: (typeof visibleMessages)[number] }
+    | { type: 'thread'; threadId: string; messages: typeof visibleMessages };
+
+  // Thread grouping: consecutive internal messages with same threadId collapse into ThreadGroup
+  const renderedGroups = useMemo((): MessageGroup[] => {
+    if (!isRoomMode || !showInternal) return visibleMessages.map(m => ({ type: 'single', message: m }));
+
+    const result: MessageGroup[] = [];
+    let i = 0;
+    while (i < visibleMessages.length) {
+      const msg = visibleMessages[i];
+      if (msg.visibility === 'internal' && msg.threadId) {
+        const threadId = msg.threadId;
+        const threadMsgs: (typeof visibleMessages)[number][] = [msg];
+        let j = i + 1;
+        while (j < visibleMessages.length) {
+          const next = visibleMessages[j];
+          if (next.visibility === 'internal' && next.threadId === threadId) {
+            threadMsgs.push(next);
+            j++;
+          } else {
+            break;
+          }
+        }
+        if (threadMsgs.length > 1) {
+          result.push({ type: 'thread', threadId, messages: threadMsgs });
+          i = j;
+          continue;
+        }
+      }
+      result.push({ type: 'single', message: msg });
+      i++;
+    }
+    return result;
+  }, [visibleMessages, isRoomMode, showInternal]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView?.({ behavior });
@@ -430,12 +482,39 @@ export function SessionChat({
           </div>
         )}
 
+        {isRoomMode && (
+          <ParticipantFilter
+            participants={participants}
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+            showInternal={showInternal}
+            onToggleInternal={toggleInternal}
+          />
+        )}
+
         {hasConversation ? (
           <div className={styles.messagesContainer} ref={scrollContainerRef}>
             <div className={styles.messagesInner}>
-              {visibleMessages.map(msg => {
-                // Room session messages — wrap with participant label and detail button
-                if (isRoomSession) {
+              {renderedGroups.map(group => {
+                if (group.type === 'thread') {
+                  return (
+                    <ThreadGroup
+                      key={group.threadId}
+                      messages={group.messages}
+                      participants={participants}
+                    />
+                  );
+                }
+
+                const msg = group.message;
+
+                // System messages rendered as compact inline notifications
+                if (msg.metadata?.messageType === 'system') {
+                  return <SystemMessage key={msg.id} message={msg} />;
+                }
+
+                // Room messages (participant present or room session) — render as RoomMessage
+                if ((isRoomMode && msg.participant) || isRoomSession) {
                   return (
                     <RoomMessage
                       key={msg.id}
@@ -456,19 +535,19 @@ export function SessionChat({
                   );
                 }
 
-                // Single-agent session messages — standard rendering
-                // System messages rendered as compact inline notifications
-                if (msg.metadata?.messageType === 'system') {
-                  return <SystemMessage key={msg.id} message={msg} />;
-                }
-
                 if (msg.role === 'user') {
                   return <UserMessage key={msg.id} message={msg} />;
                 }
 
                 // Streaming assistant message
                 if (msg.status === 'running') {
-                  return <StreamingMessage key={msg.id} content={msg.content} parts={msg.parts} />;
+                  return (
+                    <StreamingMessage
+                      key={msg.id}
+                      content={msg.content}
+                      parts={msg.parts}
+                    />
+                  );
                 }
 
                 // Complete assistant message
