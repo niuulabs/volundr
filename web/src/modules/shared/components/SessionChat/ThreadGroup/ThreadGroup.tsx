@@ -2,12 +2,10 @@ import { useState, useCallback } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { RoomMessage } from '../RoomMessage';
 import type { SkuldChatMessage } from '@/modules/shared/hooks/useSkuldChat';
-import type { RoomParticipant } from '@/modules/shared/hooks/useSkuldChat';
 import styles from './ThreadGroup.module.css';
 
 interface ThreadGroupProps {
   messages: readonly SkuldChatMessage[];
-  participants: ReadonlyMap<string, RoomParticipant>;
 }
 
 function buildThreadLabel(messages: readonly SkuldChatMessage[]): string {
@@ -23,7 +21,7 @@ function buildThreadLabel(messages: readonly SkuldChatMessage[]): string {
   return participantStr ? `${participantStr} \u2014 ${count} ${msgWord}` : `${count} ${msgWord}`;
 }
 
-export function ThreadGroup({ messages, participants }: ThreadGroupProps) {
+export function ThreadGroup({ messages }: ThreadGroupProps) {
   const [expanded, setExpanded] = useState(false);
 
   const toggle = useCallback(() => setExpanded(prev => !prev), []);
@@ -44,13 +42,7 @@ export function ThreadGroup({ messages, participants }: ThreadGroupProps) {
       <div className={styles.body} data-expanded={expanded}>
         <div className={styles.messages}>
           {messages.map(msg => (
-            <RoomMessage
-              key={msg.id}
-              message={msg}
-              participantStatus={
-                msg.participantId ? participants.get(msg.participantId)?.status : undefined
-              }
-            />
+            <RoomMessage key={msg.id} message={msg} />
           ))}
         </div>
       </div>

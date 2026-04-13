@@ -8,6 +8,7 @@ import type {
   ContentBlock,
   AttachmentMeta,
   ParticipantMeta,
+  RoomParticipant,
 } from '@/modules/shared/hooks/useSkuldChat';
 import { cn } from '@/utils';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
@@ -58,6 +59,7 @@ export function SessionChat({
     historyLoaded,
     pendingPermissions,
     sendMessage,
+    sendDirectedMessages,
     respondToPermission,
     sendInterrupt,
     sendSetModel,
@@ -136,7 +138,8 @@ export function SessionChat({
 
   // Thread grouping: consecutive internal messages with same threadId collapse into ThreadGroup
   const renderedGroups = useMemo((): MessageGroup[] => {
-    if (!isRoomMode || !showInternal) return visibleMessages.map(m => ({ type: 'single', message: m }));
+    if (!isRoomMode || !showInternal)
+      return visibleMessages.map(m => ({ type: 'single', message: m }));
 
     const result: MessageGroup[] = [];
     let i = 0;
@@ -329,6 +332,24 @@ export function SessionChat({
     [sendMessage]
   );
 
+  const handleSendDirected = useCallback(
+    (
+      agentParticipants: RoomParticipant[],
+      text: string,
+      // TODO(NIU-607): directed_message does not support file attachments yet;
+      // the binary payload transport is tracked separately. File paths are already
+      // prepended as @{path} prefixes in `text` by ChatInput, so context is not lost.
+      _fileAttachments: FileAttachment[]
+    ) => {
+      userSentRef.current = true;
+      sendDirectedMessages(
+        agentParticipants.map(p => p.peerId),
+        text
+      );
+    },
+    [sendDirectedMessages]
+  );
+
   const handleStop = useCallback(() => {
     sendInterrupt();
   }, [sendInterrupt]);
@@ -497,13 +518,7 @@ export function SessionChat({
             <div className={styles.messagesInner}>
               {renderedGroups.map(group => {
                 if (group.type === 'thread') {
-                  return (
-                    <ThreadGroup
-                      key={group.threadId}
-                      messages={group.messages}
-                      participants={participants}
-                    />
-                  );
+                  return <ThreadGroup key={group.threadId} messages={group.messages} />;
                 }
 
                 const msg = group.message;
@@ -541,13 +556,7 @@ export function SessionChat({
 
                 // Streaming assistant message
                 if (msg.status === 'running') {
-                  return (
-                    <StreamingMessage
-                      key={msg.id}
-                      content={msg.content}
-                      parts={msg.parts}
-                    />
-                  );
+                  return <StreamingMessage key={msg.id} content={msg.content} parts={msg.parts} />;
                 }
 
                 // Complete assistant message
@@ -603,6 +612,7 @@ export function SessionChat({
             )}
             <ChatInput
               onSend={handleSend}
+              onSendDirected={handleSendDirected}
               isLoading={isRunning}
               onStop={handleStop}
               disabled={!connected}
@@ -610,6 +620,7 @@ export function SessionChat({
               sessionHost={sessionHost}
               chatEndpoint={chatEndpoint}
               availableCommands={availableCommands}
+              participants={participants}
             />
           </div>
         </div>

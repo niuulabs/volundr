@@ -293,6 +293,7 @@ interface UseSkuldChatReturn {
   sendSetModel: (model: string) => void;
   sendSetMaxThinkingTokens: (tokens: number) => void;
   sendRewindFiles: () => void;
+  sendDirectedMessages: (peerIds: string[], text: string) => void;
   clearMessages: () => void;
 }
 
@@ -1136,6 +1137,30 @@ export function useSkuldChat(
     sendJson({ type: 'rewind_files' });
   }, [sendJson]);
 
+  const sendDirectedMessages = useCallback(
+    (peerIds: string[], text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || !connected || peerIds.length === 0) {
+        return;
+      }
+      setMessages(prev => [
+        ...prev,
+        {
+          id: generateId(),
+          role: 'user',
+          content: trimmed,
+          createdAt: new Date(),
+          status: 'complete',
+        },
+      ]);
+      for (const peerId of peerIds) {
+        sendJson({ type: 'directed_message', target_peer_id: peerId, content: trimmed });
+      }
+      setIsRunning(true);
+    },
+    [connected, sendJson]
+  );
+
   const clearMessages = useCallback(() => {
     setMessages([]);
     setPendingPermissions([]);
@@ -1168,6 +1193,7 @@ export function useSkuldChat(
     sendSetModel,
     sendSetMaxThinkingTokens,
     sendRewindFiles,
+    sendDirectedMessages,
     clearMessages,
   };
 }
