@@ -74,6 +74,8 @@ export function SessionChat({
     showInternal,
     toggleInternal,
     filteredMessages,
+    collapsedThreads,
+    toggleThread,
   } = useRoomState(messages, participants);
 
   const [modelInput, setModelInput] = useState('');
@@ -502,6 +504,8 @@ export function SessionChat({
                       key={group.threadId}
                       messages={group.messages}
                       participants={participants}
+                      isCollapsed={collapsedThreads.has(group.threadId)}
+                      onToggle={() => toggleThread(group.threadId)}
                     />
                   );
                 }
