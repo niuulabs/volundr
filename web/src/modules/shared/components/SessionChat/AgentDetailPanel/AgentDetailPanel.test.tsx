@@ -52,11 +52,13 @@ function makeMessage(overrides: Partial<SkuldChatMessage> = {}): SkuldChatMessag
   };
 }
 
-function setupDetailMock(options: {
-  messages?: SkuldChatMessage[];
-  connected?: boolean;
-  isRunning?: boolean;
-} = {}) {
+function setupDetailMock(
+  options: {
+    messages?: SkuldChatMessage[];
+    connected?: boolean;
+    isRunning?: boolean;
+  } = {}
+) {
   vi.mocked(useAgentDetail).mockReturnValue({
     messages: options.messages ?? [],
     connected: options.connected ?? false,

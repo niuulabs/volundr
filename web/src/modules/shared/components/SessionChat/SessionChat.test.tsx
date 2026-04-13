@@ -8,7 +8,13 @@ vi.mock('@/modules/shared/hooks/useSkuldChat', () => ({
 
 // Mock RoomMessage and AgentDetailPanel so SessionChat tests stay focused
 vi.mock('./RoomMessage', () => ({
-  RoomMessage: ({ message, onSelectAgent }: { message: { id: string; content: string }; onSelectAgent?: (id: string) => void }) => (
+  RoomMessage: ({
+    message,
+    onSelectAgent,
+  }: {
+    message: { id: string; content: string };
+    onSelectAgent?: (id: string) => void;
+  }) => (
     <div data-testid="room-message" data-message-id={message.id}>
       {message.content}
       {onSelectAgent && (
@@ -25,7 +31,13 @@ vi.mock('./RoomMessage', () => ({
 }));
 
 vi.mock('./AgentDetailPanel', () => ({
-  AgentDetailPanel: ({ participant, onClose }: { participant: { peerId: string; persona: string }; onClose: () => void }) => (
+  AgentDetailPanel: ({
+    participant,
+    onClose,
+  }: {
+    participant: { peerId: string; persona: string };
+    onClose: () => void;
+  }) => (
     <div data-testid="agent-detail-panel" data-peer-id={participant.peerId}>
       {participant.persona}
       <button type="button" data-testid="detail-close" onClick={onClose}>

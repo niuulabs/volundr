@@ -162,18 +162,14 @@ describe('RoomMessage', () => {
     it('marks participant label as selected when selectedAgentId matches', () => {
       const participant = makeParticipant({ peerId: 'ravn-1' });
       const msg = makeMessage({ participant });
-      render(
-        <RoomMessage message={msg} onSelectAgent={vi.fn()} selectedAgentId="ravn-1" />
-      );
+      render(<RoomMessage message={msg} onSelectAgent={vi.fn()} selectedAgentId="ravn-1" />);
       expect(screen.getByTestId('participant-label')).toHaveAttribute('data-selected', 'true');
     });
 
     it('does not mark participant label as selected when id differs', () => {
       const participant = makeParticipant({ peerId: 'ravn-1' });
       const msg = makeMessage({ participant });
-      render(
-        <RoomMessage message={msg} onSelectAgent={vi.fn()} selectedAgentId="ravn-2" />
-      );
+      render(<RoomMessage message={msg} onSelectAgent={vi.fn()} selectedAgentId="ravn-2" />);
       expect(screen.getByTestId('participant-label')).not.toHaveAttribute('data-selected');
     });
   });

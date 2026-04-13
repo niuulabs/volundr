@@ -167,21 +167,10 @@ export function AgentDetailPanel({ participant, onClose }: AgentDetailPanelProps
               }
 
               if (msg.status === 'running') {
-                return (
-                  <StreamingMessage
-                    key={msg.id}
-                    content={msg.content}
-                    parts={msg.parts}
-                  />
-                );
+                return <StreamingMessage key={msg.id} content={msg.content} parts={msg.parts} />;
               }
 
-              return (
-                <AssistantMessage
-                  key={msg.id}
-                  message={msg}
-                />
-              );
+              return <AssistantMessage key={msg.id} message={msg} />;
             })
           )}
           <div ref={messagesEndRef} />
