@@ -139,8 +139,8 @@ export function useMentionMenu(
   const triggerPosRef = useRef<number>(-1);
 
   // Build agent items from participants (ravn type only)
-  const agentItems = useMemo<MentionItem[]>(() => {
-    const result: MentionItem[] = [];
+  const agentItems = useMemo<Array<{ kind: 'agent'; participant: RoomParticipant }>>(() => {
+    const result: Array<{ kind: 'agent'; participant: RoomParticipant }> = [];
     for (const [, participant] of participants) {
       if (participant.participantType === 'ravn') {
         result.push({ kind: 'agent', participant });

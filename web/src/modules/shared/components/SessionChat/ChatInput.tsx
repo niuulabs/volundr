@@ -16,6 +16,7 @@ import { useSlashMenu } from './useSlashMenu';
 import { MentionMenu } from './MentionMenu';
 import { MentionPill } from './MentionPill';
 import { useMentionMenu } from './useMentionMenu';
+import type { SelectedMention } from './useMentionMenu';
 import { useFileAttachments, type FileAttachment } from './useFileAttachments';
 import styles from './ChatInput.module.css';
 
@@ -151,7 +152,7 @@ export function ChatInput({
       .map(m => m.participant);
 
     const fileMentions = mentionMenu.mentions.filter(
-      (m): m is { kind: 'file'; entry: { path: string } } => m.kind === 'file'
+      (m): m is Extract<SelectedMention, { kind: 'file' }> => m.kind === 'file'
     );
 
     const agentPrefixes = agentMentions.map(p => `@${p.persona}`);
