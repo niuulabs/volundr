@@ -73,7 +73,7 @@ export function SessionChat({
     setActiveFilter,
     showInternal,
     toggleInternal,
-    filteredMessages,
+    visibleMessages,
     collapsedThreads,
     toggleThread,
   } = useRoomState(messages, participants);
@@ -117,18 +117,6 @@ export function SessionChat({
     () =>
       messages.some(m => m.role === 'user' || (m.role === 'assistant' && !m.metadata?.messageType)),
     [messages]
-  );
-
-  // Filter system messages to render inline, separate from main flow
-  // In room mode, further filtering by participant/internal is handled by useRoomState
-  const visibleMessages = useMemo(
-    () =>
-      filteredMessages.filter(m => {
-        if (m.role === 'system') return false;
-        if (m.role === 'assistant' && m.status === 'complete' && !m.content.trim()) return false;
-        return true;
-      }),
-    [filteredMessages]
   );
 
   // Group consecutive internal messages by threadId for ThreadGroup rendering
@@ -504,7 +492,6 @@ export function SessionChat({
                     <ThreadGroup
                       key={group.threadId}
                       messages={group.messages}
-                      participants={participants}
                       isCollapsed={collapsedThreads.has(group.threadId)}
                       onToggle={() => toggleThread(group.threadId)}
                     />

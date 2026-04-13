@@ -18,12 +18,19 @@ export interface UseRoomStateReturn {
   showInternal: boolean;
   toggleInternal: () => void;
   filteredMessages: readonly SkuldChatMessage[];
+  visibleMessages: readonly SkuldChatMessage[];
   collapsedThreads: ReadonlySet<string>;
   toggleThread: (threadId: string) => void;
   threadGroups: ReadonlyMap<string, ThreadGroupData>;
 }
 
 const FILTER_ALL = 'all';
+
+function isVisibleMessage(msg: SkuldChatMessage): boolean {
+  if (msg.role === 'system') return false;
+  if (msg.role === 'assistant' && msg.status === 'complete' && !msg.content.trim()) return false;
+  return true;
+}
 
 export function useRoomState(
   messages: readonly SkuldChatMessage[],
@@ -61,19 +68,27 @@ export function useRoomState(
     });
   }, [messages, isRoomMode, activeFilter, showInternal]);
 
+  // Remove system messages and empty assistant messages — same filter SessionChat
+  // applies before rendering. threadGroups uses this array so both grouping
+  // algorithms always operate on the same input.
+  const visibleMessages = useMemo(
+    () => filteredMessages.filter(isVisibleMessage),
+    [filteredMessages]
+  );
+
   const threadGroups = useMemo((): ReadonlyMap<string, ThreadGroupData> => {
     if (!isRoomMode || !showInternal) return new Map();
 
     const groups = new Map<string, ThreadGroupData>();
     let i = 0;
-    while (i < filteredMessages.length) {
-      const msg = filteredMessages[i];
+    while (i < visibleMessages.length) {
+      const msg = visibleMessages[i];
       if (msg.visibility === 'internal' && msg.threadId) {
         const threadId = msg.threadId;
         const threadMsgs: SkuldChatMessage[] = [msg];
         let j = i + 1;
-        while (j < filteredMessages.length) {
-          const next = filteredMessages[j];
+        while (j < visibleMessages.length) {
+          const next = visibleMessages[j];
           if (next.visibility === 'internal' && next.threadId === threadId) {
             threadMsgs.push(next);
             j++;
@@ -99,7 +114,7 @@ export function useRoomState(
       i++;
     }
     return groups;
-  }, [filteredMessages, isRoomMode, showInternal]);
+  }, [visibleMessages, isRoomMode, showInternal]);
 
   const collapsedThreads = useMemo((): ReadonlySet<string> => {
     const collapsed = new Set<string>();
@@ -119,6 +134,7 @@ export function useRoomState(
     showInternal,
     toggleInternal,
     filteredMessages,
+    visibleMessages,
     collapsedThreads,
     toggleThread,
     threadGroups,

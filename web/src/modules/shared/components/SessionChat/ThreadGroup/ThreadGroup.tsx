@@ -2,12 +2,10 @@ import { ChevronRight, ChevronDown } from 'lucide-react';
 import { RoomMessage } from '../RoomMessage';
 import { resolveParticipantColor } from '@/modules/shared/utils/participantColor';
 import type { SkuldChatMessage } from '@/modules/shared/hooks/useSkuldChat';
-import type { RoomParticipant } from '@/modules/shared/hooks/useSkuldChat';
 import styles from './ThreadGroup.module.css';
 
 interface ThreadGroupProps {
   messages: readonly SkuldChatMessage[];
-  participants: ReadonlyMap<string, RoomParticipant>;
   isCollapsed: boolean;
   onToggle: () => void;
 }
@@ -45,12 +43,7 @@ function resolveThreadBorderColor(messages: readonly SkuldChatMessage[]): string
   return resolveParticipantColor(firstParticipant.color);
 }
 
-export function ThreadGroup({
-  messages,
-  participants: _participants,
-  isCollapsed,
-  onToggle,
-}: ThreadGroupProps) {
+export function ThreadGroup({ messages, isCollapsed, onToggle }: ThreadGroupProps) {
   const label = buildThreadLabel(messages);
   const timeRange = buildTimeRange(messages);
   const borderColor = resolveThreadBorderColor(messages);

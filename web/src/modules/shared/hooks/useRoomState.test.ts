@@ -179,6 +179,80 @@ describe('useRoomState', () => {
     });
   });
 
+  describe('visibleMessages', () => {
+    const participants = makeParticipantsMap([
+      makeParticipant({ peerId: 'peer-1', persona: 'Ravn-A' }),
+      makeParticipant({ peerId: 'peer-2', persona: 'Ravn-B' }),
+    ]);
+
+    it('excludes system role messages', () => {
+      const messages = [
+        makeMessage({ id: 'msg-1', role: 'user' }),
+        makeMessage({ id: 'msg-2', role: 'system' }),
+        makeMessage({ id: 'msg-3', role: 'assistant' }),
+      ];
+      const { result } = renderHook(() => useRoomState(messages, participants));
+      const ids = result.current.visibleMessages.map(m => m.id);
+      expect(ids).not.toContain('msg-2');
+      expect(ids).toContain('msg-1');
+      expect(ids).toContain('msg-3');
+    });
+
+    it('excludes empty complete assistant messages', () => {
+      const messages = [
+        makeMessage({ id: 'msg-1', role: 'assistant', status: 'complete', content: '' }),
+        makeMessage({ id: 'msg-2', role: 'assistant', status: 'complete', content: '   ' }),
+        makeMessage({ id: 'msg-3', role: 'assistant', status: 'complete', content: 'hello' }),
+      ];
+      const { result } = renderHook(() => useRoomState(messages, participants));
+      const ids = result.current.visibleMessages.map(m => m.id);
+      expect(ids).not.toContain('msg-1');
+      expect(ids).not.toContain('msg-2');
+      expect(ids).toContain('msg-3');
+    });
+
+    it('includes running assistant messages even with empty content', () => {
+      const messages = [
+        makeMessage({ id: 'msg-1', role: 'assistant', status: 'running', content: '' }),
+      ];
+      const { result } = renderHook(() => useRoomState(messages, participants));
+      expect(result.current.visibleMessages.map(m => m.id)).toContain('msg-1');
+    });
+
+    it('uses visibleMessages as basis for threadGroups so collapsed state matches render', () => {
+      // A system message between two internal messages of the same thread breaks
+      // consecutive grouping in filteredMessages but NOT in visibleMessages.
+      // threadGroups must use visibleMessages so collapsedThreads matches what renders.
+      const messages = [
+        makeMessage({
+          id: 'a',
+          role: 'assistant',
+          visibility: 'internal',
+          threadId: 'tid-1',
+          content: 'a',
+        }),
+        makeMessage({ id: 'sys', role: 'system', content: 'system event' }),
+        makeMessage({
+          id: 'b',
+          role: 'assistant',
+          visibility: 'internal',
+          threadId: 'tid-1',
+          content: 'b',
+        }),
+      ];
+      const { result } = renderHook(() => useRoomState(messages, participants));
+
+      act(() => {
+        result.current.toggleInternal();
+      });
+
+      // visibleMessages has [a, b] consecutive (system filtered out), so the thread groups
+      expect(result.current.threadGroups.has('tid-1')).toBe(true);
+      // and is collapsed by default
+      expect(result.current.collapsedThreads.has('tid-1')).toBe(true);
+    });
+  });
+
   describe('activeFilter state', () => {
     it('defaults to "all"', () => {
       const { result } = renderHook(() => useRoomState([], new Map()));
