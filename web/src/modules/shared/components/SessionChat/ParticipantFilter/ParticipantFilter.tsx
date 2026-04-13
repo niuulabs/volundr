@@ -1,5 +1,6 @@
 import { Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/utils';
+import { FilterTabs } from '@/modules/shared/components/FilterTabs/FilterTabs';
 import type { RoomParticipant } from '@/modules/shared/hooks/useSkuldChat';
 import styles from './ParticipantFilter.module.css';
 
@@ -20,29 +21,28 @@ export function ParticipantFilter({
   showInternal,
   onToggleInternal,
 }: ParticipantFilterProps) {
+  const options = [FILTER_ALL, ...Array.from(participants.keys())];
+
+  function renderOption(peerId: string) {
+    if (peerId === FILTER_ALL) return 'All';
+    const p = participants.get(peerId);
+    if (!p) return peerId;
+    return (
+      <>
+        <span className={styles.dot} data-participant-color={p.color} />
+        <span>{p.persona}</span>
+      </>
+    );
+  }
+
   return (
     <div className={styles.container}>
-      <div className={styles.pills}>
-        <button
-          type="button"
-          className={cn(styles.pill, activeFilter === FILTER_ALL && styles.active)}
-          onClick={() => onFilterChange(FILTER_ALL)}
-        >
-          All
-        </button>
-        {Array.from(participants.values()).map(participant => (
-          <button
-            key={participant.peerId}
-            type="button"
-            className={cn(styles.pill, activeFilter === participant.peerId && styles.active)}
-            onClick={() => onFilterChange(participant.peerId)}
-            data-participant-color={participant.color}
-          >
-            <span className={styles.dot} data-participant-color={participant.color} />
-            <span>{participant.persona}</span>
-          </button>
-        ))}
-      </div>
+      <FilterTabs
+        options={options}
+        value={activeFilter}
+        onChange={onFilterChange}
+        renderOption={renderOption}
+      />
 
       <button
         type="button"

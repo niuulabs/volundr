@@ -110,18 +110,9 @@ export function SessionChat({
     | { type: 'single'; message: (typeof visibleMessages)[number] }
     | { type: 'thread'; threadId: string; messages: typeof visibleMessages };
 
-  const messageGroups = useMemo((): MessageGroup[] => {
-    if (!isRoomMode || showInternal) {
-      // No grouping needed when not in room mode or when internal visible individually
-      return visibleMessages.map(m => ({ type: 'single', message: m }));
-    }
-    // When not showing internal, all internal messages are filtered out — no grouping needed
-    return visibleMessages.map(m => ({ type: 'single', message: m }));
-  }, [visibleMessages, isRoomMode, showInternal]);
-
   // Thread grouping: consecutive internal messages with same threadId collapse into ThreadGroup
   const renderedGroups = useMemo((): MessageGroup[] => {
-    if (!isRoomMode || !showInternal) return messageGroups;
+    if (!isRoomMode || !showInternal) return visibleMessages.map(m => ({ type: 'single', message: m }));
 
     const result: MessageGroup[] = [];
     let i = 0;
@@ -150,7 +141,7 @@ export function SessionChat({
       i++;
     }
     return result;
-  }, [visibleMessages, isRoomMode, showInternal, messageGroups]);
+  }, [visibleMessages, isRoomMode, showInternal]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView?.({ behavior });
@@ -474,7 +465,7 @@ export function SessionChat({
       {hasConversation ? (
         <div className={styles.messagesContainer} ref={scrollContainerRef}>
           <div className={styles.messagesInner}>
-            {renderedGroups.map((group, idx) => {
+            {renderedGroups.map(group => {
               if (group.type === 'thread') {
                 return (
                   <ThreadGroup
@@ -513,10 +504,9 @@ export function SessionChat({
               if (msg.status === 'running') {
                 return (
                   <StreamingMessage
-                    key={`${msg.id}-${idx}`}
+                    key={msg.id}
                     content={msg.content}
                     parts={msg.parts}
-                    model={msg.metadata?.messageType !== 'system' ? undefined : undefined}
                   />
                 );
               }

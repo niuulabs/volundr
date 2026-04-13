@@ -1,34 +1,15 @@
 import { MarkdownContent } from '../MarkdownContent';
 import { ToolBlock, ToolGroupBlock, groupContentBlocks } from '../ToolBlock';
+import { partsToContentBlocks } from '../ChatMessages';
 import type {
   SkuldChatMessage,
-  SkuldChatMessagePart,
   ParticipantStatus,
 } from '@/modules/shared/hooks/useSkuldChat';
-import type { ContentBlock as ToolContentBlock } from '../ToolBlock';
 import styles from './RoomMessage.module.css';
 
 interface RoomMessageProps {
   message: SkuldChatMessage;
   participantStatus?: ParticipantStatus;
-}
-
-function partsToContentBlocks(parts: readonly SkuldChatMessagePart[]): ToolContentBlock[] {
-  const blocks: ToolContentBlock[] = [];
-  for (const part of parts) {
-    if (part.type === 'text') {
-      blocks.push({ type: 'text', text: part.text });
-      continue;
-    }
-    if (part.type === 'tool_use') {
-      blocks.push({ type: 'tool_use', id: part.id, name: part.name, input: part.input });
-      continue;
-    }
-    if (part.type === 'tool_result') {
-      blocks.push({ type: 'tool_result', tool_use_id: part.tool_use_id, content: part.content });
-    }
-  }
-  return blocks;
 }
 
 const ACTIVE_STATUSES: ParticipantStatus[] = ['thinking', 'tool_executing'];

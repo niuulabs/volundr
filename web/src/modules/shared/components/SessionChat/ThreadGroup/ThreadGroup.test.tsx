@@ -117,6 +117,25 @@ describe('ThreadGroup', () => {
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('shows plain count label when no participant has a persona', () => {
+    const msgs = [
+      makeMessage({ id: 'msg-1', participant: undefined }),
+      makeMessage({ id: 'msg-2', participant: undefined }),
+    ];
+    render(<ThreadGroup messages={msgs} participants={participants} />);
+    expect(screen.getByText(/2 messages/)).toBeInTheDocument();
+    // No em-dash separator when there are no personas
+    expect(screen.queryByText(/—/)).not.toBeInTheDocument();
+  });
+
+  it('shows singular "message" for single message with no persona', () => {
+    const one = [makeMessage({ id: 'msg-1', participant: undefined })];
+    render(<ThreadGroup messages={one} participants={participants} />);
+    expect(screen.getByText('1 message')).toBeInTheDocument();
+    expect(screen.queryByText(/1 messages/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/—/)).not.toBeInTheDocument();
+  });
+
   it('shows singular "message" for single message', () => {
     const one = [makeMessage({ id: 'msg-1' })];
     render(<ThreadGroup messages={one} participants={participants} />);
