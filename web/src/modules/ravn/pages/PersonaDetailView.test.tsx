@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { PersonaDetailView } from './PersonaDetailView';
@@ -8,6 +8,10 @@ vi.stubGlobal('fetch', mockFetch);
 
 beforeEach(() => {
   mockFetch.mockReset();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 const mockDetail = {
@@ -258,6 +262,226 @@ describe('PersonaDetailView', () => {
     wrap('coding-agent');
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /← back/i })).toBeInTheDocument();
+    });
+  });
+
+  it('renders override badge when hasOverride is true', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        status: 200,
+        ok: true,
+        json: async () => ({ ...mockDetail, has_override: true }),
+      })
+      .mockResolvedValueOnce({ status: 200, ok: true, json: async () => 'yaml: content\n' });
+    wrap('coding-agent');
+    await waitFor(() => {
+      expect(screen.getByText('override')).toBeInTheDocument();
+    });
+  });
+
+  it('shows unlimited when iterationBudget is 0', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        status: 200,
+        ok: true,
+        json: async () => ({ ...mockDetail, iteration_budget: 0 }),
+      })
+      .mockResolvedValueOnce({ status: 200, ok: true, json: async () => 'yaml: content\n' });
+    wrap('coding-agent');
+    await waitFor(() => {
+      expect(screen.getByText('unlimited')).toBeInTheDocument();
+    });
+  });
+
+  it('calls create API when create form submitted and navigates', async () => {
+    mockFetch.mockResolvedValue({
+      status: 201,
+      ok: true,
+      json: async () => ({ ...mockDetail, name: 'new-agent' }),
+    });
+    wrap('~new');
+
+    fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: 'new-agent' } });
+    fireEvent.change(screen.getByLabelText(/template/i), {
+      target: { value: 'You are helpful.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /create/i }));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/personas'),
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+  });
+
+  it('shows action error when create fails', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ detail: 'Name already taken' }),
+    });
+    wrap('~new');
+
+    fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: 'new-agent' } });
+    fireEvent.change(screen.getByLabelText(/template/i), {
+      target: { value: 'You are helpful.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /create/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Name already taken')).toBeInTheDocument();
+    });
+  });
+
+  it('saves updates and returns to view mode on successful edit', async () => {
+    mockDetailAndYaml();
+    wrap('coding-agent');
+    await waitFor(() => screen.getByText('coding-agent'));
+
+    mockFetch.mockResolvedValueOnce({
+      status: 200,
+      ok: true,
+      json: async () => ({ ...mockDetail }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /edit/i }));
+    await waitFor(() => screen.getByText(/edit:/i));
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Identity')).toBeInTheDocument();
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/coding-agent'),
+        expect.objectContaining({ method: 'PUT' })
+      );
+    });
+  });
+
+  it('shows action error when update fails', async () => {
+    mockDetailAndYaml();
+    wrap('coding-agent');
+    await waitFor(() => screen.getByText('coding-agent'));
+
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({ detail: 'Server update error' }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /edit/i }));
+    await waitFor(() => screen.getByText(/edit:/i));
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Server update error')).toBeInTheDocument();
+    });
+  });
+
+  it('navigates to personas list after successful delete', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        status: 200,
+        ok: true,
+        json: async () => ({ ...mockDetail, is_builtin: false }),
+      })
+      .mockResolvedValueOnce({ status: 200, ok: true, json: async () => 'yaml: content\n' })
+      .mockResolvedValueOnce({ status: 204, ok: true, json: async () => ({}) });
+
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    wrap('coding-agent');
+    await waitFor(() => screen.getByRole('button', { name: /delete/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Personas List')).toBeInTheDocument();
+    });
+  });
+
+  it('does not navigate when delete confirm is declined', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        status: 200,
+        ok: true,
+        json: async () => ({ ...mockDetail, is_builtin: false }),
+      })
+      .mockResolvedValueOnce({ status: 200, ok: true, json: async () => 'yaml: content\n' });
+
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    wrap('coding-agent');
+    await waitFor(() => screen.getByRole('button', { name: /delete/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+
+    expect(screen.queryByText('Personas List')).not.toBeInTheDocument();
+  });
+
+  it('calls fork API when fork form submitted', async () => {
+    mockDetailAndYaml();
+    wrap('coding-agent');
+    await waitFor(() => screen.getByText('coding-agent'));
+
+    mockFetch.mockResolvedValue({
+      status: 201,
+      ok: true,
+      json: async () => ({ ...mockDetail, name: 'forked-agent', is_builtin: false }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fork' }));
+    await waitFor(() => screen.getByPlaceholderText('new-persona-name'));
+
+    fireEvent.change(screen.getByPlaceholderText('new-persona-name'), {
+      target: { value: 'forked-agent' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /create fork/i }));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('fork'),
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+  });
+
+  it('shows action error when fork fails', async () => {
+    mockDetailAndYaml();
+    wrap('coding-agent');
+    await waitFor(() => screen.getByText('coding-agent'));
+
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ detail: 'Fork name already exists' }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fork' }));
+    await waitFor(() => screen.getByPlaceholderText('new-persona-name'));
+
+    fireEvent.change(screen.getByPlaceholderText('new-persona-name'), {
+      target: { value: 'taken-name' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /create fork/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Fork name already exists')).toBeInTheDocument();
+    });
+  });
+
+  it('cancel fork returns to view mode', async () => {
+    mockDetailAndYaml();
+    wrap('coding-agent');
+    await waitFor(() => screen.getByText('coding-agent'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fork' }));
+    await waitFor(() => screen.getByPlaceholderText('new-persona-name'));
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByPlaceholderText('new-persona-name')).not.toBeInTheDocument();
     });
   });
 });
