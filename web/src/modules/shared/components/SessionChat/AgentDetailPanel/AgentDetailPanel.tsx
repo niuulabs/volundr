@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Wifi, WifiOff, ArrowDownIcon } from 'lucide-react';
-import { cn } from '@/utils';
 import type { ParticipantMeta } from '@/modules/shared/hooks/useSkuldChat';
 import { useAgentDetail } from '@/modules/shared/hooks/useAgentDetail';
 import { AssistantMessage, StreamingMessage, SystemMessage, UserMessage } from '../ChatMessages';
