@@ -20,7 +20,12 @@ function parseToolList(raw: string): string[] {
     .filter(Boolean);
 }
 
-export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' }: PersonaFormProps) {
+export function PersonaForm({
+  initial,
+  onSubmit,
+  onCancel,
+  submitLabel = 'Save',
+}: PersonaFormProps) {
   const [name, setName] = useState(initial?.name ?? '');
   const [systemPrompt, setSystemPrompt] = useState(initial?.systemPromptTemplate ?? '');
   const [allowedTools, setAllowedTools] = useState(initial?.allowedTools.join(', ') ?? '');
@@ -31,8 +36,12 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
   const [llmThinking, setLlmThinking] = useState(initial?.llm.thinkingEnabled ?? false);
   const [llmMaxTokens, setLlmMaxTokens] = useState(String(initial?.llm.maxTokens ?? 0));
   const [producesEvent, setProducesEvent] = useState(initial?.produces.eventType ?? '');
-  const [consumesEvents, setConsumesEvents] = useState(initial?.consumes.eventTypes.join(', ') ?? '');
-  const [consumesInjects, setConsumesInjects] = useState(initial?.consumes.injects.join(', ') ?? '');
+  const [consumesEvents, setConsumesEvents] = useState(
+    initial?.consumes.eventTypes.join(', ') ?? ''
+  );
+  const [consumesInjects, setConsumesInjects] = useState(
+    initial?.consumes.injects.join(', ') ?? ''
+  );
   const [fanInStrategy, setFanInStrategy] = useState(initial?.fanIn.strategy ?? 'merge');
   const [fanInContributesTo, setFanInContributesTo] = useState(initial?.fanIn.contributesTo ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -93,7 +102,9 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
         <h3 className={styles.sectionTitle}>Identity</h3>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="pf-name">Name</label>
+          <label className={styles.label} htmlFor="pf-name">
+            Name
+          </label>
           <input
             id="pf-name"
             className={errors.name ? styles.inputError : styles.input}
@@ -107,7 +118,9 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
         </div>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="pf-permission">Permission Mode</label>
+          <label className={styles.label} htmlFor="pf-permission">
+            Permission Mode
+          </label>
           <select
             id="pf-permission"
             className={styles.select}
@@ -115,13 +128,17 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
             onChange={e => setPermissionMode(e.target.value)}
           >
             {PERMISSION_MODES.map(m => (
-              <option key={m} value={m}>{m || '(inherit)'}</option>
+              <option key={m} value={m}>
+                {m || '(inherit)'}
+              </option>
             ))}
           </select>
         </div>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="pf-budget">Iteration Budget</label>
+          <label className={styles.label} htmlFor="pf-budget">
+            Iteration Budget
+          </label>
           <input
             id="pf-budget"
             className={styles.input}
@@ -139,7 +156,9 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
         <h3 className={styles.sectionTitle}>System Prompt</h3>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="pf-prompt">Template</label>
+          <label className={styles.label} htmlFor="pf-prompt">
+            Template
+          </label>
           <textarea
             id="pf-prompt"
             className={errors.systemPrompt ? styles.textareaError : styles.textarea}
@@ -157,7 +176,9 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
         <h3 className={styles.sectionTitle}>Tools & Permissions</h3>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="pf-allowed">Allowed Tools</label>
+          <label className={styles.label} htmlFor="pf-allowed">
+            Allowed Tools
+          </label>
           <input
             id="pf-allowed"
             className={styles.input}
@@ -169,13 +190,17 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
           <span className={styles.hint}>Comma-separated tool group names</span>
           {parsedAllowedTools.length > 0 && (
             <div className={styles.toolPreview}>
-              {parsedAllowedTools.map(t => <ToolBadge key={t} tool={t} />)}
+              {parsedAllowedTools.map(t => (
+                <ToolBadge key={t} tool={t} />
+              ))}
             </div>
           )}
         </div>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="pf-forbidden">Forbidden Tools</label>
+          <label className={styles.label} htmlFor="pf-forbidden">
+            Forbidden Tools
+          </label>
           <input
             id="pf-forbidden"
             className={styles.input}
@@ -193,7 +218,9 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
         <h3 className={styles.sectionTitle}>LLM Settings</h3>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="pf-alias">Primary Alias</label>
+          <label className={styles.label} htmlFor="pf-alias">
+            Primary Alias
+          </label>
           <input
             id="pf-alias"
             className={styles.input}
@@ -217,7 +244,9 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
         </div>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="pf-maxtokens">Max Tokens</label>
+          <label className={styles.label} htmlFor="pf-maxtokens">
+            Max Tokens
+          </label>
           <input
             id="pf-maxtokens"
             className={styles.input}
@@ -235,7 +264,9 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
         <h3 className={styles.sectionTitle}>Pipeline Contract</h3>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="pf-produces">Produces Event</label>
+          <label className={styles.label} htmlFor="pf-produces">
+            Produces Event
+          </label>
           <input
             id="pf-produces"
             className={styles.input}
@@ -247,7 +278,9 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
         </div>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="pf-consumes">Consumes Events</label>
+          <label className={styles.label} htmlFor="pf-consumes">
+            Consumes Events
+          </label>
           <input
             id="pf-consumes"
             className={styles.input}
@@ -260,7 +293,9 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
         </div>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="pf-injects">Context Injects</label>
+          <label className={styles.label} htmlFor="pf-injects">
+            Context Injects
+          </label>
           <input
             id="pf-injects"
             className={styles.input}
@@ -273,7 +308,9 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
         </div>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="pf-fanin">Fan-in Strategy</label>
+          <label className={styles.label} htmlFor="pf-fanin">
+            Fan-in Strategy
+          </label>
           <select
             id="pf-fanin"
             className={styles.select}
@@ -281,13 +318,17 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
             onChange={e => setFanInStrategy(e.target.value)}
           >
             {FAN_IN_STRATEGIES.map(s => (
-              <option key={s} value={s}>{s}</option>
+              <option key={s} value={s}>
+                {s}
+              </option>
             ))}
           </select>
         </div>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="pf-contributes">Contributes To</label>
+          <label className={styles.label} htmlFor="pf-contributes">
+            Contributes To
+          </label>
           <input
             id="pf-contributes"
             className={styles.input}
@@ -301,7 +342,12 @@ export function PersonaForm({ initial, onSubmit, onCancel, submitLabel = 'Save' 
 
       {/* Actions */}
       <div className={styles.actions}>
-        <button type="button" className={styles.cancelButton} onClick={onCancel} disabled={submitting}>
+        <button
+          type="button"
+          className={styles.cancelButton}
+          onClick={onCancel}
+          disabled={submitting}
+        >
           Cancel
         </button>
         <button type="submit" className={styles.submitButton} disabled={submitting}>

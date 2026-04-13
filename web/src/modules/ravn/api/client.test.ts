@@ -53,7 +53,7 @@ describe('listPersonas', () => {
     const result = await listPersonas();
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/personas?source=all'),
-      expect.any(Object),
+      expect.any(Object)
     );
     expect(result).toHaveLength(1);
   });
@@ -78,7 +78,7 @@ describe('listPersonas', () => {
     await listPersonas('builtin');
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('source=builtin'),
-      expect.any(Object),
+      expect.any(Object)
     );
   });
 
@@ -87,7 +87,7 @@ describe('listPersonas', () => {
     await listPersonas('custom');
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('source=custom'),
-      expect.any(Object),
+      expect.any(Object)
     );
   });
 });
@@ -98,7 +98,7 @@ describe('getPersona', () => {
     await getPersona('coding-agent');
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/personas/coding-agent'),
-      expect.any(Object),
+      expect.any(Object)
     );
   });
 
@@ -128,7 +128,7 @@ describe('getPersonaYaml', () => {
     const result = await getPersonaYaml('coding-agent');
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/personas/coding-agent/yaml'),
-      expect.any(Object),
+      expect.any(Object)
     );
     expect(result).toBe('name: coding-agent\n');
   });
@@ -157,7 +157,7 @@ describe('createPersona', () => {
     await createPersona(req);
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/personas'),
-      expect.objectContaining({ method: 'POST' }),
+      expect.objectContaining({ method: 'POST' })
     );
   });
 
@@ -201,7 +201,7 @@ describe('updatePersona', () => {
     await updatePersona('coding-agent', req);
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/personas/coding-agent'),
-      expect.objectContaining({ method: 'PUT' }),
+      expect.objectContaining({ method: 'PUT' })
     );
   });
 });
@@ -212,7 +212,7 @@ describe('deletePersona', () => {
     await deletePersona('my-agent');
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/personas/my-agent'),
-      expect.objectContaining({ method: 'DELETE' }),
+      expect.objectContaining({ method: 'DELETE' })
     );
   });
 });
@@ -223,7 +223,7 @@ describe('forkPersona', () => {
     await forkPersona('coding-agent', { newName: 'my-fork' });
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/personas/coding-agent/fork'),
-      expect.objectContaining({ method: 'POST' }),
+      expect.objectContaining({ method: 'POST' })
     );
   });
 

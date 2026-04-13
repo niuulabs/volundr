@@ -94,10 +94,12 @@ describe('PersonaForm', () => {
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledOnce();
-      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-        name: 'my-agent',
-        systemPromptTemplate: 'You are helpful.',
-      }));
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'my-agent',
+          systemPromptTemplate: 'You are helpful.',
+        })
+      );
     });
   });
 

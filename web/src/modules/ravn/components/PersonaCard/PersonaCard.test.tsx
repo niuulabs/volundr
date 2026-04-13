@@ -66,7 +66,11 @@ describe('PersonaCard', () => {
   });
 
   it('shows +N for extra tools beyond 4', () => {
-    wrap(<PersonaCard persona={mkPersona({ allowedTools: ['file', 'git', 'terminal', 'web', 'todo'] })} />);
+    wrap(
+      <PersonaCard
+        persona={mkPersona({ allowedTools: ['file', 'git', 'terminal', 'web', 'todo'] })}
+      />
+    );
     expect(screen.getByText('+1')).toBeInTheDocument();
   });
 

@@ -41,7 +41,7 @@ function wrap(name: string) {
         <Route path="/ravn/personas/:name" element={<PersonaDetailView />} />
         <Route path="/ravn/personas" element={<div>Personas List</div>} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 }
 
@@ -194,7 +194,8 @@ describe('PersonaDetailView', () => {
   it('renders delete button for custom personas', async () => {
     mockFetch
       .mockResolvedValueOnce({
-        status: 200, ok: true,
+        status: 200,
+        ok: true,
         json: async () => ({ ...mockDetail, is_builtin: false }),
       })
       .mockResolvedValueOnce({ status: 200, ok: true, json: async () => 'yaml: content\n' });
@@ -236,7 +237,11 @@ describe('PersonaDetailView', () => {
   });
 
   it('shows error state on fetch failure', async () => {
-    mockFetch.mockResolvedValue({ ok: false, status: 404, json: async () => ({ detail: 'not found' }) });
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ detail: 'not found' }),
+    });
     wrap('nonexistent');
     await waitFor(() => {
       expect(screen.getByText(/failed to load/i)).toBeInTheDocument();

@@ -153,8 +153,14 @@ export async function createPersona(req: PersonaCreateRequest): Promise<PersonaD
 }
 
 /** PUT /personas/:name */
-export async function updatePersona(name: string, req: PersonaCreateRequest): Promise<PersonaDetail> {
-  const raw = await api.put<RawPersonaDetail>(`/personas/${encodeURIComponent(name)}`, toRequestBody(req));
+export async function updatePersona(
+  name: string,
+  req: PersonaCreateRequest
+): Promise<PersonaDetail> {
+  const raw = await api.put<RawPersonaDetail>(
+    `/personas/${encodeURIComponent(name)}`,
+    toRequestBody(req)
+  );
   return toDetail(raw);
 }
 

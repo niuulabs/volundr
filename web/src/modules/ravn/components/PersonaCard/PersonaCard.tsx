@@ -54,9 +54,7 @@ export function PersonaCard({ persona }: PersonaCardProps) {
           {visibleTools.map(tool => (
             <ToolBadge key={tool} tool={tool} />
           ))}
-          {extraCount > 0 && (
-            <span className={styles.extraTools}>+{extraCount}</span>
-          )}
+          {extraCount > 0 && <span className={styles.extraTools}>+{extraCount}</span>}
         </div>
       )}
     </Link>

@@ -14,7 +14,7 @@ function wrap(initialPath = '/ravn/chat') {
           <Route path="config" element={<div>Config Content</div>} />
         </Route>
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 }
 
@@ -44,12 +44,18 @@ describe('RavnLayout', () => {
 
   it('Personas nav link points to correct path', () => {
     wrap();
-    expect(screen.getByRole('link', { name: 'Personas' })).toHaveAttribute('href', '/ravn/personas');
+    expect(screen.getByRole('link', { name: 'Personas' })).toHaveAttribute(
+      'href',
+      '/ravn/personas'
+    );
   });
 
   it('Sessions nav link points to correct path', () => {
     wrap();
-    expect(screen.getByRole('link', { name: 'Sessions' })).toHaveAttribute('href', '/ravn/sessions');
+    expect(screen.getByRole('link', { name: 'Sessions' })).toHaveAttribute(
+      'href',
+      '/ravn/sessions'
+    );
   });
 
   it('Config nav link points to correct path', () => {

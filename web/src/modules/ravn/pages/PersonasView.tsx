@@ -46,10 +46,7 @@ export function PersonasView() {
             </button>
           ))}
         </div>
-        <button
-          className={styles.newButton}
-          onClick={() => navigate('/ravn/personas/~new')}
-        >
+        <button className={styles.newButton} onClick={() => navigate('/ravn/personas/~new')}>
           New Persona
         </button>
       </div>

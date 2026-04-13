@@ -111,20 +111,25 @@ export function PersonaDetailView() {
     return (
       <div className={styles.container}>
         <div className={styles.pageHeader}>
-          <button className={styles.backButton} onClick={() => {
-            if (isCreate) {
-              navigate('/ravn/personas');
-            } else {
-              setMode('view');
-            }
-          }}>
+          <button
+            className={styles.backButton}
+            onClick={() => {
+              if (isCreate) {
+                navigate('/ravn/personas');
+              } else {
+                setMode('view');
+              }
+            }}
+          >
             ← Back
           </button>
-          <h2 className={styles.pageTitle}>{isCreate ? 'New Persona' : `Edit: ${persona?.name}`}</h2>
+          <h2 className={styles.pageTitle}>
+            {isCreate ? 'New Persona' : `Edit: ${persona?.name}`}
+          </h2>
         </div>
         {actionError && <div className={styles.actionError}>{actionError}</div>}
         <PersonaForm
-          initial={mode === 'edit' ? persona ?? undefined : undefined}
+          initial={mode === 'edit' ? (persona ?? undefined) : undefined}
           onSubmit={isCreate ? handleCreate : handleUpdate}
           onCancel={() => {
             if (isCreate) {
@@ -151,8 +156,12 @@ export function PersonaDetailView() {
         <div className={styles.titleRow}>
           <h2 className={styles.pageTitle}>{persona.name}</h2>
           <div className={styles.titleBadges}>
-            {persona.isBuiltin && <span className={cn(styles.badge, styles.builtinBadge)}>built-in</span>}
-            {persona.hasOverride && <span className={cn(styles.badge, styles.overrideBadge)}>override</span>}
+            {persona.isBuiltin && (
+              <span className={cn(styles.badge, styles.builtinBadge)}>built-in</span>
+            )}
+            {persona.hasOverride && (
+              <span className={cn(styles.badge, styles.overrideBadge)}>override</span>
+            )}
           </div>
         </div>
         <div className={styles.actions}>
@@ -163,10 +172,7 @@ export function PersonaDetailView() {
             Edit
           </button>
           {!persona.isBuiltin && (
-            <button
-              className={cn(styles.actionButton, styles.deleteButton)}
-              onClick={handleDelete}
-            >
+            <button className={cn(styles.actionButton, styles.deleteButton)} onClick={handleDelete}>
               Delete
             </button>
           )}
@@ -187,11 +193,7 @@ export function PersonaDetailView() {
             placeholder="new-persona-name"
             autoFocus
           />
-          <button
-            className={styles.actionButton}
-            onClick={handleFork}
-            disabled={!forkName.trim()}
-          >
+          <button className={styles.actionButton} onClick={handleFork} disabled={!forkName.trim()}>
             Create Fork
           </button>
           <button className={styles.cancelForkButton} onClick={() => setMode('view')}>
@@ -209,7 +211,9 @@ export function PersonaDetailView() {
             <dt className={styles.dt}>Permission Mode</dt>
             <dd className={styles.dd}>{persona.permissionMode || '—'}</dd>
             <dt className={styles.dt}>Iteration Budget</dt>
-            <dd className={styles.dd}>{persona.iterationBudget === 0 ? 'unlimited' : persona.iterationBudget}</dd>
+            <dd className={styles.dd}>
+              {persona.iterationBudget === 0 ? 'unlimited' : persona.iterationBudget}
+            </dd>
             <dt className={styles.dt}>Source</dt>
             <dd className={styles.dd}>{persona.yamlSource}</dd>
           </dl>
@@ -223,17 +227,25 @@ export function PersonaDetailView() {
             <dd className={styles.dd}>
               {persona.allowedTools.length > 0 ? (
                 <div className={styles.tagRow}>
-                  {persona.allowedTools.map(t => <ToolBadge key={t} tool={t} />)}
+                  {persona.allowedTools.map(t => (
+                    <ToolBadge key={t} tool={t} />
+                  ))}
                 </div>
-              ) : '—'}
+              ) : (
+                '—'
+              )}
             </dd>
             <dt className={styles.dt}>Forbidden Tools</dt>
             <dd className={styles.dd}>
               {persona.forbiddenTools.length > 0 ? (
                 <div className={styles.tagRow}>
-                  {persona.forbiddenTools.map(t => <ToolBadge key={t} tool={t} />)}
+                  {persona.forbiddenTools.map(t => (
+                    <ToolBadge key={t} tool={t} />
+                  ))}
                 </div>
-              ) : '—'}
+              ) : (
+                '—'
+              )}
             </dd>
           </dl>
         </section>
@@ -247,7 +259,9 @@ export function PersonaDetailView() {
             <dt className={styles.dt}>Extended Thinking</dt>
             <dd className={styles.dd}>{persona.llm.thinkingEnabled ? 'enabled' : 'disabled'}</dd>
             <dt className={styles.dt}>Max Tokens</dt>
-            <dd className={styles.dd}>{persona.llm.maxTokens === 0 ? 'default' : persona.llm.maxTokens}</dd>
+            <dd className={styles.dd}>
+              {persona.llm.maxTokens === 0 ? 'default' : persona.llm.maxTokens}
+            </dd>
           </dl>
         </section>
 
@@ -265,9 +279,7 @@ export function PersonaDetailView() {
             </dd>
             <dt className={styles.dt}>Context Injects</dt>
             <dd className={styles.dd}>
-              {persona.consumes.injects.length > 0
-                ? persona.consumes.injects.join(', ')
-                : '—'}
+              {persona.consumes.injects.length > 0 ? persona.consumes.injects.join(', ') : '—'}
             </dd>
             <dt className={styles.dt}>Fan-in Strategy</dt>
             <dd className={styles.dd}>{persona.fanIn.strategy || '—'}</dd>
@@ -284,15 +296,10 @@ export function PersonaDetailView() {
 
         {/* YAML Preview */}
         <section className={styles.section}>
-          <button
-            className={styles.toggleYaml}
-            onClick={() => setShowYaml(v => !v)}
-          >
+          <button className={styles.toggleYaml} onClick={() => setShowYaml(v => !v)}>
             {showYaml ? '▾' : '▸'} Raw YAML
           </button>
-          {showYaml && yaml && (
-            <pre className={styles.yaml}>{yaml}</pre>
-          )}
+          {showYaml && yaml && <pre className={styles.yaml}>{yaml}</pre>}
         </section>
       </div>
     </div>

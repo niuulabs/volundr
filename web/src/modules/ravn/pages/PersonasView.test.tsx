@@ -60,7 +60,11 @@ describe('PersonasView', () => {
   });
 
   it('shows error message on API failure', async () => {
-    mockFetch.mockResolvedValue({ ok: false, status: 500, json: async () => ({ detail: 'error' }) });
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ detail: 'error' }),
+    });
     wrap(<PersonasView />);
     await waitFor(() => {
       expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
@@ -93,7 +97,7 @@ describe('PersonasView', () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('source=builtin'),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
   });
@@ -110,7 +114,7 @@ describe('PersonasView', () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('source=custom'),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
   });
@@ -124,11 +128,7 @@ describe('PersonasView', () => {
   });
 
   it('renders multiple personas as a grid of cards', async () => {
-    mockOk([
-      mkSummary('coding-agent'),
-      mkSummary('research-agent'),
-      mkSummary('planning-agent'),
-    ]);
+    mockOk([mkSummary('coding-agent'), mkSummary('research-agent'), mkSummary('planning-agent')]);
     wrap(<PersonasView />);
     await waitFor(() => {
       expect(screen.getAllByRole('link')).toHaveLength(3);
