@@ -113,6 +113,69 @@ class PersonaConfig:
     consumes: PersonaConsumes = field(default_factory=PersonaConsumes)
     fan_in: PersonaFanIn = field(default_factory=PersonaFanIn)
 
+    def to_dict(self) -> dict:
+        """Serialize this persona to a plain dict compatible with :meth:`PersonaLoader.parse`.
+
+        Zero-value fields (empty string, empty list, ``0``, ``False``) are
+        omitted to keep the resulting YAML clean.  Nested dataclasses are
+        serialized recursively.
+        """
+        d: dict = {"name": self.name}
+
+        if self.system_prompt_template:
+            d["system_prompt_template"] = self.system_prompt_template
+        if self.allowed_tools:
+            d["allowed_tools"] = list(self.allowed_tools)
+        if self.forbidden_tools:
+            d["forbidden_tools"] = list(self.forbidden_tools)
+        if self.permission_mode:
+            d["permission_mode"] = self.permission_mode
+
+        llm_dict: dict = {}
+        if self.llm.primary_alias:
+            llm_dict["primary_alias"] = self.llm.primary_alias
+        if self.llm.thinking_enabled:
+            llm_dict["thinking_enabled"] = self.llm.thinking_enabled
+        if self.llm.max_tokens:
+            llm_dict["max_tokens"] = self.llm.max_tokens
+        if llm_dict:
+            d["llm"] = llm_dict
+
+        if self.iteration_budget:
+            d["iteration_budget"] = self.iteration_budget
+
+        if self.produces.event_type or self.produces.schema:
+            produces_dict: dict = {}
+            if self.produces.event_type:
+                produces_dict["event_type"] = self.produces.event_type
+            if self.produces.schema:
+                schema_dict: dict = {}
+                for fname, f in self.produces.schema.items():
+                    field_dict: dict = {"type": f.type, "description": f.description}
+                    if f.type == "enum" and f.enum_values:
+                        field_dict["values"] = list(f.enum_values)
+                    if not f.required:
+                        field_dict["required"] = False
+                    schema_dict[fname] = field_dict
+                produces_dict["schema"] = schema_dict
+            d["produces"] = produces_dict
+
+        if self.consumes.event_types or self.consumes.injects:
+            consumes_dict: dict = {}
+            if self.consumes.event_types:
+                consumes_dict["event_types"] = list(self.consumes.event_types)
+            if self.consumes.injects:
+                consumes_dict["injects"] = list(self.consumes.injects)
+            d["consumes"] = consumes_dict
+
+        if self.fan_in.strategy != "merge" or self.fan_in.contributes_to:
+            fan_in_dict: dict = {"strategy": self.fan_in.strategy}
+            if self.fan_in.contributes_to:
+                fan_in_dict["contributes_to"] = self.fan_in.contributes_to
+            d["fan_in"] = fan_in_dict
+
+        return d
+
 
 # ---------------------------------------------------------------------------
 # Built-in personas
@@ -838,6 +901,32 @@ class PersonaLoader(PersonaRegistryPort):
     # ------------------------------------------------------------------
     # Static helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def to_yaml(config: PersonaConfig) -> str:
+        """Serialise *config* to a YAML string that :meth:`parse` can round-trip.
+
+        ``system_prompt_template`` is rendered in block scalar style (``|``) so
+        that multi-line prompts remain human-readable.
+        """
+        import yaml  # PyYAML — present via pydantic-settings[yaml]
+
+        class _LiteralStr(str):
+            pass
+
+        class _PersonaDumper(yaml.Dumper):
+            pass
+
+        def _literal_representer(dumper: yaml.Dumper, data: str) -> yaml.ScalarNode:
+            return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+
+        _PersonaDumper.add_representer(_LiteralStr, _literal_representer)
+
+        d = config.to_dict()
+        if "system_prompt_template" in d and "\n" in d["system_prompt_template"]:
+            d["system_prompt_template"] = _LiteralStr(d["system_prompt_template"])
+
+        return yaml.dump(d, default_flow_style=False, sort_keys=False, Dumper=_PersonaDumper)
 
     @staticmethod
     def parse(text: str) -> PersonaConfig | None:

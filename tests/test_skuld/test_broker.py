@@ -2106,3 +2106,212 @@ class TestTokenRedactFilter:
                             assert has_redact, f"{name} missing _TokenRedactFilter"
 
         asyncio.run(check())
+
+
+# ---------------------------------------------------------------------------
+# Room bridge integration in Broker (NIU-602)
+# ---------------------------------------------------------------------------
+
+
+class TestBrokerRoomBridge:
+    """Tests for RoomBridge wiring inside Broker."""
+
+    @pytest.fixture
+    def room_settings(self, tmp_path):
+        return SkuldSettings(
+            session={"id": "room-session", "workspace_dir": str(tmp_path)},
+            transport="sdk",
+            room={"enabled": True},
+        )
+
+    @pytest.fixture
+    def no_room_settings(self, tmp_path):
+        return SkuldSettings(
+            session={"id": "noroom-session", "workspace_dir": str(tmp_path)},
+            transport="sdk",
+            room={"enabled": False},
+        )
+
+    def test_room_bridge_created_when_enabled(self, room_settings):
+        from skuld.room_bridge import RoomBridge
+
+        b = Broker(settings=room_settings)
+        assert b._room_bridge is not None
+        assert isinstance(b._room_bridge, RoomBridge)
+
+    def test_room_bridge_none_when_disabled(self, no_room_settings):
+        b = Broker(settings=no_room_settings)
+        assert b._room_bridge is None
+
+    # -----------------------------------------------------------------------
+    # directed_message dispatch
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_dispatch_directed_message_with_room_bridge(self, room_settings):
+        b = Broker(settings=room_settings)
+        b._transport = AsyncMock()
+        mock_bridge = AsyncMock()
+        b._room_bridge = mock_bridge
+
+        await b._dispatch_browser_message(
+            {"type": "directed_message", "targetPeerId": "agent-1", "content": "Hi!"}
+        )
+
+        mock_bridge.route_directed_message.assert_awaited_once_with("agent-1", "Hi!")
+
+    @pytest.mark.asyncio
+    async def test_dispatch_directed_message_empty_target_ignored(self, room_settings):
+        b = Broker(settings=room_settings)
+        b._transport = AsyncMock()
+        mock_bridge = AsyncMock()
+        b._room_bridge = mock_bridge
+
+        await b._dispatch_browser_message(
+            {"type": "directed_message", "targetPeerId": "", "content": "Hi!"}
+        )
+
+        mock_bridge.route_directed_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_directed_message_room_disabled_sends_error(self, no_room_settings):
+        b = Broker(settings=no_room_settings)
+        b._transport = AsyncMock()
+        mock_ws = AsyncMock()
+
+        await b._dispatch_browser_message(
+            {"type": "directed_message", "targetPeerId": "p1", "content": "Hi!"},
+            sender_ws=mock_ws,
+        )
+
+        mock_ws.send_json.assert_awaited_once()
+        sent = mock_ws.send_json.call_args[0][0]
+        assert sent["type"] == "error"
+
+    # -----------------------------------------------------------------------
+    # room_state on browser connect
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_handle_websocket_sends_room_state_when_room_enabled(self, room_settings):
+        b = Broker(settings=room_settings)
+        mock_transport = AsyncMock()
+        mock_transport.is_alive = True
+        mock_transport.capabilities = TransportCapabilities()
+        b._transport = mock_transport
+
+        mock_ws = AsyncMock()
+        mock_ws.receive_json = AsyncMock(side_effect=WebSocketDisconnect())
+
+        await b.handle_websocket(mock_ws)
+
+        calls = [c[0][0] for c in mock_ws.send_json.call_args_list]
+        room_state_calls = [c for c in calls if c.get("type") == "room_state"]
+        assert len(room_state_calls) == 1
+        assert "participants" in room_state_calls[0]
+
+    @pytest.mark.asyncio
+    async def test_handle_websocket_no_room_state_when_room_disabled(self, no_room_settings):
+        b = Broker(settings=no_room_settings)
+        mock_transport = AsyncMock()
+        mock_transport.is_alive = True
+        mock_transport.capabilities = TransportCapabilities()
+        b._transport = mock_transport
+
+        mock_ws = AsyncMock()
+        mock_ws.receive_json = AsyncMock(side_effect=WebSocketDisconnect())
+
+        await b.handle_websocket(mock_ws)
+
+        calls = [c[0][0] for c in mock_ws.send_json.call_args_list]
+        room_state_calls = [c for c in calls if c.get("type") == "room_state"]
+        assert len(room_state_calls) == 0
+
+    # -----------------------------------------------------------------------
+    # handle_ravn_websocket
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_handle_ravn_websocket_rejects_when_room_disabled(self, no_room_settings):
+        b = Broker(settings=no_room_settings)
+        mock_ws = AsyncMock()
+
+        await b.handle_ravn_websocket(mock_ws, "agent-1")
+
+        mock_ws.close.assert_awaited_once()
+        assert mock_ws.close.call_args[1]["code"] == 1008
+
+    @pytest.mark.asyncio
+    async def test_handle_ravn_websocket_registers_on_connect(self, room_settings):
+        b = Broker(settings=room_settings)
+        mock_bridge = AsyncMock()
+        mock_bridge.register = AsyncMock(
+            return_value=MagicMock(peer_id="agent-1", persona="agent-1")
+        )
+        b._room_bridge = mock_bridge
+
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(side_effect=WebSocketDisconnect())
+
+        await b.handle_ravn_websocket(mock_ws, "agent-1")
+
+        mock_ws.accept.assert_awaited_once()
+        mock_bridge.register.assert_awaited()
+        mock_bridge.unregister.assert_awaited_once_with("agent-1")
+
+    @pytest.mark.asyncio
+    async def test_handle_ravn_websocket_forwards_frames(self, room_settings):
+        import json as _json
+
+        b = Broker(settings=room_settings)
+        mock_bridge = AsyncMock()
+        mock_bridge.register = AsyncMock(
+            return_value=MagicMock(peer_id="agent-1", persona="agent-1")
+        )
+        b._room_bridge = mock_bridge
+
+        frame = _json.dumps({"type": "response", "data": "Hello", "metadata": {}}) + "\n"
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(side_effect=[frame, WebSocketDisconnect()])
+
+        await b.handle_ravn_websocket(mock_ws, "agent-1")
+
+        mock_bridge.handle_ravn_frame.assert_awaited_once()
+        call_args = mock_bridge.handle_ravn_frame.call_args[0]
+        assert call_args[0] == "agent-1"
+        assert call_args[1]["type"] == "response"
+
+    @pytest.mark.asyncio
+    async def test_handle_ravn_websocket_skips_invalid_json(self, room_settings):
+        b = Broker(settings=room_settings)
+        mock_bridge = AsyncMock()
+        mock_bridge.register = AsyncMock(
+            return_value=MagicMock(peer_id="agent-1", persona="agent-1")
+        )
+        b._room_bridge = mock_bridge
+
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(
+            side_effect=["not valid json\n", WebSocketDisconnect()]
+        )
+
+        await b.handle_ravn_websocket(mock_ws, "agent-1")
+
+        mock_bridge.handle_ravn_frame.assert_not_awaited()
+        mock_bridge.unregister.assert_awaited_once_with("agent-1")
+
+    @pytest.mark.asyncio
+    async def test_handle_ravn_websocket_unregisters_on_exception(self, room_settings):
+        b = Broker(settings=room_settings)
+        mock_bridge = AsyncMock()
+        mock_bridge.register = AsyncMock(
+            return_value=MagicMock(peer_id="agent-1", persona="agent-1")
+        )
+        b._room_bridge = mock_bridge
+
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(side_effect=RuntimeError("unexpected"))
+
+        await b.handle_ravn_websocket(mock_ws, "agent-1")
+
+        mock_bridge.unregister.assert_awaited_once_with("agent-1")

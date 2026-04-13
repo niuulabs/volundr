@@ -387,3 +387,62 @@ def test_serialise_task_complete_event():
     data = json.loads(line.strip())
     assert data["type"] == "task_complete"
     assert "success" in data["data"]  # str(payload) will contain "success"
+
+
+# ---------------------------------------------------------------------------
+# source / persona fields (NIU-602)
+# ---------------------------------------------------------------------------
+
+
+def test_serialise_includes_source_when_peer_id_provided():
+    ch = SkuldChannel(
+        broker_url="ws://localhost:9000/ws/ravn/p1",
+        session_id="sess-1",
+        peer_id="ravn-agent-1",
+    )
+    line = ch._serialise(RavnEvent.response(_SRC, "Hello", _CID, _SID))
+    data = json.loads(line.strip())
+    assert data["source"] == "ravn-agent-1"
+
+
+def test_serialise_includes_persona_when_provided():
+    ch = SkuldChannel(
+        broker_url="ws://localhost:9000/ws/ravn/p1",
+        session_id="sess-1",
+        peer_id="ravn-agent-1",
+        persona="Aria",
+    )
+    line = ch._serialise(RavnEvent.response(_SRC, "Hello", _CID, _SID))
+    data = json.loads(line.strip())
+    assert data["persona"] == "Aria"
+
+
+def test_serialise_omits_source_when_peer_id_not_provided():
+    ch = _make_channel()  # no peer_id
+    line = ch._serialise(RavnEvent.response(_SRC, "Hello", _CID, _SID))
+    data = json.loads(line.strip())
+    assert "source" not in data
+
+
+def test_serialise_omits_persona_when_not_provided():
+    ch = _make_channel()  # no persona
+    line = ch._serialise(RavnEvent.response(_SRC, "Hello", _CID, _SID))
+    data = json.loads(line.strip())
+    assert "persona" not in data
+
+
+def test_serialise_with_peer_id_preserves_existing_fields():
+    ch = SkuldChannel(
+        broker_url="ws://localhost:9000/ws/ravn/p1",
+        session_id="sess-2",
+        peer_id="agent-x",
+        persona="Ravn",
+    )
+    event = RavnEvent.tool_start(_SRC, "BashTool", {"command": "ls"}, _CID, _SID)
+    line = ch._serialise(event)
+    data = json.loads(line.strip())
+    assert data["type"] == "tool_start"
+    assert data["data"] == "BashTool"
+    assert data["session_id"] == "sess-2"
+    assert data["source"] == "agent-x"
+    assert data["persona"] == "Ravn"

@@ -1852,10 +1852,7 @@ async def _run_daemon(
         resolved_max_iterations = max_iterations
         resolved_max_tokens = settings.effective_max_tokens()
         if task_persona and task_persona != (persona_config.name if persona_config else None):
-            from ravn.adapters.personas.loader import PersonaLoader
-
-            _persona_dirs = list(settings.persona_source.persona_dirs) if settings else []
-            task_persona_cfg = PersonaLoader(_persona_dirs or None).load(task_persona)
+            task_persona_cfg = _resolve_persona(task_persona, None, settings=settings)
             if task_persona_cfg is not None:
                 resolved_persona = task_persona_cfg
                 if task_persona_cfg.system_prompt_template:

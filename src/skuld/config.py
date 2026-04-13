@@ -43,6 +43,30 @@ CONFIG_PATHS = _config_paths()
 _DEFAULT_TRANSPORT_ADAPTER = "skuld.transports.sdk_websocket.SdkWebSocketTransport"
 
 
+_DEFAULT_PARTICIPANT_COLORS = [
+    "amber",
+    "cyan",
+    "emerald",
+    "purple",
+    "red",
+    "indigo",
+    "orange",
+]
+
+
+class RoomConfig(BaseModel):
+    """Multi-agent room chat configuration.
+
+    When enabled, the broker operates in room mode and tracks per-message
+    participant identity. Disabled by default so single-agent chat is unaffected.
+    """
+
+    enabled: bool = Field(default=False)
+    max_participants: int = Field(default=8)
+    participant_colors: list[str] = Field(default_factory=lambda: list(_DEFAULT_PARTICIPANT_COLORS))
+    activity_detail_max_length: int = Field(default=200)
+
+
 class TelegramConfig(BaseModel):
     """Telegram messaging channel configuration.
 
@@ -112,6 +136,7 @@ class SkuldSettings(BaseSettings):
     chronicle_watcher_debounce_ms: int = Field(default=500)
     max_upload_size_bytes: int = Field(default=104_857_600)  # 100 MB
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+    room: RoomConfig = Field(default_factory=RoomConfig)
 
     @model_validator(mode="after")
     def _apply_legacy_env_vars(self) -> "SkuldSettings":
