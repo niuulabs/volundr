@@ -2168,4 +2168,235 @@ describe('useSkuldChat', () => {
 
     vi.unstubAllGlobals();
   });
+
+  // ── Room event handlers ──────────────────────────────────────
+
+  describe('room event handlers', () => {
+    it('adds participant on participant_joined', () => {
+      const { handlers } = setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+      act(() => handlers.onOpen?.());
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({
+            type: 'participant_joined',
+            peer_id: 'peer-1',
+            persona: 'Ravn-A',
+            color: 'amber',
+            participant_type: 'ravn',
+          })
+        )
+      );
+
+      expect(result.current.participants.size).toBe(1);
+      const p = result.current.participants.get('peer-1');
+      expect(p?.persona).toBe('Ravn-A');
+      expect(p?.color).toBe('amber');
+      expect(p?.status).toBe('idle');
+    });
+
+    it('ignores participant_joined with empty peer_id', () => {
+      const { handlers } = setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+      act(() => handlers.onOpen?.());
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({ type: 'participant_joined', peer_id: '', persona: 'X', color: 'cyan' })
+        )
+      );
+
+      expect(result.current.participants.size).toBe(0);
+    });
+
+    it('removes participant on participant_left', () => {
+      const { handlers } = setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+      act(() => handlers.onOpen?.());
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({
+            type: 'participant_joined',
+            peer_id: 'peer-1',
+            persona: 'A',
+            color: 'amber',
+          })
+        )
+      );
+      expect(result.current.participants.size).toBe(1);
+
+      act(() =>
+        handlers.onMessage?.(JSON.stringify({ type: 'participant_left', peer_id: 'peer-1' }))
+      );
+      expect(result.current.participants.size).toBe(0);
+    });
+
+    it('ignores participant_left with empty peer_id', () => {
+      const { handlers } = setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+      act(() => handlers.onOpen?.());
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({
+            type: 'participant_joined',
+            peer_id: 'peer-1',
+            persona: 'A',
+            color: 'amber',
+          })
+        )
+      );
+      act(() => handlers.onMessage?.(JSON.stringify({ type: 'participant_left', peer_id: '' })));
+      // Still 1 participant — empty peer_id was ignored
+      expect(result.current.participants.size).toBe(1);
+    });
+
+    it('initializes participants map on room_state', () => {
+      const { handlers } = setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+      act(() => handlers.onOpen?.());
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({
+            type: 'room_state',
+            participants: [
+              { peer_id: 'p1', persona: 'Ravn-A', color: 'amber', participant_type: 'ravn' },
+              { peer_id: 'p2', persona: 'Ravn-B', color: 'cyan', participant_type: 'ravn' },
+            ],
+          })
+        )
+      );
+
+      expect(result.current.participants.size).toBe(2);
+      expect(result.current.participants.get('p1')?.persona).toBe('Ravn-A');
+      expect(result.current.participants.get('p2')?.persona).toBe('Ravn-B');
+    });
+
+    it('skips room_state participants with empty peer_id', () => {
+      const { handlers } = setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+      act(() => handlers.onOpen?.());
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({
+            type: 'room_state',
+            participants: [
+              { peer_id: '', persona: 'Ghost', color: 'purple' },
+              { peer_id: 'p1', persona: 'Ravn-A', color: 'amber' },
+            ],
+          })
+        )
+      );
+
+      expect(result.current.participants.size).toBe(1);
+    });
+
+    it('appends a room_message to messages', () => {
+      const { handlers } = setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+      act(() => handlers.onOpen?.());
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({
+            type: 'room_message',
+            id: 'rm-1',
+            role: 'assistant',
+            content: 'Room message content',
+            participant_id: 'peer-1',
+            participant: {
+              peer_id: 'peer-1',
+              persona: 'Ravn-A',
+              color: 'amber',
+              participant_type: 'ravn',
+            },
+            thread_id: 'thread-xyz',
+            visibility: 'internal',
+          })
+        )
+      );
+
+      expect(result.current.messages).toHaveLength(1);
+      const msg = result.current.messages[0];
+      expect(msg.id).toBe('rm-1');
+      expect(msg.content).toBe('Room message content');
+      expect(msg.participant?.persona).toBe('Ravn-A');
+      expect(msg.threadId).toBe('thread-xyz');
+      expect(msg.visibility).toBe('internal');
+    });
+
+    it('room_message without participant sets participant to undefined', () => {
+      const { handlers } = setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+      act(() => handlers.onOpen?.());
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({ type: 'room_message', id: 'rm-2', content: 'no participant' })
+        )
+      );
+
+      const msg = result.current.messages[0];
+      expect(msg.participant).toBeUndefined();
+    });
+
+    it('updates participant status on room_activity', () => {
+      const { handlers } = setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+      act(() => handlers.onOpen?.());
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({
+            type: 'participant_joined',
+            peer_id: 'peer-1',
+            persona: 'Ravn-A',
+            color: 'amber',
+          })
+        )
+      );
+      expect(result.current.participants.get('peer-1')?.status).toBe('idle');
+
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({ type: 'room_activity', peer_id: 'peer-1', status: 'thinking' })
+        )
+      );
+
+      expect(result.current.participants.get('peer-1')?.status).toBe('thinking');
+    });
+
+    it('ignores room_activity for unknown peer_id', () => {
+      const { handlers } = setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+      act(() => handlers.onOpen?.());
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({ type: 'room_activity', peer_id: 'unknown', status: 'thinking' })
+        )
+      );
+
+      // No crash, no participants added
+      expect(result.current.participants.size).toBe(0);
+    });
+
+    it('ignores room_activity with empty peer_id', () => {
+      const { handlers } = setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+      act(() => handlers.onOpen?.());
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({ type: 'room_activity', peer_id: '', status: 'thinking' })
+        )
+      );
+
+      expect(result.current.participants.size).toBe(0);
+    });
+  });
 });
