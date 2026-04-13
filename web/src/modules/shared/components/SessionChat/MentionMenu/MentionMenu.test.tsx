@@ -72,7 +72,7 @@ describe('MentionMenu', () => {
       />
     );
 
-    expect(screen.getByText('No matching files')).toBeDefined();
+    expect(screen.getByText('No matches')).toBeDefined();
   });
 
   it('calls onSelect for file items', () => {

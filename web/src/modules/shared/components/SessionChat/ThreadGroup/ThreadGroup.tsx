@@ -2,12 +2,10 @@ import { useState, useCallback } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { RoomMessage } from '../RoomMessage';
 import type { SkuldChatMessage } from '@/modules/shared/hooks/useSkuldChat';
-import type { RoomParticipant } from '@/modules/shared/hooks/useSkuldChat';
 import styles from './ThreadGroup.module.css';
 
 interface ThreadGroupProps {
   messages: readonly SkuldChatMessage[];
-  participants: ReadonlyMap<string, RoomParticipant>;
 }
 
 function buildThreadLabel(messages: readonly SkuldChatMessage[]): string {

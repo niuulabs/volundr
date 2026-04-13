@@ -54,7 +54,7 @@ export function MentionMenu({
   if (items.length === 0) {
     return (
       <div className={styles.menu} data-testid="mention-menu">
-        <div className={styles.empty}>No matching files</div>
+        <div className={styles.empty}>No matches</div>
       </div>
     );
   }

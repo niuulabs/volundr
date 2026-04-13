@@ -333,7 +333,14 @@ export function SessionChat({
   );
 
   const handleSendDirected = useCallback(
-    (agentParticipants: RoomParticipant[], text: string, _fileAttachments: FileAttachment[]) => {
+    (
+      agentParticipants: RoomParticipant[],
+      text: string,
+      // TODO(NIU-607): directed_message does not support file attachments yet;
+      // the binary payload transport is tracked separately. File paths are already
+      // prepended as @{path} prefixes in `text` by ChatInput, so context is not lost.
+      _fileAttachments: FileAttachment[]
+    ) => {
       userSentRef.current = true;
       sendDirectedMessages(
         agentParticipants.map(p => p.peerId),
@@ -511,13 +518,7 @@ export function SessionChat({
             <div className={styles.messagesInner}>
               {renderedGroups.map(group => {
                 if (group.type === 'thread') {
-                  return (
-                    <ThreadGroup
-                      key={group.threadId}
-                      messages={group.messages}
-                      participants={participants}
-                    />
-                  );
+                  return <ThreadGroup key={group.threadId} messages={group.messages} />;
                 }
 
                 const msg = group.message;
