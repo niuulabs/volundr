@@ -8,6 +8,7 @@ import type {
   ContentBlock,
   AttachmentMeta,
   ParticipantMeta,
+  RoomParticipant,
 } from '@/modules/shared/hooks/useSkuldChat';
 import { cn } from '@/utils';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
@@ -58,6 +59,7 @@ export function SessionChat({
     historyLoaded,
     pendingPermissions,
     sendMessage,
+    sendDirectedMessages,
     respondToPermission,
     sendInterrupt,
     sendSetModel,
@@ -327,6 +329,17 @@ export function SessionChat({
       });
     },
     [sendMessage]
+  );
+
+  const handleSendDirected = useCallback(
+    (agentParticipants: RoomParticipant[], text: string, _fileAttachments: FileAttachment[]) => {
+      userSentRef.current = true;
+      sendDirectedMessages(
+        agentParticipants.map(p => p.peerId),
+        text
+      );
+    },
+    [sendDirectedMessages]
   );
 
   const handleStop = useCallback(() => {
@@ -603,6 +616,7 @@ export function SessionChat({
             )}
             <ChatInput
               onSend={handleSend}
+              onSendDirected={handleSendDirected}
               isLoading={isRunning}
               onStop={handleStop}
               disabled={!connected}
@@ -610,6 +624,7 @@ export function SessionChat({
               sessionHost={sessionHost}
               chatEndpoint={chatEndpoint}
               availableCommands={availableCommands}
+              participants={participants}
             />
           </div>
         </div>
