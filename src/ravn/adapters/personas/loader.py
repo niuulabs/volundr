@@ -47,9 +47,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml as _yaml
+
 from niuu.domain.outcome import OutcomeField, OutcomeSchema, generate_outcome_instruction
 from ravn.config import ProjectConfig, _safe_int
-from ravn.ports.persona import PersonaPort
+from ravn.ports.persona import PersonaRegistryPort
 
 _DEFAULT_PERSONAS_DIR = Path.home() / ".ravn" / "personas"
 
@@ -696,20 +698,64 @@ def _apply_outcome_instruction(persona: PersonaConfig) -> PersonaConfig:
     )
 
 
-class PersonaLoader(PersonaPort):
+class PersonaLoader(PersonaRegistryPort):
     """Loads persona configurations from YAML files or the built-in set.
 
-    Lookup order for :meth:`load`:
-      1. ``personas_dir/<name>.yaml`` (user-defined overrides)
-      2. Built-in personas
+    Two operating modes depending on whether *persona_dirs* is supplied:
+
+    **Default mode** (``persona_dirs=None``):
+      1. Project-local: ``<cwd>/.ravn/personas/<name>.yaml``
+      2. User-global: ``~/.ravn/personas/<name>.yaml``
+      3. Built-in personas (if *include_builtin* is ``True``)
+
+    **Explicit mode** (``persona_dirs=[...]``):
+      1. Each directory in *persona_dirs*, in order (highest priority first)
+      2. Built-in personas (if *include_builtin* is ``True``)
+
+      When *persona_dirs* is set, the project-local and user-global paths
+      are **not** added automatically.
 
     Args:
-        personas_dir: Directory to search for persona YAML files.
-                      Defaults to ``~/.ravn/personas``.
+        persona_dirs: Explicit list of directories to search (highest priority
+            first).  When ``None``, uses default two-layer discovery:
+            ``<cwd>/.ravn/personas/`` → ``~/.ravn/personas/``.
+        include_builtin: Whether to include built-in personas.
+        cwd: Working directory used to resolve ``.ravn/personas/``.
+             Defaults to the process working directory at construction time.
     """
 
-    def __init__(self, personas_dir: Path | None = None) -> None:
-        self._personas_dir = personas_dir or _DEFAULT_PERSONAS_DIR
+    def __init__(
+        self,
+        persona_dirs: list[str] | None = None,
+        *,
+        include_builtin: bool = True,
+        cwd: Path | None = None,
+    ) -> None:
+        self._include_builtin = include_builtin
+        self._cwd = cwd or Path.cwd()
+
+        if persona_dirs is not None:
+            self._persona_dirs: list[Path] | None = [Path(d).expanduser() for d in persona_dirs]
+        else:
+            self._persona_dirs = None
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _resolve_dirs(self) -> list[Path]:
+        """Return ordered directories to search (highest priority first).
+
+        When *persona_dirs* was supplied explicitly it forms the list;
+        otherwise the default two-layer (project-local → user-global) paths
+        are used.
+        """
+        if self._persona_dirs is not None:
+            return list(self._persona_dirs)
+        return [
+            self._cwd / ".ravn" / "personas",
+            Path.home() / ".ravn" / "personas",
+        ]
 
     # ------------------------------------------------------------------
     # Public API
@@ -718,23 +764,25 @@ class PersonaLoader(PersonaPort):
     def load(self, name: str) -> PersonaConfig | None:
         """Load a persona by name, with outcome instruction injected if applicable.
 
-        Returns the persona from ``personas_dir/<name>.yaml`` if it exists,
-        otherwise falls back to the built-in set.  Returns ``None`` when the
-        name cannot be resolved.
+        Iterates ``_resolve_dirs()`` checking for ``<name>.yaml``; falls back
+        to the built-in set.  Returns ``None`` when the name cannot be resolved.
 
         If the persona declares a ``produces.schema``, the outcome block
         instruction is automatically appended to its system prompt.
         """
-        file_path = self._personas_dir / f"{name}.yaml"
-        if file_path.is_file():
-            persona = self.load_from_file(file_path)
-        else:
+        for directory in self._resolve_dirs():
+            file_path = directory / f"{name}.yaml"
+            if file_path.is_file():
+                persona = self.load_from_file(file_path)
+                if persona is not None:
+                    return _apply_outcome_instruction(persona)
+
+        if self._include_builtin:
             persona = _BUILTIN_PERSONAS.get(name)
+            if persona is not None:
+                return _apply_outcome_instruction(persona)
 
-        if persona is None:
-            return None
-
-        return _apply_outcome_instruction(persona)
+        return None
 
     def load_from_file(self, path: Path) -> PersonaConfig | None:
         """Parse a persona YAML file without injecting outcome instructions.
@@ -753,15 +801,72 @@ class PersonaLoader(PersonaPort):
     def list_names(self) -> list[str]:
         """Return a sorted list of all resolvable persona names.
 
-        Combines built-in personas with any YAML files found in
-        ``personas_dir``.  File-system names take precedence when there is a
-        name collision with a built-in.
+        Union of all directory YAML stems plus built-in names.
         """
-        names: set[str] = set(_BUILTIN_PERSONAS)
-        if self._personas_dir.is_dir():
-            for p in self._personas_dir.glob("*.yaml"):
+        names: set[str] = set()
+        for directory in self._resolve_dirs():
+            if not directory.is_dir():
+                continue
+            for p in directory.glob("*.yaml"):
                 names.add(p.stem)
+        if self._include_builtin:
+            names.update(_BUILTIN_PERSONAS)
         return sorted(names)
+
+    # ------------------------------------------------------------------
+    # PersonaRegistryPort — write operations
+    # ------------------------------------------------------------------
+
+    def save(self, config: PersonaConfig) -> None:
+        """Persist *config* to the user-global personas directory as YAML.
+
+        Writes to ``~/.ravn/personas/<name>.yaml``, creating the directory if
+        it does not exist.
+        """
+        dest_dir = Path.home() / ".ravn" / "personas"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / f"{config.name}.yaml"
+        payload: dict[str, Any] = config.to_dict()
+        dest.write_text(_yaml.dump(payload, allow_unicode=True), encoding="utf-8")
+
+    def delete(self, name: str) -> bool:
+        """Remove the user-defined persona file for *name*.
+
+        Returns ``True`` when a file was found and removed.  Returns ``False``
+        when *name* is a pure built-in with no user-defined override file.
+        """
+        for directory in self._resolve_dirs():
+            file_path = directory / f"{name}.yaml"
+            if file_path.is_file():
+                file_path.unlink()
+                return True
+        return False
+
+    def is_builtin(self, name: str) -> bool:
+        """Return ``True`` when *name* is a built-in persona."""
+        return name in _BUILTIN_PERSONAS
+
+    def load_all(self) -> list[PersonaConfig]:
+        """Return all resolvable personas with outcome instructions injected."""
+        result: list[PersonaConfig] = []
+        for name in self.list_names():
+            persona = self.load(name)
+            if persona is not None:
+                result.append(persona)
+        return result
+
+    def source(self, name: str) -> str:
+        """Return the file path that provides *name*, or ``'[built-in]'``.
+
+        Returns an empty string when the persona cannot be resolved at all.
+        """
+        for directory in self._resolve_dirs():
+            file_path = directory / f"{name}.yaml"
+            if file_path.is_file():
+                return str(file_path)
+        if self._include_builtin and name in _BUILTIN_PERSONAS:
+            return "[built-in]"
+        return ""
 
     def list_builtin_names(self) -> list[str]:
         """Return a sorted list of built-in persona names."""
@@ -830,13 +935,11 @@ class PersonaLoader(PersonaPort):
         Returns ``None`` on empty input or parse failure.
         Handles ``produces``, ``consumes``, and ``fan_in`` sections.
         """
-        import yaml  # PyYAML — present via pydantic-settings[yaml]
-
         if not text.strip():
             return None
 
         try:
-            raw = yaml.safe_load(text)
+            raw = _yaml.safe_load(text)
         except Exception:
             return None
 

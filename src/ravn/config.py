@@ -62,8 +62,6 @@ def _config_paths() -> tuple[Path, ...]:
 # ---------------------------------------------------------------------------
 
 
-
-
 class LLMProviderConfig(BaseModel):
     """A single LLM provider entry in the fallback chain."""
 
@@ -2277,6 +2275,14 @@ class PersonaSourceConfig(BaseModel):
     secret_kwargs_env: dict[str, str] = Field(
         default_factory=dict,
         description="Map of kwarg name → env var name for secret values.",
+    )
+    persona_dirs: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Extra directories to search for persona YAML files, "
+            "in addition to the default .ravn/personas/ and ~/.ravn/personas/ paths. "
+            "Paths are searched in order; earlier entries have higher priority."
+        ),
     )
 
 

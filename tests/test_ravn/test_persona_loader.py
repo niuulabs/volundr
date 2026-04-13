@@ -190,18 +190,18 @@ class TestPersonaLoaderLoadFromFile:
     def test_load_valid_file(self, tmp_path: Path) -> None:
         p = tmp_path / "test-agent.yaml"
         p.write_text(_FULL_PERSONA_YAML, encoding="utf-8")
-        loader = PersonaLoader(personas_dir=tmp_path)
+        loader = PersonaLoader([str(tmp_path)])
         cfg = loader.load_from_file(p)
         assert cfg is not None
         assert cfg.name == "test-agent"
 
     def test_load_missing_file_returns_none(self, tmp_path: Path) -> None:
-        loader = PersonaLoader(personas_dir=tmp_path)
+        loader = PersonaLoader([str(tmp_path)])
         result = loader.load_from_file(tmp_path / "nonexistent.yaml")
         assert result is None
 
     def test_load_unreadable_path_returns_none(self, tmp_path: Path) -> None:
-        loader = PersonaLoader(personas_dir=tmp_path)
+        loader = PersonaLoader([str(tmp_path)])
         # Directory is not a readable YAML file.
         result = loader.load_from_file(tmp_path)
         assert result is None
@@ -209,7 +209,7 @@ class TestPersonaLoaderLoadFromFile:
     def test_load_invalid_yaml_returns_none(self, tmp_path: Path) -> None:
         p = tmp_path / "bad.yaml"
         p.write_text(_INVALID_YAML, encoding="utf-8")
-        loader = PersonaLoader(personas_dir=tmp_path)
+        loader = PersonaLoader([str(tmp_path)])
         result = loader.load_from_file(p)
         assert result is None
 
@@ -361,7 +361,7 @@ class TestPersonaLoaderLoad:
             "name: coding-agent\nsystem_prompt_template: overridden prompt\n",
             encoding="utf-8",
         )
-        loader = PersonaLoader(personas_dir=tmp_path)
+        loader = PersonaLoader([str(tmp_path)])
         cfg = loader.load("coding-agent")
         assert cfg is not None
         assert cfg.system_prompt_template == "overridden prompt"
@@ -369,7 +369,7 @@ class TestPersonaLoaderLoad:
     def test_custom_persona_from_file(self, tmp_path: Path) -> None:
         custom = tmp_path / "my-persona.yaml"
         custom.write_text(_FULL_PERSONA_YAML, encoding="utf-8")
-        loader = PersonaLoader(personas_dir=tmp_path)
+        loader = PersonaLoader([str(tmp_path)])
         cfg = loader.load("test-agent")  # name inside the file, not filename
         # Only the builtin lookup uses name; file lookup uses filename key
         assert cfg is None  # filename is my-persona.yaml, not test-agent.yaml
@@ -377,7 +377,7 @@ class TestPersonaLoaderLoad:
     def test_load_uses_filename_not_yaml_name(self, tmp_path: Path) -> None:
         p = tmp_path / "myfile.yaml"
         p.write_text("name: other-name\niteration_budget: 7\n", encoding="utf-8")
-        loader = PersonaLoader(personas_dir=tmp_path)
+        loader = PersonaLoader([str(tmp_path)])
         cfg = loader.load("myfile")  # lookup by filename stem
         assert cfg is not None
         assert cfg.name == "other-name"
