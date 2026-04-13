@@ -63,7 +63,9 @@
   cursor: pointer;
   border-radius: var(--radius-sm);
   opacity: 0;
-  transition: opacity var(--transition-fast), color var(--transition-fast);
+  transition:
+    opacity var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .participantRow:hover .detailBtn {
