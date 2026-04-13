@@ -17,6 +17,12 @@ from volundr.adapters.inbound.rest_personas import create_personas_router
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _redirect_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Redirect Path.home() to tmp_path so saves never touch the real home dir."""
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+
+
 @pytest.fixture()
 def tmp_persona_dir(tmp_path: Path) -> Path:
     """Return a temporary directory for persona YAML files."""
@@ -162,7 +168,7 @@ def test_get_yaml_nonexistent_returns_404(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_create_persona_writes_file(client: TestClient, tmp_persona_dir: Path) -> None:
+def test_create_persona_writes_file(client: TestClient, tmp_path: Path) -> None:
     payload = {
         "name": "new-agent",
         "system_prompt_template": "You are new.",
@@ -173,10 +179,9 @@ def test_create_persona_writes_file(client: TestClient, tmp_persona_dir: Path) -
     assert resp.status_code == 201
     data = resp.json()
     assert data["name"] == "new-agent"
-    # Verify file on disk
-    saved_file = Path.home() / ".ravn" / "personas" / "new-agent.yaml"
+    # Verify file on disk (Path.home() is redirected to tmp_path by autouse fixture)
+    saved_file = tmp_path / ".ravn" / "personas" / "new-agent.yaml"
     assert saved_file.exists()
-    saved_file.unlink()  # cleanup
 
 
 def test_create_persona_409_if_custom_exists(client: TestClient, tmp_persona_dir: Path) -> None:
@@ -192,12 +197,18 @@ def test_create_persona_409_if_builtin(client: TestClient) -> None:
     assert resp.status_code == 409
 
 
+def test_create_persona_rejects_path_traversal(client: TestClient) -> None:
+    payload = {"name": "../../evil"}
+    resp = client.post("/api/v1/ravn/personas", json=payload)
+    assert resp.status_code == 422
+
+
 # ---------------------------------------------------------------------------
 # PUT /api/v1/ravn/personas/{name} — full replace
 # ---------------------------------------------------------------------------
 
 
-def test_put_builtin_creates_override(client: TestClient) -> None:
+def test_put_builtin_creates_override(client: TestClient, tmp_path: Path) -> None:
     payload = {
         "name": "coding-agent",
         "system_prompt_template": "Overridden.",
@@ -207,10 +218,9 @@ def test_put_builtin_creates_override(client: TestClient) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["name"] == "coding-agent"
-    # Override file should now exist at default save location
-    override_file = Path.home() / ".ravn" / "personas" / "coding-agent.yaml"
+    # Override file should now exist (Path.home() is redirected to tmp_path)
+    override_file = tmp_path / ".ravn" / "personas" / "coding-agent.yaml"
     assert override_file.exists()
-    override_file.unlink()  # cleanup
 
 
 def test_put_nonexistent_returns_404(client: TestClient) -> None:
@@ -247,7 +257,9 @@ def test_delete_nonexistent_returns_404(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_fork_creates_copy_with_new_name(client: TestClient, tmp_persona_dir: Path) -> None:
+def test_fork_creates_copy_with_new_name(
+    client: TestClient, tmp_persona_dir: Path, tmp_path: Path
+) -> None:
     write_persona(tmp_persona_dir, "source-agent", _CUSTOM_PERSONA | {"name": "source-agent"})
     resp = client.post(
         "/api/v1/ravn/personas/source-agent/fork",
@@ -256,13 +268,11 @@ def test_fork_creates_copy_with_new_name(client: TestClient, tmp_persona_dir: Pa
     assert resp.status_code == 201
     data = resp.json()
     assert data["name"] == "forked-agent"
-    # Verify file on disk (saved to ~/.ravn/personas/)
-    forked_file = Path.home() / ".ravn" / "personas" / "forked-agent.yaml"
+    forked_file = tmp_path / ".ravn" / "personas" / "forked-agent.yaml"
     assert forked_file.exists()
-    forked_file.unlink()  # cleanup
 
 
-def test_fork_builtin_creates_custom(client: TestClient) -> None:
+def test_fork_builtin_creates_custom(client: TestClient, tmp_path: Path) -> None:
     resp = client.post(
         "/api/v1/ravn/personas/coding-agent/fork",
         json={"new_name": "my-coding-agent"},
@@ -270,9 +280,8 @@ def test_fork_builtin_creates_custom(client: TestClient) -> None:
     assert resp.status_code == 201
     data = resp.json()
     assert data["name"] == "my-coding-agent"
-    forked_file = Path.home() / ".ravn" / "personas" / "my-coding-agent.yaml"
+    forked_file = tmp_path / ".ravn" / "personas" / "my-coding-agent.yaml"
     assert forked_file.exists()
-    forked_file.unlink()  # cleanup
 
 
 def test_fork_nonexistent_source_returns_404(client: TestClient) -> None:
@@ -298,3 +307,11 @@ def test_fork_409_if_new_name_is_builtin(client: TestClient) -> None:
         json={"new_name": "research-agent"},
     )
     assert resp.status_code == 409
+
+
+def test_fork_rejects_path_traversal_new_name(client: TestClient) -> None:
+    resp = client.post(
+        "/api/v1/ravn/personas/coding-agent/fork",
+        json={"new_name": "../../evil"},
+    )
+    assert resp.status_code == 422

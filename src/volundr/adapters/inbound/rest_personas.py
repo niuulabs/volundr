@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace as _dc_replace
 
 from fastapi import APIRouter, HTTPException, Path, Query, Response, status
 from pydantic import BaseModel, Field
 
 from ravn.adapters.personas.loader import PersonaConfig, PersonaLoader
+from ravn.ports.persona import PersonaRegistryPort
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +65,7 @@ class PersonaSummary(BaseModel):
     consumes_events: list[str] = Field(description="Event types this persona consumes")
 
     @classmethod
-    def from_persona(cls, config: PersonaConfig, loader: PersonaLoader) -> PersonaSummary:
+    def from_persona(cls, config: PersonaConfig, loader: PersonaRegistryPort) -> PersonaSummary:
         """Build summary from a PersonaConfig."""
         name = config.name
         is_builtin = loader.is_builtin(name)
@@ -85,7 +87,7 @@ class PersonaDetail(PersonaSummary):
     """Full detail view of a persona."""
 
     system_prompt_template: str = Field(
-        description="Raw system prompt template (without outcome injection)",
+        description="System prompt template (may include outcome injection)",
     )
     forbidden_tools: list[str] = Field(description="Explicitly forbidden tool groups")
     llm: PersonaLLMResponse = Field(description="LLM configuration")
@@ -95,7 +97,9 @@ class PersonaDetail(PersonaSummary):
     yaml_source: str = Field(description="File path providing this persona, or '[built-in]'")
 
     @classmethod
-    def from_persona(cls, config: PersonaConfig, loader: PersonaLoader) -> PersonaDetail:  # type: ignore[override]
+    def from_persona(  # type: ignore[override]
+        cls, config: PersonaConfig, loader: PersonaRegistryPort
+    ) -> PersonaDetail:
         """Build detail from a PersonaConfig."""
         name = config.name
         is_builtin = loader.is_builtin(name)
@@ -148,6 +152,8 @@ class PersonaDetail(PersonaSummary):
 # Request models
 # ---------------------------------------------------------------------------
 
+_NAME_PATTERN = r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+
 
 class PersonaCreate(BaseModel):
     """Request body for creating a new persona."""
@@ -155,7 +161,8 @@ class PersonaCreate(BaseModel):
     name: str = Field(
         min_length=1,
         max_length=128,
-        description="Unique persona name (alphanumeric + hyphens)",
+        pattern=_NAME_PATTERN,
+        description="Unique persona name (alphanumeric, hyphens, underscores)",
     )
     system_prompt_template: str = Field(default="", description="System prompt template text")
     allowed_tools: list[str] = Field(default_factory=list, description="Allowed tool groups")
@@ -210,7 +217,12 @@ class PersonaCreate(BaseModel):
 class PersonaForkRequest(BaseModel):
     """Request body for forking a persona to a new name."""
 
-    new_name: str = Field(min_length=1, max_length=128, description="Name for the forked persona")
+    new_name: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=_NAME_PATTERN,
+        description="Name for the forked persona (alphanumeric, hyphens, underscores)",
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -224,7 +236,7 @@ class ErrorResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def create_personas_router(loader: PersonaLoader) -> APIRouter:
+def create_personas_router(loader: PersonaRegistryPort) -> APIRouter:
     """Create FastAPI router for Ravn persona endpoints."""
     router = APIRouter(prefix="/api/v1/ravn")
 
@@ -310,7 +322,6 @@ def create_personas_router(loader: PersonaLoader) -> APIRouter:
     def create_persona(data: PersonaCreate) -> PersonaDetail:
         """Create a new custom persona. Returns 409 if name already exists as a custom file."""
         existing_source = loader.source(data.name)
-        # Reject if there's already a user file (non-builtin or builtin override)
         if existing_source and existing_source != "[built-in]":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -344,11 +355,7 @@ def create_personas_router(loader: PersonaLoader) -> APIRouter:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Persona not found: {name}",
             )
-        config = data.to_persona_config()
-        # Ensure the saved name matches the path parameter
-        from dataclasses import replace as _replace
-
-        config = _replace(config, name=name)
+        config = _dc_replace(data.to_persona_config(), name=name)
         loader.save(config)
         saved = loader.load(name)
         if saved is None:
@@ -412,9 +419,7 @@ def create_personas_router(loader: PersonaLoader) -> APIRouter:
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Persona already exists as built-in: {body.new_name}",
             )
-        from dataclasses import replace as _replace
-
-        forked = _replace(source_config, name=body.new_name)
+        forked = _dc_replace(source_config, name=body.new_name)
         loader.save(forked)
         saved = loader.load(body.new_name)
         if saved is None:
