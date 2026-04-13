@@ -20,6 +20,7 @@ from pathlib import Path
 
 import yaml as _yaml
 
+from ravn.adapters.personas.loader import _VALID_FAN_IN_STRATEGIES
 from ravn.domain.models import ToolResult
 from ravn.ports.tool import ToolPort
 
@@ -27,14 +28,17 @@ logger = logging.getLogger(__name__)
 
 _VALID_PERMISSION_MODES = {"read-only", "workspace-write", "full-access"}
 _VALID_LLM_ALIASES = {"balanced", "powerful", "fast"}
-_VALID_FAN_IN_STRATEGIES = {"all_must_pass", "any_pass", "majority", "merge"}
 _VALID_OUTCOME_FIELD_TYPES = {"string", "number", "boolean", "enum"}
 
 _DEFAULT_PERSONAS_DIR = Path.home() / ".ravn" / "personas"
 
 
-def _validate_yaml(yaml_content: str) -> tuple[list[str], list[str]]:
-    """Return (errors, warnings) for *yaml_content* without writing anything.
+def _validate_yaml(yaml_content: str) -> tuple[list[str], list[str], dict | None]:
+    """Return (errors, warnings, parsed_dict) for *yaml_content*.
+
+    ``parsed_dict`` is the already-parsed YAML mapping when validation
+    succeeds, so callers can use it directly without re-parsing.
+    It is ``None`` whenever ``errors`` is non-empty.
 
     Errors are fatal (save will be refused).
     Warnings are non-fatal advisory messages.
@@ -44,7 +48,7 @@ def _validate_yaml(yaml_content: str) -> tuple[list[str], list[str]]:
 
     if not yaml_content or not yaml_content.strip():
         errors.append("YAML content is empty.")
-        return errors, warnings
+        return errors, warnings, None
 
     try:
         raw = _yaml.safe_load(yaml_content)
@@ -57,11 +61,11 @@ def _validate_yaml(yaml_content: str) -> tuple[list[str], list[str]]:
             )
         else:
             errors.append(f"YAML syntax error: {exc}")
-        return errors, warnings
+        return errors, warnings, None
 
     if not isinstance(raw, dict):
         errors.append("YAML must be a mapping (dict), got a different type.")
-        return errors, warnings
+        return errors, warnings, None
 
     name = str(raw.get("name", "")).strip()
     if not name:
@@ -121,7 +125,7 @@ def _validate_yaml(yaml_content: str) -> tuple[list[str], list[str]]:
                         )
 
     if errors:
-        return errors, warnings
+        return errors, warnings, None
 
     from ravn.adapters.personas.loader import PersonaLoader  # noqa: PLC0415
 
@@ -131,8 +135,9 @@ def _validate_yaml(yaml_content: str) -> tuple[list[str], list[str]]:
             "PersonaLoader.parse() returned None — the YAML is structurally invalid. "
             "Ensure 'name' is present and the document is a valid YAML mapping."
         )
+        return errors, warnings, None
 
-    return errors, warnings
+    return errors, warnings, raw
 
 
 def _format_validation_result(
@@ -208,17 +213,9 @@ class PersonaValidateTool(ToolPort):
     async def execute(self, input: dict) -> ToolResult:  # noqa: A002
         yaml_content: str = input.get("yaml_content") or ""
 
-        errors, warnings = _validate_yaml(yaml_content)
+        errors, warnings, raw = _validate_yaml(yaml_content)
 
-        name = ""
-        if not errors and yaml_content.strip():
-            try:
-                raw = _yaml.safe_load(yaml_content)
-                if isinstance(raw, dict):
-                    name = str(raw.get("name", "")).strip()
-            except Exception:
-                pass
-
+        name = str(raw.get("name", "")).strip() if raw is not None else ""
         message, is_error = _format_validation_result(errors, warnings, name)
         return ToolResult(tool_call_id="", content=message, is_error=is_error)
 
@@ -282,20 +279,12 @@ class PersonaSaveTool(ToolPort):
         yaml_content: str = input.get("yaml_content") or ""
         directory_str: str = (input.get("directory") or "").strip()
 
-        errors, warnings = _validate_yaml(yaml_content)
+        errors, warnings, raw = _validate_yaml(yaml_content)
         if errors:
             message, _ = _format_validation_result(errors, warnings)
             return ToolResult(tool_call_id="", content=message, is_error=True)
 
-        try:
-            raw = _yaml.safe_load(yaml_content)
-        except Exception as exc:
-            return ToolResult(
-                tool_call_id="",
-                content=f"Failed to parse YAML: {exc}",
-                is_error=True,
-            )
-
+        assert raw is not None  # guaranteed when errors is empty
         name = str(raw.get("name", "")).strip()
 
         target_dir = Path(directory_str).expanduser() if directory_str else _DEFAULT_PERSONAS_DIR
