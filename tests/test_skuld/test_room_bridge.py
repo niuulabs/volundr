@@ -1,0 +1,397 @@
+"""Unit tests for skuld.room_bridge.RoomBridge."""
+
+from __future__ import annotations
+
+import json
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from skuld.config import RoomConfig
+from skuld.room_bridge import RoomBridge
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_registry() -> MagicMock:
+    """Return a mock ChannelRegistry with async broadcast."""
+    reg = MagicMock()
+    reg.broadcast = AsyncMock()
+    return reg
+
+
+def _make_bridge(
+    colors: list[str] | None = None,
+    append_turn=None,
+) -> tuple[RoomBridge, MagicMock]:
+    registry = _make_registry()
+    config = RoomConfig(
+        enabled=True,
+        participant_colors=colors or ["amber", "cyan", "emerald"],
+    )
+    bridge = RoomBridge(config=config, channels=registry, append_turn=append_turn)
+    return bridge, registry
+
+
+def _fake_ws() -> MagicMock:
+    ws = MagicMock()
+    ws.send_text = AsyncMock()
+    return ws
+
+
+# ---------------------------------------------------------------------------
+# Registration & color assignment
+# ---------------------------------------------------------------------------
+
+
+class TestParticipantRegistration:
+    @pytest.mark.asyncio
+    async def test_register_creates_participant(self):
+        bridge, registry = _make_bridge()
+        ws = _fake_ws()
+
+        meta = await bridge.register("peer-1", "Alice", ws)
+
+        assert meta.peer_id == "peer-1"
+        assert meta.persona == "Alice"
+        assert meta.participant_type == "ravn"
+        assert meta.color in {"amber", "cyan", "emerald"}
+        assert "peer-1" in bridge.participants
+
+    @pytest.mark.asyncio
+    async def test_register_broadcasts_participant_joined(self):
+        bridge, registry = _make_bridge()
+        ws = _fake_ws()
+
+        await bridge.register("peer-1", "Alice", ws)
+
+        registry.broadcast.assert_awaited_once()
+        event = registry.broadcast.call_args[0][0]
+        assert event["type"] == "participant_joined"
+        assert event["participant"]["peer_id"] == "peer-1"
+
+    @pytest.mark.asyncio
+    async def test_register_assigns_colors_from_pool(self):
+        bridge, registry = _make_bridge(colors=["amber", "cyan", "emerald"])
+
+        meta1 = await bridge.register("p1", "A", _fake_ws())
+        meta2 = await bridge.register("p2", "B", _fake_ws())
+        meta3 = await bridge.register("p3", "C", _fake_ws())
+
+        colors = {meta1.color, meta2.color, meta3.color}
+        assert colors == {"amber", "cyan", "emerald"}
+
+    @pytest.mark.asyncio
+    async def test_register_cycles_colors_beyond_pool(self):
+        bridge, registry = _make_bridge(colors=["amber", "cyan"])
+
+        await bridge.register("p1", "A", _fake_ws())
+        await bridge.register("p2", "B", _fake_ws())
+        meta = await bridge.register("p3", "C", _fake_ws())
+
+        assert meta.color == "amber"  # cycles back
+
+    @pytest.mark.asyncio
+    async def test_register_reconnect_reuses_existing_meta(self):
+        bridge, registry = _make_bridge()
+        ws1 = _fake_ws()
+        ws2 = _fake_ws()
+
+        meta1 = await bridge.register("peer-1", "Alice", ws1)
+        registry.broadcast.reset_mock()
+
+        meta2 = await bridge.register("peer-1", "Alice", ws2)
+
+        assert meta1 == meta2
+        assert bridge.participant_count == 1
+        # Still broadcasts participant_joined on reconnect
+        registry.broadcast.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_unregister_removes_participant(self):
+        bridge, registry = _make_bridge()
+        await bridge.register("peer-1", "Alice", _fake_ws())
+        registry.broadcast.reset_mock()
+
+        await bridge.unregister("peer-1")
+
+        assert "peer-1" not in bridge.participants
+
+    @pytest.mark.asyncio
+    async def test_unregister_broadcasts_participant_left(self):
+        bridge, registry = _make_bridge()
+        await bridge.register("peer-1", "Alice", _fake_ws())
+        registry.broadcast.reset_mock()
+
+        await bridge.unregister("peer-1")
+
+        registry.broadcast.assert_awaited_once()
+        event = registry.broadcast.call_args[0][0]
+        assert event["type"] == "participant_left"
+        assert event["participantId"] == "peer-1"
+
+    @pytest.mark.asyncio
+    async def test_unregister_unknown_peer_is_noop(self):
+        bridge, registry = _make_bridge()
+        # Should not raise
+        await bridge.unregister("nonexistent")
+        registry.broadcast.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Room state
+# ---------------------------------------------------------------------------
+
+
+class TestRoomState:
+    @pytest.mark.asyncio
+    async def test_get_room_state_event_empty(self):
+        bridge, _ = _make_bridge()
+        event = bridge.get_room_state_event()
+        assert event["type"] == "room_state"
+        assert event["participants"] == []
+
+    @pytest.mark.asyncio
+    async def test_get_room_state_event_with_participants(self):
+        bridge, _ = _make_bridge()
+        await bridge.register("p1", "Alice", _fake_ws())
+        await bridge.register("p2", "Bob", _fake_ws())
+
+        event = bridge.get_room_state_event()
+        assert len(event["participants"]) == 2
+        peer_ids = {p["peer_id"] for p in event["participants"]}
+        assert peer_ids == {"p1", "p2"}
+
+    def test_participant_count_empty(self):
+        bridge, _ = _make_bridge()
+        assert bridge.participant_count == 0
+
+    @pytest.mark.asyncio
+    async def test_participant_count_after_register(self):
+        bridge, _ = _make_bridge()
+        await bridge.register("p1", "A", _fake_ws())
+        await bridge.register("p2", "B", _fake_ws())
+        assert bridge.participant_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Event translation — response / error → room_message
+# ---------------------------------------------------------------------------
+
+
+class TestResponseFrameTranslation:
+    @pytest.mark.asyncio
+    async def test_response_frame_broadcasts_room_message(self):
+        bridge, registry = _make_bridge()
+        await bridge.register("p1", "Alice", _fake_ws())
+        registry.broadcast.reset_mock()
+
+        await bridge.handle_ravn_frame("p1", {"type": "response", "data": "Hello!", "metadata": {}})
+
+        calls = [c[0][0] for c in registry.broadcast.call_args_list]
+        room_msgs = [e for e in calls if e["type"] == "room_message"]
+        assert len(room_msgs) == 1
+        msg = room_msgs[0]
+        assert msg["content"] == "Hello!"
+        assert msg["participantId"] == "p1"
+        assert msg["participant"]["persona"] == "Alice"
+        assert msg["visibility"] == "public"
+
+    @pytest.mark.asyncio
+    async def test_error_frame_broadcasts_room_message_with_error_flag(self):
+        bridge, registry = _make_bridge()
+        await bridge.register("p1", "Alice", _fake_ws())
+        registry.broadcast.reset_mock()
+
+        await bridge.handle_ravn_frame("p1", {"type": "error", "data": "boom", "metadata": {}})
+
+        calls = [c[0][0] for c in registry.broadcast.call_args_list]
+        room_msgs = [e for e in calls if e["type"] == "room_message"]
+        assert len(room_msgs) == 1
+        assert room_msgs[0]["error"] is True
+
+    @pytest.mark.asyncio
+    async def test_response_includes_thread_id_when_present(self):
+        bridge, registry = _make_bridge()
+        await bridge.register("p1", "Alice", _fake_ws())
+        registry.broadcast.reset_mock()
+
+        await bridge.handle_ravn_frame(
+            "p1",
+            {"type": "response", "data": "Hi", "metadata": {"thread_id": "t-123"}},
+        )
+
+        calls = [c[0][0] for c in registry.broadcast.call_args_list]
+        msg = next(e for e in calls if e["type"] == "room_message")
+        assert msg["threadId"] == "t-123"
+
+    @pytest.mark.asyncio
+    async def test_response_omits_thread_id_when_absent(self):
+        bridge, registry = _make_bridge()
+        await bridge.register("p1", "Alice", _fake_ws())
+        registry.broadcast.reset_mock()
+
+        await bridge.handle_ravn_frame("p1", {"type": "response", "data": "Hi", "metadata": {}})
+
+        calls = [c[0][0] for c in registry.broadcast.call_args_list]
+        msg = next(e for e in calls if e["type"] == "room_message")
+        assert "threadId" not in msg
+
+
+# ---------------------------------------------------------------------------
+# Event translation — activity types
+# ---------------------------------------------------------------------------
+
+
+class TestActivityFrameTranslation:
+    @pytest.mark.asyncio
+    async def test_thought_frame_broadcasts_room_activity_thinking(self):
+        bridge, registry = _make_bridge()
+        await bridge.register("p1", "Alice", _fake_ws())
+        registry.broadcast.reset_mock()
+
+        await bridge.handle_ravn_frame(
+            "p1", {"type": "thought", "data": "pondering", "metadata": {}}
+        )
+
+        calls = [c[0][0] for c in registry.broadcast.call_args_list]
+        activities = [e for e in calls if e["type"] == "room_activity"]
+        assert len(activities) == 1
+        assert activities[0]["activityType"] == "thinking"
+        assert activities[0]["participantId"] == "p1"
+
+    @pytest.mark.asyncio
+    async def test_tool_start_frame_broadcasts_tool_executing(self):
+        bridge, registry = _make_bridge()
+        await bridge.register("p1", "Alice", _fake_ws())
+        registry.broadcast.reset_mock()
+
+        await bridge.handle_ravn_frame(
+            "p1", {"type": "tool_start", "data": "BashTool", "metadata": {}}
+        )
+
+        calls = [c[0][0] for c in registry.broadcast.call_args_list]
+        activities = [e for e in calls if e["type"] == "room_activity"]
+        assert activities[0]["activityType"] == "tool_executing"
+
+    @pytest.mark.asyncio
+    async def test_tool_result_frame_broadcasts_idle(self):
+        bridge, registry = _make_bridge()
+        await bridge.register("p1", "Alice", _fake_ws())
+        registry.broadcast.reset_mock()
+
+        await bridge.handle_ravn_frame("p1", {"type": "tool_result", "data": "ok", "metadata": {}})
+
+        calls = [c[0][0] for c in registry.broadcast.call_args_list]
+        activities = [e for e in calls if e["type"] == "room_activity"]
+        assert activities[0]["activityType"] == "idle"
+
+    @pytest.mark.asyncio
+    async def test_unknown_frame_type_is_silently_ignored(self):
+        bridge, registry = _make_bridge()
+        await bridge.register("p1", "Alice", _fake_ws())
+        registry.broadcast.reset_mock()
+
+        await bridge.handle_ravn_frame(
+            "p1", {"type": "unknown_future_type", "data": "x", "metadata": {}}
+        )
+
+        # No room_message or room_activity should be broadcast
+        for call in registry.broadcast.call_args_list:
+            ev = call[0][0]
+            assert ev["type"] not in ("room_message", "room_activity")
+
+    @pytest.mark.asyncio
+    async def test_frame_from_unknown_peer_is_dropped(self):
+        bridge, registry = _make_bridge()
+        registry.broadcast.reset_mock()
+
+        await bridge.handle_ravn_frame("ghost", {"type": "response", "data": "hi", "metadata": {}})
+
+        registry.broadcast.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# History persistence via append_turn callback
+# ---------------------------------------------------------------------------
+
+
+class TestHistoryPersistence:
+    @pytest.mark.asyncio
+    async def test_response_frame_calls_append_turn(self):
+        turns = []
+        bridge, _ = _make_bridge(append_turn=turns.append)
+        await bridge.register("p1", "Alice", _fake_ws())
+
+        await bridge.handle_ravn_frame("p1", {"type": "response", "data": "Hello", "metadata": {}})
+
+        assert len(turns) == 1
+        turn = turns[0]
+        assert turn.role == "assistant"
+        assert turn.content == "Hello"
+        assert turn.participant_id == "p1"
+        assert turn.participant_meta["persona"] == "Alice"
+        assert turn.visibility == "public"
+
+    @pytest.mark.asyncio
+    async def test_activity_frame_does_not_persist_turn(self):
+        turns = []
+        bridge, _ = _make_bridge(append_turn=turns.append)
+        await bridge.register("p1", "Alice", _fake_ws())
+
+        await bridge.handle_ravn_frame(
+            "p1", {"type": "thought", "data": "thinking", "metadata": {}}
+        )
+
+        assert len(turns) == 0
+
+    @pytest.mark.asyncio
+    async def test_no_append_turn_callback_does_not_crash(self):
+        bridge, _ = _make_bridge(append_turn=None)
+        await bridge.register("p1", "Alice", _fake_ws())
+
+        # Should not raise even without a persistence callback
+        await bridge.handle_ravn_frame("p1", {"type": "response", "data": "Hello", "metadata": {}})
+
+
+# ---------------------------------------------------------------------------
+# Directed routing
+# ---------------------------------------------------------------------------
+
+
+class TestDirectedRouting:
+    @pytest.mark.asyncio
+    async def test_route_directed_message_sends_to_target_ws(self):
+        bridge, _ = _make_bridge()
+        ws = _fake_ws()
+        await bridge.register("p1", "Alice", ws)
+
+        result = await bridge.route_directed_message("p1", "Hey Alice!")
+
+        assert result is True
+        ws.send_text.assert_awaited_once()
+        sent = ws.send_text.call_args[0][0]
+        payload = json.loads(sent)
+        assert payload["type"] == "directed_message"
+        assert payload["content"] == "Hey Alice!"
+
+    @pytest.mark.asyncio
+    async def test_route_directed_message_returns_false_for_unknown_target(self):
+        bridge, _ = _make_bridge()
+
+        result = await bridge.route_directed_message("ghost", "Hey!")
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_route_directed_message_returns_false_on_send_error(self):
+        bridge, _ = _make_bridge()
+        ws = _fake_ws()
+        ws.send_text.side_effect = RuntimeError("connection closed")
+        await bridge.register("p1", "Alice", ws)
+
+        result = await bridge.route_directed_message("p1", "Hey!")
+
+        assert result is False
