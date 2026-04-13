@@ -47,6 +47,7 @@ const ALL_CAPABILITIES: TransportCapabilities = {
 function mockSkuldChat(overrides: Partial<ReturnType<typeof useSkuldChat>> = {}) {
   const defaults: ReturnType<typeof useSkuldChat> = {
     messages: [],
+    participants: new Map(),
     connected: false,
     isRunning: false,
     historyLoaded: true,

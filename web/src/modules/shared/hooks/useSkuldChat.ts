@@ -263,8 +263,16 @@ function wsUrlToHttpBase(wsUrl: string): string | null {
   }
 }
 
+export type ParticipantStatus = 'idle' | 'busy' | 'thinking' | 'tool_executing';
+
+export interface RoomParticipant extends ParticipantMeta {
+  readonly status: ParticipantStatus;
+  readonly joinedAt: Date;
+}
+
 interface UseSkuldChatReturn {
   messages: readonly SkuldChatMessage[];
+  participants: ReadonlyMap<string, RoomParticipant>;
   connected: boolean;
   isRunning: boolean;
   historyLoaded: boolean;
@@ -315,6 +323,7 @@ export function useSkuldChat(
     if (!url) return [];
     return getMessages(url);
   });
+  const [participants, setParticipants] = useState<Map<string, RoomParticipant>>(new Map());
   const [connected, setConnected] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [pendingPermissions, setPendingPermissions] = useState<PermissionRequest[]>([]);
@@ -906,6 +915,106 @@ export function useSkuldChat(
           continue;
         }
 
+        // ── participant_joined: add participant to room ────────────
+        if (eventType === 'participant_joined') {
+          const raw = event as unknown as Record<string, unknown>;
+          const peerId = String(raw.peer_id ?? '');
+          if (peerId) {
+            const participant: RoomParticipant = {
+              peerId,
+              persona: String(raw.persona ?? ''),
+              color: String(raw.color ?? ''),
+              participantType: (raw.participant_type ?? 'ravn') as 'human' | 'ravn',
+              gatewayUrl: raw.gateway_url ? String(raw.gateway_url) : undefined,
+              status: 'idle',
+              joinedAt: new Date(),
+            };
+            setParticipants(prev => new Map(prev).set(peerId, participant));
+          }
+          continue;
+        }
+
+        // ── participant_left: remove participant from room ─────────
+        if (eventType === 'participant_left') {
+          const raw = event as unknown as Record<string, unknown>;
+          const peerId = String(raw.peer_id ?? '');
+          if (peerId) {
+            setParticipants(prev => {
+              const next = new Map(prev);
+              next.delete(peerId);
+              return next;
+            });
+          }
+          continue;
+        }
+
+        // ── room_state: initialize participants on connect ────────
+        if (eventType === 'room_state') {
+          const raw = event as unknown as Record<string, unknown>;
+          const rawParticipants = Array.isArray(raw.participants) ? raw.participants : [];
+          const newMap = new Map<string, RoomParticipant>();
+          for (const p of rawParticipants) {
+            const pr = p as Record<string, unknown>;
+            const peerId = String(pr.peer_id ?? '');
+            if (!peerId) continue;
+            newMap.set(peerId, {
+              peerId,
+              persona: String(pr.persona ?? ''),
+              color: String(pr.color ?? ''),
+              participantType: (pr.participant_type ?? 'ravn') as 'human' | 'ravn',
+              gatewayUrl: pr.gateway_url ? String(pr.gateway_url) : undefined,
+              status: 'idle',
+              joinedAt: new Date(),
+            });
+          }
+          setParticipants(newMap);
+          continue;
+        }
+
+        // ── room_message: append multi-participant message ────────
+        if (eventType === 'room_message') {
+          const raw = event as unknown as Record<string, unknown>;
+          const participantMeta = raw.participant as Record<string, unknown> | undefined;
+          const msg: SkuldChatMessage = {
+            id: String(raw.id ?? generateId()),
+            role: (raw.role === 'user' ? 'user' : 'assistant') as ChatMessageRole,
+            content: String(raw.content ?? ''),
+            createdAt: raw.created_at ? new Date(String(raw.created_at)) : new Date(),
+            status: 'complete',
+            participantId: raw.participant_id ? String(raw.participant_id) : undefined,
+            participant: participantMeta
+              ? {
+                  peerId: String(participantMeta.peer_id ?? ''),
+                  persona: String(participantMeta.persona ?? ''),
+                  color: String(participantMeta.color ?? ''),
+                  participantType: (participantMeta.participant_type ?? 'ravn') as 'human' | 'ravn',
+                  gatewayUrl: participantMeta.gateway_url
+                    ? String(participantMeta.gateway_url)
+                    : undefined,
+                }
+              : undefined,
+            threadId: raw.thread_id ? String(raw.thread_id) : undefined,
+            visibility: raw.visibility ? String(raw.visibility) : undefined,
+          };
+          setMessages(prev => [...prev, msg]);
+          continue;
+        }
+
+        // ── room_activity: update participant status ───────────────
+        if (eventType === 'room_activity') {
+          const raw = event as unknown as Record<string, unknown>;
+          const peerId = String(raw.peer_id ?? '');
+          const status = String(raw.status ?? 'idle') as ParticipantStatus;
+          if (peerId) {
+            setParticipants(prev => {
+              const existing = prev.get(peerId);
+              if (!existing) return prev;
+              return new Map(prev).set(peerId, { ...existing, status });
+            });
+          }
+          continue;
+        }
+
         // ── message_start, message_stop — silently consumed ──────
       } // end for (const event of events)
     },
@@ -1036,12 +1145,14 @@ export function useSkuldChat(
   }, [resetStreamingRefs, url, clearSession]);
 
   const stableMessages = useMemo(() => messages, [messages]);
+  const stableParticipants = useMemo(() => participants as ReadonlyMap<string, RoomParticipant>, [participants]);
   const stablePermissions = useMemo(() => pendingPermissions, [pendingPermissions]);
   const stableCommands = useMemo(() => availableCommands, [availableCommands]);
   const stableCapabilities = useMemo(() => capabilities, [capabilities]);
 
   return {
     messages: stableMessages,
+    participants: stableParticipants,
     connected,
     isRunning,
     historyLoaded,

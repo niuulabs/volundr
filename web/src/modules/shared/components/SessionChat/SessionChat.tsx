@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { Wifi, WifiOff, BrainCircuitIcon, RotateCcwIcon, ArrowDownIcon } from 'lucide-react';
 import { PermissionStack } from '@/modules/shared/components/PermissionDialog';
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
+import { useRoomState } from '@/modules/shared/hooks/useRoomState';
 import type {
   PermissionBehavior,
   ContentBlock,
@@ -9,6 +10,9 @@ import type {
 } from '@/modules/shared/hooks/useSkuldChat';
 import { cn } from '@/utils';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
+import { RoomMessage } from './RoomMessage';
+import { ParticipantFilter } from './ParticipantFilter';
+import { ThreadGroup } from './ThreadGroup';
 import { ChatInput } from './ChatInput';
 import { SessionEmptyChat } from './ChatEmptyStates';
 import type { FileAttachment } from './useFileAttachments';
@@ -46,6 +50,7 @@ export function SessionChat({
 }: SessionChatProps) {
   const {
     messages,
+    participants,
     connected,
     isRunning,
     historyLoaded,
@@ -59,6 +64,15 @@ export function SessionChat({
     availableCommands,
     capabilities,
   } = useSkuldChat(url);
+
+  const {
+    isRoomMode,
+    activeFilter,
+    setActiveFilter,
+    showInternal,
+    toggleInternal,
+    filteredMessages,
+  } = useRoomState(messages, participants);
 
   const [modelInput, setModelInput] = useState('');
   const [showModelInput, setShowModelInput] = useState(false);
@@ -80,15 +94,63 @@ export function SessionChat({
   );
 
   // Filter system messages to render inline, separate from main flow
+  // In room mode, further filtering by participant/internal is handled by useRoomState
   const visibleMessages = useMemo(
     () =>
-      messages.filter(m => {
+      filteredMessages.filter(m => {
         if (m.role === 'system') return false;
         if (m.role === 'assistant' && m.status === 'complete' && !m.content.trim()) return false;
         return true;
       }),
-    [messages]
+    [filteredMessages]
   );
+
+  // Group consecutive internal messages by threadId for ThreadGroup rendering
+  type MessageGroup =
+    | { type: 'single'; message: (typeof visibleMessages)[number] }
+    | { type: 'thread'; threadId: string; messages: (typeof visibleMessages) };
+
+  const messageGroups = useMemo((): MessageGroup[] => {
+    if (!isRoomMode || showInternal) {
+      // No grouping needed when not in room mode or when internal visible individually
+      return visibleMessages.map(m => ({ type: 'single', message: m }));
+    }
+    // When not showing internal, all internal messages are filtered out — no grouping needed
+    return visibleMessages.map(m => ({ type: 'single', message: m }));
+  }, [visibleMessages, isRoomMode, showInternal]);
+
+  // Thread grouping: consecutive internal messages with same threadId collapse into ThreadGroup
+  const renderedGroups = useMemo((): MessageGroup[] => {
+    if (!isRoomMode || !showInternal) return messageGroups;
+
+    const result: MessageGroup[] = [];
+    let i = 0;
+    while (i < visibleMessages.length) {
+      const msg = visibleMessages[i];
+      if (msg.visibility === 'internal' && msg.threadId) {
+        const threadId = msg.threadId;
+        const threadMsgs: (typeof visibleMessages)[number][] = [msg];
+        let j = i + 1;
+        while (j < visibleMessages.length) {
+          const next = visibleMessages[j];
+          if (next.visibility === 'internal' && next.threadId === threadId) {
+            threadMsgs.push(next);
+            j++;
+          } else {
+            break;
+          }
+        }
+        if (threadMsgs.length > 1) {
+          result.push({ type: 'thread', threadId, messages: threadMsgs });
+          i = j;
+          continue;
+        }
+      }
+      result.push({ type: 'single', message: msg });
+      i++;
+    }
+    return result;
+  }, [visibleMessages, isRoomMode, showInternal, messageGroups]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView?.({ behavior });
@@ -399,13 +461,50 @@ export function SessionChat({
         </div>
       )}
 
+      {isRoomMode && (
+        <ParticipantFilter
+          participants={participants}
+          activeFilter={activeFilter}
+          onFilterChange={setActiveFilter}
+          showInternal={showInternal}
+          onToggleInternal={toggleInternal}
+        />
+      )}
+
       {hasConversation ? (
         <div className={styles.messagesContainer} ref={scrollContainerRef}>
           <div className={styles.messagesInner}>
-            {visibleMessages.map(msg => {
+            {renderedGroups.map((group, idx) => {
+              if (group.type === 'thread') {
+                return (
+                  <ThreadGroup
+                    key={group.threadId}
+                    messages={group.messages}
+                    participants={participants}
+                  />
+                );
+              }
+
+              const msg = group.message;
+
               // System messages rendered as compact inline notifications
               if (msg.metadata?.messageType === 'system') {
                 return <SystemMessage key={msg.id} message={msg} />;
+              }
+
+              // Room messages (participant present) — always render as RoomMessage in room mode
+              if (isRoomMode && msg.participant) {
+                return (
+                  <RoomMessage
+                    key={msg.id}
+                    message={msg}
+                    participantStatus={
+                      msg.participantId
+                        ? participants.get(msg.participantId)?.status
+                        : undefined
+                    }
+                  />
+                );
               }
 
               if (msg.role === 'user') {
@@ -416,7 +515,7 @@ export function SessionChat({
               if (msg.status === 'running') {
                 return (
                   <StreamingMessage
-                    key={msg.id}
+                    key={`${msg.id}-${idx}`}
                     content={msg.content}
                     parts={msg.parts}
                     model={msg.metadata?.messageType !== 'system' ? undefined : undefined}
