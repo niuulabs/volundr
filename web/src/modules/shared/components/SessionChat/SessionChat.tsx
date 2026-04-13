@@ -6,11 +6,14 @@ import type {
   PermissionBehavior,
   ContentBlock,
   AttachmentMeta,
+  ParticipantMeta,
 } from '@/modules/shared/hooks/useSkuldChat';
 import { cn } from '@/utils';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
 import { ChatInput } from './ChatInput';
 import { SessionEmptyChat } from './ChatEmptyStates';
+import { RoomMessage } from './RoomMessage';
+import { AgentDetailPanel } from './AgentDetailPanel';
 import type { FileAttachment } from './useFileAttachments';
 import styles from './SessionChat.module.css';
 
@@ -65,12 +68,34 @@ export function SessionChat({
   const [showThinkingMenu, setShowThinkingMenu] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
   const userSentRef = useRef(false);
   const prevMessageCountRef = useRef(0);
   const scrollLockUntilRef = useRef(0);
+
+  // Build a map of peerId → ParticipantMeta from all messages that carry participant data
+  const participantsMap = useMemo<Map<string, ParticipantMeta>>(() => {
+    const map = new Map<string, ParticipantMeta>();
+    for (const msg of messages) {
+      if (msg.participant) {
+        map.set(msg.participant.peerId, msg.participant);
+      }
+    }
+    return map;
+  }, [messages]);
+
+  const isRoomSession = participantsMap.size > 0;
+
+  const handleSelectAgent = useCallback((peerId: string) => {
+    setSelectedAgentId(prev => (prev === peerId ? null : peerId));
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedAgentId(null);
+  }, []);
 
   // Show welcome when only system messages exist (no real user/assistant conversation)
   const hasConversation = useMemo(
@@ -290,197 +315,230 @@ export function SessionChat({
     onMessageCountChange?.(visibleMessages.length);
   }, [visibleMessages.length, onMessageCountChange]);
 
+  const selectedParticipant = selectedAgentId ? participantsMap.get(selectedAgentId) : undefined;
+
   return (
-    <div className={cn(styles.wrapper, className)}>
-      <div className={styles.toolbar}>
-        <div className={styles.toolbarLeft}>
-          <div className={styles.statusIndicator} data-connected={connected}>
-            {connected ? (
-              <Wifi className={styles.statusIcon} />
-            ) : (
-              <WifiOff className={styles.statusIcon} />
-            )}
-            <span>{connected ? 'Connected' : 'Disconnected'}</span>
-          </div>
-          <span className={styles.messageCount}>
-            {visibleMessages.length} message{visibleMessages.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-
-        {connected && (
-          <div className={styles.toolbarRight}>
-            <div className={styles.controlGroup}>
-              {capabilities.set_model && (
-                <button
-                  type="button"
-                  className={styles.controlBtn}
-                  onClick={() => setShowModelInput(prev => !prev)}
-                  title="Switch model"
-                  data-testid="model-switch-toggle"
-                >
-                  <BrainCircuitIcon className={styles.controlIcon} />
-                </button>
+    <div
+      className={cn(styles.outerGrid, className)}
+      data-detail-open={selectedParticipant ? 'true' : undefined}
+    >
+      <div className={styles.wrapper}>
+        <div className={styles.toolbar}>
+          <div className={styles.toolbarLeft}>
+            <div className={styles.statusIndicator} data-connected={connected}>
+              {connected ? (
+                <Wifi className={styles.statusIcon} />
+              ) : (
+                <WifiOff className={styles.statusIcon} />
               )}
+              <span>{connected ? 'Connected' : 'Disconnected'}</span>
+            </div>
+            <span className={styles.messageCount}>
+              {visibleMessages.length} message{visibleMessages.length !== 1 ? 's' : ''}
+            </span>
+          </div>
 
-              {capabilities.set_thinking_tokens && (
-                <div className={styles.thinkingWrapper}>
+          {connected && (
+            <div className={styles.toolbarRight}>
+              <div className={styles.controlGroup}>
+                {capabilities.set_model && (
                   <button
                     type="button"
                     className={styles.controlBtn}
-                    onClick={() => setShowThinkingMenu(prev => !prev)}
-                    title="Set thinking budget"
-                    data-testid="thinking-budget-toggle"
+                    onClick={() => setShowModelInput(prev => !prev)}
+                    title="Switch model"
+                    data-testid="model-switch-toggle"
                   >
-                    <span className={styles.controlLabel}>Thinking</span>
+                    <BrainCircuitIcon className={styles.controlIcon} />
                   </button>
-                  {showThinkingMenu && (
-                    <div className={styles.thinkingMenu} data-testid="thinking-menu">
-                      {THINKING_PRESETS.map(preset => (
-                        <button
-                          key={preset.value}
-                          type="button"
-                          className={styles.thinkingOption}
-                          onClick={() => handleThinkingSelect(preset.value)}
-                          data-testid={`thinking-${preset.label}`}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
 
-              {capabilities.rewind_files && (
-                <button
-                  type="button"
-                  className={styles.controlBtn}
-                  onClick={sendRewindFiles}
-                  title="Rewind files"
-                  data-testid="rewind-files"
-                >
-                  <RotateCcwIcon className={styles.controlIcon} />
-                </button>
-              )}
+                {capabilities.set_thinking_tokens && (
+                  <div className={styles.thinkingWrapper}>
+                    <button
+                      type="button"
+                      className={styles.controlBtn}
+                      onClick={() => setShowThinkingMenu(prev => !prev)}
+                      title="Set thinking budget"
+                      data-testid="thinking-budget-toggle"
+                    >
+                      <span className={styles.controlLabel}>Thinking</span>
+                    </button>
+                    {showThinkingMenu && (
+                      <div className={styles.thinkingMenu} data-testid="thinking-menu">
+                        {THINKING_PRESETS.map(preset => (
+                          <button
+                            key={preset.value}
+                            type="button"
+                            className={styles.thinkingOption}
+                            onClick={() => handleThinkingSelect(preset.value)}
+                            data-testid={`thinking-${preset.label}`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {capabilities.rewind_files && (
+                  <button
+                    type="button"
+                    className={styles.controlBtn}
+                    onClick={sendRewindFiles}
+                    title="Rewind files"
+                    data-testid="rewind-files"
+                  >
+                    <RotateCcwIcon className={styles.controlIcon} />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-
-      {showModelInput && connected && capabilities.set_model && (
-        <div className={styles.modelInputBar} data-testid="model-input-bar">
-          <input
-            type="text"
-            className={styles.modelInput}
-            value={modelInput}
-            onChange={e => setModelInput(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') handleModelSubmit();
-              if (e.key === 'Escape') setShowModelInput(false);
-            }}
-            placeholder="Model ID (e.g. claude-opus-4-6)"
-            autoFocus
-            aria-label="Model ID input"
-          />
-          <button
-            type="button"
-            className={styles.modelSubmitBtn}
-            onClick={handleModelSubmit}
-            data-testid="model-submit"
-          >
-            Switch
-          </button>
+          )}
         </div>
-      )}
 
-      {!historyLoaded && connected && (
-        <div className={styles.historyLoading} data-testid="history-loading">
-          Loading conversation...
-        </div>
-      )}
-
-      {hasConversation ? (
-        <div className={styles.messagesContainer} ref={scrollContainerRef}>
-          <div className={styles.messagesInner}>
-            {visibleMessages.map(msg => {
-              // System messages rendered as compact inline notifications
-              if (msg.metadata?.messageType === 'system') {
-                return <SystemMessage key={msg.id} message={msg} />;
-              }
-
-              if (msg.role === 'user') {
-                return <UserMessage key={msg.id} message={msg} />;
-              }
-
-              // Streaming assistant message
-              if (msg.status === 'running') {
-                return (
-                  <StreamingMessage
-                    key={msg.id}
-                    content={msg.content}
-                    parts={msg.parts}
-                    model={msg.metadata?.messageType !== 'system' ? undefined : undefined}
-                  />
-                );
-              }
-
-              // Complete assistant message
-              return (
-                <AssistantMessage
-                  key={msg.id}
-                  message={msg}
-                  onCopy={handleCopy}
-                  onRegenerate={handleRegenerate}
-                  onBookmark={handleBookmark}
-                  bookmarked={(() => {
-                    try {
-                      return localStorage.getItem(`bookmark:${msg.id}`) === '1';
-                    } catch {
-                      return false;
-                    }
-                  })()}
-                />
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
-          {showScrollBtn && (
+        {showModelInput && connected && capabilities.set_model && (
+          <div className={styles.modelInputBar} data-testid="model-input-bar">
+            <input
+              type="text"
+              className={styles.modelInput}
+              value={modelInput}
+              onChange={e => setModelInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleModelSubmit();
+                if (e.key === 'Escape') setShowModelInput(false);
+              }}
+              placeholder="Model ID (e.g. claude-opus-4-6)"
+              autoFocus
+              aria-label="Model ID input"
+            />
             <button
               type="button"
-              className={styles.scrollToBottom}
-              onClick={() => scrollToBottom('smooth')}
-              aria-label="Scroll to bottom"
+              className={styles.modelSubmitBtn}
+              onClick={handleModelSubmit}
+              data-testid="model-submit"
             >
-              <ArrowDownIcon className={styles.scrollToBottomIcon} />
-              {newMessageCount > 0 && (
-                <span className={styles.scrollToBottomBadge}>
-                  {newMessageCount > 99 ? '99+' : newMessageCount}
-                </span>
-              )}
+              Switch
             </button>
-          )}
-        </div>
-      ) : (
-        <SessionEmptyChat sessionName="Volundr" onSuggestionClick={text => handleSend(text, [])} />
-      )}
+          </div>
+        )}
 
-      <div className={styles.inputArea}>
-        <div className={styles.inputInner}>
-          {pendingPermissions.length > 0 && (
-            <PermissionStack permissions={pendingPermissions} onRespond={handlePermissionRespond} />
-          )}
-          <ChatInput
-            onSend={handleSend}
-            isLoading={isRunning}
-            onStop={handleStop}
-            disabled={!connected}
-            stopDisabled={!capabilities.interrupt}
-            sessionHost={sessionHost}
-            chatEndpoint={chatEndpoint}
-            availableCommands={availableCommands}
+        {!historyLoaded && connected && (
+          <div className={styles.historyLoading} data-testid="history-loading">
+            Loading conversation...
+          </div>
+        )}
+
+        {hasConversation ? (
+          <div className={styles.messagesContainer} ref={scrollContainerRef}>
+            <div className={styles.messagesInner}>
+              {visibleMessages.map(msg => {
+                // Room session messages — wrap with participant label and detail button
+                if (isRoomSession) {
+                  return (
+                    <RoomMessage
+                      key={msg.id}
+                      message={msg}
+                      onSelectAgent={handleSelectAgent}
+                      selectedAgentId={selectedAgentId}
+                      onCopy={handleCopy}
+                      onRegenerate={handleRegenerate}
+                      onBookmark={handleBookmark}
+                      bookmarked={(() => {
+                        try {
+                          return localStorage.getItem(`bookmark:${msg.id}`) === '1';
+                        } catch {
+                          return false;
+                        }
+                      })()}
+                    />
+                  );
+                }
+
+                // Single-agent session messages — standard rendering
+                // System messages rendered as compact inline notifications
+                if (msg.metadata?.messageType === 'system') {
+                  return <SystemMessage key={msg.id} message={msg} />;
+                }
+
+                if (msg.role === 'user') {
+                  return <UserMessage key={msg.id} message={msg} />;
+                }
+
+                // Streaming assistant message
+                if (msg.status === 'running') {
+                  return <StreamingMessage key={msg.id} content={msg.content} parts={msg.parts} />;
+                }
+
+                // Complete assistant message
+                return (
+                  <AssistantMessage
+                    key={msg.id}
+                    message={msg}
+                    onCopy={handleCopy}
+                    onRegenerate={handleRegenerate}
+                    onBookmark={handleBookmark}
+                    bookmarked={(() => {
+                      try {
+                        return localStorage.getItem(`bookmark:${msg.id}`) === '1';
+                      } catch {
+                        return false;
+                      }
+                    })()}
+                  />
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+            {showScrollBtn && (
+              <button
+                type="button"
+                className={styles.scrollToBottom}
+                onClick={() => scrollToBottom('smooth')}
+                aria-label="Scroll to bottom"
+              >
+                <ArrowDownIcon className={styles.scrollToBottomIcon} />
+                {newMessageCount > 0 && (
+                  <span className={styles.scrollToBottomBadge}>
+                    {newMessageCount > 99 ? '99+' : newMessageCount}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
+        ) : (
+          <SessionEmptyChat
+            sessionName="Volundr"
+            onSuggestionClick={text => handleSend(text, [])}
           />
+        )}
+
+        <div className={styles.inputArea}>
+          <div className={styles.inputInner}>
+            {pendingPermissions.length > 0 && (
+              <PermissionStack
+                permissions={pendingPermissions}
+                onRespond={handlePermissionRespond}
+              />
+            )}
+            <ChatInput
+              onSend={handleSend}
+              isLoading={isRunning}
+              onStop={handleStop}
+              disabled={!connected}
+              stopDisabled={!capabilities.interrupt}
+              sessionHost={sessionHost}
+              chatEndpoint={chatEndpoint}
+              availableCommands={availableCommands}
+            />
+          </div>
         </div>
       </div>
+
+      {selectedParticipant && (
+        <AgentDetailPanel participant={selectedParticipant} onClose={handleCloseDetail} />
+      )}
     </div>
   );
 }
