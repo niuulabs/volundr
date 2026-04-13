@@ -1145,7 +1145,10 @@ export function useSkuldChat(
   }, [resetStreamingRefs, url, clearSession]);
 
   const stableMessages = useMemo(() => messages, [messages]);
-  const stableParticipants = useMemo(() => participants as ReadonlyMap<string, RoomParticipant>, [participants]);
+  const stableParticipants = useMemo(
+    () => participants as ReadonlyMap<string, RoomParticipant>,
+    [participants]
+  );
   const stablePermissions = useMemo(() => pendingPermissions, [pendingPermissions]);
   const stableCommands = useMemo(() => availableCommands, [availableCommands]);
   const stableCapabilities = useMemo(() => capabilities, [capabilities]);

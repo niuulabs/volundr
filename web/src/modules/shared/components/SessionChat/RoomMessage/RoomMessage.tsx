@@ -1,6 +1,10 @@
 import { MarkdownContent } from '../MarkdownContent';
 import { ToolBlock, ToolGroupBlock, groupContentBlocks } from '../ToolBlock';
-import type { SkuldChatMessage, SkuldChatMessagePart, ParticipantStatus } from '@/modules/shared/hooks/useSkuldChat';
+import type {
+  SkuldChatMessage,
+  SkuldChatMessagePart,
+  ParticipantStatus,
+} from '@/modules/shared/hooks/useSkuldChat';
 import type { ContentBlock as ToolContentBlock } from '../ToolBlock';
 import styles from './RoomMessage.module.css';
 

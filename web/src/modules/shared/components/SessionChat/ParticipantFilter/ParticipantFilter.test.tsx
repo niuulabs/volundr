@@ -15,7 +15,9 @@ function makeParticipant(overrides: Partial<RoomParticipant> = {}): RoomParticip
   };
 }
 
-function makeParticipantsMap(participants: RoomParticipant[]): ReadonlyMap<string, RoomParticipant> {
+function makeParticipantsMap(
+  participants: RoomParticipant[]
+): ReadonlyMap<string, RoomParticipant> {
   return new Map(participants.map(p => [p.peerId, p]));
 }
 

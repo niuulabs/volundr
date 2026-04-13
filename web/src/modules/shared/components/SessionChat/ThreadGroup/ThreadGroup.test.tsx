@@ -30,7 +30,9 @@ function makeMessage(overrides: Partial<SkuldChatMessage> = {}): SkuldChatMessag
   };
 }
 
-function makeParticipantsMap(participants: RoomParticipant[]): ReadonlyMap<string, RoomParticipant> {
+function makeParticipantsMap(
+  participants: RoomParticipant[]
+): ReadonlyMap<string, RoomParticipant> {
   return new Map(participants.map(p => [p.peerId, p]));
 }
 
@@ -55,12 +57,23 @@ describe('ThreadGroup', () => {
   ]);
 
   const twoMessages = [
-    makeMessage({ id: 'msg-1', content: 'message one', participant: { peerId: 'peer-1', persona: 'Ravn-A', color: 'amber', participantType: 'ravn' } }),
-    makeMessage({ id: 'msg-2', content: 'message two', participantId: 'peer-2', participant: { peerId: 'peer-2', persona: 'Ravn-B', color: 'cyan', participantType: 'ravn' } }),
+    makeMessage({
+      id: 'msg-1',
+      content: 'message one',
+      participant: { peerId: 'peer-1', persona: 'Ravn-A', color: 'amber', participantType: 'ravn' },
+    }),
+    makeMessage({
+      id: 'msg-2',
+      content: 'message two',
+      participantId: 'peer-2',
+      participant: { peerId: 'peer-2', persona: 'Ravn-B', color: 'cyan', participantType: 'ravn' },
+    }),
   ];
 
   it('renders collapsed by default', () => {
-    const { container } = render(<ThreadGroup messages={twoMessages} participants={participants} />);
+    const { container } = render(
+      <ThreadGroup messages={twoMessages} participants={participants} />
+    );
     const body = container.querySelector('[data-expanded]');
     expect(body).toHaveAttribute('data-expanded', 'false');
   });
@@ -84,7 +97,9 @@ describe('ThreadGroup', () => {
   });
 
   it('collapses when header is clicked again', () => {
-    const { container } = render(<ThreadGroup messages={twoMessages} participants={participants} />);
+    const { container } = render(
+      <ThreadGroup messages={twoMessages} participants={participants} />
+    );
     fireEvent.click(screen.getByRole('button'));
     fireEvent.click(screen.getByRole('button'));
     const body = container.querySelector('[data-expanded]');

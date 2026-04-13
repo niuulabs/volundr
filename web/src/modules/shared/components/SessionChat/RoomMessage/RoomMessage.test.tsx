@@ -6,13 +6,19 @@ import { groupContentBlocks } from '../ToolBlock';
 
 // Mock MarkdownContent to keep tests simple and fast
 vi.mock('../MarkdownContent', () => ({
-  MarkdownContent: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
+  MarkdownContent: ({ content }: { content: string }) => (
+    <div data-testid="markdown">{content}</div>
+  ),
 }));
 
 // Mock ToolBlock/ToolGroupBlock — default returns empty array (no grouped blocks)
 vi.mock('../ToolBlock', () => ({
-  ToolBlock: ({ block }: { block: { name: string } }) => <div data-testid={`tool-block-${block.name}`} />,
-  ToolGroupBlock: ({ toolName }: { toolName: string }) => <div data-testid={`tool-group-${toolName}`} />,
+  ToolBlock: ({ block }: { block: { name: string } }) => (
+    <div data-testid={`tool-block-${block.name}`} />
+  ),
+  ToolGroupBlock: ({ toolName }: { toolName: string }) => (
+    <div data-testid={`tool-group-${toolName}`} />
+  ),
   groupContentBlocks: vi.fn(() => []),
 }));
 
@@ -101,9 +107,9 @@ describe('RoomMessage', () => {
   });
 
   it('skips empty text segments from groupContentBlocks', () => {
-    vi.mocked(groupContentBlocks).mockReturnValue([
-      { kind: 'text', text: '   ' },
-    ] as ReturnType<typeof groupContentBlocks>);
+    vi.mocked(groupContentBlocks).mockReturnValue([{ kind: 'text', text: '   ' }] as ReturnType<
+      typeof groupContentBlocks
+    >);
 
     const msg = makeMessage({
       parts: [{ type: 'text', text: '   ' }],

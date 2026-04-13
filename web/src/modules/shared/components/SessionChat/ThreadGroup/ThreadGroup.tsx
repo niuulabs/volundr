@@ -20,9 +20,7 @@ function buildThreadLabel(messages: readonly SkuldChatMessage[]): string {
   const count = messages.length;
   const participantStr = Array.from(personas).join(' \u2194 ');
   const msgWord = count === 1 ? 'message' : 'messages';
-  return participantStr
-    ? `${participantStr} \u2014 ${count} ${msgWord}`
-    : `${count} ${msgWord}`;
+  return participantStr ? `${participantStr} \u2014 ${count} ${msgWord}` : `${count} ${msgWord}`;
 }
 
 export function ThreadGroup({ messages, participants }: ThreadGroupProps) {
@@ -34,12 +32,7 @@ export function ThreadGroup({ messages, participants }: ThreadGroupProps) {
 
   return (
     <div className={styles.group}>
-      <button
-        type="button"
-        className={styles.header}
-        onClick={toggle}
-        aria-expanded={expanded}
-      >
+      <button type="button" className={styles.header} onClick={toggle} aria-expanded={expanded}>
         {expanded ? (
           <ChevronDown className={styles.chevron} />
         ) : (
@@ -55,9 +48,7 @@ export function ThreadGroup({ messages, participants }: ThreadGroupProps) {
               key={msg.id}
               message={msg}
               participantStatus={
-                msg.participantId
-                  ? participants.get(msg.participantId)?.status
-                  : undefined
+                msg.participantId ? participants.get(msg.participantId)?.status : undefined
               }
             />
           ))}

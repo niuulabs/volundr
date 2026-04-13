@@ -108,7 +108,7 @@ export function SessionChat({
   // Group consecutive internal messages by threadId for ThreadGroup rendering
   type MessageGroup =
     | { type: 'single'; message: (typeof visibleMessages)[number] }
-    | { type: 'thread'; threadId: string; messages: (typeof visibleMessages) };
+    | { type: 'thread'; threadId: string; messages: typeof visibleMessages };
 
   const messageGroups = useMemo((): MessageGroup[] => {
     if (!isRoomMode || showInternal) {
@@ -499,9 +499,7 @@ export function SessionChat({
                     key={msg.id}
                     message={msg}
                     participantStatus={
-                      msg.participantId
-                        ? participants.get(msg.participantId)?.status
-                        : undefined
+                      msg.participantId ? participants.get(msg.participantId)?.status : undefined
                     }
                   />
                 );

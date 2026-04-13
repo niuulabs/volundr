@@ -27,16 +27,16 @@ function makeMessage(overrides: Partial<SkuldChatMessage> = {}): SkuldChatMessag
   };
 }
 
-function makeParticipantsMap(participants: RoomParticipant[]): ReadonlyMap<string, RoomParticipant> {
+function makeParticipantsMap(
+  participants: RoomParticipant[]
+): ReadonlyMap<string, RoomParticipant> {
   return new Map(participants.map(p => [p.peerId, p]));
 }
 
 describe('useRoomState', () => {
   describe('isRoomMode', () => {
     it('is false when 0 participants', () => {
-      const { result } = renderHook(() =>
-        useRoomState([], new Map())
-      );
+      const { result } = renderHook(() => useRoomState([], new Map()));
       expect(result.current.isRoomMode).toBe(false);
     });
 
@@ -141,8 +141,12 @@ describe('useRoomState', () => {
     it('hides internal again after second toggle', () => {
       const { result } = renderHook(() => useRoomState(messages, participants));
 
-      act(() => { result.current.toggleInternal(); });
-      act(() => { result.current.toggleInternal(); });
+      act(() => {
+        result.current.toggleInternal();
+      });
+      act(() => {
+        result.current.toggleInternal();
+      });
 
       const ids = result.current.filteredMessages.map(m => m.id);
       expect(ids).not.toContain('msg-2');
@@ -155,7 +159,9 @@ describe('useRoomState', () => {
 
     it('showInternal becomes true after toggle', () => {
       const { result } = renderHook(() => useRoomState([], participants));
-      act(() => { result.current.toggleInternal(); });
+      act(() => {
+        result.current.toggleInternal();
+      });
       expect(result.current.showInternal).toBe(true);
     });
   });
@@ -181,7 +187,9 @@ describe('useRoomState', () => {
 
     it('updates via setActiveFilter', () => {
       const { result } = renderHook(() => useRoomState([], new Map()));
-      act(() => { result.current.setActiveFilter('peer-42'); });
+      act(() => {
+        result.current.setActiveFilter('peer-42');
+      });
       expect(result.current.activeFilter).toBe('peer-42');
     });
   });
