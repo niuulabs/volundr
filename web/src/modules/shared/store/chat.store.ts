@@ -13,6 +13,10 @@ interface SerializedMessage {
   readonly createdAt: string;
   readonly status: 'running' | 'complete' | 'error';
   readonly metadata?: SkuldChatMessage['metadata'];
+  readonly participantId?: string;
+  readonly participant?: SkuldChatMessage['participant'];
+  readonly threadId?: string;
+  readonly visibility?: string;
 }
 
 interface ChatStoreState {

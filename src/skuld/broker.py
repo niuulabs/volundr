@@ -373,6 +373,11 @@ class ConversationTurn:
     parts: list[dict] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     metadata: dict = field(default_factory=dict)
+    # Multi-participant fields (None in single-agent mode)
+    participant_id: str | None = None
+    participant_meta: dict | None = None
+    thread_id: str | None = None
+    visibility: str = "public"  # "public" | "internal"
 
 
 CHRONICLE_SUMMARY_PROMPT = """\
@@ -1355,9 +1360,7 @@ class Broker:
         Always emits the event — even when outcome extraction failed — so that
         downstream Tyr pipeline executors receive session completion signals.
         """
-        outcome_str = (
-            "SUCCESS" if self._artifacts.outcome_valid else "PARTIAL"
-        )
+        outcome_str = "SUCCESS" if self._artifacts.outcome_valid else "PARTIAL"
         source = f"ravn:{self.session_id}"
         persona = self._settings.session.name
 
@@ -1741,8 +1744,21 @@ async def get_conversation_history() -> dict:
             last_activity = broker._pending_assistant_content[-100:]
         elif broker._pending_reasoning_text:
             last_activity = "Thinking..."
+
+    def _serialize_turn(turn: ConversationTurn) -> dict:
+        d = asdict(turn)
+        # Omit optional participant fields when absent to keep JSON backward-compatible
+        if d["participant_id"] is None:
+            del d["participant_id"]
+        if d["participant_meta"] is None:
+            del d["participant_meta"]
+        if d["thread_id"] is None:
+            del d["thread_id"]
+        # Always include visibility so clients can rely on it being present
+        return d
+
     return {
-        "turns": [asdict(t) for t in broker._conversation_turns],
+        "turns": [_serialize_turn(t) for t in broker._conversation_turns],
         "is_active": is_active,
         "last_activity": last_activity,
     }

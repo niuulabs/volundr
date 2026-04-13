@@ -162,6 +162,14 @@ export interface ChatMessageMeta {
   turns?: number;
 }
 
+export interface ParticipantMeta {
+  readonly peerId: string;
+  readonly persona: string;
+  readonly color: string;
+  readonly participantType: 'human' | 'ravn';
+  readonly gatewayUrl?: string;
+}
+
 export interface SkuldChatMessage {
   readonly id: string;
   readonly role: ChatMessageRole;
@@ -171,6 +179,11 @@ export interface SkuldChatMessage {
   readonly createdAt: Date;
   readonly status: 'running' | 'complete' | 'error';
   readonly metadata?: ChatMessageMeta;
+  // Multi-participant fields (undefined in single-agent mode)
+  readonly participantId?: string;
+  readonly participant?: ParticipantMeta;
+  readonly threadId?: string;
+  readonly visibility?: string;
 }
 
 export type PermissionBehavior = 'allow' | 'deny' | 'allowForever';
@@ -197,6 +210,10 @@ interface ConversationTurn {
   parts: Array<Record<string, unknown>>;
   created_at: string;
   metadata: Record<string, unknown>;
+  participant_id?: string;
+  participant_meta?: Record<string, unknown>;
+  thread_id?: string;
+  visibility?: string;
 }
 
 /**
@@ -211,6 +228,20 @@ function transformTurns(turns: ConversationTurn[]): SkuldChatMessage[] {
     createdAt: new Date(turn.created_at),
     status: 'complete' as const,
     metadata: turn.metadata as ChatMessageMeta | undefined,
+    participantId: turn.participant_id,
+    participant: turn.participant_meta
+      ? ({
+          peerId: String(turn.participant_meta.peer_id ?? ''),
+          persona: String(turn.participant_meta.persona ?? ''),
+          color: String(turn.participant_meta.color ?? ''),
+          participantType: (turn.participant_meta.participant_type ?? 'human') as 'human' | 'ravn',
+          gatewayUrl: turn.participant_meta.gateway_url
+            ? String(turn.participant_meta.gateway_url)
+            : undefined,
+        } satisfies ParticipantMeta)
+      : undefined,
+    threadId: turn.thread_id,
+    visibility: turn.visibility,
   }));
 }
 
