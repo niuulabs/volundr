@@ -6,11 +6,14 @@ import type {
   PermissionBehavior,
   ContentBlock,
   AttachmentMeta,
+  ParticipantMeta,
 } from '@/modules/shared/hooks/useSkuldChat';
 import { cn } from '@/utils';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
 import { ChatInput } from './ChatInput';
 import { SessionEmptyChat } from './ChatEmptyStates';
+import { RoomMessage } from './RoomMessage';
+import { AgentDetailPanel } from './AgentDetailPanel';
 import type { FileAttachment } from './useFileAttachments';
 import styles from './SessionChat.module.css';
 
@@ -65,12 +68,34 @@ export function SessionChat({
   const [showThinkingMenu, setShowThinkingMenu] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
   const userSentRef = useRef(false);
   const prevMessageCountRef = useRef(0);
   const scrollLockUntilRef = useRef(0);
+
+  // Build a map of peerId → ParticipantMeta from all messages that carry participant data
+  const participantsMap = useMemo<Map<string, ParticipantMeta>>(() => {
+    const map = new Map<string, ParticipantMeta>();
+    for (const msg of messages) {
+      if (msg.participant) {
+        map.set(msg.participant.peerId, msg.participant);
+      }
+    }
+    return map;
+  }, [messages]);
+
+  const isRoomSession = participantsMap.size > 0;
+
+  const handleSelectAgent = useCallback((peerId: string) => {
+    setSelectedAgentId(prev => (prev === peerId ? null : peerId));
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedAgentId(null);
+  }, []);
 
   // Show welcome when only system messages exist (no real user/assistant conversation)
   const hasConversation = useMemo(
@@ -290,8 +315,14 @@ export function SessionChat({
     onMessageCountChange?.(visibleMessages.length);
   }, [visibleMessages.length, onMessageCountChange]);
 
+  const selectedParticipant = selectedAgentId ? participantsMap.get(selectedAgentId) : undefined;
+
   return (
-    <div className={cn(styles.wrapper, className)}>
+    <div
+      className={cn(styles.outerGrid, className)}
+      data-detail-open={selectedParticipant ? 'true' : undefined}
+    >
+    <div className={styles.wrapper}>
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
           <div className={styles.statusIndicator} data-connected={connected}>
@@ -403,6 +434,29 @@ export function SessionChat({
         <div className={styles.messagesContainer} ref={scrollContainerRef}>
           <div className={styles.messagesInner}>
             {visibleMessages.map(msg => {
+              // Room session messages — wrap with participant label and detail button
+              if (isRoomSession) {
+                return (
+                  <RoomMessage
+                    key={msg.id}
+                    message={msg}
+                    onSelectAgent={handleSelectAgent}
+                    selectedAgentId={selectedAgentId}
+                    onCopy={handleCopy}
+                    onRegenerate={handleRegenerate}
+                    onBookmark={handleBookmark}
+                    bookmarked={(() => {
+                      try {
+                        return localStorage.getItem(`bookmark:${msg.id}`) === '1';
+                      } catch {
+                        return false;
+                      }
+                    })()}
+                  />
+                );
+              }
+
+              // Single-agent session messages — standard rendering
               // System messages rendered as compact inline notifications
               if (msg.metadata?.messageType === 'system') {
                 return <SystemMessage key={msg.id} message={msg} />;
@@ -419,7 +473,6 @@ export function SessionChat({
                     key={msg.id}
                     content={msg.content}
                     parts={msg.parts}
-                    model={msg.metadata?.messageType !== 'system' ? undefined : undefined}
                   />
                 );
               }
@@ -481,6 +534,14 @@ export function SessionChat({
           />
         </div>
       </div>
+    </div>
+
+      {selectedParticipant && (
+        <AgentDetailPanel
+          participant={selectedParticipant}
+          onClose={handleCloseDetail}
+        />
+      )}
     </div>
   );
 }
