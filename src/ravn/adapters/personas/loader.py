@@ -826,7 +826,7 @@ class PersonaLoader(PersonaRegistryPort):
         dest_dir = Path.home() / ".ravn" / "personas"
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / f"{config.name}.yaml"
-        payload: dict[str, Any] = dataclasses.asdict(config)
+        payload: dict[str, Any] = config.to_dict()
         dest.write_text(_yaml.dump(payload, allow_unicode=True), encoding="utf-8")
 
     def delete(self, name: str) -> bool:
