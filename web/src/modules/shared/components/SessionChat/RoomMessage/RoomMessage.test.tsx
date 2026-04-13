@@ -149,4 +149,35 @@ describe('RoomMessage', () => {
     render(<RoomMessage message={msg} />);
     expect(screen.getByTestId('tool-group-Read')).toBeInTheDocument();
   });
+
+  it('includes tool_result parts in content blocks', () => {
+    vi.mocked(groupContentBlocks).mockReturnValue([
+      { kind: 'text', text: 'result included' },
+    ] as ReturnType<typeof groupContentBlocks>);
+
+    const msg = makeMessage({
+      parts: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }],
+    });
+    render(<RoomMessage message={msg} />);
+    // groupContentBlocks was called with a tool_result block
+    expect(vi.mocked(groupContentBlocks)).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'tool_result', tool_use_id: 'tool-1' }),
+      ])
+    );
+  });
+
+  it('returns null for unknown grouped item kind', () => {
+    vi.mocked(groupContentBlocks).mockReturnValue([
+      { kind: 'unknown_future_kind' } as unknown as ReturnType<typeof groupContentBlocks>[number],
+    ]);
+
+    const msg = makeMessage({
+      parts: [{ type: 'text', text: 'x' }],
+    });
+    const { container } = render(<RoomMessage message={msg} />);
+    // Content div should be empty — no markdown or tool blocks rendered
+    expect(container.querySelectorAll('[data-testid="markdown"]')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-testid^="tool-"]')).toHaveLength(0);
+  });
 });
