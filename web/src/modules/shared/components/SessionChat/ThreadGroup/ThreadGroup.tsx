@@ -45,7 +45,12 @@ function resolveThreadBorderColor(messages: readonly SkuldChatMessage[]): string
   return resolveParticipantColor(firstParticipant.color);
 }
 
-export function ThreadGroup({ messages, participants: _participants, isCollapsed, onToggle }: ThreadGroupProps) {
+export function ThreadGroup({
+  messages,
+  participants: _participants,
+  isCollapsed,
+  onToggle,
+}: ThreadGroupProps) {
   const label = buildThreadLabel(messages);
   const timeRange = buildTimeRange(messages);
   const borderColor = resolveThreadBorderColor(messages);
@@ -67,18 +72,13 @@ export function ThreadGroup({ messages, participants: _participants, isCollapsed
           <ChevronDown className={styles.chevron} />
         )}
         <span className={styles.label}>{label}</span>
-        {timeRange && (
-          <span className={styles.timeRange}>{timeRange}</span>
-        )}
+        {timeRange && <span className={styles.timeRange}>{timeRange}</span>}
       </button>
 
       <div className={styles.body} data-expanded={!isCollapsed}>
         <div className={styles.messages}>
           {messages.map(msg => (
-            <RoomMessage
-              key={msg.id}
-              message={msg}
-            />
+            <RoomMessage key={msg.id} message={msg} />
           ))}
         </div>
       </div>

@@ -223,12 +223,26 @@ describe('useRoomState', () => {
       const t0 = new Date('2024-01-01T12:03:00');
       const t1 = new Date('2024-01-01T12:07:00');
       const messages = [
-        makeMessage({ id: 'a', visibility: 'internal', threadId: 'tid-1', createdAt: t0, participantId: 'peer-1' }),
-        makeMessage({ id: 'b', visibility: 'internal', threadId: 'tid-1', createdAt: t1, participantId: 'peer-2' }),
+        makeMessage({
+          id: 'a',
+          visibility: 'internal',
+          threadId: 'tid-1',
+          createdAt: t0,
+          participantId: 'peer-1',
+        }),
+        makeMessage({
+          id: 'b',
+          visibility: 'internal',
+          threadId: 'tid-1',
+          createdAt: t1,
+          participantId: 'peer-2',
+        }),
       ];
       const { result } = renderHook(() => useRoomState(messages, participants));
 
-      act(() => { result.current.toggleInternal(); });
+      act(() => {
+        result.current.toggleInternal();
+      });
 
       const group = result.current.threadGroups.get('tid-1');
       expect(group).toBeDefined();
@@ -240,12 +254,12 @@ describe('useRoomState', () => {
     });
 
     it('does not group a single internal message', () => {
-      const messages = [
-        makeMessage({ visibility: 'internal', threadId: 'tid-1' }),
-      ];
+      const messages = [makeMessage({ visibility: 'internal', threadId: 'tid-1' })];
       const { result } = renderHook(() => useRoomState(messages, participants));
 
-      act(() => { result.current.toggleInternal(); });
+      act(() => {
+        result.current.toggleInternal();
+      });
 
       expect(result.current.threadGroups.size).toBe(0);
     });
@@ -258,7 +272,9 @@ describe('useRoomState', () => {
       ];
       const { result } = renderHook(() => useRoomState(messages, participants));
 
-      act(() => { result.current.toggleInternal(); });
+      act(() => {
+        result.current.toggleInternal();
+      });
 
       expect(result.current.threadGroups.size).toBe(0);
     });
@@ -273,7 +289,9 @@ describe('useRoomState', () => {
       ];
       const { result } = renderHook(() => useRoomState(messages, participants));
 
-      act(() => { result.current.toggleInternal(); });
+      act(() => {
+        result.current.toggleInternal();
+      });
 
       expect(result.current.threadGroups.has('tid-1')).toBe(true);
       expect(result.current.threadGroups.has('tid-2')).toBe(true);
@@ -287,7 +305,9 @@ describe('useRoomState', () => {
       ];
       const { result } = renderHook(() => useRoomState(messages, participants));
 
-      act(() => { result.current.toggleInternal(); });
+      act(() => {
+        result.current.toggleInternal();
+      });
 
       expect(result.current.threadGroups.size).toBe(0);
     });
@@ -310,7 +330,9 @@ describe('useRoomState', () => {
       const messages = makeThreadMessages('tid-1');
       const { result } = renderHook(() => useRoomState(messages, participants));
 
-      act(() => { result.current.toggleInternal(); });
+      act(() => {
+        result.current.toggleInternal();
+      });
 
       expect(result.current.collapsedThreads.has('tid-1')).toBe(true);
     });
@@ -319,8 +341,12 @@ describe('useRoomState', () => {
       const messages = makeThreadMessages('tid-1');
       const { result } = renderHook(() => useRoomState(messages, participants));
 
-      act(() => { result.current.toggleInternal(); });
-      act(() => { result.current.toggleThread('tid-1'); });
+      act(() => {
+        result.current.toggleInternal();
+      });
+      act(() => {
+        result.current.toggleThread('tid-1');
+      });
 
       expect(result.current.collapsedThreads.has('tid-1')).toBe(false);
     });
@@ -329,9 +355,15 @@ describe('useRoomState', () => {
       const messages = makeThreadMessages('tid-1');
       const { result } = renderHook(() => useRoomState(messages, participants));
 
-      act(() => { result.current.toggleInternal(); });
-      act(() => { result.current.toggleThread('tid-1'); });
-      act(() => { result.current.toggleThread('tid-1'); });
+      act(() => {
+        result.current.toggleInternal();
+      });
+      act(() => {
+        result.current.toggleThread('tid-1');
+      });
+      act(() => {
+        result.current.toggleThread('tid-1');
+      });
 
       expect(result.current.collapsedThreads.has('tid-1')).toBe(true);
     });
@@ -340,7 +372,9 @@ describe('useRoomState', () => {
       const messages = makeThreadMessages('tid-1');
       const { result } = renderHook(() => useRoomState(messages, participants));
 
-      act(() => { result.current.toggleInternal(); });
+      act(() => {
+        result.current.toggleInternal();
+      });
 
       // Only tid-1 exists as a group — collapsedThreads should only contain known IDs
       expect(result.current.collapsedThreads.size).toBe(1);

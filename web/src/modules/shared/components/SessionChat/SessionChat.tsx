@@ -138,7 +138,8 @@ export function SessionChat({
 
   // Thread grouping: consecutive internal messages with same threadId collapse into ThreadGroup
   const renderedGroups = useMemo((): MessageGroup[] => {
-    if (!isRoomMode || !showInternal) return visibleMessages.map(m => ({ type: 'single', message: m }));
+    if (!isRoomMode || !showInternal)
+      return visibleMessages.map(m => ({ type: 'single', message: m }));
 
     const result: MessageGroup[] = [];
     let i = 0;
@@ -545,13 +546,7 @@ export function SessionChat({
 
                 // Streaming assistant message
                 if (msg.status === 'running') {
-                  return (
-                    <StreamingMessage
-                      key={msg.id}
-                      content={msg.content}
-                      parts={msg.parts}
-                    />
-                  );
+                  return <StreamingMessage key={msg.id} content={msg.content} parts={msg.parts} />;
                 }
 
                 // Complete assistant message
