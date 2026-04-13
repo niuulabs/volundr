@@ -748,6 +748,7 @@ class Settings(BaseSettings):
     ai_models: list[AIModelConfig] = Field(
         default_factory=lambda: [
             AIModelConfig(id="claude-opus-4-6", name="Opus 4.6"),
+            AIModelConfig(id="claude-opus-4-5-20251101", name="Opus 4.5"),
             AIModelConfig(id="claude-sonnet-4-6", name="Sonnet 4.6"),
             AIModelConfig(id="claude-haiku-4-5-20251001", name="Haiku 4.5"),
         ]

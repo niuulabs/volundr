@@ -16,6 +16,9 @@ global:
     - id: "claude-opus-4-6"
       name: "Opus 4.6"
       costPerMillionTokens: 15.00
+    - id: "claude-opus-4-5-20251101"
+      name: "Opus 4.5"
+      costPerMillionTokens: 15.00
     - id: "claude-sonnet-4-6"
       name: "Sonnet 4.6"
       costPerMillionTokens: 3.00
