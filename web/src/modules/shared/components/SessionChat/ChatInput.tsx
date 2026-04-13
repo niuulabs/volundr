@@ -21,7 +21,11 @@ import styles from './ChatInput.module.css';
 
 interface ChatInputProps {
   onSend: (text: string, attachments: FileAttachment[]) => void;
-  onSendDirected?: (participants: RoomParticipant[], text: string, attachments: FileAttachment[]) => void;
+  onSendDirected?: (
+    participants: RoomParticipant[],
+    text: string,
+    attachments: FileAttachment[]
+  ) => void;
   isLoading: boolean;
   onStop: () => void;
   disabled?: boolean;
@@ -143,9 +147,7 @@ export function ChatInput({
 
     // Separate agent mentions from file mentions
     const agentMentions = mentionMenu.mentions
-      .filter(
-        (m): m is { kind: 'agent'; participant: RoomParticipant } => m.kind === 'agent'
-      )
+      .filter((m): m is { kind: 'agent'; participant: RoomParticipant } => m.kind === 'agent')
       .map(m => m.participant);
 
     const fileMentions = mentionMenu.mentions.filter(
@@ -170,7 +172,15 @@ export function ChatInput({
       const id = m.kind === 'file' ? m.entry.path : m.participant.peerId;
       mentionMenu.removeMention(id);
     }
-  }, [input, disabled, onSend, onSendDirected, mentionMenu, fileAttachmentsList, clearFileAttachments]);
+  }, [
+    input,
+    disabled,
+    onSend,
+    onSendDirected,
+    mentionMenu,
+    fileAttachmentsList,
+    clearFileAttachments,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -198,8 +208,7 @@ export function ChatInput({
             // For files: directories expand on Enter; only select files
             // For agents: select immediately
             if (selected) {
-              const isDirectory =
-                selected.kind === 'file' && selected.entry.type === 'directory';
+              const isDirectory = selected.kind === 'file' && selected.entry.type === 'directory';
               if (!isDirectory) {
                 const selectedLabel = mentionMenu.selectItem(selected);
                 const textarea = textareaRef.current;

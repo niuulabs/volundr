@@ -150,13 +150,37 @@ describe('ChatInput', () => {
     filter: '',
     selectedIndex: 0,
     items: [] as Array<
-      | { kind: 'file'; entry: { name: string; path: string; type: 'file' | 'directory' }; depth: number }
-      | { kind: 'agent'; participant: { peerId: string; persona: string; color: string; participantType: string; status: string; joinedAt: Date } }
+      | {
+          kind: 'file';
+          entry: { name: string; path: string; type: 'file' | 'directory' };
+          depth: number;
+        }
+      | {
+          kind: 'agent';
+          participant: {
+            peerId: string;
+            persona: string;
+            color: string;
+            participantType: string;
+            status: string;
+            joinedAt: Date;
+          };
+        }
     >,
     loading: false,
     mentions: [] as Array<
       | { kind: 'file'; entry: { name: string; path: string; type: 'file' | 'directory' } }
-      | { kind: 'agent'; participant: { peerId: string; persona: string; color: string; participantType: string; status: string; joinedAt: Date } }
+      | {
+          kind: 'agent';
+          participant: {
+            peerId: string;
+            persona: string;
+            color: string;
+            participantType: string;
+            status: string;
+            joinedAt: Date;
+          };
+        }
     >,
     handleKeyDown: vi.fn(() => false),
     handleChange: vi.fn(),
@@ -847,7 +871,13 @@ describe('ChatInput', () => {
       vi.mocked(useMentionMenu).mockReturnValue({
         ...defaultMentionMenu,
         isOpen: true,
-        items: [{ kind: 'file', entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' }, depth: 0 }],
+        items: [
+          {
+            kind: 'file',
+            entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' },
+            depth: 0,
+          },
+        ],
         selectedIndex: 0,
         handleKeyDown,
         selectItem,
@@ -943,7 +973,13 @@ describe('ChatInput', () => {
       vi.mocked(useMentionMenu).mockReturnValue({
         ...defaultMentionMenu,
         isOpen: true,
-        items: [{ kind: 'file', entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' }, depth: 0 }],
+        items: [
+          {
+            kind: 'file',
+            entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' },
+            depth: 0,
+          },
+        ],
         selectedIndex: 0,
         handleKeyDown,
         selectItem,
@@ -1155,7 +1191,9 @@ describe('ChatInput', () => {
     it('renders mention pills when file mentions exist', () => {
       vi.mocked(useMentionMenu).mockReturnValue({
         ...defaultMentionMenu,
-        mentions: [{ kind: 'file', entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' } }],
+        mentions: [
+          { kind: 'file', entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' } },
+        ],
       });
 
       renderInput();
@@ -1188,7 +1226,9 @@ describe('ChatInput', () => {
       const removeMention = vi.fn();
       vi.mocked(useMentionMenu).mockReturnValue({
         ...defaultMentionMenu,
-        mentions: [{ kind: 'file', entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' } }],
+        mentions: [
+          { kind: 'file', entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' } },
+        ],
         removeMention,
       });
 
@@ -1205,7 +1245,9 @@ describe('ChatInput', () => {
       const removeMention = vi.fn();
       vi.mocked(useMentionMenu).mockReturnValue({
         ...defaultMentionMenu,
-        mentions: [{ kind: 'file', entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' } }],
+        mentions: [
+          { kind: 'file', entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' } },
+        ],
         removeMention,
       });
 
@@ -1218,17 +1260,19 @@ describe('ChatInput', () => {
     it('renders agent mention pills', () => {
       vi.mocked(useMentionMenu).mockReturnValue({
         ...defaultMentionMenu,
-        mentions: [{
-          kind: 'agent',
-          participant: {
-            peerId: 'peer-alpha',
-            persona: 'Ravn-Alpha',
-            color: '#a855f7',
-            participantType: 'ravn',
-            status: 'idle',
-            joinedAt: new Date(),
+        mentions: [
+          {
+            kind: 'agent',
+            participant: {
+              peerId: 'peer-alpha',
+              persona: 'Ravn-Alpha',
+              color: '#a855f7',
+              participantType: 'ravn',
+              status: 'idle',
+              joinedAt: new Date(),
+            },
           },
-        }],
+        ],
       });
 
       renderInput();
@@ -1261,11 +1305,7 @@ describe('ChatInput', () => {
       fireEvent.change(textarea, { target: { value: 'hello' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
-      expect(onSendDirected).toHaveBeenCalledWith(
-        [agentParticipant],
-        '@Ravn-Alpha hello',
-        []
-      );
+      expect(onSendDirected).toHaveBeenCalledWith([agentParticipant], '@Ravn-Alpha hello', []);
       expect(onSend).not.toHaveBeenCalled();
     });
 
@@ -1331,7 +1371,13 @@ describe('ChatInput', () => {
       vi.mocked(useMentionMenu).mockReturnValue({
         ...defaultMentionMenu,
         isOpen: true,
-        items: [{ kind: 'file', entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' }, depth: 0 }],
+        items: [
+          {
+            kind: 'file',
+            entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' },
+            depth: 0,
+          },
+        ],
       });
 
       renderInput();
@@ -1344,7 +1390,13 @@ describe('ChatInput', () => {
       vi.mocked(useMentionMenu).mockReturnValue({
         ...defaultMentionMenu,
         isOpen: true,
-        items: [{ kind: 'file', entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' }, depth: 0 }],
+        items: [
+          {
+            kind: 'file',
+            entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' },
+            depth: 0,
+          },
+        ],
         selectItem,
       });
 
@@ -1370,7 +1422,13 @@ describe('ChatInput', () => {
       vi.mocked(useMentionMenu).mockReturnValue({
         ...defaultMentionMenu,
         isOpen: true,
-        items: [{ kind: 'file', entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' }, depth: 0 }],
+        items: [
+          {
+            kind: 'file',
+            entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' },
+            depth: 0,
+          },
+        ],
         selectItem,
       });
 
@@ -1414,7 +1472,13 @@ describe('ChatInput', () => {
       vi.mocked(useMentionMenu).mockReturnValue({
         ...defaultMentionMenu,
         isOpen: true,
-        items: [{ kind: 'file', entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' }, depth: 0 }],
+        items: [
+          {
+            kind: 'file',
+            entry: { name: 'utils.ts', path: 'src/utils.ts', type: 'file' },
+            depth: 0,
+          },
+        ],
       });
 
       renderInput();

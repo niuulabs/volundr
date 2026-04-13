@@ -92,9 +92,7 @@ export function MentionMenu({
 
       {hasFiles && (
         <>
-          <div className={styles.sectionHeader}>
-            {hasAgents ? 'Files' : 'Files & Directories'}
-          </div>
+          <div className={styles.sectionHeader}>{hasAgents ? 'Files' : 'Files & Directories'}</div>
           <ul className={styles.list}>
             {fileItems.map(item => {
               if (item.kind !== 'file') return null;

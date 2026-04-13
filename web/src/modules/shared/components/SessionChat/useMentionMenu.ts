@@ -262,9 +262,7 @@ export function useMentionMenu(
 
         // Insert children right after the parent directory
         setFileItems(prev => {
-          const parentIndex = prev.findIndex(
-            i => i.kind === 'file' && i.entry.path === dirPath
-          );
+          const parentIndex = prev.findIndex(i => i.kind === 'file' && i.entry.path === dirPath);
           if (parentIndex === -1) {
             return prev;
           }
@@ -284,9 +282,7 @@ export function useMentionMenu(
       if (item.kind === 'agent') {
         setMentions(prev => {
           if (
-            prev.some(
-              m => m.kind === 'agent' && m.participant.peerId === item.participant.peerId
-            )
+            prev.some(m => m.kind === 'agent' && m.participant.peerId === item.participant.peerId)
           ) {
             return prev;
           }

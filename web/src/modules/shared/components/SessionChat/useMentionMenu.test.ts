@@ -647,7 +647,11 @@ describe('useMentionMenu', () => {
   // ── Agent mention tests ────────────────────────────────────────────────
 
   describe('with participants', () => {
-    const alpha = makeParticipant({ peerId: 'peer-alpha', persona: 'Ravn-Alpha', color: '#a855f7' });
+    const alpha = makeParticipant({
+      peerId: 'peer-alpha',
+      persona: 'Ravn-Alpha',
+      color: '#a855f7',
+    });
     const beta = makeParticipant({ peerId: 'peer-beta', persona: 'Ravn-Beta', color: '#06b6d4' });
     const human = makeParticipant({
       peerId: 'peer-human',
@@ -659,9 +663,7 @@ describe('useMentionMenu', () => {
     it('shows agents first when participants provided', async () => {
       const pMap = makeParticipantsMap([alpha, beta]);
 
-      const { result } = renderHook(() =>
-        useMentionMenu('session-1', 'pod.local', null, pMap)
-      );
+      const { result } = renderHook(() => useMentionMenu('session-1', 'pod.local', null, pMap));
 
       await act(async () => {
         result.current.handleChange('@', 1);
@@ -682,9 +684,7 @@ describe('useMentionMenu', () => {
     it('excludes human participants from agent items', async () => {
       const pMap = makeParticipantsMap([alpha, human]);
 
-      const { result } = renderHook(() =>
-        useMentionMenu('session-1', 'pod.local', null, pMap)
-      );
+      const { result } = renderHook(() => useMentionMenu('session-1', 'pod.local', null, pMap));
 
       await act(async () => {
         result.current.handleChange('@', 1);
@@ -700,9 +700,7 @@ describe('useMentionMenu', () => {
     it('fuzzy filters agent items by persona name', async () => {
       const pMap = makeParticipantsMap([alpha, beta]);
 
-      const { result } = renderHook(() =>
-        useMentionMenu('session-1', 'pod.local', null, pMap)
-      );
+      const { result } = renderHook(() => useMentionMenu('session-1', 'pod.local', null, pMap));
 
       await act(async () => {
         result.current.handleChange('@alpha', 6);
@@ -718,9 +716,7 @@ describe('useMentionMenu', () => {
     it('selectItem adds agent mention and returns persona name', async () => {
       const pMap = makeParticipantsMap([alpha]);
 
-      const { result } = renderHook(() =>
-        useMentionMenu('session-1', 'pod.local', null, pMap)
-      );
+      const { result } = renderHook(() => useMentionMenu('session-1', 'pod.local', null, pMap));
 
       await act(async () => {
         result.current.handleChange('@', 1);
@@ -745,9 +741,7 @@ describe('useMentionMenu', () => {
     it('selectItem does not add duplicate agent mentions', async () => {
       const pMap = makeParticipantsMap([alpha]);
 
-      const { result } = renderHook(() =>
-        useMentionMenu('session-1', 'pod.local', null, pMap)
-      );
+      const { result } = renderHook(() => useMentionMenu('session-1', 'pod.local', null, pMap));
 
       await act(async () => {
         result.current.handleChange('@', 1);
@@ -775,9 +769,7 @@ describe('useMentionMenu', () => {
     it('removeMention removes agent by peerId', async () => {
       const pMap = makeParticipantsMap([alpha]);
 
-      const { result } = renderHook(() =>
-        useMentionMenu('session-1', 'pod.local', null, pMap)
-      );
+      const { result } = renderHook(() => useMentionMenu('session-1', 'pod.local', null, pMap));
 
       await act(async () => {
         result.current.handleChange('@', 1);
@@ -800,9 +792,7 @@ describe('useMentionMenu', () => {
     it('opens with agent-only items when no apiBase', async () => {
       const pMap = makeParticipantsMap([alpha]);
 
-      const { result } = renderHook(() =>
-        useMentionMenu('session-1', null, null, pMap)
-      );
+      const { result } = renderHook(() => useMentionMenu('session-1', null, null, pMap));
 
       await act(async () => {
         result.current.handleChange('@', 1);
@@ -817,9 +807,7 @@ describe('useMentionMenu', () => {
     it('expandDirectory does nothing for agent items', async () => {
       const pMap = makeParticipantsMap([alpha]);
 
-      const { result } = renderHook(() =>
-        useMentionMenu('session-1', 'pod.local', null, pMap)
-      );
+      const { result } = renderHook(() => useMentionMenu('session-1', 'pod.local', null, pMap));
 
       await act(async () => {
         result.current.handleChange('@', 1);
@@ -841,9 +829,7 @@ describe('useMentionMenu', () => {
       mockFetchResponse(DEFAULT_FILES);
       const pMap = makeParticipantsMap([alpha]);
 
-      const { result } = renderHook(() =>
-        useMentionMenu('session-1', 'pod.local', null, pMap)
-      );
+      const { result } = renderHook(() => useMentionMenu('session-1', 'pod.local', null, pMap));
 
       await act(async () => {
         result.current.handleChange('@', 1);
