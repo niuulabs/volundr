@@ -2044,4 +2044,128 @@ describe('useSkuldChat', () => {
     expect(result.current.capabilities.set_model).toBe(false);
     expect(result.current.capabilities.cli_websocket).toBe(false);
   });
+
+  // ── transformTurns: participant field mapping ────────────────────────────
+
+  it('maps participant_meta from history to ParticipantMeta', async () => {
+    const turns = [
+      {
+        id: 'turn-p1',
+        role: 'assistant',
+        content: 'Hi from bot',
+        parts: [],
+        created_at: '2026-01-01T00:00:00Z',
+        metadata: {},
+        participant_id: 'agent-1',
+        participant_meta: {
+          peer_id: 'agent-1',
+          persona: 'Ravn',
+          color: 'cyan',
+          participant_type: 'ravn',
+          gateway_url: 'wss://gateway/ravn',
+        },
+        thread_id: 'thread-abc',
+        visibility: 'public',
+      },
+    ];
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ turns }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    setupMock();
+    const { result } = renderHook(() => useSkuldChat('wss://test-host/session'));
+
+    await vi.waitFor(() => {
+      expect(result.current.historyLoaded).toBe(true);
+    });
+
+    const msg = result.current.messages[0];
+    expect(msg.participantId).toBe('agent-1');
+    expect(msg.participant?.peerId).toBe('agent-1');
+    expect(msg.participant?.persona).toBe('Ravn');
+    expect(msg.participant?.color).toBe('cyan');
+    expect(msg.participant?.participantType).toBe('ravn');
+    expect(msg.participant?.gatewayUrl).toBe('wss://gateway/ravn');
+    expect(msg.threadId).toBe('thread-abc');
+    expect(msg.visibility).toBe('public');
+
+    vi.unstubAllGlobals();
+  });
+
+  it('maps turns without participant_meta to undefined participant fields', async () => {
+    const turns = [
+      {
+        id: 'turn-np',
+        role: 'user',
+        content: 'plain',
+        parts: [],
+        created_at: '2026-01-01T00:00:00Z',
+        metadata: {},
+      },
+    ];
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ turns }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    setupMock();
+    const { result } = renderHook(() => useSkuldChat('wss://test-host/session'));
+
+    await vi.waitFor(() => {
+      expect(result.current.historyLoaded).toBe(true);
+    });
+
+    const msg = result.current.messages[0];
+    expect(msg.participantId).toBeUndefined();
+    expect(msg.participant).toBeUndefined();
+    expect(msg.threadId).toBeUndefined();
+    expect(msg.visibility).toBeUndefined();
+
+    vi.unstubAllGlobals();
+  });
+
+  it('maps participant_meta with null gateway_url to undefined gatewayUrl', async () => {
+    const turns = [
+      {
+        id: 'turn-human',
+        role: 'user',
+        content: 'hello',
+        parts: [],
+        created_at: '2026-01-01T00:00:00Z',
+        metadata: {},
+        participant_id: 'human-1',
+        participant_meta: {
+          peer_id: 'human-1',
+          persona: 'Alice',
+          color: 'amber',
+          participant_type: 'human',
+          gateway_url: null,
+        },
+      },
+    ];
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ turns }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    setupMock();
+    const { result } = renderHook(() => useSkuldChat('wss://test-host/session'));
+
+    await vi.waitFor(() => {
+      expect(result.current.historyLoaded).toBe(true);
+    });
+
+    const msg = result.current.messages[0];
+    expect(msg.participant?.participantType).toBe('human');
+    expect(msg.participant?.gatewayUrl).toBeUndefined();
+
+    vi.unstubAllGlobals();
+  });
 });

@@ -88,10 +88,7 @@ describe('chat store — participant field serialization', () => {
   it('preserves visibility through serialization round-trip', () => {
     const { setMessages, getMessages } = useChatStore.getState();
     const url = 'wss://host/session';
-    const msgs = [
-      makeMessage({ visibility: 'public' }),
-      makeMessage({ visibility: 'internal' }),
-    ];
+    const msgs = [makeMessage({ visibility: 'public' }), makeMessage({ visibility: 'internal' })];
 
     setMessages(url, msgs);
     const restored = getMessages(url);
@@ -140,7 +137,12 @@ describe('chat store — participant field serialization', () => {
     const url = 'wss://host/session';
     const msgs = [
       makeMessage({ id: 'plain', role: 'user', content: 'no participant' }),
-      makeMessage({ id: 'with-p', role: 'assistant', participantId: 'bot', participant: ravnParticipant }),
+      makeMessage({
+        id: 'with-p',
+        role: 'assistant',
+        participantId: 'bot',
+        participant: ravnParticipant,
+      }),
     ];
 
     setMessages(url, msgs);
