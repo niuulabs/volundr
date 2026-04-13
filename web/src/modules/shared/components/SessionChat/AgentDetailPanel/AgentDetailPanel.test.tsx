@@ -102,6 +102,30 @@ describe('AgentDetailPanel', () => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 
+    it('does not call onClose when Escape is pressed inside an input', () => {
+      setupDetailMock();
+      const onClose = vi.fn();
+      render(<AgentDetailPanel participant={makeParticipant()} onClose={onClose} />);
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      input.focus();
+      fireEvent.keyDown(input, { key: 'Escape', target: input });
+      expect(onClose).not.toHaveBeenCalled();
+      document.body.removeChild(input);
+    });
+
+    it('does not call onClose when Escape is pressed inside a textarea', () => {
+      setupDetailMock();
+      const onClose = vi.fn();
+      render(<AgentDetailPanel participant={makeParticipant()} onClose={onClose} />);
+      const textarea = document.createElement('textarea');
+      document.body.appendChild(textarea);
+      textarea.focus();
+      fireEvent.keyDown(textarea, { key: 'Escape', target: textarea });
+      expect(onClose).not.toHaveBeenCalled();
+      document.body.removeChild(textarea);
+    });
+
     it('shows idle activity status when not running', () => {
       setupDetailMock({ isRunning: false });
       render(<AgentDetailPanel participant={makeParticipant()} onClose={vi.fn()} />);

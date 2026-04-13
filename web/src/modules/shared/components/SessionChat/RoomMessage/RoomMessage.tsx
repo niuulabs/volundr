@@ -1,6 +1,7 @@
 import { Eye } from 'lucide-react';
 import { cn } from '@/utils';
 import type { SkuldChatMessage, ParticipantMeta } from '@/modules/shared/hooks/useSkuldChat';
+import { resolveParticipantColor } from '@/modules/shared/utils/participantColor';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from '../ChatMessages';
 import styles from './RoomMessage.module.css';
 
@@ -16,19 +17,6 @@ interface RoomMessageProps {
   bookmarked?: boolean;
 }
 
-function participantColor(color: string): string {
-  const colorMap: Record<string, string> = {
-    amber: 'var(--color-accent-amber)',
-    cyan: 'var(--color-accent-cyan)',
-    emerald: 'var(--color-accent-emerald)',
-    purple: 'var(--color-accent-purple)',
-    red: 'var(--color-accent-red)',
-    indigo: 'var(--color-accent-indigo)',
-    orange: 'var(--color-accent-orange)',
-  };
-  return colorMap[color] ?? 'var(--color-text-secondary)';
-}
-
 interface ParticipantLabelProps {
   participant: ParticipantMeta;
   onSelectAgent?: (peerId: string) => void;
@@ -36,7 +24,7 @@ interface ParticipantLabelProps {
 }
 
 function ParticipantLabel({ participant, onSelectAgent, isSelected }: ParticipantLabelProps) {
-  const color = participantColor(participant.color);
+  const color = resolveParticipantColor(participant.color);
   const isRavn = participant.participantType === 'ravn';
   const canSelect = isRavn && participant.gatewayUrl && onSelectAgent;
 

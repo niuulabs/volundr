@@ -2,24 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Wifi, WifiOff, ArrowDownIcon } from 'lucide-react';
 import type { ParticipantMeta } from '@/modules/shared/hooks/useSkuldChat';
 import { useAgentDetail } from '@/modules/shared/hooks/useAgentDetail';
+import { resolveParticipantColor } from '@/modules/shared/utils/participantColor';
 import { AssistantMessage, StreamingMessage, SystemMessage, UserMessage } from '../ChatMessages';
 import styles from './AgentDetailPanel.module.css';
 
 const SCROLL_THRESHOLD = 150;
-
-const COLOR_MAP: Record<string, string> = {
-  amber: 'var(--color-accent-amber)',
-  cyan: 'var(--color-accent-cyan)',
-  emerald: 'var(--color-accent-emerald)',
-  purple: 'var(--color-accent-purple)',
-  red: 'var(--color-accent-red)',
-  indigo: 'var(--color-accent-indigo)',
-  orange: 'var(--color-accent-orange)',
-};
-
-function resolveColor(color: string): string {
-  return COLOR_MAP[color] ?? 'var(--color-text-secondary)';
-}
 
 interface AgentDetailPanelProps {
   /** The participant whose event stream should be shown */
@@ -45,7 +32,7 @@ export function AgentDetailPanel({ participant, onClose }: AgentDetailPanelProps
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [newCount, setNewCount] = useState(0);
 
-  const accentColor = resolveColor(participant.color);
+  const accentColor = resolveParticipantColor(participant.color);
 
   // Determine activity status label
   const activityStatus = isRunning ? 'active' : 'idle';
@@ -87,10 +74,13 @@ export function AgentDetailPanel({ participant, onClose }: AgentDetailPanelProps
     setNewCount(prev => prev + delta);
   }, [messages.length]);
 
-  // Close on Escape key
+  // Close on Escape key (skip when focus is inside an input/textarea/select)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      onClose();
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
