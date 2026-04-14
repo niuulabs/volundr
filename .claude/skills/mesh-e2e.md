@@ -7,18 +7,26 @@ description: Run end-to-end validation of the Ravn mesh architecture
 
 Validates the full mesh event cascade works correctly across all three personas.
 
-## What It Tests
+## What It Tests (Closed Loop)
 
 ```
-test-publisher → code.changed → reviewer (node 2)
-                                    ↓
-                             review.completed
-                                ↓      ↓
-                             coder   security
-                            (node 1) (node 3)
-                                        ↓
-                             security.completed
+test-publisher → code.changed ──→ reviewer (node 2) ←──┐
+                                       ↓               │
+                                review.completed       │
+                                   ↓      ↓            │
+                                coder   security       │
+                               (node 1) (node 3)       │
+                                  ↓                    │
+                             code.changed (fix) ───────┘
 ```
+
+The test verifies:
+1. Reviewer receives initial `code.changed`
+2. Reviewer publishes `review.completed`
+3. Coder receives `review.completed`
+4. Coder applies fixes and publishes `code.changed`
+5. Security receives `review.completed`
+6. **Reviewer receives coder's fix (loop closes)**
 
 ## Quick Start
 
