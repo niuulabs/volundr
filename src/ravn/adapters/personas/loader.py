@@ -53,7 +53,8 @@ from niuu.domain.outcome import OutcomeField, OutcomeSchema, generate_outcome_in
 from ravn.config import ProjectConfig, _safe_int
 from ravn.ports.persona import PersonaRegistryPort
 
-_DEFAULT_PERSONAS_DIR = Path.home() / ".ravn" / "personas"
+# Bundled personas shipped with the ravn package (src/ravn/personas/*.yaml)
+_BUILTIN_PERSONAS_DIR = Path(__file__).parent.parent.parent / "personas"
 
 # ---------------------------------------------------------------------------
 # Data models
@@ -2105,20 +2106,21 @@ class PersonaLoader(PersonaRegistryPort):
     **Default mode** (``persona_dirs=None``):
       1. Project-local: ``<cwd>/.ravn/personas/<name>.yaml``
       2. User-global: ``~/.ravn/personas/<name>.yaml``
-      3. Built-in personas (if *include_builtin* is ``True``)
+      3. Bundled: ``src/ravn/personas/<name>.yaml`` (shipped with the package)
+      4. Built-in dict (if *include_builtin* is ``True``)
 
     **Explicit mode** (``persona_dirs=[...]``):
       1. Each directory in *persona_dirs*, in order (highest priority first)
-      2. Built-in personas (if *include_builtin* is ``True``)
+      2. Built-in dict (if *include_builtin* is ``True``)
 
-      When *persona_dirs* is set, the project-local and user-global paths
-      are **not** added automatically.
+      When *persona_dirs* is set, the project-local, user-global, and bundled
+      paths are **not** added automatically.
 
     Args:
         persona_dirs: Explicit list of directories to search (highest priority
-            first).  When ``None``, uses default two-layer discovery:
-            ``<cwd>/.ravn/personas/`` → ``~/.ravn/personas/``.
-        include_builtin: Whether to include built-in personas.
+            first).  When ``None``, uses default three-layer discovery:
+            ``<cwd>/.ravn/personas/`` → ``~/.ravn/personas/`` → bundled.
+        include_builtin: Whether to include built-in personas (dict fallback).
         cwd: Working directory used to resolve ``.ravn/personas/``.
              Defaults to the process working directory at construction time.
     """
@@ -2146,14 +2148,17 @@ class PersonaLoader(PersonaRegistryPort):
         """Return ordered directories to search (highest priority first).
 
         When *persona_dirs* was supplied explicitly it forms the list;
-        otherwise the default two-layer (project-local → user-global) paths
-        are used.
+        otherwise the default three-layer discovery is used:
+          1. Project-local: ``<cwd>/.ravn/personas/``
+          2. User-global: ``~/.ravn/personas/``
+          3. Bundled: ``src/ravn/personas/`` (shipped with the package)
         """
         if self._persona_dirs is not None:
             return list(self._persona_dirs)
         return [
             self._cwd / ".ravn" / "personas",
             Path.home() / ".ravn" / "personas",
+            _BUILTIN_PERSONAS_DIR,
         ]
 
     # ------------------------------------------------------------------
