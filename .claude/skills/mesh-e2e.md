@@ -28,6 +28,10 @@ The test verifies:
 5. Security receives `review.completed`
 6. **Reviewer receives coder's fix (loop closes)**
 
+Additionally checks for:
+- ERROR level log entries in all nodes
+- Python exceptions/tracebacks
+
 ## Quick Start
 
 Run the automated e2e test:

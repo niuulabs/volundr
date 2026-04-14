@@ -341,14 +341,52 @@ test-publisher → code.changed ──→ reviewer (node 2) ←──┐
 4. Coder published code.changed: $(grep -q "publishing outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null && echo "PASS" || echo "FAIL")
 5. Security received review.completed: $(grep -q "mesh: received outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null && echo "PASS" || echo "FAIL")
 6. Reviewer received coder's fix: $(test "$(grep -c 'mesh: received outcome event_type=code.changed' "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null || echo 0)" -ge 2 && echo "PASS" || echo "FAIL")
+
+## Error Check
+
+- Node 1 errors: $(grep -c " ERROR " "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null || echo 0)
+- Node 2 errors: $(grep -c " ERROR " "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null || echo 0)
+- Node 3 errors: $(grep -c " ERROR " "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null || echo 0)
+- Tracebacks: $(grep -l "Traceback" "${LOG_DIR}"/ravn-mesh-*.log 2>/dev/null | wc -l || echo 0)
 EOF
 
 echo ""
 
-# 10. Final result
-if [[ $steps_passed -eq $steps_total ]]; then
-    log_info "=== E2E TEST PASSED (${steps_passed}/${steps_total}) ==="
+# 10. Check for errors in logs
+log_info "=== Error Check ==="
+errors_found=0
+
+for n in 1 2 3; do
+    log_file="${LOG_DIR}/ravn-mesh-${n}.log"
+    # Count ERROR level entries (excluding expected/benign mDNS errors)
+    error_count=$(grep " ERROR " "${log_file}" 2>/dev/null | grep -v "mdns_discovery: responder error" | wc -l | tr -d ' ')
+    error_count=${error_count:-0}
+    if [[ "${error_count}" -gt 0 ]]; then
+        log_error "Node ${n} has ${error_count} ERROR entries:"
+        grep " ERROR " "${log_file}" | grep -v "mdns_discovery: responder error" | head -5
+        errors_found=$((errors_found + error_count))
+    else
+        log_info "Node ${n}: no errors"
+    fi
+done
+
+# Also check for Python exceptions/tracebacks
+traceback_count=$(grep -l "Traceback" "${LOG_DIR}"/ravn-mesh-*.log 2>/dev/null | wc -l | tr -d ' ')
+traceback_count=${traceback_count:-0}
+if [[ "${traceback_count}" -gt 0 ]]; then
+    log_error "Found Python tracebacks in ${traceback_count} log file(s)"
+    errors_found=$((errors_found + traceback_count))
+fi
+
+echo ""
+
+# 11. Final result
+if [[ $steps_passed -eq $steps_total ]] && [[ $errors_found -eq 0 ]]; then
+    log_info "=== E2E TEST PASSED (${steps_passed}/${steps_total}, no errors) ==="
     exit 0
+elif [[ $steps_passed -eq $steps_total ]]; then
+    log_warn "=== E2E TEST PASSED WITH WARNINGS (${steps_passed}/${steps_total}, ${errors_found} errors) ==="
+    exit 0  # Still pass but warn
 else
     log_error "=== E2E TEST FAILED (${steps_passed}/${steps_total}) ==="
     exit 1
