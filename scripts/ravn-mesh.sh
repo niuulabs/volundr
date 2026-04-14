@@ -104,6 +104,10 @@ mimir:
       url: "https://volundr.valhalla.asgard.niuu.world"
       read_priority: 1
 
+# Allow file tools to access /tmp for demos
+permission:
+  workspace_root: /tmp
+
 logging:
   level: DEBUG
 YAML
