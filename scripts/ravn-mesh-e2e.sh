@@ -344,10 +344,10 @@ test-publisher → code.changed ──→ reviewer (node 2) ←──┐
 
 ## Error Check
 
-- Node 1 errors: $(grep -c " ERROR " "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null || echo 0)
-- Node 2 errors: $(grep -c " ERROR " "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null || echo 0)
-- Node 3 errors: $(grep -c " ERROR " "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null || echo 0)
-- Tracebacks: $(grep -l "Traceback" "${LOG_DIR}"/ravn-mesh-*.log 2>/dev/null | wc -l || echo 0)
+- Node 1 errors: $(grep -c " ERROR " "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null || echo "0")
+- Node 2 errors: $(grep -c " ERROR " "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null || echo "0")
+- Node 3 errors: $(grep -c " ERROR " "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null || echo "0")
+- Tracebacks: $( (grep -l "Traceback" "${LOG_DIR}"/ravn-mesh-*.log 2>/dev/null | wc -l) || echo "0")
 EOF
 
 echo ""
@@ -359,7 +359,8 @@ errors_found=0
 for n in 1 2 3; do
     log_file="${LOG_DIR}/ravn-mesh-${n}.log"
     # Count ERROR level entries (excluding expected/benign mDNS errors)
-    error_count=$(grep " ERROR " "${log_file}" 2>/dev/null | grep -v "mdns_discovery: responder error" | wc -l | tr -d ' ')
+    # Note: Need || true because pipefail causes failure when grep finds no matches
+    error_count=$(grep " ERROR " "${log_file}" 2>/dev/null | grep -v "mdns_discovery: responder error" | wc -l | tr -d ' ' || true)
     error_count=${error_count:-0}
     if [[ "${error_count}" -gt 0 ]]; then
         log_error "Node ${n} has ${error_count} ERROR entries:"
@@ -371,7 +372,8 @@ for n in 1 2 3; do
 done
 
 # Also check for Python exceptions/tracebacks
-traceback_count=$(grep -l "Traceback" "${LOG_DIR}"/ravn-mesh-*.log 2>/dev/null | wc -l | tr -d ' ')
+# Note: Need || true because pipefail causes failure when grep finds no matches
+traceback_count=$(grep -l "Traceback" "${LOG_DIR}"/ravn-mesh-*.log 2>/dev/null | wc -l | tr -d ' ' || true)
 traceback_count=${traceback_count:-0}
 if [[ "${traceback_count}" -gt 0 ]]; then
     log_error "Found Python tracebacks in ${traceback_count} log file(s)"

@@ -90,6 +90,23 @@ system_prompt_template: |
   When escalating, use `status: help_needed` in your outcome with reason and
   what you've already tried.
 
+  ## Output Format
+
+  When you have completed your work, output your results in this exact format:
+
+  ---outcome---
+  files_changed: [number of files modified]
+  tests_added: [number of tests added]
+  summary: |
+    [One-line summary of what was done]
+  details: |
+    ## Changes
+    - **path/to/file.py** — What was changed
+    - **tests/test_file.py** — What test was added
+  ---
+
+  IMPORTANT: Output the outcome block and STOP. Do not continue after the outcome.
+
   ## Quality Checklist
 
   Before completing, verify:
