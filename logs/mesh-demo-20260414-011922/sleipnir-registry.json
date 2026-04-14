@@ -1,0 +1,23 @@
+{
+  "services": [
+    {
+      "id": "ravn:ravn-mesh-1",
+      "pid": 9207,
+      "socket": "ipc:///tmp/ravn-mesh/node-1.ipc",
+      "started": "2026-04-14T01:17:23.073023+00:00"
+    },
+    {
+      "id": "ravn:ravn-mesh-2",
+      "pid": 9215,
+      "socket": "ipc:///tmp/ravn-mesh/node-2.ipc",
+      "started": "2026-04-14T01:17:24.533957+00:00"
+    },
+    {
+      "id": "ravn:ravn-mesh-3",
+      "pid": 9254,
+      "socket": "ipc:///tmp/ravn-mesh/node-3.ipc",
+      "started": "2026-04-14T01:17:25.736614+00:00"
+    }
+  ],
+  "primary_pub": ""
+}

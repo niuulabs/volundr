@@ -61,7 +61,7 @@ mesh:
     req_rep_address: "ipc:///tmp/ravn-mesh/node-${n}-rep.ipc"
 
 llm:
-  model: google/gemma-4-26B-A4B-it
+  model: Qwen/Qwen3-Coder-30B-A3B-Instruct
   max_tokens: 8192
   timeout: 300.0
   provider:
@@ -90,8 +90,21 @@ memory:
   sqlite:
     path: "${MEMORY_DIR}/ravn-mesh-${n}.db"
 
+mimir:
+  enabled: true
+  path: ~/.ravn/mimir
+  instances:
+    - name: local
+      role: local
+      path: ~/.ravn/mimir
+      read_priority: 0
+    - name: shared
+      role: shared
+      url: "https://volundr.valhalla.asgard.niuu.world"
+      read_priority: 1
+
 logging:
-  level: INFO
+  level: DEBUG
 YAML
 
     echo "${config_path}"
@@ -115,14 +128,14 @@ cmd_start() {
     # Node roles:
     #   1 — coder     (produces code.changed)
     #   2 — reviewer  (consumes code.changed, produces review.completed)
-    #   3 — deployer  (consumes review.completed)
+    #   3 — security  (consumes review.completed, produces security.completed)
     declare -a configs
     configs[1]="$(_write_config 1 7480 7481 7490 coder)"
     configs[2]="$(_write_config 2 7482 7483 7491 reviewer)"
-    configs[3]="$(_write_config 3 7484 7485 7492 deployer)"
+    configs[3]="$(_write_config 3 7484 7485 7492 security)"
 
     declare -a pids
-    local personas=('' coder reviewer deployer)
+    local personas=('' coder reviewer security)
     for n in 1 2 3; do
         local log="${LOG_DIR}/ravn-mesh-${n}.log"
         echo "  Node ${n} [${personas[$n]}]: config=${configs[$n]}"

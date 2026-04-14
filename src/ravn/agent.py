@@ -126,6 +126,8 @@ class RavnAgent:
         reflection_config: PostSessionReflectionConfig | None = None,
         # NIU-594: persona config for outcome block parsing
         persona_config: PersonaConfig | None = None,
+        # NIU-612: stop loop early when outcome block detected
+        stop_on_outcome: bool = False,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -175,6 +177,8 @@ class RavnAgent:
         self._reflection_config = reflection_config
         # NIU-594: persona config for outcome block parsing
         self._persona_config = persona_config
+        # NIU-612: stop loop early when outcome block detected
+        self._stop_on_outcome = stop_on_outcome
 
     @property
     def session(self) -> Session:
@@ -450,6 +454,34 @@ class RavnAgent:
             if llm_response.content:
                 final_response = llm_response.content
 
+            # NIU-612: Early termination when outcome block detected (optional).
+            # Some models continue calling tools even after producing the outcome.
+            # When stop_on_outcome is enabled, we check for the block and break early.
+            if self._stop_on_outcome and llm_response.content:
+                early_outcome = _parse_outcome_block_for_persona(
+                    llm_response.content, self._persona_config
+                )
+                if early_outcome is not None:
+                    logger.info("Early termination: outcome block detected, skipping tool calls")
+                    logger.debug(
+                        "outcome_block: valid=%s fields=%s errors=%s",
+                        early_outcome.valid,
+                        early_outcome.fields,
+                        early_outcome.errors,
+                    )
+                    await self._channel.emit(
+                        RavnEvent.response(
+                            source=self._source_id,
+                            text=llm_response.content,
+                            correlation_id=self._session.id,
+                            session_id=self._session.id,
+                        )
+                    )
+                    self._session.add_message(
+                        Message(role="assistant", content=llm_response.content)
+                    )
+                    break
+
             # Append the assistant message (with tool calls) to history.
             assistant_content = _build_assistant_content(llm_response)
             self._session.messages.append(Message(role="assistant", content=assistant_content))
@@ -522,6 +554,13 @@ class RavnAgent:
 
         # NIU-594: parse ---outcome--- block from final response when persona declares a schema
         parsed_outcome = _parse_outcome_block_for_persona(final_response, self._persona_config)
+        if parsed_outcome is not None:
+            logger.debug(
+                "final_outcome_block: valid=%s fields=%s errors=%s",
+                parsed_outcome.valid,
+                parsed_outcome.fields,
+                parsed_outcome.errors,
+            )
 
         # Extract episode (always, so TurnResult.episode is populated for outcome capture)
         recorded_episode: Episode | None = None

@@ -1907,12 +1907,13 @@ async def _run_daemon(
             # Add cascade tools (parallel task execution) if wired
             # NOTE: cascade_tools uses the same monkey-patch pattern as before —
             # tracked as tech debt to align with the cron pattern.
+            # NIU-612: Apply persona's allowed_tools filter to cascade/cron tools.
             cascade_tools = getattr(drive_loop, "_cascade_tools", [])
-            tools.extend(cascade_tools)
+            tools.extend(_filter_tools(cascade_tools, settings, resolved_persona))
 
-            # Add cron scheduling tools
+            # Add cron scheduling tools (also filtered by persona)
             if cron_tools:
-                tools.extend(cron_tools)
+                tools.extend(_filter_tools(cron_tools, settings, resolved_persona))
 
         # NIU-571: Apply trust gradient constraints for thread-triggered tasks
         tools = _apply_trust_filter(tools, settings, triggered_by)
@@ -1947,6 +1948,9 @@ async def _run_daemon(
             sleipnir_publisher=daemon_bus,
             reflection_config=settings.reflection,
             persona=resolved_persona.name if resolved_persona else "",
+            # NIU-612: persona config for outcome parsing + early termination
+            persona_config=resolved_persona,
+            stop_on_outcome=resolved_persona.stop_on_outcome if resolved_persona else False,
         )
 
     tasks: list[asyncio.Task] = []
