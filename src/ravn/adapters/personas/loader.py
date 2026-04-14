@@ -112,6 +112,8 @@ class PersonaConfig:
     produces: PersonaProduces = field(default_factory=PersonaProduces)
     consumes: PersonaConsumes = field(default_factory=PersonaConsumes)
     fan_in: PersonaFanIn = field(default_factory=PersonaFanIn)
+    # NIU-612: Stop agent loop early when outcome block detected
+    stop_on_outcome: bool = False
 
     def to_dict(self) -> dict:
         """Serialize this persona to a plain dict compatible with :meth:`PersonaLoader.parse`.
@@ -173,6 +175,9 @@ class PersonaConfig:
             if self.fan_in.contributes_to:
                 fan_in_dict["contributes_to"] = self.fan_in.contributes_to
             d["fan_in"] = fan_in_dict
+
+        if self.stop_on_outcome:
+            d["stop_on_outcome"] = True
 
         return d
 
@@ -987,6 +992,7 @@ class PersonaLoader(PersonaRegistryPort):
             produces=_parse_produces(raw.get("produces")),
             consumes=_parse_consumes(raw.get("consumes")),
             fan_in=_parse_fan_in(raw.get("fan_in")),
+            stop_on_outcome=_safe_bool(raw.get("stop_on_outcome", False)),
         )
 
     @staticmethod
