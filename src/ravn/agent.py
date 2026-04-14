@@ -147,6 +147,10 @@ class RavnAgent:
         self._iteration_budget = iteration_budget
         self._compressor = compressor
         self._prompt_builder = prompt_builder
+        # Set identity on prompt_builder if provided — this was missing and caused
+        # empty system prompts when using PromptBuilder with personas.
+        if prompt_builder is not None:
+            prompt_builder.set_identity(system_prompt)
         self._reflection_model = reflection_model
         self._reflection_max_tokens = reflection_max_tokens
         self._task_summary_max_chars = task_summary_max_chars
@@ -388,6 +392,13 @@ class RavnAgent:
         final_response = ""
         self._last_compression_result = None
         last_had_tool_error = False
+
+        # Log system prompt on first iteration for debugging
+        if isinstance(effective_system, str):
+            logger.debug("system_prompt (first 2000 chars): %s", effective_system[:2000])
+        else:
+            # Anthropic blocks format
+            logger.debug("system_prompt_blocks: %d blocks", len(effective_system))
 
         for iteration in range(self._max_iterations):
             # Check external interruption (SIGINT/SIGTERM/Tyr cancel via interrupt()).

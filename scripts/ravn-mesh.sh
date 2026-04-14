@@ -89,6 +89,7 @@ memory:
   backend: sqlite
   sqlite:
     path: "${MEMORY_DIR}/ravn-mesh-${n}.db"
+  reflection_model: Qwen/Qwen3-Coder-30B-A3B-Instruct
 
 mimir:
   enabled: true

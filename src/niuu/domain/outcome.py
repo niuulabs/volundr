@@ -10,7 +10,8 @@ from typing import Any, Literal
 import yaml
 
 _OUTCOME_START = re.compile(r"---outcome---", re.IGNORECASE)
-_OUTCOME_END = re.compile(r"---end---", re.IGNORECASE)
+# Accept ---end--- or just --- on its own line as end marker
+_OUTCOME_END = re.compile(r"---end---|(?:^|\n)---(?:\s*$|\n)", re.IGNORECASE)
 _CODE_FENCE = re.compile(r"^```[a-z]*\s*\n?(.*?)```\s*$", re.DOTALL)
 
 _TYPE_VALIDATORS: dict[str, type] = {
@@ -60,9 +61,11 @@ def generate_outcome_instruction(schema: OutcomeSchema) -> str:
         ---end---
     """
     lines = [
-        "IMPORTANT: When your work is complete, output this outcome block and STOP.",
+        "IMPORTANT: When your work is complete, output this EXACT outcome block format and STOP.",
+        "The outcome block MUST be valid YAML with key: value pairs. Do NOT write prose or lists.",
         "Do not call any more tools after producing the outcome block.",
         "",
+        "Required format (copy this structure exactly):",
         "---outcome---",
     ]
     for name, f in schema.fields.items():
