@@ -1,0 +1,388 @@
+2026-04-14 01:38:18,475 asyncio DEBUG Using selector: EpollSelector
+2026-04-14 01:38:19,578 ravn.cli.commands INFO cron: wired 0 config job(s); store at /volundr/home/.ravn/cron/jobs.json
+2026-04-14 01:38:19,578 ravn.cli.commands INFO mimir: source trigger registered (poll=60s, persona=mimir-curator)
+2026-04-14 01:38:19,579 ravn.cli.commands INFO mimir: staleness trigger registered (schedule=6h, top_n=20, persona=mimir-curator)
+2026-04-14 01:38:19,579 ravn.cli.commands INFO thread: queue trigger registered (enabled=False, poll_interval=300s)
+2026-04-14 01:38:19,662 ravn.cli.commands INFO cascade: registered 6 tools (mesh=True, discovery=True)
+2026-04-14 01:38:19,662 ravn.cli.commands INFO mesh_routing: registered 2 tools
+2026-04-14 01:38:19,663 ravn.cli.commands INFO mesh: will subscribe to event_type=review.completed after start
+2026-04-14 01:38:19,695 ravn.adapters.discovery.mdns DEBUG mdns_discovery: service registration failed: 
+2026-04-14 01:38:19,695 ravn.adapters.discovery.mdns INFO mdns_discovery: started peer=ravn-mesh-3 handshake_port=7492
+2026-04-14 01:38:19,698 sleipnir.adapters.nng_transport DEBUG NngPublisher: bound to ipc:///tmp/ravn-mesh/node-3.ipc
+2026-04-14 01:38:19,702 sleipnir.adapters.discovery DEBUG ServiceRegistry: registered ravn:ravn-mesh-3 at ipc:///tmp/ravn-mesh/node-3.ipc
+2026-04-14 01:38:19,703 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/test-pub.ipc', 'ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 01:38:19,703 sleipnir.adapters.nng_transport DEBUG NngSubscriber: dialing ipc:///tmp/ravn-mesh/test-pub.ipc
+2026-04-14 01:38:19,704 sleipnir.adapters.nng_transport DEBUG NngSubscriber: dialing ipc:///tmp/ravn-mesh/node-1.ipc
+2026-04-14 01:38:19,704 sleipnir.adapters.nng_transport DEBUG NngSubscriber: dialing ipc:///tmp/ravn-mesh/node-2.ipc
+2026-04-14 01:38:19,704 sleipnir.adapters.nng_transport DEBUG NngSubscriber: dialing ipc:///tmp/ravn-mesh/node-3.ipc
+2026-04-14 01:38:19,704 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 01:38:19,704 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 01:38:19,704 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 01:38:19,705 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 01:38:19,705 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 01:38:19,705 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 01:38:19,705 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 01:38:19,705 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 01:38:19,705 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 01:38:19,705 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 01:38:19,724 ravn.adapters.mesh.sleipnir_mesh INFO sleipnir_mesh: started peer=ravn-mesh-3
+2026-04-14 01:38:19,724 ravn.cli.commands INFO mesh: subscribing to event_type=review.completed
+ravn daemon started.
+  Channels: none
+  Triggers: cron, mimir_source, mimir_staleness, thread_queue
+  Drive loop: running (max 3 concurrent tasks)
+Press Ctrl+C to stop.
+2026-04-14 01:38:19,725 ravn.drive_loop INFO drive_loop: starting trigger 'cron'
+2026-04-14 01:38:19,726 ravn.adapters.triggers.cron WARNING cron: another instance holds the lock — skipping
+2026-04-14 01:38:19,726 ravn.drive_loop INFO drive_loop: starting trigger 'mimir_source'
+2026-04-14 01:38:19,726 ravn.adapters.triggers.mimir_source INFO MimirSourceTrigger: starting (poll_interval=60s, persona=mimir-curator)
+2026-04-14 01:38:19,792 ravn.drive_loop INFO drive_loop: starting trigger 'mimir_staleness'
+2026-04-14 01:38:19,792 ravn.adapters.triggers.mimir_staleness INFO MimirStalenessTrigger: starting (schedule=6h, top_n=20, persona=mimir-curator)
+2026-04-14 01:38:19,793 ravn.adapters.triggers.mimir_staleness DEBUG MimirStalenessTrigger: no usage data — skipping
+2026-04-14 01:38:19,793 ravn.drive_loop INFO drive_loop: starting trigger 'thread_queue'
+2026-04-14 01:38:19,793 ravn.adapters.triggers.thread_queue INFO ThreadQueueTrigger: starting (enabled=False, poll_interval=300s, owner='ravn-ae12d393')
+2026-04-14 01:38:19,793 httpcore.connection DEBUG connect_tcp.started host='volundr.valhalla.asgard.niuu.world' port=443 local_address=None timeout=30.0 socket_options=None
+2026-04-14 01:38:19,797 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bde1e80>
+2026-04-14 01:38:19,798 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71edabda7800> server_hostname='volundr.valhalla.asgard.niuu.world' timeout=30.0
+2026-04-14 01:38:19,803 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71edab7c0cd0>
+2026-04-14 01:38:19,804 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-04-14 01:38:19,804 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:38:19,804 httpcore.http11 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-04-14 01:38:19,804 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:38:19,804 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-04-14 01:38:19,806 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Length', b'2'), (b'Content-Type', b'application/json'), (b'Date', b'Tue, 14 Apr 2026 01:38:18 GMT'), (b'Server', b'uvicorn')])
+2026-04-14 01:38:19,807 httpx INFO HTTP Request: GET https://volundr.valhalla.asgard.niuu.world/mimir/sources?unprocessed=true "HTTP/1.1 200 OK"
+2026-04-14 01:38:19,807 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-04-14 01:38:19,807 httpcore.http11 DEBUG receive_response_body.complete
+2026-04-14 01:38:19,807 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:38:19,807 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:38:20,162 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 01:38:20,163 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 01:38:20,165 pynng.nng DEBUG Pipe callback event 2
+2026-04-14 01:38:20,998 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 01:38:20,998 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 01:38:21,000 pynng.nng DEBUG Pipe callback event 2
+2026-04-14 01:38:49,932 ravn.adapters.discovery.mdns DEBUG mdns_discovery: service registration failed: 
+2026-04-14 01:39:08,163 ravn.cli.commands INFO mesh: received outcome event_type=review.completed from=reviewer task_id=event_code_changed_test-tas
+2026-04-14 01:39:08,164 ravn.cli.commands INFO mesh: enqueued task event_review_completed_event_co for event_type=review.completed
+2026-04-14 01:39:08,185 ravn.drive_loop INFO drive_loop: executing task event_review_completed_event_co ('Handle review.completed from reviewer') triggered_by='mesh:outcome:review.completed'
+2026-04-14 01:39:08,268 httpcore.connection DEBUG close.started
+2026-04-14 01:39:08,269 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:08,269 httpcore.connection DEBUG connect_tcp.started host='volundr.valhalla.asgard.niuu.world' port=443 local_address=None timeout=30.0 socket_options=None
+2026-04-14 01:39:08,274 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd11310>
+2026-04-14 01:39:08,274 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71edabda7800> server_hostname='volundr.valhalla.asgard.niuu.world' timeout=30.0
+2026-04-14 01:39:08,279 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bc810f0>
+2026-04-14 01:39:08,280 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-04-14 01:39:08,280 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:08,280 httpcore.http11 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-04-14 01:39:08,280 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:08,280 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-04-14 01:39:08,283 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Length', b'2'), (b'Content-Type', b'application/json'), (b'Date', b'Tue, 14 Apr 2026 01:39:07 GMT'), (b'Server', b'uvicorn')])
+2026-04-14 01:39:08,283 httpx INFO HTTP Request: GET https://volundr.valhalla.asgard.niuu.world/mimir/pages?category=learnings "HTTP/1.1 200 OK"
+2026-04-14 01:39:08,283 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-04-14 01:39:08,283 httpcore.http11 DEBUG receive_response_body.complete
+2026-04-14 01:39:08,283 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:08,283 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:08,292 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:08,297 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bc815b0>
+2026-04-14 01:39:08,297 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71ed9be0d130> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:08,304 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bc9dfd0>
+2026-04-14 01:39:08,304 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:08,304 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:08,304 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:08,305 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:08,305 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:08,322 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:07 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:07 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'4134794e-3173-4dad-8e63-bc68e2eefa77'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:08,322 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:08,322 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:09,344 httpcore.connection DEBUG close.started
+2026-04-14 01:39:09,344 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:09,346 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:09,346 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:09,346 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:09,379 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:09,385 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9be1de10>
+2026-04-14 01:39:09,385 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71ed9be02c30> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:09,392 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9be1e9c0>
+2026-04-14 01:39:09,392 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:09,392 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:09,392 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:09,393 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:09,393 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:09,409 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:08 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:09 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'e8c841ee-54ad-4c18-be90-ae8e96fc1b66'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:09,410 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:09,410 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:11,340 httpcore.connection DEBUG close.started
+2026-04-14 01:39:11,341 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:11,342 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:11,342 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:11,342 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:11,356 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:11,361 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd18650>
+2026-04-14 01:39:11,361 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71ed9be02a90> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:11,366 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd18d50>
+2026-04-14 01:39:11,366 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:11,366 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:11,366 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:11,367 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:11,367 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:11,386 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:10 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:10 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'1da9c39f-2269-40b0-883d-7e446091679b'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:11,387 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:11,387 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:13,151 httpcore.connection DEBUG close.started
+2026-04-14 01:39:13,151 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:13,152 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:13,153 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:13,153 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:13,233 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:13,239 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bcf9130>
+2026-04-14 01:39:13,239 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71edabff0050> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:13,245 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bcf9400>
+2026-04-14 01:39:13,245 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:13,246 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:13,246 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:13,246 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:13,246 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:13,266 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:12 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:12 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'6ccd40b6-bb16-45bf-befa-e487d45e7513'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:13,266 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:13,267 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:15,244 httpcore.connection DEBUG close.started
+2026-04-14 01:39:15,245 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:15,255 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:15,255 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:15,255 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:15,256 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:15,259 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd151d0>
+2026-04-14 01:39:15,259 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71edad1365d0> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:15,266 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd14210>
+2026-04-14 01:39:15,266 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:15,267 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:15,267 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:15,267 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:15,267 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:15,287 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:14 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:14 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'5061add3-6897-42d3-a3d4-475a5e765e79'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:15,287 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:15,288 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:16,766 httpcore.connection DEBUG close.started
+2026-04-14 01:39:16,767 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:16,768 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:16,768 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:16,768 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:16,899 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:16,904 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bca0d50>
+2026-04-14 01:39:16,904 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71edab727350> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:16,912 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd1c710>
+2026-04-14 01:39:16,913 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:16,913 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:16,913 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:16,913 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:16,913 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:16,929 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:15 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:16 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'c34d7da9-0076-4e5e-87e7-d716e44f2881'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:16,930 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:16,930 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:17,561 httpcore.connection DEBUG close.started
+2026-04-14 01:39:17,562 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:17,563 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:17,563 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:17,563 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:17,610 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:17,614 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd1cdd0>
+2026-04-14 01:39:17,614 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71ed9bcc0a60> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:17,621 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71edab6d0aa0>
+2026-04-14 01:39:17,621 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:17,622 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:17,622 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:17,622 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:17,622 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:17,639 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:16 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:17 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'6e91df3a-a2ed-4d00-b09e-817c193ba042'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:17,639 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:17,639 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:19,171 httpcore.connection DEBUG close.started
+2026-04-14 01:39:19,171 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:19,173 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:19,173 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:19,173 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:19,188 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:19,192 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bcde410>
+2026-04-14 01:39:19,192 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71ed9bcc0d40> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:19,199 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bcf0190>
+2026-04-14 01:39:19,199 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:19,199 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:19,199 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:19,200 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:19,200 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:19,216 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:18 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:18 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'7b6d0751-1bcf-4896-8d18-70869b8ca21f'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:19,217 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:19,217 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:19,726 ravn.drive_loop DEBUG drive_loop: heartbeat — active=1 queued=0 triggers=4
+2026-04-14 01:39:19,811 httpcore.connection DEBUG close.started
+2026-04-14 01:39:19,811 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:19,811 httpcore.connection DEBUG connect_tcp.started host='volundr.valhalla.asgard.niuu.world' port=443 local_address=None timeout=30.0 socket_options=None
+2026-04-14 01:39:19,817 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bcf0a50>
+2026-04-14 01:39:19,817 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71edabda7800> server_hostname='volundr.valhalla.asgard.niuu.world' timeout=30.0
+2026-04-14 01:39:19,824 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9be66e70>
+2026-04-14 01:39:19,824 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-04-14 01:39:19,824 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:19,824 httpcore.http11 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-04-14 01:39:19,824 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:19,824 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-04-14 01:39:19,826 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Length', b'2'), (b'Content-Type', b'application/json'), (b'Date', b'Tue, 14 Apr 2026 01:39:19 GMT'), (b'Server', b'uvicorn')])
+2026-04-14 01:39:19,827 httpx INFO HTTP Request: GET https://volundr.valhalla.asgard.niuu.world/mimir/sources?unprocessed=true "HTTP/1.1 200 OK"
+2026-04-14 01:39:19,827 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-04-14 01:39:19,827 httpcore.http11 DEBUG receive_response_body.complete
+2026-04-14 01:39:19,827 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:19,827 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:20,123 ravn.adapters.discovery.mdns DEBUG mdns_discovery: service registration failed: 
+2026-04-14 01:39:20,229 httpcore.connection DEBUG close.started
+2026-04-14 01:39:20,229 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:20,230 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:20,230 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:20,231 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:20,324 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:20,329 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9be7aad0>
+2026-04-14 01:39:20,329 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71ed9be74b50> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:20,335 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bcf6d50>
+2026-04-14 01:39:20,335 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:20,335 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:20,335 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:20,335 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:20,335 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:20,352 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:19 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:19 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'06ad8ae2-5aa5-4367-921f-5758287671c9'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:20,352 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:20,352 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:20,936 httpcore.connection DEBUG close.started
+2026-04-14 01:39:20,936 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:20,945 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:20,946 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:20,946 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:20,946 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:20,951 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bca7ee0>
+2026-04-14 01:39:20,951 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71ed9be754f0> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:20,958 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bca6f90>
+2026-04-14 01:39:20,958 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:20,958 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:20,958 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:20,958 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:20,958 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:20,975 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:20 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:20 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'5ac87f92-e55f-497b-97db-c756567b1ffd'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:20,976 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:20,976 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:21,823 httpcore.connection DEBUG close.started
+2026-04-14 01:39:21,823 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:21,825 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:21,825 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:21,825 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:21,872 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:21,877 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd34bf0>
+2026-04-14 01:39:21,877 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71ed9bc89a90> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:21,884 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd34cb0>
+2026-04-14 01:39:21,885 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:21,885 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:21,885 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:21,885 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:21,885 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:21,906 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:20 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:21 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'e959fc6b-a1c3-4576-ac68-bdfbe81257a0'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:21,906 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:21,907 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:23,326 httpcore.connection DEBUG close.started
+2026-04-14 01:39:23,326 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:23,328 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:23,328 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:23,328 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:23,366 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:23,371 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd48690>
+2026-04-14 01:39:23,372 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71ed9bc8aba0> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:23,378 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd487d0>
+2026-04-14 01:39:23,378 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:23,378 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:23,378 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:23,379 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:23,379 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:23,400 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:22 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:22 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'5defedae-8f74-48e0-9ceb-0d58313166c4'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:23,400 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:23,401 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:24,702 httpcore.connection DEBUG close.started
+2026-04-14 01:39:24,702 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:24,704 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:24,704 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:24,704 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:29,580 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:29,587 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd48fa0>
+2026-04-14 01:39:29,587 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71ed9bd116d0> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:29,594 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd48f00>
+2026-04-14 01:39:29,595 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:29,595 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:29,595 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:29,595 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:29,595 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:29,614 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:28 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:29 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'd9d36191-7b85-4af1-a0b3-df02a8d3cb0c'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:29,614 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:29,614 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:30,516 httpcore.connection DEBUG close.started
+2026-04-14 01:39:30,516 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:30,527 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:30,528 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:30,528 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:30,528 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:30,532 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9be13980>
+2026-04-14 01:39:30,532 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71ed9bc835c0> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:30,538 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9be139d0>
+2026-04-14 01:39:30,538 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:30,539 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:30,539 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:30,539 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:30,539 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:30,558 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 01:39:29 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:30 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'237aab00-e0da-4f7e-ba70-9b419a22a87b'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:30,558 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:30,558 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:33,420 httpcore.connection DEBUG close.started
+2026-04-14 01:39:33,420 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:33,421 ravn.agent DEBUG final_outcome_block: valid=False fields={} errors=['YAML parse error: expected a single document in the stream\n  in "<unicode string>", line 1, column 1:\n    The task "Handle review.complete ... \n    ^\nbut found another document\n  in "<unicode string>", line 2, column 1:\n    ---\n    ^']
+2026-04-14 01:39:33,433 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 01:39:33,434 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:33,434 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:33,434 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 01:39:33,438 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71edabe03c50>
+2026-04-14 01:39:33,438 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71ed9bce6520> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 01:39:33,445 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71edabe03f70>
+2026-04-14 01:39:33,445 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:33,445 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:39:33,445 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 01:39:33,445 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:39:33,446 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 01:39:37,015 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'application/json'), (b'Date', b'Tue, 14 Apr 2026 01:39:32 GMT'), (b'Date', b'Tue, 14 Apr 2026 01:39:32 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'bf520fbf-b5c2-4f3e-901a-1d7f59ef9f5e'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 01:39:37,016 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:39:37,016 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 01:39:37,017 httpcore.http11 DEBUG receive_response_body.complete
+2026-04-14 01:39:37,017 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:39:37,017 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:39:37,017 httpcore.connection DEBUG close.started
+2026-04-14 01:39:37,018 httpcore.connection DEBUG close.complete
+2026-04-14 01:39:37,299 ravn.drive_loop DEBUG drive_loop: task event_review_completed_event_co cost=0.107685 spent_today=0.107685 remaining=0.892315
+2026-04-14 01:39:37,299 ravn.drive_loop INFO drive_loop: task event_review_completed_event_co output: ---outcome---
+The task "Handle review.completed from reviewer" has been completed. The changes were committed to the `main` branch. The commit message was "feat: update ravn-mesh config and outcome instruction". The changes include updates to the ravn-mesh configuration and outcome instructions, along with several new reference files. The branch has been updated and pushed to the remote repository.
+---
+2026-04-14 01:39:37,300 ravn.drive_loop INFO drive_loop: publishing outcome event_type=security.completed task_id=event_review_completed_event_co
+2026-04-14 01:39:50,333 ravn.adapters.discovery.mdns DEBUG mdns_discovery: service registration failed: 
+2026-04-14 01:39:50,333 ravn.adapters.discovery.mdns DEBUG mdns_discovery: evicted stale peer ravn-mesh-1
+2026-04-14 01:39:55,866 pynng.nng DEBUG Pipe callback event 2
+2026-04-14 01:40:19,727 ravn.drive_loop DEBUG drive_loop: heartbeat — active=0 queued=0 triggers=4
+2026-04-14 01:40:19,831 httpcore.connection DEBUG close.started
+2026-04-14 01:40:19,831 httpcore.connection DEBUG close.complete
+2026-04-14 01:40:19,832 httpcore.connection DEBUG connect_tcp.started host='volundr.valhalla.asgard.niuu.world' port=443 local_address=None timeout=30.0 socket_options=None
+2026-04-14 01:40:19,837 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd05540>
+2026-04-14 01:40:19,837 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x71edabda7800> server_hostname='volundr.valhalla.asgard.niuu.world' timeout=30.0
+2026-04-14 01:40:19,842 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ed9bd05590>
+2026-04-14 01:40:19,842 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-04-14 01:40:19,842 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 01:40:19,842 httpcore.http11 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-04-14 01:40:19,842 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 01:40:19,843 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-04-14 01:40:19,845 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Length', b'2'), (b'Content-Type', b'application/json'), (b'Date', b'Tue, 14 Apr 2026 01:40:19 GMT'), (b'Server', b'uvicorn')])
+2026-04-14 01:40:19,845 httpx INFO HTTP Request: GET https://volundr.valhalla.asgard.niuu.world/mimir/sources?unprocessed=true "HTTP/1.1 200 OK"
+2026-04-14 01:40:19,845 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-04-14 01:40:19,845 httpcore.http11 DEBUG receive_response_body.complete
+2026-04-14 01:40:19,845 httpcore.http11 DEBUG response_closed.started
+2026-04-14 01:40:19,845 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 01:40:20,493 ravn.adapters.discovery.mdns DEBUG mdns_discovery: service registration failed: 
+2026-04-14 01:40:20,493 ravn.adapters.discovery.mdns DEBUG mdns_discovery: evicted stale peer ravn-mesh-2

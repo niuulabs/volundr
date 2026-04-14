@@ -10,7 +10,8 @@ from typing import Any, Literal
 import yaml
 
 _OUTCOME_START = re.compile(r"---outcome---", re.IGNORECASE)
-_OUTCOME_END = re.compile(r"---end---", re.IGNORECASE)
+# Accept ---end--- or just --- on its own line as end marker
+_OUTCOME_END = re.compile(r"---end---|(?:^|\n)---(?:\s*$|\n)", re.IGNORECASE)
 _CODE_FENCE = re.compile(r"^```[a-z]*\s*\n?(.*?)```\s*$", re.DOTALL)
 
 _TYPE_VALIDATORS: dict[str, type] = {
