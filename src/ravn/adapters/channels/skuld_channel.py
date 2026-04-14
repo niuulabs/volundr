@@ -39,8 +39,13 @@ class SkuldChannel(ChannelPort):
 
     Args:
         broker_url:    WebSocket URL of the Skuld broker endpoint
-                       (e.g. ``ws://localhost:9000/ws/ravn/{session_id}``).
+                       (e.g. ``ws://localhost:9000/ws/ravn/{peer_id}``).
         session_id:    Agent session identifier forwarded in each event frame.
+        peer_id:       Stable participant identifier for this Ravn daemon.
+                       Included as ``source`` in each NDJSON frame so the
+                       RoomBridge can route events to the correct participant.
+        persona:       Display name for this Ravn in the room UI.  Included
+                       in each frame for late-joining RoomBridge registration.
         reconnect_delay: Seconds to wait between reconnection attempts.
         max_reconnect_attempts: Maximum number of reconnection attempts before
                                giving up and buffering events locally.
@@ -51,11 +56,15 @@ class SkuldChannel(ChannelPort):
         broker_url: str,
         session_id: str,
         *,
+        peer_id: str | None = None,
+        persona: str | None = None,
         reconnect_delay: float = _DEFAULT_RECONNECT_DELAY_SECONDS,
         max_reconnect_attempts: int = _DEFAULT_MAX_RECONNECT_ATTEMPTS,
     ) -> None:
         self._broker_url = broker_url
         self._session_id = session_id
+        self._peer_id = peer_id
+        self._persona = persona
         self._reconnect_delay = reconnect_delay
         self._max_reconnect_attempts = max_reconnect_attempts
         self._ws: websockets.WebSocketClientProtocol | None = None
@@ -193,10 +202,17 @@ class SkuldChannel(ChannelPort):
                 data = str(payload)
                 metadata = {}
 
-        frame = {
+        frame: dict = {
             "session_id": self._session_id,
             "type": str(event.type),
             "data": data,
             "metadata": metadata,
         }
+        # Include source/persona for RoomBridge participant identification.
+        # Existing Skuld deployments that do not understand these fields will
+        # ignore them (backward-compatible addition).
+        if self._peer_id is not None:
+            frame["source"] = self._peer_id
+        if self._persona is not None:
+            frame["persona"] = self._persona
         return json.dumps(frame) + "\n"

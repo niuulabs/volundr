@@ -51,7 +51,7 @@ class ParsedOutcome:
 def generate_outcome_instruction(schema: OutcomeSchema) -> str:
     """Generate the system prompt appendix that tells the persona to produce an outcome block.
 
-    At the end of your response, include an outcome block:
+    When your work is complete, output the outcome block and STOP:
 
         ---outcome---
         verdict: pass | fail | needs_changes
@@ -59,7 +59,12 @@ def generate_outcome_instruction(schema: OutcomeSchema) -> str:
         summary: <one-line summary>
         ---end---
     """
-    lines = ["At the end of your response, include an outcome block:", "", "---outcome---"]
+    lines = [
+        "IMPORTANT: When your work is complete, output this outcome block and STOP.",
+        "Do not call any more tools after producing the outcome block.",
+        "",
+        "---outcome---",
+    ]
     for name, f in schema.fields.items():
         if f.type == "enum" and f.enum_values:
             hint = " | ".join(f.enum_values)

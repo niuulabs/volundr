@@ -6,6 +6,86 @@ vi.mock('@/modules/shared/hooks/useSkuldChat', () => ({
   useSkuldChat: vi.fn(),
 }));
 
+// Mock RoomMessage, AgentDetailPanel, ParticipantFilter, and ThreadGroup
+// so SessionChat tests stay focused
+vi.mock('./RoomMessage', () => ({
+  RoomMessage: ({
+    message,
+    onSelectAgent,
+  }: {
+    message: { id: string; content: string };
+    onSelectAgent?: (id: string) => void;
+  }) => (
+    <div data-testid="room-message" data-message-id={message.id}>
+      {message.content}
+      {onSelectAgent && (
+        <button
+          type="button"
+          data-testid="room-select-agent"
+          onClick={() => onSelectAgent('ravn-1')}
+        >
+          Select
+        </button>
+      )}
+    </div>
+  ),
+}));
+
+vi.mock('./AgentDetailPanel', () => ({
+  AgentDetailPanel: ({
+    participant,
+    onClose,
+  }: {
+    participant: { peerId: string; persona: string };
+    onClose: () => void;
+  }) => (
+    <div data-testid="agent-detail-panel" data-peer-id={participant.peerId}>
+      {participant.persona}
+      <button type="button" data-testid="detail-close" onClick={onClose}>
+        Close
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock('./ParticipantFilter', () => ({
+  ParticipantFilter: ({
+    participants,
+    activeFilter,
+    onFilterChange,
+    showInternal,
+    onToggleInternal,
+  }: {
+    participants: ReadonlyMap<string, { persona: string }>;
+    activeFilter: string;
+    onFilterChange: (f: string) => void;
+    showInternal: boolean;
+    onToggleInternal: () => void;
+  }) => (
+    <div
+      data-testid="participant-filter"
+      data-active={activeFilter}
+      data-show-internal={showInternal}
+    >
+      <button onClick={() => onFilterChange('all')}>All</button>
+      {Array.from(participants.values()).map(p => (
+        <button key={p.persona} onClick={() => onFilterChange(p.persona)}>
+          {p.persona}
+        </button>
+      ))}
+      <button onClick={onToggleInternal} data-testid="internal-toggle">
+        Toggle
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock('./ThreadGroup', () => ({
+  ThreadGroup: ({ messages }: { messages: unknown[] }) => (
+    <div data-testid="thread-group">{messages.length} messages</div>
+  ),
+}));
+
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
 import type {
   SkuldChatMessage,
@@ -47,6 +127,7 @@ const ALL_CAPABILITIES: TransportCapabilities = {
 function mockSkuldChat(overrides: Partial<ReturnType<typeof useSkuldChat>> = {}) {
   const defaults: ReturnType<typeof useSkuldChat> = {
     messages: [],
+    participants: new Map(),
     connected: false,
     isRunning: false,
     historyLoaded: true,
@@ -627,5 +708,212 @@ describe('SessionChat', () => {
     expect(screen.getByTestId('rewind-files')).toBeInTheDocument();
     const stopBtn = screen.getByTestId('stop-btn');
     expect(stopBtn).not.toBeDisabled();
+  });
+
+  // ── Room mode (niu-605) ─────────────────────────────────────
+
+  function makeParticipant(peerId: string, persona: string, color: string) {
+    return {
+      peerId,
+      persona,
+      color,
+      participantType: 'ravn' as const,
+      status: 'idle' as const,
+      joinedAt: new Date(),
+    };
+  }
+
+  it('renders ParticipantFilter when more than one participant is present', () => {
+    const participants = new Map([
+      ['p1', makeParticipant('p1', 'Ravn-A', 'amber')],
+      ['p2', makeParticipant('p2', 'Ravn-B', 'cyan')],
+    ]);
+    mockSkuldChat({ connected: true, participants });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.getByTestId('participant-filter')).toBeInTheDocument();
+  });
+
+  it('does not render ParticipantFilter with only one participant', () => {
+    const participants = new Map([['p1', makeParticipant('p1', 'Ravn-A', 'amber')]]);
+    mockSkuldChat({ connected: true, participants });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.queryByTestId('participant-filter')).not.toBeInTheDocument();
+  });
+
+  it('renders RoomMessage for participant messages in room mode', () => {
+    const participants = new Map([
+      ['p1', makeParticipant('p1', 'Ravn-A', 'amber')],
+      ['p2', makeParticipant('p2', 'Ravn-B', 'cyan')],
+    ]);
+    const messages: SkuldChatMessage[] = [
+      {
+        id: 'rm-1',
+        role: 'assistant',
+        content: 'Hello from Ravn-A',
+        createdAt: new Date(),
+        status: 'complete',
+        participant: { peerId: 'p1', persona: 'Ravn-A', color: 'amber', participantType: 'ravn' },
+        participantId: 'p1',
+      },
+    ];
+    mockSkuldChat({ connected: true, participants, messages });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.getByTestId('room-message')).toBeInTheDocument();
+  });
+
+  it('renders ThreadGroup for consecutive internal messages with same threadId when showInternal', () => {
+    const participants = new Map([
+      ['p1', makeParticipant('p1', 'Ravn-A', 'amber')],
+      ['p2', makeParticipant('p2', 'Ravn-B', 'cyan')],
+    ]);
+    const messages: SkuldChatMessage[] = [
+      {
+        id: 'msg-1',
+        role: 'assistant',
+        content: 'internal one',
+        createdAt: new Date(),
+        status: 'complete',
+        visibility: 'internal',
+        threadId: 'thread-1',
+        participant: { peerId: 'p1', persona: 'Ravn-A', color: 'amber', participantType: 'ravn' },
+        participantId: 'p1',
+      },
+      {
+        id: 'msg-2',
+        role: 'assistant',
+        content: 'internal two',
+        createdAt: new Date(),
+        status: 'complete',
+        visibility: 'internal',
+        threadId: 'thread-1',
+        participant: { peerId: 'p2', persona: 'Ravn-B', color: 'cyan', participantType: 'ravn' },
+        participantId: 'p2',
+      },
+    ];
+    mockSkuldChat({ connected: true, participants, messages });
+    const { getByTestId } = render(<SessionChat url="wss://test/session" />);
+
+    // The internal toggle button exists in the ParticipantFilter mock
+    fireEvent.click(screen.getByTestId('internal-toggle'));
+
+    // After showing internal messages, consecutive internal messages with same threadId
+    // should be grouped into a ThreadGroup
+    expect(getByTestId('thread-group')).toBeInTheDocument();
+  });
+
+  // ── Room session — agent detail panel (NIU-609) ─────────────
+
+  it('uses RoomMessage when messages have participant metadata', () => {
+    const messages: SkuldChatMessage[] = [
+      {
+        id: 'u1',
+        role: 'user',
+        content: 'User message',
+        createdAt: new Date(),
+        status: 'complete',
+        participant: {
+          peerId: 'ravn-1',
+          persona: 'Ravn Alpha',
+          color: 'cyan',
+          participantType: 'ravn',
+          gatewayUrl: 'http://ravn-1:8080',
+        },
+      },
+    ];
+    mockSkuldChat({ connected: true, messages });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.getByTestId('room-message')).toBeInTheDocument();
+  });
+
+  it('renders AgentDetailPanel when an agent is selected via room message', () => {
+    const messages: SkuldChatMessage[] = [
+      {
+        id: 'msg-1',
+        role: 'assistant',
+        content: 'Agent response',
+        createdAt: new Date(),
+        status: 'complete',
+        participant: {
+          peerId: 'ravn-1',
+          persona: 'Ravn Alpha',
+          color: 'cyan',
+          participantType: 'ravn',
+          gatewayUrl: 'http://ravn-1:8080',
+        },
+      },
+    ];
+    mockSkuldChat({ connected: true, messages });
+    render(<SessionChat url="wss://test/session" />);
+
+    // Agent detail panel not shown yet
+    expect(screen.queryByTestId('agent-detail-panel')).not.toBeInTheDocument();
+
+    // Click the "Select" button in the RoomMessage mock to trigger onSelectAgent
+    fireEvent.click(screen.getByTestId('room-select-agent'));
+
+    // Panel should now appear
+    expect(screen.getByTestId('agent-detail-panel')).toBeInTheDocument();
+  });
+
+  it('closes AgentDetailPanel when onClose is called', () => {
+    const messages: SkuldChatMessage[] = [
+      {
+        id: 'msg-1',
+        role: 'assistant',
+        content: 'Agent response',
+        createdAt: new Date(),
+        status: 'complete',
+        participant: {
+          peerId: 'ravn-1',
+          persona: 'Ravn Alpha',
+          color: 'cyan',
+          participantType: 'ravn',
+          gatewayUrl: 'http://ravn-1:8080',
+        },
+      },
+    ];
+    mockSkuldChat({ connected: true, messages });
+    render(<SessionChat url="wss://test/session" />);
+
+    // Open the panel
+    fireEvent.click(screen.getByTestId('room-select-agent'));
+    expect(screen.getByTestId('agent-detail-panel')).toBeInTheDocument();
+
+    // Close via the panel's close button
+    fireEvent.click(screen.getByTestId('detail-close'));
+    expect(screen.queryByTestId('agent-detail-panel')).not.toBeInTheDocument();
+  });
+
+  it('toggles agent selection when same agent is clicked twice', () => {
+    const messages: SkuldChatMessage[] = [
+      {
+        id: 'msg-1',
+        role: 'assistant',
+        content: 'Agent response',
+        createdAt: new Date(),
+        status: 'complete',
+        participant: {
+          peerId: 'ravn-1',
+          persona: 'Ravn Alpha',
+          color: 'cyan',
+          participantType: 'ravn',
+          gatewayUrl: 'http://ravn-1:8080',
+        },
+      },
+    ];
+    mockSkuldChat({ connected: true, messages });
+    render(<SessionChat url="wss://test/session" />);
+
+    // Select once — panel opens
+    fireEvent.click(screen.getByTestId('room-select-agent'));
+    expect(screen.getByTestId('agent-detail-panel')).toBeInTheDocument();
+
+    // Select same agent again — panel closes (toggle)
+    fireEvent.click(screen.getByTestId('room-select-agent'));
+    expect(screen.queryByTestId('agent-detail-panel')).not.toBeInTheDocument();
   });
 });

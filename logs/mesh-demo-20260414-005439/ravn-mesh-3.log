@@ -1,0 +1,37 @@
+2026-04-14 00:52:30,328 ravn.cli.commands INFO cron: wired 0 config job(s); store at /volundr/home/.ravn/cron/jobs.json
+2026-04-14 00:52:30,328 ravn.cli.commands INFO mimir: source trigger registered (poll=60s, persona=mimir-curator)
+2026-04-14 00:52:30,330 ravn.cli.commands INFO mimir: staleness trigger registered (schedule=6h, top_n=20, persona=mimir-curator)
+2026-04-14 00:52:30,330 ravn.cli.commands INFO thread: queue trigger registered (enabled=False, poll_interval=300s)
+2026-04-14 00:52:30,414 ravn.cli.commands INFO cascade: registered 6 tools (mesh=True, discovery=True)
+2026-04-14 00:52:30,415 ravn.cli.commands INFO mesh_routing: registered 2 tools
+2026-04-14 00:52:30,415 ravn.cli.commands INFO mesh: will subscribe to event_type=review.completed after start
+2026-04-14 00:52:30,638 ravn.adapters.discovery.mdns INFO mdns_discovery: started peer=ravn-mesh-3 handshake_port=7492
+2026-04-14 00:52:30,667 ravn.adapters.mesh.sleipnir_mesh INFO sleipnir_mesh: started peer=ravn-mesh-3
+2026-04-14 00:52:30,667 ravn.cli.commands INFO mesh: subscribing to event_type=review.completed
+ravn daemon started.
+  Channels: none
+  Triggers: cron, mimir_source, mimir_staleness, thread_queue
+  Drive loop: running (max 3 concurrent tasks)
+Press Ctrl+C to stop.
+2026-04-14 00:52:30,668 ravn.drive_loop INFO drive_loop: starting trigger 'cron'
+2026-04-14 00:52:30,670 ravn.adapters.triggers.cron WARNING cron: another instance holds the lock — skipping
+2026-04-14 00:52:30,670 ravn.drive_loop INFO drive_loop: starting trigger 'mimir_source'
+2026-04-14 00:52:30,670 ravn.adapters.triggers.mimir_source INFO MimirSourceTrigger: starting (poll_interval=60s, persona=mimir-curator)
+2026-04-14 00:52:30,673 ravn.drive_loop INFO drive_loop: starting trigger 'mimir_staleness'
+2026-04-14 00:52:30,673 ravn.adapters.triggers.mimir_staleness INFO MimirStalenessTrigger: starting (schedule=6h, top_n=20, persona=mimir-curator)
+2026-04-14 00:52:30,674 ravn.drive_loop INFO drive_loop: starting trigger 'thread_queue'
+2026-04-14 00:52:30,674 ravn.adapters.triggers.thread_queue INFO ThreadQueueTrigger: starting (enabled=False, poll_interval=300s, owner='ravn-827d68f3')
+2026-04-14 00:54:03,420 ravn.cli.commands INFO mesh: received outcome event_type=review.completed from=reviewer task_id=event_code_changed_test-tas
+2026-04-14 00:54:03,421 ravn.cli.commands INFO mesh: enqueued task event_review_completed_event_co for event_type=review.completed
+2026-04-14 00:54:03,439 ravn.drive_loop INFO drive_loop: executing task event_review_completed_event_co ('Handle review.completed from reviewer') triggered_by='mesh:outcome:review.completed'
+2026-04-14 00:54:03,951 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 00:54:04,452 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 00:54:05,646 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 00:54:06,178 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 00:54:07,677 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 00:54:13,670 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 00:54:18,374 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 00:54:18,375 ravn.agent INFO Context compressed: 11 → 9 messages (1 pass(es), 2 removed)
+2026-04-14 00:54:20,197 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-04-14 00:54:20,198 ravn.drive_loop ERROR drive_loop: task event_review_completed_event_co failed: OpenAI-compatible API error 400: {"error":{"message":"This model's maximum context length is 131072 tokens. However, you requested 8192 output tokens and your prompt contains at least 122881 input tokens, for a total of at least 131073 tokens. Please reduce the length of the input prompt or the number of requested output tokens. (parameter=input_tokens, value=122881)","type":"BadRequestError","param":"input_tokens","code":400}}
+2026-04-14 00:54:20,198 ravn.drive_loop INFO drive_loop: publishing outcome event_type=deploy.completed task_id=event_review_completed_event_co

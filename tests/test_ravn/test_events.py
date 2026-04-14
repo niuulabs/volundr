@@ -22,7 +22,9 @@ class TestRavnEventType:
         assert RavnEventType.TASK_COMPLETE == "task_complete"
 
     def test_member_count(self) -> None:
-        assert len(RavnEventType) == 9
+        # 10 types: THOUGHT, TOOL_START, TOOL_RESULT, RESPONSE, ERROR,
+        # DECISION, TASK_COMPLETE, TASK_STARTED, TASK_STUCK, OUTCOME
+        assert len(RavnEventType) == 10
 
 
 class TestRavnEvent:

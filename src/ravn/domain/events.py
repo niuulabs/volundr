@@ -17,6 +17,7 @@ class RavnEventType(StrEnum):
     TASK_COMPLETE = "task_complete"
     TASK_STARTED = "task_started"  # emitted by DriveLoop when a task begins execution
     TASK_STUCK = "task_stuck"  # emitted by Watchdog on stuck detection (NIU-510)
+    OUTCOME = "outcome"  # emitted when persona produces outcome (mesh event routing)
 
 
 @dataclass(frozen=True)

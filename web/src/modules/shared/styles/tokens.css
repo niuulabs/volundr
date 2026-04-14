@@ -82,6 +82,30 @@
   --transition-slow: 300ms ease;
 }
 
+/* ── Participant color attribute selectors ── */
+
+[data-participant-color='amber'] {
+  --participant-color: var(--color-accent-amber);
+}
+[data-participant-color='cyan'] {
+  --participant-color: var(--color-accent-cyan);
+}
+[data-participant-color='emerald'] {
+  --participant-color: var(--color-accent-emerald);
+}
+[data-participant-color='purple'] {
+  --participant-color: var(--color-accent-purple);
+}
+[data-participant-color='indigo'] {
+  --participant-color: var(--color-accent-indigo);
+}
+[data-participant-color='orange'] {
+  --participant-color: var(--color-accent-orange);
+}
+[data-participant-color='red'] {
+  --participant-color: var(--color-accent-red);
+}
+
 /* ── Theme overrides ── */
 
 [data-theme='spring'] {

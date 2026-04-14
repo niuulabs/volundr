@@ -2,13 +2,20 @@ import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { Wifi, WifiOff, BrainCircuitIcon, RotateCcwIcon, ArrowDownIcon } from 'lucide-react';
 import { PermissionStack } from '@/modules/shared/components/PermissionDialog';
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
+import { useRoomState } from '@/modules/shared/hooks/useRoomState';
 import type {
   PermissionBehavior,
   ContentBlock,
   AttachmentMeta,
+  ParticipantMeta,
+  RoomParticipant,
 } from '@/modules/shared/hooks/useSkuldChat';
 import { cn } from '@/utils';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
+import { RoomMessage } from './RoomMessage';
+import { ParticipantFilter } from './ParticipantFilter';
+import { ThreadGroup } from './ThreadGroup';
+import { AgentDetailPanel } from './AgentDetailPanel';
 import { ChatInput } from './ChatInput';
 import { SessionEmptyChat } from './ChatEmptyStates';
 import type { FileAttachment } from './useFileAttachments';
@@ -46,11 +53,13 @@ export function SessionChat({
 }: SessionChatProps) {
   const {
     messages,
+    participants,
     connected,
     isRunning,
     historyLoaded,
     pendingPermissions,
     sendMessage,
+    sendDirectedMessages,
     respondToPermission,
     sendInterrupt,
     sendSetModel,
@@ -60,17 +69,50 @@ export function SessionChat({
     capabilities,
   } = useSkuldChat(url);
 
+  const {
+    isRoomMode,
+    activeFilter,
+    setActiveFilter,
+    showInternal,
+    toggleInternal,
+    visibleMessages,
+    collapsedThreads,
+    toggleThread,
+  } = useRoomState(messages, participants);
+
   const [modelInput, setModelInput] = useState('');
   const [showModelInput, setShowModelInput] = useState(false);
   const [showThinkingMenu, setShowThinkingMenu] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
   const userSentRef = useRef(false);
   const prevMessageCountRef = useRef(0);
   const scrollLockUntilRef = useRef(0);
+
+  // Build a map of peerId → ParticipantMeta from all messages that carry participant data
+  const participantsMap = useMemo<Map<string, ParticipantMeta>>(() => {
+    const map = new Map<string, ParticipantMeta>();
+    for (const msg of messages) {
+      if (msg.participant) {
+        map.set(msg.participant.peerId, msg.participant);
+      }
+    }
+    return map;
+  }, [messages]);
+
+  const isRoomSession = participantsMap.size > 0;
+
+  const handleSelectAgent = useCallback((peerId: string) => {
+    setSelectedAgentId(prev => (prev === peerId ? null : peerId));
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedAgentId(null);
+  }, []);
 
   // Show welcome when only system messages exist (no real user/assistant conversation)
   const hasConversation = useMemo(
@@ -79,16 +121,44 @@ export function SessionChat({
     [messages]
   );
 
-  // Filter system messages to render inline, separate from main flow
-  const visibleMessages = useMemo(
-    () =>
-      messages.filter(m => {
-        if (m.role === 'system') return false;
-        if (m.role === 'assistant' && m.status === 'complete' && !m.content.trim()) return false;
-        return true;
-      }),
-    [messages]
-  );
+  // Group consecutive internal messages by threadId for ThreadGroup rendering
+  type MessageGroup =
+    | { type: 'single'; message: (typeof visibleMessages)[number] }
+    | { type: 'thread'; threadId: string; messages: typeof visibleMessages };
+
+  // Thread grouping: consecutive internal messages with same threadId collapse into ThreadGroup
+  const renderedGroups = useMemo((): MessageGroup[] => {
+    if (!isRoomMode || !showInternal)
+      return visibleMessages.map(m => ({ type: 'single', message: m }));
+
+    const result: MessageGroup[] = [];
+    let i = 0;
+    while (i < visibleMessages.length) {
+      const msg = visibleMessages[i];
+      if (msg.visibility === 'internal' && msg.threadId) {
+        const threadId = msg.threadId;
+        const threadMsgs: (typeof visibleMessages)[number][] = [msg];
+        let j = i + 1;
+        while (j < visibleMessages.length) {
+          const next = visibleMessages[j];
+          if (next.visibility === 'internal' && next.threadId === threadId) {
+            threadMsgs.push(next);
+            j++;
+          } else {
+            break;
+          }
+        }
+        if (threadMsgs.length > 1) {
+          result.push({ type: 'thread', threadId, messages: threadMsgs });
+          i = j;
+          continue;
+        }
+      }
+      result.push({ type: 'single', message: msg });
+      i++;
+    }
+    return result;
+  }, [visibleMessages, isRoomMode, showInternal]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView?.({ behavior });
@@ -252,6 +322,24 @@ export function SessionChat({
     [sendMessage]
   );
 
+  const handleSendDirected = useCallback(
+    (
+      agentParticipants: RoomParticipant[],
+      text: string,
+      // TODO(NIU-607): directed_message does not support file attachments yet;
+      // the binary payload transport is tracked separately. File paths are already
+      // prepended as @{path} prefixes in `text` by ChatInput, so context is not lost.
+      _fileAttachments: FileAttachment[]
+    ) => {
+      userSentRef.current = true;
+      sendDirectedMessages(
+        agentParticipants.map(p => p.peerId),
+        text
+      );
+    },
+    [sendDirectedMessages]
+  );
+
   const handleStop = useCallback(() => {
     sendInterrupt();
   }, [sendInterrupt]);
@@ -290,197 +378,254 @@ export function SessionChat({
     onMessageCountChange?.(visibleMessages.length);
   }, [visibleMessages.length, onMessageCountChange]);
 
+  const selectedParticipant = selectedAgentId ? participantsMap.get(selectedAgentId) : undefined;
+
   return (
-    <div className={cn(styles.wrapper, className)}>
-      <div className={styles.toolbar}>
-        <div className={styles.toolbarLeft}>
-          <div className={styles.statusIndicator} data-connected={connected}>
-            {connected ? (
-              <Wifi className={styles.statusIcon} />
-            ) : (
-              <WifiOff className={styles.statusIcon} />
-            )}
-            <span>{connected ? 'Connected' : 'Disconnected'}</span>
-          </div>
-          <span className={styles.messageCount}>
-            {visibleMessages.length} message{visibleMessages.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-
-        {connected && (
-          <div className={styles.toolbarRight}>
-            <div className={styles.controlGroup}>
-              {capabilities.set_model && (
-                <button
-                  type="button"
-                  className={styles.controlBtn}
-                  onClick={() => setShowModelInput(prev => !prev)}
-                  title="Switch model"
-                  data-testid="model-switch-toggle"
-                >
-                  <BrainCircuitIcon className={styles.controlIcon} />
-                </button>
+    <div
+      className={cn(styles.outerGrid, className)}
+      data-detail-open={selectedParticipant ? 'true' : undefined}
+    >
+      <div className={styles.wrapper}>
+        <div className={styles.toolbar}>
+          <div className={styles.toolbarLeft}>
+            <div className={styles.statusIndicator} data-connected={connected}>
+              {connected ? (
+                <Wifi className={styles.statusIcon} />
+              ) : (
+                <WifiOff className={styles.statusIcon} />
               )}
+              <span>{connected ? 'Connected' : 'Disconnected'}</span>
+            </div>
+            <span className={styles.messageCount}>
+              {visibleMessages.length} message{visibleMessages.length !== 1 ? 's' : ''}
+            </span>
+          </div>
 
-              {capabilities.set_thinking_tokens && (
-                <div className={styles.thinkingWrapper}>
+          {connected && (
+            <div className={styles.toolbarRight}>
+              <div className={styles.controlGroup}>
+                {capabilities.set_model && (
                   <button
                     type="button"
                     className={styles.controlBtn}
-                    onClick={() => setShowThinkingMenu(prev => !prev)}
-                    title="Set thinking budget"
-                    data-testid="thinking-budget-toggle"
+                    onClick={() => setShowModelInput(prev => !prev)}
+                    title="Switch model"
+                    data-testid="model-switch-toggle"
                   >
-                    <span className={styles.controlLabel}>Thinking</span>
+                    <BrainCircuitIcon className={styles.controlIcon} />
                   </button>
-                  {showThinkingMenu && (
-                    <div className={styles.thinkingMenu} data-testid="thinking-menu">
-                      {THINKING_PRESETS.map(preset => (
-                        <button
-                          key={preset.value}
-                          type="button"
-                          className={styles.thinkingOption}
-                          onClick={() => handleThinkingSelect(preset.value)}
-                          data-testid={`thinking-${preset.label}`}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
 
-              {capabilities.rewind_files && (
-                <button
-                  type="button"
-                  className={styles.controlBtn}
-                  onClick={sendRewindFiles}
-                  title="Rewind files"
-                  data-testid="rewind-files"
-                >
-                  <RotateCcwIcon className={styles.controlIcon} />
-                </button>
-              )}
+                {capabilities.set_thinking_tokens && (
+                  <div className={styles.thinkingWrapper}>
+                    <button
+                      type="button"
+                      className={styles.controlBtn}
+                      onClick={() => setShowThinkingMenu(prev => !prev)}
+                      title="Set thinking budget"
+                      data-testid="thinking-budget-toggle"
+                    >
+                      <span className={styles.controlLabel}>Thinking</span>
+                    </button>
+                    {showThinkingMenu && (
+                      <div className={styles.thinkingMenu} data-testid="thinking-menu">
+                        {THINKING_PRESETS.map(preset => (
+                          <button
+                            key={preset.value}
+                            type="button"
+                            className={styles.thinkingOption}
+                            onClick={() => handleThinkingSelect(preset.value)}
+                            data-testid={`thinking-${preset.label}`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {capabilities.rewind_files && (
+                  <button
+                    type="button"
+                    className={styles.controlBtn}
+                    onClick={sendRewindFiles}
+                    title="Rewind files"
+                    data-testid="rewind-files"
+                  >
+                    <RotateCcwIcon className={styles.controlIcon} />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-
-      {showModelInput && connected && capabilities.set_model && (
-        <div className={styles.modelInputBar} data-testid="model-input-bar">
-          <input
-            type="text"
-            className={styles.modelInput}
-            value={modelInput}
-            onChange={e => setModelInput(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') handleModelSubmit();
-              if (e.key === 'Escape') setShowModelInput(false);
-            }}
-            placeholder="Model ID (e.g. claude-opus-4-6)"
-            autoFocus
-            aria-label="Model ID input"
-          />
-          <button
-            type="button"
-            className={styles.modelSubmitBtn}
-            onClick={handleModelSubmit}
-            data-testid="model-submit"
-          >
-            Switch
-          </button>
+          )}
         </div>
-      )}
 
-      {!historyLoaded && connected && (
-        <div className={styles.historyLoading} data-testid="history-loading">
-          Loading conversation...
-        </div>
-      )}
-
-      {hasConversation ? (
-        <div className={styles.messagesContainer} ref={scrollContainerRef}>
-          <div className={styles.messagesInner}>
-            {visibleMessages.map(msg => {
-              // System messages rendered as compact inline notifications
-              if (msg.metadata?.messageType === 'system') {
-                return <SystemMessage key={msg.id} message={msg} />;
-              }
-
-              if (msg.role === 'user') {
-                return <UserMessage key={msg.id} message={msg} />;
-              }
-
-              // Streaming assistant message
-              if (msg.status === 'running') {
-                return (
-                  <StreamingMessage
-                    key={msg.id}
-                    content={msg.content}
-                    parts={msg.parts}
-                    model={msg.metadata?.messageType !== 'system' ? undefined : undefined}
-                  />
-                );
-              }
-
-              // Complete assistant message
-              return (
-                <AssistantMessage
-                  key={msg.id}
-                  message={msg}
-                  onCopy={handleCopy}
-                  onRegenerate={handleRegenerate}
-                  onBookmark={handleBookmark}
-                  bookmarked={(() => {
-                    try {
-                      return localStorage.getItem(`bookmark:${msg.id}`) === '1';
-                    } catch {
-                      return false;
-                    }
-                  })()}
-                />
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
-          {showScrollBtn && (
+        {showModelInput && connected && capabilities.set_model && (
+          <div className={styles.modelInputBar} data-testid="model-input-bar">
+            <input
+              type="text"
+              className={styles.modelInput}
+              value={modelInput}
+              onChange={e => setModelInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleModelSubmit();
+                if (e.key === 'Escape') setShowModelInput(false);
+              }}
+              placeholder="Model ID (e.g. claude-opus-4-6)"
+              autoFocus
+              aria-label="Model ID input"
+            />
             <button
               type="button"
-              className={styles.scrollToBottom}
-              onClick={() => scrollToBottom('smooth')}
-              aria-label="Scroll to bottom"
+              className={styles.modelSubmitBtn}
+              onClick={handleModelSubmit}
+              data-testid="model-submit"
             >
-              <ArrowDownIcon className={styles.scrollToBottomIcon} />
-              {newMessageCount > 0 && (
-                <span className={styles.scrollToBottomBadge}>
-                  {newMessageCount > 99 ? '99+' : newMessageCount}
-                </span>
-              )}
+              Switch
             </button>
-          )}
-        </div>
-      ) : (
-        <SessionEmptyChat sessionName="Volundr" onSuggestionClick={text => handleSend(text, [])} />
-      )}
+          </div>
+        )}
 
-      <div className={styles.inputArea}>
-        <div className={styles.inputInner}>
-          {pendingPermissions.length > 0 && (
-            <PermissionStack permissions={pendingPermissions} onRespond={handlePermissionRespond} />
-          )}
-          <ChatInput
-            onSend={handleSend}
-            isLoading={isRunning}
-            onStop={handleStop}
-            disabled={!connected}
-            stopDisabled={!capabilities.interrupt}
-            sessionHost={sessionHost}
-            chatEndpoint={chatEndpoint}
-            availableCommands={availableCommands}
+        {!historyLoaded && connected && (
+          <div className={styles.historyLoading} data-testid="history-loading">
+            Loading conversation...
+          </div>
+        )}
+
+        {isRoomMode && (
+          <ParticipantFilter
+            participants={participants}
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+            showInternal={showInternal}
+            onToggleInternal={toggleInternal}
           />
+        )}
+
+        {hasConversation ? (
+          <div className={styles.messagesContainer} ref={scrollContainerRef}>
+            <div className={styles.messagesInner}>
+              {renderedGroups.map(group => {
+                if (group.type === 'thread') {
+                  return (
+                    <ThreadGroup
+                      key={group.threadId}
+                      messages={group.messages}
+                      isCollapsed={collapsedThreads.has(group.threadId)}
+                      onToggle={() => toggleThread(group.threadId)}
+                    />
+                  );
+                }
+
+                const msg = group.message;
+
+                // System messages rendered as compact inline notifications
+                if (msg.metadata?.messageType === 'system') {
+                  return <SystemMessage key={msg.id} message={msg} />;
+                }
+
+                // Room messages (participant present or room session) — render as RoomMessage
+                if ((isRoomMode && msg.participant) || isRoomSession) {
+                  return (
+                    <RoomMessage
+                      key={msg.id}
+                      message={msg}
+                      onSelectAgent={handleSelectAgent}
+                      selectedAgentId={selectedAgentId}
+                      onCopy={handleCopy}
+                      onRegenerate={handleRegenerate}
+                      onBookmark={handleBookmark}
+                      bookmarked={(() => {
+                        try {
+                          return localStorage.getItem(`bookmark:${msg.id}`) === '1';
+                        } catch {
+                          return false;
+                        }
+                      })()}
+                    />
+                  );
+                }
+
+                if (msg.role === 'user') {
+                  return <UserMessage key={msg.id} message={msg} />;
+                }
+
+                // Streaming assistant message
+                if (msg.status === 'running') {
+                  return <StreamingMessage key={msg.id} content={msg.content} parts={msg.parts} />;
+                }
+
+                // Complete assistant message
+                return (
+                  <AssistantMessage
+                    key={msg.id}
+                    message={msg}
+                    onCopy={handleCopy}
+                    onRegenerate={handleRegenerate}
+                    onBookmark={handleBookmark}
+                    bookmarked={(() => {
+                      try {
+                        return localStorage.getItem(`bookmark:${msg.id}`) === '1';
+                      } catch {
+                        return false;
+                      }
+                    })()}
+                  />
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+            {showScrollBtn && (
+              <button
+                type="button"
+                className={styles.scrollToBottom}
+                onClick={() => scrollToBottom('smooth')}
+                aria-label="Scroll to bottom"
+              >
+                <ArrowDownIcon className={styles.scrollToBottomIcon} />
+                {newMessageCount > 0 && (
+                  <span className={styles.scrollToBottomBadge}>
+                    {newMessageCount > 99 ? '99+' : newMessageCount}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
+        ) : (
+          <SessionEmptyChat
+            sessionName="Volundr"
+            onSuggestionClick={text => handleSend(text, [])}
+          />
+        )}
+
+        <div className={styles.inputArea}>
+          <div className={styles.inputInner}>
+            {pendingPermissions.length > 0 && (
+              <PermissionStack
+                permissions={pendingPermissions}
+                onRespond={handlePermissionRespond}
+              />
+            )}
+            <ChatInput
+              onSend={handleSend}
+              onSendDirected={handleSendDirected}
+              isLoading={isRunning}
+              onStop={handleStop}
+              disabled={!connected}
+              stopDisabled={!capabilities.interrupt}
+              sessionHost={sessionHost}
+              chatEndpoint={chatEndpoint}
+              availableCommands={availableCommands}
+              participants={participants}
+            />
+          </div>
         </div>
       </div>
+
+      {selectedParticipant && (
+        <AgentDetailPanel participant={selectedParticipant} onClose={handleCloseDetail} />
+      )}
     </div>
   );
 }
