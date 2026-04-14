@@ -107,7 +107,7 @@ llm:
   primary_alias: balanced
   thinking_enabled: true
 
-iteration_budget: 40
+iteration_budget: 80
 stop_on_outcome: true
 
 consumes:
