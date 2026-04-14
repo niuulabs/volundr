@@ -26,7 +26,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 LOG_DIR="/tmp/ravn-mesh"
 SAVE_DIR="${REPO_ROOT}/logs/mesh-e2e-$(date +%Y%m%d-%H%M%S)"
 TIMEOUT_DISCOVERY=20
-TIMEOUT_CASCADE=90
+TIMEOUT_CASCADE=180  # Longer timeout for full fix cycle
 QUICK_MODE=false
 
 # Parse args
@@ -223,11 +223,16 @@ while true; do
     if grep -q "publishing outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null; then
         log_info "Reviewer published review.completed"
 
-        # Check for security.completed
-        if grep -q "publishing outcome event_type=security.completed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null; then
-            log_info "Security published security.completed"
-            cascade_complete=true
-            break
+        # Check for coder publishing code.changed (fix cycle)
+        if grep -q "publishing outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null; then
+            log_info "Coder published code.changed (fix applied)"
+
+            # Check for security.completed
+            if grep -q "publishing outcome event_type=security.completed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null; then
+                log_info "Security published security.completed"
+                cascade_complete=true
+                break
+            fi
         fi
     fi
 
@@ -243,7 +248,7 @@ log_info "=== Cascade Results ==="
 
 # Check each step
 steps_passed=0
-steps_total=4
+steps_total=5
 
 # Step 1: Reviewer received code.changed
 if grep -q "mesh: received outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null; then
@@ -269,12 +274,20 @@ else
     log_error "3. Coder did NOT receive review.completed"
 fi
 
-# Step 4: Security received and processed
-if grep -q "mesh: received outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null; then
-    log_info "4. Security received review.completed"
+# Step 4: Coder published code.changed (fix cycle)
+if grep -q "publishing outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null; then
+    log_info "4. Coder published code.changed (fix applied)"
     steps_passed=$((steps_passed + 1))
 else
-    log_error "4. Security did NOT receive review.completed"
+    log_error "4. Coder did NOT publish code.changed"
+fi
+
+# Step 5: Security received and processed
+if grep -q "mesh: received outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null; then
+    log_info "5. Security received review.completed"
+    steps_passed=$((steps_passed + 1))
+else
+    log_error "5. Security did NOT receive review.completed"
 fi
 
 echo ""
@@ -301,6 +314,10 @@ test-publisher → code.changed → reviewer (node 2)
                                 ↓      ↓
                              coder   security
                             (node 1) (node 3)
+                               ↓
+                          code.changed (fix applied)
+                               ↓
+                            reviewer → re-reviews
 \`\`\`
 
 ## Steps
@@ -308,7 +325,8 @@ test-publisher → code.changed → reviewer (node 2)
 1. Reviewer received code.changed: $(grep -q "mesh: received outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null && echo "PASS" || echo "FAIL")
 2. Reviewer published review.completed: $(grep -q "publishing outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null && echo "PASS" || echo "FAIL")
 3. Coder received review.completed: $(grep -q "mesh: received outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null && echo "PASS" || echo "FAIL")
-4. Security received review.completed: $(grep -q "mesh: received outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null && echo "PASS" || echo "FAIL")
+4. Coder published code.changed: $(grep -q "publishing outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null && echo "PASS" || echo "FAIL")
+5. Security received review.completed: $(grep -q "mesh: received outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null && echo "PASS" || echo "FAIL")
 EOF
 
 echo ""
