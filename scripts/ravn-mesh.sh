@@ -108,6 +108,10 @@ mimir:
 permission:
   workspace_root: /tmp
 
+persona_source:
+  persona_dirs:
+    - "${REPO_ROOT}/.ravn/personas"
+
 logging:
   level: DEBUG
 YAML
