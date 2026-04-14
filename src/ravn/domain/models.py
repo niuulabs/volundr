@@ -392,8 +392,11 @@ class RavnIdentity:
     capabilities: list[str]
     permission_mode: str  # read_only | workspace_write | full_access
     version: str
+    consumes_event_types: list[str] = field(
+        default_factory=list
+    )  # event types this persona handles
     rep_address: str | None = None  # nng REP address for mesh.send()
-    pub_address: str | None = None  # nng PUB address for mesh.subscribe()
+    pub_address: str | None = None  # nng PUB address for mesh.send()
     spiffe_id: str | None = None  # infra mode only
     sleipnir_routing_key: str | None = None  # for SleipnirMeshAdapter routing
 

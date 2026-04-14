@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import json
 import logging
 import os
 import signal
 import sys
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -22,8 +24,11 @@ from ravn.config import (
     resolve_trust_tools,
 )
 from ravn.domain.checkpoint import InterruptReason
+from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.models import (
+    AgentTask,
     Message,
+    OutputMode,
     Session,
     TodoItem,
     TodoStatus,
@@ -2040,6 +2045,11 @@ async def _run_daemon(
                 await _cascade_discovery.start()
             if _cascade_mesh is not None:
                 await _cascade_mesh.start()
+                # Process pending outcome subscriptions
+                pending = getattr(_cascade_mesh, "_pending_outcome_subscriptions", [])
+                for event_type, handler in pending:
+                    logger.info("mesh: subscribing to event_type=%s", event_type)
+                    await _cascade_mesh.subscribe(event_type, handler)
 
         trigger_names = [t.name for t in drive_loop._triggers]
         tasks.append(asyncio.create_task(drive_loop.run(), name="drive_loop"))
@@ -2361,8 +2371,15 @@ def _wire_cascade(
         discovery is not None,
     )
 
-    # Store cascade tools on drive_loop for agent_factory to pick up
-    drive_loop._cascade_tools = cascade_tools
+    # Build mesh routing tools (event-type based routing)
+    from ravn.adapters.tools.mesh_routing_tools import build_mesh_routing_tools  # noqa: PLC0415
+
+    mesh_routing_tools = build_mesh_routing_tools(mesh=mesh, discovery=discovery)
+    if mesh_routing_tools:
+        logger.info("mesh_routing: registered %d tools", len(mesh_routing_tools))
+
+    # Store all tools on drive_loop for agent_factory to pick up
+    drive_loop._cascade_tools = cascade_tools + mesh_routing_tools
 
     # Wire the mesh RPC handler
     async def _handle_mesh_rpc(message: dict) -> dict:
@@ -2371,8 +2388,6 @@ def _wire_cascade(
         if msg_type == "task_dispatch":
             task_dict = message.get("task", {})
             try:
-                from ravn.domain.models import AgentTask, OutputMode  # noqa: PLC0415
-
                 task = AgentTask(
                     task_id=task_dict["task_id"],
                     title=task_dict.get("title", "remote task"),
@@ -2419,6 +2434,57 @@ def _wire_cascade(
                 "event_count": len(result.events),
             }
 
+        if msg_type == "work_request":
+            # Synchronous work request - enqueue, wait for completion, return result
+            # Used for event-type based routing (persona-to-persona work delegation)
+            prompt = message.get("prompt", "")
+            event_type = message.get("event_type", "")
+            request_id = message.get("request_id", str(uuid.uuid4()))
+            timeout_s = float(message.get("timeout_s", 120.0))
+
+            task = AgentTask(
+                task_id=f"work_{request_id}",
+                title=f"Work request: {event_type}" if event_type else "Work request",
+                initiative_context=prompt,
+                triggered_by=f"mesh:work_request:{event_type}",
+                output_mode=OutputMode.SILENT,
+                priority=5,
+            )
+
+            try:
+                await drive_loop.enqueue(task)
+                # Wait for completion with timeout
+                result = await asyncio.wait_for(
+                    drive_loop.wait_for_result(task.task_id),
+                    timeout=timeout_s,
+                )
+                output = result.output if result else ""
+
+                # Parse outcome block if present
+                from niuu.domain.outcome import parse_outcome_block  # noqa: PLC0415
+
+                response: dict[str, Any] = {
+                    "status": "complete",
+                    "request_id": request_id,
+                    "output": output,
+                    "event_type": event_type,
+                }
+
+                parsed = parse_outcome_block(output)
+                if parsed is not None:
+                    response["outcome"] = {
+                        "fields": parsed.fields,
+                        "valid": parsed.valid,
+                        "errors": parsed.errors,
+                    }
+
+                return response
+            except TimeoutError:
+                return {"status": "timeout", "request_id": request_id, "event_type": event_type}
+            except Exception as exc:
+                logger.error("work_request failed: %s", exc)
+                return {"status": "error", "request_id": request_id, "error": str(exc)}
+
         return {"error": "unknown_message_type", "type": msg_type}
 
     drive_loop.set_rpc_handler(_handle_mesh_rpc)
@@ -2426,51 +2492,170 @@ def _wire_cascade(
     if mesh is not None and hasattr(mesh, "set_rpc_handler"):
         mesh.set_rpc_handler(drive_loop.handle_rpc)
 
+    # Wire mesh and persona_config for outcome event publishing
+    drive_loop.set_mesh(mesh)
+    drive_loop.set_persona_config(persona_config)
+
+    # Subscribe to event types this persona consumes
+    if mesh is not None and persona_config is not None:
+        consumes = getattr(persona_config, "consumes", None)
+        event_types = getattr(consumes, "event_types", []) if consumes else []
+
+        async def _handle_outcome_event(event: RavnEvent) -> None:
+            """Handle incoming outcome events from other personas."""
+            if event.type != RavnEventType.OUTCOME:
+                return
+
+            payload = event.payload
+            event_type = payload.get("event_type", "")
+            source_persona = payload.get("persona", "")
+            outcome = payload.get("outcome", {})
+            source_task_id = event.task_id or event.correlation_id
+
+            logger.info(
+                "mesh: received outcome event_type=%s from=%s task_id=%s",
+                event_type,
+                source_persona,
+                source_task_id,
+            )
+
+            # Build context from the outcome
+            context_parts = [
+                f"Event type: {event_type}",
+                f"From persona: {source_persona}",
+                f"Source task: {source_task_id}",
+            ]
+            if outcome:
+                context_parts.append(f"Outcome: {json.dumps(outcome)}")
+
+            task_id_suffix = (source_task_id or "unknown")[:8]
+            task = AgentTask(
+                task_id=f"event_{event_type.replace('.', '_')}_{task_id_suffix}",
+                title=f"Handle {event_type} from {source_persona}",
+                initiative_context="\n".join(context_parts),
+                triggered_by=f"mesh:outcome:{event_type}",
+                output_mode=OutputMode.SILENT,
+                priority=5,
+            )
+
+            try:
+                await drive_loop.enqueue(task)
+                logger.info(
+                    "mesh: enqueued task %s for event_type=%s",
+                    task.task_id,
+                    event_type,
+                )
+            except Exception as exc:
+                logger.error("mesh: failed to enqueue task for event: %s", exc)
+
+        # Store pending subscriptions - will be activated after mesh.start()
+        mesh._pending_outcome_subscriptions = [(et, _handle_outcome_event) for et in event_types]
+        for event_type in event_types:
+            logger.info("mesh: will subscribe to event_type=%s after start", event_type)
+
     return mesh, discovery
 
 
 def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
-    """Build the mesh adapter from config."""
+    """Build the mesh adapter using Sleipnir transport.
+
+    The transport (nng, rabbitmq, nats, redis) is determined by mesh.adapter config.
+    All transports go through Sleipnir's abstraction layer.
+    """
     import socket
 
-    from ravn.adapters.mesh.nng_mesh import NngMeshAdapter
     from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
 
     mesh_cfg = settings.mesh
     own_peer_id = mesh_cfg.own_peer_id or socket.gethostname()
 
-    if mesh_cfg.adapter == "nng":
-        return NngMeshAdapter(
-            config=mesh_cfg.nng,
-            discovery=discovery,
-            own_peer_id=own_peer_id,
-        )
+    # Build the appropriate Sleipnir transport based on config
+    transport = _build_sleipnir_transport(settings, mesh_cfg.adapter)
+    if transport is None:
+        logger.warning("mesh: failed to build transport, mesh disabled")
+        return None
 
-    if mesh_cfg.adapter == "sleipnir":
-        return SleipnirMeshAdapter(
-            sleipnir_config=settings.sleipnir,
-            mesh_sleipnir_config=mesh_cfg.sleipnir,
-            own_peer_id=own_peer_id,
-            discovery=discovery,
-        )
+    return SleipnirMeshAdapter(
+        publisher=transport,
+        subscriber=transport,
+        own_peer_id=own_peer_id,
+        discovery=discovery,
+        rpc_timeout_s=mesh_cfg.rpc_timeout_s,
+    )
 
-    if mesh_cfg.adapter == "composite":
-        from ravn.adapters.mesh.composite import CompositeMeshAdapter
 
-        preferred = SleipnirMeshAdapter(
-            sleipnir_config=settings.sleipnir,
-            mesh_sleipnir_config=mesh_cfg.sleipnir,
-            own_peer_id=own_peer_id,
-            discovery=discovery,
-        )
-        fallback = NngMeshAdapter(
-            config=mesh_cfg.nng,
-            discovery=discovery,
-            own_peer_id=own_peer_id,
-        )
-        return CompositeMeshAdapter(preferred=preferred, fallback=fallback)
+def _build_sleipnir_transport(settings: Settings, adapter: str) -> Any:
+    """Build the Sleipnir transport based on adapter config."""
+    if adapter == "nng":
+        try:
+            from pathlib import Path
 
-    raise ValueError(f"Unknown mesh adapter: {mesh_cfg.adapter!r}")
+            from sleipnir.adapters.discovery import ServiceRegistry
+            from sleipnir.adapters.nng_transport import NngTransport
+
+            nng_cfg = settings.mesh.nng
+            # Use shared registry for multi-process discovery
+            registry_path = Path("/tmp/ravn-mesh/sleipnir-registry.json")
+            registry = ServiceRegistry(registry_path)
+            service_id = f"ravn:{settings.mesh.own_peer_id}"
+            return NngTransport(
+                address=nng_cfg.pub_sub_address,
+                service_id=service_id,
+                registry=registry,
+            )
+        except ImportError:
+            logger.warning("mesh: pynng not installed, nng transport unavailable")
+            return None
+
+    if adapter in ("sleipnir", "rabbitmq"):
+        try:
+            import os
+
+            from sleipnir.adapters.rabbitmq import RabbitMQTransport
+
+            amqp_url = os.environ.get(settings.sleipnir.amqp_url_env, "")
+            if not amqp_url:
+                logger.warning(
+                    "mesh: %s not set, rabbitmq transport unavailable",
+                    settings.sleipnir.amqp_url_env,
+                )
+                return None
+            return RabbitMQTransport(amqp_url=amqp_url)
+        except ImportError:
+            logger.warning("mesh: aio_pika not installed, rabbitmq transport unavailable")
+            return None
+
+    if adapter == "nats":
+        try:
+            import os
+
+            from sleipnir.adapters.nats_transport import NatsTransport
+
+            nats_url = os.environ.get("NATS_URL", "nats://localhost:4222")
+            return NatsTransport(servers=[nats_url])
+        except ImportError:
+            logger.warning("mesh: nats-py not installed, nats transport unavailable")
+            return None
+
+    if adapter == "redis":
+        try:
+            import os
+
+            from sleipnir.adapters.redis_streams import RedisStreamsTransport
+
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+            return RedisStreamsTransport(redis_url=redis_url)
+        except ImportError:
+            logger.warning("mesh: redis not installed, redis transport unavailable")
+            return None
+
+    if adapter == "in_process":
+        from sleipnir.adapters.in_process import InProcessBus
+
+        return InProcessBus()
+
+    logger.warning("mesh: unknown adapter %r", adapter)
+    return None
 
 
 def _build_discovery(
@@ -2507,6 +2692,11 @@ def _build_discovery(
     )
     capabilities = _derive_capabilities(settings, persona_config, profile_name)
 
+    # Extract event types this persona consumes (for mesh routing)
+    consumes_event_types: list[str] = []
+    if persona_config is not None and hasattr(persona_config, "consumes"):
+        consumes_event_types = list(persona_config.consumes.event_types or [])
+
     identity = RavnIdentity(
         peer_id=peer_id,
         realm_id=realm_id,
@@ -2514,6 +2704,7 @@ def _build_discovery(
         capabilities=capabilities,
         permission_mode=settings.permission.mode,
         version=version,
+        consumes_event_types=consumes_event_types,
         rep_address=rep_address,
         pub_address=pub_address,
     )

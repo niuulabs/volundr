@@ -194,6 +194,19 @@ _BUILTIN_PERSONAS: dict[str, PersonaConfig] = {
         permission_mode="workspace-write",
         llm=PersonaLLMConfig(primary_alias="balanced", thinking_enabled=True),
         iteration_budget=40,
+        produces=PersonaProduces(
+            event_type="code.changed",
+            schema={
+                "files_changed": OutcomeField(
+                    type="number", description="number of files modified"
+                ),
+                "tests_added": OutcomeField(type="number", description="number of tests added"),
+                "summary": OutcomeField(type="string", description="one-line summary of changes"),
+            },
+        ),
+        consumes=PersonaConsumes(
+            event_types=["code.requested", "bug.fix.requested", "feature.requested"],
+        ),
     ),
     "research-agent": PersonaConfig(
         name="research-agent",

@@ -18,8 +18,10 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from niuu.domain.mimir import ThreadState
+from niuu.domain.outcome import parse_outcome_block
 from niuu.ports.mimir import MimirPort
 from ravn.adapters.channels.capture import CaptureChannel, TaskResult, TaskResultStore
 from ravn.adapters.channels.silent import SilentChannel
@@ -32,6 +34,10 @@ from ravn.ports.channel import ChannelPort
 from ravn.ports.event_publisher import EventPublisherPort
 from ravn.ports.trigger import TriggerPort
 from ravn.prompt_builder import build_initiative_prompt
+
+if TYPE_CHECKING:
+    from ravn.adapters.personas.loader import PersonaConfig
+    from ravn.ports.mesh import MeshPort
 
 try:
     from sleipnir.domain.catalog import ravn_task_completed as _sleipnir_task_completed
@@ -90,6 +96,9 @@ class DriveLoop:
         self._counter = 0
         self._rpc_handler: MeshRpcHandler | None = None
         self._result_store: TaskResultStore = TaskResultStore()
+        self._completion_events: dict[str, asyncio.Event] = {}
+        self._mesh: MeshPort | None = None
+        self._persona_config: PersonaConfig | None = None
         budget_cfg = getattr(settings, "budget", None)
         if isinstance(budget_cfg, BudgetConfig):
             _cap = budget_cfg.daily_cap_usd
@@ -198,6 +207,28 @@ class DriveLoop:
         """Return the full TaskResult for a completed (or running) task, or None."""
         return self._result_store.get(task_id)
 
+    async def wait_for_result(self, task_id: str) -> TaskResult | None:
+        """Wait for a task to complete and return its result.
+
+        Creates an asyncio.Event for the task if one doesn't exist, then waits
+        for it to be signalled by _on_task_done.
+        """
+        # If task is already complete, return immediately
+        result = self._result_store.get(task_id)
+        if result is not None and result.status in ("complete", "failed", "cancelled"):
+            return result
+
+        # Create event if not exists
+        if task_id not in self._completion_events:
+            self._completion_events[task_id] = asyncio.Event()
+
+        # Wait for completion
+        await self._completion_events[task_id].wait()
+
+        # Clean up and return result
+        self._completion_events.pop(task_id, None)
+        return self._result_store.get(task_id)
+
     def set_rpc_handler(self, handler: MeshRpcHandler) -> None:
         """Register a coroutine handler for incoming mesh RPC messages.
 
@@ -205,6 +236,14 @@ class DriveLoop:
         dict reply.  Registered via MeshPort.set_rpc_handler() in _run_daemon().
         """
         self._rpc_handler = handler
+
+    def set_mesh(self, mesh: MeshPort | None) -> None:
+        """Set the mesh port for publishing outcome events."""
+        self._mesh = mesh
+
+    def set_persona_config(self, persona_config: PersonaConfig | None) -> None:
+        """Set the persona config for determining produces.event_type."""
+        self._persona_config = persona_config
 
     async def handle_rpc(self, message: dict) -> dict:
         """Dispatch an incoming mesh RPC message to the registered handler.
@@ -291,6 +330,10 @@ class DriveLoop:
     def _on_task_done(self, task_id: str) -> None:
         self._active_tasks.pop(task_id, None)
         self._semaphore.release()
+        # Signal any waiters that this task is complete
+        event = self._completion_events.get(task_id)
+        if event is not None:
+            event.set()
 
     async def _run_task(self, task: AgentTask) -> None:
         """Execute a single initiative task."""
@@ -393,6 +436,10 @@ class DriveLoop:
                 logger.warning("emit_session_ended failed; continuing", exc_info=True)
         await self._emit_sleipnir_task_completed(task, outcome)
 
+        # Publish outcome event to mesh for other agents to consume
+        response_text = getattr(channel, "response_text", "")
+        await self._emit_mesh_outcome_event(task, response_text, success)
+
         await self._event_publisher.publish(
             RavnEvent(
                 type=RavnEventType.TASK_COMPLETE,
@@ -429,6 +476,56 @@ class DriveLoop:
             await self._sleipnir_publisher.publish(event)
         except Exception:
             logger.warning("Failed to emit ravn.task.completed; continuing.", exc_info=True)
+
+    async def _emit_mesh_outcome_event(
+        self, task: AgentTask, response_text: str, success: bool
+    ) -> None:
+        """Publish persona outcome to mesh for other agents to consume.
+
+        If the persona declares a produces.event_type, this publishes the task
+        outcome to the mesh so other agents can react to it. For example:
+        - Coder finishes with produces.event_type="code.completed"
+        - Reviewer (who consumes code.changed) can pick up the event
+
+        This is fully generic — any persona with produces.event_type participates.
+        """
+        if self._mesh is None or self._persona_config is None:
+            return
+
+        event_type = self._persona_config.produces.event_type
+        if not event_type:
+            return
+
+        # Parse outcome block from response
+        parsed = parse_outcome_block(response_text)
+        outcome_fields = parsed.fields if parsed and parsed.valid else {}
+
+        # Create proper RavnEvent for hexagonal compliance
+        event = RavnEvent(
+            type=RavnEventType.OUTCOME,
+            source=self._source_id,
+            payload={
+                "event_type": event_type,
+                "persona": self._persona_config.name,
+                "success": success,
+                "outcome": outcome_fields,
+            },
+            timestamp=datetime.now(UTC),
+            urgency=0.3,
+            correlation_id=task.task_id,
+            session_id=task.session_id or "",
+            task_id=task.task_id,
+        )
+
+        try:
+            logger.info(
+                "drive_loop: publishing outcome event_type=%s task_id=%s",
+                event_type,
+                task.task_id,
+            )
+            await self._mesh.publish(event, topic=event_type)
+        except Exception:
+            logger.warning("Failed to publish mesh outcome event; continuing.", exc_info=True)
 
     def _save_task_output(self, task: AgentTask, channel: ChannelPort) -> None:
         """Persist agent response to ``task.output_path`` when set (cron tasks)."""

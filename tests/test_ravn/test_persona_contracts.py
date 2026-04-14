@@ -476,11 +476,14 @@ class TestPersonaLoaderLoadInjection:
         assert "verdict:" in persona.system_prompt_template
         assert "pass | fail | needs_changes" in persona.system_prompt_template
 
-    def test_coding_agent_no_outcome_instruction(self) -> None:
+    def test_coding_agent_has_outcome_instruction(self) -> None:
+        """coding-agent now produces code.changed events with outcome schema."""
         loader = PersonaLoader()
         persona = loader.load("coding-agent")
         assert persona is not None
-        assert "---outcome---" not in persona.system_prompt_template
+        assert "---outcome---" in persona.system_prompt_template
+        assert "files_changed" in persona.system_prompt_template
+        assert "summary" in persona.system_prompt_template
 
     def test_security_auditor_has_outcome_instruction(self) -> None:
         loader = PersonaLoader()
@@ -549,9 +552,9 @@ class TestPersonaContractE2E:
         assert "pass | fail | needs_changes" in persona.system_prompt_template
 
     def test_persona_without_contract_unchanged(self) -> None:
-        """Loading coding-agent → no outcome block in system prompt."""
+        """Loading research-agent (no produces) → no outcome block in system prompt."""
         loader = PersonaLoader()
-        persona = loader.load("coding-agent")
+        persona = loader.load("research-agent")
         assert "---outcome---" not in persona.system_prompt_template
 
 

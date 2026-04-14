@@ -232,6 +232,25 @@ class MdnsDiscoveryAdapter:
         """Return the cached verified peer table (synchronous)."""
         return dict(self._peers)
 
+    def find_peer_for_event_type(self, event_type: str) -> RavnPeer | None:
+        """Find the first idle peer that consumes the given event type.
+
+        Returns None if no matching peer is found or all matching peers are busy.
+        Prefers idle peers over busy ones.
+        """
+        idle_match: RavnPeer | None = None
+        busy_match: RavnPeer | None = None
+
+        for peer in self._peers.values():
+            if event_type in peer.consumes_event_types:
+                if peer.status == "idle":
+                    idle_match = peer
+                    break  # Prefer first idle match
+                if busy_match is None:
+                    busy_match = peer
+
+        return idle_match or busy_match
+
     async def own_identity(self) -> RavnIdentity:
         """Return this Ravn's identity."""
         return self._identity
@@ -255,6 +274,9 @@ class MdnsDiscoveryAdapter:
             records["pub_addr"] = self._identity.pub_address
         if not self._identity.rep_address and not self._identity.pub_address:
             records["host"] = ip
+        # Include event types this persona consumes (for mesh routing)
+        if self._identity.consumes_event_types:
+            records["consumes"] = ",".join(self._identity.consumes_event_types)
         return records
 
     async def _register_service(self) -> None:
@@ -374,11 +396,45 @@ class MdnsDiscoveryAdapter:
     # ------------------------------------------------------------------
 
     async def _initiate_handshake(self, candidate: RavnCandidate) -> None:
+        """Initiate handshake with retry and jitter to handle PAIR socket contention.
+
+        PAIR sockets are 1-to-1, so when multiple peers discover each other
+        simultaneously, only one connection succeeds. Jitter + retries resolve this.
+        """
         self._pending_handshakes.add(candidate.peer_id)
         try:
-            peer = await self.handshake(candidate)
-            if peer is not None:
-                self._add_peer(peer)
+            # Random jitter (0-500ms) to stagger simultaneous discovery
+            jitter = secrets.randbelow(500) / 1000.0
+            await asyncio.sleep(jitter)
+
+            max_retries = 3
+            for attempt in range(max_retries):
+                if candidate.peer_id in self._peers:
+                    # Already verified (responder side completed first)
+                    return
+
+                peer = await self.handshake(candidate)
+                if peer is not None:
+                    self._add_peer(peer)
+                    return
+
+                if attempt < max_retries - 1:
+                    # Exponential backoff with jitter: 0.5s, 1s, 2s base
+                    backoff = (0.5 * (2**attempt)) + (secrets.randbelow(300) / 1000.0)
+                    logger.debug(
+                        "mdns_discovery: handshake attempt %d/%d failed for %s, retrying in %.2fs",
+                        attempt + 1,
+                        max_retries,
+                        candidate.peer_id,
+                        backoff,
+                    )
+                    await asyncio.sleep(backoff)
+
+            logger.debug(
+                "mdns_discovery: handshake with %s failed after %d attempts",
+                candidate.peer_id,
+                max_retries,
+            )
         finally:
             self._pending_handshakes.discard(candidate.peer_id)
 
@@ -552,6 +608,7 @@ class MdnsDiscoveryAdapter:
             capabilities=raw.get("capabilities", []),
             permission_mode=raw.get("permission_mode", ""),
             version=raw.get("version", ""),
+            consumes_event_types=raw.get("consumes_event_types", []),
             rep_address=raw.get("rep_address") or (candidate.rep_address if candidate else None),
             pub_address=raw.get("pub_address") or (candidate.pub_address if candidate else None),
             spiffe_id=raw.get("spiffe_id"),

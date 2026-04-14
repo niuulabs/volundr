@@ -35,13 +35,8 @@ MEMORY_DIR="/tmp/ravn-mesh"
 # ---------------------------------------------------------------------------
 
 _ravn_cmd() {
-    # Run ravn via uv if available (project standard), otherwise fall back to
-    # plain python -m ravn.
-    if command -v uv > /dev/null 2>&1; then
-        uv run --directory "${REPO_ROOT}" python -m ravn "$@"
-    else
-        python -m ravn "$@"
-    fi
+    # Run ravn with PYTHONPATH set to src directory
+    PYTHONPATH="${REPO_ROOT}/src" python -m ravn "$@"
 }
 
 _write_config() {
@@ -62,8 +57,19 @@ mesh:
   adapter: nng
   own_peer_id: ravn-mesh-${n}
   nng:
-    pub_sub_address: "tcp://0.0.0.0:${pub_port}"
-    req_rep_address: "tcp://0.0.0.0:${rep_port}"
+    pub_sub_address: "ipc:///tmp/ravn-mesh/node-${n}.ipc"
+    req_rep_address: "ipc:///tmp/ravn-mesh/node-${n}-rep.ipc"
+
+llm:
+  model: google/gemma-4-26B-A4B-it
+  max_tokens: 8192
+  timeout: 300.0
+  provider:
+    adapter: ravn.adapters.llm.openai.OpenAICompatibleAdapter
+    kwargs:
+      base_url: "https://vllm.valaskjalf.asgard.niuu.world"
+      api_key: ""
+      system_prefix: "You are Ravn, an autonomous agent."
 
 discovery:
   enabled: true
@@ -87,6 +93,7 @@ memory:
 logging:
   level: INFO
 YAML
+
     echo "${config_path}"
 }
 
@@ -106,16 +113,16 @@ cmd_start() {
     echo ""
 
     # Node roles:
-    #   1 — coordinator  (cascade tools, plans and delegates)
-    #   2 — coding-agent (file, git, terminal, web)
-    #   3 — research-agent (web, file — read-only)
+    #   1 — coder     (produces code.changed)
+    #   2 — reviewer  (consumes code.changed, produces review.completed)
+    #   3 — deployer  (consumes review.completed)
     declare -a configs
-    configs[1]="$(_write_config 1 7480 7481 7490 coordinator)"
-    configs[2]="$(_write_config 2 7482 7483 7491 coding-agent)"
-    configs[3]="$(_write_config 3 7484 7485 7492 research-agent)"
+    configs[1]="$(_write_config 1 7480 7481 7490 coder)"
+    configs[2]="$(_write_config 2 7482 7483 7491 reviewer)"
+    configs[3]="$(_write_config 3 7484 7485 7492 deployer)"
 
     declare -a pids
-    local personas=('' coordinator coding-agent research-agent)
+    local personas=('' coder reviewer deployer)
     for n in 1 2 3; do
         local log="${LOG_DIR}/ravn-mesh-${n}.log"
         echo "  Node ${n} [${personas[$n]}]: config=${configs[$n]}"
@@ -126,6 +133,9 @@ cmd_start() {
             > "${log}" 2>&1 &
         pids[$n]=$!
         echo "           pid=${pids[$n]}"
+
+        # Stagger starts so registry has time to populate
+        sleep 2
     done
 
     # Write all PIDs to file for later cleanup
