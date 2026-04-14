@@ -1,0 +1,29 @@
+{
+  "services": [
+    {
+      "id": "ravn:test-publisher",
+      "pid": 5683,
+      "socket": "ipc:///tmp/ravn-mesh/test-pub.ipc",
+      "started": "2026-04-14T01:02:02.743547+00:00"
+    },
+    {
+      "id": "ravn:ravn-mesh-1",
+      "pid": 5751,
+      "socket": "ipc:///tmp/ravn-mesh/node-1.ipc",
+      "started": "2026-04-14T01:02:07.640964+00:00"
+    },
+    {
+      "id": "ravn:ravn-mesh-2",
+      "pid": 5790,
+      "socket": "ipc:///tmp/ravn-mesh/node-2.ipc",
+      "started": "2026-04-14T01:02:09.563504+00:00"
+    },
+    {
+      "id": "ravn:ravn-mesh-3",
+      "pid": 5829,
+      "socket": "ipc:///tmp/ravn-mesh/node-3.ipc",
+      "started": "2026-04-14T01:02:12.592442+00:00"
+    }
+  ],
+  "primary_pub": ""
+}
