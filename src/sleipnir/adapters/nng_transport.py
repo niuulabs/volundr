@@ -102,6 +102,10 @@ DEFAULT_RECONNECT_MIN_MS = 50
 #: Maximum reconnect interval (0 = same as min, i.e. fixed interval).
 DEFAULT_RECONNECT_MAX_MS = 0
 
+#: How often to re-discover publishers from the registry (seconds).
+#: Enables subscribers to find publishers that registered after startup.
+DEFAULT_REDISCOVER_INTERVAL_S = 5.0
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -287,6 +291,7 @@ class NngSubscriber(SleipnirSubscriber):
         reconnect_min_ms: int = DEFAULT_RECONNECT_MIN_MS,
         reconnect_max_ms: int = DEFAULT_RECONNECT_MAX_MS,
         registry: ServiceRegistry | None = None,
+        rediscover_interval_s: float = DEFAULT_REDISCOVER_INTERVAL_S,
     ) -> None:
         _require_pynng()
         if ring_buffer_depth < 1:
@@ -298,11 +303,14 @@ class NngSubscriber(SleipnirSubscriber):
         self._reconnect_min_ms = reconnect_min_ms
         self._reconnect_max_ms = reconnect_max_ms
         self._registry = registry
+        self._rediscover_interval_s = rediscover_interval_s
 
         self._socket: pynng.Sub0 | None = None  # type: ignore[name-defined]
         self._recv_task: asyncio.Task[None] | None = None
+        self._rediscover_task: asyncio.Task[None] | None = None
         self._subscriptions: list[_BaseSubscription] = []
         self._nng_subscribed_topics: set[bytes] = set()
+        self._dialed_addresses: set[str] = set()
         self._running = False
 
     async def start(self) -> None:
@@ -311,6 +319,9 @@ class NngSubscriber(SleipnirSubscriber):
         When discovery is configured, all live publisher sockets from the
         registry are dialled.  Falls back to *address* when the registry is
         empty or discovery is disabled.
+
+        Also starts a background task that periodically re-discovers publishers
+        so that late-registering nodes are found.
         """
         self._socket = pynng.Sub0()
         self._socket.recv_timeout = self._recv_timeout_ms
@@ -320,12 +331,19 @@ class NngSubscriber(SleipnirSubscriber):
         addresses = await self._discover_addresses()
         for addr in addresses:
             self._socket.dial(addr, block=False)
+            self._dialed_addresses.add(addr)
             logger.debug("NngSubscriber: dialing %s", addr)
 
         if self._connect_settle_ms > 0:
             await asyncio.sleep(self._connect_settle_ms / 1000.0)
         self._running = True
         self._recv_task = asyncio.create_task(self._recv_loop(), name="sleipnir-nng-sub-recv")
+
+        # Start periodic re-discovery if registry is configured
+        if self._registry is not None and self._rediscover_interval_s > 0:
+            self._rediscover_task = asyncio.create_task(
+                self._rediscover_loop(), name="sleipnir-nng-sub-rediscover"
+            )
 
     async def _discover_addresses(self) -> list[str]:
         """Return the list of publisher addresses to dial.
@@ -343,9 +361,35 @@ class NngSubscriber(SleipnirSubscriber):
         logger.debug("NngSubscriber: discovered %d publisher(s): %s", len(addresses), addresses)
         return addresses
 
+    async def _rediscover_loop(self) -> None:
+        """Periodically re-discover publishers and dial any new ones.
+
+        This allows subscribers to find publishers that registered after
+        the subscriber started, enabling late-joining nodes in a mesh.
+        """
+        while self._running:
+            await asyncio.sleep(self._rediscover_interval_s)
+            if not self._running or self._socket is None:
+                return
+            try:
+                addresses = await self._discover_addresses()
+                for addr in addresses:
+                    if addr not in self._dialed_addresses:
+                        self._socket.dial(addr, block=False)
+                        self._dialed_addresses.add(addr)
+                        logger.info("NngSubscriber: discovered new publisher, dialing %s", addr)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("NngSubscriber: rediscovery error; will retry")
+
     async def stop(self) -> None:
-        """Cancel the receive loop and close the SUB socket."""
+        """Cancel the receive and rediscovery loops, then close the SUB socket."""
         self._running = False
+        if self._rediscover_task and not self._rediscover_task.done():
+            self._rediscover_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._rediscover_task
         if self._recv_task and not self._recv_task.done():
             self._recv_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -354,6 +398,7 @@ class NngSubscriber(SleipnirSubscriber):
             with suppress(Exception):
                 self._socket.close()
             self._socket = None
+        self._dialed_addresses.clear()
         logger.debug("NngSubscriber: closed")
 
     async def __aenter__(self) -> NngSubscriber:
@@ -456,6 +501,7 @@ class NngTransport(SleipnirPublisher, SleipnirSubscriber):
         reconnect_max_ms: int = DEFAULT_RECONNECT_MAX_MS,
         service_id: str | None = None,
         registry: ServiceRegistry | None = None,
+        rediscover_interval_s: float = DEFAULT_REDISCOVER_INTERVAL_S,
     ) -> None:
         _require_pynng()
         self._publisher = NngPublisher(
@@ -473,6 +519,7 @@ class NngTransport(SleipnirPublisher, SleipnirSubscriber):
             reconnect_min_ms=reconnect_min_ms,
             reconnect_max_ms=reconnect_max_ms,
             registry=registry,
+            rediscover_interval_s=rediscover_interval_s,
         )
 
     async def start(self) -> None:

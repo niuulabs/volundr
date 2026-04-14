@@ -104,6 +104,10 @@ mimir:
       url: "https://volundr.valhalla.asgard.niuu.world"
       read_priority: 1
 
+# Allow file tools to access /tmp for demos
+permission:
+  workspace_root: /tmp
+
 logging:
   level: DEBUG
 YAML
@@ -126,18 +130,17 @@ cmd_start() {
     echo "Starting Ravn mesh (3 nodes)..."
     echo ""
 
-    # Node roles:
-    #   1 — coder     (produces code.changed)
+    # Node roles (feedback loop demo):
+    #   1 — coder     (consumes review.completed, produces code.changed)
     #   2 — reviewer  (consumes code.changed, produces review.completed)
-    #   3 — security  (consumes review.completed, produces security.completed)
+    # Flow: code.changed → reviewer → review.completed → coder → code.changed → ...
     declare -a configs
     configs[1]="$(_write_config 1 7480 7481 7490 coder)"
     configs[2]="$(_write_config 2 7482 7483 7491 reviewer)"
-    configs[3]="$(_write_config 3 7484 7485 7492 security)"
 
     declare -a pids
-    local personas=('' coder reviewer security)
-    for n in 1 2 3; do
+    local personas=('' coder reviewer)
+    for n in 1 2; do
         local log="${LOG_DIR}/ravn-mesh-${n}.log"
         echo "  Node ${n} [${personas[$n]}]: config=${configs[$n]}"
         echo "           log=${log}"
@@ -153,7 +156,7 @@ cmd_start() {
     done
 
     # Write all PIDs to file for later cleanup
-    printf '%s\n' "${pids[1]}" "${pids[2]}" "${pids[3]}" > "${PIDS_FILE}"
+    printf '%s\n' "${pids[1]}" "${pids[2]}" > "${PIDS_FILE}"
 
     echo ""
     echo "Mesh started. Nodes will discover each other via mDNS."
