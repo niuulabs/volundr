@@ -1,0 +1,21 @@
+2026-04-14 00:52:26,123 ravn.cli.commands INFO cron: wired 0 config job(s); store at /volundr/home/.ravn/cron/jobs.json
+2026-04-14 00:52:26,123 ravn.cli.commands INFO mimir: source trigger registered (poll=60s, persona=mimir-curator)
+2026-04-14 00:52:26,124 ravn.cli.commands INFO mimir: staleness trigger registered (schedule=6h, top_n=20, persona=mimir-curator)
+2026-04-14 00:52:26,125 ravn.cli.commands INFO thread: queue trigger registered (enabled=False, poll_interval=300s)
+2026-04-14 00:52:26,229 ravn.cli.commands INFO cascade: registered 6 tools (mesh=True, discovery=True)
+2026-04-14 00:52:26,229 ravn.cli.commands INFO mesh_routing: registered 2 tools
+2026-04-14 00:52:26,417 ravn.adapters.discovery.mdns INFO mdns_discovery: started peer=ravn-mesh-1 handshake_port=7490
+2026-04-14 00:52:26,446 ravn.adapters.mesh.sleipnir_mesh INFO sleipnir_mesh: started peer=ravn-mesh-1
+ravn daemon started.
+  Channels: none
+  Triggers: cron, mimir_source, mimir_staleness, thread_queue
+  Drive loop: running (max 3 concurrent tasks)
+Press Ctrl+C to stop.
+2026-04-14 00:52:26,446 ravn.drive_loop INFO drive_loop: starting trigger 'cron'
+2026-04-14 00:52:26,448 ravn.adapters.triggers.cron WARNING cron: another instance holds the lock — skipping
+2026-04-14 00:52:26,448 ravn.drive_loop INFO drive_loop: starting trigger 'mimir_source'
+2026-04-14 00:52:26,448 ravn.adapters.triggers.mimir_source INFO MimirSourceTrigger: starting (poll_interval=60s, persona=mimir-curator)
+2026-04-14 00:52:26,450 ravn.drive_loop INFO drive_loop: starting trigger 'mimir_staleness'
+2026-04-14 00:52:26,450 ravn.adapters.triggers.mimir_staleness INFO MimirStalenessTrigger: starting (schedule=6h, top_n=20, persona=mimir-curator)
+2026-04-14 00:52:26,451 ravn.drive_loop INFO drive_loop: starting trigger 'thread_queue'
+2026-04-14 00:52:26,451 ravn.adapters.triggers.thread_queue INFO ThreadQueueTrigger: starting (enabled=False, poll_interval=300s, owner='ravn-c77a1894')
