@@ -118,7 +118,7 @@ system_prompt_template: |
 
 allowed_tools: [mimir_query, file, git, terminal, web, todo, ravn]
 forbidden_tools: [cascade, volundr]
-permission_mode: workspace-write
+permission_mode: workspace_write
 
 llm:
   primary_alias: balanced

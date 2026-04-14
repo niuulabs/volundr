@@ -229,10 +229,10 @@ def _build_permission(
     if no_tools:
         return DenyAllPermission()
 
-    if persona_config is not None and persona_config.permission_mode == "read-only":
-        return DenyAllPermission()
-
+    # Determine effective permission mode: persona override takes precedence
     mode = settings.permission.mode
+    if persona_config is not None and persona_config.permission_mode:
+        mode = persona_config.permission_mode
 
     if mode in ("allow_all", "full_access"):
         return AllowAllPermission()
@@ -244,8 +244,10 @@ def _build_permission(
     from ravn.adapters.memory.approval import ApprovalMemory
     from ravn.adapters.permission.enforcer import PermissionEnforcer
 
+    # Override config mode with the effective mode (persona takes precedence)
+    effective_config = settings.permission.model_copy(update={"mode": mode})
     return PermissionEnforcer(
-        config=settings.permission,
+        config=effective_config,
         workspace_root=workspace,
         approval_memory=ApprovalMemory(project_root=workspace),
     )
@@ -485,7 +487,8 @@ def _filter_tools(
     """Apply enabled/disabled and persona tool filters.
 
     ``persona_config.allowed_tools`` and ``forbidden_tools`` entries are treated
-    as group prefixes (e.g. ``"mimir"`` matches ``mimir_query``, ``mimir_write``).
+    as group aliases or prefixes (e.g. ``"file"`` expands to read_file, write_file,
+    etc; ``"git"`` matches git_status, git_diff via prefix).
     ``settings.tools.enabled`` / ``disabled`` are exact tool names.
     """
     enabled_names = set(settings.tools.enabled)
@@ -495,9 +498,9 @@ def _filter_tools(
     forbidden_groups: set[str] = set()
     if persona_config is not None:
         if persona_config.allowed_tools:
-            allowed_groups = set(persona_config.allowed_tools)
+            allowed_groups = _expand_allowed_tools(set(persona_config.allowed_tools))
         if persona_config.forbidden_tools:
-            forbidden_groups = set(persona_config.forbidden_tools)
+            forbidden_groups = _expand_allowed_tools(set(persona_config.forbidden_tools))
 
     if allowed_groups or enabled_names:
         tools = [
@@ -515,6 +518,30 @@ def _filter_tools(
     return tools
 
 
+# Maps documented group aliases to actual tool name prefixes.
+# Needed because some groups don't use prefix_ naming (e.g. "file" → "read_file", not "file_read").
+_TOOL_GROUP_ALIASES: dict[str, list[str]] = {
+    "file": ["read_file", "write_file", "edit_file", "glob_search", "grep_search"],
+    "web": ["web_fetch", "web_search"],
+    "terminal": ["terminal", "bash"],
+    "mimir": ["mimir_read", "mimir_write", "mimir_search", "mimir_list", "mimir_ingest"],
+    "cascade": ["cascade_delegate", "cascade_broadcast"],
+    "volundr": ["volundr_session", "volundr_git"],
+    "ravn": ["persona_validate", "persona_save", "skill_list", "skill_run"],
+}
+
+
+def _expand_allowed_tools(allowed: set[str]) -> set[str]:
+    """Expand group aliases in allowed_tools to their constituent tool names."""
+    expanded: set[str] = set()
+    for item in allowed:
+        if item in _TOOL_GROUP_ALIASES:
+            expanded.update(_TOOL_GROUP_ALIASES[item])
+        else:
+            expanded.add(item)
+    return expanded
+
+
 def _groups_for_persona(persona_config: Any) -> list[str]:
     """Derive include_groups from a persona's allowed_tools.
 
@@ -524,8 +551,8 @@ def _groups_for_persona(persona_config: Any) -> list[str]:
     """
     from ravn.adapters.tools.builtin_registry import BUILTIN_TOOLS  # noqa: PLC0415
 
-    allowed: set[str] = set(persona_config.allowed_tools or [])
-    forbidden: set[str] = set(persona_config.forbidden_tools or [])
+    allowed: set[str] = _expand_allowed_tools(set(persona_config.allowed_tools or []))
+    forbidden: set[str] = _expand_allowed_tools(set(persona_config.forbidden_tools or []))
 
     groups: set[str] = {"core"}
     for key, tool_def in BUILTIN_TOOLS.items():
@@ -2560,21 +2587,92 @@ def _wire_cascade(
     return mesh, discovery
 
 
-def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
-    """Build the mesh adapter using Sleipnir transport.
+_MESH_ALIASES: dict[str, str] = {
+    "sleipnir": "ravn.adapters.mesh.sleipnir_mesh.SleipnirMeshAdapter",
+    "webhook": "ravn.adapters.mesh.webhook.WebhookMeshAdapter",
+}
 
-    The transport (nng, rabbitmq, nats, redis) is determined by mesh.adapter config.
-    All transports go through Sleipnir's abstraction layer.
+
+def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
+    """Build mesh adapters using dynamic import from config.
+
+    If settings.mesh.adapters is non-empty, uses the new list-based config.
+    Otherwise falls back to legacy single-adapter mode for backward compatibility.
+
+    All adapters run simultaneously via CompositeMeshAdapter:
+    - publish() fans out to ALL transports
+    - subscribe() registers on ALL transports
+    - send() tries transports in order until success
     """
     import socket
 
-    from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
+    from ravn.adapters.mesh.composite import CompositeMeshAdapter
 
     mesh_cfg = settings.mesh
     own_peer_id = mesh_cfg.own_peer_id or socket.gethostname()
 
-    # Build the appropriate Sleipnir transport based on config
-    transport = _build_sleipnir_transport(settings, mesh_cfg.adapter)
+    # New list-based config: dynamic import with kwargs
+    if mesh_cfg.adapters:
+        transports: list[Any] = []
+        for entry in mesh_cfg.adapters:
+            adapter_class = entry.get("adapter", "")
+            if not adapter_class:
+                logger.warning("mesh: adapter entry missing 'adapter' field, skipping")
+                continue
+
+            # Resolve short aliases for convenience
+            fq_class = _MESH_ALIASES.get(adapter_class, adapter_class)
+
+            try:
+                cls = _import_class(fq_class)
+            except Exception as exc:
+                logger.warning("mesh: failed to import %s: %s", fq_class, exc)
+                continue
+
+            # Build kwargs: everything except 'adapter' key
+            kwargs = {k: v for k, v in entry.items() if k != "adapter"}
+            kwargs["own_peer_id"] = own_peer_id
+            kwargs["discovery"] = discovery
+            kwargs.setdefault("rpc_timeout_s", mesh_cfg.rpc_timeout_s)
+
+            # Handle Sleipnir adapter specially - needs publisher/subscriber
+            if "sleipnir" in fq_class.lower():
+                transport = _build_sleipnir_transport(
+                    settings, entry.get("transport", mesh_cfg.adapter or "nng")
+                )
+                if transport is None:
+                    logger.warning("mesh: failed to build Sleipnir transport, skipping")
+                    continue
+                kwargs["publisher"] = transport
+                kwargs["subscriber"] = transport
+                kwargs.pop("discovery", None)  # Sleipnir doesn't need discovery in constructor
+
+            try:
+                adapter = cls(**kwargs)
+                transports.append(adapter)
+                logger.debug("mesh: loaded adapter %s", fq_class)
+            except Exception as exc:
+                logger.warning("mesh: failed to instantiate %s: %s", fq_class, exc)
+                continue
+
+        if not transports:
+            logger.warning("mesh: no adapters loaded from config")
+            return None
+
+        if len(transports) == 1:
+            return transports[0]
+
+        return CompositeMeshAdapter(transports=transports, own_peer_id=own_peer_id)
+
+    # Legacy single-adapter mode for backward compatibility
+    legacy_adapter = mesh_cfg.adapter
+    if not legacy_adapter:
+        # Default to nng for local mesh
+        legacy_adapter = "nng"
+
+    from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
+
+    transport = _build_sleipnir_transport(settings, legacy_adapter)
     if transport is None:
         logger.warning("mesh: failed to build transport, mesh disabled")
         return None
@@ -2713,13 +2811,7 @@ def _build_discovery(
         pub_address=pub_address,
     )
 
-    handshake_port = settings.discovery.mdns.handshake_port
-    return _build_discovery_adapter(
-        settings.discovery.adapter,
-        settings,
-        identity,
-        handshake_port=handshake_port,
-    )
+    return _build_discovery_adapters(settings, identity)
 
 
 @app.command()
@@ -2779,8 +2871,7 @@ async def _run_peers(settings: Settings, *, verbose: bool, force_scan: bool) -> 
         version=version,
     )
 
-    adapter_name = settings.discovery.adapter
-    discovery = _build_discovery_adapter(adapter_name, settings, identity)
+    discovery = _build_discovery_adapters(settings, identity)
     if discovery is None:
         typer.echo("No discovery adapter configured.", err=True)
         return
@@ -2821,53 +2912,106 @@ async def _run_peers(settings: Settings, *, verbose: bool, force_scan: bool) -> 
     await discovery.stop()
 
 
+# Legacy aliases for backward compatibility with `adapter: mdns` style config
 _DISCOVERY_ALIASES: dict[str, str] = {
     "mdns": "ravn.adapters.discovery.mdns.MdnsDiscoveryAdapter",
     "sleipnir": "ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter",
     "k8s": "ravn.adapters.discovery.k8s.K8sDiscoveryAdapter",
-    "composite": "ravn.adapters.discovery.composite.CompositeDiscoveryAdapter",
+    "static": "ravn.adapters.discovery.static.StaticDiscoveryAdapter",
 }
 
-# Adapters that need sleipnir_config injected in addition to config + own_identity.
-_SLEIPNIR_KWARGS_ADAPTERS = {"ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter"}
 
-
-def _build_discovery_adapter(
-    name: str, settings: Settings, identity: Any, *, handshake_port: int = 7482
+def _build_discovery_adapters(
+    settings: Settings,
+    identity: Any,
 ) -> Any:
-    """Instantiate a discovery adapter by short name or fully-qualified class path.
+    """Build discovery adapters using dynamic import from config.
 
-    Single-backend adapters are resolved via dynamic import (dynamic-adapters pattern).
-    The composite case is special: its sub-backends are wired explicitly.
+    If settings.discovery.adapters is non-empty, uses the new list-based config.
+    Otherwise falls back to legacy single-adapter mode for backward compatibility.
+
+    All adapters run simultaneously via CompositeDiscoveryAdapter.
     """
-    fq_class = _DISCOVERY_ALIASES.get(name, name)
+    from ravn.adapters.discovery.composite import CompositeDiscoveryAdapter
 
-    if fq_class == _DISCOVERY_ALIASES["composite"]:
-        from ravn.adapters.discovery.composite import CompositeDiscoveryAdapter
+    adapters_config = settings.discovery.adapters
 
-        mdns_cls = _import_class(_DISCOVERY_ALIASES["mdns"])
-        sleipnir_cls = _import_class(_DISCOVERY_ALIASES["sleipnir"])
-        backends: list[Any] = [
-            mdns_cls(
-                config=settings.discovery,
-                own_identity=identity,
-                handshake_port=handshake_port,
-            ),
-            sleipnir_cls(
-                config=settings.discovery,
-                sleipnir_config=settings.sleipnir,
-                own_identity=identity,
-            ),
-        ]
+    # New list-based config: dynamic import with kwargs
+    if adapters_config:
+        backends: list[Any] = []
+        for entry in adapters_config:
+            adapter_class = entry.get("adapter", "")
+            if not adapter_class:
+                logger.warning("discovery: adapter entry missing 'adapter' field, skipping")
+                continue
+
+            # Resolve short aliases for convenience
+            fq_class = _DISCOVERY_ALIASES.get(adapter_class, adapter_class)
+
+            try:
+                cls = _import_class(fq_class)
+            except Exception as exc:
+                logger.warning("discovery: failed to import %s: %s", fq_class, exc)
+                continue
+
+            # Build kwargs: everything except 'adapter' key, plus own_identity
+            kwargs = {k: v for k, v in entry.items() if k != "adapter"}
+            kwargs["own_identity"] = identity
+
+            # Add common settings from discovery config
+            kwargs.setdefault("heartbeat_interval_s", settings.discovery.heartbeat_interval_s)
+            kwargs.setdefault("peer_ttl_s", settings.discovery.peer_ttl_s)
+
+            try:
+                backend = cls(**kwargs)
+                backends.append(backend)
+                logger.debug("discovery: loaded adapter %s", fq_class)
+            except Exception as exc:
+                logger.warning("discovery: failed to instantiate %s: %s", fq_class, exc)
+                continue
+
+        if not backends:
+            logger.warning("discovery: no adapters loaded from config")
+            return None
+
+        if len(backends) == 1:
+            return backends[0]
+
         return CompositeDiscoveryAdapter(backends=backends)
 
-    cls = _import_class(fq_class)
-    kwargs: dict[str, Any] = {"config": settings.discovery, "own_identity": identity}
-    if fq_class in _SLEIPNIR_KWARGS_ADAPTERS:
+    # Legacy single-adapter mode for backward compatibility
+    legacy_adapter = settings.discovery.adapter
+    if not legacy_adapter:
+        # Default to mdns if no adapter specified
+        legacy_adapter = "mdns"
+
+    fq_class = _DISCOVERY_ALIASES.get(legacy_adapter, legacy_adapter)
+
+    try:
+        cls = _import_class(fq_class)
+    except Exception as exc:
+        logger.warning("discovery: failed to import legacy adapter %s: %s", fq_class, exc)
+        return None
+
+    # Legacy adapters use config object for backward compatibility
+    kwargs: dict[str, Any] = {
+        "own_identity": identity,
+        "config": settings.discovery,
+    }
+
+    # Add sleipnir_config for Sleipnir adapter
+    if "sleipnir" in fq_class.lower():
         kwargs["sleipnir_config"] = settings.sleipnir
-    if fq_class == _DISCOVERY_ALIASES["mdns"]:
-        kwargs["handshake_port"] = handshake_port
-    return cls(**kwargs)
+
+    # Add handshake_port for mDNS adapter
+    if "mdns" in fq_class.lower():
+        kwargs["handshake_port"] = settings.discovery.mdns.handshake_port
+
+    try:
+        return cls(**kwargs)
+    except Exception as exc:
+        logger.warning("discovery: failed to instantiate legacy adapter %s: %s", fq_class, exc)
+        return None
 
 
 @app.command()
