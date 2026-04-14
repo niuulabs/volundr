@@ -1,0 +1,41 @@
+2026-04-14 01:17:25,414 ravn.cli.commands INFO cron: wired 0 config job(s); store at /volundr/home/.ravn/cron/jobs.json
+2026-04-14 01:17:25,414 ravn.cli.commands INFO mimir: source trigger registered (poll=60s, persona=mimir-curator)
+2026-04-14 01:17:25,415 ravn.cli.commands INFO mimir: staleness trigger registered (schedule=6h, top_n=20, persona=mimir-curator)
+2026-04-14 01:17:25,416 ravn.cli.commands INFO thread: queue trigger registered (enabled=False, poll_interval=300s)
+2026-04-14 01:17:25,505 ravn.cli.commands INFO cascade: registered 6 tools (mesh=True, discovery=True)
+2026-04-14 01:17:25,506 ravn.cli.commands INFO mesh_routing: registered 2 tools
+2026-04-14 01:17:25,506 ravn.cli.commands INFO mesh: will subscribe to event_type=review.completed after start
+2026-04-14 01:17:25,729 ravn.adapters.discovery.mdns INFO mdns_discovery: started peer=ravn-mesh-3 handshake_port=7492
+2026-04-14 01:17:25,758 ravn.adapters.mesh.sleipnir_mesh INFO sleipnir_mesh: started peer=ravn-mesh-3
+2026-04-14 01:17:25,758 ravn.cli.commands INFO mesh: subscribing to event_type=review.completed
+ravn daemon started.
+  Channels: none
+  Triggers: cron, mimir_source, mimir_staleness, thread_queue
+  Drive loop: running (max 3 concurrent tasks)
+Press Ctrl+C to stop.
+2026-04-14 01:17:25,759 ravn.drive_loop INFO drive_loop: starting trigger 'cron'
+2026-04-14 01:17:25,761 ravn.adapters.triggers.cron WARNING cron: another instance holds the lock — skipping
+2026-04-14 01:17:25,761 ravn.drive_loop INFO drive_loop: starting trigger 'mimir_source'
+2026-04-14 01:17:25,761 ravn.adapters.triggers.mimir_source INFO MimirSourceTrigger: starting (poll_interval=60s, persona=mimir-curator)
+2026-04-14 01:17:25,833 ravn.drive_loop INFO drive_loop: starting trigger 'mimir_staleness'
+2026-04-14 01:17:25,834 ravn.adapters.triggers.mimir_staleness INFO MimirStalenessTrigger: starting (schedule=6h, top_n=20, persona=mimir-curator)
+2026-04-14 01:17:25,835 ravn.drive_loop INFO drive_loop: starting trigger 'thread_queue'
+2026-04-14 01:17:25,835 ravn.adapters.triggers.thread_queue INFO ThreadQueueTrigger: starting (enabled=False, poll_interval=300s, owner='ravn-850965ec')
+2026-04-14 01:17:25,849 httpx INFO HTTP Request: GET https://volundr.valhalla.asgard.niuu.world/mimir/sources?unprocessed=true "HTTP/1.1 200 OK"
+2026-04-14 01:17:47,646 ravn.cli.commands INFO mesh: received outcome event_type=review.completed from=reviewer task_id=event_code_changed_test-tas
+2026-04-14 01:17:47,646 ravn.cli.commands INFO mesh: enqueued task event_review_completed_event_co for event_type=review.completed
+2026-04-14 01:17:47,665 ravn.drive_loop INFO drive_loop: executing task event_review_completed_event_co ('Handle review.completed from reviewer') triggered_by='mesh:outcome:review.completed'
+2026-04-14 01:17:47,763 httpx INFO HTTP Request: GET https://volundr.valhalla.asgard.niuu.world/mimir/pages?category=learnings "HTTP/1.1 200 OK"
+2026-04-14 01:17:47,792 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:17:48,873 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:17:51,276 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:17:53,216 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:17:55,997 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:17:57,099 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:18:00,024 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:18:02,034 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:18:03,020 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:18:05,254 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 01:18:06,815 ravn.drive_loop ERROR drive_loop: task event_review_completed_event_co failed: Agent loop exceeded 10 iterations
+2026-04-14 01:18:06,815 ravn.drive_loop INFO drive_loop: publishing outcome event_type=deploy.completed task_id=event_review_completed_event_co
+2026-04-14 01:18:25,866 httpx INFO HTTP Request: GET https://volundr.valhalla.asgard.niuu.world/mimir/sources?unprocessed=true "HTTP/1.1 200 OK"
