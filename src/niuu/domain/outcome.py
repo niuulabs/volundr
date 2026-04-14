@@ -60,9 +60,11 @@ def generate_outcome_instruction(schema: OutcomeSchema) -> str:
         ---end---
     """
     lines = [
-        "IMPORTANT: When your work is complete, output this outcome block and STOP.",
+        "IMPORTANT: When your work is complete, output this EXACT outcome block format and STOP.",
+        "The outcome block MUST be valid YAML with key: value pairs. Do NOT write prose or lists.",
         "Do not call any more tools after producing the outcome block.",
         "",
+        "Required format (copy this structure exactly):",
         "---outcome---",
     ]
     for name, f in schema.fields.items():
