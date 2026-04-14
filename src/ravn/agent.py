@@ -397,8 +397,11 @@ class RavnAgent:
         if isinstance(effective_system, str):
             logger.debug("system_prompt (first 2000 chars): %s", effective_system[:2000])
         else:
-            # Anthropic blocks format
+            # Anthropic blocks format - log full content
             logger.debug("system_prompt_blocks: %d blocks", len(effective_system))
+            for i, block in enumerate(effective_system):
+                text = block.get("text", "")
+                logger.debug("system_prompt_block[%d] (first 2000 chars): %s", i, text[:2000])
 
         for iteration in range(self._max_iterations):
             # Check external interruption (SIGINT/SIGTERM/Tyr cancel via interrupt()).
