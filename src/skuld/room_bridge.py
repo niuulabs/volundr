@@ -11,6 +11,9 @@ Wire events emitted to browsers:
     room_state           {participants: list[ParticipantMeta]}
     room_message         {id, participantId, participant, content, threadId?, visibility}
     room_activity        {participantId, activityType, detail?}
+    room_notification    {notificationType, participantId, participant, ...}
+    room_outcome         {participantId, participant, persona, eventType, fields, verdict?}
+    room_mesh_message    {participantId, participant, fromPersona, eventType, direction, preview}
 """
 
 from __future__ import annotations
@@ -129,6 +132,9 @@ class RoomBridge:
         Routing:
             type "response"             → room_message
             type "error"                → room_message (error=True)
+            type "outcome"              → room_outcome (structured result)
+            type "help_needed"          → room_notification
+            type "tool_start" (route_work) → room_mesh_message + room_activity
             type "thought"/"tool_start"/"tool_result" → room_activity
         """
         meta = self._participants.get(peer_id)
@@ -138,10 +144,25 @@ class RoomBridge:
 
         event_type = frame.get("type", "")
         data = frame.get("data", "")
+        metadata = frame.get("metadata", {})
 
         if event_type in ("response", "error"):
             await self._handle_response_frame(meta, frame, is_error=(event_type == "error"))
             return
+
+        if event_type == "outcome":
+            await self._handle_outcome_frame(meta, frame)
+            return
+
+        if event_type == "help_needed":
+            await self._handle_help_needed_frame(meta, frame)
+            return
+
+        # Check for inter-agent delegation (route_work tool)
+        if event_type == "tool_start":
+            tool_name = metadata.get("tool_name") or data
+            if tool_name == "route_work":
+                await self._handle_mesh_delegation_frame(meta, frame)
 
         activity_type = _RAVN_ACTIVITY_MAP.get(event_type)
         if activity_type:
@@ -204,6 +225,128 @@ class RoomBridge:
             event["detail"] = detail[: self._config.activity_detail_max_length]
 
         await self._channels.broadcast(event)
+
+    async def _handle_help_needed_frame(
+        self,
+        meta: ParticipantMeta,
+        frame: dict,
+    ) -> None:
+        """Translate a help_needed event into a room_notification for ambient AI.
+
+        Emits a high-visibility notification that surfaces in the user's chat
+        without requiring them to watch logs.
+        """
+        data = frame.get("data", {})
+        if isinstance(data, str):
+            # If data is a string, wrap it
+            data = {"summary": data}
+
+        notification: dict = {
+            "type": "room_notification",
+            "notificationType": "help_needed",
+            "participantId": meta.peer_id,
+            "participant": asdict(meta),
+            "persona": data.get("persona", meta.persona),
+            "reason": data.get("reason", "unknown"),
+            "summary": data.get("summary", "Agent needs help"),
+            "attempted": data.get("attempted", []),
+            "recommendation": data.get("recommendation", ""),
+            "urgency": frame.get("metadata", {}).get("urgency", 0.85),
+        }
+
+        # Include context if provided (file paths, errors, etc.)
+        context = data.get("context")
+        if context:
+            notification["context"] = context
+
+        await self._channels.broadcast(notification)
+        logger.info(
+            "RoomBridge: help_needed notification peer_id=%s reason=%s",
+            meta.peer_id,
+            notification["reason"],
+        )
+
+    async def _handle_outcome_frame(
+        self,
+        meta: ParticipantMeta,
+        frame: dict,
+    ) -> None:
+        """Translate an outcome event into a room_outcome event for chat visibility.
+
+        Emits structured outcome data so users can see persona results in the chat
+        without parsing logs.
+        """
+        data = frame.get("data", {})
+        if isinstance(data, str):
+            # If data is a string, wrap it
+            data = {"raw": data}
+
+        metadata = frame.get("metadata", {})
+        event_type = metadata.get("event_type", "")
+
+        outcome: dict = {
+            "type": "room_outcome",
+            "participantId": meta.peer_id,
+            "participant": asdict(meta),
+            "persona": meta.persona,
+            "eventType": event_type,
+            "fields": data.get("fields", data),
+            "valid": data.get("valid", True),
+        }
+
+        # Include summary if available
+        summary = data.get("summary") or data.get("fields", {}).get("summary")
+        if summary:
+            outcome["summary"] = summary
+
+        # Include verdict if available (common field)
+        verdict = data.get("verdict") or data.get("fields", {}).get("verdict")
+        if verdict:
+            outcome["verdict"] = verdict
+
+        await self._channels.broadcast(outcome)
+        logger.info(
+            "RoomBridge: outcome broadcast peer_id=%s event_type=%s verdict=%s",
+            meta.peer_id,
+            event_type,
+            verdict,
+        )
+
+    async def _handle_mesh_delegation_frame(
+        self,
+        meta: ParticipantMeta,
+        frame: dict,
+    ) -> None:
+        """Translate a route_work tool call into a room_mesh_message for chat visibility.
+
+        Shows inter-agent delegation in the chat so users can follow the discussion
+        between agents without watching logs.
+        """
+        metadata = frame.get("metadata", {})
+        tool_input = metadata.get("input", {})
+
+        event_type = tool_input.get("event_type", "work")
+        prompt = tool_input.get("prompt", "")
+
+        # Truncate prompt for display (keep first 500 chars)
+        display_prompt = prompt[:500] + "..." if len(prompt) > 500 else prompt
+
+        mesh_message: dict = {
+            "type": "room_mesh_message",
+            "participantId": meta.peer_id,
+            "participant": asdict(meta),
+            "fromPersona": meta.persona,
+            "eventType": event_type,
+            "direction": "delegate",
+            "preview": display_prompt,
+        }
+
+        await self._channels.broadcast(mesh_message)
+        logger.info(
+            "RoomBridge: mesh delegation peer_id=%s event_type=%s",
+            meta.peer_id,
+            event_type,
+        )
 
     # ------------------------------------------------------------------
     # Directed routing

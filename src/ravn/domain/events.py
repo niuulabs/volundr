@@ -18,6 +18,7 @@ class RavnEventType(StrEnum):
     TASK_STARTED = "task_started"  # emitted by DriveLoop when a task begins execution
     TASK_STUCK = "task_stuck"  # emitted by Watchdog on stuck detection (NIU-510)
     OUTCOME = "outcome"  # emitted when persona produces outcome (mesh event routing)
+    HELP_NEEDED = "help_needed"  # emitted when persona needs human input to proceed
 
 
 @dataclass(frozen=True)
@@ -212,6 +213,55 @@ class RavnEvent:
             payload={"success": success},
             timestamp=datetime.now(UTC),
             urgency=0.2 if success else 0.7,
+            correlation_id=correlation_id,
+            session_id=session_id,
+            task_id=task_id,
+        )
+
+    @classmethod
+    def help_needed(
+        cls,
+        source: str,
+        persona: str,
+        reason: str,
+        summary: str,
+        attempted: list[str],
+        recommendation: str,
+        correlation_id: str,
+        session_id: str,
+        task_id: str | None = None,
+        context: dict | None = None,
+    ) -> RavnEvent:
+        """Emit when a persona needs human input to proceed.
+
+        Parameters
+        ----------
+        persona:
+            Name of the persona requesting help.
+        reason:
+            One of: blocked, uncertain, needs_context, scope_exceeded.
+        summary:
+            One-sentence description of what help is needed.
+        attempted:
+            List of approaches already tried (max 3 for brevity).
+        recommendation:
+            Suggested next step for the human.
+        context:
+            Optional additional context (file paths, error messages, etc.).
+        """
+        return cls(
+            type=RavnEventType.HELP_NEEDED,
+            source=source,
+            payload={
+                "persona": persona,
+                "reason": reason,
+                "summary": summary,
+                "attempted": attempted[:3],  # Cap at 3 for brevity
+                "recommendation": recommendation,
+                "context": context or {},
+            },
+            timestamp=datetime.now(UTC),
+            urgency=0.85,  # High priority, below decision_required (0.9)
             correlation_id=correlation_id,
             session_id=session_id,
             task_id=task_id,
