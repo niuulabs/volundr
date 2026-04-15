@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ravn.adapters.personas.loader import (
-    _BUILTIN_PERSONAS,
+    _BUILTIN_PERSONAS_DIR,
     PersonaConfig,
     PersonaConsumes,
     PersonaFanIn,
@@ -13,6 +13,8 @@ from ravn.adapters.personas.loader import (
     PersonaLoader,
     PersonaProduces,
 )
+
+_BUILTIN_NAMES = sorted(p.stem for p in _BUILTIN_PERSONAS_DIR.glob("*.yaml"))
 from ravn.ports.persona import PersonaPort, PersonaRegistryPort
 
 # ---------------------------------------------------------------------------
@@ -100,11 +102,19 @@ class TestConstructor:
         custom = tmp_path / "custom"
         loader = PersonaLoader([str(custom)])
         dirs = loader._resolve_dirs()
-        assert dirs == [custom]
+        assert dirs[0] == custom
+        # Builtin dir appended when include_builtin=True (default)
+        assert _BUILTIN_PERSONAS_DIR in dirs
 
     def test_empty_persona_dirs_list_uses_explicit_empty(self, tmp_path: Path) -> None:
-        """Passing an empty list means no extra dirs (not default)."""
+        """Passing an empty list means only bundled dir (when include_builtin)."""
         loader = PersonaLoader([])
+        dirs = loader._resolve_dirs()
+        assert dirs == [_BUILTIN_PERSONAS_DIR]
+
+    def test_empty_persona_dirs_no_builtin(self, tmp_path: Path) -> None:
+        """Passing an empty list with include_builtin=False means no dirs."""
+        loader = PersonaLoader([], include_builtin=False)
         dirs = loader._resolve_dirs()
         assert dirs == []
 
@@ -132,7 +142,7 @@ class TestListNames:
     def test_includes_builtin_names_by_default(self) -> None:
         loader = PersonaLoader()
         names = loader.list_names()
-        for builtin in _BUILTIN_PERSONAS:
+        for builtin in _BUILTIN_NAMES:
             assert builtin in names
 
     def test_includes_file_names(self, tmp_path: Path) -> None:
@@ -168,9 +178,9 @@ class TestListNames:
         assert isinstance(names, list)
 
     def test_no_builtin_when_include_builtin_false(self, tmp_path: Path) -> None:
-        loader = PersonaLoader(include_builtin=False)
+        loader = PersonaLoader([], include_builtin=False)
         names = loader.list_names()
-        for builtin in _BUILTIN_PERSONAS:
+        for builtin in _BUILTIN_NAMES:
             assert builtin not in names
 
     def test_names_are_sorted(self, tmp_path: Path) -> None:
@@ -485,15 +495,15 @@ class TestDelete:
 class TestIsBuiltin:
     def test_builtin_returns_true(self) -> None:
         loader = PersonaLoader()
-        for name in _BUILTIN_PERSONAS:
+        for name in _BUILTIN_NAMES:
             assert loader.is_builtin(name) is True
 
     def test_custom_name_returns_false(self) -> None:
         loader = PersonaLoader()
         assert loader.is_builtin("my-custom-agent") is False
 
-    def test_is_builtin_does_not_check_filesystem(self, tmp_path: Path) -> None:
-        """is_builtin only checks the registry dict, not files."""
+    def test_is_builtin_checks_bundled_dir_only(self, tmp_path: Path) -> None:
+        """is_builtin checks the bundled dir, not user persona dirs."""
         yaml = _SIMPLE_PERSONA_YAML.replace("custom-agent", "file-only")
         _write_persona(tmp_path, "file-only", yaml)
         loader = PersonaLoader([str(tmp_path)])
@@ -515,7 +525,7 @@ class TestLoadAll:
     def test_load_all_contains_all_builtins(self) -> None:
         loader = PersonaLoader()
         names = {p.name for p in loader.load_all()}
-        for builtin in _BUILTIN_PERSONAS:
+        for builtin in _BUILTIN_NAMES:
             assert builtin in names
 
     def test_load_all_includes_file_personas(self, tmp_path: Path) -> None:
@@ -580,13 +590,13 @@ class TestSource:
         src = loader.source("coding-agent")
         assert src == str(file)
 
-    def test_source_builtin_without_files(self) -> None:
-        loader = PersonaLoader(include_builtin=True)
+    def test_source_builtin_without_files(self, tmp_path: Path) -> None:
+        loader = PersonaLoader([], include_builtin=True)
         src = loader.source("reviewer")
         assert src == "[built-in]"
 
-    def test_source_returns_empty_when_builtin_excluded(self) -> None:
-        loader = PersonaLoader(include_builtin=False)
+    def test_source_returns_empty_when_builtin_excluded(self, tmp_path: Path) -> None:
+        loader = PersonaLoader([], include_builtin=False)
         src = loader.source("coding-agent")
         assert src == ""
 

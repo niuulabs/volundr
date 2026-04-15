@@ -9,7 +9,7 @@ import pytest
 
 from niuu.domain.outcome import OutcomeField
 from ravn.adapters.personas.loader import (
-    _BUILTIN_PERSONAS,
+    _BUILTIN_PERSONAS_DIR,
     PersonaConfig,
     PersonaConsumes,
     PersonaFanIn,
@@ -22,8 +22,14 @@ from ravn.adapters.personas.loader import (
 # Round-trip: all built-in personas
 # ---------------------------------------------------------------------------
 
+_loader = PersonaLoader()
+_builtin_personas = {
+    p.stem: _loader.load_from_file(p)
+    for p in sorted(_BUILTIN_PERSONAS_DIR.glob("*.yaml"))
+}
 
-@pytest.mark.parametrize("name,persona", list(_BUILTIN_PERSONAS.items()))
+
+@pytest.mark.parametrize("name,persona", list(_builtin_personas.items()))
 def test_round_trip_builtin_persona(name: str, persona: PersonaConfig) -> None:
     """parse(to_yaml(config)) == config for every built-in persona."""
     yaml_text = PersonaLoader.to_yaml(persona)
@@ -262,7 +268,7 @@ def test_to_yaml_single_line_prompt_round_trips() -> None:
 def test_to_yaml_output_is_valid_yaml() -> None:
     import yaml
 
-    p = _BUILTIN_PERSONAS["reviewer"]
+    p = _builtin_personas["reviewer"]
     yaml_text = PersonaLoader.to_yaml(p)
     parsed = yaml.safe_load(yaml_text)
     assert isinstance(parsed, dict)

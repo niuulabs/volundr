@@ -9,7 +9,7 @@ from pathlib import Path
 
 from niuu.domain.outcome import OutcomeField
 from ravn.adapters.personas.loader import (
-    _BUILTIN_PERSONAS,
+    _BUILTIN_PERSONAS_DIR,
     PersonaConfig,
     PersonaConsumes,
     PersonaFanIn,
@@ -629,52 +629,59 @@ class TestFindConsumersProducers:
 
 
 class TestBuiltinSpecialistContracts:
+    _loader = PersonaLoader()
+
+    def _load(self, name: str) -> PersonaConfig:
+        cfg = self._loader.load_from_file(_BUILTIN_PERSONAS_DIR / f"{name}.yaml")
+        assert cfg is not None, f"Failed to load built-in persona {name!r}"
+        return cfg
+
     def test_reviewer_builtin_produces_review_completed(self) -> None:
-        cfg = _BUILTIN_PERSONAS["reviewer"]
+        cfg = self._load("reviewer")
         assert cfg.produces.event_type == "review.completed"
         assert "verdict" in cfg.produces.schema
         assert "findings_count" in cfg.produces.schema
         assert "critical_count" in cfg.produces.schema
 
     def test_reviewer_builtin_consumes_code_changed(self) -> None:
-        cfg = _BUILTIN_PERSONAS["reviewer"]
+        cfg = self._load("reviewer")
         assert "code.changed" in cfg.consumes.event_types
         assert "review.requested" in cfg.consumes.event_types
 
     def test_reviewer_fan_in_all_must_pass(self) -> None:
-        cfg = _BUILTIN_PERSONAS["reviewer"]
+        cfg = self._load("reviewer")
         assert cfg.fan_in.strategy == "all_must_pass"
         assert cfg.fan_in.contributes_to == "review.verdict"
 
     def test_security_auditor_builtin_produces_security_completed(self) -> None:
-        cfg = _BUILTIN_PERSONAS["security-auditor"]
+        cfg = self._load("security-auditor")
         assert cfg.produces.event_type == "security.completed"
         assert "verdict" in cfg.produces.schema
         assert "critical_findings" in cfg.produces.schema
 
     def test_security_auditor_fan_in_all_must_pass(self) -> None:
-        cfg = _BUILTIN_PERSONAS["security-auditor"]
+        cfg = self._load("security-auditor")
         assert cfg.fan_in.strategy == "all_must_pass"
 
     def test_qa_agent_builtin_produces_qa_completed(self) -> None:
-        cfg = _BUILTIN_PERSONAS["qa-agent"]
+        cfg = self._load("qa-agent")
         assert cfg.produces.event_type == "qa.completed"
         assert "tests_run" in cfg.produces.schema
         assert "tests_failed" in cfg.produces.schema
 
     def test_ship_agent_builtin_produces_ship_completed(self) -> None:
-        cfg = _BUILTIN_PERSONAS["ship-agent"]
+        cfg = self._load("ship-agent")
         assert cfg.produces.event_type == "ship.completed"
         assert cfg.produces.schema["verdict"].enum_values == ["shipped", "blocked"]
 
     def test_retro_analyst_builtin_produces_retro_completed(self) -> None:
-        cfg = _BUILTIN_PERSONAS["retro-analyst"]
+        cfg = self._load("retro-analyst")
         assert cfg.produces.event_type == "retro.completed"
         assert "items_shipped" in cfg.produces.schema
         assert "patterns_found" in cfg.produces.schema
 
     def test_mimir_curator_builtin_produces_dream_completed(self) -> None:
-        cfg = _BUILTIN_PERSONAS["mimir-curator"]
+        cfg = self._load("mimir-curator")
         assert cfg.produces.event_type == "dream.completed"
         assert "pages_updated" in cfg.produces.schema
 
@@ -687,7 +694,7 @@ class TestBuiltinSpecialistContracts:
             "retro-analyst",
         ]
         for name in specialist_names:
-            cfg = _BUILTIN_PERSONAS[name]
+            cfg = self._load(name)
             assert cfg.system_prompt_template, f"{name} missing system_prompt_template"
 
     def test_all_specialist_personas_have_positive_budgets(self) -> None:
@@ -699,7 +706,7 @@ class TestBuiltinSpecialistContracts:
             "retro-analyst",
         ]
         for name in specialist_names:
-            cfg = _BUILTIN_PERSONAS[name]
+            cfg = self._load(name)
             assert cfg.iteration_budget > 0, f"{name} has non-positive iteration_budget"
 
 

@@ -80,10 +80,10 @@ class TestPersonaCommandList:
     def test_list_includes_custom_persona(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from ravn.adapters.personas import loader as _loader_module
 
-        # Monkeypatch the default directories to include tmp_path
+        # Monkeypatch the bundled personas directory to include tmp_path
         monkeypatch.setattr(
             _loader_module,
-            "_DEFAULT_PERSONAS_DIR",
+            "_BUILTIN_PERSONAS_DIR",
             tmp_path,
         )
         _make_custom_persona(tmp_path, "my-test-persona")

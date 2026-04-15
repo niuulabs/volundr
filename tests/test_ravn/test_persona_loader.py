@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ravn.adapters.personas.loader import (
-    _BUILTIN_PERSONAS,
+    _BUILTIN_PERSONAS_DIR,
     PersonaConfig,
     PersonaLLMConfig,
     PersonaLoader,
@@ -233,9 +233,10 @@ class TestListBuiltinNames:
         names = PersonaLoader().list_builtin_names()
         assert names == sorted(names)
 
-    def test_matches_builtin_dict_keys(self) -> None:
+    def test_matches_builtin_dir_files(self) -> None:
         loader = PersonaLoader()
-        assert set(loader.list_builtin_names()) == set(_BUILTIN_PERSONAS)
+        expected = {p.stem for p in _BUILTIN_PERSONAS_DIR.glob("*.yaml")}
+        assert set(loader.list_builtin_names()) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -244,8 +245,15 @@ class TestListBuiltinNames:
 
 
 class TestBuiltinPersonas:
+    _loader = PersonaLoader()
+
+    def _load(self, name: str) -> PersonaConfig:
+        cfg = self._loader.load_from_file(_BUILTIN_PERSONAS_DIR / f"{name}.yaml")
+        assert cfg is not None, f"Failed to load built-in persona {name!r}"
+        return cfg
+
     def test_coding_agent_exists(self) -> None:
-        cfg = _BUILTIN_PERSONAS["coding-agent"]
+        cfg = self._load("coding-agent")
         assert cfg.name == "coding-agent"
         assert cfg.permission_mode == "workspace-write"
         assert cfg.llm.thinking_enabled is True
@@ -255,7 +263,7 @@ class TestBuiltinPersonas:
         assert "terminal" in cfg.allowed_tools
 
     def test_research_agent_exists(self) -> None:
-        cfg = _BUILTIN_PERSONAS["research-agent"]
+        cfg = self._load("research-agent")
         assert cfg.name == "research-agent"
         assert cfg.permission_mode == "read-only"
         assert "web" in cfg.allowed_tools
@@ -263,20 +271,20 @@ class TestBuiltinPersonas:
         assert "terminal" not in cfg.allowed_tools
 
     def test_planning_agent_exists(self) -> None:
-        cfg = _BUILTIN_PERSONAS["planning-agent"]
+        cfg = self._load("planning-agent")
         assert cfg.name == "planning-agent"
         assert cfg.llm.thinking_enabled is True
         assert cfg.permission_mode == "read-only"
 
     def test_autonomous_agent_exists(self) -> None:
-        cfg = _BUILTIN_PERSONAS["autonomous-agent"]
+        cfg = self._load("autonomous-agent")
         assert cfg.name == "autonomous-agent"
         assert cfg.permission_mode == "full-access"
         assert cfg.allowed_tools == []
         assert cfg.forbidden_tools == []
 
     def test_draft_a_note_exists(self) -> None:
-        cfg = _BUILTIN_PERSONAS["draft-a-note"]
+        cfg = self._load("draft-a-note")
         assert cfg.name == "draft-a-note"
         assert cfg.permission_mode == "read-only"
         assert cfg.iteration_budget == 5
@@ -286,27 +294,27 @@ class TestBuiltinPersonas:
         assert "mimir_write" in cfg.allowed_tools
 
     def test_draft_a_note_forbids_external_tools(self) -> None:
-        cfg = _BUILTIN_PERSONAS["draft-a-note"]
+        cfg = self._load("draft-a-note")
         assert "bash" in cfg.forbidden_tools
         assert "web_search" in cfg.forbidden_tools
         assert "web_fetch" in cfg.forbidden_tools
         assert "terminal" in cfg.forbidden_tools
 
     def test_draft_a_note_lower_budget_than_research_agent(self) -> None:
-        draft = _BUILTIN_PERSONAS["draft-a-note"]
-        research = _BUILTIN_PERSONAS["research-agent"]
+        draft = self._load("draft-a-note")
+        research = self._load("research-agent")
         assert draft.iteration_budget < research.iteration_budget
 
     def test_draft_a_note_system_prompt_mentions_produced_by_thread(self) -> None:
-        cfg = _BUILTIN_PERSONAS["draft-a-note"]
+        cfg = self._load("draft-a-note")
         assert "produced_by_thread" in cfg.system_prompt_template
 
     def test_draft_a_note_system_prompt_mentions_notes_path(self) -> None:
-        cfg = _BUILTIN_PERSONAS["draft-a-note"]
+        cfg = self._load("draft-a-note")
         assert "notes/" in cfg.system_prompt_template
 
     def test_research_and_distill_exists(self) -> None:
-        cfg = _BUILTIN_PERSONAS["research-and-distill"]
+        cfg = self._load("research-and-distill")
         assert cfg.name == "research-and-distill"
         assert cfg.permission_mode == "read-only"
         assert cfg.iteration_budget == 15
@@ -322,20 +330,22 @@ class TestBuiltinPersonas:
         assert "write_file" in cfg.forbidden_tools
 
     def test_research_and_distill_system_prompt_mentions_produced_by_thread(self) -> None:
-        cfg = _BUILTIN_PERSONAS["research-and-distill"]
+        cfg = self._load("research-and-distill")
         assert "produced_by_thread" in cfg.system_prompt_template
 
     def test_research_and_distill_system_prompt_mentions_word_limit(self) -> None:
-        cfg = _BUILTIN_PERSONAS["research-and-distill"]
+        cfg = self._load("research-and-distill")
         assert "1500" in cfg.system_prompt_template
 
     def test_all_builtins_have_system_prompts(self) -> None:
-        for name, cfg in _BUILTIN_PERSONAS.items():
-            assert cfg.system_prompt_template, f"{name} has empty system_prompt_template"
+        for p in _BUILTIN_PERSONAS_DIR.glob("*.yaml"):
+            cfg = self._load(p.stem)
+            assert cfg.system_prompt_template, f"{p.stem} has empty system_prompt_template"
 
     def test_all_builtins_have_positive_budgets(self) -> None:
-        for name, cfg in _BUILTIN_PERSONAS.items():
-            assert cfg.iteration_budget > 0, f"{name} has non-positive iteration_budget"
+        for p in _BUILTIN_PERSONAS_DIR.glob("*.yaml"):
+            cfg = self._load(p.stem)
+            assert cfg.iteration_budget > 0, f"{p.stem} has non-positive iteration_budget"
 
 
 # ---------------------------------------------------------------------------
