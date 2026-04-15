@@ -108,6 +108,11 @@ mimir:
 permission:
   workspace_root: /tmp
 
+# Skuld channel for browser delivery (mesh cascade visualization)
+skuld:
+  enabled: true
+  broker_url: "ws://localhost:8081/ws/ravn"
+
 logging:
   level: DEBUG
 YAML
