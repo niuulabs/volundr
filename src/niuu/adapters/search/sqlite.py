@@ -397,7 +397,9 @@ class SqliteSearchAdapter(SearchPort):
             conn = self._connect()
             try:
                 rows = conn.execute(
-                    f"SELECT id, content, metadata FROM search_index WHERE id IN ({placeholders})",
+                    "SELECT id, content, metadata FROM search_index WHERE id IN ("
+                    + placeholders
+                    + ")",
                     ids,
                 ).fetchall()
             finally:

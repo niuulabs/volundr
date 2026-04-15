@@ -1605,25 +1605,34 @@ class DiscoveryK8sConfig(BaseModel):
 class DiscoveryConfig(BaseModel):
     """Flock peer detection configuration (NIU-538).
 
-    ``adapter`` selects the discovery backend:
-    - ``mdns``      — Pi mode, mDNS + HMAC handshake (zeroconf)
-    - ``sleipnir``  — infra mode, pub/sub + SPIFFE JWT validation
-    - ``k8s``       — infra mode, K8s pod label selector
-    - ``composite`` — combines multiple backends
+    Uses dynamic adapter loading. All adapters in the ``adapters`` list run
+    simultaneously — peers are merged from all backends (union semantics).
+
+    Example::
+
+        discovery:
+          enabled: true
+          adapters:
+            - adapter: ravn.adapters.discovery.mdns.MdnsDiscoveryAdapter
+              handshake_port: 7482
+            - adapter: ravn.adapters.discovery.k8s.K8sDiscoveryAdapter
+              namespace: ravn
+              label_selector: "ravn.niuu.world/role=agent"
     """
 
     enabled: bool = Field(
         default=False,
         description="Enable flock peer discovery.",
     )
-    adapter: str = Field(
-        default="mdns",
-        description="Discovery backend: 'mdns', 'sleipnir', 'k8s', or 'composite'.",
+    adapters: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "List of discovery adapters to run simultaneously. Each entry has "
+            "'adapter' (fully-qualified class path) plus adapter-specific kwargs. "
+            "All adapters run in parallel; peer tables are merged."
+        ),
     )
-    realm_id_env: str = Field(
-        default="RAVN_REALM_ID",
-        description="Env var carrying the realm_id for infra mode (OpenBao / K8s label).",
-    )
+    # Common settings passed to all adapters
     heartbeat_interval_s: float = Field(
         default=30.0,
         description="Seconds between liveness heartbeats.",
@@ -1631,6 +1640,15 @@ class DiscoveryConfig(BaseModel):
     peer_ttl_s: float = Field(
         default=90.0,
         description="Seconds of missed heartbeats before a peer is evicted (≈ 3 heartbeats).",
+    )
+    realm_id_env: str = Field(
+        default="RAVN_REALM_ID",
+        description="Env var carrying the realm_id for infra mode (OpenBao / K8s label).",
+    )
+    # Legacy fields — deprecated, use adapters list instead
+    adapter: str = Field(
+        default="",
+        description="DEPRECATED: Use 'adapters' list instead. Legacy single-adapter mode.",
     )
     mdns: DiscoveryMdnsConfig = Field(default_factory=DiscoveryMdnsConfig)
     sleipnir: DiscoverySleipnirConfig = Field(default_factory=DiscoverySleipnirConfig)
@@ -1640,20 +1658,33 @@ class DiscoveryConfig(BaseModel):
 class MeshConfig(BaseModel):
     """Ravn-to-Ravn mesh transport configuration (NIU-517).
 
-    When enabled, Ravn instances communicate directly with each other for
-    cascade delegation (``send``) and broadcast (``publish``/``subscribe``).
+    Uses dynamic adapter loading. All adapters in the ``adapters`` list run
+    simultaneously — publish fans out to all transports, subscribe receives
+    from any transport.
 
-    ``adapter`` selects the transport backend:
-    - ``nng``       — Pi mode, no broker required (uses ``nng:`` sub-section)
-    - ``sleipnir``  — infra mode, RabbitMQ (re-uses ``sleipnir:`` config block)
-    - ``composite`` — tries Sleipnir first, falls back to nng
+    Example::
+
+        mesh:
+          enabled: true
+          adapters:
+            - adapter: ravn.adapters.mesh.nng.NngMeshAdapter
+              pub_sub_address: "ipc:///tmp/ravn-mesh/node.ipc"
+              req_rep_address: "ipc:///tmp/ravn-mesh/node-rep.ipc"
+            - adapter: ravn.adapters.mesh.webhook.WebhookMeshAdapter
+              listen_port: 7483
+              hmac_secret_env: RAVN_WEBHOOK_SECRET
     """
 
     enabled: bool = Field(default=False)
-    adapter: str = Field(
-        default="nng",
-        description="Mesh transport backend: 'nng', 'sleipnir', or 'composite'.",
+    adapters: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "List of mesh transport adapters to run simultaneously. Each entry has "
+            "'adapter' (fully-qualified class path) plus adapter-specific kwargs. "
+            "All transports are active: publish fans out to all, subscribe receives from any."
+        ),
     )
+    # Common settings passed to all adapters
     rpc_timeout_s: float = Field(
         default=10.0,
         description="Default RPC reply timeout in seconds.",
@@ -1661,6 +1692,11 @@ class MeshConfig(BaseModel):
     own_peer_id: str = Field(
         default="",
         description="This Ravn's unique mesh peer identifier (auto: hostname when empty).",
+    )
+    # Legacy fields — deprecated, use adapters list instead
+    adapter: str = Field(
+        default="",
+        description="DEPRECATED: Use 'adapters' list instead. Legacy single-adapter mode.",
     )
     nng: NngMeshConfig = Field(default_factory=NngMeshConfig)
     sleipnir: MeshSleipnirConfig = Field(default_factory=MeshSleipnirConfig)
