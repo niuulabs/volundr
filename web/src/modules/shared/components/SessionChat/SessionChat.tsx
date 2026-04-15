@@ -16,6 +16,7 @@ import { RoomMessage } from './RoomMessage';
 import { ParticipantFilter } from './ParticipantFilter';
 import { ThreadGroup } from './ThreadGroup';
 import { AgentDetailPanel } from './AgentDetailPanel';
+import { MeshCascadePanel } from './MeshCascadePanel';
 import { ChatInput } from './ChatInput';
 import { SessionEmptyChat } from './ChatEmptyStates';
 import type { FileAttachment } from './useFileAttachments';
@@ -54,6 +55,7 @@ export function SessionChat({
   const {
     messages,
     participants,
+    meshEvents,
     connected,
     isRunning,
     historyLoaded,
@@ -502,6 +504,8 @@ export function SessionChat({
             onToggleInternal={toggleInternal}
           />
         )}
+
+        {meshEvents.length > 0 && <MeshCascadePanel events={meshEvents} />}
 
         {hasConversation ? (
           <div className={styles.messagesContainer} ref={scrollContainerRef}>
