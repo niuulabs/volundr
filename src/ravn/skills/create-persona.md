@@ -2,6 +2,9 @@
 
 Guide the user through creating a new Ravn persona interactively — like cookiecutter but LLM-driven.
 
+**Template Reference:** See `docs/ravn/persona-template.md` for the full persona structure,
+voice guidelines, escalation protocol, and examples.
+
 ## PersonaConfig schema reference
 
 ### Top-level fields

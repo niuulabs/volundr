@@ -522,6 +522,7 @@ class OpenAICompatibleAdapter(LLMPort):
         content_text = _strip_reasoning_tags(message.get("content") or "")
         tool_calls: list[ToolCall] = []
 
+        # First, check for API-returned tool calls
         for tc in message.get("tool_calls") or []:
             func = tc.get("function") or {}
             raw_args = func.get("arguments", "")

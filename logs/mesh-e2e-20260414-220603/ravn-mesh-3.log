@@ -1,0 +1,368 @@
+2026-04-14 22:06:09,657 asyncio DEBUG Using selector: EpollSelector
+2026-04-14 22:06:10,258 ravn.cli.commands INFO cron: wired 0 config job(s); store at /volundr/home/.ravn/cron/jobs.json
+2026-04-14 22:06:10,259 ravn.cli.commands INFO mimir: source trigger registered (poll=60s, persona=mimir-curator)
+2026-04-14 22:06:10,259 ravn.cli.commands INFO mimir: staleness trigger registered (schedule=6h, top_n=20, persona=mimir-curator)
+2026-04-14 22:06:10,260 ravn.cli.commands INFO thread: queue trigger registered (enabled=False, poll_interval=300s)
+2026-04-14 22:06:10,350 ravn.cli.commands INFO cascade: registered 6 tools (mesh=True, discovery=True)
+2026-04-14 22:06:10,350 ravn.cli.commands INFO mesh_routing: registered 2 tools
+2026-04-14 22:06:10,351 ravn.cli.commands INFO mesh: will subscribe to event_type=review.completed after start
+2026-04-14 22:06:11,552 ravn.adapters.discovery.mdns DEBUG mdns_discovery: registered ravn-mesh-3._ravn._tcp.local. at 10.80.106.231:7492
+2026-04-14 22:06:11,553 ravn.adapters.discovery.mdns INFO mdns_discovery: started peer=ravn-mesh-3 handshake_port=7492
+2026-04-14 22:06:11,555 sleipnir.adapters.nng_transport DEBUG NngPublisher: bound to ipc:///tmp/ravn-mesh/node-3.ipc
+2026-04-14 22:06:11,560 sleipnir.adapters.discovery DEBUG ServiceRegistry: registered ravn:ravn-mesh-3 at ipc:///tmp/ravn-mesh/node-3.ipc
+2026-04-14 22:06:11,563 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:06:11,563 sleipnir.adapters.nng_transport DEBUG NngSubscriber: dialing ipc:///tmp/ravn-mesh/node-1.ipc
+2026-04-14 22:06:11,563 sleipnir.adapters.nng_transport DEBUG NngSubscriber: dialing ipc:///tmp/ravn-mesh/node-2.ipc
+2026-04-14 22:06:11,563 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:11,563 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:11,564 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 22:06:11,564 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:11,564 sleipnir.adapters.nng_transport DEBUG NngSubscriber: dialing ipc:///tmp/ravn-mesh/node-3.ipc
+2026-04-14 22:06:11,564 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 22:06:11,564 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:11,565 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 22:06:11,565 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 22:06:11,585 ravn.adapters.mesh.sleipnir_mesh INFO sleipnir_mesh: started peer=ravn-mesh-3
+2026-04-14 22:06:11,585 ravn.cli.commands INFO mesh: subscribing to event_type=review.completed
+ravn daemon started.
+  Channels: none
+  Triggers: cron, mimir_source, mimir_staleness, thread_queue
+  Drive loop: running (max 3 concurrent tasks)
+Press Ctrl+C to stop.
+2026-04-14 22:06:11,585 ravn.drive_loop INFO drive_loop: starting trigger 'cron'
+2026-04-14 22:06:11,587 ravn.adapters.triggers.cron WARNING cron: another instance holds the lock — skipping
+2026-04-14 22:06:11,587 ravn.drive_loop INFO drive_loop: starting trigger 'mimir_source'
+2026-04-14 22:06:11,587 ravn.adapters.triggers.mimir_source INFO MimirSourceTrigger: starting (poll_interval=60s, persona=mimir-curator)
+2026-04-14 22:06:11,609 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:11,609 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 22:06:11,610 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:11,616 pynng.nng DEBUG Pipe callback event 2
+2026-04-14 22:06:11,654 ravn.drive_loop INFO drive_loop: starting trigger 'mimir_staleness'
+2026-04-14 22:06:11,654 ravn.adapters.triggers.mimir_staleness INFO MimirStalenessTrigger: starting (schedule=6h, top_n=20, persona=mimir-curator)
+2026-04-14 22:06:11,655 ravn.adapters.triggers.mimir_staleness DEBUG MimirStalenessTrigger: no usage data — skipping
+2026-04-14 22:06:11,656 ravn.drive_loop INFO drive_loop: starting trigger 'thread_queue'
+2026-04-14 22:06:11,656 ravn.adapters.triggers.thread_queue INFO ThreadQueueTrigger: starting (enabled=False, poll_interval=300s, owner='ravn-cc6bab9f')
+2026-04-14 22:06:11,656 httpcore.connection DEBUG connect_tcp.started host='volundr.valhalla.asgard.niuu.world' port=443 local_address=None timeout=30.0 socket_options=None
+2026-04-14 22:06:11,657 ravn.adapters.discovery.mdns DEBUG mdns_discovery: responder error: no running event loop
+2026-04-14 22:06:11,658 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:11,658 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 22:06:11,658 pynng.nng DEBUG Pipe callback event 2
+2026-04-14 22:06:11,660 pynng.nng DEBUG Pipe callback event 2
+2026-04-14 22:06:11,662 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4ce817f0>
+2026-04-14 22:06:11,662 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x726c5d64f4a0> server_hostname='volundr.valhalla.asgard.niuu.world' timeout=30.0
+2026-04-14 22:06:11,669 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4ce32350>
+2026-04-14 22:06:11,669 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-04-14 22:06:11,670 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 22:06:11,670 httpcore.http11 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-04-14 22:06:11,670 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 22:06:11,670 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-04-14 22:06:11,672 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Length', b'2'), (b'Content-Type', b'application/json'), (b'Date', b'Tue, 14 Apr 2026 22:06:10 GMT'), (b'Server', b'uvicorn')])
+2026-04-14 22:06:11,673 httpx INFO HTTP Request: GET https://volundr.valhalla.asgard.niuu.world/mimir/sources?unprocessed=true "HTTP/1.1 200 OK"
+2026-04-14 22:06:11,673 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-04-14 22:06:11,673 httpcore.http11 DEBUG receive_response_body.complete
+2026-04-14 22:06:11,673 httpcore.http11 DEBUG response_closed.started
+2026-04-14 22:06:11,673 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 22:06:11,834 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:11,834 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 22:06:11,836 pynng.nng DEBUG Pipe callback event 2
+2026-04-14 22:06:12,489 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:12,489 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 22:06:12,687 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:12,688 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 22:06:14,824 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:14,824 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 22:06:16,588 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:06:16,611 pynng.nng DEBUG Pipe callback event 2
+2026-04-14 22:06:17,269 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:17,270 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 22:06:17,271 ravn.adapters.discovery.mdns DEBUG mdns_discovery: responder error: no running event loop
+2026-04-14 22:06:17,272 pynng.nng DEBUG Pipe callback event 2
+2026-04-14 22:06:21,589 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:06:26,590 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:06:31,325 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:31,325 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 22:06:31,591 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:06:31,591 sleipnir.adapters.nng_transport INFO NngSubscriber: discovered new publisher, dialing ipc:///tmp/ravn-mesh/test-pub.ipc
+2026-04-14 22:06:31,591 pynng.nng DEBUG Pipe callback event 0
+2026-04-14 22:06:31,591 pynng.nng DEBUG Pipe callback event 1
+2026-04-14 22:06:36,593 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:06:41,593 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:06:41,749 ravn.adapters.discovery.mdns DEBUG mdns_discovery: service registration failed: 
+2026-04-14 22:06:46,595 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:06:51,596 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:06:54,532 ravn.cli.commands INFO mesh: received outcome event_type=review.completed from=reviewer task_id=event_code_changed_e2e-test
+2026-04-14 22:06:54,533 ravn.cli.commands INFO mesh: enqueued task event_review_completed_event_co for event_type=review.completed
+2026-04-14 22:06:54,551 ravn.drive_loop INFO drive_loop: executing task event_review_completed_event_co ('Handle review.completed from reviewer') triggered_by='mesh:outcome:review.completed'
+2026-04-14 22:06:54,719 httpcore.connection DEBUG close.started
+2026-04-14 22:06:54,720 httpcore.connection DEBUG close.complete
+2026-04-14 22:06:54,720 httpcore.connection DEBUG connect_tcp.started host='volundr.valhalla.asgard.niuu.world' port=443 local_address=None timeout=30.0 socket_options=None
+2026-04-14 22:06:54,725 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4c582490>
+2026-04-14 22:06:54,725 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x726c5d64f4a0> server_hostname='volundr.valhalla.asgard.niuu.world' timeout=30.0
+2026-04-14 22:06:54,729 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4c554c30>
+2026-04-14 22:06:54,729 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-04-14 22:06:54,729 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 22:06:54,729 httpcore.http11 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-04-14 22:06:54,729 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 22:06:54,729 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-04-14 22:06:54,732 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Length', b'2'), (b'Content-Type', b'application/json'), (b'Date', b'Tue, 14 Apr 2026 22:06:53 GMT'), (b'Server', b'uvicorn')])
+2026-04-14 22:06:54,732 httpx INFO HTTP Request: GET https://volundr.valhalla.asgard.niuu.world/mimir/pages?category=learnings "HTTP/1.1 200 OK"
+2026-04-14 22:06:54,732 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-04-14 22:06:54,732 httpcore.http11 DEBUG receive_response_body.complete
+2026-04-14 22:06:54,733 httpcore.http11 DEBUG response_closed.started
+2026-04-14 22:06:54,733 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 22:06:54,735 ravn.agent DEBUG system_prompt_blocks: 1 blocks
+2026-04-14 22:06:54,735 ravn.agent DEBUG system_prompt_block[0] (first 2000 chars): ## Identity
+
+You are a security auditor. Your job is to identify security vulnerabilities
+in code changes and produce a structured security verdict. You focus on
+preventing exploitable weaknesses from reaching production.
+
+## Core Principles
+
+1. **Assume hostile input** — All user input, API responses, and external data
+   should be treated as potentially malicious until validated.
+
+2. **Defense in depth** — Security issues at one layer don't excuse missing
+   protections at other layers. Flag all issues, not just the "first" one.
+
+3. **Be specific about exploitability** — Describe how a vulnerability could
+   be exploited, not just that it exists. "Attacker can inject SQL via the
+   `user_id` parameter" not just "SQL injection possible."
+
+4. **Distinguish theoretical from practical** — A timing side-channel in a
+   password comparison is critical. A timing side-channel in a public API
+   that returns the same data regardless is not.
+
+## OWASP Top 10 Checklist
+
+Check for these categories in every review:
+
+1. **Injection** (SQL, NoSQL, OS command, LDAP, XPath, template)
+   - User input concatenated into queries or commands
+   - Missing parameterized queries or prepared statements
+   - Unsanitized input in system calls
+
+2. **Broken Authentication**
+   - Weak password requirements
+   - Missing brute-force protection
+   - Session tokens in URLs
+   - Missing logout/session invalidation
+
+3. **Sensitive Data Exposure**
+   - Secrets in code (API keys, passwords, tokens)
+   - Unencrypted sensitive data in transit or at rest
+   - Sensitive data in logs or error messages
+   - Missing security headers (HSTS, CSP, etc.)
+
+4. **XML External Entities (XXE)**
+   - XML parsers with external entity processing enabled
+   - DTD processing not disabled
+
+5. **Broken Access Control**
+   - Missing authorization checks
+   - IDOR (Insecure Direct Object References)
+   - Missing function-level access control
+   - CORS misconfigurations
+
+6. **Security Misconfiguration**
+   - Debug mode enabled 
+2026-04-14 22:06:54,743 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 22:06:54,754 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4c555350>
+2026-04-14 22:06:54,754 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x726c4cf012e0> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 22:06:54,760 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4cecdfd0>
+2026-04-14 22:06:54,760 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 22:06:54,761 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 22:06:54,761 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 22:06:54,761 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 22:06:54,761 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 22:06:54,783 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 22:06:54 GMT'), (b'Date', b'Tue, 14 Apr 2026 22:06:54 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'4c9ce83b-eb85-4238-9150-562c4087944f'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 22:06:54,784 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 22:06:54,784 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 22:06:56,597 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:06:56,976 httpcore.connection DEBUG close.started
+2026-04-14 22:06:56,977 httpcore.connection DEBUG close.complete
+2026-04-14 22:06:56,987 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 22:06:56,988 httpcore.http11 DEBUG response_closed.started
+2026-04-14 22:06:56,988 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 22:06:56,988 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 22:06:56,992 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4ceabdf0>
+2026-04-14 22:06:56,992 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x726c4cea28f0> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 22:06:56,999 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4ceabce0>
+2026-04-14 22:06:56,999 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 22:06:56,999 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 22:06:56,999 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 22:06:56,999 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 22:06:56,999 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 22:06:57,030 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 22:06:56 GMT'), (b'Date', b'Tue, 14 Apr 2026 22:06:56 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'4d02dfb9-88db-419f-8712-41b874fff6f7'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 22:06:57,030 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 22:06:57,030 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 22:07:00,868 httpcore.connection DEBUG close.started
+2026-04-14 22:07:00,869 httpcore.connection DEBUG close.complete
+2026-04-14 22:07:00,883 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 22:07:00,883 httpcore.http11 DEBUG response_closed.started
+2026-04-14 22:07:00,883 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 22:07:00,883 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 22:07:00,888 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4ce8d350>
+2026-04-14 22:07:00,888 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x726c4cea2a90> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 22:07:00,894 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4c571f50>
+2026-04-14 22:07:00,895 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 22:07:00,895 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 22:07:00,895 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 22:07:00,895 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 22:07:00,895 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 22:07:00,917 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream; charset=utf-8'), (b'Date', b'Tue, 14 Apr 2026 22:07:00 GMT'), (b'Date', b'Tue, 14 Apr 2026 22:07:00 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'07d328c2-0284-4be2-a6b4-7c392f6167b5'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 22:07:00,917 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 22:07:00,917 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 22:07:01,597 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:07:06,600 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:07:10,703 httpcore.connection DEBUG close.started
+2026-04-14 22:07:10,703 httpcore.connection DEBUG close.complete
+2026-04-14 22:07:10,705 ravn.agent DEBUG final_outcome_block: valid=True fields={'verdict': 'needs_review', 'critical_findings': 0, 'summary': 'Unable to perform security review due to lack of access to code changes', 'findings': "Cannot assess security posture as I don't have access to the actual code modifications that occurred during the e2e-test. A manual review of the changes would be required to identify any potential security vulnerabilities."} errors=[]
+2026-04-14 22:07:10,717 httpcore.connection DEBUG connect_tcp.started host='vllm.valaskjalf.asgard.niuu.world' port=443 local_address=None timeout=300.0 socket_options=None
+2026-04-14 22:07:10,718 httpcore.http11 DEBUG response_closed.started
+2026-04-14 22:07:10,718 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 22:07:10,718 httpcore.http11 DEBUG receive_response_body.failed exception=GeneratorExit()
+2026-04-14 22:07:10,723 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4c5ae120>
+2026-04-14 22:07:10,723 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x726c4c5854a0> server_hostname='vllm.valaskjalf.asgard.niuu.world' timeout=300.0
+2026-04-14 22:07:10,729 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4c5ae300>
+2026-04-14 22:07:10,730 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-04-14 22:07:10,730 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 22:07:10,730 httpcore.http11 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-04-14 22:07:10,730 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 22:07:10,730 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-04-14 22:07:11,586 ravn.drive_loop DEBUG drive_loop: heartbeat — active=1 queued=0 triggers=4
+2026-04-14 22:07:11,601 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:07:11,677 httpcore.connection DEBUG close.started
+2026-04-14 22:07:11,677 httpcore.connection DEBUG close.complete
+2026-04-14 22:07:11,677 httpcore.connection DEBUG connect_tcp.started host='volundr.valhalla.asgard.niuu.world' port=443 local_address=None timeout=30.0 socket_options=None
+2026-04-14 22:07:11,682 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4c58bd90>
+2026-04-14 22:07:11,682 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x726c5d64f4a0> server_hostname='volundr.valhalla.asgard.niuu.world' timeout=30.0
+2026-04-14 22:07:11,687 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4c58be70>
+2026-04-14 22:07:11,688 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-04-14 22:07:11,688 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 22:07:11,688 httpcore.http11 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-04-14 22:07:11,688 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 22:07:11,688 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-04-14 22:07:11,690 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Length', b'2'), (b'Content-Type', b'application/json'), (b'Date', b'Tue, 14 Apr 2026 22:07:10 GMT'), (b'Server', b'uvicorn')])
+2026-04-14 22:07:11,690 httpx INFO HTTP Request: GET https://volundr.valhalla.asgard.niuu.world/mimir/sources?unprocessed=true "HTTP/1.1 200 OK"
+2026-04-14 22:07:11,691 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-04-14 22:07:11,691 httpcore.http11 DEBUG receive_response_body.complete
+2026-04-14 22:07:11,691 httpcore.http11 DEBUG response_closed.started
+2026-04-14 22:07:11,691 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 22:07:11,971 ravn.adapters.discovery.mdns DEBUG mdns_discovery: service registration failed: 
+2026-04-14 22:07:15,702 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'application/json'), (b'Date', b'Tue, 14 Apr 2026 22:07:10 GMT'), (b'Date', b'Tue, 14 Apr 2026 22:07:10 GMT'), (b'Server', b'uvicorn'), (b'Server', b'uvicorn'), (b'X-Request-Id', b'70cd9128-9d2a-4394-9df2-8457e8429b6a'), (b'Transfer-Encoding', b'chunked')])
+2026-04-14 22:07:15,703 httpx INFO HTTP Request: POST https://vllm.valaskjalf.asgard.niuu.world/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-14 22:07:15,703 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-04-14 22:07:15,704 httpcore.http11 DEBUG receive_response_body.complete
+2026-04-14 22:07:15,704 httpcore.http11 DEBUG response_closed.started
+2026-04-14 22:07:15,704 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 22:07:15,705 httpcore.connection DEBUG close.started
+2026-04-14 22:07:15,705 httpcore.connection DEBUG close.complete
+2026-04-14 22:07:16,004 ravn.drive_loop DEBUG drive_loop: task event_review_completed_event_co cost=0.042291 spent_today=0.042291 remaining=0.957709
+2026-04-14 22:07:16,004 ravn.drive_loop INFO drive_loop: task event_review_completed_event_co output: Since I cannot access the file system or git information directly, I'm unable to perform the security review of the actual code changes that occurred during the e2e-test. This prevents me from identifying any potential vulnerabilities or security issues in the modified code.
+
+To properly conduct a security audit, I would need:
+1. Access to the specific code changes that were made
+2. Visibility into the files that were modified during the test
+3. The ability to analyze those changes against secur
+2026-04-14 22:07:16,005 ravn.drive_loop INFO drive_loop: publishing outcome event_type=security.completed task_id=event_review_completed_event_co
+2026-04-14 22:07:16,603 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:07:21,604 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:07:26,604 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:07:31,606 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:07:36,608 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:07:41,609 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 4 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc', 'ipc:///tmp/ravn-mesh/test-pub.ipc']
+2026-04-14 22:07:42,208 ravn.adapters.discovery.mdns DEBUG mdns_discovery: service registration failed: 
+2026-04-14 22:07:42,209 ravn.adapters.discovery.mdns DEBUG mdns_discovery: evicted stale peer ravn-mesh-1
+2026-04-14 22:07:42,209 ravn.adapters.discovery.mdns DEBUG mdns_discovery: evicted stale peer ravn-mesh-2
+2026-04-14 22:07:46,350 pynng.nng DEBUG Pipe callback event 2
+2026-04-14 22:07:46,351 pynng.nng DEBUG Pipe callback event 2
+2026-04-14 22:07:46,610 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:07:51,612 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:07:56,613 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:08:01,614 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:08:06,615 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:08:11,587 ravn.drive_loop DEBUG drive_loop: heartbeat — active=0 queued=0 triggers=4
+2026-04-14 22:08:11,616 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:08:11,695 httpcore.connection DEBUG close.started
+2026-04-14 22:08:11,695 httpcore.connection DEBUG close.complete
+2026-04-14 22:08:11,695 httpcore.connection DEBUG connect_tcp.started host='volundr.valhalla.asgard.niuu.world' port=443 local_address=None timeout=30.0 socket_options=None
+2026-04-14 22:08:11,701 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4c5413d0>
+2026-04-14 22:08:11,701 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x726c5d64f4a0> server_hostname='volundr.valhalla.asgard.niuu.world' timeout=30.0
+2026-04-14 22:08:11,706 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4c54d3d0>
+2026-04-14 22:08:11,706 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-04-14 22:08:11,706 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 22:08:11,706 httpcore.http11 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-04-14 22:08:11,706 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 22:08:11,706 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-04-14 22:08:11,708 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Length', b'2'), (b'Content-Type', b'application/json'), (b'Date', b'Tue, 14 Apr 2026 22:08:11 GMT'), (b'Server', b'uvicorn')])
+2026-04-14 22:08:11,709 httpx INFO HTTP Request: GET https://volundr.valhalla.asgard.niuu.world/mimir/sources?unprocessed=true "HTTP/1.1 200 OK"
+2026-04-14 22:08:11,709 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-04-14 22:08:11,709 httpcore.http11 DEBUG receive_response_body.complete
+2026-04-14 22:08:11,709 httpcore.http11 DEBUG response_closed.started
+2026-04-14 22:08:11,709 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 22:08:12,378 ravn.adapters.discovery.mdns DEBUG mdns_discovery: service registration failed: 
+2026-04-14 22:08:16,618 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:08:21,619 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:08:26,621 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:08:31,623 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:08:36,624 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:08:41,626 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:08:42,611 ravn.adapters.discovery.mdns DEBUG mdns_discovery: service registration failed: 
+2026-04-14 22:08:46,627 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:08:51,629 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:08:56,631 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:09:01,633 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:09:06,634 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:09:11,588 ravn.drive_loop DEBUG drive_loop: heartbeat — active=0 queued=0 triggers=4
+2026-04-14 22:09:11,636 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:09:11,713 httpcore.connection DEBUG close.started
+2026-04-14 22:09:11,713 httpcore.connection DEBUG close.complete
+2026-04-14 22:09:11,713 httpcore.connection DEBUG connect_tcp.started host='volundr.valhalla.asgard.niuu.world' port=443 local_address=None timeout=30.0 socket_options=None
+2026-04-14 22:09:11,718 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4c54d850>
+2026-04-14 22:09:11,718 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x726c5d64f4a0> server_hostname='volundr.valhalla.asgard.niuu.world' timeout=30.0
+2026-04-14 22:09:11,724 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4cec1860>
+2026-04-14 22:09:11,724 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-04-14 22:09:11,724 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 22:09:11,724 httpcore.http11 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-04-14 22:09:11,724 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 22:09:11,725 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-04-14 22:09:11,727 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Length', b'2'), (b'Content-Type', b'application/json'), (b'Date', b'Tue, 14 Apr 2026 22:09:11 GMT'), (b'Server', b'uvicorn')])
+2026-04-14 22:09:11,727 httpx INFO HTTP Request: GET https://volundr.valhalla.asgard.niuu.world/mimir/sources?unprocessed=true "HTTP/1.1 200 OK"
+2026-04-14 22:09:11,727 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-04-14 22:09:11,727 httpcore.http11 DEBUG receive_response_body.complete
+2026-04-14 22:09:11,727 httpcore.http11 DEBUG response_closed.started
+2026-04-14 22:09:11,727 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 22:09:12,824 ravn.adapters.discovery.mdns DEBUG mdns_discovery: service registration failed: 
+2026-04-14 22:09:16,638 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:09:21,639 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:09:26,640 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:09:31,641 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:09:36,642 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:09:41,644 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:09:43,036 ravn.adapters.discovery.mdns DEBUG mdns_discovery: service registration failed: 
+2026-04-14 22:09:46,646 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:09:51,647 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:09:56,648 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:10:01,650 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:10:06,651 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:10:11,589 ravn.drive_loop DEBUG drive_loop: heartbeat — active=0 queued=0 triggers=4
+2026-04-14 22:10:11,653 sleipnir.adapters.nng_transport DEBUG NngSubscriber: discovered 3 publisher(s): ['ipc:///tmp/ravn-mesh/node-1.ipc', 'ipc:///tmp/ravn-mesh/node-2.ipc', 'ipc:///tmp/ravn-mesh/node-3.ipc']
+2026-04-14 22:10:11,731 httpcore.connection DEBUG close.started
+2026-04-14 22:10:11,731 httpcore.connection DEBUG close.complete
+2026-04-14 22:10:11,731 httpcore.connection DEBUG connect_tcp.started host='volundr.valhalla.asgard.niuu.world' port=443 local_address=None timeout=30.0 socket_options=None
+2026-04-14 22:10:11,735 httpcore.connection DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c4c5a4470>
+2026-04-14 22:10:11,736 httpcore.connection DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x726c5d64f4a0> server_hostname='volundr.valhalla.asgard.niuu.world' timeout=30.0
+2026-04-14 22:10:11,740 httpcore.connection DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x726c5cf84af0>
+2026-04-14 22:10:11,740 httpcore.http11 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-04-14 22:10:11,740 httpcore.http11 DEBUG send_request_headers.complete
+2026-04-14 22:10:11,740 httpcore.http11 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-04-14 22:10:11,741 httpcore.http11 DEBUG send_request_body.complete
+2026-04-14 22:10:11,741 httpcore.http11 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-04-14 22:10:11,743 httpcore.http11 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Length', b'2'), (b'Content-Type', b'application/json'), (b'Date', b'Tue, 14 Apr 2026 22:10:11 GMT'), (b'Server', b'uvicorn')])
+2026-04-14 22:10:11,743 httpx INFO HTTP Request: GET https://volundr.valhalla.asgard.niuu.world/mimir/sources?unprocessed=true "HTTP/1.1 200 OK"
+2026-04-14 22:10:11,743 httpcore.http11 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-04-14 22:10:11,743 httpcore.http11 DEBUG receive_response_body.complete
+2026-04-14 22:10:11,743 httpcore.http11 DEBUG response_closed.started
+2026-04-14 22:10:11,743 httpcore.http11 DEBUG response_closed.complete
+2026-04-14 22:10:13,237 ravn.adapters.discovery.mdns DEBUG mdns_discovery: service registration failed: 

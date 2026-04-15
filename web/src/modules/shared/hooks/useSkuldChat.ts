@@ -270,9 +270,58 @@ export interface RoomParticipant extends ParticipantMeta {
   readonly joinedAt: Date;
 }
 
+// ── Mesh cascade event types ──────────────────────────────────────────
+
+export type MeshEventType = 'outcome' | 'mesh_message' | 'notification';
+
+export interface MeshOutcomeEvent {
+  readonly type: 'outcome';
+  readonly id: string;
+  readonly timestamp: Date;
+  readonly participantId: string;
+  readonly participant: ParticipantMeta;
+  readonly persona: string;
+  readonly eventType: string; // e.g. "review.passed", "security.changes_requested"
+  readonly fields: Record<string, unknown>;
+  readonly valid: boolean;
+  readonly summary?: string;
+  readonly verdict?: string;
+}
+
+export interface MeshDelegationEvent {
+  readonly type: 'mesh_message';
+  readonly id: string;
+  readonly timestamp: Date;
+  readonly participantId: string;
+  readonly participant: ParticipantMeta;
+  readonly fromPersona: string;
+  readonly eventType: string; // e.g. "code.changed"
+  readonly direction: 'delegate' | 'receive';
+  readonly preview: string;
+}
+
+export interface MeshNotificationEvent {
+  readonly type: 'notification';
+  readonly id: string;
+  readonly timestamp: Date;
+  readonly participantId: string;
+  readonly participant: ParticipantMeta;
+  readonly notificationType: string; // e.g. "help_needed"
+  readonly persona: string;
+  readonly reason: string;
+  readonly summary: string;
+  readonly attempted?: string[];
+  readonly recommendation?: string;
+  readonly urgency: number;
+  readonly context?: Record<string, unknown>;
+}
+
+export type MeshEvent = MeshOutcomeEvent | MeshDelegationEvent | MeshNotificationEvent;
+
 interface UseSkuldChatReturn {
   messages: readonly SkuldChatMessage[];
   participants: ReadonlyMap<string, RoomParticipant>;
+  meshEvents: readonly MeshEvent[];
   connected: boolean;
   isRunning: boolean;
   historyLoaded: boolean;
@@ -325,6 +374,7 @@ export function useSkuldChat(
     return getMessages(url);
   });
   const [participants, setParticipants] = useState<Map<string, RoomParticipant>>(new Map());
+  const [meshEvents, setMeshEvents] = useState<MeshEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [pendingPermissions, setPendingPermissions] = useState<PermissionRequest[]>([]);
@@ -1017,6 +1067,99 @@ export function useSkuldChat(
           continue;
         }
 
+        // ── room_outcome: persona produced a structured result ─────
+        if (eventType === 'room_outcome') {
+          const raw = event as unknown as Record<string, unknown>;
+          const participantRaw = raw.participant as Record<string, unknown> | undefined;
+          const outcome: MeshOutcomeEvent = {
+            type: 'outcome',
+            id: generateId(),
+            timestamp: new Date(),
+            participantId: String(raw.participantId ?? ''),
+            participant: participantRaw
+              ? {
+                  peerId: String(participantRaw.peer_id ?? ''),
+                  persona: String(participantRaw.persona ?? ''),
+                  color: String(participantRaw.color ?? ''),
+                  participantType: (participantRaw.participant_type ?? 'ravn') as 'human' | 'ravn',
+                  gatewayUrl: participantRaw.gateway_url
+                    ? String(participantRaw.gateway_url)
+                    : undefined,
+                }
+              : { peerId: '', persona: '', color: '', participantType: 'ravn' },
+            persona: String(raw.persona ?? ''),
+            eventType: String(raw.eventType ?? ''),
+            fields: (raw.fields as Record<string, unknown>) ?? {},
+            valid: raw.valid !== false,
+            summary: raw.summary ? String(raw.summary) : undefined,
+            verdict: raw.verdict ? String(raw.verdict) : undefined,
+          };
+          setMeshEvents(prev => [...prev, outcome]);
+          continue;
+        }
+
+        // ── room_mesh_message: inter-agent delegation ──────────────
+        if (eventType === 'room_mesh_message') {
+          const raw = event as unknown as Record<string, unknown>;
+          const participantRaw = raw.participant as Record<string, unknown> | undefined;
+          const meshMsg: MeshDelegationEvent = {
+            type: 'mesh_message',
+            id: generateId(),
+            timestamp: new Date(),
+            participantId: String(raw.participantId ?? ''),
+            participant: participantRaw
+              ? {
+                  peerId: String(participantRaw.peer_id ?? ''),
+                  persona: String(participantRaw.persona ?? ''),
+                  color: String(participantRaw.color ?? ''),
+                  participantType: (participantRaw.participant_type ?? 'ravn') as 'human' | 'ravn',
+                  gatewayUrl: participantRaw.gateway_url
+                    ? String(participantRaw.gateway_url)
+                    : undefined,
+                }
+              : { peerId: '', persona: '', color: '', participantType: 'ravn' },
+            fromPersona: String(raw.fromPersona ?? ''),
+            eventType: String(raw.eventType ?? ''),
+            direction: (raw.direction ?? 'delegate') as 'delegate' | 'receive',
+            preview: String(raw.preview ?? ''),
+          };
+          setMeshEvents(prev => [...prev, meshMsg]);
+          continue;
+        }
+
+        // ── room_notification: help_needed or other alerts ─────────
+        if (eventType === 'room_notification') {
+          const raw = event as unknown as Record<string, unknown>;
+          const participantRaw = raw.participant as Record<string, unknown> | undefined;
+          const notification: MeshNotificationEvent = {
+            type: 'notification',
+            id: generateId(),
+            timestamp: new Date(),
+            participantId: String(raw.participantId ?? ''),
+            participant: participantRaw
+              ? {
+                  peerId: String(participantRaw.peer_id ?? ''),
+                  persona: String(participantRaw.persona ?? ''),
+                  color: String(participantRaw.color ?? ''),
+                  participantType: (participantRaw.participant_type ?? 'ravn') as 'human' | 'ravn',
+                  gatewayUrl: participantRaw.gateway_url
+                    ? String(participantRaw.gateway_url)
+                    : undefined,
+                }
+              : { peerId: '', persona: '', color: '', participantType: 'ravn' },
+            notificationType: String(raw.notificationType ?? ''),
+            persona: String(raw.persona ?? ''),
+            reason: String(raw.reason ?? ''),
+            summary: String(raw.summary ?? ''),
+            attempted: Array.isArray(raw.attempted) ? (raw.attempted as string[]) : undefined,
+            recommendation: raw.recommendation ? String(raw.recommendation) : undefined,
+            urgency: typeof raw.urgency === 'number' ? raw.urgency : 0.5,
+            context: raw.context as Record<string, unknown> | undefined,
+          };
+          setMeshEvents(prev => [...prev, notification]);
+          continue;
+        }
+
         // ── message_start, message_stop — silently consumed ──────
       } // end for (const event of events)
     },
@@ -1175,6 +1318,7 @@ export function useSkuldChat(
     () => participants as ReadonlyMap<string, RoomParticipant>,
     [participants]
   );
+  const stableMeshEvents = useMemo(() => meshEvents, [meshEvents]);
   const stablePermissions = useMemo(() => pendingPermissions, [pendingPermissions]);
   const stableCommands = useMemo(() => availableCommands, [availableCommands]);
   const stableCapabilities = useMemo(() => capabilities, [capabilities]);
@@ -1182,6 +1326,7 @@ export function useSkuldChat(
   return {
     messages: stableMessages,
     participants: stableParticipants,
+    meshEvents: stableMeshEvents,
     connected,
     isRunning,
     historyLoaded,

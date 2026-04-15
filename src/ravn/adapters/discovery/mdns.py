@@ -40,7 +40,7 @@ import logging
 import secrets
 import socket
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ravn.adapters.discovery._identity import (
     load_or_create_realm_key,
@@ -95,26 +95,50 @@ class MdnsDiscoveryAdapter:
 
     Parameters
     ----------
-    config:
-        Root ``DiscoveryConfig`` from settings.
     own_identity:
         Pre-built ``RavnIdentity`` for this instance (peer_id, realm_id,
         persona, capabilities, etc.).  ``rep_address`` and ``pub_address``
         should be populated by the mesh adapter before ``start()`` is called.
     handshake_port:
         Port for the nng PAIR socket used during handshake negotiation.
-        Defaults to 7482.
+    service_type:
+        mDNS service type for flock discovery (e.g. "_ravn._tcp.local.").
+    handshake_timeout_s:
+        Seconds to wait for HMAC handshake completion.
+    heartbeat_interval_s:
+        Seconds between liveness heartbeats.
+    peer_ttl_s:
+        Seconds of missed heartbeats before a peer is evicted.
+    **kwargs:
+        Ignored — allows forward compatibility with new config fields.
     """
 
     def __init__(
         self,
-        config: DiscoveryConfig,
         own_identity: RavnIdentity,
+        *,
         handshake_port: int = 7482,
+        service_type: str = "_ravn._tcp.local.",
+        handshake_timeout_s: float = 5.0,
+        heartbeat_interval_s: float = 30.0,
+        peer_ttl_s: float = 90.0,
+        # Legacy: accept config object for backward compatibility
+        config: DiscoveryConfig | None = None,
+        **kwargs: Any,
     ) -> None:
-        self._config = config
         self._identity = own_identity
         self._handshake_port = handshake_port
+        self._service_type = service_type
+        self._handshake_timeout_s = handshake_timeout_s
+        self._heartbeat_interval_s = heartbeat_interval_s
+        self._peer_ttl_s = peer_ttl_s
+
+        # Legacy config support — extract values if config object provided
+        if config is not None:
+            self._service_type = config.mdns.service_type
+            self._handshake_timeout_s = config.mdns.handshake_timeout_s
+            self._heartbeat_interval_s = config.heartbeat_interval_s
+            self._peer_ttl_s = config.peer_ttl_s
 
         # Derive realm key — used only for HMAC, never transmitted raw.
         self._realm_key: bytes = load_or_create_realm_key()
@@ -214,7 +238,7 @@ class MdnsDiscoveryAdapter:
             return None
 
         addr = f"tcp://{candidate.host}:{candidate.handshake_port}"
-        timeout_ms = int(self._config.mdns.handshake_timeout_s * 1000)
+        timeout_ms = int(self._handshake_timeout_s * 1000)
 
         try:
             return await asyncio.get_running_loop().run_in_executor(
@@ -284,9 +308,9 @@ class MdnsDiscoveryAdapter:
             return
         ip = _local_ip()
         txt = self._build_txt_records()
-        service_name = f"{self._identity.peer_id}.{self._config.mdns.service_type}"
+        service_name = f"{self._identity.peer_id}.{self._service_type}"
         info = ServiceInfo(  # type: ignore[call-arg]
-            type_=self._config.mdns.service_type,
+            type_=self._service_type,
             name=service_name,
             addresses=[socket.inet_aton(ip)],
             port=self._handshake_port,
@@ -308,7 +332,7 @@ class MdnsDiscoveryAdapter:
         handlers = [self._on_service_state_change]
         self._browser = AsyncServiceBrowser(  # type: ignore[call-arg]
             self._zc.zeroconf,
-            self._config.mdns.service_type,
+            self._service_type,
             handlers=handlers,
         )
 
@@ -627,7 +651,7 @@ class MdnsDiscoveryAdapter:
     async def _heartbeat_loop(self) -> None:
         while True:
             try:
-                await asyncio.sleep(self._config.heartbeat_interval_s)
+                await asyncio.sleep(self._heartbeat_interval_s)
                 await self.announce()
                 self._evict_stale_peers()
             except asyncio.CancelledError:
@@ -637,7 +661,7 @@ class MdnsDiscoveryAdapter:
 
     def _evict_stale_peers(self) -> None:
         now = datetime.now(UTC)
-        ttl = self._config.peer_ttl_s
+        ttl = self._peer_ttl_s
         to_evict = [
             peer_id
             for peer_id, peer in self._peers.items()

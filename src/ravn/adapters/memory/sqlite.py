@@ -381,7 +381,7 @@ class SqliteMemoryAdapter(MemoryPort):
             conn = self._connect()
             try:
                 rows = conn.execute(
-                    f"SELECT * FROM episodes WHERE episode_id IN ({placeholders})",
+                    "SELECT * FROM episodes WHERE episode_id IN (" + placeholders + ")",
                     ids,
                 ).fetchall()
             finally:

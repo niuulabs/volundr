@@ -241,7 +241,7 @@ class SQLiteUsageStore(UsageStore):
         limit: int,
     ) -> list[tuple]:
         where, params = SQLiteUsageStore._build_where(agent_id, tenant_id, model, since, until)
-        sql = f"""
+        sql = """
             SELECT id, request_id, agent_id, tenant_id, session_id, saga_id,
                    model, provider,
                    input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
