@@ -72,9 +72,17 @@ class PersonaLLMConfig:
 
 @dataclass
 class PersonaProduces:
-    """What this persona outputs when it completes."""
+    """What this persona outputs when it completes.
+
+    event_type: Default event type to publish (used if event_type_map doesn't match)
+    event_type_map: Maps outcome field values to event types, e.g.:
+        {"pass": "review.passed", "needs_changes": "review.changes_requested"}
+        The map is checked against the 'verdict' field in the outcome.
+    schema: Expected fields in the outcome block
+    """
 
     event_type: str = ""
+    event_type_map: dict[str, str] = field(default_factory=dict)
     schema: dict[str, OutcomeField] = field(default_factory=dict)
 
 
@@ -147,10 +155,12 @@ class PersonaConfig:
         if self.iteration_budget:
             d["iteration_budget"] = self.iteration_budget
 
-        if self.produces.event_type or self.produces.schema:
+        if self.produces.event_type or self.produces.event_type_map or self.produces.schema:
             produces_dict: dict = {}
             if self.produces.event_type:
                 produces_dict["event_type"] = self.produces.event_type
+            if self.produces.event_type_map:
+                produces_dict["event_type_map"] = dict(self.produces.event_type_map)
             if self.produces.schema:
                 schema_dict: dict = {}
                 for fname, f in self.produces.schema.items():
@@ -2051,6 +2061,11 @@ def _parse_produces(raw: Any) -> PersonaProduces:
     if not isinstance(raw, dict):
         return PersonaProduces()
     event_type = str(raw.get("event_type", ""))
+    event_type_map: dict[str, str] = {}
+    event_type_map_raw = raw.get("event_type_map")
+    if isinstance(event_type_map_raw, dict):
+        for k, v in event_type_map_raw.items():
+            event_type_map[str(k)] = str(v)
     schema: dict[str, OutcomeField] = {}
     schema_raw = raw.get("schema")
     if isinstance(schema_raw, dict):
@@ -2058,7 +2073,7 @@ def _parse_produces(raw: Any) -> PersonaProduces:
             parsed = _parse_outcome_field(fname, fval)
             if parsed is not None:
                 schema[fname] = parsed
-    return PersonaProduces(event_type=event_type, schema=schema)
+    return PersonaProduces(event_type=event_type, event_type_map=event_type_map, schema=schema)
 
 
 def _parse_consumes(raw: Any) -> PersonaConsumes:

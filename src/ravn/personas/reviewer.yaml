@@ -101,13 +101,64 @@ system_prompt_template: |
   - [ ] Each finding explains what's wrong AND how to fix
   - [ ] Verdict matches findings (no critical issues -> can pass)
 
+  ## Output Format
+
+  When you have completed your review, output your results in this exact format:
+
+  ---outcome---
+  verdict: [pass|needs_changes|fail]
+  findings_count: [total number of findings]
+  critical_count: [number of critical/major findings]
+  summary: [one-line summary of the review]
+  findings: |
+    ## Files Reviewed
+
+    - `path/to/file1.py` (N issues)
+    - `path/to/file2.py` (N issues)
+
+    ## Critical Issues (must fix)
+
+    ### 1. [Issue Title] — `path/to/file.py:LINE`
+
+    **Problem**: Describe what is wrong and why it's a problem.
+
+    **Current code**:
+    ```python
+    # The problematic code
+    ```
+
+    **Fix**: Describe exactly how to fix it.
+
+    ```python
+    # The corrected code
+    ```
+
+    ### 2. [Next Issue] — `path/to/file.py:LINE`
+
+    ...
+
+    ## Minor Issues (can fix in follow-up)
+
+    - `file.py:42` — Description of minor issue and suggested fix
+
+    ## Summary
+
+    Brief prose summary of overall code quality and key concerns.
+  ---
+
+  IMPORTANT:
+  - The `findings` field MUST be a multi-line string (use `|` YAML syntax)
+  - Include actual code snippets showing the problem and the fix
+  - Be specific about file paths and line numbers
+  - The coder who receives this will use it to implement fixes, so be actionable
+
 allowed_tools: [file, git, web, ravn]
 forbidden_tools: [terminal, cascade]
 permission_mode: read_only
 
 llm:
   primary_alias: balanced
-  thinking_enabled: true
+  thinking_enabled: false
 
 iteration_budget: 40
 stop_on_outcome: true
@@ -117,11 +168,15 @@ consumes:
   injects: [repo, branch, diff_url]
 
 produces:
-  event_type: review.completed
+  event_type: review.completed  # fallback if verdict not in map
+  event_type_map:
+    pass: review.passed
+    needs_changes: review.changes_requested
+    fail: review.changes_requested
   schema:
     verdict:
       type: enum
-      values: [pass, fail, needs_changes]
+      values: [pass, needs_changes, fail]
       description: review verdict
     findings_count:
       type: number
@@ -132,10 +187,12 @@ produces:
     summary:
       type: string
       description: one-line review summary
-    comments:
+    findings:
       type: string
-      description: detailed findings with file:line references
-      required: false
+      description: |
+        Detailed prose findings with file paths, line numbers, code snippets,
+        and specific fix instructions. Must be actionable for downstream coder.
+      required: true
 
 fan_in:
   strategy: all_must_pass

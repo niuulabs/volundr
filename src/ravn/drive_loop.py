@@ -492,13 +492,26 @@ class DriveLoop:
         if self._mesh is None or self._persona_config is None:
             return
 
-        event_type = self._persona_config.produces.event_type
-        if not event_type:
-            return
-
         # Parse outcome block from response
         parsed = parse_outcome_block(response_text)
         outcome_fields = parsed.fields if parsed and parsed.valid else {}
+
+        # Determine event type: check event_type_map first, fall back to default
+        event_type = self._persona_config.produces.event_type
+        event_type_map = self._persona_config.produces.event_type_map
+        if event_type_map:
+            # Look for verdict field to determine which event to publish
+            verdict = outcome_fields.get("verdict", "")
+            if verdict and verdict in event_type_map:
+                event_type = event_type_map[verdict]
+                logger.debug(
+                    "drive_loop: mapped verdict=%s to event_type=%s",
+                    verdict,
+                    event_type,
+                )
+
+        if not event_type:
+            return
 
         # Create proper RavnEvent for hexagonal compliance
         event = RavnEvent(

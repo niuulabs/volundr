@@ -2,13 +2,13 @@
 # End-to-end test for the Ravn mesh architecture.
 #
 # Tests the full event cascade:
-#   test-publisher → code.changed → reviewer
-#                                     ↓
-#                              review.completed
-#                                  ↓      ↓
-#                               coder  security
-#                                          ↓
-#                              security.completed
+#   test-publisher → code.changed ──→ reviewer ──→ review.passed / review.changes_requested
+#                          │                                              ↓
+#                          └──→ security ──→ security.passed / security.changes_requested
+#                                                                         ↓
+#                                                                       coder (only on .changes_requested)
+#                                                                         ↓
+#                                                                    code.changed (fix applied)
 #
 # Usage:
 #   scripts/ravn-mesh-e2e.sh          — run full e2e test
@@ -201,6 +201,14 @@ def process():
         pass
 PYCODE
 
+# Show starting file content
+echo ""
+log_info "=== STARTING FILE CONTENT ==="
+echo "--- /tmp/hello.py ---"
+cat /tmp/hello.py
+echo "--- end ---"
+echo ""
+
 # Run test publisher
 PYTHONPATH="${REPO_ROOT}/src" python "${TEST_PUBLISHER}" &
 PUB_PID=$!
@@ -219,42 +227,88 @@ while true; do
         break
     fi
 
-    # Check for review.completed in reviewer log
-    if grep -q "publishing outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null; then
-        log_info "Reviewer published review.completed"
+    # Count how many code.changed events coder has published (fix cycles)
+    coder_fix_count=$(grep -c "publishing outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null | tr -d '\n' || true)
+    coder_fix_count=${coder_fix_count:-0}
 
-        # Check for coder publishing code.changed (fix cycle)
-        if grep -q "publishing outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null; then
-            log_info "Coder published code.changed (fix applied)"
+    # Count reviewer verdicts
+    reviewer_pass_count=$(grep -c "publishing outcome event_type=review.passed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null | tr -d '\n' || true)
+    reviewer_pass_count=${reviewer_pass_count:-0}
+    reviewer_changes_count=$(grep -c "publishing outcome event_type=review.changes_requested" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null | tr -d '\n' || true)
+    reviewer_changes_count=${reviewer_changes_count:-0}
 
-            # Check reviewer received the SECOND code.changed (from coder, not test publisher)
-            code_changed_count=$(grep -c "mesh: received outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null || echo 0)
-            if [[ "${code_changed_count}" -ge 2 ]]; then
-                log_info "Reviewer received coder's code.changed (re-review triggered)"
+    # Count security verdicts
+    security_pass_count=$(grep -c "publishing outcome event_type=security.passed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null | tr -d '\n' || true)
+    security_pass_count=${security_pass_count:-0}
+    security_changes_count=$(grep -c "publishing outcome event_type=security.changes_requested" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null | tr -d '\n' || true)
+    security_changes_count=${security_changes_count:-0}
 
-                # Check for security.completed
-                if grep -q "publishing outcome event_type=security.completed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null; then
-                    log_info "Security published security.completed"
-                    cascade_complete=true
-                    break
-                fi
-            fi
+    # Show progress
+    if [[ $((reviewer_pass_count + reviewer_changes_count + security_pass_count + security_changes_count)) -gt 0 ]]; then
+        log_info "Progress: reviewer(pass=${reviewer_pass_count}, changes=${reviewer_changes_count}) security(pass=${security_pass_count}, changes=${security_changes_count}) coder_fixes=${coder_fix_count}"
+    fi
+
+    # Cascade is SETTLED when we have .passed from BOTH reviewer and security
+    # This means either:
+    # 1. Initial review passed (no issues found)
+    # 2. Issues were found, coder fixed them, re-review passed
+    if [[ $reviewer_pass_count -gt 0 ]] && [[ $security_pass_count -gt 0 ]]; then
+        log_info "CASCADE SETTLED: Both reviewer and security published .passed"
+        cascade_complete=true
+        break
+    fi
+
+    # If we have changes_requested but no .passed yet, check if coder is working
+    if [[ $reviewer_changes_count -gt 0 ]] || [[ $security_changes_count -gt 0 ]]; then
+        if [[ $coder_fix_count -gt 0 ]]; then
+            log_info "Coder applied fix #${coder_fix_count}, waiting for re-review..."
+        else
+            log_info "Changes requested, waiting for coder to fix..."
         fi
     fi
 
-    sleep 2
+    sleep 5
 done
 
 # Kill test publisher
 kill $PUB_PID 2>/dev/null || true
 
+# Show ending file content
+echo ""
+log_info "=== ENDING FILE CONTENT ==="
+echo "--- /tmp/hello.py ---"
+cat /tmp/hello.py
+echo "--- end ---"
+echo ""
+
 # 8. Verify cascade
 echo ""
 log_info "=== Cascade Results ==="
 
-# Check each step
+# Full settle flow:
+# 1. Reviewer receives code.changed
+# 2. Reviewer publishes initial verdict (changes_requested or passed)
+# 3. Security receives code.changed
+# 4. Security publishes initial verdict (changes_requested or passed)
+# 5. If changes_requested: Coder fixes and publishes code.changed
+# 6. After fix: Reviewer re-reviews → review.passed
+# 7. After fix: Security re-reviews → security.passed
+# 8. CASCADE SETTLED
+
 steps_passed=0
-steps_total=6
+steps_total=6  # Full settle requires both .passed events
+
+# Count events (use tr to strip newlines, default to 0)
+reviewer_changes=$(grep -c "publishing outcome event_type=review.changes_requested" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null | tr -d '\n' || true)
+reviewer_changes=${reviewer_changes:-0}
+reviewer_passed=$(grep -c "publishing outcome event_type=review.passed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null | tr -d '\n' || true)
+reviewer_passed=${reviewer_passed:-0}
+security_changes=$(grep -c "publishing outcome event_type=security.changes_requested" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null | tr -d '\n' || true)
+security_changes=${security_changes:-0}
+security_passed=$(grep -c "publishing outcome event_type=security.passed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null | tr -d '\n' || true)
+security_passed=${security_passed:-0}
+coder_fixes=$(grep -c "publishing outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null | tr -d '\n' || true)
+coder_fixes=${coder_fixes:-0}
 
 # Step 1: Reviewer received code.changed
 if grep -q "mesh: received outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null; then
@@ -264,45 +318,49 @@ else
     log_error "1. Reviewer did NOT receive code.changed"
 fi
 
-# Step 2: Reviewer published review.completed
-if grep -q "publishing outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null; then
-    log_info "2. Reviewer published review.completed"
+# Step 2: Reviewer published initial verdict
+if [[ $reviewer_changes -gt 0 ]] || [[ $reviewer_passed -gt 0 ]]; then
+    log_info "2. Reviewer published initial verdict (changes_requested=${reviewer_changes}, passed=${reviewer_passed})"
     steps_passed=$((steps_passed + 1))
 else
-    log_error "2. Reviewer did NOT publish review.completed"
+    log_error "2. Reviewer did NOT publish any verdict"
 fi
 
-# Step 3: Coder received review.completed
-if grep -q "mesh: received outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null; then
-    log_info "3. Coder received review.completed"
+# Step 3: Security received code.changed
+if grep -q "mesh: received outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null; then
+    log_info "3. Security received code.changed"
     steps_passed=$((steps_passed + 1))
 else
-    log_error "3. Coder did NOT receive review.completed"
+    log_error "3. Security did NOT receive code.changed"
 fi
 
-# Step 4: Coder published code.changed (fix cycle)
-if grep -q "publishing outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null; then
-    log_info "4. Coder published code.changed (fix applied)"
+# Step 4: Security published initial verdict
+if [[ $security_changes -gt 0 ]] || [[ $security_passed -gt 0 ]]; then
+    log_info "4. Security published initial verdict (changes_requested=${security_changes}, passed=${security_passed})"
     steps_passed=$((steps_passed + 1))
 else
-    log_error "4. Coder did NOT publish code.changed"
+    log_error "4. Security did NOT publish any verdict"
 fi
 
-# Step 5: Security received and processed
-if grep -q "mesh: received outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null; then
-    log_info "5. Security received review.completed"
-    steps_passed=$((steps_passed + 1))
+# Step 5: Coder applied fixes (if needed)
+if [[ $reviewer_changes -gt 0 ]] || [[ $security_changes -gt 0 ]]; then
+    if [[ $coder_fixes -gt 0 ]]; then
+        log_info "5. Coder applied ${coder_fixes} fix(es)"
+        steps_passed=$((steps_passed + 1))
+    else
+        log_error "5. Coder did NOT apply fixes (changes were requested)"
+    fi
 else
-    log_error "5. Security did NOT receive review.completed"
+    log_info "5. No fixes needed (initial review passed)"
+    steps_passed=$((steps_passed + 1))
 fi
 
-# Step 6: Reviewer received coder's code.changed (closed loop)
-code_changed_count=$(grep -c "mesh: received outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null || echo 0)
-if [[ "${code_changed_count}" -ge 2 ]]; then
-    log_info "6. Reviewer received coder's code.changed (re-review loop closed)"
+# Step 6: CASCADE SETTLED (both reviewer and security published .passed)
+if [[ $reviewer_passed -gt 0 ]] && [[ $security_passed -gt 0 ]]; then
+    log_info "6. CASCADE SETTLED: review.passed=${reviewer_passed}, security.passed=${security_passed}"
     steps_passed=$((steps_passed + 1))
 else
-    log_error "6. Reviewer did NOT receive second code.changed (got ${code_changed_count}, need 2+)"
+    log_error "6. CASCADE NOT SETTLED: review.passed=${reviewer_passed}, security.passed=${security_passed}"
 fi
 
 echo ""
@@ -320,27 +378,31 @@ cat > "${SAVE_DIR}/README.md" << EOF
 **Date:** $(date -Iseconds)
 **Result:** ${steps_passed}/${steps_total} steps passed
 
-## Cascade Flow (Closed Loop)
+## Cascade Flow
 
 \`\`\`
-test-publisher → code.changed ──→ reviewer (node 2) ←──┐
-                                       ↓               │
-                                review.completed       │
-                                   ↓      ↓            │
-                                coder   security       │
-                               (node 1) (node 3)       │
-                                  ↓                    │
-                             code.changed (fix) ───────┘
+test-publisher → code.changed ──→ reviewer (node 2) ──→ review.passed / review.changes_requested
+                       │                                               ↓
+                       └──→ security (node 3) ──→ security.passed / security.changes_requested
+                                                                       ↓
+                                                     coder (node 1) — only on .changes_requested
+                                                                       ↓
+                                                                  code.changed (fix applied)
 \`\`\`
 
 ## Steps
 
 1. Reviewer received code.changed: $(grep -q "mesh: received outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null && echo "PASS" || echo "FAIL")
-2. Reviewer published review.completed: $(grep -q "publishing outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null && echo "PASS" || echo "FAIL")
-3. Coder received review.completed: $(grep -q "mesh: received outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null && echo "PASS" || echo "FAIL")
-4. Coder published code.changed: $(grep -q "publishing outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null && echo "PASS" || echo "FAIL")
-5. Security received review.completed: $(grep -q "mesh: received outcome event_type=review.completed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null && echo "PASS" || echo "FAIL")
-6. Reviewer received coder's fix: $(test "$(grep -c 'mesh: received outcome event_type=code.changed' "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null || echo 0)" -ge 2 && echo "PASS" || echo "FAIL")
+2. Reviewer published verdict: $(grep -qE "publishing outcome event_type=review\.(passed|changes_requested)" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null && echo "PASS" || echo "FAIL")
+3. Security received code.changed: $(grep -q "mesh: received outcome event_type=code.changed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null && echo "PASS" || echo "FAIL")
+4. Security published verdict: $(grep -qE "publishing outcome event_type=security\.(passed|changes_requested)" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null && echo "PASS" || echo "FAIL")
+
+## Settle Status
+
+- Reviewer: changes_requested=$(grep -c "event_type=review.changes_requested" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null || echo 0), passed=$(grep -c "event_type=review.passed" "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null || echo 0)
+- Security: changes_requested=$(grep -c "event_type=security.changes_requested" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null || echo 0), passed=$(grep -c "event_type=security.passed" "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null || echo 0)
+- Coder fixes: $(grep -c "event_type=code.changed" "${LOG_DIR}/ravn-mesh-1.log" 2>/dev/null || echo 0)
+- Settled: $(test "$(grep -c 'event_type=review.passed' "${LOG_DIR}/ravn-mesh-2.log" 2>/dev/null || echo 0)" -gt 0 && test "$(grep -c 'event_type=security.passed' "${LOG_DIR}/ravn-mesh-3.log" 2>/dev/null || echo 0)" -gt 0 && echo "YES" || echo "NO")
 
 ## Error Check
 
