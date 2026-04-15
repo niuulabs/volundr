@@ -24,7 +24,9 @@ from niuu.domain.mimir import ThreadState
 from niuu.domain.outcome import parse_outcome_block
 from niuu.ports.mimir import MimirPort
 from ravn.adapters.channels.capture import CaptureChannel, TaskResult, TaskResultStore
+from ravn.adapters.channels.composite import CompositeChannel
 from ravn.adapters.channels.silent import SilentChannel
+from ravn.adapters.channels.skuld_channel import SkuldChannel
 from ravn.adapters.events.noop_publisher import NoOpEventPublisher
 from ravn.config import BudgetConfig, InitiativeConfig, Settings
 from ravn.domain.budget import DailyBudgetTracker, compute_cost
@@ -110,6 +112,19 @@ class DriveLoop:
             daily_cap_usd=_cap,
             warn_at_percent=_warn,
         )
+
+        # Skuld channel for browser delivery (mesh cascade visualization)
+        self._skuld_channel: SkuldChannel | None = None
+        if settings.skuld.enabled:
+            # peer_id is appended to the broker_url
+            peer_id = settings.mesh.own_peer_id if settings.mesh.enabled else "ravn-daemon"
+            broker_url = f"{settings.skuld.broker_url.rstrip('/')}/{peer_id}"
+            self._skuld_channel = SkuldChannel(
+                broker_url=broker_url,
+                session_id="mesh",
+                peer_id=peer_id,
+                persona=None,  # Set per-task
+            )
 
     # ------------------------------------------------------------------
     # Public API
@@ -351,11 +366,23 @@ class DriveLoop:
             )
             return
 
+        # Track the capture channel separately for response_text access
+        capture_channel: CaptureChannel | None = None
         if self._settings.cascade.enabled:
             self._result_store.start(task.task_id, task.triggered_by)
-            channel: ChannelPort = CaptureChannel(task.task_id, self._result_store)
+            capture_channel = CaptureChannel(task.task_id, self._result_store)
+            # Wrap with skuld channel for browser delivery when enabled
+            if self._skuld_channel is not None:
+                self._skuld_channel._persona = task.persona  # Update persona for this task
+                channel: ChannelPort = CompositeChannel([capture_channel, self._skuld_channel])
+            else:
+                channel = capture_channel
         else:
-            channel = SilentChannel()
+            if self._skuld_channel is not None:
+                self._skuld_channel._persona = task.persona
+                channel = self._skuld_channel
+            else:
+                channel = SilentChannel()
         agent = self._agent_factory(channel, task.task_id, task.persona, task.triggered_by)
         prompt = build_initiative_prompt(task)
 
@@ -389,8 +416,8 @@ class DriveLoop:
             success = True
             self._record_task_cost(task, turn_result)
             await self._maybe_publish_budget_warning(task)
-            self._save_task_output(task, channel)
-            response_text = getattr(channel, "response_text", "")
+            self._save_task_output(task, capture_channel or channel)
+            response_text = capture_channel.response_text if capture_channel else ""
             if response_text:
                 logger.info(
                     "drive_loop: task %s output: %s",
@@ -437,7 +464,7 @@ class DriveLoop:
         await self._emit_sleipnir_task_completed(task, outcome)
 
         # Publish outcome event to mesh for other agents to consume
-        response_text = getattr(channel, "response_text", "")
+        response_text = capture_channel.response_text if capture_channel else ""
         await self._emit_mesh_outcome_event(task, response_text, success)
 
         await self._event_publisher.publish(
@@ -453,8 +480,8 @@ class DriveLoop:
             )
         )
 
-        if channel.surface_triggered:
-            await self._re_deliver_surface(task, channel.response_text)
+        if capture_channel and capture_channel.surface_triggered:
+            await self._re_deliver_surface(task, capture_channel.response_text)
 
         if task.triggered_by and task.triggered_by.startswith("thread:"):
             thread_path = task.triggered_by.removeprefix("thread:")
@@ -539,6 +566,13 @@ class DriveLoop:
             await self._mesh.publish(event, topic=event_type)
         except Exception:
             logger.warning("Failed to publish mesh outcome event; continuing.", exc_info=True)
+
+        # Also emit to skuld channel for browser visualization
+        if self._skuld_channel is not None:
+            try:
+                await self._skuld_channel.emit(event)
+            except Exception:
+                logger.warning("Failed to emit outcome to skuld; continuing.", exc_info=True)
 
     def _save_task_output(self, task: AgentTask, channel: ChannelPort) -> None:
         """Persist agent response to ``task.output_path`` when set (cron tasks)."""

@@ -904,12 +904,17 @@ class HttpChannelConfig(BaseModel):
 
 
 class SkuldChannelConfig(BaseModel):
-    """Skuld WebSocket channel configuration for gateway mode."""
+    """Skuld WebSocket channel configuration for browser delivery.
+
+    Used by both gateway mode and daemon/mesh mode to deliver events
+    to the Skuld broker for browser visualization.
+    """
 
     enabled: bool = Field(default=False)
     broker_url: str = Field(
-        default="ws://localhost:9000/ws/ravn",
-        description="WebSocket URL of the Skuld broker endpoint.",
+        default="ws://localhost:8081/ws/ravn",
+        description="WebSocket URL of the Skuld broker endpoint. "
+        "The peer_id is appended automatically (e.g. ws://localhost:8081/ws/ravn/{peer_id}).",
     )
 
 
@@ -2396,6 +2401,9 @@ class Settings(BaseSettings):
 
     # NIU-516: Pi-mode gateway
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
+
+    # Skuld broker channel — delivers mesh events to browser UI
+    skuld: SkuldChannelConfig = Field(default_factory=SkuldChannelConfig)
 
     # NIU-438: Sleipnir event backbone
     sleipnir: SleipnirConfig = Field(default_factory=SleipnirConfig)

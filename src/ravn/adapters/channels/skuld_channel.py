@@ -198,6 +198,14 @@ class SkuldChannel(ChannelPort):
             case RavnEventType.ERROR:
                 data = payload["message"]
                 metadata = {}
+            case RavnEventType.OUTCOME:
+                # Mesh outcome event — RoomBridge translates to room_outcome
+                data = payload
+                metadata = {"event_type": payload.get("event_type", "")}
+            case RavnEventType.HELP_NEEDED:
+                # Help needed event — RoomBridge translates to room_notification
+                data = payload
+                metadata = {"urgency": event.urgency}
             case _:
                 data = str(payload)
                 metadata = {}
