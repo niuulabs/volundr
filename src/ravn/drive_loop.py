@@ -260,6 +260,16 @@ class DriveLoop:
         """Set the persona config for determining produces.event_type."""
         self._persona_config = persona_config
 
+        # Enrich Skuld channel with persona metadata for the sidebar UI
+        if self._skuld_channel is not None and persona_config is not None:
+            self._skuld_channel._subscribes_to = persona_config.consumes.event_types
+            emits: list[str] = []
+            if persona_config.produces.event_type:
+                emits.append(persona_config.produces.event_type)
+            emits.extend(persona_config.produces.event_type_map.values())
+            self._skuld_channel._emits = list(dict.fromkeys(emits))  # dedupe, preserve order
+            self._skuld_channel._tools = persona_config.allowed_tools
+
     async def handle_rpc(self, message: dict) -> dict:
         """Dispatch an incoming mesh RPC message to the registered handler.
 

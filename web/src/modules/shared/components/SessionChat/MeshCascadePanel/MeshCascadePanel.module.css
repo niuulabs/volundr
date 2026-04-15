@@ -1,8 +1,9 @@
 .panel {
+  display: flex;
+  flex-direction: column;
   background-color: var(--color-bg-primary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  margin: var(--space-4) 0;
+  border-left: 1px solid var(--color-border-subtle);
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -96,7 +97,7 @@
 }
 
 .content {
-  max-height: 400px;
+  flex: 1;
   overflow-y: auto;
   padding: var(--space-3) var(--space-4);
   background-color: var(--color-bg-primary);

@@ -9,6 +9,7 @@ import type {
   AttachmentMeta,
   ParticipantMeta,
   RoomParticipant,
+  MeshEvent,
 } from '@/modules/shared/hooks/useSkuldChat';
 import { cn } from '@/utils';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
@@ -17,6 +18,7 @@ import { ParticipantFilter } from './ParticipantFilter';
 import { ThreadGroup } from './ThreadGroup';
 import { AgentDetailPanel } from './AgentDetailPanel';
 import { MeshCascadePanel } from './MeshCascadePanel';
+import { MeshSidebar } from './MeshSidebar';
 import { ChatInput } from './ChatInput';
 import { SessionEmptyChat } from './ChatEmptyStates';
 import type { FileAttachment } from './useFileAttachments';
@@ -56,6 +58,7 @@ export function SessionChat({
     messages,
     participants,
     meshEvents,
+    agentEvents,
     connected,
     isRunning,
     historyLoaded,
@@ -88,6 +91,7 @@ export function SessionChat({
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [rightPanelMode, setRightPanelMode] = useState<'cascade' | 'agent-detail' | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -109,12 +113,51 @@ export function SessionChat({
   const isRoomSession = participantsMap.size > 0;
 
   const handleSelectAgent = useCallback((peerId: string) => {
-    setSelectedAgentId(prev => (prev === peerId ? null : peerId));
+    setSelectedAgentId(prev => {
+      if (prev === peerId) {
+        setRightPanelMode(null);
+        return null;
+      }
+      setRightPanelMode('agent-detail');
+      return peerId;
+    });
   }, []);
 
   const handleCloseDetail = useCallback(() => {
     setSelectedAgentId(null);
+    setRightPanelMode(null);
   }, []);
+
+  // Auto-show cascade panel when mesh events exist
+  const effectiveRightPanelMode = rightPanelMode ?? (meshEvents.length > 0 ? 'cascade' : null);
+
+  // Scroll to message closest to an outcome event
+  const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+  const handleOutcomeClick = useCallback(
+    (event: MeshEvent) => {
+      if (event.type !== 'outcome') return;
+      // Find the closest room_message from this participant by timestamp
+      const targetTime = event.timestamp.getTime();
+      const participantMsgs = messages.filter(
+        m => m.participant?.peerId === event.participantId && m.role === 'assistant'
+      );
+      if (participantMsgs.length === 0) return;
+      // Find closest by time (last message before or at outcome time)
+      const closest = participantMsgs.reduce((best, m) => {
+        const dt = Math.abs(m.createdAt.getTime() - targetTime);
+        const bestDt = Math.abs(best.createdAt.getTime() - targetTime);
+        return dt < bestDt ? m : best;
+      });
+      // Scroll to it
+      const el = document.getElementById(`msg-${closest.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedMsgId(closest.id);
+        setTimeout(() => setHighlightedMsgId(null), 2000);
+      }
+    },
+    [messages]
+  );
 
   // Show welcome when only system messages exist (no real user/assistant conversation)
   const hasConversation = useMemo(
@@ -380,13 +423,27 @@ export function SessionChat({
     onMessageCountChange?.(visibleMessages.length);
   }, [visibleMessages.length, onMessageCountChange]);
 
-  const selectedParticipant = selectedAgentId ? participantsMap.get(selectedAgentId) : undefined;
+  // Look up selected participant from live room state (not just message-derived map)
+  const selectedParticipant = selectedAgentId
+    ? (participants.get(selectedAgentId) ?? participantsMap.get(selectedAgentId))
+    : undefined;
+  const selectedAgentEvents = selectedAgentId ? (agentEvents.get(selectedAgentId) ?? []) : [];
+  const hasSidebar = participants.size > 0;
+  const showRightPanel = effectiveRightPanelMode !== null;
 
   return (
     <div
       className={cn(styles.outerGrid, className)}
-      data-detail-open={selectedParticipant ? 'true' : undefined}
+      data-has-sidebar={hasSidebar ? 'true' : undefined}
+      data-right-panel={showRightPanel ? 'true' : undefined}
     >
+      {hasSidebar && (
+        <MeshSidebar
+          participants={participants}
+          selectedPeerId={selectedAgentId}
+          onSelectPeer={handleSelectAgent}
+        />
+      )}
       <div className={styles.wrapper}>
         <div className={styles.toolbar}>
           <div className={styles.toolbarLeft}>
@@ -505,8 +562,6 @@ export function SessionChat({
           />
         )}
 
-        {meshEvents.length > 0 && <MeshCascadePanel events={meshEvents} />}
-
         {hasConversation ? (
           <div className={styles.messagesContainer} ref={scrollContainerRef}>
             <div className={styles.messagesInner}>
@@ -532,22 +587,27 @@ export function SessionChat({
                 // Room messages (participant present or room session) — render as RoomMessage
                 if ((isRoomMode && msg.participant) || isRoomSession) {
                   return (
-                    <RoomMessage
+                    <div
                       key={msg.id}
-                      message={msg}
-                      onSelectAgent={handleSelectAgent}
-                      selectedAgentId={selectedAgentId}
-                      onCopy={handleCopy}
-                      onRegenerate={handleRegenerate}
-                      onBookmark={handleBookmark}
-                      bookmarked={(() => {
-                        try {
-                          return localStorage.getItem(`bookmark:${msg.id}`) === '1';
-                        } catch {
-                          return false;
-                        }
-                      })()}
-                    />
+                      id={`msg-${msg.id}`}
+                      data-highlighted={highlightedMsgId === msg.id || undefined}
+                    >
+                      <RoomMessage
+                        message={msg}
+                        onSelectAgent={handleSelectAgent}
+                        selectedAgentId={selectedAgentId}
+                        onCopy={handleCopy}
+                        onRegenerate={handleRegenerate}
+                        onBookmark={handleBookmark}
+                        bookmarked={(() => {
+                          try {
+                            return localStorage.getItem(`bookmark:${msg.id}`) === '1';
+                          } catch {
+                            return false;
+                          }
+                        })()}
+                      />
+                    </div>
                   );
                 }
 
@@ -627,9 +687,18 @@ export function SessionChat({
         </div>
       </div>
 
-      {selectedParticipant && (
-        <AgentDetailPanel participant={selectedParticipant} onClose={handleCloseDetail} />
-      )}
+      {showRightPanel &&
+        (effectiveRightPanelMode === 'agent-detail' &&
+        selectedParticipant &&
+        'status' in selectedParticipant ? (
+          <AgentDetailPanel
+            participant={selectedParticipant as RoomParticipant}
+            events={selectedAgentEvents}
+            onClose={handleCloseDetail}
+          />
+        ) : effectiveRightPanelMode === 'cascade' && meshEvents.length > 0 ? (
+          <MeshCascadePanel events={meshEvents} onEventClick={handleOutcomeClick} />
+        ) : null)}
     </div>
   );
 }

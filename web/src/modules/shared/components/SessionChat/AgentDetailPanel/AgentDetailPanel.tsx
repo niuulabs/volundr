@@ -1,30 +1,69 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Wifi, WifiOff, ArrowDownIcon } from 'lucide-react';
-import type { ParticipantMeta } from '@/modules/shared/hooks/useSkuldChat';
-import { useAgentDetail } from '@/modules/shared/hooks/useAgentDetail';
+import { X, ArrowDownIcon } from 'lucide-react';
+import type { RoomParticipant, AgentInternalEvent } from '@/modules/shared/hooks/useSkuldChat';
 import { resolveParticipantColor } from '@/modules/shared/utils/participantColor';
-import { AssistantMessage, StreamingMessage, SystemMessage, UserMessage } from '../ChatMessages';
 import styles from './AgentDetailPanel.module.css';
 
 const SCROLL_THRESHOLD = 150;
 
 interface AgentDetailPanelProps {
   /** The participant whose event stream should be shown */
-  participant: ParticipantMeta;
+  participant: RoomParticipant;
+  /** Internal events for this agent relayed through the broker */
+  events: readonly AgentInternalEvent[];
   /** Called when the close button is pressed or Escape is pressed */
   onClose: () => void;
 }
 
-/**
- * Slide-out right panel that displays the full event stream (thinking blocks,
- * tool calls, streaming messages) for a single Ravn agent.
- *
- * Connects to the agent's gateway WebSocket via `useAgentDetail` and renders
- * using the same shared message components as the main chat pane.
- */
-export function AgentDetailPanel({ participant, onClose }: AgentDetailPanelProps) {
-  const { messages, connected, isRunning } = useAgentDetail(participant.gatewayUrl ?? null);
+function EventItem({ event }: { event: AgentInternalEvent }) {
+  const data = typeof event.data === 'string' ? event.data : JSON.stringify(event.data, null, 2);
+  const toolName = event.metadata?.tool_name as string | undefined;
 
+  if (event.frameType === 'thought') {
+    return (
+      <div className={styles.eventItem} data-type="thought">
+        <span className={styles.eventLabel}>thinking</span>
+        <pre className={styles.eventContent}>{data}</pre>
+      </div>
+    );
+  }
+
+  if (event.frameType === 'tool_start') {
+    const input = event.metadata?.input;
+    return (
+      <div className={styles.eventItem} data-type="tool_start">
+        <span className={styles.eventLabel}>tool: {toolName ?? data}</span>
+        {input && (
+          <pre className={styles.eventContent}>
+            {typeof input === 'string' ? input : JSON.stringify(input, null, 2)}
+          </pre>
+        )}
+      </div>
+    );
+  }
+
+  if (event.frameType === 'tool_result') {
+    return (
+      <div className={styles.eventItem} data-type="tool_result">
+        <span className={styles.eventLabel}>result: {toolName ?? ''}</span>
+        <pre className={styles.eventContent}>{data}</pre>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.eventItem}>
+      <span className={styles.eventLabel}>{event.frameType}</span>
+      <pre className={styles.eventContent}>{data}</pre>
+    </div>
+  );
+}
+
+/**
+ * Slide-out right panel that displays the internal event stream (thinking blocks,
+ * tool calls) for a single Ravn agent, relayed through the Skuld broker.
+ */
+export function AgentDetailPanel({ participant, events, onClose }: AgentDetailPanelProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -33,9 +72,14 @@ export function AgentDetailPanel({ participant, onClose }: AgentDetailPanelProps
   const [newCount, setNewCount] = useState(0);
 
   const accentColor = resolveParticipantColor(participant.color);
-
-  // Determine activity status label
-  const activityStatus = isRunning ? 'active' : 'idle';
+  const statusLabel =
+    participant.status === 'idle'
+      ? 'idle'
+      : participant.status === 'thinking'
+        ? 'thinking'
+        : participant.status === 'tool_executing'
+          ? 'running tool'
+          : participant.status;
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView?.({ behavior });
@@ -58,9 +102,9 @@ export function AgentDetailPanel({ participant, onClose }: AgentDetailPanelProps
     return () => el.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Auto-scroll on new messages
+  // Auto-scroll on new events
   useEffect(() => {
-    const count = messages.length;
+    const count = events.length;
     const delta = count - prevCountRef.current;
     prevCountRef.current = count;
 
@@ -72,9 +116,9 @@ export function AgentDetailPanel({ participant, onClose }: AgentDetailPanelProps
     }
 
     setNewCount(prev => prev + delta);
-  }, [messages.length]);
+  }, [events.length]);
 
-  // Close on Escape key (skip when focus is inside an input/textarea/select)
+  // Close on Escape key
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
@@ -85,12 +129,6 @@ export function AgentDetailPanel({ participant, onClose }: AgentDetailPanelProps
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
   }, [onClose]);
-
-  const visibleMessages = messages.filter(m => {
-    if (m.role === 'system') return false;
-    if (m.role === 'assistant' && m.status === 'complete' && !m.content.trim()) return false;
-    return true;
-  });
 
   return (
     <div className={styles.panel} data-testid="agent-detail-panel">
@@ -111,20 +149,12 @@ export function AgentDetailPanel({ participant, onClose }: AgentDetailPanelProps
         </div>
 
         <div className={styles.headerRight}>
-          <div className={styles.statusIndicator} data-connected={connected}>
-            {connected ? (
-              <Wifi className={styles.statusIcon} />
-            ) : (
-              <WifiOff className={styles.statusIcon} />
-            )}
-          </div>
-
           <span
             className={styles.activityBadge}
-            data-status={activityStatus}
+            data-status={participant.status}
             data-testid="agent-activity-status"
           >
-            {isRunning ? 'thinking' : 'idle'}
+            {statusLabel}
           </span>
 
           <button
@@ -139,29 +169,15 @@ export function AgentDetailPanel({ participant, onClose }: AgentDetailPanelProps
         </div>
       </div>
 
-      {/* ── Messages ── */}
+      {/* ── Event stream ── */}
       <div className={styles.messagesContainer} ref={scrollContainerRef}>
         <div className={styles.messagesInner}>
-          {visibleMessages.length === 0 ? (
+          {events.length === 0 ? (
             <div className={styles.emptyState} data-testid="agent-detail-empty">
-              {connected ? 'Waiting for agent activity…' : 'Connecting to agent…'}
+              Waiting for agent activity…
             </div>
           ) : (
-            visibleMessages.map(msg => {
-              if (msg.metadata?.messageType === 'system') {
-                return <SystemMessage key={msg.id} message={msg} />;
-              }
-
-              if (msg.role === 'user') {
-                return <UserMessage key={msg.id} message={msg} />;
-              }
-
-              if (msg.status === 'running') {
-                return <StreamingMessage key={msg.id} content={msg.content} parts={msg.parts} />;
-              }
-
-              return <AssistantMessage key={msg.id} message={msg} />;
-            })
+            events.map(evt => <EventItem key={evt.id} event={evt} />)
           )}
           <div ref={messagesEndRef} />
         </div>

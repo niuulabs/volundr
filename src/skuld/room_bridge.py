@@ -79,12 +79,20 @@ class RoomBridge:
         peer_id: str,
         persona: str,
         websocket: WebSocket,
+        *,
+        subscribes_to: list[str] | None = None,
+        emits: list[str] | None = None,
+        tools: list[str] | None = None,
     ) -> ParticipantMeta:
         """Register a new Ravn participant and broadcast ``participant_joined``.
 
         If a participant with *peer_id* already exists (reconnect), the
         existing record is reused and a fresh ``participant_joined`` is broadcast.
         """
+        subs = tuple(subscribes_to or ())
+        emit_types = tuple(emits or ())
+        tool_names = tuple(tools or ())
+
         if peer_id not in self._participants:
             color = next(self._color_cycle)
             meta = ParticipantMeta(
@@ -92,18 +100,23 @@ class RoomBridge:
                 persona=persona,
                 color=color,
                 participant_type="ravn",
+                subscribes_to=subs,
+                emits=emit_types,
+                tools=tool_names,
             )
             self._participants[peer_id] = meta
         else:
-            meta = self._participants[peer_id]
-            if meta.persona != persona:
-                meta = ParticipantMeta(
-                    peer_id=peer_id,
-                    persona=persona,
-                    color=meta.color,
-                    participant_type=meta.participant_type,
-                )
-                self._participants[peer_id] = meta
+            old = self._participants[peer_id]
+            meta = ParticipantMeta(
+                peer_id=peer_id,
+                persona=persona,
+                color=old.color,
+                participant_type=old.participant_type,
+                subscribes_to=subs or old.subscribes_to,
+                emits=emit_types or old.emits,
+                tools=tool_names or old.tools,
+            )
+            self._participants[peer_id] = meta
 
         self._websockets[peer_id] = websocket
         logger.info("RoomBridge: participant registered peer_id=%s persona=%s", peer_id, persona)
@@ -167,6 +180,16 @@ class RoomBridge:
         activity_type = _RAVN_ACTIVITY_MAP.get(event_type)
         if activity_type:
             await self._handle_activity_frame(meta, activity_type, data)
+
+        # Forward internal events (thought, tool_start, tool_result) so the
+        # agent detail panel can render them — the original frame is relayed
+        # tagged with the participant identity.
+        if event_type in ("thought", "tool_start", "tool_result"):
+            await self._channels.broadcast({
+                "type": "room_agent_event",
+                "participantId": meta.peer_id,
+                "frame": frame,
+            })
 
     async def _handle_response_frame(
         self,

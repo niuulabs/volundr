@@ -18,6 +18,9 @@ class ParticipantMeta:
         color: Accent token name from the design system (e.g. "amber", "cyan").
         participant_type: "human" for human users, "ravn" for AI agents.
         gateway_url: WebSocket gateway URL for agent participants; None for humans.
+        subscribes_to: Event types this participant listens for.
+        emits: Event types this participant can publish.
+        tools: Tool names available to this participant.
     """
 
     peer_id: str
@@ -25,6 +28,9 @@ class ParticipantMeta:
     color: str
     participant_type: str  # "human" | "ravn"
     gateway_url: str | None = None
+    subscribes_to: tuple[str, ...] = ()
+    emits: tuple[str, ...] = ()
+    tools: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

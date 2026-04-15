@@ -1,4 +1,4 @@
-/* ── Outer grid — splits into two panes when detail panel is open ── */
+/* ── Outer grid — sidebar | chat | right-panel ── */
 
 .outerGrid {
   display: grid;
@@ -9,8 +9,30 @@
   transition: grid-template-columns 200ms ease;
 }
 
-.outerGrid[data-detail-open] {
-  grid-template-columns: 1fr 1fr;
+.outerGrid[data-has-sidebar] {
+  grid-template-columns: auto 1fr;
+}
+
+.outerGrid[data-has-sidebar][data-right-panel] {
+  grid-template-columns: auto 1fr 360px;
+}
+
+.outerGrid[data-right-panel]:not([data-has-sidebar]) {
+  grid-template-columns: 1fr 360px;
+}
+
+/* Highlight animation for scroll-to-message from outcome click */
+.wrapper [data-highlighted] {
+  animation: highlightFlash 2s ease-out;
+}
+
+@keyframes highlightFlash {
+  0% {
+    background-color: color-mix(in srgb, var(--color-accent-cyan) 20%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 
 .wrapper {

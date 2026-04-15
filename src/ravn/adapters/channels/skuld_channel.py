@@ -24,6 +24,7 @@ import logging
 
 import websockets
 import websockets.exceptions
+from websockets.protocol import State as WsState
 
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.ports.channel import ChannelPort
@@ -58,6 +59,9 @@ class SkuldChannel(ChannelPort):
         *,
         peer_id: str | None = None,
         persona: str | None = None,
+        subscribes_to: list[str] | None = None,
+        emits: list[str] | None = None,
+        tools: list[str] | None = None,
         reconnect_delay: float = _DEFAULT_RECONNECT_DELAY_SECONDS,
         max_reconnect_attempts: int = _DEFAULT_MAX_RECONNECT_ATTEMPTS,
     ) -> None:
@@ -65,6 +69,9 @@ class SkuldChannel(ChannelPort):
         self._session_id = session_id
         self._peer_id = peer_id
         self._persona = persona
+        self._subscribes_to = subscribes_to or []
+        self._emits = emits or []
+        self._tools = tools or []
         self._reconnect_delay = reconnect_delay
         self._max_reconnect_attempts = max_reconnect_attempts
         self._ws: websockets.WebSocketClientProtocol | None = None
@@ -91,7 +98,7 @@ class SkuldChannel(ChannelPort):
         the connection is already open.
         """
         async with self._connect_lock:
-            if self._ws is not None and not self._ws.closed:
+            if self._ws is not None and not self._ws.state == WsState.CLOSED:
                 return
             await self._do_connect()
 
@@ -134,6 +141,22 @@ class SkuldChannel(ChannelPort):
                     self._broker_url,
                     self._session_id,
                 )
+                # Send registration frame with persona metadata
+                reg_frame: dict = {
+                    "type": "register",
+                    "session_id": self._session_id,
+                }
+                if self._peer_id:
+                    reg_frame["source"] = self._peer_id
+                if self._persona:
+                    reg_frame["persona"] = self._persona
+                if self._subscribes_to:
+                    reg_frame["subscribes_to"] = self._subscribes_to
+                if self._emits:
+                    reg_frame["emits"] = self._emits
+                if self._tools:
+                    reg_frame["tools"] = self._tools
+                await self._ws.send(json.dumps(reg_frame) + "\n")
                 return
             except Exception as exc:
                 attempts += 1
@@ -154,7 +177,7 @@ class SkuldChannel(ChannelPort):
 
     async def _send(self, payload: str) -> None:
         """Send *payload* over the WebSocket, reconnecting if necessary."""
-        if self._ws is None or self._ws.closed:
+        if self._ws is None or self._ws.state == WsState.CLOSED:
             await self.connect()
 
         if self._ws is None:

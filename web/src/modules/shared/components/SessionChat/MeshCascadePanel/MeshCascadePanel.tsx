@@ -1,30 +1,30 @@
-import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Workflow } from 'lucide-react';
+import { useRef, useEffect } from 'react';
+import { Workflow } from 'lucide-react';
 import type { MeshEvent } from '@/modules/shared/hooks/useSkuldChat';
 import { MeshEventCard } from '../MeshEventCard';
 import styles from './MeshCascadePanel.module.css';
 
 interface MeshCascadePanelProps {
   events: readonly MeshEvent[];
+  onEventClick?: (event: MeshEvent) => void;
   className?: string;
 }
 
 /**
- * Collapsible panel showing the mesh cascade - all events from persona interactions.
+ * Right-side panel showing the mesh cascade - all events from persona interactions.
  * Displays outcomes, delegations, and notifications in chronological order.
  */
-export function MeshCascadePanel({ events, className }: MeshCascadePanelProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+export function MeshCascadePanel({ events, onEventClick, className }: MeshCascadePanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(events.length);
 
   // Auto-scroll to bottom when new events arrive
   useEffect(() => {
-    if (events.length > prevCountRef.current && scrollRef.current && isExpanded) {
+    if (events.length > prevCountRef.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
     prevCountRef.current = events.length;
-  }, [events.length, isExpanded]);
+  }, [events.length]);
 
   if (events.length === 0) {
     return null;
@@ -40,13 +40,8 @@ export function MeshCascadePanel({ events, className }: MeshCascadePanelProps) {
   const latestVerdict = latestOutcome?.type === 'outcome' ? latestOutcome.verdict : undefined;
 
   return (
-    <div className={`${styles.panel} ${className ?? ''}`} data-expanded={isExpanded || undefined}>
-      <button
-        type="button"
-        className={styles.header}
-        onClick={() => setIsExpanded(prev => !prev)}
-        aria-expanded={isExpanded}
-      >
+    <div className={`${styles.panel} ${className ?? ''}`} data-expanded>
+      <div className={styles.header}>
         <div className={styles.headerLeft}>
           <Workflow className={styles.icon} />
           <span className={styles.title}>Mesh Cascade</span>
@@ -72,26 +67,24 @@ export function MeshCascadePanel({ events, className }: MeshCascadePanelProps) {
               </span>
             )}
           </span>
-          {isExpanded ? (
-            <ChevronUp className={styles.chevron} />
-          ) : (
-            <ChevronDown className={styles.chevron} />
-          )}
         </div>
-      </button>
+      </div>
 
-      {isExpanded && (
-        <div className={styles.content} ref={scrollRef}>
-          <div className={styles.timeline}>
-            {events.map(event => (
-              <div key={event.id} className={styles.timelineItem}>
-                <div className={styles.timelineLine} />
-                <MeshEventCard event={event} />
-              </div>
-            ))}
-          </div>
+      <div className={styles.content} ref={scrollRef}>
+        <div className={styles.timeline}>
+          {events.map(event => (
+            <div
+              key={event.id}
+              className={styles.timelineItem}
+              onClick={() => onEventClick?.(event)}
+              style={{ cursor: onEventClick ? 'pointer' : undefined }}
+            >
+              <div className={styles.timelineLine} />
+              <MeshEventCard event={event} />
+            </div>
+          ))}
         </div>
-      )}
+      </div>
     </div>
   );
 }

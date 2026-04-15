@@ -168,6 +168,9 @@ export interface ParticipantMeta {
   readonly color: string;
   readonly participantType: 'human' | 'ravn';
   readonly gatewayUrl?: string;
+  readonly subscribesTo?: readonly string[];
+  readonly emits?: readonly string[];
+  readonly tools?: readonly string[];
 }
 
 export interface SkuldChatMessage {
@@ -318,10 +321,21 @@ export interface MeshNotificationEvent {
 
 export type MeshEvent = MeshOutcomeEvent | MeshDelegationEvent | MeshNotificationEvent;
 
+/** Per-peer internal event (thought, tool_start, tool_result) for agent detail view */
+export interface AgentInternalEvent {
+  readonly id: string;
+  readonly participantId: string;
+  readonly timestamp: Date;
+  readonly frameType: string;
+  readonly data: unknown;
+  readonly metadata: Record<string, unknown>;
+}
+
 interface UseSkuldChatReturn {
   messages: readonly SkuldChatMessage[];
   participants: ReadonlyMap<string, RoomParticipant>;
   meshEvents: readonly MeshEvent[];
+  agentEvents: ReadonlyMap<string, readonly AgentInternalEvent[]>;
   connected: boolean;
   isRunning: boolean;
   historyLoaded: boolean;
@@ -375,6 +389,7 @@ export function useSkuldChat(
   });
   const [participants, setParticipants] = useState<Map<string, RoomParticipant>>(new Map());
   const [meshEvents, setMeshEvents] = useState<MeshEvent[]>([]);
+  const [agentEvents, setAgentEvents] = useState<Map<string, AgentInternalEvent[]>>(new Map());
   const [connected, setConnected] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [pendingPermissions, setPendingPermissions] = useState<PermissionRequest[]>([]);
@@ -969,7 +984,9 @@ export function useSkuldChat(
 
         // ── participant_joined: add participant to room ────────────
         if (eventType === 'participant_joined') {
-          const raw = event as unknown as Record<string, unknown>;
+          const wrapper = event as unknown as Record<string, unknown>;
+          // Server sends {type: "participant_joined", participant: {...}}
+          const raw = (wrapper.participant ?? wrapper) as Record<string, unknown>;
           const peerId = String(raw.peer_id ?? '');
           if (peerId) {
             const participant: RoomParticipant = {
@@ -978,6 +995,11 @@ export function useSkuldChat(
               color: String(raw.color ?? ''),
               participantType: (raw.participant_type ?? 'ravn') as 'human' | 'ravn',
               gatewayUrl: raw.gateway_url ? String(raw.gateway_url) : undefined,
+              subscribesTo: Array.isArray(raw.subscribes_to)
+                ? (raw.subscribes_to as string[])
+                : undefined,
+              emits: Array.isArray(raw.emits) ? (raw.emits as string[]) : undefined,
+              tools: Array.isArray(raw.tools) ? (raw.tools as string[]) : undefined,
               status: 'idle',
               joinedAt: new Date(),
             };
@@ -989,7 +1011,7 @@ export function useSkuldChat(
         // ── participant_left: remove participant from room ─────────
         if (eventType === 'participant_left') {
           const raw = event as unknown as Record<string, unknown>;
-          const peerId = String(raw.peer_id ?? '');
+          const peerId = String(raw.participantId ?? raw.peer_id ?? '');
           if (peerId) {
             setParticipants(prev => {
               const next = new Map(prev);
@@ -1015,6 +1037,11 @@ export function useSkuldChat(
               color: String(pr.color ?? ''),
               participantType: (pr.participant_type ?? 'ravn') as 'human' | 'ravn',
               gatewayUrl: pr.gateway_url ? String(pr.gateway_url) : undefined,
+              subscribesTo: Array.isArray(pr.subscribes_to)
+                ? (pr.subscribes_to as string[])
+                : undefined,
+              emits: Array.isArray(pr.emits) ? (pr.emits as string[]) : undefined,
+              tools: Array.isArray(pr.tools) ? (pr.tools as string[]) : undefined,
               status: 'idle',
               joinedAt: new Date(),
             });
@@ -1055,8 +1082,9 @@ export function useSkuldChat(
         // ── room_activity: update participant status ───────────────
         if (eventType === 'room_activity') {
           const raw = event as unknown as Record<string, unknown>;
-          const peerId = String(raw.peer_id ?? '');
-          const status = String(raw.status ?? 'idle') as ParticipantStatus;
+          // Server sends camelCase: participantId, activityType
+          const peerId = String(raw.participantId ?? raw.peer_id ?? '');
+          const status = String(raw.activityType ?? raw.status ?? 'idle') as ParticipantStatus;
           if (peerId) {
             setParticipants(prev => {
               const existing = prev.get(peerId);
@@ -1157,6 +1185,30 @@ export function useSkuldChat(
             context: raw.context as Record<string, unknown> | undefined,
           };
           setMeshEvents(prev => [...prev, notification]);
+          continue;
+        }
+
+        // ── room_agent_event: internal agent event (thought/tool) ──
+        if (eventType === 'room_agent_event') {
+          const raw = event as unknown as Record<string, unknown>;
+          const peerId = String(raw.participantId ?? '');
+          const frame = raw.frame as Record<string, unknown> | undefined;
+          if (peerId && frame) {
+            const agentEvt: AgentInternalEvent = {
+              id: generateId(),
+              participantId: peerId,
+              timestamp: new Date(),
+              frameType: String(frame.type ?? ''),
+              data: frame.data,
+              metadata: (frame.metadata ?? {}) as Record<string, unknown>,
+            };
+            setAgentEvents(prev => {
+              const next = new Map(prev);
+              const existing = next.get(peerId) ?? [];
+              next.set(peerId, [...existing, agentEvt]);
+              return next;
+            });
+          }
           continue;
         }
 
@@ -1319,6 +1371,10 @@ export function useSkuldChat(
     [participants]
   );
   const stableMeshEvents = useMemo(() => meshEvents, [meshEvents]);
+  const stableAgentEvents = useMemo(
+    () => agentEvents as ReadonlyMap<string, readonly AgentInternalEvent[]>,
+    [agentEvents]
+  );
   const stablePermissions = useMemo(() => pendingPermissions, [pendingPermissions]);
   const stableCommands = useMemo(() => availableCommands, [availableCommands]);
   const stableCapabilities = useMemo(() => capabilities, [capabilities]);
@@ -1327,6 +1383,7 @@ export function useSkuldChat(
     messages: stableMessages,
     participants: stableParticipants,
     meshEvents: stableMeshEvents,
+    agentEvents: stableAgentEvents,
     connected,
     isRunning,
     historyLoaded,
