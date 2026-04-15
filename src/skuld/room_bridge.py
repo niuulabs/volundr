@@ -80,6 +80,7 @@ class RoomBridge:
         persona: str,
         websocket: WebSocket,
         *,
+        display_name: str = "",
         subscribes_to: list[str] | None = None,
         emits: list[str] | None = None,
         tools: list[str] | None = None,
@@ -100,6 +101,7 @@ class RoomBridge:
                 persona=persona,
                 color=color,
                 participant_type="ravn",
+                display_name=display_name,
                 subscribes_to=subs,
                 emits=emit_types,
                 tools=tool_names,
@@ -112,6 +114,7 @@ class RoomBridge:
                 persona=persona,
                 color=old.color,
                 participant_type=old.participant_type,
+                display_name=display_name or old.display_name,
                 subscribes_to=subs or old.subscribes_to,
                 emits=emit_types or old.emits,
                 tools=tool_names or old.tools,
@@ -161,14 +164,19 @@ class RoomBridge:
 
         if event_type in ("response", "error"):
             await self._handle_response_frame(meta, frame, is_error=(event_type == "error"))
+            # Agent turn is complete — reset status to idle.
+            await self._handle_activity_frame(meta, "idle", "")
             return
 
         if event_type == "outcome":
             await self._handle_outcome_frame(meta, frame)
+            # Outcome is emitted mid-turn; the agent may still produce a
+            # response afterward — don't reset status here.
             return
 
         if event_type == "help_needed":
             await self._handle_help_needed_frame(meta, frame)
+            # Agent is asking for help but is still working — don't reset.
             return
 
         # Check for inter-agent delegation (route_work tool)

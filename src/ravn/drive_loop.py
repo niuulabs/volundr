@@ -124,6 +124,7 @@ class DriveLoop:
                 session_id="mesh",
                 peer_id=peer_id,
                 persona=None,  # Set per-task
+                display_name=settings.skuld.display_name or "",
             )
 
     # ------------------------------------------------------------------
@@ -257,11 +258,16 @@ class DriveLoop:
         self._mesh = mesh
 
     def set_persona_config(self, persona_config: PersonaConfig | None) -> None:
-        """Set the persona config for determining produces.event_type."""
+        """Set the persona config for determining produces.event_type.
+
+        Must be called before ``run()`` so the Skuld channel connects with
+        the full identity (persona, display_name, subscribes_to, emits, tools).
+        """
         self._persona_config = persona_config
 
         # Enrich Skuld channel with persona metadata for the sidebar UI
         if self._skuld_channel is not None and persona_config is not None:
+            self._skuld_channel._persona = persona_config.name
             self._skuld_channel._subscribes_to = persona_config.consumes.event_types
             emits: list[str] = []
             if persona_config.produces.event_type:
@@ -283,6 +289,24 @@ class DriveLoop:
             logger.error("drive_loop: rpc handler raised: %s", exc)
             return {"error": str(exc)}
 
+    async def _handle_directed_message(self, content: str) -> None:
+        """Enqueue a directed message from the browser as an agent task."""
+        import time
+
+        task_id = f"task_{int(time.time() * 1000):x}_{self._next_counter()}"
+        persona = self._persona_config.name if self._persona_config else None
+        task = AgentTask(
+            task_id=task_id,
+            title=f"Directed message from user",
+            initiative_context=content,
+            triggered_by="skuld:directed_message",
+            output_mode=OutputMode.SURFACE,
+            persona=persona,
+            priority=1,  # high priority — user is waiting
+        )
+        logger.info("drive_loop: directed message enqueued as task %s", task_id)
+        await self.enqueue(task)
+
     # ------------------------------------------------------------------
     # Main run loop
     # ------------------------------------------------------------------
@@ -297,6 +321,14 @@ class DriveLoop:
                 self._journal_path.unlink()
             except OSError:
                 pass
+
+        # Connect Skuld channel eagerly so the ravn appears in the browser
+        # sidebar immediately.  set_persona_config() has already enriched the
+        # channel with persona, display_name, subscribes_to, emits, tools —
+        # the registration frame sent on connect carries the full identity.
+        if self._skuld_channel is not None:
+            self._skuld_channel.on_directed_message(self._handle_directed_message)
+            await self._skuld_channel.connect()
 
         coros: list[Awaitable] = [
             self._task_executor(),

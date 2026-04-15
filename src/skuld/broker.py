@@ -1724,6 +1724,7 @@ class Broker:
                             peer_id=peer_id,
                             persona=frame.get("persona", peer_id),
                             websocket=websocket,
+                            display_name=frame.get("display_name", ""),
                             subscribes_to=frame.get("subscribes_to"),
                             emits=frame.get("emits"),
                             tools=frame.get("tools"),

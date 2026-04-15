@@ -39,12 +39,16 @@ function ParticipantLabel({ participant, onSelectAgent, isSelected }: Participan
         className={cn(styles.participantLabel, canSelect && styles.participantLabelClickable)}
         style={{ '--participant-color': color } as React.CSSProperties}
         onClick={canSelect ? handleClick : undefined}
-        title={canSelect ? `View ${participant.persona} details` : participant.persona}
+        title={canSelect ? `View ${participant.displayName || participant.persona} details` : (participant.displayName || participant.persona)}
         data-selected={isSelected || undefined}
         data-testid="participant-label"
       >
         <span className={styles.participantDot} />
-        <span className={styles.participantName}>{participant.persona}</span>
+        <span className={styles.participantName}>
+          {participant.displayName
+            ? `${participant.displayName} (${participant.persona})`
+            : participant.persona}
+        </span>
       </button>
 
       {canSelect && (
@@ -52,8 +56,8 @@ function ParticipantLabel({ participant, onSelectAgent, isSelected }: Participan
           type="button"
           className={cn(styles.detailBtn, isSelected && styles.detailBtnActive)}
           onClick={handleClick}
-          title={`View ${participant.persona} event stream`}
-          aria-label={`View ${participant.persona} details`}
+          title={`View ${participant.displayName || participant.persona} event stream`}
+          aria-label={`View ${participant.displayName || participant.persona} details`}
           data-testid="view-agent-detail-btn"
         >
           <Eye className={styles.detailIcon} />

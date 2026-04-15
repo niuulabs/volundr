@@ -128,6 +128,12 @@
   background-color: color-mix(in srgb, var(--color-bg-tertiary) 40%, transparent);
 }
 
+.controlBtnActive {
+  color: var(--color-accent-cyan);
+  border-color: color-mix(in srgb, var(--color-accent-cyan) 40%, transparent);
+  background-color: color-mix(in srgb, var(--color-accent-cyan) 10%, transparent);
+}
+
 .controlIcon {
   width: 12px;
   height: 12px;

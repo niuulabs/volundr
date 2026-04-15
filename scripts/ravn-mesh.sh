@@ -35,7 +35,7 @@ MEMORY_DIR="/tmp/ravn-mesh"
 
 _ravn_cmd() {
     # Run ravn with PYTHONPATH set to src directory
-    PYTHONPATH="${REPO_ROOT}/src" python -m ravn "$@"
+    uv run --project "${REPO_ROOT}" python -m ravn "$@"
 }
 
 _write_cluster_yaml() {
@@ -45,14 +45,17 @@ _write_cluster_yaml() {
 peers:
   - peer_id: ravn-mesh-1
     persona: coder
+    display_name: Kvasir
     pub_address: "ipc:///tmp/ravn-mesh/node-1.ipc"
     rep_address: "ipc:///tmp/ravn-mesh/node-1-rep.ipc"
   - peer_id: ravn-mesh-2
     persona: reviewer
+    display_name: Bragi
     pub_address: "ipc:///tmp/ravn-mesh/node-2.ipc"
     rep_address: "ipc:///tmp/ravn-mesh/node-2-rep.ipc"
   - peer_id: ravn-mesh-3
     persona: security
+    display_name: Heimdall
     pub_address: "ipc:///tmp/ravn-mesh/node-3.ipc"
     rep_address: "ipc:///tmp/ravn-mesh/node-3-rep.ipc"
 YAML
@@ -65,6 +68,7 @@ _write_config() {
     local rep_port="$3"
     local hs_port="$4"   # unused now, kept for call-site compat
     local persona="$5"
+    local display_name="$6"
     local config_path="${CONFIG_DIR}/ravn-mesh-${n}.yaml"
 
     mkdir -p "${CONFIG_DIR}"
@@ -133,6 +137,7 @@ permission:
 skuld:
   enabled: true
   broker_url: "ws://localhost:8081/ws/ravn"
+  display_name: "${display_name}"
 
 logging:
   level: DEBUG
@@ -146,10 +151,15 @@ YAML
 # ---------------------------------------------------------------------------
 
 cmd_start() {
-    if [[ -f "${PIDS_FILE}" ]]; then
-        echo "Mesh already running? Found ${PIDS_FILE}. Run 'stop' first." >&2
-        exit 1
+    # Kill any leftover processes from a previous run
+    local stray_pids
+    stray_pids=$(pgrep -f "ravn.*daemon.*ravn-mesh" 2>/dev/null || true)
+    if [[ -n "${stray_pids}" ]]; then
+        echo "Cleaning up stale ravn-mesh processes..."
+        echo "${stray_pids}" | xargs kill -9 2>/dev/null || true
+        sleep 1
     fi
+    rm -f "${PIDS_FILE}"
 
     mkdir -p "${LOG_DIR}" "${MEMORY_DIR}"
 
@@ -167,9 +177,9 @@ cmd_start() {
     #   3 — security  (consumes review.completed, produces security.completed)
     # Flow: code.changed → reviewer → review.completed → coder + security
     declare -a configs
-    configs[1]="$(_write_config 1 7480 7481 7490 coder)"
-    configs[2]="$(_write_config 2 7482 7483 7491 reviewer)"
-    configs[3]="$(_write_config 3 7484 7485 7492 security)"
+    configs[1]="$(_write_config 1 7480 7481 7490 coder Kvasir)"
+    configs[2]="$(_write_config 2 7482 7483 7491 reviewer Bragi)"
+    configs[3]="$(_write_config 3 7484 7485 7492 security Heimdall)"
 
     declare -a pids
     local personas=('' coder reviewer security)
@@ -201,22 +211,38 @@ cmd_start() {
 }
 
 cmd_stop() {
-    if [[ ! -f "${PIDS_FILE}" ]]; then
-        echo "No mesh running (${PIDS_FILE} not found)."
-        return
+    # Always kill any stray ravn-mesh processes, even if PID file is missing
+    local stray_pids
+    stray_pids=$(pgrep -f "ravn.*daemon.*ravn-mesh" 2>/dev/null || true)
+
+    if [[ -f "${PIDS_FILE}" ]]; then
+        echo "Stopping Ravn mesh..."
+        while IFS= read -r pid; do
+            if kill -0 "${pid}" 2>/dev/null; then
+                kill "${pid}"
+                echo "  sent SIGTERM to pid ${pid}"
+            else
+                echo "  pid ${pid} already gone"
+            fi
+        done < "${PIDS_FILE}"
+        rm -f "${PIDS_FILE}"
     fi
 
-    echo "Stopping Ravn mesh..."
-    while IFS= read -r pid; do
-        if kill -0 "${pid}" 2>/dev/null; then
-            kill "${pid}"
-            echo "  killed pid ${pid}"
-        else
-            echo "  pid ${pid} already gone"
-        fi
-    done < "${PIDS_FILE}"
+    # Also kill any strays not in the PID file (e.g. from a crashed stop)
+    if [[ -n "${stray_pids}" ]]; then
+        echo "  killing stray ravn-mesh processes..."
+        echo "${stray_pids}" | xargs kill 2>/dev/null || true
+    fi
 
-    rm -f "${PIDS_FILE}"
+    # Wait briefly then force-kill survivors
+    sleep 1
+    local survivors
+    survivors=$(pgrep -f "ravn.*daemon.*ravn-mesh" 2>/dev/null || true)
+    if [[ -n "${survivors}" ]]; then
+        echo "  force-killing survivors..."
+        echo "${survivors}" | xargs kill -9 2>/dev/null || true
+    fi
+
     echo "Done."
 }
 

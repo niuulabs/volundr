@@ -1,61 +1,45 @@
 ---
 name: mesh-e2e
-description: Run end-to-end validation of the Ravn mesh architecture
+description: Run end-to-end validation of the Ravn mesh with browser visualization via Skuld
 ---
 
 # Ravn Mesh E2E Test
 
-Validates the full mesh event cascade works correctly across all three personas.
+Validates the full mesh event cascade across three personas with live browser
+visualization through the Skuld WebSocket broker.
 
-## What It Tests (Closed Loop)
+## Mesh Nodes
+
+| Node | Persona | Display Name | Consumes | Produces |
+|------|---------|-------------|----------|----------|
+| 1 | coder | Kvasir | review.completed | code.changed |
+| 2 | reviewer | Bragi | code.changed | review.completed |
+| 3 | security | Heimdall | review.completed | security.completed |
+
+## Cascade Flow
 
 ```
-test-publisher → code.changed ──→ reviewer (node 2) ←──┐
-                                       ↓               │
-                                review.completed       │
-                                   ↓      ↓            │
-                                coder   security       │
-                               (node 1) (node 3)       │
-                                  ↓                    │
-                             code.changed (fix) ───────┘
+user message (via Skuld browser) ──→ all nodes receive
+                                        ↓
+coder (Kvasir) ── code.changed ──→ reviewer (Bragi)
+                                        ↓
+                                  review.completed
+                                   ↓          ↓
+                             coder (Kvasir)  security (Heimdall)
 ```
-
-The test verifies:
-1. Reviewer receives initial `code.changed`
-2. Reviewer publishes `review.completed`
-3. Coder receives `review.completed`
-4. Coder applies fixes and publishes `code.changed`
-5. Security receives `review.completed`
-6. **Reviewer receives coder's fix (loop closes)**
-
-Additionally checks for:
-- ERROR level log entries in all nodes
-- Python exceptions/tracebacks
 
 ## Quick Start
 
-Run the automated e2e test:
+### 1. Start Skuld (the broker)
+
+Skuld must be running for browser delivery. Start it in a separate terminal:
 
 ```bash
-scripts/ravn-mesh-e2e.sh
+make skuld
+# or: uv run python -m skuld
 ```
 
-For a quick startup check (no cascade test):
-
-```bash
-scripts/ravn-mesh-e2e.sh --quick
-```
-
-## Manual Testing
-
-If you need to run manually or debug:
-
-### 1. Clean Previous Runs
-
-```bash
-pkill -f "ravn daemon" 2>/dev/null || true
-rm -rf /tmp/ravn-mesh/*
-```
+Default: `ws://localhost:8081/ws/ravn`
 
 ### 2. Start the Mesh
 
@@ -63,68 +47,59 @@ rm -rf /tmp/ravn-mesh/*
 scripts/ravn-mesh.sh start
 ```
 
-Wait 15-20 seconds for mDNS discovery and nng subscriptions.
+This spawns 3 ravn daemon nodes with:
+- nng mesh transport (IPC sockets at `/tmp/ravn-mesh/`)
+- Static discovery via `/tmp/ravn-mesh/cluster.yaml`
+- Skuld channel for browser delivery (display names: Kvasir, Bragi, Heimdall)
+- Config files at `/tmp/ravn-mesh/ravn-mesh-{1,2,3}.yaml`
 
-### 3. Verify Nodes Running
+### 3. Open Browser
 
-```bash
-scripts/ravn-mesh.sh status
-scripts/ravn-mesh.sh peers
-```
+Navigate to the Volundr web UI and open a mesh session. You should see all
+three agents in the sidebar: **Kvasir (coder)**, **Bragi (reviewer)**,
+**Heimdall (security)**.
 
-### 4. Publish Test Event
+### 4. Test File
 
-The test event MUST be in `RavnEventType.OUTCOME` format:
+The test uses `/tmp/hello.py` — a deliberately buggy user management API with
+SQL injection, plaintext passwords, command injection, hardcoded secrets, etc.
+Reset it before each run:
 
 ```python
-event = SleipnirEvent(
-    event_type="ravn.mesh.code.changed",
-    source="ravn:test-publisher",
-    payload={
-        "ravn_event": {
-            "event_type": "code.changed",
-            "persona": "developer",
-            "outcome": {...},  # The actual outcome data
-        },
-        "ravn_type": "outcome",  # CRITICAL — handler filters on this
-        "ravn_source": "ravn:test-publisher",
-        "ravn_task_id": "test-001",
-    },
-    ...
-)
+# /tmp/hello.py should contain functions with these bugs:
+# - f-string SQL queries (SQL injection)
+# - plaintext password storage and comparison
+# - os.popen with unsanitized input (command injection)
+# - hashlib.md5 for tokens (weak hashing)
+# - hardcoded SECRET_KEY
+# - passwords leaked in list_users() and export_users()
+# - missing connection.close() in delete_user()
+# - no auth check in promote_user()
+# - no path traversal protection in export_users()
 ```
 
-Key requirements:
-- `ravn_type` MUST be `"outcome"` (not `"request"`)
-- `ravn_event` MUST contain `event_type`, `persona`, and `outcome` fields
-- Publisher must wait 15s after registering for mesh nodes to discover and dial
+### 5. Send a Message
 
-### 5. Monitor Logs
+Type a message in the chat like:
 
-```bash
-scripts/ravn-mesh.sh logs
-# Or watch specific node:
-tail -f /tmp/ravn-mesh/ravn-mesh-2.log | grep -E "(mesh:|drive_loop:)"
-```
+> Review /tmp/hello.py for security issues and fix them
 
-### 6. Verify Cascade
+All three agents work on it:
+- **Kvasir (coder)** applies fixes, publishes `code.changed`
+- **Bragi (reviewer)** reviews the changes, publishes `review.completed`
+- **Heimdall (security)** does a security audit, publishes `security.completed`
 
-Look for these log lines:
+### 6. What to Verify in Browser
 
-```
-# Reviewer received event:
-mesh: received outcome event_type=code.changed from=developer
-
-# Reviewer processed and published:
-drive_loop: publishing outcome event_type=review.completed
-
-# Coder received:
-mesh: received outcome event_type=review.completed from=reviewer
-
-# Security received and processed:
-mesh: received outcome event_type=review.completed from=reviewer
-drive_loop: publishing outcome event_type=security.completed
-```
+- Agents appear in sidebar with display names and status indicators
+- Status transitions: idle → thinking → tool_executing → idle
+- Internal events (thinking, tool calls) visible via **Internal** toggle in toolbar
+- Internal events use the same tool grouping UI as regular messages
+- Mesh cascade events visible in the right panel (outcomes, delegations)
+- Mesh events persist across page refresh
+- Click a sidebar peer to filter chat to that participant
+- **Clear chat** button (trash icon) resets everything
+- @-mentioning a specific ravn via the chat input directs the message to that agent
 
 ### 7. Stop Mesh
 
@@ -132,44 +107,52 @@ drive_loop: publishing outcome event_type=security.completed
 scripts/ravn-mesh.sh stop
 ```
 
+The stop command now force-kills strays, so stale processes from crashed runs
+are cleaned up automatically.
+
+## Monitor Logs
+
+```bash
+scripts/ravn-mesh.sh logs
+# Or watch specific node:
+tail -f /tmp/ravn-mesh/ravn-mesh-2.log | grep -E "(mesh:|drive_loop:|SkuldChannel)"
+```
+
 ## Troubleshooting
+
+### Agents Don't Appear in Browser
+
+1. **Skuld not running**: Start it with `make skuld`
+2. **Stale processes**: `scripts/ravn-mesh.sh stop` now kills strays automatically
+3. **Config missing display_name**: Check `/tmp/ravn-mesh/ravn-mesh-*.yaml` has `display_name` under `skuld:`
 
 ### Events Not Received
 
-1. **Wrong event format**: Must use `ravn_type: "outcome"` — the handler at `_handle_outcome_event` filters on this
-2. **Publisher not discovered**: Wait 15 seconds after publisher starts — nng discovery polls every 5s
-3. **Stale IPC sockets**: Clean with `rm -rf /tmp/ravn-mesh/*` and restart
+1. **Wrong event format**: Must use `ravn_type: "outcome"` — the handler filters on this
+2. **Publisher not discovered**: Wait 15s — nng discovery polls every 5-10s
+3. **Stale IPC sockets**: `scripts/ravn-mesh.sh stop && rm -rf /tmp/ravn-mesh/*.ipc && scripts/ravn-mesh.sh start`
 
-### AddressInUse Errors
+### Agents Stuck in "thinking"
 
-Previous mesh didn't clean up properly:
+The `response` event resets status to idle. If an agent errors out without
+sending a response, it stays in thinking. Check its log for exceptions.
+`outcome` and `help_needed` events do NOT reset status (they happen mid-turn).
 
-```bash
-rm -rf /tmp/ravn-mesh/*.ipc
-pkill -f "ravn daemon"
-```
+### Directed Messages (@-mentions) Not Working
 
-### Discovery Issues
+The browser sends `targetPeerId` (camelCase) to the broker, which routes via
+`RoomBridge.route_directed_message()` to the ravn's WebSocket. The ravn's
+`SkuldChannel` receive loop picks it up and enqueues it as a high-priority
+`AgentTask` in the drive loop.
 
-Check if mDNS is working:
+## Files
 
-```bash
-scripts/ravn-mesh.sh peers
-```
-
-Check service registry (nng mode):
-
-```bash
-cat /tmp/ravn-mesh/sleipnir-registry.json | python -m json.tool
-```
-
-## Logs Location
-
-- Runtime logs: `/tmp/ravn-mesh/ravn-mesh-{1,2,3}.log`
-- Saved test runs: `logs/mesh-e2e-YYYYMMDD-HHMMSS/`
-
-## Related
-
-- `scripts/ravn-mesh.sh` — mesh lifecycle management
-- `docs/testing/mesh-e2e.md` — detailed test documentation
-- `docs/site/ravn/advanced/flock.md` — architecture documentation
+- `scripts/ravn-mesh.sh` — mesh lifecycle (start/stop/status/logs/peers)
+- `/tmp/ravn-mesh/cluster.yaml` — static peer definitions with display names
+- `/tmp/ravn-mesh/ravn-mesh-{1,2,3}.yaml` — per-node config (generated)
+- `/tmp/ravn-mesh/ravn-mesh-{1,2,3}.log` — per-node logs
+- `src/skuld/room_bridge.py` — Ravn→browser event translation
+- `src/skuld/broker.py` — WebSocket broker, ravn registration, directed messages
+- `src/ravn/adapters/channels/skuld_channel.py` — ravn→Skuld WebSocket channel
+- `src/ravn/drive_loop.py` — task execution, Skuld eager connect
+- `web/src/modules/shared/hooks/useSkuldChat.ts` — browser-side event handling

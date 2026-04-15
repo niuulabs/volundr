@@ -27,6 +27,7 @@ class ParticipantMeta:
     persona: str
     color: str
     participant_type: str  # "human" | "ravn"
+    display_name: str = ""
     gateway_url: str | None = None
     subscribes_to: tuple[str, ...] = ()
     emits: tuple[str, ...] = ()

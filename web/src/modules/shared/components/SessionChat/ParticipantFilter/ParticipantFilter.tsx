@@ -30,7 +30,7 @@ export function ParticipantFilter({
     return (
       <>
         <span className={styles.dot} data-participant-color={p.color} />
-        <span>{p.persona}</span>
+        <span>{p.displayName ? `${p.displayName} (${p.persona})` : p.persona}</span>
       </>
     );
   }

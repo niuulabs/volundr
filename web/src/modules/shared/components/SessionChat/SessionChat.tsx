@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
-import { Wifi, WifiOff, BrainCircuitIcon, RotateCcwIcon, ArrowDownIcon } from 'lucide-react';
+import { Wifi, WifiOff, BrainCircuitIcon, RotateCcwIcon, ArrowDownIcon, Eye, EyeOff, Trash2Icon } from 'lucide-react';
 import { PermissionStack } from '@/modules/shared/components/PermissionDialog';
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
 import { useRoomState } from '@/modules/shared/hooks/useRoomState';
@@ -14,9 +14,7 @@ import type {
 import { cn } from '@/utils';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
 import { RoomMessage } from './RoomMessage';
-import { ParticipantFilter } from './ParticipantFilter';
 import { ThreadGroup } from './ThreadGroup';
-import { AgentDetailPanel } from './AgentDetailPanel';
 import { MeshCascadePanel } from './MeshCascadePanel';
 import { MeshSidebar } from './MeshSidebar';
 import { ChatInput } from './ChatInput';
@@ -58,7 +56,6 @@ export function SessionChat({
     messages,
     participants,
     meshEvents,
-    agentEvents,
     connected,
     isRunning,
     historyLoaded,
@@ -70,6 +67,7 @@ export function SessionChat({
     sendSetModel,
     sendSetMaxThinkingTokens,
     sendRewindFiles,
+    clearMessages,
     availableCommands,
     capabilities,
   } = useSkuldChat(url);
@@ -90,8 +88,7 @@ export function SessionChat({
   const [showThinkingMenu, setShowThinkingMenu] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
-  const [rightPanelMode, setRightPanelMode] = useState<'cascade' | 'agent-detail' | null>(null);
+  const [rightPanelMode, setRightPanelMode] = useState<'cascade' | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -113,23 +110,12 @@ export function SessionChat({
   const isRoomSession = participantsMap.size > 0;
 
   const handleSelectAgent = useCallback((peerId: string) => {
-    setSelectedAgentId(prev => {
-      if (prev === peerId) {
-        setRightPanelMode(null);
-        return null;
-      }
-      setRightPanelMode('agent-detail');
-      return peerId;
-    });
-  }, []);
-
-  const handleCloseDetail = useCallback(() => {
-    setSelectedAgentId(null);
-    setRightPanelMode(null);
-  }, []);
+    setActiveFilter(prev => (prev === peerId ? 'all' : peerId));
+  }, [setActiveFilter]);
 
   // Auto-show cascade panel when mesh events exist
   const effectiveRightPanelMode = rightPanelMode ?? (meshEvents.length > 0 ? 'cascade' : null);
+  const selectedAgentId: string | null = activeFilter !== 'all' ? activeFilter : null;
 
   // Scroll to message closest to an outcome event
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
@@ -423,11 +409,6 @@ export function SessionChat({
     onMessageCountChange?.(visibleMessages.length);
   }, [visibleMessages.length, onMessageCountChange]);
 
-  // Look up selected participant from live room state (not just message-derived map)
-  const selectedParticipant = selectedAgentId
-    ? (participants.get(selectedAgentId) ?? participantsMap.get(selectedAgentId))
-    : undefined;
-  const selectedAgentEvents = selectedAgentId ? (agentEvents.get(selectedAgentId) ?? []) : [];
   const hasSidebar = participants.size > 0;
   const showRightPanel = effectiveRightPanelMode !== null;
 
@@ -458,6 +439,17 @@ export function SessionChat({
             <span className={styles.messageCount}>
               {visibleMessages.length} message{visibleMessages.length !== 1 ? 's' : ''}
             </span>
+            {visibleMessages.length > 0 && (
+              <button
+                type="button"
+                className={styles.controlBtn}
+                onClick={clearMessages}
+                title="Clear chat"
+                data-testid="clear-chat"
+              >
+                <Trash2Icon className={styles.controlIcon} />
+              </button>
+            )}
           </div>
 
           {connected && (
@@ -515,6 +507,24 @@ export function SessionChat({
                     <RotateCcwIcon className={styles.controlIcon} />
                   </button>
                 )}
+
+                {isRoomMode && (
+                  <button
+                    type="button"
+                    className={cn(styles.controlBtn, showInternal && styles.controlBtnActive)}
+                    onClick={toggleInternal}
+                    title={showInternal ? 'Hide internal messages' : 'Show internal messages'}
+                    aria-pressed={showInternal}
+                    data-testid="internal-toggle"
+                  >
+                    {showInternal ? (
+                      <Eye className={styles.controlIcon} />
+                    ) : (
+                      <EyeOff className={styles.controlIcon} />
+                    )}
+                    <span className={styles.controlLabel}>Internal</span>
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -550,16 +560,6 @@ export function SessionChat({
           <div className={styles.historyLoading} data-testid="history-loading">
             Loading conversation...
           </div>
-        )}
-
-        {isRoomMode && (
-          <ParticipantFilter
-            participants={participants}
-            activeFilter={activeFilter}
-            onFilterChange={setActiveFilter}
-            showInternal={showInternal}
-            onToggleInternal={toggleInternal}
-          />
         )}
 
         {hasConversation ? (
@@ -687,18 +687,9 @@ export function SessionChat({
         </div>
       </div>
 
-      {showRightPanel &&
-        (effectiveRightPanelMode === 'agent-detail' &&
-        selectedParticipant &&
-        'status' in selectedParticipant ? (
-          <AgentDetailPanel
-            participant={selectedParticipant as RoomParticipant}
-            events={selectedAgentEvents}
-            onClose={handleCloseDetail}
-          />
-        ) : effectiveRightPanelMode === 'cascade' && meshEvents.length > 0 ? (
-          <MeshCascadePanel events={meshEvents} onEventClick={handleOutcomeClick} />
-        ) : null)}
+      {showRightPanel && effectiveRightPanelMode === 'cascade' && meshEvents.length > 0 && (
+        <MeshCascadePanel events={meshEvents} onEventClick={handleOutcomeClick} />
+      )}
     </div>
   );
 }

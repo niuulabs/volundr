@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
 
 import websockets
 import websockets.exceptions
@@ -33,6 +34,9 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_RECONNECT_DELAY_SECONDS = 2.0
 _DEFAULT_MAX_RECONNECT_ATTEMPTS = 5
+
+
+DirectedMessageHandler = Callable[[str], Awaitable[None]]
 
 
 class SkuldChannel(ChannelPort):
@@ -59,6 +63,7 @@ class SkuldChannel(ChannelPort):
         *,
         peer_id: str | None = None,
         persona: str | None = None,
+        display_name: str | None = None,
         subscribes_to: list[str] | None = None,
         emits: list[str] | None = None,
         tools: list[str] | None = None,
@@ -69,6 +74,7 @@ class SkuldChannel(ChannelPort):
         self._session_id = session_id
         self._peer_id = peer_id
         self._persona = persona
+        self._display_name = display_name
         self._subscribes_to = subscribes_to or []
         self._emits = emits or []
         self._tools = tools or []
@@ -77,6 +83,8 @@ class SkuldChannel(ChannelPort):
         self._ws: websockets.WebSocketClientProtocol | None = None
         self._connect_lock = asyncio.Lock()
         self._buffer: list[RavnEvent] = []
+        self._on_directed_message: DirectedMessageHandler | None = None
+        self._recv_task: asyncio.Task | None = None
 
     async def emit(self, event: RavnEvent) -> None:
         """Emit *event* to the Skuld broker as an NDJSON frame."""
@@ -104,6 +112,9 @@ class SkuldChannel(ChannelPort):
 
     async def disconnect(self) -> None:
         """Close the WebSocket connection gracefully."""
+        if self._recv_task is not None:
+            self._recv_task.cancel()
+            self._recv_task = None
         if self._ws is None:
             return
         try:
@@ -126,6 +137,40 @@ class SkuldChannel(ChannelPort):
             except Exception as exc:
                 logger.warning("SkuldChannel: flush failed for event %r: %r", event.type, exc)
                 self._buffer.append(event)
+
+    def on_directed_message(self, handler: DirectedMessageHandler) -> None:
+        """Register a callback for incoming directed messages from the browser."""
+        self._on_directed_message = handler
+
+    async def _recv_loop(self) -> None:
+        """Background loop that reads incoming messages from the broker WebSocket.
+
+        The broker sends ``{"type": "directed_message", "content": "..."}``
+        when a user @-mentions this Ravn in the chat.  The content is forwarded
+        to the registered handler (typically DriveLoop.enqueue).
+        """
+        while True:
+            ws = self._ws
+            if ws is None or ws.state == WsState.CLOSED:
+                await asyncio.sleep(self._reconnect_delay)
+                continue
+            try:
+                raw = await ws.recv()
+                frame = json.loads(raw)
+                if frame.get("type") == "directed_message" and self._on_directed_message:
+                    content = frame.get("content", "")
+                    if content:
+                        await self._on_directed_message(content)
+            except websockets.exceptions.ConnectionClosed:
+                logger.info("SkuldChannel: recv loop — connection closed, waiting for reconnect.")
+                await asyncio.sleep(self._reconnect_delay)
+            except json.JSONDecodeError:
+                logger.warning("SkuldChannel: recv loop — invalid JSON, skipping.")
+            except asyncio.CancelledError:
+                return
+            except Exception:
+                logger.exception("SkuldChannel: recv loop — unexpected error.")
+                await asyncio.sleep(self._reconnect_delay)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -150,6 +195,8 @@ class SkuldChannel(ChannelPort):
                     reg_frame["source"] = self._peer_id
                 if self._persona:
                     reg_frame["persona"] = self._persona
+                if self._display_name:
+                    reg_frame["display_name"] = self._display_name
                 if self._subscribes_to:
                     reg_frame["subscribes_to"] = self._subscribes_to
                 if self._emits:
@@ -157,6 +204,9 @@ class SkuldChannel(ChannelPort):
                 if self._tools:
                     reg_frame["tools"] = self._tools
                 await self._ws.send(json.dumps(reg_frame) + "\n")
+                # Start receive loop for incoming directed messages
+                if self._recv_task is None or self._recv_task.done():
+                    self._recv_task = asyncio.create_task(self._recv_loop())
                 return
             except Exception as exc:
                 attempts += 1

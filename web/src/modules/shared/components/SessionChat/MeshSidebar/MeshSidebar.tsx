@@ -33,7 +33,11 @@ function PeerCard({
     >
       <div className={styles.peerHeader}>
         <span className={styles.statusDot} data-status={participant.status} />
-        <span className={styles.peerName}>{participant.persona || participant.peerId}</span>
+        <span className={styles.peerName}>
+          {participant.displayName
+            ? `${participant.displayName} (${participant.persona})`
+            : participant.persona || participant.peerId}
+        </span>
         <span className={styles.peerStatus}>{participant.status}</span>
       </div>
 

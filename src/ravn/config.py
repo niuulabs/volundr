@@ -916,6 +916,11 @@ class SkuldChannelConfig(BaseModel):
         description="WebSocket URL of the Skuld broker endpoint. "
         "The peer_id is appended automatically (e.g. ws://localhost:8081/ws/ravn/{peer_id}).",
     )
+    display_name: str = Field(
+        default="",
+        description="Human-friendly name shown in the mesh UI (e.g. 'Kvasir'). "
+        "Falls back to the persona name when empty.",
+    )
 
 
 class PlatformToolsConfig(BaseModel):

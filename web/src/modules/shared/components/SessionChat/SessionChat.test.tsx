@@ -128,6 +128,8 @@ function mockSkuldChat(overrides: Partial<ReturnType<typeof useSkuldChat>> = {})
   const defaults: ReturnType<typeof useSkuldChat> = {
     messages: [],
     participants: new Map(),
+    meshEvents: [],
+    agentEvents: new Map(),
     connected: false,
     isRunning: false,
     historyLoaded: true,
@@ -135,6 +137,7 @@ function mockSkuldChat(overrides: Partial<ReturnType<typeof useSkuldChat>> = {})
     availableCommands: [],
     capabilities: ALL_CAPABILITIES,
     sendMessage: vi.fn(),
+    sendDirectedMessages: vi.fn(),
     respondToPermission: vi.fn(),
     sendInterrupt: vi.fn(),
     sendSetModel: vi.fn(),
@@ -716,6 +719,7 @@ describe('SessionChat', () => {
     return {
       peerId,
       persona,
+      displayName: '',
       color,
       participantType: 'ravn' as const,
       status: 'idle' as const,
@@ -723,7 +727,7 @@ describe('SessionChat', () => {
     };
   }
 
-  it('renders ParticipantFilter when more than one participant is present', () => {
+  it('does not render ParticipantFilter in room mode (replaced by toolbar toggle)', () => {
     const participants = new Map([
       ['p1', makeParticipant('p1', 'Ravn-A', 'amber')],
       ['p2', makeParticipant('p2', 'Ravn-B', 'cyan')],
@@ -731,7 +735,7 @@ describe('SessionChat', () => {
     mockSkuldChat({ connected: true, participants });
     render(<SessionChat url="wss://test/session" />);
 
-    expect(screen.getByTestId('participant-filter')).toBeInTheDocument();
+    expect(screen.queryByTestId('participant-filter')).not.toBeInTheDocument();
   });
 
   it('does not render ParticipantFilter with only one participant', () => {
@@ -817,6 +821,7 @@ describe('SessionChat', () => {
         participant: {
           peerId: 'ravn-1',
           persona: 'Ravn Alpha',
+          displayName: '',
           color: 'cyan',
           participantType: 'ravn',
           gatewayUrl: 'http://ravn-1:8080',
@@ -829,7 +834,7 @@ describe('SessionChat', () => {
     expect(screen.getByTestId('room-message')).toBeInTheDocument();
   });
 
-  it('renders AgentDetailPanel when an agent is selected via room message', () => {
+  it('clicking agent in room message toggles participant filter', () => {
     const messages: SkuldChatMessage[] = [
       {
         id: 'msg-1',
@@ -840,6 +845,7 @@ describe('SessionChat', () => {
         participant: {
           peerId: 'ravn-1',
           persona: 'Ravn Alpha',
+          displayName: '',
           color: 'cyan',
           participantType: 'ravn',
           gatewayUrl: 'http://ravn-1:8080',
@@ -849,71 +855,7 @@ describe('SessionChat', () => {
     mockSkuldChat({ connected: true, messages });
     render(<SessionChat url="wss://test/session" />);
 
-    // Agent detail panel not shown yet
-    expect(screen.queryByTestId('agent-detail-panel')).not.toBeInTheDocument();
-
-    // Click the "Select" button in the RoomMessage mock to trigger onSelectAgent
-    fireEvent.click(screen.getByTestId('room-select-agent'));
-
-    // Panel should now appear
-    expect(screen.getByTestId('agent-detail-panel')).toBeInTheDocument();
-  });
-
-  it('closes AgentDetailPanel when onClose is called', () => {
-    const messages: SkuldChatMessage[] = [
-      {
-        id: 'msg-1',
-        role: 'assistant',
-        content: 'Agent response',
-        createdAt: new Date(),
-        status: 'complete',
-        participant: {
-          peerId: 'ravn-1',
-          persona: 'Ravn Alpha',
-          color: 'cyan',
-          participantType: 'ravn',
-          gatewayUrl: 'http://ravn-1:8080',
-        },
-      },
-    ];
-    mockSkuldChat({ connected: true, messages });
-    render(<SessionChat url="wss://test/session" />);
-
-    // Open the panel
-    fireEvent.click(screen.getByTestId('room-select-agent'));
-    expect(screen.getByTestId('agent-detail-panel')).toBeInTheDocument();
-
-    // Close via the panel's close button
-    fireEvent.click(screen.getByTestId('detail-close'));
-    expect(screen.queryByTestId('agent-detail-panel')).not.toBeInTheDocument();
-  });
-
-  it('toggles agent selection when same agent is clicked twice', () => {
-    const messages: SkuldChatMessage[] = [
-      {
-        id: 'msg-1',
-        role: 'assistant',
-        content: 'Agent response',
-        createdAt: new Date(),
-        status: 'complete',
-        participant: {
-          peerId: 'ravn-1',
-          persona: 'Ravn Alpha',
-          color: 'cyan',
-          participantType: 'ravn',
-          gatewayUrl: 'http://ravn-1:8080',
-        },
-      },
-    ];
-    mockSkuldChat({ connected: true, messages });
-    render(<SessionChat url="wss://test/session" />);
-
-    // Select once — panel opens
-    fireEvent.click(screen.getByTestId('room-select-agent'));
-    expect(screen.getByTestId('agent-detail-panel')).toBeInTheDocument();
-
-    // Select same agent again — panel closes (toggle)
-    fireEvent.click(screen.getByTestId('room-select-agent'));
+    // Agent detail panel should NOT exist (removed in favour of inline internals)
     expect(screen.queryByTestId('agent-detail-panel')).not.toBeInTheDocument();
   });
 });

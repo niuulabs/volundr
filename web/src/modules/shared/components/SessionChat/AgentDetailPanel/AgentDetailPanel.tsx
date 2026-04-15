@@ -144,7 +144,9 @@ export function AgentDetailPanel({ participant, events, onClose }: AgentDetailPa
             style={{ '--agent-color': accentColor } as React.CSSProperties}
             data-testid="agent-persona-name"
           >
-            {participant.persona}
+            {participant.displayName
+              ? `${participant.displayName} (${participant.persona})`
+              : participant.persona}
           </span>
         </div>
 

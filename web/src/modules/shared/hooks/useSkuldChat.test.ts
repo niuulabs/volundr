@@ -12,6 +12,8 @@ vi.mock('@/modules/shared/store/chat.store', () => ({
   useChatStore: vi.fn(() => ({
     getMessages: vi.fn(() => []),
     setMessages: vi.fn(),
+    getMeshEvents: vi.fn(() => []),
+    setMeshEvents: vi.fn(),
     clearSession: vi.fn(),
   })),
 }));
@@ -43,6 +45,8 @@ function setupMock() {
   const storeMock = {
     getMessages: vi.fn(() => []),
     setMessages: vi.fn(),
+    getMeshEvents: vi.fn(() => []),
+    setMeshEvents: vi.fn(),
     clearSession: vi.fn(),
   };
 
