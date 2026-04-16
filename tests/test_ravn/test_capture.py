@@ -53,6 +53,7 @@ def _make_drive_loop(cascade_enabled: bool = False) -> DriveLoop:
     agent_factory = MagicMock(return_value=AsyncMock())
     cfg = InitiativeConfig(enabled=True, max_concurrent_tasks=3, task_queue_max=50)
     settings = MagicMock()
+    settings.skuld.enabled = False
     settings.cascade.enabled = cascade_enabled
     settings.budget.daily_cap_usd = 1.0
     settings.budget.warn_at_percent = 80
@@ -341,6 +342,7 @@ class TestDriveLoopCaptureIntegration:
 
         cfg = InitiativeConfig(enabled=True, max_concurrent_tasks=3, task_queue_max=50)
         settings = MagicMock()
+        settings.skuld.enabled = False
         settings.cascade.enabled = True
         dl = DriveLoop(agent_factory=_agent_factory, config=cfg, settings=settings)
 
@@ -380,6 +382,7 @@ class TestDriveLoopCaptureIntegration:
 
         cfg = InitiativeConfig(enabled=True, max_concurrent_tasks=1, task_queue_max=10)
         settings = MagicMock()
+        settings.skuld.enabled = False
         settings.cascade.enabled = False
         dl = DriveLoop(agent_factory=_agent_factory, config=cfg, settings=settings)
 
@@ -412,6 +415,7 @@ class TestDriveLoopCaptureIntegration:
 
         cfg = InitiativeConfig(enabled=True, max_concurrent_tasks=1, task_queue_max=10)
         settings = MagicMock()
+        settings.skuld.enabled = False
         settings.cascade.enabled = True
         dl = DriveLoop(agent_factory=_agent_factory, config=cfg, settings=settings)
 
@@ -619,6 +623,7 @@ async def test_integration_two_local_tasks_progress_and_collect():
 
     cfg = InitiativeConfig(enabled=True, max_concurrent_tasks=3, task_queue_max=50)
     settings = MagicMock()
+    settings.skuld.enabled = False
     settings.cascade.enabled = True
     dl = DriveLoop(agent_factory=_agent_factory, config=cfg, settings=settings)
 
