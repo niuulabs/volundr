@@ -78,6 +78,8 @@ class MeshConfig(BaseModel):
     transport: str = Field(default="nng")
     adapters: list[dict[str, Any]] = Field(default_factory=list)
     rpc_timeout_s: float = Field(default=10.0)
+    default_work_timeout_s: float = Field(default=120.0)
+    default_response_urgency: float = Field(default=0.3)
     consumes_event_types: list[str] = Field(
         default_factory=lambda: ["code.requested"],
     )

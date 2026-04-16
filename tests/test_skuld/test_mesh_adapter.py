@@ -5,6 +5,7 @@ Covers:
 - Config parsing (mesh.enabled true/false)
 - Work request handling (prompt → CLI → result)
 - Outcome extraction and response publishing
+- Concurrency safety (execute lock)
 - Integration with InProcessBus round-trip
 """
 
@@ -55,15 +56,24 @@ def mock_mesh():
 
 @pytest.fixture
 def mock_transport():
-    transport = AsyncMock()
+    """Mock CLITransport exposing public event_callback property."""
+    transport = MagicMock()
     transport.send_message = AsyncMock()
     transport.is_alive = True
-    transport._event_callback = None
+
+    _callback_holder: dict[str, object] = {"cb": None}
 
     def on_event(callback):
-        transport._event_callback = callback
+        _callback_holder["cb"] = callback
 
     transport.on_event = on_event
+
+    # Public property matching CLITransport.event_callback
+    type(transport).event_callback = property(lambda self: _callback_holder["cb"])
+
+    # Also expose the internal for fake_send helpers to fire
+    type(transport)._event_callback = property(lambda self: _callback_holder["cb"])
+
     return transport
 
 
@@ -123,6 +133,22 @@ class TestMeshConfig:
     def test_mesh_rpc_timeout(self):
         cfg = MeshConfig(rpc_timeout_s=30.0)
         assert cfg.rpc_timeout_s == 30.0
+
+    def test_mesh_default_work_timeout(self):
+        cfg = MeshConfig()
+        assert cfg.default_work_timeout_s == 120.0
+
+    def test_mesh_custom_work_timeout(self):
+        cfg = MeshConfig(default_work_timeout_s=300.0)
+        assert cfg.default_work_timeout_s == 300.0
+
+    def test_mesh_default_response_urgency(self):
+        cfg = MeshConfig()
+        assert cfg.default_response_urgency == 0.3
+
+    def test_mesh_custom_response_urgency(self):
+        cfg = MeshConfig(default_response_urgency=0.7)
+        assert cfg.default_response_urgency == 0.7
 
 
 # ---------------------------------------------------------------------------
@@ -335,6 +361,37 @@ class TestWorkRequestHandling:
         assert result["request_id"] == "req-004"
 
     @pytest.mark.asyncio
+    async def test_work_request_uses_config_default_timeout(self, mock_mesh, mock_transport):
+        """When no timeout_s in message, use config.default_work_timeout_s."""
+        cfg = MeshConfig(
+            enabled=True,
+            peer_id="s1",
+            default_work_timeout_s=0.05,
+        )
+        adapter = SkuldMeshAdapter(
+            mesh=mock_mesh,
+            transport=mock_transport,
+            config=cfg,
+            session_id="s1",
+        )
+        await adapter.start()
+
+        async def slow_send(content):
+            await asyncio.sleep(10)
+
+        mock_transport.send_message = slow_send
+
+        result = await adapter._handle_work_request(
+            {
+                "prompt": "slow",
+                "request_id": "req-cfg-timeout",
+                # no timeout_s — should use config default (0.05s)
+            }
+        )
+
+        assert result["status"] == "timeout"
+
+    @pytest.mark.asyncio
     async def test_unknown_rpc_type_returns_error(self, adapter):
         await adapter.start()
 
@@ -347,7 +404,7 @@ class TestWorkRequestHandling:
         await adapter.start()
 
         original_cb = AsyncMock()
-        mock_transport._event_callback = original_cb
+        adapter._transport.on_event(original_cb)
 
         async def fake_send(content):
             cb = mock_transport._event_callback
@@ -356,8 +413,6 @@ class TestWorkRequestHandling:
 
         mock_transport.send_message = fake_send
 
-        adapter._transport.on_event(original_cb)
-
         await adapter._handle_work_request(
             {
                 "prompt": "test",
@@ -365,8 +420,8 @@ class TestWorkRequestHandling:
             }
         )
 
-        # The original callback should have been called by the capture wrapper
-        assert mock_transport._event_callback is original_cb
+        # The original callback should have been restored
+        assert mock_transport.event_callback is original_cb
 
     @pytest.mark.asyncio
     async def test_work_request_exception_returns_error(self, adapter, mock_transport):
@@ -425,7 +480,7 @@ class TestWorkRequestHandling:
         await adapter.start()
 
         # Manually add a pending future
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         fut = loop.create_future()
         adapter._pending_responses["test-req"] = fut
 
@@ -433,6 +488,49 @@ class TestWorkRequestHandling:
 
         assert fut.cancelled()
         assert len(adapter._pending_responses) == 0
+
+
+# ---------------------------------------------------------------------------
+# Concurrency safety tests
+# ---------------------------------------------------------------------------
+
+
+class TestConcurrencySafety:
+    """Test that _execute_prompt serializes concurrent calls."""
+
+    @pytest.mark.asyncio
+    async def test_execute_lock_serializes_calls(self, adapter, mock_transport):
+        """Two overlapping work_requests should not corrupt the callback chain."""
+        await adapter.start()
+
+        call_order: list[str] = []
+
+        async def sequenced_send(content):
+            call_order.append(f"send:{content}")
+            # Small delay to simulate real work
+            await asyncio.sleep(0.01)
+            cb = mock_transport._event_callback
+            if cb:
+                await cb({"type": "result", "result": f"done:{content}"})
+
+        mock_transport.send_message = sequenced_send
+
+        # Launch two concurrent work requests
+        r1 = asyncio.create_task(
+            adapter._handle_work_request({"prompt": "first", "request_id": "r1", "timeout_s": 5.0})
+        )
+        r2 = asyncio.create_task(
+            adapter._handle_work_request({"prompt": "second", "request_id": "r2", "timeout_s": 5.0})
+        )
+
+        results = await asyncio.gather(r1, r2)
+
+        # Both should complete successfully (not corrupt)
+        statuses = {r["status"] for r in results}
+        assert statuses == {"complete"}
+
+        # The lock ensures sends are serialized (not interleaved)
+        assert call_order == ["send:first", "send:second"]
 
 
 # ---------------------------------------------------------------------------
@@ -511,6 +609,44 @@ class TestOutcomeEventHandling:
         assert call_args[1]["topic"] == "coder.completed"
 
     @pytest.mark.asyncio
+    async def test_outcome_uses_config_response_urgency(self, mock_mesh, mock_transport):
+        """Published outcome event uses config.default_response_urgency."""
+        cfg = MeshConfig(
+            enabled=True,
+            peer_id="urg-test",
+            default_response_urgency=0.7,
+        )
+        adapter = SkuldMeshAdapter(
+            mesh=mock_mesh,
+            transport=mock_transport,
+            config=cfg,
+            session_id="s1",
+        )
+        await adapter.start()
+
+        async def fake_send(content):
+            cb = mock_transport._event_callback
+            if cb:
+                await cb({"type": "result", "result": "done"})
+
+        mock_transport.send_message = fake_send
+
+        event = RavnEvent(
+            type=RavnEventType.OUTCOME,
+            source="peer",
+            payload={"event_type": "code.requested", "prompt": "test"},
+            timestamp=datetime.now(UTC),
+            urgency=0.1,
+            correlation_id="c1",
+            session_id="s1",
+        )
+
+        await adapter._handle_outcome_event(event)
+
+        published = mock_mesh.publish.call_args[0][0]
+        assert published.urgency == 0.7
+
+    @pytest.mark.asyncio
     async def test_outcome_execute_failure_publishes_error(
         self, adapter, mock_transport, mock_mesh
     ):
@@ -568,15 +704,17 @@ class TestMeshRoundTrip:
 
         # Mock transport that echoes back
         transport = MagicMock()
-        transport._event_callback = None
+        _cb_holder: dict[str, object] = {"cb": None}
 
         def on_event(cb):
-            transport._event_callback = cb
+            _cb_holder["cb"] = cb
 
         transport.on_event = on_event
+        type(transport).event_callback = property(lambda self: _cb_holder["cb"])
+        type(transport)._event_callback = property(lambda self: _cb_holder["cb"])
 
         async def fake_send(content):
-            cb = transport._event_callback
+            cb = _cb_holder["cb"]
             if cb:
                 await cb({"type": "result", "result": f"Echo: {content}"})
 
@@ -653,6 +791,70 @@ class TestMeshRoundTrip:
         assert received[0].payload["data"] == "hello"
 
         await mesh.stop()
+
+
+# ---------------------------------------------------------------------------
+# Shared niuu.mesh builder tests
+# ---------------------------------------------------------------------------
+
+
+class TestNiuuMeshBuilder:
+    """Test shared mesh builder in niuu.mesh."""
+
+    def test_resolve_peer_id_with_value(self):
+        from niuu.mesh import resolve_peer_id
+
+        assert resolve_peer_id("my-peer") == "my-peer"
+
+    def test_resolve_peer_id_empty_falls_back_to_hostname(self):
+        import socket
+
+        from niuu.mesh import resolve_peer_id
+
+        assert resolve_peer_id("") == socket.gethostname()
+
+    def test_build_in_process_mesh(self):
+        from niuu.mesh import build_in_process_mesh
+
+        mesh = build_in_process_mesh("test-peer", rpc_timeout_s=5.0)
+        assert mesh is not None
+
+    def test_build_mesh_from_adapters_list_empty(self):
+        from niuu.mesh import build_mesh_from_adapters_list
+
+        result = build_mesh_from_adapters_list(
+            adapters=[],
+            own_peer_id="test",
+            rpc_timeout_s=5.0,
+        )
+        assert result is None
+
+    def test_build_mesh_from_adapters_list_bad_import(self):
+        from niuu.mesh import build_mesh_from_adapters_list
+
+        result = build_mesh_from_adapters_list(
+            adapters=[{"adapter": "nonexistent.module.Class"}],
+            own_peer_id="test",
+            rpc_timeout_s=5.0,
+        )
+        assert result is None
+
+    def test_build_mesh_from_adapters_list_missing_adapter_key(self):
+        from niuu.mesh import build_mesh_from_adapters_list
+
+        result = build_mesh_from_adapters_list(
+            adapters=[{"not_adapter": "foo"}],
+            own_peer_id="test",
+            rpc_timeout_s=5.0,
+        )
+        assert result is None
+
+    def test_mesh_aliases_resolve(self):
+        from niuu.mesh import MESH_ALIASES
+
+        assert "sleipnir" in MESH_ALIASES
+        assert "webhook" in MESH_ALIASES
+        assert "SleipnirMeshAdapter" in MESH_ALIASES["sleipnir"]
 
 
 # ---------------------------------------------------------------------------
@@ -746,9 +948,16 @@ class TestBrokerMeshIntegration:
             mesh={"enabled": True, "peer_id": "test-skuld", "transport": "in_process"},
         )
         b = Broker(settings=settings)
-        b._transport = MagicMock()
-        b._transport._event_callback = None
-        b._transport.on_event = MagicMock()
+
+        transport = MagicMock()
+        _cb_holder: dict[str, object] = {"cb": None}
+
+        def on_event(cb):
+            _cb_holder["cb"] = cb
+
+        transport.on_event = on_event
+        type(transport).event_callback = property(lambda self: _cb_holder["cb"])
+        b._transport = transport
 
         await b._start_mesh_adapter()
 

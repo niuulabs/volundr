@@ -555,78 +555,43 @@ class Broker:
             self._mesh_adapter = None
 
     def _build_mesh(self, mesh_cfg: Any) -> Any:
-        """Build mesh transport from config — reuses ravn's _build_mesh pattern."""
-        import socket as sock_mod
+        """Build mesh transport from config via shared niuu.mesh builder."""
+        from niuu.mesh import (
+            build_in_process_mesh,
+            build_mesh_from_adapters_list,
+            resolve_peer_id,
+        )
 
-        own_peer_id = mesh_cfg.peer_id or sock_mod.gethostname()
+        own_peer_id = resolve_peer_id(mesh_cfg.peer_id)
 
+        # Dynamic adapter list takes precedence
         if mesh_cfg.adapters:
-            from ravn.adapters.mesh.composite import CompositeMeshAdapter
-
-            transports: list[Any] = []
-            for entry in mesh_cfg.adapters:
-                adapter_class = entry.get("adapter", "")
-                if not adapter_class:
-                    continue
-                try:
-                    cls = import_class(adapter_class)
-                except Exception as exc:
-                    logger.warning("mesh: failed to import %s: %s", adapter_class, exc)
-                    continue
-
-                kwargs = {k: v for k, v in entry.items() if k != "adapter"}
-                kwargs["own_peer_id"] = own_peer_id
-                kwargs.setdefault("rpc_timeout_s", mesh_cfg.rpc_timeout_s)
-                try:
-                    transports.append(cls(**kwargs))
-                except Exception as exc:
-                    logger.warning("mesh: failed to instantiate %s: %s", adapter_class, exc)
-
-            if not transports:
-                return None
-            if len(transports) == 1:
-                return transports[0]
-            return CompositeMeshAdapter(transports=transports, own_peer_id=own_peer_id)
-
-        # Default: InProcessBus-backed SleipnirMeshAdapter for local dev
-        transport_type = mesh_cfg.transport
-        if transport_type == "in_process":
-            from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
-
-            bus = InProcessBus()
-            return SleipnirMeshAdapter(
-                publisher=bus,
-                subscriber=bus,
+            return build_mesh_from_adapters_list(
+                adapters=mesh_cfg.adapters,
                 own_peer_id=own_peer_id,
                 rpc_timeout_s=mesh_cfg.rpc_timeout_s,
             )
 
-        # For nng and other transports, delegate to ravn's builder
-        try:
-            from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
-            from sleipnir.adapters.nng_transport import NngTransport
+        # Single-transport mode: nng with ImportError fallback to in-process
+        if mesh_cfg.transport != "in_process":
+            try:
+                from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
+                from sleipnir.adapters.nng_transport import NngTransport
 
-            nng = NngTransport(
-                address="tcp://127.0.0.1:0",
-                service_id=f"skuld:{own_peer_id}",
-            )
-            return SleipnirMeshAdapter(
-                publisher=nng,
-                subscriber=nng,
-                own_peer_id=own_peer_id,
-                rpc_timeout_s=mesh_cfg.rpc_timeout_s,
-            )
-        except ImportError:
-            logger.warning("mesh: nng transport not available, falling back to in-process")
-            from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
+                nng = NngTransport(
+                    address="tcp://127.0.0.1:0",
+                    service_id=f"skuld:{own_peer_id}",
+                )
+                return SleipnirMeshAdapter(
+                    publisher=nng,
+                    subscriber=nng,
+                    own_peer_id=own_peer_id,
+                    rpc_timeout_s=mesh_cfg.rpc_timeout_s,
+                )
+            except ImportError:
+                logger.warning("mesh: nng transport not available, falling back to in-process")
 
-            bus = InProcessBus()
-            return SleipnirMeshAdapter(
-                publisher=bus,
-                subscriber=bus,
-                own_peer_id=own_peer_id,
-                rpc_timeout_s=mesh_cfg.rpc_timeout_s,
-            )
+        return build_in_process_mesh(own_peer_id, mesh_cfg.rpc_timeout_s)
 
     def _build_discovery(self, mesh_cfg: Any) -> Any:
         """Build discovery adapter if available, or return None."""

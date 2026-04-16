@@ -47,6 +47,7 @@ class SkuldMeshAdapter:
         self._peer_id = config.peer_id or socket.gethostname()
         self._running = False
         self._pending_responses: dict[str, asyncio.Future[str]] = {}
+        self._execute_lock = asyncio.Lock()
 
     @property
     def peer_id(self) -> str:
@@ -123,7 +124,7 @@ class SkuldMeshAdapter:
         prompt = message.get("prompt", "")
         event_type = message.get("event_type", "")
         request_id = message.get("request_id", str(uuid.uuid4()))
-        timeout_s = float(message.get("timeout_s", 120.0))
+        timeout_s = float(message.get("timeout_s", self._config.default_work_timeout_s))
 
         if not prompt:
             return {
@@ -177,14 +178,23 @@ class SkuldMeshAdapter:
             }
 
     async def _execute_prompt(self, prompt: str, request_id: str) -> str:
-        """Send prompt to CLI transport and collect the result text."""
-        result_future: asyncio.Future[str] = asyncio.get_event_loop().create_future()
+        """Send prompt to CLI transport and collect the result text.
+
+        Serialized via ``_execute_lock`` — the CLI handles one prompt at
+        a time, so overlapping calls would corrupt the event callback chain.
+        """
+        async with self._execute_lock:
+            return await self._execute_prompt_inner(prompt, request_id)
+
+    async def _execute_prompt_inner(self, prompt: str, request_id: str) -> str:
+        """Inner implementation — must be called under ``_execute_lock``."""
+        result_future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
         self._pending_responses[request_id] = result_future
 
         collected_text: list[str] = []
 
-        # Store original callback and wrap it
-        original_callback = self._transport._event_callback
+        # Save and wrap the existing callback via the public property
+        original_callback = self._transport.event_callback
 
         async def _capture_event(data: dict) -> None:
             event_type = data.get("type", "")
@@ -268,7 +278,7 @@ class SkuldMeshAdapter:
             source=self._peer_id,
             payload=outcome_payload,
             timestamp=datetime.now(UTC),
-            urgency=0.3,
+            urgency=self._config.default_response_urgency,
             correlation_id=event.correlation_id,
             session_id=self._session_id,
         )
