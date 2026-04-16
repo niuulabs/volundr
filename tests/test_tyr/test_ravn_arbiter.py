@@ -11,6 +11,7 @@ Test harness from NIU-619 spec:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -36,7 +37,7 @@ from tyr.domain.models import (
 )
 from tyr.domain.services.review_engine import ReviewEngine
 
-NOW = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+NOW = datetime.now(UTC)
 PHASE_ID = uuid4()
 SAGA_ID = uuid4()
 OWNER_ID = "user-arbiter"
