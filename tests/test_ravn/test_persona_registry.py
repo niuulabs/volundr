@@ -13,9 +13,9 @@ from ravn.adapters.personas.loader import (
     PersonaLoader,
     PersonaProduces,
 )
+from ravn.ports.persona import PersonaPort, PersonaRegistryPort
 
 _BUILTIN_NAMES = sorted(p.stem for p in _BUILTIN_PERSONAS_DIR.glob("*.yaml"))
-from ravn.ports.persona import PersonaPort, PersonaRegistryPort
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers

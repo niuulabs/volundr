@@ -185,18 +185,18 @@ class TestBuildPermission:
         perm = _build_permission(settings, tmp_path, no_tools=True, persona_config=None)
         assert isinstance(perm, DenyAllPermission)
 
-    def test_read_only_persona_overrides_to_deny_all(
+    def test_read_only_persona_overrides_to_enforcer(
         self,
         settings: Settings,
         tmp_path: Path,
     ) -> None:
-        from ravn.adapters.permission.allow_deny import DenyAllPermission
+        from ravn.adapters.permission.enforcer import PermissionEnforcer
         from ravn.cli.commands import _build_permission
 
         persona = MagicMock(permission_mode="read-only")
         settings.permission.mode = "allow_all"
         perm = _build_permission(settings, tmp_path, no_tools=False, persona_config=persona)
-        assert isinstance(perm, DenyAllPermission)
+        assert isinstance(perm, PermissionEnforcer)
 
 
 # ---------------------------------------------------------------------------

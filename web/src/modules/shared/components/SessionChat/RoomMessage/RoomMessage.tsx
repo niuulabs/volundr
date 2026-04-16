@@ -39,7 +39,11 @@ function ParticipantLabel({ participant, onSelectAgent, isSelected }: Participan
         className={cn(styles.participantLabel, canSelect && styles.participantLabelClickable)}
         style={{ '--participant-color': color } as React.CSSProperties}
         onClick={canSelect ? handleClick : undefined}
-        title={canSelect ? `View ${participant.displayName || participant.persona} details` : (participant.displayName || participant.persona)}
+        title={
+          canSelect
+            ? `View ${participant.displayName || participant.persona} details`
+            : participant.displayName || participant.persona
+        }
         data-selected={isSelected || undefined}
         data-testid="participant-label"
       >
