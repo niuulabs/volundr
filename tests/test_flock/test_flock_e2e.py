@@ -30,7 +30,7 @@ from tests.test_flock.harness import (
     FlockTestHarness,
 )
 from tests.test_tyr.stubs import make_raid
-from tyr.domain.models import RaidStatus
+from tyr.domain.models import Raid, RaidStatus
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -41,7 +41,7 @@ def _make_running_raid(
     tracker_id: str = "raid-001",
     session_id: str = "sess-001",
     retry_count: int = 0,
-) -> object:
+) -> Raid:
     return make_raid(
         status=RaidStatus.RUNNING,
         confidence=0.5,
