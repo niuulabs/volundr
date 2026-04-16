@@ -88,7 +88,7 @@ export function SessionChat({
   const [showThinkingMenu, setShowThinkingMenu] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
-  const [rightPanelMode, setRightPanelMode] = useState<'cascade' | null>(null);
+  const [rightPanelMode, _setRightPanelMode] = useState<'cascade' | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);

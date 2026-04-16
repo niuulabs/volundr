@@ -42,7 +42,7 @@ function makeParticipant(overrides: Partial<ParticipantMeta> = {}): ParticipantM
   };
 }
 
-function makeMessage(overrides: Partial<SkuldChatMessage> = {}): SkuldChatMessage {
+function _makeMessage(overrides: Partial<SkuldChatMessage> = {}): SkuldChatMessage {
   return {
     id: 'msg-1',
     role: 'assistant',

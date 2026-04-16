@@ -397,7 +397,9 @@ export function useSkuldChat(
   });
   const [participants, setParticipants] = useState<Map<string, RoomParticipant>>(new Map());
   const participantsRef = useRef<Map<string, RoomParticipant>>(participants);
-  participantsRef.current = participants;
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
 
   // Per-participant internal message accumulation — mirrors the streaming refs
   // but keyed by peerId so multiple agents can stream concurrently.
