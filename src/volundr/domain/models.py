@@ -962,6 +962,7 @@ class PodSpecAdditions:
     annotations: dict[str, str] = ()  # type: ignore[assignment]
     env: tuple[dict, ...] = ()
     service_account: str | None = None
+    extra_containers: tuple[dict, ...] = ()
 
     def __post_init__(self) -> None:
         # Ensure dict fields default to empty dicts, not empty tuples
@@ -1414,4 +1415,5 @@ def _merge_pod_specs(a: PodSpecAdditions, b: PodSpecAdditions) -> PodSpecAdditio
         annotations={**a.annotations, **b.annotations},
         env=a.env + b.env,
         service_account=b.service_account or a.service_account,
+        extra_containers=a.extra_containers + b.extra_containers,
     )
