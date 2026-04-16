@@ -551,7 +551,9 @@ export function useSkuldChat(
   }, []);
 
   /** Extract a ParticipantMeta from a raw participant object in a wire event. */
-  function parseParticipantMeta(raw: Record<string, unknown> | undefined): ParticipantMeta | undefined {
+  function parseParticipantMeta(
+    raw: Record<string, unknown> | undefined
+  ): ParticipantMeta | undefined {
     if (!raw) return undefined;
     return {
       peerId: String(raw.peer_id ?? ''),
@@ -1114,7 +1116,12 @@ export function useSkuldChat(
               setMessages(prev =>
                 prev.map(m =>
                   m.id === finId
-                    ? { ...m, content: finalContent, parts: finalParts, status: 'complete' as const }
+                    ? {
+                        ...m,
+                        content: finalContent,
+                        parts: finalParts,
+                        status: 'complete' as const,
+                      }
                     : m
                 )
               );
@@ -1129,7 +1136,9 @@ export function useSkuldChat(
             createdAt: raw.created_at ? new Date(String(raw.created_at)) : new Date(),
             status: 'complete',
             participantId: senderId,
-            participant: parseParticipantMeta(raw.participant as Record<string, unknown> | undefined),
+            participant: parseParticipantMeta(
+              raw.participant as Record<string, unknown> | undefined
+            ),
             threadId: raw.thread_id ? String(raw.thread_id) : undefined,
             visibility: raw.visibility ? String(raw.visibility) : undefined,
           };
@@ -1163,7 +1172,12 @@ export function useSkuldChat(
                 setMessages(prev =>
                   prev.map(m =>
                     m.id === finId
-                      ? { ...m, content: finalContent, parts: finalParts, status: 'complete' as const }
+                      ? {
+                          ...m,
+                          content: finalContent,
+                          parts: finalParts,
+                          status: 'complete' as const,
+                        }
                       : m
                   )
                 );
@@ -1182,8 +1196,9 @@ export function useSkuldChat(
             id: generateId(),
             timestamp: new Date(),
             participantId: String(raw.participantId ?? ''),
-            participant: parseParticipantMeta(raw.participant as Record<string, unknown> | undefined)
-              ?? { peerId: '', persona: '', displayName: '', color: '', participantType: 'ravn' },
+            participant: parseParticipantMeta(
+              raw.participant as Record<string, unknown> | undefined
+            ) ?? { peerId: '', persona: '', displayName: '', color: '', participantType: 'ravn' },
             persona: String(raw.persona ?? ''),
             eventType: String(raw.eventType ?? ''),
             fields: (raw.fields as Record<string, unknown>) ?? {},
@@ -1203,8 +1218,9 @@ export function useSkuldChat(
             id: generateId(),
             timestamp: new Date(),
             participantId: String(raw.participantId ?? ''),
-            participant: parseParticipantMeta(raw.participant as Record<string, unknown> | undefined)
-              ?? { peerId: '', persona: '', displayName: '', color: '', participantType: 'ravn' },
+            participant: parseParticipantMeta(
+              raw.participant as Record<string, unknown> | undefined
+            ) ?? { peerId: '', persona: '', displayName: '', color: '', participantType: 'ravn' },
             fromPersona: String(raw.fromPersona ?? ''),
             eventType: String(raw.eventType ?? ''),
             direction: (raw.direction ?? 'delegate') as 'delegate' | 'receive',
@@ -1222,8 +1238,9 @@ export function useSkuldChat(
             id: generateId(),
             timestamp: new Date(),
             participantId: String(raw.participantId ?? ''),
-            participant: parseParticipantMeta(raw.participant as Record<string, unknown> | undefined)
-              ?? { peerId: '', persona: '', displayName: '', color: '', participantType: 'ravn' },
+            participant: parseParticipantMeta(
+              raw.participant as Record<string, unknown> | undefined
+            ) ?? { peerId: '', persona: '', displayName: '', color: '', participantType: 'ravn' },
             notificationType: String(raw.notificationType ?? ''),
             persona: String(raw.persona ?? ''),
             reason: String(raw.reason ?? ''),
@@ -1303,8 +1320,7 @@ export function useSkuldChat(
               stream.parts.push({ type: 'reasoning', text });
             } else if (frameType === 'tool_start') {
               const toolName =
-                (frameMeta.tool_name as string) ||
-                (typeof frameData === 'string' ? frameData : '');
+                (frameMeta.tool_name as string) || (typeof frameData === 'string' ? frameData : '');
               const toolId = `tool-${generateId()}`;
               stream.currentToolId = toolId;
               const input =
@@ -1327,9 +1343,7 @@ export function useSkuldChat(
             const currentParts = [...stream.parts];
             const msgId = stream.messageId;
             setMessages(prev =>
-              prev.map(m =>
-                m.id === msgId ? { ...m, content, parts: currentParts } : m
-              )
+              prev.map(m => (m.id === msgId ? { ...m, content, parts: currentParts } : m))
             );
           }
           continue;

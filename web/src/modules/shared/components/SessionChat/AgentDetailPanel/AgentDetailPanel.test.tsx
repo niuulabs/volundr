@@ -77,20 +77,38 @@ describe('AgentDetailPanel', () => {
   describe('Header', () => {
     it('renders persona name', () => {
       setupDetailMock();
-      render(<AgentDetailPanel participant={{...makeParticipant(), status: 'idle' as const, joinedAt: new Date()}} events={[]} onClose={vi.fn()} />);
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[]}
+          onClose={vi.fn()}
+        />
+      );
       expect(screen.getByTestId('agent-persona-name')).toHaveTextContent('Ravn Alpha');
     });
 
     it('renders close button', () => {
       setupDetailMock();
-      render(<AgentDetailPanel participant={{...makeParticipant(), status: 'idle' as const, joinedAt: new Date()}} events={[]} onClose={vi.fn()} />);
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[]}
+          onClose={vi.fn()}
+        />
+      );
       expect(screen.getByTestId('agent-detail-close')).toBeInTheDocument();
     });
 
     it('calls onClose when close button is clicked', () => {
       setupDetailMock();
       const onClose = vi.fn();
-      render(<AgentDetailPanel participant={{...makeParticipant(), status: 'idle' as const, joinedAt: new Date()}} events={[]} onClose={onClose} />);
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[]}
+          onClose={onClose}
+        />
+      );
       fireEvent.click(screen.getByTestId('agent-detail-close'));
       expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -98,7 +116,13 @@ describe('AgentDetailPanel', () => {
     it('calls onClose when Escape key is pressed', () => {
       setupDetailMock();
       const onClose = vi.fn();
-      render(<AgentDetailPanel participant={{...makeParticipant(), status: 'idle' as const, joinedAt: new Date()}} events={[]} onClose={onClose} />);
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[]}
+          onClose={onClose}
+        />
+      );
       fireEvent.keyDown(document, { key: 'Escape' });
       expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -106,7 +130,13 @@ describe('AgentDetailPanel', () => {
     it('does not call onClose when Escape is pressed inside an input', () => {
       setupDetailMock();
       const onClose = vi.fn();
-      render(<AgentDetailPanel participant={{...makeParticipant(), status: 'idle' as const, joinedAt: new Date()}} events={[]} onClose={onClose} />);
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[]}
+          onClose={onClose}
+        />
+      );
       const input = document.createElement('input');
       document.body.appendChild(input);
       input.focus();
@@ -118,7 +148,13 @@ describe('AgentDetailPanel', () => {
     it('does not call onClose when Escape is pressed inside a textarea', () => {
       setupDetailMock();
       const onClose = vi.fn();
-      render(<AgentDetailPanel participant={{...makeParticipant(), status: 'idle' as const, joinedAt: new Date()}} events={[]} onClose={onClose} />);
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[]}
+          onClose={onClose}
+        />
+      );
       const textarea = document.createElement('textarea');
       document.body.appendChild(textarea);
       textarea.focus();
@@ -129,13 +165,25 @@ describe('AgentDetailPanel', () => {
 
     it('shows idle activity status when not running', () => {
       setupDetailMock({ isRunning: false });
-      render(<AgentDetailPanel participant={{...makeParticipant(), status: 'idle' as const, joinedAt: new Date()}} events={[]} onClose={vi.fn()} />);
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[]}
+          onClose={vi.fn()}
+        />
+      );
       expect(screen.getByTestId('agent-activity-status')).toHaveTextContent('idle');
     });
 
     it('shows thinking activity status', () => {
       setupDetailMock();
-      render(<AgentDetailPanel participant={{...makeParticipant(), status: 'thinking' as const, joinedAt: new Date()}} events={[]} onClose={vi.fn()} />);
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'thinking' as const, joinedAt: new Date() }}
+          events={[]}
+          onClose={vi.fn()}
+        />
+      );
       expect(screen.getByTestId('agent-activity-status')).toHaveTextContent('thinking');
     });
   });
@@ -143,7 +191,13 @@ describe('AgentDetailPanel', () => {
   describe('Event rendering', () => {
     it('shows empty state when no events', () => {
       setupDetailMock();
-      render(<AgentDetailPanel participant={{...makeParticipant(), status: 'idle' as const, joinedAt: new Date()}} events={[]} onClose={vi.fn()} />);
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[]}
+          onClose={vi.fn()}
+        />
+      );
       expect(screen.getByTestId('agent-detail-empty')).toBeInTheDocument();
     });
   });
@@ -151,14 +205,22 @@ describe('AgentDetailPanel', () => {
   describe('with different participant colors', () => {
     it('renders the panel for amber participants', () => {
       setupDetailMock();
-      const participant = { ...makeParticipant({ color: 'amber', persona: 'Amber Agent' }), status: 'idle' as const, joinedAt: new Date() };
+      const participant = {
+        ...makeParticipant({ color: 'amber', persona: 'Amber Agent' }),
+        status: 'idle' as const,
+        joinedAt: new Date(),
+      };
       render(<AgentDetailPanel participant={participant} events={[]} onClose={vi.fn()} />);
       expect(screen.getByTestId('agent-persona-name')).toHaveTextContent('Amber Agent');
     });
 
     it('renders the panel for participants with unknown colors', () => {
       setupDetailMock();
-      const participant = { ...makeParticipant({ color: 'unknown-color', persona: 'Mystery Agent' }), status: 'idle' as const, joinedAt: new Date() };
+      const participant = {
+        ...makeParticipant({ color: 'unknown-color', persona: 'Mystery Agent' }),
+        status: 'idle' as const,
+        joinedAt: new Date(),
+      };
       render(<AgentDetailPanel participant={participant} events={[]} onClose={vi.fn()} />);
       expect(screen.getByTestId('agent-persona-name')).toHaveTextContent('Mystery Agent');
     });
