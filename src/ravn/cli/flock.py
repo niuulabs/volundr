@@ -38,6 +38,8 @@ from pathlib import Path
 
 import typer
 
+from niuu.mesh import nng_gateway_port_for, nng_ports_for
+
 # ---------------------------------------------------------------------------
 # Typer app
 # ---------------------------------------------------------------------------
@@ -195,17 +197,8 @@ def _delete_runtime(flock_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _ports_for(index: int, base_port: int) -> tuple[int, int, int]:
-    """Return (pub_port, rep_port, handshake_port) for node at *index*."""
-    pub = base_port + (index * 2)
-    rep = base_port + (index * 2) + 1
-    hs = base_port + 100 + index
-    return pub, rep, hs
-
-
-def _gateway_port_for(index: int, base_port: int) -> int:
-    """Return the HTTP/WS gateway port for node at *index*."""
-    return base_port + 200 + index
+_ports_for = nng_ports_for
+_gateway_port_for = nng_gateway_port_for
 
 
 def _port_free(port: int) -> bool:

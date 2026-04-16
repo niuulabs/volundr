@@ -134,3 +134,25 @@ def build_in_process_mesh(own_peer_id: str, rpc_timeout_s: float) -> Any:
 def resolve_peer_id(configured_id: str) -> str:
     """Return *configured_id* if non-empty, else the machine hostname."""
     return configured_id or socket.gethostname()
+
+
+def nng_ports_for(index: int, base_port: int) -> tuple[int, int, int]:
+    """Return (pub_port, rep_port, handshake_port) for the nng node at *index*.
+
+    Port allocation scheme (mirrors ravn flock init):
+      pub       = base_port + index * 2
+      rep       = base_port + index * 2 + 1
+      handshake = base_port + 100 + index
+    """
+    pub = base_port + (index * 2)
+    rep = base_port + (index * 2) + 1
+    hs = base_port + 100 + index
+    return pub, rep, hs
+
+
+def nng_gateway_port_for(index: int, base_port: int) -> int:
+    """Return the HTTP/WS gateway port for the nng node at *index*.
+
+    gateway = base_port + 200 + index
+    """
+    return base_port + 200 + index

@@ -8,7 +8,7 @@ single-CLI layout with:
   - Mimir emptyDir volume for ephemeral local memory
   - Sleipnir webhook transport config in both skuld and ravn containers
 
-Port allocation (mirrors ravn/cli/flock.py):
+Port allocation (mirrors ravn/cli/flock.py via niuu.mesh):
   pub       = base_port + index * 2
   rep       = base_port + index * 2 + 1
   handshake = base_port + 100 + index
@@ -20,6 +20,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import yaml
+
+from niuu.mesh import nng_gateway_port_for as _gateway_port_for
+from niuu.mesh import nng_ports_for as _ports_for
 from volundr.domain.models import ForgeProfile, PodSpecAdditions, Session, WorkspaceTemplate
 from volundr.domain.ports import (
     ProfileProvider,
@@ -32,24 +36,12 @@ from volundr.domain.ports import (
 logger = logging.getLogger(__name__)
 
 _DEFAULT_BASE_PORT = 7480
+_DEFAULT_MAX_CONCURRENT_TASKS = 3
 _MIMIR_VOLUME_NAME = "mimir-local"
 _MIMIR_MOUNT_PATH = "/mimir/local"
 _WORKSPACE_VOLUME_NAME = "workspace"
 _WORKSPACE_MOUNT_PATH = "/workspace"
 _RAVN_IMAGE_DEFAULT = "ghcr.io/niuulabs/ravn:latest"
-
-
-def _ports_for(index: int, base_port: int) -> tuple[int, int, int]:
-    """Return (pub_port, rep_port, handshake_port) for the node at *index*."""
-    pub = base_port + (index * 2)
-    rep = base_port + (index * 2) + 1
-    hs = base_port + 100 + index
-    return pub, rep, hs
-
-
-def _gateway_port_for(index: int, base_port: int) -> int:
-    """Return the HTTP/WS gateway port for the node at *index*."""
-    return base_port + 200 + index
 
 
 def _build_ravn_config(
@@ -58,79 +50,62 @@ def _build_ravn_config(
     peer_id: str,
     base_port: int,
     all_personas: list[str],
+    skuld_peer_id: str,
     mimir_hosted_url: str | None,
     sleipnir_publish_urls: list[str],
+    max_concurrent_tasks: int,
 ) -> str:
     """Generate the ravn daemon YAML config for a single flock node."""
-    pub, rep, hs = _ports_for(index, base_port)
+    pub, rep, _hs = _ports_for(index, base_port)
     gw = _gateway_port_for(index, base_port)
 
-    peers_block = "\n".join(f'    - peer_id: "flock-{p}"' for p in all_personas if p != persona)
+    peers: list[dict[str, str]] = [{"peer_id": skuld_peer_id}] + [
+        {"peer_id": f"flock-{p}"} for p in all_personas if p != persona
+    ]
 
-    mimir_block = (
-        "memory:\n"
-        "  backend: composite\n"
-        "  composite:\n"
-        "    backends:\n"
-        "      - type: local\n"
-        "        path: /mimir/local"
-    )
+    mimir_backends: list[dict[str, Any]] = [{"type": "local", "path": _MIMIR_MOUNT_PATH}]
     if mimir_hosted_url:
-        mimir_block += f"\n      - type: hosted\n        url: {mimir_hosted_url!r}"
+        mimir_backends.append({"type": "hosted", "url": mimir_hosted_url})
 
-    sleipnir_urls = "\n".join(f'      - "{u}"' for u in sleipnir_publish_urls)
-    sleipnir_block = ""
+    config: dict[str, Any] = {
+        "persona": persona,
+        "mesh": {
+            "enabled": True,
+            "adapter": "nng",
+            "own_peer_id": peer_id,
+            "nng": {
+                "pub_sub_address": f"tcp://0.0.0.0:{pub}",
+                "req_rep_address": f"tcp://0.0.0.0:{rep}",
+            },
+            "peers": peers,
+        },
+        "discovery": {"enabled": True, "adapter": "static"},
+        "cascade": {"enabled": True},
+        "gateway": {
+            "enabled": True,
+            "channels": {
+                "http": {"enabled": True, "host": "0.0.0.0", "port": gw},
+            },
+        },
+        "initiative": {
+            "enabled": True,
+            "max_concurrent_tasks": max_concurrent_tasks,
+        },
+        "memory": {
+            "backend": "composite",
+            "composite": {"backends": mimir_backends},
+        },
+        "logging": {"level": "INFO"},
+    }
+
     if sleipnir_publish_urls:
-        sleipnir_block = (
-            "sleipnir:\n"
-            "  enabled: true\n"
-            "  transport: webhook\n"
-            "  webhook:\n"
-            "    publish_urls:\n"
-            f"{sleipnir_urls}\n"
-        )
+        config["sleipnir"] = {
+            "enabled": True,
+            "transport": "webhook",
+            "webhook": {"publish_urls": sleipnir_publish_urls},
+        }
 
-    peers_section = ""
-    if peers_block:
-        peers_section = f"  peers:\n{peers_block}\n"
-
-    return (
-        f"persona: {persona!r}\n"
-        f"\n"
-        f"mesh:\n"
-        f"  enabled: true\n"
-        f"  adapter: nng\n"
-        f'  own_peer_id: "{peer_id}"\n'
-        f"  nng:\n"
-        f'    pub_sub_address: "tcp://0.0.0.0:{pub}"\n'
-        f'    req_rep_address: "tcp://0.0.0.0:{rep}"\n'
-        f"{peers_section}"
-        f"\n"
-        f"discovery:\n"
-        f"  enabled: true\n"
-        f"  adapter: static\n"
-        f"\n"
-        f"cascade:\n"
-        f"  enabled: true\n"
-        f"\n"
-        f"gateway:\n"
-        f"  enabled: true\n"
-        f"  channels:\n"
-        f"    http:\n"
-        f"      enabled: true\n"
-        f"      host: '0.0.0.0'\n"
-        f"      port: {gw}\n"
-        f"\n"
-        f"initiative:\n"
-        f"  enabled: true\n"
-        f"  max_concurrent_tasks: 3\n"
-        f"\n"
-        f"{mimir_block}\n"
-        f"\n"
-        f"{sleipnir_block}"
-        f"logging:\n"
-        f"  level: INFO\n"
-    )
+    return yaml.safe_dump(config, default_flow_style=False, sort_keys=False)
 
 
 class RavnFlockContributor(SessionContributor):
@@ -193,6 +168,7 @@ class RavnFlockContributor(SessionContributor):
         mimir_hosted_url: str | None = mimir_cfg.get("hosted_url")
         sleipnir_publish_urls: list[str] = sleipnir_cfg.get("publish_urls", [])
         mesh_transport: str = mesh_cfg.get("transport", "nng")
+        max_concurrent_tasks: int = wc.get("max_concurrent_tasks", _DEFAULT_MAX_CONCURRENT_TASKS)
 
         values, pod_spec = self._build_flock_spec(
             session=session,
@@ -200,6 +176,7 @@ class RavnFlockContributor(SessionContributor):
             mesh_transport=mesh_transport,
             mimir_hosted_url=mimir_hosted_url,
             sleipnir_publish_urls=sleipnir_publish_urls,
+            max_concurrent_tasks=max_concurrent_tasks,
         )
 
         return SessionContribution(values=values, pod_spec=pod_spec)
@@ -228,6 +205,7 @@ class RavnFlockContributor(SessionContributor):
         mesh_transport: str,
         mimir_hosted_url: str | None,
         sleipnir_publish_urls: list[str],
+        max_concurrent_tasks: int,
     ) -> tuple[dict[str, Any], PodSpecAdditions]:
         session_id = str(session.id)
         base_port = self._base_port
@@ -274,8 +252,10 @@ class RavnFlockContributor(SessionContributor):
                 peer_id=peer_id,
                 base_port=base_port,
                 all_personas=personas,
+                skuld_peer_id=skuld_peer_id,
                 mimir_hosted_url=mimir_hosted_url,
                 sleipnir_publish_urls=sleipnir_publish_urls,
+                max_concurrent_tasks=max_concurrent_tasks,
             )
 
             ravn_env: list[dict] = [
