@@ -287,7 +287,9 @@ class TestContributorOutput:
         ctx = SessionContext(template_name="ravn-flock")
         result = await c.contribute(session, ctx)
 
-        assert result.values.get("mimir", {}).get("hostedUrl") == "https://mimir.niuu.internal/api/v1"
+        assert (
+            result.values.get("mimir", {}).get("hostedUrl") == "https://mimir.niuu.internal/api/v1"
+        )
 
     async def test_mesh_values_present(self, session, flock_template):
         provider = MagicMock()
@@ -335,7 +337,7 @@ class TestConfigGeneration:
             assert "mesh:" in inline_cfg
             assert "enabled: true" in inline_cfg
 
-    async def test_ravn_config_has_mimir_composite(self, session, flock_template):
+    async def test_ravn_config_has_mimir_instances(self, session, flock_template):
         provider = MagicMock()
         provider.get.return_value = flock_template
         c = RavnFlockContributor(template_provider=provider)
@@ -345,8 +347,55 @@ class TestConfigGeneration:
         for ctr in result.pod_spec.extra_containers:
             env = {e["name"]: e["value"] for e in ctr["env"]}
             inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
-            assert "composite" in inline_cfg
+            assert "mimir:" in inline_cfg
+            assert "instances:" in inline_cfg
             assert "/mimir/local" in inline_cfg
+
+    async def test_ravn_config_has_write_routing(self, session, flock_template):
+        provider = MagicMock()
+        provider.get.return_value = flock_template
+        c = RavnFlockContributor(template_provider=provider)
+        ctx = SessionContext(template_name="ravn-flock")
+        result = await c.contribute(session, ctx)
+
+        for ctr in result.pod_spec.extra_containers:
+            env = {e["name"]: e["value"] for e in ctr["env"]}
+            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
+            assert "write_routing:" in inline_cfg
+            # self/ always routes to local
+            assert "self/" in inline_cfg
+
+    async def test_ravn_config_hosted_url_in_instances(self, session, flock_template):
+        provider = MagicMock()
+        provider.get.return_value = flock_template
+        c = RavnFlockContributor(template_provider=provider)
+        ctx = SessionContext(template_name="ravn-flock")
+        result = await c.contribute(session, ctx)
+
+        for ctr in result.pod_spec.extra_containers:
+            env = {e["name"]: e["value"] for e in ctr["env"]}
+            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
+            # Hosted URL from flock_template is present as a mimir instance
+            assert "https://mimir.niuu.internal/api/v1" in inline_cfg
+            # Hosted instance routes project/ and entity/ pages
+            assert "project/" in inline_cfg
+            assert "entity/" in inline_cfg
+
+    async def test_ravn_config_no_hosted_url_only_local(self, session, flock_profile):
+        """When no hosted URL configured, config only has local mimir instance."""
+        provider = MagicMock()
+        provider.get.return_value = flock_profile  # flock_profile has mimir: {}
+        c = RavnFlockContributor(profile_provider=provider)
+        ctx = SessionContext(profile_name="ravn-flock")
+        result = await c.contribute(session, ctx)
+
+        for ctr in result.pod_spec.extra_containers:
+            env = {e["name"]: e["value"] for e in ctr["env"]}
+            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
+            assert "/mimir/local" in inline_cfg
+            # No hosted instance — project/ and entity/ prefixes absent
+            assert "project/" not in inline_cfg
+            assert "entity/" not in inline_cfg
 
     async def test_ravn_config_sleipnir_webhook(self, session, flock_template):
         provider = MagicMock()

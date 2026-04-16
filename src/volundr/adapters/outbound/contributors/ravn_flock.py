@@ -63,9 +63,27 @@ def _build_ravn_config(
         {"peer_id": f"flock-{p}"} for p in all_personas if p != persona
     ]
 
-    mimir_backends: list[dict[str, Any]] = [{"type": "local", "path": _MIMIR_MOUNT_PATH}]
+    mimir_instances: list[dict[str, Any]] = [
+        {"name": "local", "role": "local", "path": _MIMIR_MOUNT_PATH},
+    ]
+    mimir_write_rules: list[dict[str, Any]] = [
+        {"prefix": "self/", "mounts": ["local"]},
+    ]
     if mimir_hosted_url:
-        mimir_backends.append({"type": "hosted", "url": mimir_hosted_url})
+        mimir_instances.append(
+            {
+                "name": "hosted",
+                "role": "shared",
+                "url": mimir_hosted_url,
+                "categories": ["entity", "decision", "directive", "topic"],
+            }
+        )
+        mimir_write_rules.extend(
+            [
+                {"prefix": "project/", "mounts": ["hosted"]},
+                {"prefix": "entity/", "mounts": ["hosted"]},
+            ]
+        )
 
     config: dict[str, Any] = {
         "persona": persona,
@@ -91,9 +109,13 @@ def _build_ravn_config(
             "enabled": True,
             "max_concurrent_tasks": max_concurrent_tasks,
         },
-        "memory": {
-            "backend": "composite",
-            "composite": {"backends": mimir_backends},
+        "mimir": {
+            "enabled": True,
+            "instances": mimir_instances,
+            "write_routing": {
+                "rules": mimir_write_rules,
+                "default": ["local"],
+            },
         },
         "logging": {"level": "INFO"},
     }
