@@ -297,7 +297,7 @@ class DriveLoop:
         persona = self._persona_config.name if self._persona_config else None
         task = AgentTask(
             task_id=task_id,
-            title=f"Directed message from user",
+            title="Directed message from user",
             initiative_context=content,
             triggered_by="skuld:directed_message",
             output_mode=OutputMode.SURFACE,

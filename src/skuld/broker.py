@@ -1781,7 +1781,7 @@ class Broker:
         logger.info("handle_ravn_websocket: Ravn connected peer_id=%s", peer_id)
 
         # Register with peer_id as initial persona; enriched on first frame
-        meta = await self._room_bridge.register(
+        await self._room_bridge.register(
             peer_id=peer_id,
             persona=peer_id,
             websocket=websocket,
@@ -1808,7 +1808,7 @@ class Broker:
                         frame.get("persona") or frame.get("subscribes_to")
                     ):
                         _registered_with_metadata = True
-                        meta = await self._room_bridge.register(
+                        await self._room_bridge.register(
                             peer_id=peer_id,
                             persona=frame.get("persona", peer_id),
                             websocket=websocket,
