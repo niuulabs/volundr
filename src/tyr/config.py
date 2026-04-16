@@ -701,6 +701,32 @@ class EventTriggerConfig(BaseModel):
     )
 
 
+class RavnOutcomeConfig(BaseModel):
+    """Configuration for the RavnOutcomeHandler adapter.
+
+    Example YAML::
+
+        ravn_outcome:
+          enabled: true
+          scope_adherence_threshold: 0.7
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable the ravn.task.completed outcome subscriber.",
+    )
+    owner_id: str = Field(
+        default="api",
+        description="Owner ID used when looking up raids from ravn outcome events.",
+    )
+    scope_adherence_threshold: float = Field(
+        default=0.7,
+        description=(
+            "scope_adherence values below this threshold flag a scope breach. Range 0.0–1.0."
+        ),
+    )
+
+
 class NotificationConfig(BaseModel):
     """Notification service configuration."""
 
@@ -771,6 +797,7 @@ class Settings(BaseSettings):
     notification: NotificationConfig = Field(default_factory=NotificationConfig)
     sleipnir: SleipnirConfig = Field(default_factory=SleipnirConfig)
     event_triggers: EventTriggerConfig = Field(default_factory=EventTriggerConfig)
+    ravn_outcome: RavnOutcomeConfig = Field(default_factory=RavnOutcomeConfig)
 
     @classmethod
     def settings_customise_sources(

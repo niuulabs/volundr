@@ -35,6 +35,7 @@ from tyr.domain.models import (
     PRStatus,
     Raid,
     RaidStatus,
+    RavnOutcome,
     Saga,
     validate_transition,
 )
@@ -445,6 +446,127 @@ class ReviewEngine:
             return await self._handle_auto_approve(tracker, tracker_id, owner_id, raid, score)
 
         return await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
+
+    async def handle_ravn_outcome(
+        self,
+        tracker_id: str,
+        owner_id: str,
+        outcome: RavnOutcome,
+        *,
+        scope_adherence_threshold: float,
+    ) -> ReviewDecision:
+        """Process a structured outcome from a ``ravn.task.completed`` event.
+
+        Maps the ravn coordinator's outcome fields to :class:`ConfidenceEvent`
+        entries and routes to the appropriate decision handler based on the
+        explicit verdict.
+
+        Accepts raids in RUNNING or REVIEW state:
+
+        - RUNNING → transitions to REVIEW first (ravn outcome is authoritative).
+        - REVIEW → processes directly (ActivitySubscriber may have beaten us).
+        - Any other status → skipped (already handled or terminal).
+        """
+        trackers = await self._tracker_factory.for_owner(owner_id)
+        if not trackers:
+            raise ValueError(f"No tracker adapter found for owner {owner_id}")
+        tracker = trackers[0]
+
+        raid = await tracker.get_raid(tracker_id)
+
+        if raid.status not in (RaidStatus.RUNNING, RaidStatus.REVIEW):
+            logger.info(
+                "handle_ravn_outcome: raid %s is %s — already handled, skipping",
+                tracker_id,
+                raid.status,
+            )
+            return ReviewDecision(
+                raid=raid,
+                action="skipped",
+                reason=f"Raid already in {raid.status} state",
+            )
+
+        if raid.status == RaidStatus.RUNNING:
+            validate_transition(raid.status, RaidStatus.REVIEW)
+            raid = await tracker.update_raid_progress(tracker_id, status=RaidStatus.REVIEW)
+
+        score = raid.confidence
+
+        if outcome.tests_passing is True:
+            event = _make_event(
+                raid.id, ConfidenceEventType.CI_PASS, self._cfg.confidence_delta_ci_pass, score
+            )
+            await tracker.add_confidence_event(tracker_id, event)
+            await self._emit_confidence_updated(raid.id, event)
+            score = event.score_after
+        elif outcome.tests_passing is False:
+            event = _make_event(
+                raid.id, ConfidenceEventType.CI_FAIL, self._cfg.confidence_delta_ci_fail, score
+            )
+            await tracker.add_confidence_event(tracker_id, event)
+            await self._emit_confidence_updated(raid.id, event)
+            score = event.score_after
+
+        if (
+            outcome.scope_adherence is not None
+            and outcome.scope_adherence < scope_adherence_threshold
+        ):
+            event = _make_event(
+                raid.id,
+                ConfidenceEventType.SCOPE_BREACH,
+                self._cfg.confidence_delta_scope_breach,
+                score,
+            )
+            await tracker.add_confidence_event(tracker_id, event)
+            await self._emit_confidence_updated(raid.id, event)
+            score = event.score_after
+
+        match outcome.verdict:
+            case "retry":
+                if raid.retry_count < self._cfg.max_retries:
+                    attempt = f"attempt {raid.retry_count + 1}/{self._cfg.max_retries}"
+                    return await self._auto_retry(
+                        tracker,
+                        tracker_id,
+                        owner_id,
+                        raid,
+                        reason=f"ravn coordinator requested retry ({attempt})",
+                    )
+
+                # Retries exhausted → FAILED
+                validate_transition(raid.status, RaidStatus.FAILED)
+                updated = await tracker.update_raid_progress(
+                    tracker_id,
+                    status=RaidStatus.FAILED,
+                    reason="ravn coordinator requested retry but retries exhausted",
+                )
+                if raid.session_id:
+                    await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
+                    await self._stop_session(owner_id, raid.session_id, "working session")
+                await self._emit_state_changed(updated, owner_id=owner_id, action="failed")
+                return ReviewDecision(
+                    raid=updated,
+                    action="failed",
+                    reason=(
+                        f"ravn coordinator requested retry after"
+                        f" {self._cfg.max_retries} retries exhausted"
+                    ),
+                )
+            case "approve":
+                if score >= self._cfg.auto_approve_threshold:
+                    return await self._handle_auto_approve(
+                        tracker, tracker_id, owner_id, raid, score
+                    )
+                return await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
+            case "escalate":
+                return await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
+            case _:
+                logger.warning(
+                    "handle_ravn_outcome: unknown verdict %r for raid %s — escalating",
+                    outcome.verdict,
+                    tracker_id,
+                )
+                return await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
 
     # -- Signal fetchers --
 
