@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from volundr.adapters.outbound.contributors.core import CoreSessionContributor
-from volundr.adapters.outbound.contributors.git import GitContributor
 from volundr.adapters.outbound.contributors.ravn_flock import (
     RavnFlockContributor,
     _gateway_port_for,
@@ -18,8 +17,7 @@ from volundr.domain.models import (
     SessionSpec,
     WorkspaceTemplate,
 )
-from volundr.domain.ports import SessionContext, SessionContribution
-
+from volundr.domain.ports import SessionContext
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -503,7 +501,9 @@ class TestProfileProviderPath:
         assert result.pod_spec is not None
         assert len(result.pod_spec.extra_containers) == 2
 
-    async def test_template_takes_precedence_over_profile(self, session, flock_template, session_template):
+    async def test_template_takes_precedence_over_profile(
+        self, session, flock_template, session_template
+    ):
         template_provider = MagicMock()
         template_provider.get.return_value = session_template
         profile_provider = MagicMock()
