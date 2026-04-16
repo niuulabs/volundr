@@ -1,5 +1,14 @@
 import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
-import { Wifi, WifiOff, BrainCircuitIcon, RotateCcwIcon, ArrowDownIcon, Eye, EyeOff, Trash2Icon } from 'lucide-react';
+import {
+  Wifi,
+  WifiOff,
+  BrainCircuitIcon,
+  RotateCcwIcon,
+  ArrowDownIcon,
+  Eye,
+  EyeOff,
+  Trash2Icon,
+} from 'lucide-react';
 import { PermissionStack } from '@/modules/shared/components/PermissionDialog';
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
 import { useRoomState } from '@/modules/shared/hooks/useRoomState';
@@ -88,7 +97,7 @@ export function SessionChat({
   const [showThinkingMenu, setShowThinkingMenu] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
-  const [rightPanelMode, setRightPanelMode] = useState<'cascade' | null>(null);
+  const [rightPanelMode, _setRightPanelMode] = useState<'cascade' | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -109,9 +118,12 @@ export function SessionChat({
 
   const isRoomSession = participantsMap.size > 0;
 
-  const handleSelectAgent = useCallback((peerId: string) => {
-    setActiveFilter(prev => (prev === peerId ? 'all' : peerId));
-  }, [setActiveFilter]);
+  const handleSelectAgent = useCallback(
+    (peerId: string) => {
+      setActiveFilter(activeFilter === peerId ? 'all' : peerId);
+    },
+    [activeFilter, setActiveFilter]
+  );
 
   // Auto-show cascade panel when mesh events exist
   const effectiveRightPanelMode = rightPanelMode ?? (meshEvents.length > 0 ? 'cascade' : null);

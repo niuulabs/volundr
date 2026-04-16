@@ -16,6 +16,7 @@ Environment variable override format:
 
 import os
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import (
@@ -52,6 +53,36 @@ _DEFAULT_PARTICIPANT_COLORS = [
     "indigo",
     "orange",
 ]
+
+
+_DEFAULT_MESH_CAPABILITIES = [
+    "coding",
+    "git",
+    "terminal",
+    "file_edit",
+]
+
+
+class MeshConfig(BaseModel):
+    """Mesh peer configuration for flock participation.
+
+    When enabled, Skuld registers as a mesh peer and subscribes to task
+    topics. Other ravens can delegate coding work via the standard mesh
+    pub/sub protocol. Disabled by default so solo sessions are unaffected.
+    """
+
+    enabled: bool = Field(default=False)
+    peer_id: str = Field(default="")
+    capabilities: list[str] = Field(default_factory=lambda: list(_DEFAULT_MESH_CAPABILITIES))
+    persona: str = Field(default="coder")
+    transport: str = Field(default="nng")
+    adapters: list[dict[str, Any]] = Field(default_factory=list)
+    rpc_timeout_s: float = Field(default=10.0)
+    default_work_timeout_s: float = Field(default=120.0)
+    default_response_urgency: float = Field(default=0.3)
+    consumes_event_types: list[str] = Field(
+        default_factory=lambda: ["code.requested"],
+    )
 
 
 class RoomConfig(BaseModel):
@@ -137,6 +168,7 @@ class SkuldSettings(BaseSettings):
     max_upload_size_bytes: int = Field(default=104_857_600)  # 100 MB
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     room: RoomConfig = Field(default_factory=RoomConfig)
+    mesh: MeshConfig = Field(default_factory=MeshConfig)
 
     @model_validator(mode="after")
     def _apply_legacy_env_vars(self) -> "SkuldSettings":

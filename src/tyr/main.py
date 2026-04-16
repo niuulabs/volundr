@@ -287,6 +287,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     default_system_prompt=settings.dispatch.default_system_prompt,
                     default_model=settings.dispatch.default_model,
                     dispatch_prompt_template=settings.dispatch.dispatch_prompt_template,
+                    flock_enabled=settings.dispatch.flock.enabled,
+                    flock_default_personas=list(settings.dispatch.flock.default_personas),
+                    flock_mimir_hosted_url=settings.dispatch.flock.mimir_hosted_url,
+                    flock_sleipnir_publish_urls=list(settings.dispatch.flock.sleipnir_publish_urls),
                 ),
                 sleipnir_publisher=sleipnir_bus,
             )
@@ -520,6 +524,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         len(et_cfg.rules),
                     )
 
+            # Wire RavnOutcomeHandler (Sleipnir subscriber for ravn.task.completed)
+            ravn_outcome_handler = None
+            if (
+                settings.ravn_outcome.enabled
+                and sleipnir_bus is not None
+                and hasattr(sleipnir_bus, "subscribe")
+            ):
+                from tyr.adapters.ravn_outcome_handler import RavnOutcomeHandler  # noqa: PLC0415
+
+                ravn_outcome_handler = RavnOutcomeHandler(
+                    subscriber=sleipnir_bus,
+                    tracker_factory=app.state.tracker_factory,
+                    review_engine=review_engine,
+                    owner_id=settings.ravn_outcome.owner_id,
+                    scope_adherence_threshold=settings.ravn_outcome.scope_adherence_threshold,
+                )
+                await ravn_outcome_handler.start()
+                app.state.ravn_outcome_handler = ravn_outcome_handler
+                logger.info("RavnOutcomeHandler started")
+
             # Wire PipelineExecutor (dynamic pipeline creation via API)
             from tyr.domain.pipeline_executor import TemplateAwarePipelineExecutor  # noqa: PLC0415
 
@@ -544,6 +568,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
 
             # Lifecycle cleanup
+            if ravn_outcome_handler is not None:
+                await ravn_outcome_handler.stop()
             if event_trigger_adapter is not None:
                 await event_trigger_adapter.stop()
             if tyr_sleipnir_bridge is not None:

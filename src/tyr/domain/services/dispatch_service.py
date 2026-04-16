@@ -12,7 +12,7 @@ import re
 import string
 import uuid
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -156,6 +156,42 @@ def build_prompt(
     return "\n".join(parts)
 
 
+def build_flock_prompt(
+    issue: TrackerIssue,
+    repo: str,
+    feature_branch: str,
+    mimir_hosted_url: str = "",
+) -> str:
+    """Build the coordinator's initiative_context for a flock session.
+
+    Includes raid title, description, saga context (repo, branch), and an
+    optional note that Mimir is available for prior knowledge queries.
+    """
+    parts = [
+        f"# Raid: {issue.identifier} — {issue.title}",
+        "",
+        issue.description or "",
+        "",
+        f"Repository: {repo}",
+        f"Feature branch: {feature_branch}",
+    ]
+
+    if mimir_hosted_url:
+        parts += [
+            "",
+            f"Prior knowledge is available via Mimir at: {mimir_hosted_url}",
+            "Query it for relevant context about this repository and area before starting.",
+        ]
+
+    parts += [
+        "",
+        "Decompose this raid into coding tasks, delegate to the coder peer, collect"
+        " results, delegate review to the reviewer peer, iterate until acceptance"
+        " criteria are met, then publish your final outcome.",
+    ]
+    return "\n".join(parts)
+
+
 def resolve_target_adapter(
     connection_id: str | None,
     adapter_by_name: dict[str, VolundrPort],
@@ -185,6 +221,10 @@ class DispatchConfig:
     max_cached_issues: int = 10_000
     templates_dir: Path = BUNDLED_TEMPLATES_DIR
     initial_confidence: float = 0.5
+    flock_enabled: bool = False
+    flock_default_personas: list[str] = field(default_factory=lambda: ["coordinator", "reviewer"])
+    flock_mimir_hosted_url: str = ""
+    flock_sleipnir_publish_urls: list[str] = field(default_factory=list)
 
 
 class DispatchService:
@@ -724,6 +764,66 @@ class DispatchService:
                     continue
         return issue_cache
 
+    def _build_spawn_request(
+        self,
+        *,
+        item: DispatchItem,
+        saga: Saga,
+        issue: TrackerIssue,
+        effective_model: str,
+        effective_prompt: str,
+        integration_ids: list[str],
+    ) -> SpawnRequest:
+        """Build a SpawnRequest — flock or solo — based on config."""
+        session_name = issue.identifier.lower()
+        if not self._config.flock_enabled:
+            return SpawnRequest(
+                name=session_name,
+                repo=item.repo,
+                branch=saga.feature_branch,
+                base_branch=saga.base_branch,
+                model=effective_model,
+                tracker_issue_id=issue.identifier,
+                tracker_issue_url=issue.url,
+                system_prompt=effective_prompt,
+                initial_prompt=build_prompt(
+                    issue,
+                    item.repo,
+                    saga.feature_branch,
+                    template=self._config.dispatch_prompt_template,
+                ),
+                integration_ids=integration_ids,
+            )
+
+        workload_config: dict = {
+            "personas": self._config.flock_default_personas,
+            "initiative_context": build_flock_prompt(
+                issue,
+                item.repo,
+                saga.feature_branch,
+                mimir_hosted_url=self._config.flock_mimir_hosted_url,
+            ),
+        }
+        if self._config.flock_sleipnir_publish_urls:
+            workload_config["sleipnir_publish_urls"] = self._config.flock_sleipnir_publish_urls
+        if self._config.flock_mimir_hosted_url:
+            workload_config["mimir_hosted_url"] = self._config.flock_mimir_hosted_url
+
+        return SpawnRequest(
+            name=session_name,
+            repo=item.repo,
+            branch=saga.feature_branch,
+            base_branch=saga.base_branch,
+            model=effective_model,
+            tracker_issue_id=issue.identifier,
+            tracker_issue_url=issue.url,
+            system_prompt=effective_prompt,
+            initial_prompt=workload_config["initiative_context"],
+            workload_type="ravn_flock",
+            workload_config=workload_config,
+            integration_ids=integration_ids,
+        )
+
     async def _spawn_single(
         self,
         *,
@@ -739,27 +839,17 @@ class DispatchService:
         owner_id: str,
     ) -> DispatchResult:
         """Spawn a single session and update raid progress."""
-        session_name = issue.identifier.lower()
-
         try:
+            request = self._build_spawn_request(
+                item=item,
+                saga=saga,
+                issue=issue,
+                effective_model=effective_model,
+                effective_prompt=effective_prompt,
+                integration_ids=integration_ids,
+            )
             session = await target_volundr.spawn_session(
-                request=SpawnRequest(
-                    name=session_name,
-                    repo=item.repo,
-                    branch=saga.feature_branch,
-                    base_branch=saga.base_branch,
-                    model=effective_model,
-                    tracker_issue_id=issue.identifier,
-                    tracker_issue_url=issue.url,
-                    system_prompt=effective_prompt,
-                    initial_prompt=build_prompt(
-                        issue,
-                        item.repo,
-                        saga.feature_branch,
-                        template=self._config.dispatch_prompt_template,
-                    ),
-                    integration_ids=integration_ids,
-                ),
+                request=request,
                 auth_token=auth_token,
             )
 

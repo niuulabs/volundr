@@ -147,6 +147,21 @@ class ReviewConfig(BaseModel):
         ge=6,
         description="Maximum review rounds before escalating. Minimum 6.",
     )
+    ravn_arbiter_enabled: bool = Field(
+        default=False,
+        description=(
+            "When True, ReviewEngine dispatches to the review-arbiter ravn persona "
+            "before falling back to imperative signal-based decisions."
+        ),
+    )
+    ravn_arbiter_model: str = Field(
+        default="claude-sonnet-4-6",
+        description="AI model used by the review-arbiter ravn persona.",
+    )
+    ravn_arbiter_timeout: float = Field(
+        default=60.0,
+        description="HTTP timeout in seconds for review-arbiter ravn dispatch calls.",
+    )
     reviewer_system_prompt: str = Field(
         default=(
             "You are a senior code reviewer for the Niuu platform. You do not just check\n"
@@ -373,11 +388,33 @@ class PlannerConfig(BaseModel):
     )
 
 
+class FlockConfig(BaseModel):
+    """Flock dispatch configuration."""
+
+    enabled: bool = Field(
+        default=False,
+        description="When True, eligible raids are dispatched as ravn_flock sessions.",
+    )
+    default_personas: list[str] = Field(
+        default=["coordinator", "reviewer"],
+        description="Ravn persona names included in every flock session.",
+    )
+    mimir_hosted_url: str = Field(
+        default="",
+        description="URL of the Mimir knowledge base for coordinator context queries.",
+    )
+    sleipnir_publish_urls: list[str] = Field(
+        default_factory=list,
+        description="Sleipnir publish URLs for flock task event routing.",
+    )
+
+
 class DispatchConfig(BaseModel):
     """Dispatcher configuration."""
 
     default_system_prompt: str = Field(default="")
     default_model: str = Field(default="claude-sonnet-4-6")
+    flock: FlockConfig = Field(default_factory=FlockConfig)
     dispatch_prompt_template: str = Field(
         default=(
             "# Task: {identifier} — {title}\n"
@@ -537,6 +574,17 @@ class LLMConfig(BaseModel):
             "Optional identifier for the agent/saga making LLM calls. "
             "Used as correlation_id in Sleipnir events."
         ),
+    )
+    ravn_decomposer_enabled: bool = Field(
+        default=False,
+        description=(
+            "When True, BifrostAdapter dispatches to the decomposer ravn persona "
+            "before falling back to the direct Anthropic API call."
+        ),
+    )
+    ravn_decomposer_timeout: float = Field(
+        default=120.0,
+        description="HTTP timeout in seconds for decomposer ravn dispatch calls.",
     )
 
 
@@ -701,6 +749,32 @@ class EventTriggerConfig(BaseModel):
     )
 
 
+class RavnOutcomeConfig(BaseModel):
+    """Configuration for the RavnOutcomeHandler adapter.
+
+    Example YAML::
+
+        ravn_outcome:
+          enabled: true
+          scope_adherence_threshold: 0.7
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable the ravn.task.completed outcome subscriber.",
+    )
+    owner_id: str = Field(
+        default="api",
+        description="Owner ID used when looking up raids from ravn outcome events.",
+    )
+    scope_adherence_threshold: float = Field(
+        default=0.7,
+        description=(
+            "scope_adherence values below this threshold flag a scope breach. Range 0.0–1.0."
+        ),
+    )
+
+
 class NotificationConfig(BaseModel):
     """Notification service configuration."""
 
@@ -771,6 +845,7 @@ class Settings(BaseSettings):
     notification: NotificationConfig = Field(default_factory=NotificationConfig)
     sleipnir: SleipnirConfig = Field(default_factory=SleipnirConfig)
     event_triggers: EventTriggerConfig = Field(default_factory=EventTriggerConfig)
+    ravn_outcome: RavnOutcomeConfig = Field(default_factory=RavnOutcomeConfig)
 
     @classmethod
     def settings_customise_sources(

@@ -595,7 +595,7 @@ class DriveLoop:
         persona = self._persona_config.name if self._persona_config else None
         task = AgentTask(
             task_id=task_id,
-            title=f"Directed message from user",
+            title="Directed message from user",
             initiative_context=content,
             triggered_by="skuld:directed_message",
             output_mode=OutputMode.SURFACE,
@@ -822,6 +822,12 @@ class DriveLoop:
 
         if capture_channel and capture_channel.surface_triggered:
             await self._re_deliver_surface(task, capture_channel.response_text)
+        elif (
+            capture_channel is None
+            and getattr(channel, "surface_triggered", False)
+            and hasattr(channel, "response_text")
+        ):
+            await self._re_deliver_surface(task, channel.response_text)
 
         if task.triggered_by and task.triggered_by.startswith("thread:"):
             thread_path = task.triggered_by.removeprefix("thread:")

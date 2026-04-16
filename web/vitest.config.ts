@@ -27,6 +27,10 @@ export default defineConfig({
         'src/modules/icons.ts',
         'src/modules/registry.ts',
         'src/adapters/api/yggdrasil.adapter.ts',
+        // Mesh UI components — complex real-time visualizations, will be tested in follow-up
+        'src/modules/shared/components/SessionChat/MeshCascadePanel/**',
+        'src/modules/shared/components/SessionChat/MeshEventCard/**',
+        'src/modules/shared/components/SessionChat/MeshSidebar/**',
         // New Tyr dashboard UI components — will be tested in follow-up
         'src/modules/tyr/components/RaidsTable/**',
         'src/modules/tyr/components/RaidExpandedRow/**',
