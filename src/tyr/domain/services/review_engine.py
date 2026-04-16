@@ -40,6 +40,7 @@ from tyr.domain.models import (
     validate_transition,
 )
 from tyr.domain.services.dispatch_service import DispatchService
+from tyr.domain.services.ravn_dispatcher import RavnDispatcher
 from tyr.domain.services.reviewer_session import (
     ReviewerSessionService,
     parse_reviewer_response,
@@ -135,6 +136,7 @@ class ReviewEngine:
         integration_repo: IntegrationRepository | None = None,
         dispatcher_repo: DispatcherRepository | None = None,
         dispatch_service: DispatchService | None = None,
+        ravn_dispatcher: RavnDispatcher | None = None,
     ) -> None:
         self._tracker_factory = tracker_factory
         self._volundr_factory = volundr_factory
@@ -145,6 +147,7 @@ class ReviewEngine:
         self._integration_repo = integration_repo
         self._dispatcher_repo = dispatcher_repo
         self._dispatch_service = dispatch_service
+        self._ravn = ravn_dispatcher
         self._task: asyncio.Task[None] | None = None
         self._processed: set[str] = set()
         # Maps reviewer_session_id → (raid_tracker_id, owner_id)
@@ -433,7 +436,15 @@ class ReviewEngine:
                 reason="Reviewer session spawned, awaiting completion",
             )
 
-        # No reviewer — decide immediately based on signals
+        # Try review-arbiter ravn for nuanced judgment (falls back to imperative logic)
+        if self._cfg.ravn_arbiter_enabled and self._ravn is not None:
+            arbiter_decision = await self._dispatch_to_arbiter(
+                tracker, tracker_id, owner_id, raid, pr_status, changed_files, score
+            )
+            if arbiter_decision is not None:
+                return arbiter_decision
+
+        # Imperative fallback: decide based on confidence signals
         if pr_status and not pr_status.ci_passed:
             return await self._handle_ci_failure(
                 tracker, tracker_id, owner_id, raid, pr_status, score
@@ -680,6 +691,140 @@ class ReviewEngine:
         await tracker.add_confidence_event(tracker_id, event)
         await self._emit_confidence_updated(raid_id, event)
         return event.score_after
+
+    # -- Review-arbiter ravn dispatch --
+
+    def _assemble_arbiter_context(
+        self,
+        raid: Raid,
+        pr_status: PRStatus | None,
+        changed_files: list[str],
+        score: float,
+    ) -> str:
+        """Assemble the initiative context string for the review-arbiter persona."""
+        lines: list[str] = [
+            f"# Review arbiter context for raid: {raid.name}",
+            f"Tracker ID: {raid.tracker_id}",
+            f"Confidence score (after signals): {score:.3f}",
+            f"Auto-approve threshold: {self._cfg.auto_approve_threshold:.3f}",
+            f"Retry count: {raid.retry_count} / {self._cfg.max_retries}",
+            "",
+            "## Acceptance criteria",
+        ]
+        for criterion in raid.acceptance_criteria:
+            lines.append(f"- {criterion}")
+
+        lines.append("")
+        lines.append("## PR status")
+        if pr_status is None:
+            lines.append("No PR found.")
+        else:
+            lines.append(f"PR ID: {pr_status.pr_id}")
+            lines.append(f"PR URL: {pr_status.url}")
+            lines.append(f"State: {pr_status.state}")
+            lines.append(f"Mergeable: {pr_status.mergeable}")
+            ci_label = {True: "passed", False: "failed", None: "unknown"}[pr_status.ci_passed]
+            lines.append(f"CI: {ci_label}")
+
+        lines.append("")
+        lines.append("## Declared files")
+        for f in raid.declared_files:
+            lines.append(f"- {f}")
+
+        lines.append("")
+        lines.append("## Changed files in PR")
+        if changed_files:
+            for f in changed_files:
+                declared = " [declared]" if f in raid.declared_files else " [undeclared]"
+                lines.append(f"- {f}{declared}")
+        else:
+            lines.append("No changed files available.")
+
+        undeclared = [f for f in changed_files if f not in set(raid.declared_files)]
+        if undeclared:
+            ratio = len(undeclared) / len(changed_files) if changed_files else 0.0
+            lines.append(f"\nScope breach ratio: {ratio:.1%} undeclared")
+
+        lines.append("")
+        lines.append(
+            "Based on the above context, decide: approve, retry, or escalate. "
+            "Produce your outcome block."
+        )
+        return "\n".join(lines)
+
+    async def _dispatch_to_arbiter(
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        owner_id: str,
+        raid: Raid,
+        pr_status: PRStatus | None,
+        changed_files: list[str],
+        score: float,
+    ) -> ReviewDecision | None:
+        """Dispatch to the review-arbiter ravn persona.
+
+        Returns a :class:`ReviewDecision` if the arbiter produced a valid
+        outcome, or ``None`` to fall back to imperative logic.
+        """
+        if self._ravn is None:
+            return None
+
+        context = self._assemble_arbiter_context(raid, pr_status, changed_files, score)
+
+        try:
+            outcome = await self._ravn.dispatch(
+                "review-arbiter",
+                context,
+                model=self._cfg.ravn_arbiter_model,
+            )
+        except Exception:
+            logger.warning(
+                "review-arbiter dispatch failed for raid %s — using imperative fallback",
+                tracker_id,
+                exc_info=True,
+            )
+            return None
+
+        if outcome is None:
+            logger.info(
+                "review-arbiter returned no outcome for raid %s — using imperative fallback",
+                tracker_id,
+            )
+            return None
+
+        verdict = str(outcome.get("verdict", "")).lower()
+        reason = str(outcome.get("reason", "review-arbiter decision"))
+
+        logger.info(
+            "review-arbiter verdict for raid %s: %s (reason=%s)",
+            tracker_id,
+            verdict,
+            reason,
+        )
+
+        match verdict:
+            case "approve":
+                return await self._handle_auto_approve(tracker, tracker_id, owner_id, raid, score)
+            case "retry":
+                if raid.retry_count < self._cfg.max_retries:
+                    return await self._auto_retry(
+                        tracker,
+                        tracker_id,
+                        owner_id,
+                        raid,
+                        reason=f"review-arbiter: {reason}",
+                    )
+                return await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
+            case "escalate":
+                return await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
+            case _:
+                logger.warning(
+                    "review-arbiter returned unknown verdict %r for raid %s — imperative fallback",
+                    verdict,
+                    tracker_id,
+                )
+                return None
 
     # -- Reviewer session --
 

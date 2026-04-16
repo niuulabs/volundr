@@ -147,6 +147,21 @@ class ReviewConfig(BaseModel):
         ge=6,
         description="Maximum review rounds before escalating. Minimum 6.",
     )
+    ravn_arbiter_enabled: bool = Field(
+        default=False,
+        description=(
+            "When True, ReviewEngine dispatches to the review-arbiter ravn persona "
+            "before falling back to imperative signal-based decisions."
+        ),
+    )
+    ravn_arbiter_model: str = Field(
+        default="claude-sonnet-4-6",
+        description="AI model used by the review-arbiter ravn persona.",
+    )
+    ravn_arbiter_timeout: float = Field(
+        default=60.0,
+        description="HTTP timeout in seconds for review-arbiter ravn dispatch calls.",
+    )
     reviewer_system_prompt: str = Field(
         default=(
             "You are a senior code reviewer for the Niuu platform. You do not just check\n"
@@ -559,6 +574,17 @@ class LLMConfig(BaseModel):
             "Optional identifier for the agent/saga making LLM calls. "
             "Used as correlation_id in Sleipnir events."
         ),
+    )
+    ravn_decomposer_enabled: bool = Field(
+        default=False,
+        description=(
+            "When True, BifrostAdapter dispatches to the decomposer ravn persona "
+            "before falling back to the direct Anthropic API call."
+        ),
+    )
+    ravn_decomposer_timeout: float = Field(
+        default=120.0,
+        description="HTTP timeout in seconds for decomposer ravn dispatch calls.",
     )
 
 
