@@ -433,6 +433,9 @@ class Broker:
         self._pending_reasoning_text: str = ""
         self._chronicle_watcher: ChronicleWatcher | None = None
 
+        # Mesh adapter — only active when mesh.enabled is True
+        self._mesh_adapter: Any = None
+
         # Room bridge — only active when room.enabled is True
         self._room_bridge: RoomBridge | None = (
             RoomBridge(
@@ -520,6 +523,82 @@ class Broker:
         self._pending_assistant_content = ""
         self._pending_assistant_parts = []
         self._pending_reasoning_text = ""
+
+    async def _start_mesh_adapter(self) -> None:
+        """Build and start the mesh adapter when mesh.enabled is True."""
+        from skuld.mesh_adapter import SkuldMeshAdapter
+
+        mesh_cfg = self._settings.mesh
+        mesh = self._build_mesh(mesh_cfg)
+        if mesh is None:
+            logger.warning("Mesh enabled but no mesh transport could be built")
+            return
+
+        discovery = self._build_discovery(mesh_cfg)
+
+        self._mesh_adapter = SkuldMeshAdapter(
+            mesh=mesh,
+            transport=self._transport,
+            config=mesh_cfg,
+            session_id=self.session_id,
+            discovery=discovery,
+        )
+
+        try:
+            await self._mesh_adapter.start()
+            logger.info(
+                "Mesh adapter started (peer_id=%s)",
+                self._mesh_adapter.peer_id,
+            )
+        except Exception as exc:
+            logger.error("Mesh adapter start failed: %r", exc, exc_info=True)
+            self._mesh_adapter = None
+
+    def _build_mesh(self, mesh_cfg: Any) -> Any:
+        """Build mesh transport from config via shared niuu.mesh builder."""
+        from niuu.mesh import (
+            build_in_process_mesh,
+            build_mesh_from_adapters_list,
+            resolve_peer_id,
+        )
+
+        own_peer_id = resolve_peer_id(mesh_cfg.peer_id)
+
+        # Dynamic adapter list takes precedence
+        if mesh_cfg.adapters:
+            return build_mesh_from_adapters_list(
+                adapters=mesh_cfg.adapters,
+                own_peer_id=own_peer_id,
+                rpc_timeout_s=mesh_cfg.rpc_timeout_s,
+            )
+
+        # Single-transport mode: nng with ImportError fallback to in-process
+        if mesh_cfg.transport != "in_process":
+            try:
+                from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
+                from sleipnir.adapters.nng_transport import NngTransport
+
+                nng = NngTransport(
+                    address="tcp://127.0.0.1:0",
+                    service_id=f"skuld:{own_peer_id}",
+                )
+                return SleipnirMeshAdapter(
+                    publisher=nng,
+                    subscriber=nng,
+                    own_peer_id=own_peer_id,
+                    rpc_timeout_s=mesh_cfg.rpc_timeout_s,
+                )
+            except ImportError:
+                logger.warning("mesh: nng transport not available, falling back to in-process")
+
+        return build_in_process_mesh(own_peer_id, mesh_cfg.rpc_timeout_s)
+
+    def _build_discovery(self, mesh_cfg: Any) -> Any:
+        """Build discovery adapter if available, or return None."""
+        # Discovery is optional for Skuld — it registers as a passive peer
+        # For now, return None; discovery integration can be added later
+        # when multi-host flock support is needed.
+        return None
 
     def _build_transport_kwargs(self) -> dict:
         """Return superset of kwargs that any transport constructor might need."""
@@ -613,6 +692,10 @@ class Broker:
             except Exception as e:
                 logger.error("Transport auto-start failed: %r", e, exc_info=True)
 
+        # Start mesh adapter if enabled (after transport is ready)
+        if self._settings.mesh.enabled:
+            await self._start_mesh_adapter()
+
     async def shutdown(self) -> None:
         """Clean up on shutdown.
 
@@ -627,6 +710,11 @@ class Broker:
 
         # Report chronicle BEFORE stopping the transport (CLI must be alive)
         await self._report_chronicle()
+
+        # Stop mesh adapter before transport (deregister from discovery)
+        if self._mesh_adapter is not None:
+            await self._mesh_adapter.stop()
+            self._mesh_adapter = None
 
         # Close all message channels (browser WebSockets, Telegram, etc.)
         await self._channels.close_all()
