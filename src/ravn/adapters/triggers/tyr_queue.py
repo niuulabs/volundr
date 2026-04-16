@@ -191,7 +191,7 @@ class TyrQueueTrigger(TriggerPort):
 
         # Clear IDs that are no longer in the queue (completed / removed by Tyr).
         # Do this before the capacity check so completed raids free up slots.
-        current_issue_ids = {item["issue_id"] for item in items}
+        current_issue_ids = {iid for item in items if (iid := item.get("issue_id", ""))}
         self._enqueued_ids = {eid for eid in self._enqueued_ids if eid in current_issue_ids}
 
         if len(self._enqueued_ids) >= max_concurrent:
