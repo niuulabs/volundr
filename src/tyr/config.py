@@ -373,11 +373,33 @@ class PlannerConfig(BaseModel):
     )
 
 
+class FlockConfig(BaseModel):
+    """Flock dispatch configuration."""
+
+    enabled: bool = Field(
+        default=False,
+        description="When True, eligible raids are dispatched as ravn_flock sessions.",
+    )
+    default_personas: list[str] = Field(
+        default=["coordinator", "reviewer"],
+        description="Ravn persona names included in every flock session.",
+    )
+    mimir_hosted_url: str = Field(
+        default="",
+        description="URL of the Mimir knowledge base for coordinator context queries.",
+    )
+    sleipnir_publish_urls: list[str] = Field(
+        default_factory=list,
+        description="Sleipnir publish URLs for flock task event routing.",
+    )
+
+
 class DispatchConfig(BaseModel):
     """Dispatcher configuration."""
 
     default_system_prompt: str = Field(default="")
     default_model: str = Field(default="claude-sonnet-4-6")
+    flock: FlockConfig = Field(default_factory=FlockConfig)
     dispatch_prompt_template: str = Field(
         default=(
             "# Task: {identifier} — {title}\n"
