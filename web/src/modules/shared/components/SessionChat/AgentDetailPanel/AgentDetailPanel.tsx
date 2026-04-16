@@ -33,7 +33,7 @@ function EventItem({ event }: { event: AgentInternalEvent }) {
     return (
       <div className={styles.eventItem} data-type="tool_start">
         <span className={styles.eventLabel}>tool: {toolName ?? data}</span>
-        {input && (
+        {Boolean(input) && (
           <pre className={styles.eventContent}>
             {typeof input === 'string' ? input : JSON.stringify(input, null, 2)}
           </pre>

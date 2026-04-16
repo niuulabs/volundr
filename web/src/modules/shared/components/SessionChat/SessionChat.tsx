@@ -120,9 +120,9 @@ export function SessionChat({
 
   const handleSelectAgent = useCallback(
     (peerId: string) => {
-      setActiveFilter(prev => (prev === peerId ? 'all' : peerId));
+      setActiveFilter(activeFilter === peerId ? 'all' : peerId);
     },
-    [setActiveFilter]
+    [activeFilter, setActiveFilter]
   );
 
   // Auto-show cascade panel when mesh events exist
