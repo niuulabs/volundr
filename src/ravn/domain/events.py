@@ -34,6 +34,7 @@ class RavnEvent:
     correlation_id: str  # Groups related events
     session_id: str
     task_id: str | None = None  # If from a sub-ravn
+    root_correlation_id: str = ""  # Traces back to the original trigger across the event chain
 
     @classmethod
     def thought(

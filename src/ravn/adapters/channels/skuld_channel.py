@@ -296,4 +296,6 @@ class SkuldChannel(ChannelPort):
             frame["source"] = self._peer_id
         if self._persona is not None:
             frame["persona"] = self._persona
+        if event.root_correlation_id:
+            frame["root_correlation_id"] = event.root_correlation_id
         return json.dumps(frame) + "\n"

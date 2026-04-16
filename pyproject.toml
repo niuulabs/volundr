@@ -22,13 +22,11 @@ dependencies = [
     "msgpack>=1.0",
     "typer>=0.24.1",
     "respx>=0.21",
-]
-
-[project.optional-dependencies]
-nng = [
     "pynng>=0.9.0",
     "zeroconf>=0.131",
 ]
+
+[project.optional-dependencies]
 nats = [
     "nats-py>=2.3",
 ]

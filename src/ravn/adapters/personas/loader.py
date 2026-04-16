@@ -497,6 +497,19 @@ class PersonaLoader(PersonaRegistryPort):
                 result.append(persona)
         return result
 
+    def find_contributors(self, target: str) -> list[PersonaConfig]:
+        """Return all personas whose ``fan_in.contributes_to`` matches *target*.
+
+        Used by the fan-in buffer to determine how many contributor outcomes
+        must be collected before the aggregate is ready.
+        """
+        result: list[PersonaConfig] = []
+        for name in self.list_names():
+            persona = self.load(name)
+            if persona and persona.fan_in.contributes_to == target:
+                result.append(persona)
+        return result
+
     # ------------------------------------------------------------------
     # Static helpers
     # ------------------------------------------------------------------

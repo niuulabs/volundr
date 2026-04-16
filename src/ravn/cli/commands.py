@@ -2532,49 +2532,105 @@ def _wire_cascade(
         consumes = getattr(persona_config, "consumes", None)
         event_types = getattr(consumes, "event_types", []) if consumes else []
 
+        # Register fan-in contributors from the persona catalog so the
+        # buffer knows how many producer outcomes to collect.
+        if persona_config and persona_config.fan_in.contributes_to:
+            from ravn.adapters.personas.loader import PersonaLoader  # noqa: PLC0415
+
+            loader = PersonaLoader()
+            target = persona_config.fan_in.contributes_to
+            contributors = loader.find_contributors(target)
+            if contributors:
+                drive_loop.fan_in.set_contributors(
+                    target, [c.name for c in contributors]
+                )
+                logger.info(
+                    "mesh: fan-in contributors for %s: %s",
+                    target,
+                    [c.name for c in contributors],
+                )
+
+        fan_in_strategy = (
+            persona_config.fan_in.strategy if persona_config else "merge"
+        )
+        fan_in_contributes_to = (
+            persona_config.fan_in.contributes_to if persona_config else ""
+        )
+
         async def _handle_outcome_event(event: RavnEvent) -> None:
-            """Handle incoming outcome events from other personas."""
+            """Handle incoming outcome events, respecting fan-in accumulation."""
             if event.type != RavnEventType.OUTCOME:
                 return
 
             payload = event.payload
             event_type = payload.get("event_type", "")
             source_persona = payload.get("persona", "")
-            outcome = payload.get("outcome", {})
             source_task_id = event.task_id or event.correlation_id
+            root_corr = event.root_correlation_id or event.correlation_id
 
             logger.info(
-                "mesh: received outcome event_type=%s from=%s task_id=%s",
+                "mesh: received outcome event_type=%s from=%s task_id=%s root=%s",
                 event_type,
                 source_persona,
                 source_task_id,
+                root_corr,
             )
 
-            # Build context from the outcome
-            context_parts = [
-                f"Event type: {event_type}",
-                f"From persona: {source_persona}",
-                f"Source task: {source_task_id}",
-            ]
-            if outcome:
-                context_parts.append(f"Outcome: {json.dumps(outcome)}")
+            # --- Producer aggregation ---
+            # If the source persona contributes_to a target, check if all
+            # contributors have reported before proceeding.
+            if fan_in_contributes_to:
+                agg_result = drive_loop.fan_in.try_accept_producer(
+                    contributes_to=fan_in_contributes_to,
+                    producer_persona=source_persona,
+                    event_type=event_type,
+                    event_payload=payload,
+                    root_correlation_id=root_corr,
+                )
+                if agg_result is not None:
+                    logger.info(
+                        "mesh: producer fan-in complete for %s",
+                        fan_in_contributes_to,
+                    )
+                    # Producer aggregation result is informational — the actual
+                    # task dispatch happens via consumer accumulation below.
 
-            task_id_suffix = (source_task_id or "unknown")[:8]
+            # --- Consumer accumulation ---
+            result = drive_loop.fan_in.try_accept_consumer(
+                event_type=event_type,
+                event_payload=payload,
+                root_correlation_id=root_corr,
+                persona_name=persona_config.name if persona_config else "unknown",
+                consumes_event_types=list(event_types),
+                strategy=fan_in_strategy,
+            )
+
+            if result is None:
+                logger.info(
+                    "mesh: fan-in pending for %s — waiting for more events",
+                    persona_config.name if persona_config else "unknown",
+                )
+                return
+
+            task_id_suffix = (root_corr or "unknown")[:8]
             task = AgentTask(
                 task_id=f"event_{event_type.replace('.', '_')}_{task_id_suffix}",
-                title=f"Handle {event_type} from {source_persona}",
-                initiative_context="\n".join(context_parts),
-                triggered_by=f"mesh:outcome:{event_type}",
+                title=f"Handle {result.triggered_by}",
+                initiative_context=result.merged_context,
+                triggered_by=result.triggered_by,
                 output_mode=OutputMode.SILENT,
+                persona=result.persona_name if result.persona_name != persona_config.name else None,
                 priority=5,
+                root_correlation_id=result.root_correlation_id,
             )
 
             try:
                 await drive_loop.enqueue(task)
                 logger.info(
-                    "mesh: enqueued task %s for event_type=%s",
+                    "mesh: enqueued task %s for %s (fan-in: %s)",
                     task.task_id,
-                    event_type,
+                    result.triggered_by,
+                    fan_in_strategy,
                 )
             except Exception as exc:
                 logger.error("mesh: failed to enqueue task for event: %s", exc)
