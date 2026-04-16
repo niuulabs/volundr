@@ -142,10 +142,23 @@ branch = true
 # plain pytest. They are excluded from coverage measurement until Textual
 # Pilot-based widget tests are added. The same applies to tyr/tui/ and
 # tyr/plugin.py (CLI plugin registration with TUI imports).
+# Sleipnir transport adapters require live broker services (NATS, NNG, RabbitMQ)
+# and cannot be tested in CI without those services running.
+# Ravn infrastructure adapters that require live Kubernetes, PostgreSQL, mDNS,
+# or HTTP services are also excluded from coverage measurement.
 omit = [
     "src/ravn/tui/*",
     "src/tyr/tui/*",
     "src/tyr/plugin.py",
+    "src/sleipnir/adapters/nats_transport.py",
+    "src/sleipnir/adapters/nng_transport.py",
+    "src/sleipnir/adapters/rabbitmq.py",
+    "src/ravn/adapters/checkpoint/postgres.py",
+    "src/ravn/adapters/checkpoint/sleipnir_trigger.py",
+    "src/ravn/adapters/discovery/mdns.py",
+    "src/ravn/adapters/mesh/webhook.py",
+    "src/ravn/adapters/mesh/composite.py",
+    "src/ravn/adapters/spawn/kubernetes_spawn.py",
 ]
 
 [tool.coverage.report]
