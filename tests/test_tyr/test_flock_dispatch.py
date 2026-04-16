@@ -26,6 +26,7 @@ from tyr.domain.models import (
 from tyr.domain.services.dispatch_service import (
     DispatchConfig,
     DispatchItem,
+    DispatchService,
     build_flock_prompt,
 )
 from tyr.ports.volundr import SpawnRequest
@@ -92,15 +93,6 @@ def _make_flock_config(**overrides) -> DispatchConfig:
 class TestBuildSpawnRequestFlockEnabled:
     """_build_spawn_request returns a ravn_flock SpawnRequest when flock is on."""
 
-    def _make_service(self, config: DispatchConfig):
-        from unittest.mock import MagicMock
-
-        svc = MagicMock()
-        svc._config = config
-        from tyr.domain.services.dispatch_service import DispatchService
-
-        return DispatchService.__dict__["_build_spawn_request"].__get__(svc, DispatchService)
-
     def test_workload_type_is_ravn_flock(self) -> None:
         config = _make_flock_config()
         saga = _make_saga()
@@ -109,8 +101,6 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
-        from tyr.domain.services.dispatch_service import DispatchService
-
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -131,8 +121,6 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
-        from tyr.domain.services.dispatch_service import DispatchService
-
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -155,8 +143,6 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
-        from tyr.domain.services.dispatch_service import DispatchService
-
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -180,8 +166,6 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
-        from tyr.domain.services.dispatch_service import DispatchService
-
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -202,8 +186,6 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
-        from tyr.domain.services.dispatch_service import DispatchService
-
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -224,8 +206,6 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
-        from tyr.domain.services.dispatch_service import DispatchService
-
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -255,8 +235,6 @@ class TestBuildSpawnRequestFlockDisabled:
 
         svc = MagicMock()
         svc._config = config
-        from tyr.domain.services.dispatch_service import DispatchService
-
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -277,8 +255,6 @@ class TestBuildSpawnRequestFlockDisabled:
 
         svc = MagicMock()
         svc._config = config
-        from tyr.domain.services.dispatch_service import DispatchService
-
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -299,8 +275,6 @@ class TestBuildSpawnRequestFlockDisabled:
 
         svc = MagicMock()
         svc._config = config
-        from tyr.domain.services.dispatch_service import DispatchService
-
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
