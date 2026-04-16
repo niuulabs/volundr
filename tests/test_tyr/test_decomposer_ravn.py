@@ -301,7 +301,7 @@ class TestRavnDispatcher:
     @respx.mock
     async def test_dispatch_returns_parsed_outcome(self) -> None:
         """RavnDispatcher.dispatch() returns parsed outcome fields."""
-        from tyr.domain.services.ravn_dispatcher import RavnDispatcher
+        from tyr.adapters.ravn_dispatcher import RavnDispatcher
 
         response_text = (
             "Some reasoning...\n\n---outcome---\nverdict: approve\nreason: all good\n---end---"
@@ -331,7 +331,7 @@ class TestRavnDispatcher:
     @respx.mock
     async def test_dispatch_unknown_persona_returns_none(self) -> None:
         """Dispatching an unknown persona returns None without calling the API."""
-        from tyr.domain.services.ravn_dispatcher import RavnDispatcher
+        from tyr.adapters.ravn_dispatcher import RavnDispatcher
 
         dispatcher = RavnDispatcher(
             base_url="http://dispatch.test",
@@ -348,7 +348,7 @@ class TestRavnDispatcher:
     @respx.mock
     async def test_dispatch_no_outcome_block_returns_none(self) -> None:
         """When LLM response has no ---outcome--- block, dispatch returns None."""
-        from tyr.domain.services.ravn_dispatcher import RavnDispatcher
+        from tyr.adapters.ravn_dispatcher import RavnDispatcher
 
         respx.post("http://dispatch.test/v1/messages").mock(
             return_value=httpx.Response(
@@ -372,7 +372,7 @@ class TestRavnDispatcher:
     @respx.mock
     async def test_dispatch_http_error_returns_none(self) -> None:
         """When the API returns an error, dispatch returns None."""
-        from tyr.domain.services.ravn_dispatcher import RavnDispatcher
+        from tyr.adapters.ravn_dispatcher import RavnDispatcher
 
         respx.post("http://dispatch.test/v1/messages").mock(
             return_value=httpx.Response(500, json={"error": "server error"})
@@ -391,7 +391,7 @@ class TestRavnDispatcher:
 
     def test_load_persona_review_arbiter(self) -> None:
         """RavnDispatcher.load_persona() can resolve 'review-arbiter'."""
-        from tyr.domain.services.ravn_dispatcher import RavnDispatcher
+        from tyr.adapters.ravn_dispatcher import RavnDispatcher
 
         dispatcher = RavnDispatcher()
         persona = dispatcher.load_persona("review-arbiter")
@@ -400,7 +400,7 @@ class TestRavnDispatcher:
 
     def test_load_persona_decomposer(self) -> None:
         """RavnDispatcher.load_persona() can resolve 'decomposer'."""
-        from tyr.domain.services.ravn_dispatcher import RavnDispatcher
+        from tyr.adapters.ravn_dispatcher import RavnDispatcher
 
         dispatcher = RavnDispatcher()
         persona = dispatcher.load_persona("decomposer")

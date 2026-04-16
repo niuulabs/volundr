@@ -8,19 +8,17 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 
 import httpx
 
+from tyr.adapters.anthropic_client import anthropic_messages_call
 from tyr.adapters.bifrost_publisher import BifrostPublisher
+from tyr.adapters.ravn_dispatcher import RavnDispatcher
 from tyr.domain.models import SagaStructure
-from tyr.domain.services.ravn_dispatcher import RavnDispatcher
 from tyr.domain.validation import ValidationError, parse_and_validate
 from tyr.ports.llm import LLMPort
 
 logger = logging.getLogger(__name__)
-
-ANTHROPIC_API_VERSION = "2023-06-01"
 
 DECOMPOSITION_PROMPT = """\
 You are a saga decomposition engine for the Niuu platform.
@@ -145,15 +143,6 @@ class BifrostAdapter(LLMPort):
         """Inject the Sleipnir publisher.  Called from main.py after wiring."""
         self._publisher = publisher
 
-    def _headers(self) -> dict[str, str]:
-        headers: dict[str, str] = {
-            "anthropic-version": ANTHROPIC_API_VERSION,
-            "content-type": "application/json",
-        }
-        if self._api_key:
-            headers["x-api-key"] = self._api_key
-        return headers
-
     async def decompose_spec(self, spec: str, repo: str, *, model: str) -> SagaStructure:
         # Try decomposer ravn persona first when enabled
         if self._ravn_decomposer_enabled and self._ravn is not None:
@@ -252,28 +241,14 @@ class BifrostAdapter(LLMPort):
             A ``(text, usage)`` tuple where *usage* contains ``input_tokens``
             and ``output_tokens`` as reported by the API.
         """
-        t0 = time.monotonic()
-        resp = await self._client.post(
-            f"{self._base_url}/v1/messages",
-            headers=self._headers(),
-            json={
-                "model": model,
-                "max_tokens": self._max_tokens,
-                "messages": [{"role": "user", "content": prompt}],
-            },
+        return await anthropic_messages_call(
+            self._client,
+            base_url=self._base_url,
+            api_key=self._api_key,
+            model=model,
+            max_tokens=self._max_tokens,
+            messages=[{"role": "user", "content": prompt}],
         )
-        latency_ms = (time.monotonic() - t0) * 1000
-        resp.raise_for_status()
-        data = resp.json()
-        content_blocks = data.get("content", [])
-        text_parts = [block["text"] for block in content_blocks if block.get("type") == "text"]
-        raw_usage = data.get("usage", {})
-        usage = {
-            "input_tokens": int(raw_usage.get("input_tokens", 0)),
-            "output_tokens": int(raw_usage.get("output_tokens", 0)),
-            "latency_ms": latency_ms,
-        }
-        return "".join(text_parts), usage
 
     async def close(self) -> None:
         """Close the underlying HTTP clients."""

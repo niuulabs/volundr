@@ -16,14 +16,9 @@ import httpx
 
 from niuu.domain.outcome import OutcomeSchema, parse_outcome_block
 from ravn.adapters.personas.loader import PersonaConfig, PersonaLoader
+from tyr.adapters.anthropic_client import anthropic_messages_call
 
 logger = logging.getLogger(__name__)
-
-ANTHROPIC_API_VERSION = "2023-06-01"
-
-
-class DispatchError(Exception):
-    """Raised when the dispatcher cannot produce a valid outcome."""
 
 
 class RavnDispatcher:
@@ -117,10 +112,14 @@ class RavnDispatcher:
         used_model = model or self._model
 
         try:
-            response_text = await self._call_llm(
-                system_prompt=system_prompt,
-                user_message=initiative_context,
+            text, _ = await anthropic_messages_call(
+                self._client,
+                base_url=self._base_url,
+                api_key=self._api_key,
                 model=used_model,
+                max_tokens=self._max_tokens,
+                messages=[{"role": "user", "content": initiative_context}],
+                system=system_prompt or None,
             )
         except Exception:
             logger.warning(
@@ -130,7 +129,7 @@ class RavnDispatcher:
             )
             return None
 
-        outcome = parse_outcome_block(response_text, schema=schema)
+        outcome = parse_outcome_block(text, schema=schema)
         if outcome is None:
             logger.warning(
                 "RavnDispatcher: no ---outcome--- block in response for persona %r",
@@ -147,41 +146,3 @@ class RavnDispatcher:
             return None
 
         return outcome.fields
-
-    async def _call_llm(
-        self,
-        *,
-        system_prompt: str,
-        user_message: str,
-        model: str,
-    ) -> str:
-        """Make a single Anthropic-compatible Messages API call.
-
-        Returns the text content of the response.
-        """
-        headers: dict[str, str] = {
-            "anthropic-version": ANTHROPIC_API_VERSION,
-            "content-type": "application/json",
-        }
-        if self._api_key:
-            headers["x-api-key"] = self._api_key
-
-        payload: dict[str, Any] = {
-            "model": model,
-            "max_tokens": self._max_tokens,
-            "messages": [{"role": "user", "content": user_message}],
-        }
-        if system_prompt:
-            payload["system"] = system_prompt
-
-        resp = await self._client.post(
-            f"{self._base_url}/v1/messages",
-            headers=headers,
-            json=payload,
-        )
-        resp.raise_for_status()
-
-        data = resp.json()
-        content_blocks = data.get("content", [])
-        text_parts = [b["text"] for b in content_blocks if b.get("type") == "text"]
-        return "".join(text_parts)

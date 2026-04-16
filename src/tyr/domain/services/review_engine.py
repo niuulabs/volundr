@@ -27,6 +27,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from niuu.ports.integrations import IntegrationRepository
+from tyr.adapters.ravn_dispatcher import RavnDispatcher
 from tyr.config import ReviewConfig
 from tyr.domain.models import (
     ConfidenceEvent,
@@ -40,7 +41,6 @@ from tyr.domain.models import (
     validate_transition,
 )
 from tyr.domain.services.dispatch_service import DispatchService
-from tyr.domain.services.ravn_dispatcher import RavnDispatcher
 from tyr.domain.services.reviewer_session import (
     ReviewerSessionService,
     parse_reviewer_response,
@@ -726,6 +726,8 @@ class ReviewEngine:
             ci_label = {True: "passed", False: "failed", None: "unknown"}[pr_status.ci_passed]
             lines.append(f"CI: {ci_label}")
 
+        declared_set = set(raid.declared_files)
+
         lines.append("")
         lines.append("## Declared files")
         for f in raid.declared_files:
@@ -735,12 +737,12 @@ class ReviewEngine:
         lines.append("## Changed files in PR")
         if changed_files:
             for f in changed_files:
-                declared = " [declared]" if f in raid.declared_files else " [undeclared]"
+                declared = " [declared]" if f in declared_set else " [undeclared]"
                 lines.append(f"- {f}{declared}")
         else:
             lines.append("No changed files available.")
 
-        undeclared = [f for f in changed_files if f not in set(raid.declared_files)]
+        undeclared = [f for f in changed_files if f not in declared_set]
         if undeclared:
             ratio = len(undeclared) / len(changed_files) if changed_files else 0.0
             lines.append(f"\nScope breach ratio: {ratio:.1%} undeclared")

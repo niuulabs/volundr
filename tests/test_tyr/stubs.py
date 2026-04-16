@@ -237,6 +237,11 @@ class StubTracker(TrackerPort):
         self._all_merged: bool = False
         self.closed_raids: list[str] = []
 
+    @property
+    def raids(self) -> dict[str, Raid]:
+        """Public alias for _raids_by_id used in tests."""
+        return self._raids_by_id
+
     # -- CRUD: create entities --
 
     async def create_saga(self, saga: Saga, *, description: str = "") -> str:
@@ -398,6 +403,35 @@ class StubTrackerFactory:
 
     async def for_owner(self, owner_id: str) -> list[StubTracker]:
         return [self._tracker]
+
+
+class StubGit:
+    """Minimal in-memory git stub for Tyr unit tests."""
+
+    def __init__(self) -> None:
+        self.pr_statuses: dict[str, PRStatus] = {}
+        self.changed_files: dict[str, list[str]] = {}
+
+    async def create_branch(self, repo: str, branch: str, base: str) -> None:
+        pass
+
+    async def merge_branch(self, repo: str, source: str, target: str) -> None:
+        pass
+
+    async def delete_branch(self, repo: str, branch: str) -> None:
+        pass
+
+    async def create_pr(self, repo: str, source: str, target: str, title: str) -> str:
+        return "pr-1"
+
+    async def get_pr_status(self, pr_id: str) -> PRStatus:
+        pr = self.pr_statuses.get(pr_id)
+        if pr is None:
+            raise RuntimeError(f"No PR: {pr_id}")
+        return pr
+
+    async def get_pr_changed_files(self, pr_id: str) -> list[str]:
+        return self.changed_files.get(pr_id, [])
 
 
 def make_raid(

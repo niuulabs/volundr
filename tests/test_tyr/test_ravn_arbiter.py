@@ -11,17 +11,21 @@ Test harness from NIU-619 spec:
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
-from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
 import pytest
 
+from tests.test_tyr.stubs import (
+    StubGit,
+    StubTracker,
+    StubTrackerFactory,
+    StubVolundrFactory,
+    StubVolundrPort,
+)
 from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.config import ReviewConfig
 from tyr.domain.models import (
-    ConfidenceEvent,
     Phase,
     PhaseStatus,
     PRStatus,
@@ -32,257 +36,16 @@ from tyr.domain.models import (
 )
 from tyr.domain.services.review_engine import ReviewEngine
 
-NOW = datetime.now(UTC)
+NOW = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
 PHASE_ID = uuid4()
 SAGA_ID = uuid4()
 OWNER_ID = "user-arbiter"
 TRACKER_ID = "NIU-619"
 
+
 # ---------------------------------------------------------------------------
-# Stubs (mirrors test_review_engine.py stubs to avoid import coupling)
+# Stub: RavnDispatcher (genuinely new — not in stubs.py)
 # ---------------------------------------------------------------------------
-
-
-class StubTracker:
-    """Minimal tracker stub for arbiter tests."""
-
-    def __init__(self) -> None:
-        self.raids: dict[str, Raid] = {}
-        self.events: dict[str, list[ConfidenceEvent]] = {}
-        self.saga: Saga | None = None
-        self.phase: Phase | None = None
-        self.phases: list[Phase] = []
-        self._all_merged: bool = False
-        self.phase_status_updates: list[tuple[str, PhaseStatus]] = []
-        self.attached_documents: list[tuple[str, str, str]] = []
-
-    async def create_saga(self, saga, **kwargs):
-        return saga.tracker_id
-
-    async def create_phase(self, phase, **kwargs):
-        return phase.tracker_id
-
-    async def create_raid(self, raid, **kwargs):
-        self.raids[raid.tracker_id] = raid
-        return raid.tracker_id
-
-    async def update_raid_state(self, raid_id, state):
-        pass
-
-    async def close_raid(self, raid_id):
-        pass
-
-    async def attach_issue_document(self, issue_id, title, content):
-        self.attached_documents.append((issue_id, title, content))
-        return "doc-stub"
-
-    async def get_saga(self, saga_id):
-        if self.saga is None:
-            raise ValueError(f"Not found: {saga_id}")
-        return self.saga
-
-    async def get_phase(self, tracker_id):
-        if self.phase is None:
-            raise ValueError(f"Not found: {tracker_id}")
-        return self.phase
-
-    async def get_raid(self, tracker_id):
-        raid = self.raids.get(tracker_id)
-        if raid is None:
-            raise ValueError(f"Raid not found: {tracker_id}")
-        return raid
-
-    async def list_pending_raids(self, phase_id):
-        return []
-
-    async def list_projects(self):
-        return []
-
-    async def get_project(self, project_id):
-        raise NotImplementedError
-
-    async def list_milestones(self, project_id):
-        return []
-
-    async def list_issues(self, project_id, milestone_id=None):
-        return []
-
-    async def update_raid_progress(
-        self,
-        tracker_id,
-        *,
-        status=None,
-        session_id=None,
-        confidence=None,
-        pr_url=None,
-        pr_id=None,
-        retry_count=None,
-        reason=None,
-        owner_id=None,
-        phase_tracker_id=None,
-        saga_tracker_id=None,
-        chronicle_summary=None,
-        reviewer_session_id=None,
-        review_round=None,
-    ):
-        raid = self.raids.get(tracker_id)
-        if raid is None:
-            raise ValueError(f"Raid not found: {tracker_id}")
-        events = self.events.get(tracker_id, [])
-        new_confidence = events[-1].score_after if events else raid.confidence
-        updated = Raid(
-            id=raid.id,
-            phase_id=raid.phase_id,
-            tracker_id=raid.tracker_id,
-            name=raid.name,
-            description=raid.description,
-            acceptance_criteria=raid.acceptance_criteria,
-            declared_files=raid.declared_files,
-            estimate_hours=raid.estimate_hours,
-            status=status if status is not None else raid.status,
-            confidence=confidence if confidence is not None else new_confidence,
-            session_id=session_id if session_id is not None else raid.session_id,
-            branch=raid.branch,
-            chronicle_summary=raid.chronicle_summary,
-            pr_url=pr_url if pr_url is not None else raid.pr_url,
-            pr_id=pr_id if pr_id is not None else raid.pr_id,
-            retry_count=retry_count if retry_count is not None else raid.retry_count,
-            created_at=raid.created_at,
-            updated_at=datetime.now(UTC),
-        )
-        self.raids[tracker_id] = updated
-        return updated
-
-    async def get_raid_progress_for_saga(self, saga_tracker_id):
-        return list(self.raids.values())
-
-    async def get_raid_by_session(self, session_id):
-        return None
-
-    async def list_raids_by_status(self, status):
-        return []
-
-    async def get_raid_by_id(self, raid_id):
-        return None
-
-    async def add_confidence_event(self, tracker_id, event):
-        self.events.setdefault(tracker_id, []).append(event)
-
-    async def get_confidence_events(self, tracker_id):
-        return self.events.get(tracker_id, [])
-
-    async def all_raids_merged(self, phase_tracker_id):
-        return self._all_merged
-
-    async def list_phases_for_saga(self, saga_tracker_id):
-        return self.phases
-
-    async def update_phase_status(self, phase_tracker_id, status):
-        return None
-
-    async def get_saga_for_raid(self, tracker_id):
-        return self.saga
-
-    async def get_phase_for_raid(self, tracker_id):
-        return self.phase
-
-    async def get_owner_for_raid(self, tracker_id):
-        return OWNER_ID
-
-    async def save_session_message(self, message):
-        pass
-
-    async def get_session_messages(self, tracker_id):
-        return []
-
-
-class StubTrackerFactory:
-    def __init__(self, tracker: StubTracker) -> None:
-        self._tracker = tracker
-
-    async def for_owner(self, owner_id: str) -> list[StubTracker]:
-        return [self._tracker]
-
-
-class StubVolundr:
-    def __init__(self) -> None:
-        self.messages: list[tuple[str, str]] = []
-        self.stopped_sessions: list[str] = []
-
-    async def spawn_session(self, request, **kwargs):
-        raise NotImplementedError
-
-    async def get_session(self, session_id, **kwargs):
-        return None
-
-    async def list_sessions(self, **kwargs):
-        return []
-
-    async def get_pr_status(self, session_id):
-        raise NotImplementedError
-
-    async def get_chronicle_summary(self, session_id):
-        return ""
-
-    async def send_message(self, session_id, message, **kwargs):
-        self.messages.append((session_id, message))
-
-    async def stop_session(self, session_id, **kwargs):
-        self.stopped_sessions.append(session_id)
-
-    async def list_integration_ids(self, **kwargs):
-        return []
-
-    async def list_repos(self, **kwargs):
-        return []
-
-    async def get_conversation(self, session_id):
-        return {"turns": []}
-
-    async def get_last_assistant_message(self, session_id):
-        return ""
-
-    async def subscribe_activity(self) -> AsyncGenerator:
-        return
-        yield  # type: ignore[misc]
-
-
-class StubVolundrFactory:
-    def __init__(self, volundr: StubVolundr) -> None:
-        self._v = volundr
-
-    async def for_owner(self, owner_id: str) -> list[StubVolundr]:
-        return [self._v]
-
-    async def primary_for_owner(self, owner_id: str) -> StubVolundr | None:
-        return self._v
-
-
-class StubGit:
-    def __init__(self) -> None:
-        self.pr_statuses: dict[str, PRStatus] = {}
-        self.changed_files: dict[str, list[str]] = {}
-
-    async def create_branch(self, repo, branch, base):
-        pass
-
-    async def merge_branch(self, repo, source, target):
-        pass
-
-    async def delete_branch(self, repo, branch):
-        pass
-
-    async def create_pr(self, repo, source, target, title):
-        return "pr-1"
-
-    async def get_pr_status(self, pr_id):
-        pr = self.pr_statuses.get(pr_id)
-        if pr is None:
-            raise RuntimeError(f"No PR: {pr_id}")
-        return pr
-
-    async def get_pr_changed_files(self, pr_id):
-        return self.changed_files.get(pr_id, [])
 
 
 class StubRavnDispatcher:
@@ -378,11 +141,11 @@ def _make_engine(
     ravn: StubRavnDispatcher | None = None,
     tracker: StubTracker | None = None,
     git: StubGit | None = None,
-    volundr: StubVolundr | None = None,
-) -> tuple[ReviewEngine, StubTracker, StubGit, StubVolundr]:
+    volundr: StubVolundrPort | None = None,
+) -> tuple[ReviewEngine, StubTracker, StubGit, StubVolundrPort]:
     t = tracker or StubTracker()
     g = git or StubGit()
-    v = volundr or StubVolundr()
+    v = volundr or StubVolundrPort()
     cfg = config or ReviewConfig(reviewer_session_enabled=False)
 
     engine = ReviewEngine(

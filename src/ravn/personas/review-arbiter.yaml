@@ -41,10 +41,6 @@ produces:
     reason:
       type: string
       description: one-line explanation of the verdict
-    confidence_adjustment:
-      type: number
-      description: suggested confidence delta (-0.3 to +0.3, 0.0 means no change)
-      required: false
 
 allowed_tools: [mimir_query, file_read, glob, grep]
 
