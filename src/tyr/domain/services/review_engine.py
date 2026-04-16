@@ -523,12 +523,34 @@ class ReviewEngine:
 
         match outcome.verdict:
             case "retry":
-                return await self._auto_retry(
-                    tracker,
+                if raid.retry_count < self._cfg.max_retries:
+                    attempt = f"attempt {raid.retry_count + 1}/{self._cfg.max_retries}"
+                    return await self._auto_retry(
+                        tracker,
+                        tracker_id,
+                        owner_id,
+                        raid,
+                        reason=f"ravn coordinator requested retry ({attempt})",
+                    )
+
+                # Retries exhausted → FAILED
+                validate_transition(raid.status, RaidStatus.FAILED)
+                updated = await tracker.update_raid_progress(
                     tracker_id,
-                    owner_id,
-                    raid,
-                    reason="ravn coordinator requested retry",
+                    status=RaidStatus.FAILED,
+                    reason="ravn coordinator requested retry but retries exhausted",
+                )
+                if raid.session_id:
+                    await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
+                    await self._stop_session(owner_id, raid.session_id, "working session")
+                await self._emit_state_changed(updated, owner_id=owner_id, action="failed")
+                return ReviewDecision(
+                    raid=updated,
+                    action="failed",
+                    reason=(
+                        f"ravn coordinator requested retry after"
+                        f" {self._cfg.max_retries} retries exhausted"
+                    ),
                 )
             case "approve":
                 if score >= self._cfg.auto_approve_threshold:

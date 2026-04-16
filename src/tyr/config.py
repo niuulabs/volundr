@@ -715,6 +715,10 @@ class RavnOutcomeConfig(BaseModel):
         default=False,
         description="Enable the ravn.task.completed outcome subscriber.",
     )
+    owner_id: str = Field(
+        default="api",
+        description="Owner ID used when looking up raids from ravn outcome events.",
+    )
     scope_adherence_threshold: float = Field(
         default=0.7,
         description=(

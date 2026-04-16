@@ -533,9 +533,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     subscriber=sleipnir_bus,
                     tracker_factory=app.state.tracker_factory,
                     review_engine=review_engine,
-                    owner_id=settings.event_triggers.owner_id
-                    if settings.event_triggers.enabled
-                    else "api",
+                    owner_id=settings.ravn_outcome.owner_id,
                     scope_adherence_threshold=settings.ravn_outcome.scope_adherence_threshold,
                 )
                 await ravn_outcome_handler.start()
