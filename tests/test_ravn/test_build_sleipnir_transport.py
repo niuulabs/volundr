@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from niuu.mesh.transport_builder import TRANSPORT_ALIASES as _TRANSPORT_ALIASES
 from ravn.cli.commands import (
-    _TRANSPORT_ALIASES,
     _build_sleipnir_transport,
     _resolve_transport_kwargs,
 )
@@ -108,12 +108,12 @@ class TestResolveTransportKwargs:
 
 
 class TestBuildSleipnirTransport:
-    """Verify _build_sleipnir_transport uses dynamic import via _import_class."""
+    """Verify _build_sleipnir_transport delegates to niuu.mesh.transport_builder."""
 
     def test_uses_import_class_for_known_alias(self):
         settings = _make_settings()
         mock_cls = MagicMock(return_value=MagicMock())
-        with patch("ravn.cli.commands._import_class", return_value=mock_cls) as imp:
+        with patch("niuu.mesh.transport_builder.import_class", return_value=mock_cls) as imp:
             result = _build_sleipnir_transport(settings, "nng")
 
         imp.assert_called_once_with("sleipnir.adapters.nng_transport.NngTransport")
@@ -124,7 +124,7 @@ class TestBuildSleipnirTransport:
         settings = _make_settings()
         mock_cls = MagicMock(return_value=MagicMock())
         fq = "my.custom.transport.CustomTransport"
-        with patch("ravn.cli.commands._import_class", return_value=mock_cls) as imp:
+        with patch("niuu.mesh.transport_builder.import_class", return_value=mock_cls) as imp:
             result = _build_sleipnir_transport(settings, fq)
 
         imp.assert_called_once_with(fq)
@@ -133,7 +133,7 @@ class TestBuildSleipnirTransport:
     def test_returns_none_on_import_error(self):
         settings = _make_settings()
         with patch(
-            "ravn.cli.commands._import_class",
+            "niuu.mesh.transport_builder.import_class",
             side_effect=ImportError("no module"),
         ):
             result = _build_sleipnir_transport(settings, "nng")
@@ -142,14 +142,14 @@ class TestBuildSleipnirTransport:
     def test_returns_none_on_instantiation_error(self):
         settings = _make_settings()
         mock_cls = MagicMock(side_effect=RuntimeError("bad init"))
-        with patch("ravn.cli.commands._import_class", return_value=mock_cls):
+        with patch("niuu.mesh.transport_builder.import_class", return_value=mock_cls):
             result = _build_sleipnir_transport(settings, "nng")
         assert result is None
 
     def test_rabbitmq_returns_none_when_env_missing(self):
         settings = _make_settings()
         mock_cls = MagicMock(return_value=MagicMock())
-        with patch("ravn.cli.commands._import_class", return_value=mock_cls):
+        with patch("niuu.mesh.transport_builder.import_class", return_value=mock_cls):
             with patch.dict("os.environ", {}, clear=True):
                 result = _build_sleipnir_transport(settings, "rabbitmq")
         assert result is None
@@ -158,7 +158,7 @@ class TestBuildSleipnirTransport:
     def test_rabbitmq_returns_transport_when_env_set(self):
         settings = _make_settings()
         mock_cls = MagicMock(return_value=MagicMock())
-        with patch("ravn.cli.commands._import_class", return_value=mock_cls):
+        with patch("niuu.mesh.transport_builder.import_class", return_value=mock_cls):
             with patch.dict("os.environ", {"SLEIPNIR_AMQP_URL": "amqp://host"}):
                 result = _build_sleipnir_transport(settings, "rabbitmq")
         assert result is mock_cls.return_value
@@ -167,7 +167,7 @@ class TestBuildSleipnirTransport:
     def test_in_process_instantiated_with_no_args(self):
         settings = _make_settings()
         mock_cls = MagicMock(return_value=MagicMock())
-        with patch("ravn.cli.commands._import_class", return_value=mock_cls):
+        with patch("niuu.mesh.transport_builder.import_class", return_value=mock_cls):
             result = _build_sleipnir_transport(settings, "in_process")
         assert result is mock_cls.return_value
         mock_cls.assert_called_once_with()
@@ -175,7 +175,7 @@ class TestBuildSleipnirTransport:
     def test_nng_passes_correct_kwargs(self):
         settings = _make_settings()
         mock_cls = MagicMock(return_value=MagicMock())
-        with patch("ravn.cli.commands._import_class", return_value=mock_cls):
+        with patch("niuu.mesh.transport_builder.import_class", return_value=mock_cls):
             with patch(
                 "ravn.cli.commands._read_cluster_pub_addresses",
                 return_value=["tcp://peer1:7480"],
