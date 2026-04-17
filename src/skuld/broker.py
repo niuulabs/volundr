@@ -217,9 +217,17 @@ class SessionArtifacts:
 
         Returns a list of timeline-reportable tool events extracted
         from the content blocks.
+
+        Handles both the HTTP streaming format (``data["content"]``)
+        and the SDK WebSocket format (``data["message"]["content"]``).
         """
         tool_events: list[dict] = []
         content = data.get("content", [])
+        if not isinstance(content, list) or not content:
+            # SDK WebSocket transport nests content under message.content
+            msg = data.get("message")
+            if isinstance(msg, dict):
+                content = msg.get("content", [])
         if not isinstance(content, list):
             return tool_events
 
@@ -1600,6 +1608,37 @@ class Broker:
         self._extract_and_store_outcome()
         await self._publish_mesh_outcome()
 
+    async def _git_diff_summary(self) -> str:
+        """Return a truncated git diff from the workspace.
+
+        Best-effort: returns an empty string on any failure so mesh
+        publishing is never blocked by git issues.
+        """
+        max_bytes = self._settings.mesh.diff_max_bytes
+        timeout = self._settings.mesh.diff_timeout_s
+
+        # Try committed changes first (HEAD~1..HEAD) since the coder
+        # session typically commits before finishing.  Fall back to
+        # uncommitted working-tree changes (diff HEAD).
+        for diff_args in (["git", "diff", "HEAD~1..HEAD"], ["git", "diff", "HEAD"]):
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *diff_args,
+                    cwd=self.workspace_dir,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            except Exception:
+                return ""
+            raw = stdout.decode(errors="replace")
+            if raw.strip():
+                if len(raw) > max_bytes:
+                    return raw[:max_bytes] + "\n... (truncated)"
+                return raw
+
+        return ""
+
     async def _publish_mesh_outcome(self) -> None:
         """Publish a ``code.changed`` event on the mesh so flock peers react.
 
@@ -1611,6 +1650,8 @@ class Broker:
 
         from ravn.domain.events import RavnEvent, RavnEventType
 
+        diff_summary = await self._git_diff_summary()
+
         outcome_payload: dict = {
             "event_type": "code.changed",
             "session_id": self.session_id,
@@ -1620,7 +1661,16 @@ class Broker:
                 f" ({self._artifacts.turn_count} turns,"
                 f" {len(self._artifacts.files_changed)} files)"
             ),
+            "workspace_path": self.workspace_dir,
         }
+
+        initial_prompt = self._settings.session.initial_prompt
+        if initial_prompt:
+            outcome_payload["task_description"] = initial_prompt
+
+        if diff_summary:
+            outcome_payload["diff_summary"] = diff_summary
+
         if self._artifacts.structured_outcome is not None:
             outcome_payload["outcome"] = self._artifacts.structured_outcome
         if self._artifacts.files_changed:
