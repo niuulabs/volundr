@@ -291,7 +291,13 @@ class FanInBuffer:
 
     @staticmethod
     def _format_single_event(event_type: str, payload: dict) -> str:
-        """Format a single event payload as initiative context."""
+        """Format a single event payload as initiative context.
+
+        When the payload contains enriched fields (workspace_path,
+        files_changed, diff_summary, task_description) they are
+        included so downstream personas (e.g. reviewer) have enough
+        context to do useful work.
+        """
         source_persona = payload.get("persona", "")
         source_task = payload.get("task_id", "unknown")
         outcome = payload.get("outcome", {})
@@ -300,6 +306,25 @@ class FanInBuffer:
             f"From persona: {source_persona}",
             f"Source task: {source_task}",
         ]
+
+        task_desc = payload.get("task_description")
+        if task_desc:
+            parts.append(f"Task description: {task_desc}")
+
+        workspace = payload.get("workspace_path")
+        if workspace:
+            parts.append(f"Workspace path: {workspace}")
+
+        files = payload.get("files_changed")
+        if files:
+            parts.append(f"Files changed ({len(files)}):")
+            for f in files:
+                parts.append(f"  - {f}")
+
+        diff = payload.get("diff_summary")
+        if diff:
+            parts.append(f"Git diff:\n{diff}")
+
         if outcome:
             parts.append(f"Outcome: {json.dumps(outcome)}")
         return "\n".join(parts)

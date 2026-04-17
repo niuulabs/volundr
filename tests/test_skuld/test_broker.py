@@ -915,6 +915,79 @@ class TestSessionArtifacts:
         # duration should be >= 0
         assert artifacts.duration_seconds >= 0
 
+    def test_record_tool_use_sdk_message_format(self):
+        """SDK WebSocket transport nests content under message.content."""
+        from skuld.broker import SessionArtifacts
+
+        artifacts = SessionArtifacts()
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Edit",
+                        "input": {"file_path": "/src/main.py"},
+                        "id": "tu_1",
+                    },
+                    {
+                        "type": "tool_use",
+                        "name": "Write",
+                        "input": {"file_path": "/src/new_file.py"},
+                        "id": "tu_2",
+                    },
+                ]
+            },
+        }
+        events = artifacts.record_tool_use(data)
+        assert artifacts.files_changed == ["/src/main.py", "/src/new_file.py"]
+        assert len(events) == 2
+
+    def test_record_tool_use_sdk_format_no_top_level_content(self):
+        """When top-level content is absent, falls back to message.content."""
+        from skuld.broker import SessionArtifacts
+
+        artifacts = SessionArtifacts()
+        data = {
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Edit",
+                        "input": {"file_path": "/src/fix.py"},
+                        "id": "tu_3",
+                    },
+                ]
+            },
+        }
+        artifacts.record_tool_use(data)
+        assert artifacts.files_changed == ["/src/fix.py"]
+
+    def test_record_tool_use_prefers_top_level_content(self):
+        """When both top-level and message.content exist, uses top-level."""
+        from skuld.broker import SessionArtifacts
+
+        artifacts = SessionArtifacts()
+        data = {
+            "content": [
+                {
+                    "type": "tool_use",
+                    "input": {"file_path": "/src/top.py"},
+                },
+            ],
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "input": {"file_path": "/src/nested.py"},
+                    },
+                ]
+            },
+        }
+        artifacts.record_tool_use(data)
+        assert artifacts.files_changed == ["/src/top.py"]
+        assert "/src/nested.py" not in artifacts.files_changed
+
 
 class TestHandleCliEventArtifacts:
     """Tests for artifact accumulation in _handle_cli_event."""
@@ -944,6 +1017,146 @@ class TestHandleCliEventArtifacts:
         data = {"type": "result", "modelUsage": {}}
         await test_broker._handle_cli_event(data)
         assert test_broker._artifacts.turn_count == 1
+
+
+class TestHandleCliEventSdkFormat:
+    """Tests for artifact accumulation from SDK WebSocket message format."""
+
+    @pytest.fixture
+    def test_broker(self, tmp_path):
+        settings = SkuldSettings(
+            session={"id": "test-session-sdk", "workspace_dir": str(tmp_path)},
+            transport="subprocess",
+        )
+        return Broker(settings=settings)
+
+    @pytest.mark.asyncio
+    async def test_assistant_event_sdk_format_records_tool_use(self, test_broker):
+        """SDK format: content nested under message.content."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Edit",
+                        "input": {"file_path": "/src/module.py"},
+                        "id": "tu_sdk_1",
+                    },
+                ]
+            },
+        }
+        await test_broker._handle_cli_event(data)
+        assert "/src/module.py" in test_broker._artifacts.files_changed
+
+
+class TestGitDiffSummary:
+    """Tests for Broker._git_diff_summary."""
+
+    @pytest.fixture
+    def test_broker(self, tmp_path):
+        settings = SkuldSettings(
+            session={"id": "test-diff", "workspace_dir": str(tmp_path)},
+        )
+        return Broker(settings=settings)
+
+    @pytest.mark.asyncio
+    async def test_returns_diff_output(self, test_broker):
+        diff_text = "diff --git a/main.py b/main.py\n+hello"
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(diff_text.encode(), b""))
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await test_broker._git_diff_summary()
+        assert "diff --git" in result
+
+    @pytest.mark.asyncio
+    async def test_truncates_large_diff(self, test_broker):
+        diff_text = "x" * 10000
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(diff_text.encode(), b""))
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await test_broker._git_diff_summary(max_bytes=100)
+        assert len(result) < 200
+        assert "truncated" in result
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_error(self, test_broker):
+        with patch("asyncio.create_subprocess_exec", side_effect=OSError("no git")):
+            result = await test_broker._git_diff_summary()
+        assert result == ""
+
+
+class TestPublishMeshOutcome:
+    """Tests for Broker._publish_mesh_outcome with enriched payload."""
+
+    @pytest.fixture
+    def test_broker(self, tmp_path):
+        settings = SkuldSettings(
+            session={
+                "id": "test-mesh-pub",
+                "workspace_dir": str(tmp_path),
+                "initial_prompt": "Fix the login bug",
+            },
+        )
+        b = Broker(settings=settings)
+        b._artifacts.files_changed = ["/src/auth.py", "/src/login.py"]
+        b._artifacts.turn_count = 5
+        return b
+
+    @pytest.mark.asyncio
+    async def test_payload_includes_workspace_and_task(self, test_broker):
+        mock_mesh = AsyncMock()
+        mock_adapter = MagicMock()
+        mock_adapter.peer_id = "peer-1"
+        mock_adapter._mesh = mock_mesh
+        test_broker._mesh_adapter = mock_adapter
+
+        with patch.object(test_broker, "_git_diff_summary", return_value="diff content"):
+            await test_broker._publish_mesh_outcome()
+
+        call_args = mock_mesh.publish.call_args
+        event = call_args[0][0]
+        payload = event.payload
+
+        assert payload["workspace_path"] == test_broker.workspace_dir
+        assert payload["task_description"] == "Fix the login bug"
+        assert payload["diff_summary"] == "diff content"
+        assert payload["files_changed"] == ["/src/auth.py", "/src/login.py"]
+        assert "5 turns" in payload["summary"]
+        assert "2 files" in payload["summary"]
+
+    @pytest.mark.asyncio
+    async def test_no_mesh_adapter_returns_early(self, test_broker):
+        test_broker._mesh_adapter = None
+        # Should not raise
+        await test_broker._publish_mesh_outcome()
+
+    @pytest.mark.asyncio
+    async def test_payload_omits_empty_fields(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("SESSION_INITIAL_PROMPT", raising=False)
+        settings = SkuldSettings(
+            session={
+                "id": "test-mesh-empty",
+                "workspace_dir": str(tmp_path),
+                "initial_prompt": "",
+            },
+        )
+        b = Broker(settings=settings)
+        mock_mesh = AsyncMock()
+        mock_adapter = MagicMock()
+        mock_adapter.peer_id = "peer-2"
+        mock_adapter._mesh = mock_mesh
+        b._mesh_adapter = mock_adapter
+        b._room_bridge = None
+
+        with patch.object(b, "_git_diff_summary", return_value=""):
+            await b._publish_mesh_outcome()
+
+        event = mock_mesh.publish.call_args[0][0]
+        payload = event.payload
+        assert "task_description" not in payload
+        assert "diff_summary" not in payload
+        assert "files_changed" not in payload
 
 
 class TestReportChronicle:
@@ -2291,9 +2504,7 @@ class TestBrokerRoomBridge:
         b._room_bridge = mock_bridge
 
         mock_ws = AsyncMock()
-        mock_ws.receive_text = AsyncMock(
-            side_effect=["not valid json\n", WebSocketDisconnect()]
-        )
+        mock_ws.receive_text = AsyncMock(side_effect=["not valid json\n", WebSocketDisconnect()])
 
         await b.handle_ravn_websocket(mock_ws, "agent-1")
 
