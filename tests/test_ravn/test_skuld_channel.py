@@ -363,8 +363,9 @@ async def test_send_reconnects_on_connection_closed():
     with patch("ravn.adapters.channels.skuld_channel.websockets.connect", new=connect_coro):
         await ch._send("hello")
 
-    assert len(sent_payloads) == 1
-    assert sent_payloads[0] == "hello"
+    assert len(sent_payloads) == 2
+    # First payload is the registration frame, second is the re-sent message
+    assert sent_payloads[1] == "hello"
 
 
 def test_serialise_task_complete_event():

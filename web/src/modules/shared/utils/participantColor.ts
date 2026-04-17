@@ -1,5 +1,5 @@
 /**
- * Number of brand-derived participant color slots available.
+ * Number of brand-derived participant color slots available (p1–p7).
  * Each slot is defined in tokens.css as --color-participant-{n}.
  */
 export const PARTICIPANT_SLOT_COUNT = 7;

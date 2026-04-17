@@ -923,8 +923,8 @@ class TestBrokerMeshIntegration:
         # This will fail to instantiate because SleipnirMeshAdapter needs
         # publisher/subscriber, but it tests the import path
         mesh = b._build_mesh(settings.mesh)
-        # Should be None because instantiation fails without publisher
-        assert mesh is None
+        # Should succeed — SleipnirMeshAdapter is now built with NNG transport
+        assert mesh is not None
 
     @pytest.mark.asyncio
     async def test_build_discovery_returns_none(self, tmp_path):
