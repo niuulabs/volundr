@@ -7,7 +7,7 @@ function makeParticipant(overrides: Partial<RoomParticipant> = {}): RoomParticip
   return {
     peerId: 'peer-1',
     persona: 'Ravn-Alpha',
-    color: 'amber',
+    color: 'p1',
     participantType: 'ravn',
     status: 'idle',
     joinedAt: new Date(),
@@ -23,8 +23,8 @@ function makeParticipantsMap(
 
 describe('ParticipantFilter', () => {
   const twoParticipants = makeParticipantsMap([
-    makeParticipant({ peerId: 'peer-1', persona: 'Ravn-Alpha', color: 'amber' }),
-    makeParticipant({ peerId: 'peer-2', persona: 'Ravn-Beta', color: 'cyan' }),
+    makeParticipant({ peerId: 'peer-1', persona: 'Ravn-Alpha', color: 'p1' }),
+    makeParticipant({ peerId: 'peer-2', persona: 'Ravn-Beta', color: 'p2' }),
   ]);
 
   it('renders All pill', () => {

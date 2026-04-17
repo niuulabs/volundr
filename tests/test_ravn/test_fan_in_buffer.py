@@ -1,10 +1,6 @@
 """Unit tests for the FanInBuffer in drive_loop.py."""
 
-from datetime import UTC, datetime, timedelta
-
-import pytest
-
-from ravn.drive_loop import FanInBuffer, _FanInResult
+from ravn.drive_loop import FanInBuffer
 
 
 class TestMergeStrategy:
@@ -41,8 +37,15 @@ class TestMergeStrategy:
 class TestAllMustPassStrategy:
     """all_must_pass waits for all event types, checks all verdicts != fail."""
 
-    def test_first_event_returns_none(self):
+    def _make_buffer(self) -> FanInBuffer:
+        """Create a FanInBuffer with contributors registered so fan-in accumulates."""
         buf = FanInBuffer()
+        # Register contributors so the buffer does NOT short-circuit to immediate return
+        buf.set_contributors("some.target", ["coder", "reviewer"])
+        return buf
+
+    def test_first_event_returns_none(self):
+        buf = self._make_buffer()
         result = buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -55,7 +58,7 @@ class TestAllMustPassStrategy:
         assert buf.pending_count == 1
 
     def test_second_event_completes(self):
-        buf = FanInBuffer()
+        buf = self._make_buffer()
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -78,7 +81,7 @@ class TestAllMustPassStrategy:
         assert "PASS" in result.merged_context
 
     def test_different_root_correlation_creates_separate_slots(self):
-        buf = FanInBuffer()
+        buf = self._make_buffer()
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -98,7 +101,7 @@ class TestAllMustPassStrategy:
         assert buf.pending_count == 2
 
     def test_fail_verdict_shows_in_context(self):
-        buf = FanInBuffer()
+        buf = self._make_buffer()
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -122,6 +125,8 @@ class TestAllMustPassStrategy:
 class TestAnyPassStrategy:
     def test_any_pass_with_one_passing(self):
         buf = FanInBuffer()
+        # Register contributors so the buffer accumulates instead of returning immediately
+        buf.set_contributors("some.target", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "fail"}},
@@ -190,9 +195,100 @@ class TestProducerAggregation:
         assert buf.pending_count == 0
 
 
+class TestFormatSingleEvent:
+    """Tests for _format_single_event enriched payload formatting."""
+
+    def test_basic_format(self):
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {"persona": "coder", "task_id": "t1"},
+        )
+        assert "Event type: code.changed" in ctx
+        assert "From persona: coder" in ctx
+        assert "Source task: t1" in ctx
+
+    def test_includes_task_description(self):
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {"persona": "coder", "task_description": "Fix the login bug"},
+        )
+        assert "Task description: Fix the login bug" in ctx
+
+    def test_includes_workspace_path(self):
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {"persona": "coder", "workspace_path": "/tmp/workspace"},
+        )
+        assert "Workspace path: /tmp/workspace" in ctx
+
+    def test_includes_files_changed(self):
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {
+                "persona": "coder",
+                "files_changed": ["/src/auth.py", "/src/login.py"],
+            },
+        )
+        assert "Files changed (2):" in ctx
+        assert "  - /src/auth.py" in ctx
+        assert "  - /src/login.py" in ctx
+
+    def test_includes_diff_summary(self):
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {
+                "persona": "coder",
+                "diff_summary": "diff --git a/main.py\n+new line",
+            },
+        )
+        assert "Git diff:" in ctx
+        assert "diff --git a/main.py" in ctx
+
+    def test_includes_outcome(self):
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {"persona": "coder", "outcome": {"verdict": "pass"}},
+        )
+        assert "Outcome:" in ctx
+        assert "pass" in ctx
+
+    def test_enriched_payload_all_fields(self):
+        """Full enriched payload includes all fields in correct order."""
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {
+                "persona": "coder",
+                "task_description": "Fix auth",
+                "workspace_path": "/ws",
+                "files_changed": ["/src/a.py"],
+                "diff_summary": "diff text",
+                "outcome": {"verdict": "pass"},
+            },
+        )
+        lines = ctx.split("\n")
+        # Task description should come before diff
+        task_idx = next(i for i, line in enumerate(lines) if "Task description" in line)
+        diff_idx = next(i for i, line in enumerate(lines) if "Git diff" in line)
+        assert task_idx < diff_idx
+
+    def test_omits_empty_enriched_fields(self):
+        """Empty enriched fields should not appear in context."""
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {"persona": "coder"},
+        )
+        assert "Task description" not in ctx
+        assert "Workspace path" not in ctx
+        assert "Files changed" not in ctx
+        assert "Git diff" not in ctx
+        assert "Outcome" not in ctx
+
+
 class TestExpiry:
     def test_sweep_removes_expired_slots(self):
         buf = FanInBuffer(ttl_seconds=0.001)
+        # Register contributors so the buffer accumulates
+        buf.set_contributors("some.target", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {}},
@@ -204,6 +300,7 @@ class TestExpiry:
         assert buf.pending_count == 1
 
         import time
+
         time.sleep(0.01)
 
         expired = buf.sweep_expired()
@@ -212,6 +309,8 @@ class TestExpiry:
 
     def test_sweep_keeps_non_expired(self):
         buf = FanInBuffer(ttl_seconds=300)
+        # Register contributors so the buffer accumulates
+        buf.set_contributors("some.target", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {}},
@@ -228,6 +327,8 @@ class TestExpiry:
 class TestPersistence:
     def test_round_trip(self):
         buf = FanInBuffer()
+        # Register contributors so the buffer accumulates
+        buf.set_contributors("some.target", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -240,6 +341,8 @@ class TestPersistence:
         assert len(data) == 1
 
         buf2 = FanInBuffer()
+        # Register contributors on the restored buffer too
+        buf2.set_contributors("some.target", ["coder", "reviewer"])
         buf2.load_dict(data)
         assert buf2.pending_count == 1
 

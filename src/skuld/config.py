@@ -45,13 +45,13 @@ _DEFAULT_TRANSPORT_ADAPTER = "skuld.transports.sdk_websocket.SdkWebSocketTranspo
 
 
 _DEFAULT_PARTICIPANT_COLORS = [
-    "amber",
-    "cyan",
-    "emerald",
-    "purple",
-    "red",
-    "indigo",
-    "orange",
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5",
+    "p6",
+    "p7",
 ]
 
 
@@ -94,6 +94,8 @@ class MeshConfig(BaseModel):
     rpc_timeout_s: float = Field(default=10.0)
     default_work_timeout_s: float = Field(default=120.0)
     default_response_urgency: float = Field(default=0.3)
+    diff_max_bytes: int = Field(default=8192)
+    diff_timeout_s: float = Field(default=10.0)
     consumes_event_types: list[str] = Field(
         default_factory=lambda: ["code.requested"],
     )

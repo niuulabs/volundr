@@ -23,7 +23,6 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-import yaml
 from fastapi import FastAPI, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -31,6 +30,9 @@ from pydantic import BaseModel
 
 from niuu.domain.logging import LoggingConfig
 from niuu.domain.outcome import parse_outcome_block
+from niuu.mesh.cluster import read_cluster_pub_addresses
+from niuu.mesh.discovery_builder import build_discovery_adapters
+from niuu.mesh.identity import MeshIdentity
 from niuu.utils import import_class
 from skuld.channels import (
     ChannelRegistry,
@@ -40,6 +42,7 @@ from skuld.channels import (
 from skuld.chronicle_watcher import ChronicleWatcher
 from skuld.config import SkuldSettings
 from skuld.room_bridge import RoomBridge
+from skuld.room_mesh_bridge import RoomMeshBridge
 from skuld.service_manager import (
     ServiceCreateRequest,
     ServiceManager,
@@ -98,23 +101,6 @@ def _configure_logging() -> None:
 
 _configure_logging()
 logger = logging.getLogger("skuld.broker")
-
-
-def _read_cluster_addresses(adapters_config: list[dict]) -> list[str]:
-    """Read peer pub addresses from cluster.yaml files in the adapters config."""
-    addresses: list[str] = []
-    for cfg in adapters_config:
-        cluster_file = cfg.get("cluster_file", "")
-        if not cluster_file:
-            continue
-        cf = Path(cluster_file).expanduser()
-        if not cf.exists():
-            continue
-        cluster = yaml.safe_load(cf.read_text()) or {}
-        addresses.extend(
-            peer["pub_address"] for peer in cluster.get("peers", []) if peer.get("pub_address")
-        )
-    return addresses
 
 
 def _sanitize_log(value: object) -> str:
@@ -217,9 +203,17 @@ class SessionArtifacts:
 
         Returns a list of timeline-reportable tool events extracted
         from the content blocks.
+
+        Handles both the HTTP streaming format (``data["content"]``)
+        and the SDK WebSocket format (``data["message"]["content"]``).
         """
         tool_events: list[dict] = []
         content = data.get("content", [])
+        if not isinstance(content, list) or not content:
+            # SDK WebSocket transport nests content under message.content
+            msg = data.get("message")
+            if isinstance(msg, dict):
+                content = msg.get("content", [])
         if not isinstance(content, list):
             return tool_events
 
@@ -454,6 +448,10 @@ class Broker:
         # Mesh adapter — only active when mesh.enabled is True
         self._mesh_adapter: Any = None
 
+        # Room mesh bridge — translates ravn.mesh.* Sleipnir events to room wire events.
+        # Active when both mesh.enabled and room.enabled are True.
+        self._room_mesh_bridge: RoomMeshBridge | None = None
+
         # Room bridge — only active when room.enabled is True
         self._room_bridge: RoomBridge | None = (
             RoomBridge(
@@ -590,6 +588,31 @@ class Broker:
                         subscribes_to=list(getattr(peer, "capabilities", [])),
                     )
 
+            # Start room mesh bridge so outcomes from any mesh peer flow to the
+            # room UI via Sleipnir — eliminates the dual-publish pattern.
+            if self._room_bridge is not None:
+                from sleipnir.ports.events import SleipnirSubscriber
+
+                sleipnir_subscriber = self._mesh_adapter.sleipnir_subscriber
+                if sleipnir_subscriber is None:
+                    # Fallback: InProcessBus implements both Publisher and Subscriber.
+                    # Only use it if it actually satisfies the Subscriber interface.
+                    if isinstance(self._sleipnir_publisher, SleipnirSubscriber):
+                        sleipnir_subscriber = self._sleipnir_publisher
+                    else:
+                        logger.warning(
+                            "Sleipnir publisher does not implement SleipnirSubscriber"
+                            " — RoomMeshBridge disabled"
+                        )
+                if sleipnir_subscriber is not None:
+                    self._room_mesh_bridge = RoomMeshBridge(
+                        subscriber=sleipnir_subscriber,
+                        room_bridge=self._room_bridge,
+                        session_id=self.session_id,
+                    )
+                    await self._room_mesh_bridge.start()
+                    logger.info("RoomMeshBridge started (session_id=%s)", self.session_id)
+
         except Exception as exc:
             logger.error("Mesh adapter start failed: %r", exc, exc_info=True)
             self._mesh_adapter = None
@@ -611,32 +634,28 @@ class Broker:
         # Build nng transport (fallback to in-process)
         if mesh_cfg.transport != "in_process":
             try:
-                from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
-                from sleipnir.adapters.nng_transport import NngTransport
+                from niuu.mesh.transport_builder import build_nng_transport  # noqa: PLC0415
+                from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter  # noqa: PLC0415
 
-                # Use configured NNG address (from SKULD__MESH__NNG__PUB_SUB_ADDRESS)
                 nng_cfg = getattr(mesh_cfg, "nng", None)
                 address = (
                     getattr(nng_cfg, "pub_sub_address", "tcp://127.0.0.1:0")
                     if nng_cfg
                     else "tcp://127.0.0.1:0"
                 )
-
-                # Read peer pub addresses from cluster.yaml so the NNG
-                # subscriber dials them on startup.
-                peer_addresses = _read_cluster_addresses(mesh_cfg.adapters)
-
-                nng = NngTransport(
+                peer_addresses = read_cluster_pub_addresses(mesh_cfg.adapters)
+                nng = build_nng_transport(
                     address=address,
                     service_id=f"skuld:{own_peer_id}",
                     peer_addresses=peer_addresses or None,
                 )
-                return SleipnirMeshAdapter(
-                    publisher=nng,
-                    subscriber=nng,
-                    own_peer_id=own_peer_id,
-                    rpc_timeout_s=mesh_cfg.rpc_timeout_s,
-                )
+                if nng is not None:
+                    return SleipnirMeshAdapter(
+                        publisher=nng,
+                        subscriber=nng,
+                        own_peer_id=own_peer_id,
+                        rpc_timeout_s=mesh_cfg.rpc_timeout_s,
+                    )
             except ImportError:
                 logger.warning("mesh: nng transport not available, falling back to in-process")
 
@@ -645,19 +664,10 @@ class Broker:
     def _build_discovery(self, mesh_cfg: Any) -> Any:
         """Build discovery adapter from mesh config, or return None.
 
-        Uses the ``adapters`` list in mesh config with dynamic import,
-        same pattern as ravn's discovery builder.  Each adapter receives
-        ``own_identity`` as a :class:`RavnIdentity` constructed from
-        Skuld's mesh config.
+        Uses ``niuu.mesh.discovery_builder`` with a :class:`MeshIdentity`
+        constructed from Skuld's mesh config.  No cross-import from ravn.
         """
-        if not mesh_cfg.adapters:
-            return None
-
-        import importlib
-
-        from ravn.domain.models import RavnIdentity
-
-        own_identity = RavnIdentity(
+        own_identity = MeshIdentity(
             peer_id=mesh_cfg.peer_id or self.session_id or "skuld",
             realm_id="",
             persona=mesh_cfg.persona,
@@ -666,22 +676,10 @@ class Broker:
             version="0.1.0",
         )
 
-        for cfg in mesh_cfg.adapters:
-            adapter_path = cfg.get("adapter", "")
-            if not adapter_path:
-                continue
-            module_path, class_name = adapter_path.rsplit(".", 1)
-            mod = importlib.import_module(module_path)
-            cls = getattr(mod, class_name)
-            kwargs = {k: v for k, v in cfg.items() if k != "adapter"}
-            kwargs["own_identity"] = own_identity
-            try:
-                return cls(**kwargs)
-            except Exception as exc:
-                logger.warning("discovery: failed to build %s: %s", adapter_path, exc)
-                continue
-
-        return None
+        return build_discovery_adapters(
+            adapters_config=mesh_cfg.adapters,
+            own_identity=own_identity,
+        )
 
     def _build_transport_kwargs(self) -> dict:
         """Return superset of kwargs that any transport constructor might need."""
@@ -794,6 +792,11 @@ class Broker:
         # Report chronicle BEFORE stopping the transport (CLI must be alive)
         await self._report_chronicle()
 
+        # Stop room mesh bridge before mesh adapter
+        if self._room_mesh_bridge is not None:
+            await self._room_mesh_bridge.stop()
+            self._room_mesh_bridge = None
+
         # Stop mesh adapter before transport (deregister from discovery)
         if self._mesh_adapter is not None:
             await self._mesh_adapter.stop()
@@ -866,6 +869,11 @@ class Broker:
         # Report activity state transitions to Volundr
         if event_type == "assistant":
             asyncio.create_task(self._report_activity_state("active"))
+            # Emit room activity for CLI participant so room UI shows "thinking"
+            if self._room_bridge is not None and self._mesh_adapter is not None:
+                await self._room_bridge.broadcast_cli_activity(
+                    self._mesh_adapter.peer_id, "thinking"
+                )
         elif event_type == "result":
             asyncio.create_task(self._report_activity_state("idle"))
             asyncio.create_task(self._on_result_publish_mesh())
@@ -985,6 +993,12 @@ class Broker:
                     "model": result_model,
                 }
             )
+
+            # Emit CLI turn as room_message so it shows participant color
+            if self._room_bridge is not None and self._mesh_adapter is not None and content:
+                await self._room_bridge.broadcast_cli_message(self._mesh_adapter.peer_id, content)
+                await self._room_bridge.broadcast_cli_activity(self._mesh_adapter.peer_id, "idle")
+
             first_line = ""
             if content:
                 for line in content.strip().splitlines():
@@ -1600,6 +1614,37 @@ class Broker:
         self._extract_and_store_outcome()
         await self._publish_mesh_outcome()
 
+    async def _git_diff_summary(self) -> str:
+        """Return a truncated git diff from the workspace.
+
+        Best-effort: returns an empty string on any failure so mesh
+        publishing is never blocked by git issues.
+        """
+        max_bytes = self._settings.mesh.diff_max_bytes
+        timeout = self._settings.mesh.diff_timeout_s
+
+        # Try committed changes first (HEAD~1..HEAD) since the coder
+        # session typically commits before finishing.  Fall back to
+        # uncommitted working-tree changes (diff HEAD).
+        for diff_args in (["git", "diff", "HEAD~1..HEAD"], ["git", "diff", "HEAD"]):
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *diff_args,
+                    cwd=self.workspace_dir,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            except Exception:
+                return ""
+            raw = stdout.decode(errors="replace")
+            if raw.strip():
+                if len(raw) > max_bytes:
+                    return raw[:max_bytes] + "\n... (truncated)"
+                return raw
+
+        return ""
+
     async def _publish_mesh_outcome(self) -> None:
         """Publish a ``code.changed`` event on the mesh so flock peers react.
 
@@ -1611,6 +1656,8 @@ class Broker:
 
         from ravn.domain.events import RavnEvent, RavnEventType
 
+        diff_summary = await self._git_diff_summary()
+
         outcome_payload: dict = {
             "event_type": "code.changed",
             "session_id": self.session_id,
@@ -1620,7 +1667,16 @@ class Broker:
                 f" ({self._artifacts.turn_count} turns,"
                 f" {len(self._artifacts.files_changed)} files)"
             ),
+            "workspace_path": self.workspace_dir,
         }
+
+        initial_prompt = self._settings.session.initial_prompt
+        if initial_prompt:
+            outcome_payload["task_description"] = initial_prompt
+
+        if diff_summary:
+            outcome_payload["diff_summary"] = diff_summary
+
         if self._artifacts.structured_outcome is not None:
             outcome_payload["outcome"] = self._artifacts.structured_outcome
         if self._artifacts.files_changed:
@@ -1643,24 +1699,8 @@ class Broker:
                 self._mesh_adapter.peer_id,
                 len(self._artifacts.files_changed),
             )
-
-            # Broadcast outcome to browser via room bridge
-            if self._room_bridge is not None:
-                from dataclasses import asdict
-
-                meta = self._room_bridge._participants.get(self._mesh_adapter.peer_id)
-                if meta is not None:
-                    await self._channels.broadcast(
-                        {
-                            "type": "room_outcome",
-                            "participantId": meta.peer_id,
-                            "participant": asdict(meta),
-                            "persona": meta.persona,
-                            "eventType": "code.changed",
-                            "fields": outcome_payload,
-                            "summary": outcome_payload.get("summary", ""),
-                        }
-                    )
+            # Room UI receives this via RoomMeshBridge subscribing to
+            # ravn.mesh.* — no separate broadcast needed here.
 
         except Exception:
             logger.warning("Mesh: failed to publish code.changed", exc_info=True)
