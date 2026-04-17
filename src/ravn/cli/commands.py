@@ -2782,81 +2782,74 @@ def _read_cluster_pub_addresses(settings: Settings) -> list[str]:
     return addresses
 
 
+_TRANSPORT_ALIASES: dict[str, str] = {
+    "nng": "sleipnir.adapters.nng_transport.NngTransport",
+    "sleipnir": "sleipnir.adapters.rabbitmq.RabbitMQTransport",
+    "rabbitmq": "sleipnir.adapters.rabbitmq.RabbitMQTransport",
+    "nats": "sleipnir.adapters.nats_transport.NatsTransport",
+    "redis": "sleipnir.adapters.redis_streams.RedisStreamsTransport",
+    "in_process": "sleipnir.adapters.in_process.InProcessBus",
+}
+
+
+def _resolve_transport_kwargs(
+    settings: Settings,
+    adapter: str,
+) -> dict[str, Any]:
+    """Build constructor kwargs for a Sleipnir transport from settings."""
+    if adapter == "nng":
+        nng_cfg = settings.mesh.nng
+        peer_addresses = _read_cluster_pub_addresses(settings)
+        return {
+            "address": nng_cfg.pub_sub_address,
+            "service_id": f"ravn:{settings.mesh.own_peer_id}",
+            "peer_addresses": peer_addresses or None,
+        }
+
+    if adapter in ("sleipnir", "rabbitmq"):
+        amqp_url = os.environ.get(settings.sleipnir.amqp_url_env, "")
+        if not amqp_url:
+            logger.warning(
+                "mesh: %s not set, rabbitmq transport unavailable",
+                settings.sleipnir.amqp_url_env,
+            )
+            return {}
+        return {"amqp_url": amqp_url}
+
+    if adapter == "nats":
+        nats_url = os.environ.get("NATS_URL", "nats://localhost:4222")
+        return {"servers": [nats_url]}
+
+    if adapter == "redis":
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+        return {"redis_url": redis_url}
+
+    return {}
+
+
 def _build_sleipnir_transport(
     settings: Settings,
     adapter: str,
     discovery: Any = None,
 ) -> Any:
-    """Build the Sleipnir transport based on adapter config."""
-    if adapter == "nng":
-        try:
-            from sleipnir.adapters.nng_transport import NngTransport
+    """Build the Sleipnir transport using the dynamic adapter pattern."""
+    fq_class = _TRANSPORT_ALIASES.get(adapter, adapter)
 
-            nng_cfg = settings.mesh.nng
-            service_id = f"ravn:{settings.mesh.own_peer_id}"
+    try:
+        cls = _import_class(fq_class)
+    except Exception as exc:
+        logger.warning("mesh: failed to import transport %s: %s", fq_class, exc)
+        return None
 
-            # Read peer pub addresses from cluster.yaml so the NNG subscriber
-            # dials them on startup (discovery.peers() loads async — too late).
-            peer_addresses = _read_cluster_pub_addresses(settings)
+    kwargs = _resolve_transport_kwargs(settings, adapter)
+    if adapter in ("sleipnir", "rabbitmq") and not kwargs:
+        return None
 
-            return NngTransport(
-                address=nng_cfg.pub_sub_address,
-                service_id=service_id,
-                peer_addresses=peer_addresses or None,
-            )
-        except ImportError:
-            logger.warning("mesh: pynng not installed, nng transport unavailable")
-            return None
-
-    if adapter in ("sleipnir", "rabbitmq"):
-        try:
-            import os
-
-            from sleipnir.adapters.rabbitmq import RabbitMQTransport
-
-            amqp_url = os.environ.get(settings.sleipnir.amqp_url_env, "")
-            if not amqp_url:
-                logger.warning(
-                    "mesh: %s not set, rabbitmq transport unavailable",
-                    settings.sleipnir.amqp_url_env,
-                )
-                return None
-            return RabbitMQTransport(amqp_url=amqp_url)
-        except ImportError:
-            logger.warning("mesh: aio_pika not installed, rabbitmq transport unavailable")
-            return None
-
-    if adapter == "nats":
-        try:
-            import os
-
-            from sleipnir.adapters.nats_transport import NatsTransport
-
-            nats_url = os.environ.get("NATS_URL", "nats://localhost:4222")
-            return NatsTransport(servers=[nats_url])
-        except ImportError:
-            logger.warning("mesh: nats-py not installed, nats transport unavailable")
-            return None
-
-    if adapter == "redis":
-        try:
-            import os
-
-            from sleipnir.adapters.redis_streams import RedisStreamsTransport
-
-            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
-            return RedisStreamsTransport(redis_url=redis_url)
-        except ImportError:
-            logger.warning("mesh: redis not installed, redis transport unavailable")
-            return None
-
-    if adapter == "in_process":
-        from sleipnir.adapters.in_process import InProcessBus
-
-        return InProcessBus()
-
-    logger.warning("mesh: unknown adapter %r", adapter)
-    return None
+    try:
+        return cls(**kwargs)
+    except Exception as exc:
+        logger.warning("mesh: failed to instantiate transport %s: %s", fq_class, exc)
+        return None
 
 
 def _build_discovery(
