@@ -1925,7 +1925,7 @@ async def _run_daemon(
             mimir=daemon_mimir,
             persona_config=resolved_persona,
             profile=profile,
-            discovery=_cascade_discovery,
+            discovery=_cascade_participant.discovery if _cascade_participant is not None else None,
         )
         if profile_cfg.include_mcp:
             tools.extend(_filter_tools(mcp_tools, settings, resolved_persona))
@@ -2028,8 +2028,7 @@ async def _run_daemon(
     event_publisher: EventPublisherPort = NoOpEventPublisher()
     trigger_names: list[str] = []
     drive_loop: Any = None
-    _cascade_mesh: Any = None
-    _cascade_discovery: Any = None
+    _cascade_participant: Any = None
     if settings.initiative.enabled or task_dispatch:
         if settings.sleipnir.enabled:
             event_publisher = RabbitMQEventPublisher(settings.sleipnir)
@@ -2068,14 +2067,12 @@ async def _run_daemon(
         # Wire cascade tools when enabled (Mode 1 local + optional mesh/spawn)
         if settings.cascade.enabled:
             _active_profile_name = profile.name if profile else "default"
-            _cascade_mesh, _cascade_discovery = _wire_cascade(
+            _cascade_participant = _wire_cascade(
                 drive_loop, settings, persona_config, _active_profile_name
             )
-            if _cascade_discovery is not None:
-                await _cascade_discovery.start()
-            if _cascade_mesh is not None:
-                await _cascade_mesh.start()
-                # Process pending outcome subscriptions
+            if _cascade_participant is not None:
+                await _cascade_participant.start()
+                _cascade_mesh = _cascade_participant.mesh
                 pending = getattr(_cascade_mesh, "_pending_outcome_subscriptions", [])
                 for event_type, handler in pending:
                     logger.info("mesh: subscribing to event_type=%s", event_type)
@@ -2131,10 +2128,8 @@ async def _run_daemon(
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        if _cascade_mesh is not None:
-            await _cascade_mesh.stop()
-        if _cascade_discovery is not None:
-            await _cascade_discovery.stop()
+        if _cascade_participant is not None:
+            await _cascade_participant.stop()
         await event_publisher.close()
         await _shutdown_mcp(mcp_manager)
         # NIU-598: flush pending events before tearing down daemon reflection service.
@@ -2359,7 +2354,7 @@ def _wire_cascade(
     settings: Settings,
     persona_config: Any | None = None,
     profile_name: str = "default",
-) -> None:
+) -> Any:
     """Wire cascade tools and mesh RPC handler onto the drive loop.
 
     This wires up:
@@ -2652,13 +2647,17 @@ def _wire_cascade(
         for event_type in event_types:
             logger.info("mesh: will subscribe to event_type=%s after start", event_type)
 
-    return mesh, discovery
+    if mesh is None and discovery is None:
+        return None
 
+    from niuu.mesh import resolve_peer_id  # noqa: PLC0415
+    from niuu.mesh.participant import MeshParticipant  # noqa: PLC0415
 
-_MESH_ALIASES: dict[str, str] = {
-    "sleipnir": "ravn.adapters.mesh.sleipnir_mesh.SleipnirMeshAdapter",
-    "webhook": "ravn.adapters.mesh.webhook.WebhookMeshAdapter",
-}
+    return MeshParticipant(
+        mesh=mesh,
+        discovery=discovery,
+        peer_id=resolve_peer_id(settings.mesh.own_peer_id),
+    )
 
 
 def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
@@ -2674,65 +2673,27 @@ def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
     """
     import socket
 
-    from ravn.adapters.mesh.composite import CompositeMeshAdapter
-
     mesh_cfg = settings.mesh
     own_peer_id = mesh_cfg.own_peer_id or socket.gethostname()
 
-    # New list-based config: dynamic import with kwargs
+    # New list-based config: delegate to shared niuu.mesh helper
     if mesh_cfg.adapters:
-        transports: list[Any] = []
-        for entry in mesh_cfg.adapters:
-            adapter_class = entry.get("adapter", "")
-            if not adapter_class:
-                logger.warning("mesh: adapter entry missing 'adapter' field, skipping")
-                continue
+        from niuu.mesh import build_mesh_from_adapters_list  # noqa: PLC0415
 
-            # Resolve short aliases for convenience
-            fq_class = _MESH_ALIASES.get(adapter_class, adapter_class)
+        def _sleipnir_tb(entry: dict[str, Any]) -> Any:
+            return _build_sleipnir_transport(
+                settings,
+                entry.get("transport", mesh_cfg.adapter or "nng"),
+                discovery=discovery,
+            )
 
-            try:
-                cls = _import_class(fq_class)
-            except Exception as exc:
-                logger.warning("mesh: failed to import %s: %s", fq_class, exc)
-                continue
-
-            # Build kwargs: everything except 'adapter' key
-            kwargs = {k: v for k, v in entry.items() if k != "adapter"}
-            kwargs["own_peer_id"] = own_peer_id
-            kwargs["discovery"] = discovery
-            kwargs.setdefault("rpc_timeout_s", mesh_cfg.rpc_timeout_s)
-
-            # Handle Sleipnir adapter specially - needs publisher/subscriber
-            if "sleipnir" in fq_class.lower():
-                transport = _build_sleipnir_transport(
-                    settings,
-                    entry.get("transport", mesh_cfg.adapter or "nng"),
-                    discovery=discovery,
-                )
-                if transport is None:
-                    logger.warning("mesh: failed to build Sleipnir transport, skipping")
-                    continue
-                kwargs["publisher"] = transport
-                kwargs["subscriber"] = transport
-                kwargs.pop("discovery", None)  # Sleipnir doesn't need discovery in constructor
-
-            try:
-                adapter = cls(**kwargs)
-                transports.append(adapter)
-                logger.debug("mesh: loaded adapter %s", fq_class)
-            except Exception as exc:
-                logger.warning("mesh: failed to instantiate %s: %s", fq_class, exc)
-                continue
-
-        if not transports:
-            logger.warning("mesh: no adapters loaded from config")
-            return None
-
-        if len(transports) == 1:
-            return transports[0]
-
-        return CompositeMeshAdapter(transports=transports, own_peer_id=own_peer_id)
+        return build_mesh_from_adapters_list(
+            adapters=mesh_cfg.adapters,
+            own_peer_id=own_peer_id,
+            rpc_timeout_s=mesh_cfg.rpc_timeout_s,
+            discovery=discovery,
+            sleipnir_transport_builder=_sleipnir_tb,
+        )
 
     # Legacy single-adapter mode for backward compatibility
     legacy_adapter = mesh_cfg.adapter
@@ -2770,16 +2731,6 @@ def _read_cluster_pub_addresses(settings: Settings) -> list[str]:
 
     adapters_config = list(getattr(discovery_cfg, "adapters", []))
     return read_cluster_pub_addresses(adapters_config)
-
-
-_TRANSPORT_ALIASES: dict[str, str] = {
-    "nng": "sleipnir.adapters.nng_transport.NngTransport",
-    "sleipnir": "sleipnir.adapters.rabbitmq.RabbitMQTransport",
-    "rabbitmq": "sleipnir.adapters.rabbitmq.RabbitMQTransport",
-    "nats": "sleipnir.adapters.nats_transport.NatsTransport",
-    "redis": "sleipnir.adapters.redis_streams.RedisStreamsTransport",
-    "in_process": "sleipnir.adapters.in_process.InProcessBus",
-}
 
 
 def _resolve_transport_kwargs(

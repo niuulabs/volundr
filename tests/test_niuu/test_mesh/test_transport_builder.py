@@ -67,17 +67,6 @@ class TestBuildTransport:
 class TestBuildNngTransport:
     """Tests for build_nng_transport — mocked so pynng is not required."""
 
-    def _make_fake_nng(self):
-        """Return a mock NngTransport class that records constructor kwargs."""
-        records: list[dict] = []
-
-        class FakeNng:
-            def __init__(self, **kwargs):
-                records.append(kwargs)
-
-        FakeNng.records = records
-        return FakeNng
-
     def test_calls_build_transport_with_nng_alias(self):
         with patch("niuu.mesh.transport_builder.import_class") as mock_import:
             fake_cls = MagicMock(return_value="nng_instance")

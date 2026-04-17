@@ -70,7 +70,7 @@ def build_mesh_from_adapters_list(
     -------
     A MeshPort implementation, or None if no adapters could be loaded.
     """
-    from ravn.adapters.mesh.composite import CompositeMeshAdapter
+    CompositeMeshAdapter = import_class("ravn.adapters.mesh.composite.CompositeMeshAdapter")  # noqa: N806
 
     transports: list[Any] = []
     for entry in adapters:
@@ -120,8 +120,8 @@ def build_mesh_from_adapters_list(
 
 def build_in_process_mesh(own_peer_id: str, rpc_timeout_s: float) -> Any:
     """Build a SleipnirMeshAdapter backed by InProcessBus (local/test mode)."""
-    from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
-    from sleipnir.adapters.in_process import InProcessBus
+    SleipnirMeshAdapter = import_class("ravn.adapters.mesh.sleipnir_mesh.SleipnirMeshAdapter")  # noqa: N806
+    InProcessBus = import_class("sleipnir.adapters.in_process.InProcessBus")  # noqa: N806
 
     bus = InProcessBus()
     return SleipnirMeshAdapter(

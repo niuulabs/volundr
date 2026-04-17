@@ -604,32 +604,28 @@ class Broker:
         # Build nng transport (fallback to in-process)
         if mesh_cfg.transport != "in_process":
             try:
-                from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
-                from sleipnir.adapters.nng_transport import NngTransport
+                from niuu.mesh.transport_builder import build_nng_transport  # noqa: PLC0415
+                from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter  # noqa: PLC0415
 
-                # Use configured NNG address (from SKULD__MESH__NNG__PUB_SUB_ADDRESS)
                 nng_cfg = getattr(mesh_cfg, "nng", None)
                 address = (
                     getattr(nng_cfg, "pub_sub_address", "tcp://127.0.0.1:0")
                     if nng_cfg
                     else "tcp://127.0.0.1:0"
                 )
-
-                # Read peer pub addresses from cluster.yaml so the NNG
-                # subscriber dials them on startup.
                 peer_addresses = read_cluster_pub_addresses(mesh_cfg.adapters)
-
-                nng = NngTransport(
+                nng = build_nng_transport(
                     address=address,
                     service_id=f"skuld:{own_peer_id}",
                     peer_addresses=peer_addresses or None,
                 )
-                return SleipnirMeshAdapter(
-                    publisher=nng,
-                    subscriber=nng,
-                    own_peer_id=own_peer_id,
-                    rpc_timeout_s=mesh_cfg.rpc_timeout_s,
-                )
+                if nng is not None:
+                    return SleipnirMeshAdapter(
+                        publisher=nng,
+                        subscriber=nng,
+                        own_peer_id=own_peer_id,
+                        rpc_timeout_s=mesh_cfg.rpc_timeout_s,
+                    )
             except ImportError:
                 logger.warning("mesh: nng transport not available, falling back to in-process")
 

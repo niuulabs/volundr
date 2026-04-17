@@ -60,7 +60,9 @@ def build_discovery_adapters(
     if not adapters_config:
         return None
 
-    from ravn.adapters.discovery.composite import CompositeDiscoveryAdapter
+    CompositeDiscoveryAdapter = import_class(  # noqa: N806
+        "ravn.adapters.discovery.composite.CompositeDiscoveryAdapter"
+    )
 
     backends: list[Any] = []
 
