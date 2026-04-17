@@ -858,4 +858,137 @@ describe('SessionChat', () => {
     // Agent detail panel should NOT exist (removed in favour of inline internals)
     expect(screen.queryByTestId('agent-detail-panel')).not.toBeInTheDocument();
   });
+
+  // ── clearMessages button ─────────────────────────────────────
+
+  it('calls clearMessages when clear chat button is clicked', () => {
+    const clearMessages = vi.fn();
+    const messages: SkuldChatMessage[] = [
+      { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },
+    ];
+    mockSkuldChat({ connected: true, messages, clearMessages });
+    render(<SessionChat url="wss://test/session" />);
+
+    fireEvent.click(screen.getByTestId('clear-chat'));
+    expect(clearMessages).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not show clear chat button when no messages', () => {
+    mockSkuldChat({ connected: true, messages: [] });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.queryByTestId('clear-chat')).not.toBeInTheDocument();
+  });
+
+  // ── History loading state ────────────────────────────────────
+
+  it('shows loading message when historyLoaded is false and connected', () => {
+    mockSkuldChat({ connected: true, historyLoaded: false });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.getByTestId('history-loading')).toBeInTheDocument();
+    expect(screen.getByText('Loading conversation...')).toBeInTheDocument();
+  });
+
+  it('hides loading message when historyLoaded is true', () => {
+    mockSkuldChat({ connected: true, historyLoaded: true });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.queryByTestId('history-loading')).not.toBeInTheDocument();
+  });
+
+  it('hides loading message when disconnected', () => {
+    mockSkuldChat({ connected: false, historyLoaded: false });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.queryByTestId('history-loading')).not.toBeInTheDocument();
+  });
+
+  // ── handleBookmark ───────────────────────────────────────────
+
+  it('stores bookmark in localStorage when bookmark button is clicked', () => {
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+    const messages: SkuldChatMessage[] = [
+      { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },
+      { id: 'a1', role: 'assistant', content: 'World', createdAt: new Date(), status: 'complete' },
+    ];
+    mockSkuldChat({ connected: true, messages });
+    render(<SessionChat url="wss://test/session" />);
+
+    const bookmarkBtn = screen.getByTitle('Bookmark');
+    fireEvent.click(bookmarkBtn);
+
+    expect(setItemSpy).toHaveBeenCalledWith('bookmark:a1', '1');
+    setItemSpy.mockRestore();
+  });
+
+  // ── handleCopy ───────────────────────────────────────────────
+
+  it('copies message content to clipboard on copy', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    const messages: SkuldChatMessage[] = [
+      { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },
+      { id: 'a1', role: 'assistant', content: 'Copy me', createdAt: new Date(), status: 'complete' },
+    ];
+    mockSkuldChat({ connected: true, messages });
+    render(<SessionChat url="wss://test/session" />);
+
+    const copyBtn = screen.getByTitle('Copy');
+    fireEvent.click(copyBtn);
+
+    expect(writeText).toHaveBeenCalledWith('Copy me');
+  });
+
+  // ── internal toggle in room mode ────────────────────────────
+
+  it('shows internal toggle button in room mode', () => {
+    const participants = new Map([
+      ['p1', makeParticipant('p1', 'Ravn-A', 'amber')],
+      ['p2', makeParticipant('p2', 'Ravn-B', 'cyan')],
+    ]);
+    mockSkuldChat({ connected: true, participants });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.getByTestId('internal-toggle')).toBeInTheDocument();
+  });
+
+  it('does not show internal toggle when not in room mode', () => {
+    mockSkuldChat({ connected: true, participants: new Map() });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.queryByTestId('internal-toggle')).not.toBeInTheDocument();
+  });
+
+  // ── MeshSidebar visibility ───────────────────────────────────
+
+  it('shows MeshSidebar when participant messages exist', () => {
+    const messages: SkuldChatMessage[] = [
+      {
+        id: 'rm-1',
+        role: 'assistant',
+        content: 'Hello from agent',
+        createdAt: new Date(),
+        status: 'complete',
+        participant: { peerId: 'p1', persona: 'Ravn-A', color: 'amber', participantType: 'ravn' },
+        participantId: 'p1',
+      },
+    ];
+    const participants = new Map([
+      ['p1', makeParticipant('p1', 'Ravn-A', 'amber')],
+    ]);
+    mockSkuldChat({ connected: true, participants, messages });
+    const { container } = render(<SessionChat url="wss://test/session" />);
+
+    // When participants exist, sidebar is shown
+    expect(container.firstChild).toHaveAttribute('data-has-sidebar', 'true');
+  });
+
+  it('does not show MeshSidebar when no participants', () => {
+    mockSkuldChat({ connected: true, participants: new Map() });
+    const { container } = render(<SessionChat url="wss://test/session" />);
+
+    expect(container.firstChild).not.toHaveAttribute('data-has-sidebar');
+  });
 });

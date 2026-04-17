@@ -204,4 +204,137 @@ describe('SessionCard', () => {
     render(<SessionCard session={sessionWithIssue} />);
     expect(screen.getByText('NIU-44')).toBeInTheDocument();
   });
+
+  // ── Manual session (origin = 'manual') ──────────────────────
+
+  const manualSession: VolundrSession = {
+    id: 'forge-manual-01',
+    name: 'manual-debug',
+    source: { type: 'git', repo: 'kanuckvalley/debug', branch: 'main' },
+    status: 'running',
+    model: 'claude-opus-4-6',
+    lastActive: Date.now() - 1000 * 60 * 2,
+    messageCount: 12,
+    tokensUsed: 45000,
+    origin: 'manual',
+    hostname: 'my-laptop.local',
+  };
+
+  it('renders hostname for manual sessions', () => {
+    render(<SessionCard session={manualSession} />);
+    expect(screen.getByText('my-laptop.local')).toBeInTheDocument();
+  });
+
+  it('renders manual badge for manual sessions', () => {
+    render(<SessionCard session={manualSession} />);
+    expect(screen.getByText('manual')).toBeInTheDocument();
+  });
+
+  it('does not render model badge for manual session without model prop', () => {
+    render(<SessionCard session={manualSession} />);
+    expect(screen.queryByText('GPU')).not.toBeInTheDocument();
+    expect(screen.queryByText('API')).not.toBeInTheDocument();
+  });
+
+  // ── Compact mode ──────────────────────────────────────────────
+
+  it('renders compact view with session name', () => {
+    render(<SessionCard session={runningSession} compact />);
+    expect(screen.getByText('printer-firmware-thermal')).toBeInTheDocument();
+  });
+
+  it('renders message count in compact view', () => {
+    render(<SessionCard session={runningSession} compact />);
+    expect(screen.getByText('47')).toBeInTheDocument();
+  });
+
+  it('applies selected style in compact mode', () => {
+    const { container } = render(
+      <SessionCard session={runningSession} compact selected />
+    );
+    const card = container.firstChild as HTMLElement;
+    expect(card.className).toMatch(/selected/);
+  });
+
+  it('has button role in compact mode when onClick is provided', () => {
+    render(<SessionCard session={runningSession} compact onClick={() => {}} />);
+    expect(screen.getByRole('button')).toBeInTheDocument();
+  });
+
+  it('calls onClick in compact mode', () => {
+    const handleClick = vi.fn();
+    render(<SessionCard session={runningSession} compact onClick={handleClick} />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(handleClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not render external link when source has no repo URL in compact mode', () => {
+    const localSession: VolundrSession = {
+      ...runningSession,
+      source: { type: 'local_mount', paths: [] },
+    };
+    render(<SessionCard session={localSession} compact />);
+    expect(screen.queryByTitle('Open repository')).not.toBeInTheDocument();
+  });
+
+  it('renders external link for git source in compact mode', () => {
+    render(<SessionCard session={runningSession} compact />);
+    expect(screen.getByTitle('Open repository')).toBeInTheDocument();
+  });
+
+  it('renders tracker issue link in compact mode', () => {
+    const sessionWithIssue: VolundrSession = {
+      ...runningSession,
+      trackerIssue: {
+        id: 'issue-2',
+        identifier: 'NIU-88',
+        title: 'Fix compact',
+        status: 'in_progress',
+        url: 'https://linear.app/niuu/issue/NIU-88',
+        priority: 1,
+      },
+    };
+    render(<SessionCard session={sessionWithIssue} compact />);
+    expect(screen.getByTitle('NIU-88')).toBeInTheDocument();
+  });
+
+  it('renders status dot with activity state in compact mode', () => {
+    const activeSession: VolundrSession = {
+      ...runningSession,
+      activityState: 'tool_executing',
+    };
+    const { container } = render(<SessionCard session={activeSession} compact />);
+    const dot = container.querySelector('[data-activity="tool_executing"]');
+    expect(dot).toBeInTheDocument();
+  });
+
+  it('renders status dot with active activity for running session without activityState', () => {
+    const { container } = render(<SessionCard session={runningSession} compact />);
+    const dot = container.querySelector('[data-activity="active"]');
+    expect(dot).toBeInTheDocument();
+  });
+
+  it('applies custom className in compact mode', () => {
+    const { container } = render(
+      <SessionCard session={runningSession} compact className="my-class" />
+    );
+    expect(container.firstChild).toHaveClass('my-class');
+  });
+
+  it('does not have button role in compact mode without onClick', () => {
+    render(<SessionCard session={runningSession} compact />);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  // ── Non-git source in full mode ───────────────────────────────
+
+  it('renders source label without branch for non-git source', () => {
+    const localSession: VolundrSession = {
+      ...runningSession,
+      source: { type: 'local_mount', paths: [] },
+    };
+    render(<SessionCard session={localSession} />);
+    // Should not show a branch tag
+    expect(screen.queryByText('feature/thermal-calibration')).not.toBeInTheDocument();
+  });
 });
