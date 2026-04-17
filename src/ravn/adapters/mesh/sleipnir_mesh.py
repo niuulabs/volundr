@@ -21,13 +21,12 @@ import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.ports.mesh import PeerNotFoundError
 
-if TYPE_CHECKING:
-    from sleipnir.ports.events import SleipnirPublisher, SleipnirSubscriber, Subscription
+from sleipnir.ports.events import SleipnirPublisher, SleipnirSubscriber, Subscription
 
 logger = logging.getLogger(__name__)
 
@@ -281,6 +280,11 @@ class SleipnirMeshAdapter:
             await self._subscriber.stop()
 
         logger.info("sleipnir_mesh: stopped peer=%s", self._own_peer_id)
+
+    @property
+    def subscriber(self) -> SleipnirSubscriber:
+        """Expose the underlying Sleipnir subscriber port."""
+        return self._subscriber
 
     def set_rpc_handler(self, handler: Callable[[dict], Awaitable[dict]]) -> None:
         """Register handler for incoming RPC requests."""

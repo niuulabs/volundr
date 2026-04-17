@@ -606,18 +606,27 @@ class Broker:
             # Start room mesh bridge so outcomes from any mesh peer flow to the
             # room UI via Sleipnir — eliminates the dual-publish pattern.
             if self._room_bridge is not None:
-                sleipnir_subscriber = getattr(
-                    self._mesh_adapter._mesh, "_subscriber", None
-                )
+                from sleipnir.ports.events import SleipnirSubscriber
+
+                sleipnir_subscriber = self._mesh_adapter.sleipnir_subscriber
                 if sleipnir_subscriber is None:
-                    sleipnir_subscriber = self._sleipnir_publisher
-                self._room_mesh_bridge = RoomMeshBridge(
-                    subscriber=sleipnir_subscriber,
-                    room_bridge=self._room_bridge,
-                    session_id=self.session_id,
-                )
-                await self._room_mesh_bridge.start()
-                logger.info("RoomMeshBridge started (session_id=%s)", self.session_id)
+                    # Fallback: InProcessBus implements both Publisher and Subscriber.
+                    # Only use it if it actually satisfies the Subscriber interface.
+                    if isinstance(self._sleipnir_publisher, SleipnirSubscriber):
+                        sleipnir_subscriber = self._sleipnir_publisher
+                    else:
+                        logger.warning(
+                            "Sleipnir publisher does not implement SleipnirSubscriber"
+                            " — RoomMeshBridge disabled"
+                        )
+                if sleipnir_subscriber is not None:
+                    self._room_mesh_bridge = RoomMeshBridge(
+                        subscriber=sleipnir_subscriber,
+                        room_bridge=self._room_bridge,
+                        session_id=self.session_id,
+                    )
+                    await self._room_mesh_bridge.start()
+                    logger.info("RoomMeshBridge started (session_id=%s)", self.session_id)
 
         except Exception as exc:
             logger.error("Mesh adapter start failed: %r", exc, exc_info=True)

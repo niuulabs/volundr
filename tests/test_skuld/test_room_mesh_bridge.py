@@ -66,6 +66,7 @@ def _make_room_bridge(known_peers: list[str] | None = None) -> MagicMock:
     bridge.register_mesh_peer = AsyncMock()
     # Participants dict: peer_id → meta
     bridge.participants = {pid: MagicMock(peer_id=pid) for pid in (known_peers or [])}
+    bridge.has_participant = MagicMock(side_effect=lambda pid: pid in bridge.participants)
     return bridge
 
 

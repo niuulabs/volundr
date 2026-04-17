@@ -20,6 +20,8 @@ from ravn.ports.mesh import MeshPort
 from skuld.config import MeshConfig
 from skuld.transports import CLITransport
 
+from sleipnir.ports.events import SleipnirSubscriber
+
 logger = logging.getLogger("skuld.mesh_adapter")
 
 
@@ -56,6 +58,15 @@ class SkuldMeshAdapter:
     @property
     def is_running(self) -> bool:
         return self._running
+
+    @property
+    def sleipnir_subscriber(self) -> SleipnirSubscriber | None:
+        """Expose the Sleipnir subscriber from the underlying mesh transport.
+
+        Returns None when the mesh is not a SleipnirMeshAdapter (e.g. in-process
+        test mesh that has no dedicated subscriber port).
+        """
+        return getattr(self._mesh, "subscriber", None)
 
     async def start(self) -> None:
         """Register with discovery and subscribe to task topics."""

@@ -200,7 +200,7 @@ class RoomMeshBridge:
 
     async def _ensure_peer_registered(self, event: SleipnirEvent, peer_id: str) -> None:
         """Auto-register *peer_id* as a mesh participant if not already known."""
-        if peer_id in self._room_bridge.participants:
+        if self._room_bridge.has_participant(peer_id):
             return
 
         persona = _extract_persona(event, peer_id)
@@ -235,16 +235,10 @@ class RoomMeshBridge:
         ravn_event_payload: dict,
     ) -> None:
         """Translate a tool/thought mesh event into a ``room_activity`` wire event."""
-        frame: dict = {
-            "type": activity_type.replace("_executing", "_start")
-            if activity_type == "tool_executing"
-            else activity_type,
-            "data": ravn_event_payload.get("detail", ""),
-        }
-        # Map activity strings back to NDJSON frame types for handle_ravn_frame
-        ravn_frame_type = _ACTIVITY_TO_FRAME_TYPE.get(activity_type, "")
-        if ravn_frame_type:
-            frame["type"] = ravn_frame_type
+        ravn_frame_type = _ACTIVITY_TO_FRAME_TYPE.get(activity_type)
+        if not ravn_frame_type:
+            return
+        frame = {"type": ravn_frame_type, "data": ravn_event_payload.get("detail", "")}
         await self._room_bridge.handle_ravn_frame(peer_id, frame)
 
     @staticmethod
