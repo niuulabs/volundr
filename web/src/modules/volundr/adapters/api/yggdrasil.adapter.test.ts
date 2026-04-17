@@ -12,13 +12,7 @@ import type {
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-function mockResponse(data: unknown, status = 200) {
-  return Promise.resolve({
-    ok: status >= 200 && status < 300,
-    status,
-    json: () => Promise.resolve(data),
-  });
-}
+import { mockResponse } from '@/test/mockFetch';
 
 const mockHealth = {
   status: 'healthy',

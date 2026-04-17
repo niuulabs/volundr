@@ -1188,7 +1188,7 @@ describe('SessionChat', () => {
 
   it('copies message content to clipboard on copy', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
 
     const messages: SkuldChatMessage[] = [
       { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },

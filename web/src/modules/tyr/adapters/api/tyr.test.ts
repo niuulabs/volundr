@@ -1,17 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ApiTyrService } from './tyr';
+import { mockResponse } from '@/test/mockFetch';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
-
-function mockResponse(data: unknown, status = 200) {
-  return Promise.resolve({
-    ok: status >= 200 && status < 300,
-    status,
-    json: () => Promise.resolve(data),
-  });
-}
 
 describe('ApiTyrService', () => {
   let service: ApiTyrService;

@@ -15,6 +15,8 @@ import type {
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+import { mockResponse } from '@/test/mockFetch';
+
 /**
  * Mock SSE stream that replaces EventSource-based tests.
  * When fetch is called with the SSE endpoint URL, it returns a ReadableStream
@@ -176,14 +178,6 @@ describe('ApiVolundrService', () => {
     tier: 'balanced',
     color: 'purple',
   };
-
-  function mockResponse(data: unknown, status = 200) {
-    return Promise.resolve({
-      ok: status >= 200 && status < 300,
-      status,
-      json: () => Promise.resolve(data),
-    });
-  }
 
   describe('getSessions', () => {
     it('returns transformed sessions from API', async () => {

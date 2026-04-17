@@ -211,7 +211,7 @@ describe('useContextSidebar', () => {
 
   it('cancels in-flight MCP fetch when session changes', async () => {
     // Make the first fetch hang
-    let resolveFirst: () => void;
+    let resolveFirst: () => void = () => {};
     mockGetSessionMcpServers.mockImplementationOnce(
       () =>
         new Promise<never[]>(resolve => {
