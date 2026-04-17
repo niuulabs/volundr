@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-
 from niuu.mesh.transport_builder import TRANSPORT_ALIASES, build_nng_transport, build_transport
 
 

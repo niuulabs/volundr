@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-
 from niuu.mesh.discovery_builder import DISCOVERY_ALIASES, build_discovery_adapters
 from niuu.mesh.identity import MeshIdentity
 

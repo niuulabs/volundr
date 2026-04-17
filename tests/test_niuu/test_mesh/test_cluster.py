@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import textwrap
 
-
 from niuu.mesh.cluster import read_cluster_pub_addresses
 
 

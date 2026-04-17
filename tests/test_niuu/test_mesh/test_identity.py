@@ -66,8 +66,9 @@ class TestMeshIdentity:
     def test_has_same_fields_as_ravn_identity(self):
         """MeshIdentity must have all fields that RavnIdentity has so it can
         substitute for it in discovery adapters (duck typing)."""
-        from ravn.domain.models import RavnIdentity
         import dataclasses
+
+        from ravn.domain.models import RavnIdentity
 
         mesh_fields = {f.name for f in dataclasses.fields(MeshIdentity)}
         ravn_fields = {f.name for f in dataclasses.fields(RavnIdentity)}
