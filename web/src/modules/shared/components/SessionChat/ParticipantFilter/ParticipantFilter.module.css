@@ -47,7 +47,7 @@
 
 /* Colored dot for participant pills */
 .dot {
-  --participant-color: var(--color-accent-purple);
+  --participant-color: var(--color-participant-1);
   width: 6px;
   height: 6px;
   border-radius: var(--radius-full);

@@ -8,7 +8,7 @@ function makeParticipant(overrides: Partial<RoomParticipant> = {}): RoomParticip
   return {
     peerId: 'peer-1',
     persona: 'Ravn-A',
-    color: 'amber',
+    color: 'p1',
     participantType: 'ravn',
     status: 'idle',
     joinedAt: new Date(),

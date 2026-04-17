@@ -35,7 +35,7 @@ function makeParticipant(overrides: Partial<ParticipantMeta> = {}): ParticipantM
     peerId: 'ravn-1',
     persona: 'Ravn Alpha',
     displayName: '',
-    color: 'cyan',
+    color: 'p2',
     participantType: 'ravn',
     gatewayUrl: 'http://ravn-1:8080',
     ...overrides,
@@ -206,7 +206,7 @@ describe('AgentDetailPanel', () => {
     it('renders the panel for amber participants', () => {
       setupDetailMock();
       const participant = {
-        ...makeParticipant({ color: 'amber', persona: 'Amber Agent' }),
+        ...makeParticipant({ color: 'p1', persona: 'Amber Agent' }),
         status: 'idle' as const,
         joinedAt: new Date(),
       };
