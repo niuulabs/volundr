@@ -62,6 +62,18 @@ _DEFAULT_MESH_CAPABILITIES = [
     "file_edit",
 ]
 
+_DEFAULT_MESH_TOOLS = [
+    "claude-code",
+    "codex",
+]
+
+
+class NngConfig(BaseModel):
+    """NNG transport addresses for mesh communication."""
+
+    pub_sub_address: str = Field(default="tcp://127.0.0.1:0")
+    req_rep_address: str = Field(default="tcp://127.0.0.1:0")
+
 
 class MeshConfig(BaseModel):
     """Mesh peer configuration for flock participation.
@@ -74,8 +86,10 @@ class MeshConfig(BaseModel):
     enabled: bool = Field(default=False)
     peer_id: str = Field(default="")
     capabilities: list[str] = Field(default_factory=lambda: list(_DEFAULT_MESH_CAPABILITIES))
+    tools: list[str] = Field(default_factory=lambda: list(_DEFAULT_MESH_TOOLS))
     persona: str = Field(default="coder")
     transport: str = Field(default="nng")
+    nng: NngConfig = Field(default_factory=NngConfig)
     adapters: list[dict[str, Any]] = Field(default_factory=list)
     rpc_timeout_s: float = Field(default=10.0)
     default_work_timeout_s: float = Field(default=120.0)

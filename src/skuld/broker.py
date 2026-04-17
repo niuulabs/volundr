@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import yaml
 from fastapi import FastAPI, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -97,6 +98,23 @@ def _configure_logging() -> None:
 
 _configure_logging()
 logger = logging.getLogger("skuld.broker")
+
+
+def _read_cluster_addresses(adapters_config: list[dict]) -> list[str]:
+    """Read peer pub addresses from cluster.yaml files in the adapters config."""
+    addresses: list[str] = []
+    for cfg in adapters_config:
+        cluster_file = cfg.get("cluster_file", "")
+        if not cluster_file:
+            continue
+        cf = Path(cluster_file).expanduser()
+        if not cf.exists():
+            continue
+        cluster = yaml.safe_load(cf.read_text()) or {}
+        addresses.extend(
+            peer["pub_address"] for peer in cluster.get("peers", []) if peer.get("pub_address")
+        )
+    return addresses
 
 
 def _sanitize_log(value: object) -> str:
@@ -550,37 +568,68 @@ class Broker:
                 "Mesh adapter started (peer_id=%s)",
                 self._mesh_adapter.peer_id,
             )
+
+            # Register Skuld + discovered mesh peers as room participants
+            # so the browser UI shows them without a direct WebSocket.
+            if self._room_bridge is not None:
+                await self._room_bridge.register_mesh_peer(
+                    peer_id=self._mesh_adapter.peer_id,
+                    persona=mesh_cfg.persona,
+                    display_name="skuld",
+                    subscribes_to=list(mesh_cfg.consumes_event_types),
+                    emits=["code.changed"],
+                    tools=list(mesh_cfg.tools),
+                )
+            has_peers = discovery is not None and hasattr(discovery, "peers")
+            if self._room_bridge is not None and has_peers:
+                for peer in discovery.peers().values():
+                    await self._room_bridge.register_mesh_peer(
+                        peer_id=peer.peer_id,
+                        persona=peer.persona,
+                        display_name=peer.persona,
+                        subscribes_to=list(getattr(peer, "capabilities", [])),
+                    )
+
         except Exception as exc:
             logger.error("Mesh adapter start failed: %r", exc, exc_info=True)
             self._mesh_adapter = None
 
     def _build_mesh(self, mesh_cfg: Any) -> Any:
-        """Build mesh transport from config via shared niuu.mesh builder."""
+        """Build mesh transport from config.
+
+        The ``adapters`` list in mesh config is reserved for **discovery**
+        adapters (handled by ``_build_discovery``).  Mesh transport is always
+        built from the ``transport`` field (nng or in_process).
+        """
         from niuu.mesh import (
             build_in_process_mesh,
-            build_mesh_from_adapters_list,
             resolve_peer_id,
         )
 
         own_peer_id = resolve_peer_id(mesh_cfg.peer_id)
 
-        # Dynamic adapter list takes precedence
-        if mesh_cfg.adapters:
-            return build_mesh_from_adapters_list(
-                adapters=mesh_cfg.adapters,
-                own_peer_id=own_peer_id,
-                rpc_timeout_s=mesh_cfg.rpc_timeout_s,
-            )
-
-        # Single-transport mode: nng with ImportError fallback to in-process
+        # Build nng transport (fallback to in-process)
         if mesh_cfg.transport != "in_process":
             try:
                 from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
                 from sleipnir.adapters.nng_transport import NngTransport
 
+                # Use configured NNG address (from SKULD__MESH__NNG__PUB_SUB_ADDRESS)
+                nng_cfg = getattr(mesh_cfg, "nng", None)
+                address = (
+                    getattr(nng_cfg, "pub_sub_address", "tcp://127.0.0.1:0")
+                    if nng_cfg
+                    else "tcp://127.0.0.1:0"
+                )
+
+                # Read peer pub addresses from cluster.yaml so the NNG
+                # subscriber dials them on startup.
+                peer_addresses = _read_cluster_addresses(mesh_cfg.adapters)
+
                 nng = NngTransport(
-                    address="tcp://127.0.0.1:0",
+                    address=address,
                     service_id=f"skuld:{own_peer_id}",
+                    peer_addresses=peer_addresses or None,
                 )
                 return SleipnirMeshAdapter(
                     publisher=nng,
@@ -594,10 +643,44 @@ class Broker:
         return build_in_process_mesh(own_peer_id, mesh_cfg.rpc_timeout_s)
 
     def _build_discovery(self, mesh_cfg: Any) -> Any:
-        """Build discovery adapter if available, or return None."""
-        # Discovery is optional for Skuld — it registers as a passive peer
-        # For now, return None; discovery integration can be added later
-        # when multi-host flock support is needed.
+        """Build discovery adapter from mesh config, or return None.
+
+        Uses the ``adapters`` list in mesh config with dynamic import,
+        same pattern as ravn's discovery builder.  Each adapter receives
+        ``own_identity`` as a :class:`RavnIdentity` constructed from
+        Skuld's mesh config.
+        """
+        if not mesh_cfg.adapters:
+            return None
+
+        import importlib
+
+        from ravn.domain.models import RavnIdentity
+
+        own_identity = RavnIdentity(
+            peer_id=mesh_cfg.peer_id or self.session_id or "skuld",
+            realm_id="",
+            persona=mesh_cfg.persona,
+            capabilities=list(mesh_cfg.capabilities),
+            permission_mode="full_access",
+            version="0.1.0",
+        )
+
+        for cfg in mesh_cfg.adapters:
+            adapter_path = cfg.get("adapter", "")
+            if not adapter_path:
+                continue
+            module_path, class_name = adapter_path.rsplit(".", 1)
+            mod = importlib.import_module(module_path)
+            cls = getattr(mod, class_name)
+            kwargs = {k: v for k, v in cfg.items() if k != "adapter"}
+            kwargs["own_identity"] = own_identity
+            try:
+                return cls(**kwargs)
+            except Exception as exc:
+                logger.warning("discovery: failed to build %s: %s", adapter_path, exc)
+                continue
+
         return None
 
     def _build_transport_kwargs(self) -> dict:
@@ -785,6 +868,7 @@ class Broker:
             asyncio.create_task(self._report_activity_state("active"))
         elif event_type == "result":
             asyncio.create_task(self._report_activity_state("idle"))
+            asyncio.create_task(self._on_result_publish_mesh())
 
         # Track conversation from assistant messages.
         # The SDK WebSocket protocol sends complete messages as type=assistant
@@ -1507,6 +1591,80 @@ class Broker:
         except Exception:
             logger.warning("Failed to emit session ended event", exc_info=True)
 
+    async def _on_result_publish_mesh(self) -> None:
+        """Called when a CLI result event arrives (turn finished).
+
+        Extracts outcome from transcript and publishes ``code.changed``
+        on the mesh so flock peers (reviewer) can react immediately.
+        """
+        self._extract_and_store_outcome()
+        await self._publish_mesh_outcome()
+
+    async def _publish_mesh_outcome(self) -> None:
+        """Publish a ``code.changed`` event on the mesh so flock peers react.
+
+        Called after the session completes.  The reviewer ravn subscribes
+        to ``code.changed`` and will trigger a review when it receives this.
+        """
+        if self._mesh_adapter is None:
+            return
+
+        from ravn.domain.events import RavnEvent, RavnEventType
+
+        outcome_payload: dict = {
+            "event_type": "code.changed",
+            "session_id": self.session_id,
+            "persona": self._settings.mesh.persona,
+            "summary": (
+                f"Session completed"
+                f" ({self._artifacts.turn_count} turns,"
+                f" {len(self._artifacts.files_changed)} files)"
+            ),
+        }
+        if self._artifacts.structured_outcome is not None:
+            outcome_payload["outcome"] = self._artifacts.structured_outcome
+        if self._artifacts.files_changed:
+            outcome_payload["files_changed"] = list(self._artifacts.files_changed)
+
+        event = RavnEvent(
+            type=RavnEventType.OUTCOME,
+            source=f"skuld:{self._mesh_adapter.peer_id}",
+            payload=outcome_payload,
+            timestamp=datetime.now(UTC),
+            urgency=0.8,
+            correlation_id=self.session_id,
+            session_id=self.session_id,
+        )
+
+        try:
+            await self._mesh_adapter._mesh.publish(event, "code.changed")
+            logger.info(
+                "Mesh: published code.changed (peer=%s, files=%d)",
+                self._mesh_adapter.peer_id,
+                len(self._artifacts.files_changed),
+            )
+
+            # Broadcast outcome to browser via room bridge
+            if self._room_bridge is not None:
+                from dataclasses import asdict
+
+                meta = self._room_bridge._participants.get(self._mesh_adapter.peer_id)
+                if meta is not None:
+                    await self._channels.broadcast(
+                        {
+                            "type": "room_outcome",
+                            "participantId": meta.peer_id,
+                            "participant": asdict(meta),
+                            "persona": meta.persona,
+                            "eventType": "code.changed",
+                            "fields": outcome_payload,
+                            "summary": outcome_payload.get("summary", ""),
+                        }
+                    )
+
+        except Exception:
+            logger.warning("Mesh: failed to publish code.changed", exc_info=True)
+
     async def _report_chronicle(self) -> None:
         """Report chronicle summary data to the Volundr API on shutdown.
 
@@ -1518,6 +1676,7 @@ class Broker:
         """
         self._extract_and_store_outcome()
         await self._emit_session_ended_event()
+        await self._publish_mesh_outcome()
 
         if not self.volundr_api_url:
             return

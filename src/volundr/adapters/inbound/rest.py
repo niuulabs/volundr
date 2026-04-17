@@ -157,6 +157,15 @@ class SessionCreate(BaseModel):
         max_length=2048,
         description="URL of the linked issue in the tracker",
     )
+    workload_type: str = Field(
+        default="session",
+        max_length=100,
+        description="Workload type: 'session' (default) or 'ravn_flock' for raiding parties",
+    )
+    workload_config: dict = Field(
+        default_factory=dict,
+        description="Workload-specific configuration (e.g. personas, mesh, mimir settings)",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -1080,6 +1089,8 @@ def create_router(
                 resource_config=data.resource_config or None,
                 system_prompt=data.system_prompt,
                 initial_prompt=data.initial_prompt,
+                workload_type=data.workload_type,
+                workload_config=data.workload_config or None,
             )
             return SessionResponse.from_session(started)
         except SessionStateError as e:

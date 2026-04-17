@@ -131,7 +131,9 @@ class FanInBuffer:
         Returns a ``_FanInResult`` when all required events have arrived,
         otherwise ``None``.  For ``merge`` strategy returns immediately.
         """
-        if strategy == "merge" or len(consumes_event_types) <= 1:
+        # Act immediately when: merge strategy, single event type, or no
+        # fan-in contributors registered (solo persona in the flock).
+        if strategy == "merge" or len(consumes_event_types) <= 1 or not self._contributor_names:
             return _FanInResult(
                 persona_name=persona_name,
                 merged_context=self._format_single_event(event_type, event_payload),

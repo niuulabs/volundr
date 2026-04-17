@@ -58,6 +58,11 @@ peers:
     display_name: Heimdall
     pub_address: "ipc:///tmp/ravn-mesh/node-3.ipc"
     rep_address: "ipc:///tmp/ravn-mesh/node-3-rep.ipc"
+  - peer_id: ravn-mesh-4
+    persona: reporter
+    display_name: Saga
+    pub_address: "ipc:///tmp/ravn-mesh/node-4.ipc"
+    rep_address: "ipc:///tmp/ravn-mesh/node-4-rep.ipc"
 YAML
     echo "${cluster_path}"
 }
@@ -163,7 +168,7 @@ cmd_start() {
 
     mkdir -p "${LOG_DIR}" "${MEMORY_DIR}"
 
-    echo "Starting Ravn mesh (3 nodes, static discovery)..."
+    echo "Starting Ravn mesh (4 nodes, static discovery)..."
     echo ""
 
     # Generate cluster.yaml with all peer definitions
@@ -171,19 +176,20 @@ cmd_start() {
     cluster_file="$(_write_cluster_yaml)"
     echo "  Cluster file: ${cluster_file}"
 
-    # Node roles (feedback loop demo):
+    # Node roles:
     #   1 — coder     (consumes review.completed, produces code.changed)
     #   2 — reviewer  (consumes code.changed, produces review.completed)
-    #   3 — security  (consumes review.completed, produces security.completed)
-    # Flow: code.changed → reviewer → review.completed → coder + security
+    #   3 — security  (consumes code.changed, produces security.completed)
+    #   4 — reporter  (fan-in: waits for review.completed + security.completed)
     declare -a configs
     configs[1]="$(_write_config 1 7480 7481 7490 coder Kvasir)"
     configs[2]="$(_write_config 2 7482 7483 7491 reviewer Bragi)"
     configs[3]="$(_write_config 3 7484 7485 7492 security Heimdall)"
+    configs[4]="$(_write_config 4 7486 7487 7493 reporter Saga)"
 
     declare -a pids
-    local personas=('' coder reviewer security)
-    for n in 1 2 3; do
+    local personas=('' coder reviewer security reporter)
+    for n in 1 2 3 4; do
         local log="${LOG_DIR}/ravn-mesh-${n}.log"
         echo "  Node ${n} [${personas[$n]}]: config=${configs[$n]}"
         echo "           log=${log}"
@@ -199,7 +205,7 @@ cmd_start() {
     done
 
     # Write all PIDs to file for later cleanup
-    printf '%s\n' "${pids[1]}" "${pids[2]}" "${pids[3]}" > "${PIDS_FILE}"
+    printf '%s\n' "${pids[1]}" "${pids[2]}" "${pids[3]}" "${pids[4]}" > "${PIDS_FILE}"
 
     echo ""
     echo "Mesh started. Nodes will discover each other via mDNS."
@@ -266,7 +272,7 @@ cmd_status() {
 
 cmd_logs() {
     local logs=()
-    for n in 1 2 3; do
+    for n in 1 2 3 4; do
         local log="${LOG_DIR}/ravn-mesh-${n}.log"
         [[ -f "${log}" ]] && logs+=("${log}")
     done

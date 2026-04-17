@@ -292,6 +292,7 @@ class NngSubscriber(SleipnirSubscriber):
         reconnect_max_ms: int = DEFAULT_RECONNECT_MAX_MS,
         registry: ServiceRegistry | None = None,
         rediscover_interval_s: float = DEFAULT_REDISCOVER_INTERVAL_S,
+        peer_addresses: list[str] | None = None,
     ) -> None:
         _require_pynng()
         if ring_buffer_depth < 1:
@@ -304,6 +305,7 @@ class NngSubscriber(SleipnirSubscriber):
         self._reconnect_max_ms = reconnect_max_ms
         self._registry = registry
         self._rediscover_interval_s = rediscover_interval_s
+        self._peer_addresses = peer_addresses or []
 
         self._socket: pynng.Sub0 | None = None  # type: ignore[name-defined]
         self._recv_task: asyncio.Task[None] | None = None
@@ -339,8 +341,8 @@ class NngSubscriber(SleipnirSubscriber):
         self._running = True
         self._recv_task = asyncio.create_task(self._recv_loop(), name="sleipnir-nng-sub-recv")
 
-        # Start periodic re-discovery if registry is configured
-        if self._registry is not None and self._rediscover_interval_s > 0:
+        # Start periodic re-discovery if registry or peer addresses are configured
+        if (self._registry is not None or self._peer_addresses) and self._rediscover_interval_s > 0:
             self._rediscover_task = asyncio.create_task(
                 self._rediscover_loop(), name="sleipnir-nng-sub-rediscover"
             )
@@ -348,18 +350,24 @@ class NngSubscriber(SleipnirSubscriber):
     async def _discover_addresses(self) -> list[str]:
         """Return the list of publisher addresses to dial.
 
-        Uses the service registry when available; falls back to *self._address*.
+        Resolution order:
+        1. Service registry (JSON file, if provided)
+        2. Static peer addresses (from discovery, if provided)
+        3. Fallback to *self._address*
         """
-        if self._registry is None:
-            return [self._address]
-        loop = asyncio.get_running_loop()
-        entries = await loop.run_in_executor(None, self._registry.list_services)
-        if not entries:
-            logger.debug("NngSubscriber: registry empty, falling back to %s", self._address)
-            return [self._address]
-        addresses = [e.socket for e in entries]
-        logger.debug("NngSubscriber: discovered %d publisher(s): %s", len(addresses), addresses)
-        return addresses
+        if self._registry is not None:
+            loop = asyncio.get_running_loop()
+            entries = await loop.run_in_executor(None, self._registry.list_services)
+            if entries:
+                addresses = [e.socket for e in entries]
+                logger.debug("NngSubscriber: registry: %d publisher(s)", len(addresses))
+                return addresses
+
+        if self._peer_addresses:
+            logger.debug("NngSubscriber: peer_addresses: %d pub(s)", len(self._peer_addresses))
+            return list(self._peer_addresses)
+
+        return [self._address]
 
     async def _rediscover_loop(self) -> None:
         """Periodically re-discover publishers and dial any new ones.
@@ -502,6 +510,7 @@ class NngTransport(SleipnirPublisher, SleipnirSubscriber):
         service_id: str | None = None,
         registry: ServiceRegistry | None = None,
         rediscover_interval_s: float = DEFAULT_REDISCOVER_INTERVAL_S,
+        peer_addresses: list[str] | None = None,
     ) -> None:
         _require_pynng()
         self._publisher = NngPublisher(
@@ -520,6 +529,7 @@ class NngTransport(SleipnirPublisher, SleipnirSubscriber):
             reconnect_max_ms=reconnect_max_ms,
             registry=registry,
             rediscover_interval_s=rediscover_interval_s,
+            peer_addresses=peer_addresses,
         )
 
     async def start(self) -> None:

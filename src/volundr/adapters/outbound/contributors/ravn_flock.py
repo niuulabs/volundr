@@ -54,6 +54,7 @@ def _build_ravn_config(
     mimir_hosted_url: str | None,
     sleipnir_publish_urls: list[str],
     max_concurrent_tasks: int,
+    mesh_host: str = "0.0.0.0",
 ) -> str:
     """Generate the ravn daemon YAML config for a single flock node."""
     pub, rep, _hs = _ports_for(index, base_port)
@@ -92,8 +93,8 @@ def _build_ravn_config(
             "adapter": "nng",
             "own_peer_id": peer_id,
             "nng": {
-                "pub_sub_address": f"tcp://0.0.0.0:{pub}",
-                "req_rep_address": f"tcp://0.0.0.0:{rep}",
+                "pub_sub_address": f"tcp://{mesh_host}:{pub}",
+                "req_rep_address": f"tcp://{mesh_host}:{rep}",
             },
             "peers": peers,
         },
@@ -150,12 +151,14 @@ class RavnFlockContributor(SessionContributor):
         profile_provider: ProfileProvider | None = None,
         ravn_image: str = _RAVN_IMAGE_DEFAULT,
         base_port: int = _DEFAULT_BASE_PORT,
+        mesh_host: str = "0.0.0.0",
         **_extra: object,
     ) -> None:
         self._template_provider = template_provider
         self._profile_provider = profile_provider
         self._ravn_image = ravn_image
         self._base_port = base_port
+        self._mesh_host = mesh_host
 
     @property
     def name(self) -> str:
@@ -166,15 +169,15 @@ class RavnFlockContributor(SessionContributor):
         session: Session,
         context: SessionContext,
     ) -> SessionContribution:
-        source = self._resolve_source(context)
-
-        if source is None:
-            return SessionContribution()
-
-        if source.workload_type != "ravn_flock":
-            return SessionContribution()
-
-        wc = source.workload_config
+        # Check context first (workload_type from SpawnRequest / REST body)
+        if context.workload_type == "ravn_flock" and context.workload_config:
+            wc = context.workload_config
+        else:
+            # Fall back to template/profile resolution
+            source = self._resolve_source(context)
+            if source is None or source.workload_type != "ravn_flock":
+                return SessionContribution()
+            wc = source.workload_config
         personas: list[str] = list(wc.get("personas", []))
 
         if not personas:
@@ -240,8 +243,8 @@ class RavnFlockContributor(SessionContributor):
             {"name": "MESH_ENABLED", "value": "true"},
             {"name": "MESH_TRANSPORT", "value": mesh_transport},
             {"name": "MESH_PEER_ID", "value": skuld_peer_id},
-            {"name": "MESH_PUB_ADDRESS", "value": f"tcp://0.0.0.0:{skuld_pub}"},
-            {"name": "MESH_REP_ADDRESS", "value": f"tcp://0.0.0.0:{skuld_rep}"},
+            {"name": "MESH_PUB_ADDRESS", "value": f"tcp://{self._mesh_host}:{skuld_pub}"},
+            {"name": "MESH_REP_ADDRESS", "value": f"tcp://{self._mesh_host}:{skuld_rep}"},
             {"name": "MESH_HANDSHAKE_PORT", "value": str(skuld_hs)},
         ]
 
@@ -278,6 +281,7 @@ class RavnFlockContributor(SessionContributor):
                 mimir_hosted_url=mimir_hosted_url,
                 sleipnir_publish_urls=sleipnir_publish_urls,
                 max_concurrent_tasks=max_concurrent_tasks,
+                mesh_host=self._mesh_host,
             )
 
             ravn_env: list[dict] = [

@@ -127,6 +127,41 @@ class RoomBridge:
         await self._channels.broadcast({"type": "participant_joined", "participant": asdict(meta)})
         return meta
 
+    async def register_mesh_peer(
+        self,
+        peer_id: str,
+        persona: str,
+        *,
+        display_name: str = "",
+        subscribes_to: list[str] | None = None,
+        emits: list[str] | None = None,
+        tools: list[str] | None = None,
+    ) -> ParticipantMeta:
+        """Register a mesh-discovered peer (no WebSocket connection).
+
+        Used by SkuldMeshAdapter to add flock peers discovered via static/mDNS
+        discovery so they appear in the room UI without a direct WebSocket.
+        """
+        if peer_id in self._participants:
+            return self._participants[peer_id]
+
+        color = next(self._color_cycle)
+        meta = ParticipantMeta(
+            peer_id=peer_id,
+            persona=persona,
+            color=color,
+            participant_type="ravn",
+            display_name=display_name or persona,
+            subscribes_to=tuple(subscribes_to or ()),
+            emits=tuple(emits or ()),
+            tools=tuple(tools or ()),
+        )
+        self._participants[peer_id] = meta
+        logger.info("RoomBridge: mesh peer registered peer_id=%s persona=%s", peer_id, persona)
+
+        await self._channels.broadcast({"type": "participant_joined", "participant": asdict(meta)})
+        return meta
+
     async def unregister(self, peer_id: str) -> None:
         """Remove a participant and broadcast ``participant_left``."""
         self._participants.pop(peer_id, None)
@@ -193,11 +228,13 @@ class RoomBridge:
         # agent detail panel can render them — the original frame is relayed
         # tagged with the participant identity.
         if event_type in ("thought", "tool_start", "tool_result"):
-            await self._channels.broadcast({
-                "type": "room_agent_event",
-                "participantId": meta.peer_id,
-                "frame": frame,
-            })
+            await self._channels.broadcast(
+                {
+                    "type": "room_agent_event",
+                    "participantId": meta.peer_id,
+                    "frame": frame,
+                }
+            )
 
     async def _handle_response_frame(
         self,

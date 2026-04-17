@@ -544,6 +544,8 @@ class SessionService:
         resource_config: dict | None = None,
         system_prompt: str = "",
         initial_prompt: str = "",
+        workload_type: str = "session",
+        workload_config: dict | None = None,
     ) -> Session:
         """Start a session — returns immediately, provisions in background.
 
@@ -586,6 +588,8 @@ class SessionService:
                 resource_config=resource_config,
                 system_prompt=system_prompt,
                 initial_prompt=initial_prompt,
+                workload_type=workload_type,
+                workload_config=workload_config,
             ),
             name=f"provision-{session_id}",
         )
@@ -606,6 +610,8 @@ class SessionService:
         resource_config: dict | None = None,
         system_prompt: str = "",
         initial_prompt: str = "",
+        workload_type: str = "session",
+        workload_config: dict | None = None,
     ) -> None:
         """Background task: run contributor pipeline, start pods, update status."""
         try:
@@ -620,6 +626,8 @@ class SessionService:
                 resource_config=resource_config,
                 system_prompt=system_prompt,
                 initial_prompt=initial_prompt,
+                workload_type=workload_type,
+                workload_config=workload_config,
             )
 
             provisioning = (
@@ -660,6 +668,8 @@ class SessionService:
         resource_config: dict | None = None,
         system_prompt: str = "",
         initial_prompt: str = "",
+        workload_type: str = "session",
+        workload_config: dict | None = None,
     ):
         """Run the contributor pipeline and start pods with merged spec."""
         # Auto-include all enabled integrations when none are specified.
@@ -689,6 +699,8 @@ class SessionService:
             resource_config=resource_config or {},
             system_prompt=system_prompt,
             initial_prompt=initial_prompt,
+            workload_type=workload_type,
+            workload_config=workload_config or {},
         )
 
         contributions: list[SessionContribution] = []

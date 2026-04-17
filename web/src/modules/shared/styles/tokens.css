@@ -111,3 +111,7 @@
 [data-theme='spring'] {
   --color-brand: #76b900; /* Spring green */
 }
+
+[data-theme='frost'] {
+  --color-brand: rgb(186, 220, 255); /* Frost — icy white-blue */
+}

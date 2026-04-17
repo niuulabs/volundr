@@ -961,7 +961,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 if audit_subscriber is not None:
                     await audit_subscriber.stop()
                 await event_ingestion.close_all()
-                await pod_manager.close()
+                if hasattr(pod_manager, "close"):
+                    await pod_manager.close()
                 if hasattr(gateway_adapter, "close"):
                     await gateway_adapter.close()
                 await git_registry.close()

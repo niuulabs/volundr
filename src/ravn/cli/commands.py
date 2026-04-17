@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-import json
 import logging
 import os
 import signal
@@ -14,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import typer
+import yaml
 
 from ravn.agent import PostToolHook, PreToolHook, RavnAgent
 from ravn.config import (
@@ -2534,28 +2534,41 @@ def _wire_cascade(
 
         # Register fan-in contributors from the persona catalog so the
         # buffer knows how many producer outcomes to collect.
+        # When discovery is active, only include personas that are actual
+        # peers in the flock — not all installed personas.
         if persona_config and persona_config.fan_in.contributes_to:
             from ravn.adapters.personas.loader import PersonaLoader  # noqa: PLC0415
 
             loader = PersonaLoader()
             target = persona_config.fan_in.contributes_to
             contributors = loader.find_contributors(target)
-            if contributors:
-                drive_loop.fan_in.set_contributors(
-                    target, [c.name for c in contributors]
-                )
+
+            # Filter to only peers present in the flock (via discovery)
+            if discovery is not None and hasattr(discovery, "peers"):
+                flock_personas = {p.persona for p in discovery.peers().values()}
+                # Include self — discovery.peers() only returns others
+                if persona_config:
+                    flock_personas.add(persona_config.name)
+                contributors = [c for c in contributors if c.name in flock_personas]
+
+            # Only enable fan-in when there are multiple contributors to wait for.
+            # Solo contributor (e.g. reviewer without security in the flock)
+            # acts independently — no fan-in accumulation needed.
+            if len(contributors) > 1:
+                drive_loop.fan_in.set_contributors(target, [c.name for c in contributors])
                 logger.info(
                     "mesh: fan-in contributors for %s: %s",
                     target,
                     [c.name for c in contributors],
                 )
+            else:
+                logger.info(
+                    "mesh: solo contributor for %s — fan-in disabled",
+                    target,
+                )
 
-        fan_in_strategy = (
-            persona_config.fan_in.strategy if persona_config else "merge"
-        )
-        fan_in_contributes_to = (
-            persona_config.fan_in.contributes_to if persona_config else ""
-        )
+        fan_in_strategy = persona_config.fan_in.strategy if persona_config else "merge"
+        fan_in_contributes_to = persona_config.fan_in.contributes_to if persona_config else ""
 
         async def _handle_outcome_event(event: RavnEvent) -> None:
             """Handle incoming outcome events, respecting fan-in accumulation."""
@@ -2694,7 +2707,9 @@ def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
             # Handle Sleipnir adapter specially - needs publisher/subscriber
             if "sleipnir" in fq_class.lower():
                 transport = _build_sleipnir_transport(
-                    settings, entry.get("transport", mesh_cfg.adapter or "nng")
+                    settings,
+                    entry.get("transport", mesh_cfg.adapter or "nng"),
+                    discovery=discovery,
                 )
                 if transport is None:
                     logger.warning("mesh: failed to build Sleipnir transport, skipping")
@@ -2728,7 +2743,7 @@ def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
 
     from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
 
-    transport = _build_sleipnir_transport(settings, legacy_adapter)
+    transport = _build_sleipnir_transport(settings, legacy_adapter, discovery=discovery)
     if transport is None:
         logger.warning("mesh: failed to build transport, mesh disabled")
         return None
@@ -2742,24 +2757,52 @@ def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
     )
 
 
-def _build_sleipnir_transport(settings: Settings, adapter: str) -> Any:
+def _read_cluster_pub_addresses(settings: Settings) -> list[str]:
+    """Read peer pub addresses from cluster.yaml files in discovery config.
+
+    Returns an empty list when no static discovery is configured or the
+    cluster file doesn't exist yet.
+    """
+    discovery_cfg = getattr(settings, "discovery", None)
+    if discovery_cfg is None:
+        return []
+
+    addresses: list[str] = []
+    for adapter_cfg in getattr(discovery_cfg, "adapters", []):
+        cluster_file = adapter_cfg.get("cluster_file", "")
+        if not cluster_file:
+            continue
+        cf = Path(cluster_file).expanduser()
+        if not cf.exists():
+            continue
+        cluster = yaml.safe_load(cf.read_text()) or {}
+        addresses.extend(
+            peer["pub_address"] for peer in cluster.get("peers", []) if peer.get("pub_address")
+        )
+    return addresses
+
+
+def _build_sleipnir_transport(
+    settings: Settings,
+    adapter: str,
+    discovery: Any = None,
+) -> Any:
     """Build the Sleipnir transport based on adapter config."""
     if adapter == "nng":
         try:
-            from pathlib import Path
-
-            from sleipnir.adapters.discovery import ServiceRegistry
             from sleipnir.adapters.nng_transport import NngTransport
 
             nng_cfg = settings.mesh.nng
-            # Use shared registry for multi-process discovery
-            registry_path = Path("/tmp/ravn-mesh/sleipnir-registry.json")
-            registry = ServiceRegistry(registry_path)
             service_id = f"ravn:{settings.mesh.own_peer_id}"
+
+            # Read peer pub addresses from cluster.yaml so the NNG subscriber
+            # dials them on startup (discovery.peers() loads async — too late).
+            peer_addresses = _read_cluster_pub_addresses(settings)
+
             return NngTransport(
                 address=nng_cfg.pub_sub_address,
                 service_id=service_id,
-                registry=registry,
+                peer_addresses=peer_addresses or None,
             )
         except ImportError:
             logger.warning("mesh: pynng not installed, nng transport unavailable")
