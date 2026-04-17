@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from niuu.mesh.transport_builder import TRANSPORT_ALIASES as _TRANSPORT_ALIASES
 from ravn.cli.commands import (
-    _TRANSPORT_ALIASES,
     _build_sleipnir_transport,
     _resolve_transport_kwargs,
 )
