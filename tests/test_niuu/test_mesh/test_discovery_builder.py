@@ -105,20 +105,22 @@ class TestBuildDiscoveryAdapters:
             assert result is fake_instance
 
     def test_multiple_adapters_wrapped_in_composite(self):
-        with (
-            patch("niuu.mesh.discovery_builder.import_class") as mock_import,
-            patch("ravn.adapters.discovery.composite.CompositeDiscoveryAdapter") as mock_composite,
-        ):
-            mock_cls = MagicMock(return_value=MagicMock())
-            mock_import.return_value = mock_cls
+        fake_composite_cls = MagicMock()
+        fake_adapter_cls = MagicMock(return_value=MagicMock())
 
+        def _side_effect(path: str):
+            if "Composite" in path:
+                return fake_composite_cls
+            return fake_adapter_cls
+
+        with patch("niuu.mesh.discovery_builder.import_class", side_effect=_side_effect):
             build_discovery_adapters(
                 [{"adapter": "fake.A"}, {"adapter": "fake.B"}],
                 _make_identity(),
             )
 
-            mock_composite.assert_called_once()
-            backends = mock_composite.call_args[1]["backends"]
+            fake_composite_cls.assert_called_once()
+            backends = fake_composite_cls.call_args[1]["backends"]
             assert len(backends) == 2
 
     def test_per_adapter_kwargs_forwarded(self):
