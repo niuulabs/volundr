@@ -3316,7 +3316,7 @@ describe('ApiVolundrService', () => {
     it('passes secret type filter when provided', async () => {
       mockFetch.mockReturnValueOnce(mockResponse({ credentials: [] }));
 
-      await service.getCredentials('api_key' as any);
+      await service.getCredentials('api_key');
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('secret_type=api_key'),
@@ -3386,7 +3386,7 @@ describe('ApiVolundrService', () => {
 
       const cred = await service.createCredential({
         name: 'new-token',
-        secretType: 'api_key' as any,
+        secretType: 'api_key',
         data: { key: 'secret' },
       });
 
