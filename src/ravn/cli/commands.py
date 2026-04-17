@@ -2797,8 +2797,6 @@ def _resolve_transport_kwargs(
     adapter: str,
 ) -> dict[str, Any]:
     """Build constructor kwargs for a Sleipnir transport from settings."""
-    import os
-
     if adapter == "nng":
         nng_cfg = settings.mesh.nng
         peer_addresses = _read_cluster_pub_addresses(settings)
