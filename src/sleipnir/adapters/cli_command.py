@@ -61,11 +61,6 @@ from sleipnir.ports.events import EventHandler, SleipnirSubscriber, Subscription
 logger = logging.getLogger(__name__)
 
 
-#: Sentinel passed as handler when subscribing programmatically without a downstream handler.
-async def _noop(event: SleipnirEvent) -> None:  # noqa: E302
-    pass
-
-
 #: Supported values for ``pass_event_as``.
 _VALID_PASS_MODES: frozenset[str] = frozenset({"stdin", "env", "arg"})
 
