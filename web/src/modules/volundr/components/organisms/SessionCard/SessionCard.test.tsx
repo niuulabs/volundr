@@ -249,9 +249,7 @@ describe('SessionCard', () => {
   });
 
   it('applies selected style in compact mode', () => {
-    const { container } = render(
-      <SessionCard session={runningSession} compact selected />
-    );
+    const { container } = render(<SessionCard session={runningSession} compact selected />);
     const card = container.firstChild as HTMLElement;
     expect(card.className).toMatch(/selected/);
   });

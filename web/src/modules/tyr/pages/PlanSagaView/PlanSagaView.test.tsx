@@ -112,11 +112,7 @@ vi.mock('../../components/RepoSelector', () => ({
     mode: string;
     showBranch: boolean;
   }) => (
-    <select
-      data-testid="repo-selector"
-      value={value}
-      onChange={e => onSelect(e.target.value)}
-    >
+    <select data-testid="repo-selector" value={value} onChange={e => onSelect(e.target.value)}>
       <option value="">Select a repo</option>
       <option value="https://github.com/niuu/volundr">niuu/volundr</option>
     </select>

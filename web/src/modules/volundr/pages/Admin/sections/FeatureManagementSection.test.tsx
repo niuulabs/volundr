@@ -111,9 +111,7 @@ describe('FeatureManagementSection', () => {
   });
 
   it('shows empty state when no features match scope', async () => {
-    mockGetFeatureModules.mockResolvedValue([
-      { ...mockFeatures[0], scope: 'admin' },
-    ]);
+    mockGetFeatureModules.mockResolvedValue([{ ...mockFeatures[0], scope: 'admin' }]);
     render(<FeatureManagementSection />);
     await waitFor(() => {
       expect(screen.getByText('Users')).toBeInTheDocument();

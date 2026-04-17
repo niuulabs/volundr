@@ -930,7 +930,13 @@ describe('SessionChat', () => {
 
     const messages: SkuldChatMessage[] = [
       { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },
-      { id: 'a1', role: 'assistant', content: 'Copy me', createdAt: new Date(), status: 'complete' },
+      {
+        id: 'a1',
+        role: 'assistant',
+        content: 'Copy me',
+        createdAt: new Date(),
+        status: 'complete',
+      },
     ];
     mockSkuldChat({ connected: true, messages });
     render(<SessionChat url="wss://test/session" />);
@@ -975,9 +981,7 @@ describe('SessionChat', () => {
         participantId: 'p1',
       },
     ];
-    const participants = new Map([
-      ['p1', makeParticipant('p1', 'Ravn-A', 'amber')],
-    ]);
+    const participants = new Map([['p1', makeParticipant('p1', 'Ravn-A', 'amber')]]);
     mockSkuldChat({ connected: true, participants, messages });
     const { container } = render(<SessionChat url="wss://test/session" />);
 
