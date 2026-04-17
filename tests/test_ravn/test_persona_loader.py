@@ -630,7 +630,7 @@ class TestBuildAgentWithPersona:
     def test_read_only_persona_uses_deny_all_permission(self) -> None:
         from unittest.mock import MagicMock, patch
 
-        from ravn.adapters.permission.allow_deny import DenyAllPermission
+        from ravn.adapters.permission.enforcer import PermissionEnforcer
         from ravn.cli.commands import _build_agent
         from ravn.config import Settings
 
@@ -644,7 +644,8 @@ class TestBuildAgentWithPersona:
             mock_cls.return_value = MagicMock()
             agent, _ = _build_agent(settings, persona_config=persona)
 
-        assert isinstance(agent._permission, DenyAllPermission)
+        # read-only now uses PermissionEnforcer with mode="read-only" (restricts writes)
+        assert isinstance(agent._permission, PermissionEnforcer)
 
     def test_non_read_only_persona_uses_permission_enforcer(self) -> None:
         from unittest.mock import MagicMock, patch
