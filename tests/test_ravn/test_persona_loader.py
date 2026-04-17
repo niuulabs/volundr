@@ -644,7 +644,6 @@ class TestBuildAgentWithPersona:
             mock_cls.return_value = MagicMock()
             agent, _ = _build_agent(settings, persona_config=persona)
 
-        # read-only now uses PermissionEnforcer with mode="read-only" (restricts writes)
         assert isinstance(agent._permission, PermissionEnforcer)
 
     def test_non_read_only_persona_uses_permission_enforcer(self) -> None:

@@ -204,38 +204,58 @@ describe('useChatStore', () => {
   });
 
   describe('mesh events', () => {
-    it('returns empty array for unknown session URL', () => {
+    beforeEach(() => {
+      useChatStore.setState({ sessions: {}, meshEventSessions: {} });
+    });
+
+    it('initializes with empty meshEventSessions', () => {
+      const state = useChatStore.getState();
+      expect(state.meshEventSessions).toEqual({});
+    });
+
+    it('returns empty array for unknown mesh event URL', () => {
       const { getMeshEvents } = useChatStore.getState();
       expect(getMeshEvents('wss://unknown/session')).toEqual([]);
     });
 
-    it('persists and retrieves mesh events for a session', () => {
+    it('persists and retrieves mesh events', () => {
       const { setMeshEvents, getMeshEvents } = useChatStore.getState();
       const url = 'wss://host/session';
-      const events: MeshEvent[] = [
-        makeMeshEvent({ id: 'e1', eventType: 'review.passed' }),
-        makeMeshEvent({ id: 'e2', eventType: 'security.changes_requested' }),
-      ];
+      const events: MeshEvent[] = [makeMeshEvent({ id: 'evt-1' }), makeMeshEvent({ id: 'evt-2' })];
 
       setMeshEvents(url, events);
       const restored = getMeshEvents(url);
 
       expect(restored).toHaveLength(2);
-      expect(restored[0].id).toBe('e1');
-      expect(restored[1].id).toBe('e2');
+      expect(restored[0].id).toBe('evt-1');
+      expect(restored[1].id).toBe('evt-2');
     });
 
-    it('serializes timestamp to ISO string and deserializes back to Date', () => {
+    it('serializes Date timestamps and deserializes back', () => {
       const { setMeshEvents, getMeshEvents } = useChatStore.getState();
       const url = 'wss://host/session';
-      const date = new Date('2025-07-15T14:30:00Z');
+      const date = new Date('2025-07-10T08:30:00Z');
       const events: MeshEvent[] = [makeMeshEvent({ timestamp: date })];
 
       setMeshEvents(url, events);
       const restored = getMeshEvents(url);
 
       expect(restored[0].timestamp).toBeInstanceOf(Date);
-      expect(restored[0].timestamp.toISOString()).toBe('2025-07-15T14:30:00.000Z');
+      expect(restored[0].timestamp.toISOString()).toBe('2025-07-10T08:30:00.000Z');
+    });
+
+    it('keeps mesh event sessions independent', () => {
+      const { setMeshEvents, getMeshEvents } = useChatStore.getState();
+      const url1 = 'wss://host1/session';
+      const url2 = 'wss://host2/session';
+
+      setMeshEvents(url1, [makeMeshEvent({ id: 'a' })]);
+      setMeshEvents(url2, [makeMeshEvent({ id: 'b' })]);
+
+      expect(getMeshEvents(url1)).toHaveLength(1);
+      expect(getMeshEvents(url1)[0].id).toBe('a');
+      expect(getMeshEvents(url2)).toHaveLength(1);
+      expect(getMeshEvents(url2)[0].id).toBe('b');
     });
 
     it('preserves event fields through serialization', () => {
@@ -261,14 +281,6 @@ describe('useChatStore', () => {
       expect((restored[0] as MeshOutcomeEvent).verdict).toBe('approved');
     });
 
-    it('returns empty array for empty stored mesh events', () => {
-      const { setMeshEvents, getMeshEvents } = useChatStore.getState();
-      const url = 'wss://host/session';
-
-      setMeshEvents(url, []);
-      expect(getMeshEvents(url)).toEqual([]);
-    });
-
     it('overwrites mesh events for the same URL', () => {
       const { setMeshEvents, getMeshEvents } = useChatStore.getState();
       const url = 'wss://host/session';
@@ -281,8 +293,16 @@ describe('useChatStore', () => {
       expect(restored[0].id).toBe('new');
     });
 
-    it('clearSession removes mesh events along with messages', () => {
-      const { setMeshEvents, getMeshEvents, setMessages, getMessages, clearSession } =
+    it('returns empty array for stored empty mesh events', () => {
+      const { setMeshEvents, getMeshEvents } = useChatStore.getState();
+      const url = 'wss://host/session';
+
+      setMeshEvents(url, []);
+      expect(getMeshEvents(url)).toEqual([]);
+    });
+
+    it('clears mesh events along with messages when clearSession is called', () => {
+      const { setMessages, setMeshEvents, getMeshEvents, getMessages, clearSession } =
         useChatStore.getState();
       const url = 'wss://host/session';
 
@@ -293,6 +313,88 @@ describe('useChatStore', () => {
 
       expect(getMessages(url)).toEqual([]);
       expect(getMeshEvents(url)).toEqual([]);
+    });
+
+    it('preserves other session mesh events when one is cleared', () => {
+      const { setMeshEvents, getMeshEvents, clearSession } = useChatStore.getState();
+      const url1 = 'wss://host1/session';
+      const url2 = 'wss://host2/session';
+
+      setMeshEvents(url1, [makeMeshEvent({ id: 'keep' })]);
+      setMeshEvents(url2, [makeMeshEvent({ id: 'remove' })]);
+
+      clearSession(url2);
+
+      expect(getMeshEvents(url1)).toHaveLength(1);
+      expect(getMeshEvents(url1)[0].id).toBe('keep');
+      expect(getMeshEvents(url2)).toEqual([]);
+    });
+  });
+
+  describe('message multi-participant fields', () => {
+    it('preserves participantId through serialization', () => {
+      const { setMessages, getMessages } = useChatStore.getState();
+      const url = 'wss://host/session';
+      const msgs = [makeMessage({ participantId: 'peer-42' })];
+
+      setMessages(url, msgs);
+      const restored = getMessages(url);
+
+      expect(restored[0].participantId).toBe('peer-42');
+    });
+
+    it('preserves participant metadata through serialization', () => {
+      const { setMessages, getMessages } = useChatStore.getState();
+      const url = 'wss://host/session';
+      const msgs = [
+        makeMessage({
+          participant: {
+            peerId: 'peer-1',
+            persona: 'reviewer',
+            displayName: 'Reviewer Ravn',
+            color: 'cyan',
+            participantType: 'ravn',
+          },
+        }),
+      ];
+
+      setMessages(url, msgs);
+      const restored = getMessages(url);
+
+      expect(restored[0].participant?.persona).toBe('reviewer');
+      expect(restored[0].participant?.displayName).toBe('Reviewer Ravn');
+    });
+
+    it('preserves threadId and visibility through serialization', () => {
+      const { setMessages, getMessages } = useChatStore.getState();
+      const url = 'wss://host/session';
+      const msgs = [makeMessage({ threadId: 'thread-99', visibility: 'internal' })];
+
+      setMessages(url, msgs);
+      const restored = getMessages(url);
+
+      expect(restored[0].threadId).toBe('thread-99');
+      expect(restored[0].visibility).toBe('internal');
+    });
+
+    it('preserves parts through serialization', () => {
+      const { setMessages, getMessages } = useChatStore.getState();
+      const url = 'wss://host/session';
+      const msgs = [
+        makeMessage({
+          parts: [
+            { type: 'text', text: 'Hello' },
+            { type: 'reasoning', text: 'Thinking...' },
+          ],
+        }),
+      ];
+
+      setMessages(url, msgs);
+      const restored = getMessages(url);
+
+      expect(restored[0].parts).toHaveLength(2);
+      expect(restored[0].parts?.[0]).toEqual({ type: 'text', text: 'Hello' });
+      expect(restored[0].parts?.[1]).toEqual({ type: 'reasoning', text: 'Thinking...' });
     });
   });
 });

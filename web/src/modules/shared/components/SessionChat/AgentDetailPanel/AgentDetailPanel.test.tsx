@@ -211,6 +211,87 @@ describe('AgentDetailPanel', () => {
       );
       expect(screen.getByTestId('agent-activity-status')).toHaveTextContent('thinking');
     });
+
+    it('shows running tool activity status', () => {
+      setupDetailMock();
+      render(
+        <AgentDetailPanel
+          participant={{
+            ...makeParticipant(),
+            status: 'tool_executing' as const,
+            joinedAt: new Date(),
+          }}
+          events={[]}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByTestId('agent-activity-status')).toHaveTextContent('running tool');
+    });
+
+    it('shows raw status for unknown status values', () => {
+      setupDetailMock();
+      render(
+        <AgentDetailPanel
+          participant={{
+            ...makeParticipant(),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            status: 'custom_status' as any,
+            joinedAt: new Date(),
+          }}
+          events={[]}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByTestId('agent-activity-status')).toHaveTextContent('custom_status');
+    });
+
+    it('shows displayName with persona when displayName is set', () => {
+      setupDetailMock();
+      render(
+        <AgentDetailPanel
+          participant={{
+            ...makeParticipant({ displayName: 'Alpha Bot', persona: 'Ravn Alpha' }),
+            status: 'idle' as const,
+            joinedAt: new Date(),
+          }}
+          events={[]}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByTestId('agent-persona-name')).toHaveTextContent('Alpha Bot (Ravn Alpha)');
+    });
+
+    it('does not call onClose for non-Escape keys', () => {
+      setupDetailMock();
+      const onClose = vi.fn();
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[]}
+          onClose={onClose}
+        />
+      );
+      fireEvent.keyDown(document, { key: 'Enter' });
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('does not call onClose when Escape is pressed inside a select', () => {
+      setupDetailMock();
+      const onClose = vi.fn();
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[]}
+          onClose={onClose}
+        />
+      );
+      const select = document.createElement('select');
+      document.body.appendChild(select);
+      select.focus();
+      fireEvent.keyDown(select, { key: 'Escape', target: select });
+      expect(onClose).not.toHaveBeenCalled();
+      document.body.removeChild(select);
+    });
   });
 
   describe('Event rendering', () => {
@@ -224,6 +305,199 @@ describe('AgentDetailPanel', () => {
         />
       );
       expect(screen.getByTestId('agent-detail-empty')).toBeInTheDocument();
+    });
+
+    it('renders thought events', () => {
+      setupDetailMock();
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[
+            {
+              id: 'evt-1',
+              participantId: 'ravn-1',
+              timestamp: new Date(),
+              frameType: 'thought',
+              data: 'I should check the file',
+              metadata: {},
+            },
+          ]}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByText('thinking')).toBeInTheDocument();
+      expect(screen.getByText('I should check the file')).toBeInTheDocument();
+    });
+
+    it('renders thought events with object data', () => {
+      setupDetailMock();
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[
+            {
+              id: 'evt-1',
+              participantId: 'ravn-1',
+              timestamp: new Date(),
+              frameType: 'thought',
+              data: { reasoning: 'complex' },
+              metadata: {},
+            },
+          ]}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByText('thinking')).toBeInTheDocument();
+    });
+
+    it('renders tool_start events with tool_name metadata', () => {
+      setupDetailMock();
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[
+            {
+              id: 'evt-2',
+              participantId: 'ravn-1',
+              timestamp: new Date(),
+              frameType: 'tool_start',
+              data: 'Read',
+              metadata: { tool_name: 'Read', input: '/path/to/file' },
+            },
+          ]}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByText('tool: Read')).toBeInTheDocument();
+      expect(screen.getByText('/path/to/file')).toBeInTheDocument();
+    });
+
+    it('renders tool_start events without tool_name', () => {
+      setupDetailMock();
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[
+            {
+              id: 'evt-2',
+              participantId: 'ravn-1',
+              timestamp: new Date(),
+              frameType: 'tool_start',
+              data: 'Bash',
+              metadata: {},
+            },
+          ]}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByText('tool: Bash')).toBeInTheDocument();
+    });
+
+    it('renders tool_start events with object input', () => {
+      setupDetailMock();
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[
+            {
+              id: 'evt-2',
+              participantId: 'ravn-1',
+              timestamp: new Date(),
+              frameType: 'tool_start',
+              data: 'Edit',
+              metadata: { tool_name: 'Edit', input: { file: 'main.ts', line: 42 } },
+            },
+          ]}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByText('tool: Edit')).toBeInTheDocument();
+    });
+
+    it('renders tool_start events without input', () => {
+      setupDetailMock();
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[
+            {
+              id: 'evt-2',
+              participantId: 'ravn-1',
+              timestamp: new Date(),
+              frameType: 'tool_start',
+              data: 'Grep',
+              metadata: { tool_name: 'Grep' },
+            },
+          ]}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByText('tool: Grep')).toBeInTheDocument();
+    });
+
+    it('renders tool_result events with tool_name', () => {
+      setupDetailMock();
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[
+            {
+              id: 'evt-3',
+              participantId: 'ravn-1',
+              timestamp: new Date(),
+              frameType: 'tool_result',
+              data: 'File contents here',
+              metadata: { tool_name: 'Read' },
+            },
+          ]}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByText('result: Read')).toBeInTheDocument();
+      expect(screen.getByText('File contents here')).toBeInTheDocument();
+    });
+
+    it('renders tool_result events without tool_name', () => {
+      setupDetailMock();
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[
+            {
+              id: 'evt-3',
+              participantId: 'ravn-1',
+              timestamp: new Date(),
+              frameType: 'tool_result',
+              data: 'output',
+              metadata: {},
+            },
+          ]}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByText('result:')).toBeInTheDocument();
+    });
+
+    it('renders unknown frameType events with fallback', () => {
+      setupDetailMock();
+      render(
+        <AgentDetailPanel
+          participant={{ ...makeParticipant(), status: 'idle' as const, joinedAt: new Date() }}
+          events={[
+            {
+              id: 'evt-4',
+              participantId: 'ravn-1',
+              timestamp: new Date(),
+              frameType: 'custom_frame',
+              data: 'some data',
+              metadata: {},
+            },
+          ]}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByText('custom_frame')).toBeInTheDocument();
+      expect(screen.getByText('some data')).toBeInTheDocument();
     });
   });
 

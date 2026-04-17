@@ -205,6 +205,48 @@ describe('SessionCard', () => {
     expect(screen.getByText('NIU-44')).toBeInTheDocument();
   });
 
+  // ── Manual session (origin = 'manual') ──────────────────────
+
+  const manualSession: VolundrSession = {
+    id: 'forge-manual-01',
+    name: 'manual-debug',
+    source: { type: 'git', repo: 'kanuckvalley/debug', branch: 'main' },
+    status: 'running',
+    model: 'claude-opus-4-6',
+    lastActive: Date.now() - 1000 * 60 * 2,
+    messageCount: 12,
+    tokensUsed: 45000,
+    origin: 'manual',
+    hostname: 'my-laptop.local',
+  };
+
+  it('renders hostname for manual sessions', () => {
+    render(<SessionCard session={manualSession} />);
+    expect(screen.getByText('my-laptop.local')).toBeInTheDocument();
+  });
+
+  it('renders manual badge for manual sessions', () => {
+    render(<SessionCard session={manualSession} />);
+    expect(screen.getByText('manual')).toBeInTheDocument();
+  });
+
+  it('does not render model badge for manual session without model prop', () => {
+    render(<SessionCard session={manualSession} />);
+    expect(screen.queryByText('GPU')).not.toBeInTheDocument();
+    expect(screen.queryByText('API')).not.toBeInTheDocument();
+  });
+
+  // ── Non-git source in full mode ───────────────────────────────
+
+  it('renders source label without branch for non-git source', () => {
+    const localSession: VolundrSession = {
+      ...runningSession,
+      source: { type: 'local_mount', paths: [] },
+    };
+    render(<SessionCard session={localSession} />);
+    expect(screen.queryByText('feature/thermal-calibration')).not.toBeInTheDocument();
+  });
+
   describe('compact mode', () => {
     it('renders session name in compact mode', () => {
       render(<SessionCard session={runningSession} compact={true} />);

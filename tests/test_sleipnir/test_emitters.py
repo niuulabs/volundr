@@ -120,11 +120,11 @@ class TestDriveLoopEmitter:
     """Tests for DriveLoop._emit_sleipnir_task_completed."""
 
     def _make_drive_loop(self, publisher: object) -> object:
-        from ravn.config import InitiativeConfig, Settings
+        from ravn.config import InitiativeConfig
         from ravn.drive_loop import DriveLoop
         from tests.test_ravn.conftest import _NO_JOURNAL_PATH
 
-        settings = MagicMock(spec=Settings)
+        settings = MagicMock()
         settings.budget = MagicMock()
         settings.budget.daily_cap_usd = 1.0
         settings.budget.warn_at_percent = 80
@@ -132,6 +132,8 @@ class TestDriveLoopEmitter:
         settings.sleipnir.enabled = False
         settings.skuld = MagicMock()
         settings.skuld.enabled = False
+        settings.mesh = MagicMock()
+        settings.mesh.enabled = False
 
         config = InitiativeConfig(
             queue_journal_path=_NO_JOURNAL_PATH,
