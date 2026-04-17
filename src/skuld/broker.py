@@ -40,6 +40,7 @@ from skuld.channels import (
 from skuld.chronicle_watcher import ChronicleWatcher
 from skuld.config import SkuldSettings
 from skuld.room_bridge import RoomBridge
+from skuld.room_mesh_bridge import RoomMeshBridge
 from skuld.service_manager import (
     ServiceCreateRequest,
     ServiceManager,
@@ -462,6 +463,10 @@ class Broker:
         # Mesh adapter — only active when mesh.enabled is True
         self._mesh_adapter: Any = None
 
+        # Room mesh bridge — translates ravn.mesh.* Sleipnir events to room wire events.
+        # Active when both mesh.enabled and room.enabled are True.
+        self._room_mesh_bridge: RoomMeshBridge | None = None
+
         # Room bridge — only active when room.enabled is True
         self._room_bridge: RoomBridge | None = (
             RoomBridge(
@@ -597,6 +602,22 @@ class Broker:
                         display_name=peer.persona,
                         subscribes_to=list(getattr(peer, "capabilities", [])),
                     )
+
+            # Start room mesh bridge so outcomes from any mesh peer flow to the
+            # room UI via Sleipnir — eliminates the dual-publish pattern.
+            if self._room_bridge is not None:
+                sleipnir_subscriber = getattr(
+                    self._mesh_adapter._mesh, "_subscriber", None
+                )
+                if sleipnir_subscriber is None:
+                    sleipnir_subscriber = self._sleipnir_publisher
+                self._room_mesh_bridge = RoomMeshBridge(
+                    subscriber=sleipnir_subscriber,
+                    room_bridge=self._room_bridge,
+                    session_id=self.session_id,
+                )
+                await self._room_mesh_bridge.start()
+                logger.info("RoomMeshBridge started (session_id=%s)", self.session_id)
 
         except Exception as exc:
             logger.error("Mesh adapter start failed: %r", exc, exc_info=True)
@@ -801,6 +822,11 @@ class Broker:
 
         # Report chronicle BEFORE stopping the transport (CLI must be alive)
         await self._report_chronicle()
+
+        # Stop room mesh bridge before mesh adapter
+        if self._room_mesh_bridge is not None:
+            await self._room_mesh_bridge.stop()
+            self._room_mesh_bridge = None
 
         # Stop mesh adapter before transport (deregister from discovery)
         if self._mesh_adapter is not None:
@@ -1693,24 +1719,8 @@ class Broker:
                 self._mesh_adapter.peer_id,
                 len(self._artifacts.files_changed),
             )
-
-            # Broadcast outcome to browser via room bridge
-            if self._room_bridge is not None:
-                from dataclasses import asdict
-
-                meta = self._room_bridge._participants.get(self._mesh_adapter.peer_id)
-                if meta is not None:
-                    await self._channels.broadcast(
-                        {
-                            "type": "room_outcome",
-                            "participantId": meta.peer_id,
-                            "participant": asdict(meta),
-                            "persona": meta.persona,
-                            "eventType": "code.changed",
-                            "fields": outcome_payload,
-                            "summary": outcome_payload.get("summary", ""),
-                        }
-                    )
+            # Room UI receives this via RoomMeshBridge subscribing to
+            # ravn.mesh.* — no separate broadcast needed here.
 
         except Exception:
             logger.warning("Mesh: failed to publish code.changed", exc_info=True)
