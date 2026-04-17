@@ -23,7 +23,6 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-import yaml
 from fastapi import FastAPI, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -31,6 +30,9 @@ from pydantic import BaseModel
 
 from niuu.domain.logging import LoggingConfig
 from niuu.domain.outcome import parse_outcome_block
+from niuu.mesh.cluster import read_cluster_pub_addresses
+from niuu.mesh.discovery_builder import build_discovery_adapters
+from niuu.mesh.identity import MeshIdentity
 from niuu.utils import import_class
 from skuld.channels import (
     ChannelRegistry,
@@ -98,23 +100,6 @@ def _configure_logging() -> None:
 
 _configure_logging()
 logger = logging.getLogger("skuld.broker")
-
-
-def _read_cluster_addresses(adapters_config: list[dict]) -> list[str]:
-    """Read peer pub addresses from cluster.yaml files in the adapters config."""
-    addresses: list[str] = []
-    for cfg in adapters_config:
-        cluster_file = cfg.get("cluster_file", "")
-        if not cluster_file:
-            continue
-        cf = Path(cluster_file).expanduser()
-        if not cf.exists():
-            continue
-        cluster = yaml.safe_load(cf.read_text()) or {}
-        addresses.extend(
-            peer["pub_address"] for peer in cluster.get("peers", []) if peer.get("pub_address")
-        )
-    return addresses
 
 
 def _sanitize_log(value: object) -> str:
@@ -632,7 +617,7 @@ class Broker:
 
                 # Read peer pub addresses from cluster.yaml so the NNG
                 # subscriber dials them on startup.
-                peer_addresses = _read_cluster_addresses(mesh_cfg.adapters)
+                peer_addresses = read_cluster_pub_addresses(mesh_cfg.adapters)
 
                 nng = NngTransport(
                     address=address,
@@ -653,19 +638,10 @@ class Broker:
     def _build_discovery(self, mesh_cfg: Any) -> Any:
         """Build discovery adapter from mesh config, or return None.
 
-        Uses the ``adapters`` list in mesh config with dynamic import,
-        same pattern as ravn's discovery builder.  Each adapter receives
-        ``own_identity`` as a :class:`RavnIdentity` constructed from
-        Skuld's mesh config.
+        Uses ``niuu.mesh.discovery_builder`` with a :class:`MeshIdentity`
+        constructed from Skuld's mesh config.  No cross-import from ravn.
         """
-        if not mesh_cfg.adapters:
-            return None
-
-        import importlib
-
-        from ravn.domain.models import RavnIdentity
-
-        own_identity = RavnIdentity(
+        own_identity = MeshIdentity(
             peer_id=mesh_cfg.peer_id or self.session_id or "skuld",
             realm_id="",
             persona=mesh_cfg.persona,
@@ -674,22 +650,10 @@ class Broker:
             version="0.1.0",
         )
 
-        for cfg in mesh_cfg.adapters:
-            adapter_path = cfg.get("adapter", "")
-            if not adapter_path:
-                continue
-            module_path, class_name = adapter_path.rsplit(".", 1)
-            mod = importlib.import_module(module_path)
-            cls = getattr(mod, class_name)
-            kwargs = {k: v for k, v in cfg.items() if k != "adapter"}
-            kwargs["own_identity"] = own_identity
-            try:
-                return cls(**kwargs)
-            except Exception as exc:
-                logger.warning("discovery: failed to build %s: %s", adapter_path, exc)
-                continue
-
-        return None
+        return build_discovery_adapters(
+            adapters_config=mesh_cfg.adapters,
+            own_identity=own_identity,
+        )
 
     def _build_transport_kwargs(self) -> dict:
         """Return superset of kwargs that any transport constructor might need."""

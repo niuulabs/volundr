@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any
 
 import typer
-import yaml
 
 from ravn.agent import PostToolHook, PreToolHook, RavnAgent
 from ravn.config import (
@@ -2763,23 +2762,14 @@ def _read_cluster_pub_addresses(settings: Settings) -> list[str]:
     Returns an empty list when no static discovery is configured or the
     cluster file doesn't exist yet.
     """
+    from niuu.mesh.cluster import read_cluster_pub_addresses
+
     discovery_cfg = getattr(settings, "discovery", None)
     if discovery_cfg is None:
         return []
 
-    addresses: list[str] = []
-    for adapter_cfg in getattr(discovery_cfg, "adapters", []):
-        cluster_file = adapter_cfg.get("cluster_file", "")
-        if not cluster_file:
-            continue
-        cf = Path(cluster_file).expanduser()
-        if not cf.exists():
-            continue
-        cluster = yaml.safe_load(cf.read_text()) or {}
-        addresses.extend(
-            peer["pub_address"] for peer in cluster.get("peers", []) if peer.get("pub_address")
-        )
-    return addresses
+    adapters_config = list(getattr(discovery_cfg, "adapters", []))
+    return read_cluster_pub_addresses(adapters_config)
 
 
 _TRANSPORT_ALIASES: dict[str, str] = {
@@ -2833,23 +2823,13 @@ def _build_sleipnir_transport(
     discovery: Any = None,
 ) -> Any:
     """Build the Sleipnir transport using the dynamic adapter pattern."""
-    fq_class = _TRANSPORT_ALIASES.get(adapter, adapter)
-
-    try:
-        cls = _import_class(fq_class)
-    except Exception as exc:
-        logger.warning("mesh: failed to import transport %s: %s", fq_class, exc)
-        return None
+    from niuu.mesh.transport_builder import build_transport
 
     kwargs = _resolve_transport_kwargs(settings, adapter)
     if adapter in ("sleipnir", "rabbitmq") and not kwargs:
         return None
 
-    try:
-        return cls(**kwargs)
-    except Exception as exc:
-        logger.warning("mesh: failed to instantiate transport %s: %s", fq_class, exc)
-        return None
+    return build_transport(adapter, **kwargs)
 
 
 def _build_discovery(
@@ -3019,57 +2999,22 @@ def _build_discovery_adapters(
 ) -> Any:
     """Build discovery adapters using dynamic import from config.
 
-    If settings.discovery.adapters is non-empty, uses the new list-based config.
-    Otherwise falls back to legacy single-adapter mode for backward compatibility.
-
-    All adapters run simultaneously via CompositeDiscoveryAdapter.
+    If settings.discovery.adapters is non-empty, delegates to the shared
+    ``niuu.mesh.discovery_builder`` for list-based config.
+    Falls back to legacy single-adapter mode for backward compatibility.
     """
-    from ravn.adapters.discovery.composite import CompositeDiscoveryAdapter
+    from niuu.mesh.discovery_builder import build_discovery_adapters
 
     adapters_config = settings.discovery.adapters
 
-    # New list-based config: dynamic import with kwargs
+    # New list-based config: delegate to shared niuu builder
     if adapters_config:
-        backends: list[Any] = []
-        for entry in adapters_config:
-            adapter_class = entry.get("adapter", "")
-            if not adapter_class:
-                logger.warning("discovery: adapter entry missing 'adapter' field, skipping")
-                continue
-
-            # Resolve short aliases for convenience
-            fq_class = _DISCOVERY_ALIASES.get(adapter_class, adapter_class)
-
-            try:
-                cls = _import_class(fq_class)
-            except Exception as exc:
-                logger.warning("discovery: failed to import %s: %s", fq_class, exc)
-                continue
-
-            # Build kwargs: everything except 'adapter' key, plus own_identity
-            kwargs = {k: v for k, v in entry.items() if k != "adapter"}
-            kwargs["own_identity"] = identity
-
-            # Add common settings from discovery config
-            kwargs.setdefault("heartbeat_interval_s", settings.discovery.heartbeat_interval_s)
-            kwargs.setdefault("peer_ttl_s", settings.discovery.peer_ttl_s)
-
-            try:
-                backend = cls(**kwargs)
-                backends.append(backend)
-                logger.debug("discovery: loaded adapter %s", fq_class)
-            except Exception as exc:
-                logger.warning("discovery: failed to instantiate %s: %s", fq_class, exc)
-                continue
-
-        if not backends:
-            logger.warning("discovery: no adapters loaded from config")
-            return None
-
-        if len(backends) == 1:
-            return backends[0]
-
-        return CompositeDiscoveryAdapter(backends=backends)
+        return build_discovery_adapters(
+            adapters_config=adapters_config,
+            own_identity=identity,
+            heartbeat_interval_s=settings.discovery.heartbeat_interval_s,
+            peer_ttl_s=settings.discovery.peer_ttl_s,
+        )
 
     # Legacy single-adapter mode for backward compatibility
     legacy_adapter = settings.discovery.adapter

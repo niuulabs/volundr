@@ -903,8 +903,12 @@ class TestBrokerMeshIntegration:
         assert mesh is not None
 
     @pytest.mark.asyncio
-    async def test_build_mesh_with_adapters_list(self, tmp_path):
-        """Test dynamic adapter loading via adapters list."""
+    async def test_build_mesh_with_adapters_list_falls_back_to_in_process(self, tmp_path):
+        """adapters list in MeshConfig is for discovery, not mesh transport.
+
+        _build_mesh uses the transport field (nng / in_process).  When NNG is
+        unavailable it falls back to in-process, which always succeeds.
+        """
         from skuld.broker import Broker
 
         settings = SkuldSettings(
@@ -914,17 +918,15 @@ class TestBrokerMeshIntegration:
                 "peer_id": "test",
                 "adapters": [
                     {
-                        "adapter": "ravn.adapters.mesh.sleipnir_mesh.SleipnirMeshAdapter",
+                        "adapter": "ravn.adapters.discovery.static.StaticDiscoveryAdapter",
                     }
                 ],
             },
         )
         b = Broker(settings=settings)
-        # This will fail to instantiate because SleipnirMeshAdapter needs
-        # publisher/subscriber, but it tests the import path
         mesh = b._build_mesh(settings.mesh)
-        # Should be None because instantiation fails without publisher
-        assert mesh is None
+        # Falls back to in-process when NNG unavailable — always non-None
+        assert mesh is not None
 
     @pytest.mark.asyncio
     async def test_build_discovery_returns_none(self, tmp_path):
