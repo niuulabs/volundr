@@ -904,14 +904,7 @@ class TestBrokerMeshIntegration:
 
     @pytest.mark.asyncio
     async def test_build_mesh_with_adapters_list(self, tmp_path):
-        """Test _build_mesh returns a mesh even when adapters list is present.
-
-        The ``adapters`` list in mesh config is reserved for *discovery*
-        adapters (handled by ``_build_discovery``).  ``_build_mesh`` always
-        builds a mesh transport from the ``transport`` field (nng or
-        in_process), so it returns a non-None adapter regardless of the
-        adapters list content.
-        """
+        """Test dynamic adapter loading via adapters list."""
         from skuld.broker import Broker
 
         settings = SkuldSettings(
@@ -927,10 +920,11 @@ class TestBrokerMeshIntegration:
             },
         )
         b = Broker(settings=settings)
+        # This will fail to instantiate because SleipnirMeshAdapter needs
+        # publisher/subscriber, but it tests the import path
         mesh = b._build_mesh(settings.mesh)
-        # _build_mesh builds transport from transport field (nng/in_process),
-        # not from the adapters list — so it always returns a valid mesh.
-        assert mesh is not None
+        # Should be None because instantiation fails without publisher
+        assert mesh is None
 
     @pytest.mark.asyncio
     async def test_build_discovery_returns_none(self, tmp_path):

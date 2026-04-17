@@ -214,8 +214,7 @@ async def test_drive_loop_journal_round_trip(tmp_path: Path) -> None:
     await loop1.enqueue(task)
 
     assert journal.exists()
-    journal_data = json.loads(journal.read_text())
-    records = journal_data["queue"]
+    records = json.loads(journal.read_text())
     assert len(records) == 1
     assert records[0]["task_id"] == task.task_id
 

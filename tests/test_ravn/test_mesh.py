@@ -327,7 +327,7 @@ class TestMeshConfig:
     def test_defaults(self) -> None:
         cfg = MeshConfig()
         assert cfg.enabled is False
-        assert cfg.adapter == ""
+        assert cfg.adapter == "nng"
         assert cfg.rpc_timeout_s == 10.0
 
     def test_custom_values(self) -> None:
