@@ -26,7 +26,7 @@ function makeParticipant(overrides: Partial<ParticipantMeta> = {}): ParticipantM
   return {
     peerId: 'ravn-1',
     persona: 'Ravn Alpha',
-    color: 'cyan',
+    color: 'p2',
     participantType: 'ravn',
     gatewayUrl: 'http://ravn-1:8080',
     ...overrides,

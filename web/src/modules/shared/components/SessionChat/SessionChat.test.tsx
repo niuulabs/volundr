@@ -729,8 +729,8 @@ describe('SessionChat', () => {
 
   it('does not render ParticipantFilter in room mode (replaced by toolbar toggle)', () => {
     const participants = new Map([
-      ['p1', makeParticipant('p1', 'Ravn-A', 'amber')],
-      ['p2', makeParticipant('p2', 'Ravn-B', 'cyan')],
+      ['p1', makeParticipant('p1', 'Ravn-A', 'p1')],
+      ['p2', makeParticipant('p2', 'Ravn-B', 'p2')],
     ]);
     mockSkuldChat({ connected: true, participants });
     render(<SessionChat url="wss://test/session" />);
@@ -739,7 +739,7 @@ describe('SessionChat', () => {
   });
 
   it('does not render ParticipantFilter with only one participant', () => {
-    const participants = new Map([['p1', makeParticipant('p1', 'Ravn-A', 'amber')]]);
+    const participants = new Map([['p1', makeParticipant('p1', 'Ravn-A', 'p1')]]);
     mockSkuldChat({ connected: true, participants });
     render(<SessionChat url="wss://test/session" />);
 
@@ -748,8 +748,8 @@ describe('SessionChat', () => {
 
   it('renders RoomMessage for participant messages in room mode', () => {
     const participants = new Map([
-      ['p1', makeParticipant('p1', 'Ravn-A', 'amber')],
-      ['p2', makeParticipant('p2', 'Ravn-B', 'cyan')],
+      ['p1', makeParticipant('p1', 'Ravn-A', 'p1')],
+      ['p2', makeParticipant('p2', 'Ravn-B', 'p2')],
     ]);
     const messages: SkuldChatMessage[] = [
       {
@@ -758,7 +758,7 @@ describe('SessionChat', () => {
         content: 'Hello from Ravn-A',
         createdAt: new Date(),
         status: 'complete',
-        participant: { peerId: 'p1', persona: 'Ravn-A', color: 'amber', participantType: 'ravn' },
+        participant: { peerId: 'p1', persona: 'Ravn-A', color: 'p1', participantType: 'ravn' },
         participantId: 'p1',
       },
     ];
@@ -770,8 +770,8 @@ describe('SessionChat', () => {
 
   it('renders ThreadGroup for consecutive internal messages with same threadId when showInternal', () => {
     const participants = new Map([
-      ['p1', makeParticipant('p1', 'Ravn-A', 'amber')],
-      ['p2', makeParticipant('p2', 'Ravn-B', 'cyan')],
+      ['p1', makeParticipant('p1', 'Ravn-A', 'p1')],
+      ['p2', makeParticipant('p2', 'Ravn-B', 'p2')],
     ]);
     const messages: SkuldChatMessage[] = [
       {
@@ -782,7 +782,7 @@ describe('SessionChat', () => {
         status: 'complete',
         visibility: 'internal',
         threadId: 'thread-1',
-        participant: { peerId: 'p1', persona: 'Ravn-A', color: 'amber', participantType: 'ravn' },
+        participant: { peerId: 'p1', persona: 'Ravn-A', color: 'p1', participantType: 'ravn' },
         participantId: 'p1',
       },
       {
@@ -793,7 +793,7 @@ describe('SessionChat', () => {
         status: 'complete',
         visibility: 'internal',
         threadId: 'thread-1',
-        participant: { peerId: 'p2', persona: 'Ravn-B', color: 'cyan', participantType: 'ravn' },
+        participant: { peerId: 'p2', persona: 'Ravn-B', color: 'p2', participantType: 'ravn' },
         participantId: 'p2',
       },
     ];
@@ -822,7 +822,7 @@ describe('SessionChat', () => {
           peerId: 'ravn-1',
           persona: 'Ravn Alpha',
           displayName: '',
-          color: 'cyan',
+          color: 'p2',
           participantType: 'ravn',
           gatewayUrl: 'http://ravn-1:8080',
         },
@@ -846,7 +846,7 @@ describe('SessionChat', () => {
           peerId: 'ravn-1',
           persona: 'Ravn Alpha',
           displayName: '',
-          color: 'cyan',
+          color: 'p2',
           participantType: 'ravn',
           gatewayUrl: 'http://ravn-1:8080',
         },
