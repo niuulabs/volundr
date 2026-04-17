@@ -130,6 +130,8 @@ class TestDriveLoopEmitter:
         settings.budget.warn_at_percent = 80
         settings.sleipnir = MagicMock()
         settings.sleipnir.enabled = False
+        settings.skuld = MagicMock()
+        settings.skuld.enabled = False
 
         config = InitiativeConfig(
             queue_journal_path=_NO_JOURNAL_PATH,
