@@ -9,15 +9,12 @@ export const PARTICIPANT_SLOT_COUNT = 7;
  * These properties derive from --color-brand via oklch color-mix,
  * so they stay cohesive with the selected theme.
  */
-export const PARTICIPANT_COLOR_MAP: Record<string, string> = {
-  p1: 'var(--color-participant-1)',
-  p2: 'var(--color-participant-2)',
-  p3: 'var(--color-participant-3)',
-  p4: 'var(--color-participant-4)',
-  p5: 'var(--color-participant-5)',
-  p6: 'var(--color-participant-6)',
-  p7: 'var(--color-participant-7)',
-};
+export const PARTICIPANT_COLOR_MAP: Record<string, string> = Object.fromEntries(
+  Array.from({ length: PARTICIPANT_SLOT_COUNT }, (_, i) => [
+    `p${i + 1}`,
+    `var(--color-participant-${i + 1})`,
+  ])
+);
 
 /**
  * Resolve a participant color slot name to a CSS variable reference.
