@@ -19,7 +19,6 @@ from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.ports.mesh import MeshPort
 from skuld.config import MeshConfig
 from skuld.transports import CLITransport
-
 from sleipnir.ports.events import SleipnirSubscriber
 
 logger = logging.getLogger("skuld.mesh_adapter")

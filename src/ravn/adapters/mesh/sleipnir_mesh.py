@@ -25,7 +25,6 @@ from typing import Any
 
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.ports.mesh import PeerNotFoundError
-
 from sleipnir.ports.events import SleipnirPublisher, SleipnirSubscriber, Subscription
 
 logger = logging.getLogger(__name__)
