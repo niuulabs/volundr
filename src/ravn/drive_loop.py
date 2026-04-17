@@ -300,6 +300,25 @@ class FanInBuffer:
             f"From persona: {source_persona}",
             f"Source task: {source_task}",
         ]
+
+        task_desc = payload.get("task_description")
+        if task_desc:
+            parts.append(f"Task description: {task_desc}")
+
+        workspace = payload.get("workspace_path")
+        if workspace:
+            parts.append(f"Workspace path: {workspace}")
+
+        files = payload.get("files_changed")
+        if files:
+            parts.append(f"Files changed ({len(files)}):")
+            for f in files:
+                parts.append(f"  - {f}")
+
+        diff = payload.get("diff_summary")
+        if diff:
+            parts.append(f"Git diff:\n{diff}")
+
         if outcome:
             parts.append(f"Outcome: {json.dumps(outcome)}")
         return "\n".join(parts)

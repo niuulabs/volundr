@@ -2127,7 +2127,7 @@ describe('useSkuldChat', () => {
         participant_meta: {
           peer_id: 'agent-1',
           persona: 'Ravn',
-          color: 'cyan',
+          color: 'p2',
           participant_type: 'ravn',
           gateway_url: 'wss://gateway/ravn',
         },
@@ -2153,7 +2153,7 @@ describe('useSkuldChat', () => {
     expect(msg.participantId).toBe('agent-1');
     expect(msg.participant?.peerId).toBe('agent-1');
     expect(msg.participant?.persona).toBe('Ravn');
-    expect(msg.participant?.color).toBe('cyan');
+    expect(msg.participant?.color).toBe('p2');
     expect(msg.participant?.participantType).toBe('ravn');
     expect(msg.participant?.gatewayUrl).toBe('wss://gateway/ravn');
     expect(msg.threadId).toBe('thread-abc');
@@ -2209,7 +2209,7 @@ describe('useSkuldChat', () => {
         participant_meta: {
           peer_id: 'human-1',
           persona: 'Alice',
-          color: 'amber',
+          color: 'p1',
           participant_type: 'human',
           gateway_url: null,
         },
@@ -2250,7 +2250,7 @@ describe('useSkuldChat', () => {
             type: 'participant_joined',
             peer_id: 'peer-1',
             persona: 'Ravn-A',
-            color: 'amber',
+            color: 'p1',
             participant_type: 'ravn',
           })
         )
@@ -2259,7 +2259,7 @@ describe('useSkuldChat', () => {
       expect(result.current.participants.size).toBe(1);
       const p = result.current.participants.get('peer-1');
       expect(p?.persona).toBe('Ravn-A');
-      expect(p?.color).toBe('amber');
+      expect(p?.color).toBe('p1');
       expect(p?.status).toBe('idle');
     });
 
@@ -2270,7 +2270,7 @@ describe('useSkuldChat', () => {
       act(() => handlers.onOpen?.());
       act(() =>
         handlers.onMessage?.(
-          JSON.stringify({ type: 'participant_joined', peer_id: '', persona: 'X', color: 'cyan' })
+          JSON.stringify({ type: 'participant_joined', peer_id: '', persona: 'X', color: 'p2' })
         )
       );
 
@@ -2288,7 +2288,7 @@ describe('useSkuldChat', () => {
             type: 'participant_joined',
             peer_id: 'peer-1',
             persona: 'A',
-            color: 'amber',
+            color: 'p1',
           })
         )
       );
@@ -2311,7 +2311,7 @@ describe('useSkuldChat', () => {
             type: 'participant_joined',
             peer_id: 'peer-1',
             persona: 'A',
-            color: 'amber',
+            color: 'p1',
           })
         )
       );
@@ -2330,8 +2330,8 @@ describe('useSkuldChat', () => {
           JSON.stringify({
             type: 'room_state',
             participants: [
-              { peer_id: 'p1', persona: 'Ravn-A', color: 'amber', participant_type: 'ravn' },
-              { peer_id: 'p2', persona: 'Ravn-B', color: 'cyan', participant_type: 'ravn' },
+              { peer_id: 'p1', persona: 'Ravn-A', color: 'p1', participant_type: 'ravn' },
+              { peer_id: 'p2', persona: 'Ravn-B', color: 'p2', participant_type: 'ravn' },
             ],
           })
         )
@@ -2352,8 +2352,8 @@ describe('useSkuldChat', () => {
           JSON.stringify({
             type: 'room_state',
             participants: [
-              { peer_id: '', persona: 'Ghost', color: 'purple' },
-              { peer_id: 'p1', persona: 'Ravn-A', color: 'amber' },
+              { peer_id: '', persona: 'Ghost', color: 'p5' },
+              { peer_id: 'p1', persona: 'Ravn-A', color: 'p1' },
             ],
           })
         )
@@ -2378,7 +2378,7 @@ describe('useSkuldChat', () => {
             participant: {
               peer_id: 'peer-1',
               persona: 'Ravn-A',
-              color: 'amber',
+              color: 'p1',
               participant_type: 'ravn',
             },
             thread_id: 'thread-xyz',
@@ -2422,7 +2422,7 @@ describe('useSkuldChat', () => {
             type: 'participant_joined',
             peer_id: 'peer-1',
             persona: 'Ravn-A',
-            color: 'amber',
+            color: 'p1',
           })
         )
       );
@@ -2450,6 +2450,34 @@ describe('useSkuldChat', () => {
 
       // No crash, no participants added
       expect(result.current.participants.size).toBe(0);
+    });
+
+    it('room_message with camelCase participantId resolves sender', () => {
+      const { handlers } = setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+      act(() => handlers.onOpen?.());
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({
+            type: 'room_message',
+            id: 'rm-camel',
+            content: 'camelCase test',
+            participantId: 'peer-2',
+            participant: {
+              peer_id: 'peer-2',
+              persona: 'Skuld',
+              color: 'cyan',
+              participant_type: 'ravn',
+            },
+          })
+        )
+      );
+
+      expect(result.current.messages).toHaveLength(1);
+      const msg = result.current.messages[0];
+      expect(msg.participantId).toBe('peer-2');
+      expect(msg.participant?.color).toBe('cyan');
     });
 
     it('ignores room_activity with empty peer_id', () => {

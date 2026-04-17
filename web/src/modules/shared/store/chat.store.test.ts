@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useChatStore } from './chat.store';
-import type { SkuldChatMessage, MeshEvent } from '@/modules/shared/hooks/useSkuldChat';
+import type {
+  SkuldChatMessage,
+  MeshEvent,
+  MeshOutcomeEvent,
+} from '@/modules/shared/hooks/useSkuldChat';
 
 function makeMessage(overrides: Partial<SkuldChatMessage> = {}): SkuldChatMessage {
   return {
@@ -13,31 +17,30 @@ function makeMessage(overrides: Partial<SkuldChatMessage> = {}): SkuldChatMessag
   };
 }
 
-function makeMeshEvent(overrides: Partial<MeshEvent> = {}): MeshEvent {
+function makeMeshEvent(overrides: Partial<MeshOutcomeEvent> = {}): MeshOutcomeEvent {
   return {
     type: 'outcome',
     id: `evt-${Math.random().toString(36).slice(2, 8)}`,
-    timestamp: new Date('2025-06-01T14:00:00Z'),
-    participantId: 'peer-1',
+    timestamp: new Date('2025-07-01T08:00:00Z'),
+    participantId: 'agent-001',
     participant: {
-      peerId: 'peer-1',
-      persona: 'reviewer',
-      displayName: 'Reviewer',
-      color: 'cyan',
+      peerId: 'agent-001',
+      persona: 'Ravn',
+      color: 'p2',
       participantType: 'ravn',
     },
-    persona: 'reviewer',
+    persona: 'Ravn',
     eventType: 'review.passed',
-    fields: {},
+    fields: { score: 95 },
     valid: true,
     ...overrides,
-  } as MeshEvent;
+  };
 }
 
 describe('useChatStore', () => {
   beforeEach(() => {
     // Reset the store between tests
-    useChatStore.setState({ sessions: {} });
+    useChatStore.setState({ sessions: {}, meshEventSessions: {} });
   });
 
   it('initializes with empty sessions', () => {
@@ -253,6 +256,30 @@ describe('useChatStore', () => {
       expect(getMeshEvents(url1)[0].id).toBe('a');
       expect(getMeshEvents(url2)).toHaveLength(1);
       expect(getMeshEvents(url2)[0].id).toBe('b');
+
+    });
+
+    it('preserves event fields through serialization', () => {
+      const { setMeshEvents, getMeshEvents } = useChatStore.getState();
+      const url = 'wss://host/session';
+      const events: MeshEvent[] = [
+        makeMeshEvent({
+          eventType: 'review.passed',
+          fields: { score: 95, reviewer: 'bot' },
+          valid: true,
+          summary: 'All checks passed',
+          verdict: 'approved',
+        }),
+      ];
+
+      setMeshEvents(url, events);
+      const restored = getMeshEvents(url);
+
+      expect(restored[0].type).toBe('outcome');
+      expect((restored[0] as MeshOutcomeEvent).eventType).toBe('review.passed');
+      expect((restored[0] as MeshOutcomeEvent).fields).toEqual({ score: 95, reviewer: 'bot' });
+      expect((restored[0] as MeshOutcomeEvent).summary).toBe('All checks passed');
+      expect((restored[0] as MeshOutcomeEvent).verdict).toBe('approved');
     });
 
     it('overwrites mesh events for the same URL', () => {

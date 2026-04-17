@@ -17,12 +17,12 @@ class TestParticipantMeta:
         p = ParticipantMeta(
             peer_id="user-123",
             persona="Alice",
-            color="amber",
+            color="p1",
             participant_type="human",
         )
         assert p.peer_id == "user-123"
         assert p.persona == "Alice"
-        assert p.color == "amber"
+        assert p.color == "p1"
         assert p.participant_type == "human"
         assert p.gateway_url is None
 
@@ -30,7 +30,7 @@ class TestParticipantMeta:
         p = ParticipantMeta(
             peer_id="agent-456",
             persona="Ravn",
-            color="cyan",
+            color="p2",
             participant_type="ravn",
             gateway_url="wss://gateway.example.com/ravn",
         )
@@ -42,20 +42,20 @@ class TestParticipantMeta:
         p = ParticipantMeta(
             peer_id="user-1",
             persona="Bob",
-            color="emerald",
+            color="p3",
             participant_type="human",
         )
         with pytest.raises((AttributeError, TypeError)):
             p.peer_id = "other"  # type: ignore[misc]
 
     def test_equality(self):
-        p1 = ParticipantMeta(peer_id="x", persona="X", color="red", participant_type="human")
-        p2 = ParticipantMeta(peer_id="x", persona="X", color="red", participant_type="human")
+        p1 = ParticipantMeta(peer_id="x", persona="X", color="p4", participant_type="human")
+        p2 = ParticipantMeta(peer_id="x", persona="X", color="p4", participant_type="human")
         assert p1 == p2
 
     def test_inequality(self):
-        p1 = ParticipantMeta(peer_id="x", persona="X", color="red", participant_type="human")
-        p2 = ParticipantMeta(peer_id="y", persona="Y", color="red", participant_type="human")
+        p1 = ParticipantMeta(peer_id="x", persona="X", color="p4", participant_type="human")
+        p2 = ParticipantMeta(peer_id="y", persona="Y", color="p4", participant_type="human")
         assert p1 != p2
 
 
@@ -67,8 +67,8 @@ class TestRoomState:
         assert room.participants == {}
 
     def test_room_with_participants(self):
-        p1 = ParticipantMeta(peer_id="u1", persona="Alice", color="amber", participant_type="human")
-        p2 = ParticipantMeta(peer_id="a1", persona="Bot", color="cyan", participant_type="ravn")
+        p1 = ParticipantMeta(peer_id="u1", persona="Alice", color="p1", participant_type="human")
+        p2 = ParticipantMeta(peer_id="a1", persona="Bot", color="p2", participant_type="ravn")
         room = RoomState(participants={"u1": p1, "a1": p2})
         assert len(room.participants) == 2
         assert room.participants["u1"].persona == "Alice"
@@ -89,9 +89,9 @@ class TestRoomConfig:
         assert config.max_participants == 8
         assert len(config.participant_colors) == 7
 
-    def test_all_accent_tokens_present(self):
+    def test_all_participant_slots_present(self):
         config = RoomConfig()
-        expected = {"amber", "cyan", "emerald", "purple", "red", "indigo", "orange"}
+        expected = {"p1", "p2", "p3", "p4", "p5", "p6", "p7"}
         assert set(config.participant_colors) == expected
 
     def test_override_enabled(self):
@@ -103,8 +103,8 @@ class TestRoomConfig:
         assert config.max_participants == 4
 
     def test_custom_colors(self):
-        config = RoomConfig(participant_colors=["amber", "cyan"])
-        assert config.participant_colors == ["amber", "cyan"]
+        config = RoomConfig(participant_colors=["p1", "p2"])
+        assert config.participant_colors == ["p1", "p2"]
 
     def test_skuld_settings_has_room(self):
         settings = SkuldSettings()
@@ -129,12 +129,12 @@ class TestConversationTurnParticipantFields:
             role="assistant",
             content="Hi",
             participant_id="agent-1",
-            participant_meta={"peer_id": "agent-1", "persona": "Bot", "color": "cyan"},
+            participant_meta={"peer_id": "agent-1", "persona": "Bot", "color": "p2"},
             thread_id="thread-abc",
             visibility="internal",
         )
         assert turn.participant_id == "agent-1"
-        assert turn.participant_meta == {"peer_id": "agent-1", "persona": "Bot", "color": "cyan"}
+        assert turn.participant_meta == {"peer_id": "agent-1", "persona": "Bot", "color": "p2"}
         assert turn.thread_id == "thread-abc"
         assert turn.visibility == "internal"
 
@@ -152,7 +152,7 @@ class TestConversationTurnParticipantFields:
             role="user",
             content="Hello",
             participant_id="u1",
-            participant_meta={"peer_id": "u1", "persona": "Alice", "color": "amber"},
+            participant_meta={"peer_id": "u1", "persona": "Alice", "color": "p1"},
             thread_id="thr-1",
             visibility="public",
         )
@@ -168,7 +168,7 @@ class TestConversationTurnParticipantFields:
             role="assistant",
             content="Answer",
             participant_id="bot-1",
-            participant_meta={"peer_id": "bot-1", "persona": "Ravn", "color": "cyan"},
+            participant_meta={"peer_id": "bot-1", "persona": "Ravn", "color": "p2"},
         )
         # Should serialize without errors
         payload = json.dumps(asdict(turn))

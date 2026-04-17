@@ -1,15 +1,16 @@
-"""Shared mesh transport builder for Skuld and Ravn (NIU-612).
+"""Shared mesh plumbing for Skuld and Ravn (NIU-631).
 
-Both Skuld (CLI broker) and Ravn (agent daemon) need to build mesh
-adapters from config. This module provides the shared builder so
-the logic is not duplicated.
+This package centralises all mesh participation logic so both Skuld (CLI
+broker) and Ravn (agent daemon) share a single implementation:
 
-The builder handles:
-- Dynamic adapter list config (multiple transports via CompositeMeshAdapter)
-- Short alias resolution (e.g. "sleipnir" → fully-qualified class path)
-- Sleipnir special-casing (needs publisher/subscriber injection)
-- Single-adapter fallback for backward compatibility
-- InProcessBus fallback when no network transport is available
+    niuu.mesh                  — transport builders, port allocation helpers
+    niuu.mesh.cluster          — cluster.yaml peer address reader
+    niuu.mesh.discovery_builder — discovery adapter construction
+    niuu.mesh.identity         — MeshIdentity (shared peer identity model)
+    niuu.mesh.participant      — MeshParticipant lifecycle wrapper
+    niuu.mesh.transport_builder — Sleipnir transport construction
+
+Public re-exports kept here for backward compatibility.
 """
 
 from __future__ import annotations
@@ -69,7 +70,7 @@ def build_mesh_from_adapters_list(
     -------
     A MeshPort implementation, or None if no adapters could be loaded.
     """
-    from ravn.adapters.mesh.composite import CompositeMeshAdapter
+    CompositeMeshAdapter = import_class("ravn.adapters.mesh.composite.CompositeMeshAdapter")  # noqa: N806
 
     transports: list[Any] = []
     for entry in adapters:
@@ -119,8 +120,8 @@ def build_mesh_from_adapters_list(
 
 def build_in_process_mesh(own_peer_id: str, rpc_timeout_s: float) -> Any:
     """Build a SleipnirMeshAdapter backed by InProcessBus (local/test mode)."""
-    from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
-    from sleipnir.adapters.in_process import InProcessBus
+    SleipnirMeshAdapter = import_class("ravn.adapters.mesh.sleipnir_mesh.SleipnirMeshAdapter")  # noqa: N806
+    InProcessBus = import_class("sleipnir.adapters.in_process.InProcessBus")  # noqa: N806
 
     bus = InProcessBus()
     return SleipnirMeshAdapter(

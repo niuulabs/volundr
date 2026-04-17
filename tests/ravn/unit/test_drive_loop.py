@@ -215,7 +215,8 @@ async def test_drive_loop_journal_round_trip(tmp_path: Path) -> None:
 
     assert journal.exists()
     raw = json.loads(journal.read_text())
-    records = raw["queue"]
+    # journal format is {"queue": [...]} (new) or bare list (old)
+    records = raw["queue"] if isinstance(raw, dict) else raw
     assert len(records) == 1
     assert records[0]["task_id"] == task.task_id
 

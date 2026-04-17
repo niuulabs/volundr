@@ -1100,7 +1100,8 @@ export function useSkuldChat(
         // ── room_message: append multi-participant message ────────
         if (eventType === 'room_message') {
           const raw = event as unknown as Record<string, unknown>;
-          const senderId = raw.participant_id ? String(raw.participant_id) : undefined;
+          const rawSenderId = raw.participantId ?? raw.participant_id;
+          const senderId = rawSenderId ? String(rawSenderId) : undefined;
 
           // Finalize any running internal stream for this participant —
           // a room_message means their turn produced a response.

@@ -42,6 +42,8 @@ _RAVN_ACTIVITY_MAP: dict[str, str] = {
     "thinking": "thinking",
     "tool_start": "tool_executing",
     "tool_result": "idle",
+    "task_started": "busy",
+    "decision": "thinking",
 }
 
 
@@ -417,6 +419,32 @@ class RoomBridge:
         )
 
     # ------------------------------------------------------------------
+    # CLI participant helpers
+    # ------------------------------------------------------------------
+
+    async def broadcast_cli_activity(self, peer_id: str, activity_type: str) -> None:
+        """Broadcast a ``room_activity`` event for the local CLI participant.
+
+        Called by the Broker when the CLI transport changes activity state
+        so the room UI can show the Skuld participant as thinking/idle.
+        """
+        meta = self._participants.get(peer_id)
+        if meta is None:
+            return
+        await self._handle_activity_frame(meta, activity_type, "")
+
+    async def broadcast_cli_message(self, peer_id: str, content: str) -> None:
+        """Broadcast a ``room_message`` for the local CLI participant.
+
+        Called by the Broker when a CLI assistant turn completes so the
+        message appears in the room chat with participant color.
+        """
+        meta = self._participants.get(peer_id)
+        if meta is None:
+            return
+        await self._handle_response_frame(meta, {"data": content, "metadata": {}}, is_error=False)
+
+    # ------------------------------------------------------------------
     # Directed routing
     # ------------------------------------------------------------------
 
@@ -470,3 +498,7 @@ class RoomBridge:
     def participants(self) -> dict[str, ParticipantMeta]:
         """Snapshot of current participants (copy)."""
         return dict(self._participants)
+
+    def has_participant(self, peer_id: str) -> bool:
+        """Return True if *peer_id* is already a registered participant."""
+        return peer_id in self._participants

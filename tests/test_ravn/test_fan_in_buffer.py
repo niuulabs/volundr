@@ -195,6 +195,95 @@ class TestProducerAggregation:
         assert buf.pending_count == 0
 
 
+class TestFormatSingleEvent:
+    """Tests for _format_single_event enriched payload formatting."""
+
+    def test_basic_format(self):
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {"persona": "coder", "task_id": "t1"},
+        )
+        assert "Event type: code.changed" in ctx
+        assert "From persona: coder" in ctx
+        assert "Source task: t1" in ctx
+
+    def test_includes_task_description(self):
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {"persona": "coder", "task_description": "Fix the login bug"},
+        )
+        assert "Task description: Fix the login bug" in ctx
+
+    def test_includes_workspace_path(self):
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {"persona": "coder", "workspace_path": "/tmp/workspace"},
+        )
+        assert "Workspace path: /tmp/workspace" in ctx
+
+    def test_includes_files_changed(self):
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {
+                "persona": "coder",
+                "files_changed": ["/src/auth.py", "/src/login.py"],
+            },
+        )
+        assert "Files changed (2):" in ctx
+        assert "  - /src/auth.py" in ctx
+        assert "  - /src/login.py" in ctx
+
+    def test_includes_diff_summary(self):
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {
+                "persona": "coder",
+                "diff_summary": "diff --git a/main.py\n+new line",
+            },
+        )
+        assert "Git diff:" in ctx
+        assert "diff --git a/main.py" in ctx
+
+    def test_includes_outcome(self):
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {"persona": "coder", "outcome": {"verdict": "pass"}},
+        )
+        assert "Outcome:" in ctx
+        assert "pass" in ctx
+
+    def test_enriched_payload_all_fields(self):
+        """Full enriched payload includes all fields in correct order."""
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {
+                "persona": "coder",
+                "task_description": "Fix auth",
+                "workspace_path": "/ws",
+                "files_changed": ["/src/a.py"],
+                "diff_summary": "diff text",
+                "outcome": {"verdict": "pass"},
+            },
+        )
+        lines = ctx.split("\n")
+        # Task description should come before diff
+        task_idx = next(i for i, line in enumerate(lines) if "Task description" in line)
+        diff_idx = next(i for i, line in enumerate(lines) if "Git diff" in line)
+        assert task_idx < diff_idx
+
+    def test_omits_empty_enriched_fields(self):
+        """Empty enriched fields should not appear in context."""
+        ctx = FanInBuffer._format_single_event(
+            "code.changed",
+            {"persona": "coder"},
+        )
+        assert "Task description" not in ctx
+        assert "Workspace path" not in ctx
+        assert "Files changed" not in ctx
+        assert "Git diff" not in ctx
+        assert "Outcome" not in ctx
+
+
 class TestExpiry:
     def test_sweep_removes_expired_slots(self):
         buf = FanInBuffer(ttl_seconds=0.001)
@@ -211,6 +300,7 @@ class TestExpiry:
         assert buf.pending_count == 1
 
         import time
+
         time.sleep(0.01)
 
         expired = buf.sweep_expired()
