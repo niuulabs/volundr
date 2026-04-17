@@ -146,7 +146,9 @@ describe('ThreadGroup', () => {
       <ThreadGroup messages={twoMessages} isCollapsed={true} onToggle={vi.fn()} />
     );
     const group = container.firstChild as HTMLElement;
-    expect(group.style.getPropertyValue('--thread-border-color')).toBe('var(--color-participant-1)');
+    expect(group.style.getPropertyValue('--thread-border-color')).toBe(
+      'var(--color-participant-1)'
+    );
   });
 
   it('applies fallback border color when no participant', () => {
