@@ -1,10 +1,6 @@
 """Unit tests for the FanInBuffer in drive_loop.py."""
 
-from datetime import UTC, datetime, timedelta
-
-import pytest
-
-from ravn.drive_loop import FanInBuffer, _FanInResult
+from ravn.drive_loop import FanInBuffer
 
 
 class TestMergeStrategy:
