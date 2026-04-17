@@ -57,8 +57,7 @@ def _page_meta(
 
 def _lint_report(stale: list[str] | None = None) -> MimirLintReport:
     issues = [
-        LintIssue(id="L08", severity="info", message="stale", page_path=p)
-        for p in (stale or [])
+        LintIssue(id="L08", severity="info", message="stale", page_path=p) for p in (stale or [])
     ]
     return MimirLintReport(issues=issues, pages_checked=1)
 

@@ -720,8 +720,11 @@ async def test_write_learning_handles_upsert_error_on_update():
     svc = PostSessionReflectionService(bus, mimir, llm, config)
 
     learning = {
-        "title": "Some thing", "learning": "foo", "type": "observation",
-        "tags": [], "evidence": "e",
+        "title": "Some thing",
+        "learning": "foo",
+        "type": "observation",
+        "tags": [],
+        "evidence": "e",
     }
     # Must not raise.
     await svc._write_learning(learning, {"session_id": "s", "repo_slug": ""})
@@ -738,8 +741,11 @@ async def test_write_learning_handles_upsert_error_on_create():
     svc = PostSessionReflectionService(bus, mimir, llm, config)
 
     learning = {
-        "title": "New thing", "learning": "foo", "type": "observation",
-        "tags": [], "evidence": "e",
+        "title": "New thing",
+        "learning": "foo",
+        "type": "observation",
+        "tags": [],
+        "evidence": "e",
     }
     # Must not raise.
     await svc._write_learning(learning, {"session_id": "s", "repo_slug": ""})

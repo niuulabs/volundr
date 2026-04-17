@@ -24,8 +24,7 @@ from ravn.adapters.personas.loader import (
 
 _loader = PersonaLoader()
 _builtin_personas = {
-    p.stem: _loader.load_from_file(p)
-    for p in sorted(_BUILTIN_PERSONAS_DIR.glob("*.yaml"))
+    p.stem: _loader.load_from_file(p) for p in sorted(_BUILTIN_PERSONAS_DIR.glob("*.yaml"))
 }
 
 

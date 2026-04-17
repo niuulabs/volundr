@@ -168,9 +168,7 @@ class TestParseOutcomeBlockForPersona:
 
         text = "---outcome---\nbad_field: hello\n---end---\n"
         # Force parse_outcome_block to raise to cover the except branch
-        with patch(
-            "niuu.domain.outcome.parse_outcome_block", side_effect=RuntimeError("forced")
-        ):
+        with patch("niuu.domain.outcome.parse_outcome_block", side_effect=RuntimeError("forced")):
             result = _parse_outcome_block_for_persona(text, _FakePersona())
         assert result is None
 

@@ -93,6 +93,7 @@ class TestBuildTranscript:
 
     def test_only_assistant_turns_included(self, tmp_path):
         from skuld.broker import ConversationTurn
+
         b = self._make_broker(tmp_path)
         b._conversation_turns = [
             ConversationTurn(id="1", role="user", content="hello"),
@@ -102,6 +103,7 @@ class TestBuildTranscript:
 
     def test_multiple_assistant_turns_joined(self, tmp_path):
         from skuld.broker import ConversationTurn
+
         b = self._make_broker(tmp_path)
         b._conversation_turns = [
             ConversationTurn(id="1", role="assistant", content="first"),
@@ -112,6 +114,7 @@ class TestBuildTranscript:
 
     def test_empty_content_skipped(self, tmp_path):
         from skuld.broker import ConversationTurn
+
         b = self._make_broker(tmp_path)
         b._conversation_turns = [
             ConversationTurn(id="1", role="assistant", content=""),
@@ -134,6 +137,7 @@ class TestExtractAndStoreOutcome:
 
     def test_no_outcome_block_leaves_artifact_none(self, tmp_path):
         from skuld.broker import ConversationTurn
+
         b = self._make_broker(tmp_path)
         b._conversation_turns = [
             ConversationTurn(id="1", role="assistant", content="No outcome here."),
@@ -144,6 +148,7 @@ class TestExtractAndStoreOutcome:
 
     def test_outcome_block_extracted(self, tmp_path):
         from skuld.broker import ConversationTurn
+
         b = self._make_broker(tmp_path)
         b._conversation_turns = [
             ConversationTurn(
@@ -175,6 +180,7 @@ class TestExtractAndStoreOutcome:
         b = self._make_broker(tmp_path)
         with patch("skuld.broker.parse_outcome_block", side_effect=RuntimeError("boom")):
             from skuld.broker import ConversationTurn
+
             b._conversation_turns = [
                 ConversationTurn(
                     id="1",
@@ -303,6 +309,7 @@ class TestSessionCompletionE2E:
 
         # Simulate assistant messages culminating in an outcome block
         from skuld.broker import ConversationTurn
+
         b._conversation_turns = [
             ConversationTurn(id="1", role="user", content="Review the auth code"),
             ConversationTurn(
@@ -351,6 +358,7 @@ class TestSessionCompletionE2E:
         b = Broker(settings=settings, sleipnir_publisher=bus)
 
         from skuld.broker import ConversationTurn
+
         b._conversation_turns = [
             ConversationTurn(
                 id="1",

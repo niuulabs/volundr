@@ -114,11 +114,7 @@ def test_mimir_lint_report_issues_found() -> None:
     from niuu.domain.mimir import LintIssue
 
     report = MimirLintReport(
-        issues=[
-            LintIssue(
-                id="L01", severity="warning", message="Orphan", page_path="a.md"
-            )
-        ],
+        issues=[LintIssue(id="L01", severity="warning", message="Orphan", page_path="a.md")],
         pages_checked=5,
     )
     assert report.issues_found is True

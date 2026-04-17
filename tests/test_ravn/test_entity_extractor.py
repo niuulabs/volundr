@@ -217,11 +217,7 @@ class TestConfidenceGating:
         mimir.upsert_page = AsyncMock()
 
         llm = AsyncMock()
-        llm.generate = AsyncMock(
-            return_value=_llm_response(
-                [_pg_entity()]
-            )
-        )
+        llm.generate = AsyncMock(return_value=_llm_response([_pg_entity()]))
         extractor = _make_extractor(mimir=mimir, llm=llm)
         paths = await extractor.run(_source())
 
@@ -237,11 +233,7 @@ class TestConfidenceGating:
         mimir.upsert_page = AsyncMock()
 
         llm = AsyncMock()
-        llm.generate = AsyncMock(
-            return_value=_llm_response(
-                [_pg_entity("medium")]
-            )
-        )
+        llm.generate = AsyncMock(return_value=_llm_response([_pg_entity("medium")]))
         extractor = _make_extractor(mimir=mimir, llm=llm)
         paths = await extractor.run(_source())
 
@@ -261,11 +253,7 @@ class TestConfidenceGating:
         mimir.upsert_page = AsyncMock()
 
         llm = AsyncMock()
-        llm.generate = AsyncMock(
-            return_value=_llm_response(
-                [_pg_entity("medium")]
-            )
-        )
+        llm.generate = AsyncMock(return_value=_llm_response([_pg_entity("medium")]))
         extractor = _make_extractor(mimir=mimir, llm=llm)
         paths = await extractor.run(_source())
 
@@ -332,11 +320,7 @@ class TestIdempotency:
         mimir.upsert_page = AsyncMock()
 
         llm = AsyncMock()
-        llm.generate = AsyncMock(
-            return_value=_llm_response(
-                [_pg_entity()]
-            )
-        )
+        llm.generate = AsyncMock(return_value=_llm_response([_pg_entity()]))
         extractor = _make_extractor(mimir=mimir, llm=llm)
         paths = await extractor.run(source)
 
@@ -358,11 +342,7 @@ class TestIdempotency:
         mimir.upsert_page = AsyncMock()
 
         llm = AsyncMock()
-        llm.generate = AsyncMock(
-            return_value=_llm_response(
-                [_pg_entity()]
-            )
-        )
+        llm.generate = AsyncMock(return_value=_llm_response([_pg_entity()]))
         extractor = _make_extractor(mimir=mimir, llm=llm)
         paths = await extractor.run(source)
 
@@ -540,17 +520,11 @@ class TestMimirIngestToolWithExtractor:
         mimir.upsert_page = AsyncMock(side_effect=RuntimeError("disk full"))
 
         llm = AsyncMock()
-        llm.generate = AsyncMock(
-            return_value=_llm_response(
-                [_pg_entity()]
-            )
-        )
+        llm.generate = AsyncMock(return_value=_llm_response([_pg_entity()]))
         extractor = EntityExtractor(mimir=mimir, llm=llm, config=_config())
         tool = MimirIngestTool(adapter=adapter, entity_extractor=extractor)
 
-        result = await tool.execute(
-            {"content": "Some content", "title": "Some Title"}
-        )
+        result = await tool.execute({"content": "Some content", "title": "Some Title"})
 
         assert not result.is_error
         assert "Ingested source" in result.content

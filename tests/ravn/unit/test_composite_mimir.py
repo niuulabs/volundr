@@ -64,9 +64,7 @@ def _mock_port(
     port.ingest = AsyncMock(return_value=[])
     port.upsert_page = AsyncMock(return_value=None)
     port.update_thread_weight = AsyncMock(return_value=None)
-    port.lint = AsyncMock(
-        return_value=lint_report or MimirLintReport(issues=[], pages_checked=0)
-    )
+    port.lint = AsyncMock(return_value=lint_report or MimirLintReport(issues=[], pages_checked=0))
 
     if read_raises:
         port.read_page = AsyncMock(side_effect=FileNotFoundError("not found"))
