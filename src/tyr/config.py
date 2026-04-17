@@ -407,6 +407,14 @@ class FlockConfig(BaseModel):
         default_factory=list,
         description="Sleipnir publish URLs for flock task event routing.",
     )
+    llm_config: dict = Field(
+        default_factory=dict,
+        description=(
+            "LLM provider config for ravn flock nodes. "
+            "Dict matching ravn's `llm:` config block (model, max_tokens, timeout, provider). "
+            "When empty, ravn nodes use their own default or image-baked config."
+        ),
+    )
 
 
 class DispatchConfig(BaseModel):

@@ -585,3 +585,119 @@ class TestExtraKwargs:
             unknown_kwarg="ignored",
         )
         assert c.name == "ravn_flock"
+
+
+# ---------------------------------------------------------------------------
+# LLM config passthrough
+# ---------------------------------------------------------------------------
+
+_LLM_CONFIG = {
+    "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+    "max_tokens": 8192,
+    "timeout": 300.0,
+    "provider": {
+        "adapter": "ravn.adapters.llm.openai.OpenAICompatibleAdapter",
+        "kwargs": {
+            "base_url": "https://vllm.valaskjalf.asgard.niuu.world",
+            "api_key": "",
+        },
+    },
+}
+
+
+@pytest.fixture
+def flock_template_with_llm():
+    return WorkspaceTemplate(
+        name="ravn-flock-llm",
+        workload_type="ravn_flock",
+        workload_config={
+            "personas": ["coordinator", "reviewer"],
+            "mesh": {"transport": "nng"},
+            "mimir": {},
+            "sleipnir": {},
+            "llm_config": _LLM_CONFIG,
+        },
+    )
+
+
+class TestLLMConfigPassthrough:
+    async def test_llm_block_in_ravn_config_when_provided(self, session, flock_template_with_llm):
+        provider = MagicMock()
+        provider.get.return_value = flock_template_with_llm
+        c = RavnFlockContributor(template_provider=provider)
+        ctx = SessionContext(template_name="ravn-flock-llm")
+        result = await c.contribute(session, ctx)
+
+        for ctr in result.pod_spec.extra_containers:
+            env = {e["name"]: e["value"] for e in ctr["env"]}
+            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
+            assert "llm:" in inline_cfg
+            assert "Qwen/Qwen3-Coder-30B-A3B-Instruct" in inline_cfg
+            assert "vllm.valaskjalf.asgard.niuu.world" in inline_cfg
+
+    async def test_no_llm_block_when_not_provided(self, session, flock_template):
+        """flock_template has no llm_config — no llm: block emitted."""
+        provider = MagicMock()
+        provider.get.return_value = flock_template
+        c = RavnFlockContributor(template_provider=provider)
+        ctx = SessionContext(template_name="ravn-flock")
+        result = await c.contribute(session, ctx)
+
+        for ctr in result.pod_spec.extra_containers:
+            env = {e["name"]: e["value"] for e in ctr["env"]}
+            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
+            assert "llm:" not in inline_cfg
+
+    async def test_llm_config_from_workload_context(self, session):
+        """When workload_type comes directly via SessionContext (SpawnRequest path)."""
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": ["coordinator"],
+                "llm_config": _LLM_CONFIG,
+            },
+        )
+        result = await c.contribute(session, ctx)
+
+        assert result.pod_spec is not None
+        ravn_ctr = result.pod_spec.extra_containers[0]
+        env = {e["name"]: e["value"] for e in ravn_ctr["env"]}
+        inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
+        assert "llm:" in inline_cfg
+        assert "Qwen/Qwen3-Coder-30B-A3B-Instruct" in inline_cfg
+
+    async def test_empty_llm_config_dict_not_emitted(self, session):
+        """An empty llm_config dict should not produce an llm: block."""
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": ["coordinator"],
+                "llm_config": {},
+            },
+        )
+        result = await c.contribute(session, ctx)
+
+        ravn_ctr = result.pod_spec.extra_containers[0]
+        env = {e["name"]: e["value"] for e in ravn_ctr["env"]}
+        inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
+        assert "llm:" not in inline_cfg
+
+    async def test_different_models_per_persona(self, session):
+        """All ravn nodes in a flock receive the same llm_config."""
+        llm = {"model": "anthropic/claude-sonnet-4-6", "max_tokens": 4096}
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": ["coordinator", "reviewer"],
+                "llm_config": llm,
+            },
+        )
+        result = await c.contribute(session, ctx)
+
+        for ctr in result.pod_spec.extra_containers:
+            env = {e["name"]: e["value"] for e in ctr["env"]}
+            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
+            assert "claude-sonnet-4-6" in inline_cfg

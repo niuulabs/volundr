@@ -291,6 +291,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     flock_default_personas=list(settings.dispatch.flock.default_personas),
                     flock_mimir_hosted_url=settings.dispatch.flock.mimir_hosted_url,
                     flock_sleipnir_publish_urls=list(settings.dispatch.flock.sleipnir_publish_urls),
+                    flock_llm_config=dict(settings.dispatch.flock.llm_config),
                 ),
                 sleipnir_publisher=sleipnir_bus,
             )
