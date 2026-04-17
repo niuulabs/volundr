@@ -256,7 +256,6 @@ describe('useChatStore', () => {
       expect(getMeshEvents(url1)[0].id).toBe('a');
       expect(getMeshEvents(url2)).toHaveLength(1);
       expect(getMeshEvents(url2)[0].id).toBe('b');
-
     });
 
     it('preserves event fields through serialization', () => {
