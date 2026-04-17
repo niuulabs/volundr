@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // Mock the useSkuldChat hook
@@ -997,7 +997,6 @@ describe('SessionChat', () => {
           mockReadAsDataURL();
         });
         constructor() {
-          // eslint-disable-next-line @typescript-eslint/no-this-alias
           fileReaderInstances.push(this as (typeof fileReaderInstances)[number]);
         }
       };
@@ -1019,7 +1018,7 @@ describe('SessionChat', () => {
       // Create a mock image file attachment
       const imageFile = new File(['pixels'], 'photo.png', { type: 'image/png' });
       const compressedBlob = new Blob(['compressed'], { type: 'image/jpeg' });
-      const attachment = {
+      const _attachment = {
         id: 'att-1',
         file: imageFile,
         name: 'photo.png',
