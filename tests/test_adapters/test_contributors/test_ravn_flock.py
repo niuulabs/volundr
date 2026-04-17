@@ -684,7 +684,7 @@ class TestLLMConfigPassthrough:
         inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
         assert "llm:" not in inline_cfg
 
-    async def test_different_models_per_persona(self, session):
+    async def test_all_nodes_receive_same_llm_config(self, session):
         """All ravn nodes in a flock receive the same llm_config."""
         llm = {"model": "anthropic/claude-sonnet-4-6", "max_tokens": 4096}
         c = RavnFlockContributor()

@@ -89,46 +89,41 @@ def _build_ravn_config(
 
     config: dict[str, Any] = {
         "persona": persona,
+        "mesh": {
+            "enabled": True,
+            "adapter": "nng",
+            "own_peer_id": peer_id,
+            "nng": {
+                "pub_sub_address": f"tcp://{mesh_host}:{pub}",
+                "req_rep_address": f"tcp://{mesh_host}:{rep}",
+            },
+            "peers": peers,
+        },
+        "discovery": {"enabled": True, "adapter": "static"},
+        "cascade": {"enabled": True},
+        "gateway": {
+            "enabled": True,
+            "channels": {
+                "http": {"enabled": True, "host": "0.0.0.0", "port": gw},
+            },
+        },
+        "initiative": {
+            "enabled": True,
+            "max_concurrent_tasks": max_concurrent_tasks,
+        },
+        "mimir": {
+            "enabled": True,
+            "instances": mimir_instances,
+            "write_routing": {
+                "rules": mimir_write_rules,
+                "default": ["local"],
+            },
+        },
+        "logging": {"level": "INFO"},
     }
 
     if llm_config:
         config["llm"] = llm_config
-
-    config.update(
-        {
-            "mesh": {
-                "enabled": True,
-                "adapter": "nng",
-                "own_peer_id": peer_id,
-                "nng": {
-                    "pub_sub_address": f"tcp://{mesh_host}:{pub}",
-                    "req_rep_address": f"tcp://{mesh_host}:{rep}",
-                },
-                "peers": peers,
-            },
-            "discovery": {"enabled": True, "adapter": "static"},
-            "cascade": {"enabled": True},
-            "gateway": {
-                "enabled": True,
-                "channels": {
-                    "http": {"enabled": True, "host": "0.0.0.0", "port": gw},
-                },
-            },
-            "initiative": {
-                "enabled": True,
-                "max_concurrent_tasks": max_concurrent_tasks,
-            },
-            "mimir": {
-                "enabled": True,
-                "instances": mimir_instances,
-                "write_routing": {
-                    "rules": mimir_write_rules,
-                    "default": ["local"],
-                },
-            },
-            "logging": {"level": "INFO"},
-        }
-    )
 
     if sleipnir_publish_urls:
         config["sleipnir"] = {
