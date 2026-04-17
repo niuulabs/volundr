@@ -39,6 +39,8 @@ class TestAllMustPassStrategy:
 
     def test_first_event_returns_none(self):
         buf = FanInBuffer()
+        # Contributors must be registered for fan-in accumulation to activate
+        buf.set_contributors("review.verdict", ["coder", "reviewer"])
         result = buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -52,6 +54,7 @@ class TestAllMustPassStrategy:
 
     def test_second_event_completes(self):
         buf = FanInBuffer()
+        buf.set_contributors("review.verdict", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -75,6 +78,7 @@ class TestAllMustPassStrategy:
 
     def test_different_root_correlation_creates_separate_slots(self):
         buf = FanInBuffer()
+        buf.set_contributors("review.verdict", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -95,6 +99,7 @@ class TestAllMustPassStrategy:
 
     def test_fail_verdict_shows_in_context(self):
         buf = FanInBuffer()
+        buf.set_contributors("review.verdict", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -118,6 +123,7 @@ class TestAllMustPassStrategy:
 class TestAnyPassStrategy:
     def test_any_pass_with_one_passing(self):
         buf = FanInBuffer()
+        buf.set_contributors("review.verdict", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "fail"}},
@@ -189,6 +195,7 @@ class TestProducerAggregation:
 class TestExpiry:
     def test_sweep_removes_expired_slots(self):
         buf = FanInBuffer(ttl_seconds=0.001)
+        buf.set_contributors("review.verdict", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {}},
@@ -208,6 +215,7 @@ class TestExpiry:
 
     def test_sweep_keeps_non_expired(self):
         buf = FanInBuffer(ttl_seconds=300)
+        buf.set_contributors("review.verdict", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {}},
@@ -224,6 +232,7 @@ class TestExpiry:
 class TestPersistence:
     def test_round_trip(self):
         buf = FanInBuffer()
+        buf.set_contributors("review.verdict", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -236,6 +245,7 @@ class TestPersistence:
         assert len(data) == 1
 
         buf2 = FanInBuffer()
+        buf2.set_contributors("review.verdict", ["coder", "reviewer"])
         buf2.load_dict(data)
         assert buf2.pending_count == 1
 
