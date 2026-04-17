@@ -126,7 +126,6 @@ class SleipnirMeshAdapter:
         self._own_peer_id = own_peer_id
         self._discovery = discovery
         self._rpc_timeout_s = rpc_timeout_s
-        self.subscriber = subscriber  # public — used by RoomMeshBridge
 
         self._subscriptions: dict[str, Subscription] = {}
         self._rpc_handler: Callable[[dict], Awaitable[dict]] | None = None
