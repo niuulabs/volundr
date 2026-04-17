@@ -37,8 +37,15 @@ class TestMergeStrategy:
 class TestAllMustPassStrategy:
     """all_must_pass waits for all event types, checks all verdicts != fail."""
 
-    def test_first_event_returns_none(self):
+    def _make_buffer(self) -> FanInBuffer:
+        """Create a FanInBuffer with contributors registered so fan-in accumulates."""
         buf = FanInBuffer()
+        # Register contributors so the buffer does NOT short-circuit to immediate return
+        buf.set_contributors("some.target", ["coder", "reviewer"])
+        return buf
+
+    def test_first_event_returns_none(self):
+        buf = self._make_buffer()
         result = buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -51,7 +58,7 @@ class TestAllMustPassStrategy:
         assert buf.pending_count == 1
 
     def test_second_event_completes(self):
-        buf = FanInBuffer()
+        buf = self._make_buffer()
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -74,7 +81,7 @@ class TestAllMustPassStrategy:
         assert "PASS" in result.merged_context
 
     def test_different_root_correlation_creates_separate_slots(self):
-        buf = FanInBuffer()
+        buf = self._make_buffer()
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -94,7 +101,7 @@ class TestAllMustPassStrategy:
         assert buf.pending_count == 2
 
     def test_fail_verdict_shows_in_context(self):
-        buf = FanInBuffer()
+        buf = self._make_buffer()
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -118,6 +125,8 @@ class TestAllMustPassStrategy:
 class TestAnyPassStrategy:
     def test_any_pass_with_one_passing(self):
         buf = FanInBuffer()
+        # Register contributors so the buffer accumulates instead of returning immediately
+        buf.set_contributors("some.target", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "fail"}},
@@ -189,6 +198,8 @@ class TestProducerAggregation:
 class TestExpiry:
     def test_sweep_removes_expired_slots(self):
         buf = FanInBuffer(ttl_seconds=0.001)
+        # Register contributors so the buffer accumulates
+        buf.set_contributors("some.target", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {}},
@@ -208,6 +219,8 @@ class TestExpiry:
 
     def test_sweep_keeps_non_expired(self):
         buf = FanInBuffer(ttl_seconds=300)
+        # Register contributors so the buffer accumulates
+        buf.set_contributors("some.target", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {}},
@@ -224,6 +237,8 @@ class TestExpiry:
 class TestPersistence:
     def test_round_trip(self):
         buf = FanInBuffer()
+        # Register contributors so the buffer accumulates
+        buf.set_contributors("some.target", ["coder", "reviewer"])
         buf.try_accept_consumer(
             event_type="code.changed",
             event_payload={"persona": "coder", "outcome": {"verdict": "pass"}},
@@ -236,6 +251,8 @@ class TestPersistence:
         assert len(data) == 1
 
         buf2 = FanInBuffer()
+        # Register contributors on the restored buffer too
+        buf2.set_contributors("some.target", ["coder", "reviewer"])
         buf2.load_dict(data)
         assert buf2.pending_count == 1
 
