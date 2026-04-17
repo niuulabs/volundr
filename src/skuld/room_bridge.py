@@ -498,3 +498,7 @@ class RoomBridge:
     def participants(self) -> dict[str, ParticipantMeta]:
         """Snapshot of current participants (copy)."""
         return dict(self._participants)
+
+    def has_participant(self, peer_id: str) -> bool:
+        """Return True if *peer_id* is already a registered participant."""
+        return peer_id in self._participants
