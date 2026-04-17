@@ -1608,28 +1608,36 @@ class Broker:
         self._extract_and_store_outcome()
         await self._publish_mesh_outcome()
 
-    async def _git_diff_summary(self, max_bytes: int = 8192) -> str:
-        """Return a truncated ``git diff HEAD`` from the workspace.
+    async def _git_diff_summary(self) -> str:
+        """Return a truncated git diff from the workspace.
 
         Best-effort: returns an empty string on any failure so mesh
         publishing is never blocked by git issues.
         """
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "git",
-                "diff",
-                "HEAD",
-                cwd=self.workspace_dir,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
-        except Exception:
-            return ""
-        raw = stdout.decode(errors="replace")
-        if len(raw) > max_bytes:
-            return raw[:max_bytes] + "\n... (truncated)"
-        return raw
+        max_bytes = self._settings.mesh.diff_max_bytes
+        timeout = self._settings.mesh.diff_timeout_s
+
+        # Try committed changes first (HEAD~1..HEAD) since the coder
+        # session typically commits before finishing.  Fall back to
+        # uncommitted working-tree changes (diff HEAD).
+        for diff_args in (["git", "diff", "HEAD~1..HEAD"], ["git", "diff", "HEAD"]):
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *diff_args,
+                    cwd=self.workspace_dir,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            except Exception:
+                return ""
+            raw = stdout.decode(errors="replace")
+            if raw.strip():
+                if len(raw) > max_bytes:
+                    return raw[:max_bytes] + "\n... (truncated)"
+                return raw
+
+        return ""
 
     async def _publish_mesh_outcome(self) -> None:
         """Publish a ``code.changed`` event on the mesh so flock peers react.

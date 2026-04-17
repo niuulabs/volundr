@@ -1,5 +1,6 @@
 """Tests for Skuld broker service."""
 
+import asyncio
 import logging
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -1061,7 +1062,8 @@ class TestGitDiffSummary:
         return Broker(settings=settings)
 
     @pytest.mark.asyncio
-    async def test_returns_diff_output(self, test_broker):
+    async def test_returns_committed_diff(self, test_broker):
+        """HEAD~1..HEAD is tried first and returned when non-empty."""
         diff_text = "diff --git a/main.py b/main.py\n+hello"
         mock_proc = AsyncMock()
         mock_proc.communicate = AsyncMock(return_value=(diff_text.encode(), b""))
@@ -1070,12 +1072,35 @@ class TestGitDiffSummary:
         assert "diff --git" in result
 
     @pytest.mark.asyncio
+    async def test_falls_back_to_uncommitted_diff(self, test_broker):
+        """When HEAD~1..HEAD is empty, falls back to diff HEAD."""
+        call_count = 0
+
+        async def mock_exec(*args, **kwargs):
+            nonlocal call_count
+            proc = AsyncMock()
+            if call_count == 0:
+                # HEAD~1..HEAD returns empty
+                proc.communicate = AsyncMock(return_value=(b"", b""))
+            else:
+                # diff HEAD returns content
+                proc.communicate = AsyncMock(return_value=(b"diff --git uncommitted\n+new", b""))
+            call_count += 1
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_exec):
+            result = await test_broker._git_diff_summary()
+        assert "uncommitted" in result
+        assert call_count == 2
+
+    @pytest.mark.asyncio
     async def test_truncates_large_diff(self, test_broker):
+        test_broker._settings.mesh.diff_max_bytes = 100
         diff_text = "x" * 10000
         mock_proc = AsyncMock()
         mock_proc.communicate = AsyncMock(return_value=(diff_text.encode(), b""))
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            result = await test_broker._git_diff_summary(max_bytes=100)
+            result = await test_broker._git_diff_summary()
         assert len(result) < 200
         assert "truncated" in result
 
@@ -1084,6 +1109,19 @@ class TestGitDiffSummary:
         with patch("asyncio.create_subprocess_exec", side_effect=OSError("no git")):
             result = await test_broker._git_diff_summary()
         assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_uses_config_timeout(self, test_broker):
+        """Timeout value comes from settings.mesh.diff_timeout_s."""
+        test_broker._settings.mesh.diff_timeout_s = 5.0
+        diff_text = "diff content"
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(diff_text.encode(), b""))
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            with patch("asyncio.wait_for", wraps=asyncio.wait_for) as mock_wait:
+                result = await test_broker._git_diff_summary()
+                assert mock_wait.call_args[1]["timeout"] == 5.0
+        assert result == "diff content"
 
 
 class TestPublishMeshOutcome:
