@@ -446,7 +446,7 @@ class TestCliParticipantHelpers:
         assert msg["content"] == "Hello from CLI"
         assert msg["participantId"] == "skuld-1"
         assert msg["participant"]["persona"] == "coder"
-        assert msg["participant"]["color"] in {"amber", "cyan", "emerald"}
+        assert msg["participant"]["color"] in {"p1", "p2", "p3"}
 
     @pytest.mark.asyncio
     async def test_broadcast_cli_message_noop_for_unknown_peer(self):
