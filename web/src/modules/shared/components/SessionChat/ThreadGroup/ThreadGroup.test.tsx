@@ -22,7 +22,7 @@ function makeMessage(overrides: Partial<SkuldChatMessage> = {}): SkuldChatMessag
     participant: {
       peerId: 'peer-1',
       persona: 'Ravn-A',
-      color: 'amber',
+      color: 'p1',
       participantType: 'ravn',
     },
     participantId: 'peer-1',
@@ -35,14 +35,14 @@ const twoMessages = [
     id: 'msg-1',
     content: 'message one',
     createdAt: new Date('2024-01-01T12:03:00'),
-    participant: { peerId: 'peer-1', persona: 'Ravn-A', color: 'amber', participantType: 'ravn' },
+    participant: { peerId: 'peer-1', persona: 'Ravn-A', color: 'p1', participantType: 'ravn' },
   }),
   makeMessage({
     id: 'msg-2',
     content: 'message two',
     createdAt: new Date('2024-01-01T12:07:00'),
     participantId: 'peer-2',
-    participant: { peerId: 'peer-2', persona: 'Ravn-B', color: 'cyan', participantType: 'ravn' },
+    participant: { peerId: 'peer-2', persona: 'Ravn-B', color: 'p2', participantType: 'ravn' },
   }),
 ];
 
@@ -146,7 +146,9 @@ describe('ThreadGroup', () => {
       <ThreadGroup messages={twoMessages} isCollapsed={true} onToggle={vi.fn()} />
     );
     const group = container.firstChild as HTMLElement;
-    expect(group.style.getPropertyValue('--thread-border-color')).toBe('var(--color-accent-amber)');
+    expect(group.style.getPropertyValue('--thread-border-color')).toBe(
+      'var(--color-participant-1)'
+    );
   });
 
   it('applies fallback border color when no participant', () => {

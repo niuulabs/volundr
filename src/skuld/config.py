@@ -45,13 +45,13 @@ _DEFAULT_TRANSPORT_ADAPTER = "skuld.transports.sdk_websocket.SdkWebSocketTranspo
 
 
 _DEFAULT_PARTICIPANT_COLORS = [
-    "amber",
-    "cyan",
-    "emerald",
-    "purple",
-    "red",
-    "indigo",
-    "orange",
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5",
+    "p6",
+    "p7",
 ]
 
 

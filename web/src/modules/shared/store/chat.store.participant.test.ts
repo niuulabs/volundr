@@ -20,14 +20,14 @@ function makeMessage(overrides: Partial<SkuldChatMessage> = {}): SkuldChatMessag
 const humanParticipant: ParticipantMeta = {
   peerId: 'user-123',
   persona: 'Alice',
-  color: 'amber',
+  color: 'p1',
   participantType: 'human',
 };
 
 const ravnParticipant: ParticipantMeta = {
   peerId: 'agent-456',
   persona: 'Ravn',
-  color: 'cyan',
+  color: 'p2',
   participantType: 'ravn',
   gatewayUrl: 'wss://gateway.example.com/ravn',
 };

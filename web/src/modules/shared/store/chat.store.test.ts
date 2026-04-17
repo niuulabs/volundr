@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useChatStore } from './chat.store';
-import type { SkuldChatMessage } from '@/modules/shared/hooks/useSkuldChat';
+import type {
+  SkuldChatMessage,
+  MeshEvent,
+  MeshOutcomeEvent,
+} from '@/modules/shared/hooks/useSkuldChat';
 
 function makeMessage(overrides: Partial<SkuldChatMessage> = {}): SkuldChatMessage {
   return {
@@ -13,10 +17,30 @@ function makeMessage(overrides: Partial<SkuldChatMessage> = {}): SkuldChatMessag
   };
 }
 
+function makeMeshEvent(overrides: Partial<MeshOutcomeEvent> = {}): MeshOutcomeEvent {
+  return {
+    type: 'outcome',
+    id: `evt-${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: new Date('2025-07-01T08:00:00Z'),
+    participantId: 'agent-001',
+    participant: {
+      peerId: 'agent-001',
+      persona: 'Ravn',
+      color: 'p2',
+      participantType: 'ravn',
+    },
+    persona: 'Ravn',
+    eventType: 'review.passed',
+    fields: { score: 95 },
+    valid: true,
+    ...overrides,
+  };
+}
+
 describe('useChatStore', () => {
   beforeEach(() => {
     // Reset the store between tests
-    useChatStore.setState({ sessions: {} });
+    useChatStore.setState({ sessions: {}, meshEventSessions: {} });
   });
 
   it('initializes with empty sessions', () => {
@@ -177,5 +201,98 @@ describe('useChatStore', () => {
     expect(restored[0].status).toBe('running');
     expect(restored[1].status).toBe('complete');
     expect(restored[2].status).toBe('error');
+  });
+
+  describe('mesh events', () => {
+    it('returns empty array for unknown session URL', () => {
+      const { getMeshEvents } = useChatStore.getState();
+      expect(getMeshEvents('wss://unknown/session')).toEqual([]);
+    });
+
+    it('persists and retrieves mesh events for a session', () => {
+      const { setMeshEvents, getMeshEvents } = useChatStore.getState();
+      const url = 'wss://host/session';
+      const events: MeshEvent[] = [
+        makeMeshEvent({ id: 'e1', eventType: 'review.passed' }),
+        makeMeshEvent({ id: 'e2', eventType: 'security.changes_requested' }),
+      ];
+
+      setMeshEvents(url, events);
+      const restored = getMeshEvents(url);
+
+      expect(restored).toHaveLength(2);
+      expect(restored[0].id).toBe('e1');
+      expect(restored[1].id).toBe('e2');
+    });
+
+    it('serializes timestamp to ISO string and deserializes back to Date', () => {
+      const { setMeshEvents, getMeshEvents } = useChatStore.getState();
+      const url = 'wss://host/session';
+      const date = new Date('2025-07-15T14:30:00Z');
+      const events: MeshEvent[] = [makeMeshEvent({ timestamp: date })];
+
+      setMeshEvents(url, events);
+      const restored = getMeshEvents(url);
+
+      expect(restored[0].timestamp).toBeInstanceOf(Date);
+      expect(restored[0].timestamp.toISOString()).toBe('2025-07-15T14:30:00.000Z');
+    });
+
+    it('preserves event fields through serialization', () => {
+      const { setMeshEvents, getMeshEvents } = useChatStore.getState();
+      const url = 'wss://host/session';
+      const events: MeshEvent[] = [
+        makeMeshEvent({
+          eventType: 'review.passed',
+          fields: { score: 95, reviewer: 'bot' },
+          valid: true,
+          summary: 'All checks passed',
+          verdict: 'approved',
+        }),
+      ];
+
+      setMeshEvents(url, events);
+      const restored = getMeshEvents(url);
+
+      expect(restored[0].type).toBe('outcome');
+      expect((restored[0] as MeshOutcomeEvent).eventType).toBe('review.passed');
+      expect((restored[0] as MeshOutcomeEvent).fields).toEqual({ score: 95, reviewer: 'bot' });
+      expect((restored[0] as MeshOutcomeEvent).summary).toBe('All checks passed');
+      expect((restored[0] as MeshOutcomeEvent).verdict).toBe('approved');
+    });
+
+    it('returns empty array for empty stored mesh events', () => {
+      const { setMeshEvents, getMeshEvents } = useChatStore.getState();
+      const url = 'wss://host/session';
+
+      setMeshEvents(url, []);
+      expect(getMeshEvents(url)).toEqual([]);
+    });
+
+    it('overwrites mesh events for the same URL', () => {
+      const { setMeshEvents, getMeshEvents } = useChatStore.getState();
+      const url = 'wss://host/session';
+
+      setMeshEvents(url, [makeMeshEvent({ id: 'old' })]);
+      setMeshEvents(url, [makeMeshEvent({ id: 'new' })]);
+
+      const restored = getMeshEvents(url);
+      expect(restored).toHaveLength(1);
+      expect(restored[0].id).toBe('new');
+    });
+
+    it('clearSession removes mesh events along with messages', () => {
+      const { setMeshEvents, getMeshEvents, setMessages, getMessages, clearSession } =
+        useChatStore.getState();
+      const url = 'wss://host/session';
+
+      setMessages(url, [makeMessage({ content: 'msg' })]);
+      setMeshEvents(url, [makeMeshEvent({ id: 'evt' })]);
+
+      clearSession(url);
+
+      expect(getMessages(url)).toEqual([]);
+      expect(getMeshEvents(url)).toEqual([]);
+    });
   });
 });

@@ -82,28 +82,38 @@
   --transition-slow: 300ms ease;
 }
 
-/* ── Participant color attribute selectors ── */
+/* ── Participant color palette — derived from --color-brand ── */
 
-[data-participant-color='amber'] {
-  --participant-color: var(--color-accent-amber);
+:root {
+  --color-participant-1: var(--color-brand);
+  --color-participant-2: color-mix(in oklch, var(--color-brand) 75%, white);
+  --color-participant-3: color-mix(in oklch, var(--color-brand) 55%, white);
+  --color-participant-4: color-mix(in oklch, var(--color-brand) 80%, oklch(0.75 0.15 160));
+  --color-participant-5: color-mix(in oklch, var(--color-brand) 80%, oklch(0.75 0.15 280));
+  --color-participant-6: color-mix(in oklch, var(--color-brand) 75%, oklch(0.8 0.12 210));
+  --color-participant-7: color-mix(in oklch, var(--color-brand) 65%, oklch(0.85 0.1 30));
 }
-[data-participant-color='cyan'] {
-  --participant-color: var(--color-accent-cyan);
+
+[data-participant-color='p1'] {
+  --participant-color: var(--color-participant-1);
 }
-[data-participant-color='emerald'] {
-  --participant-color: var(--color-accent-emerald);
+[data-participant-color='p2'] {
+  --participant-color: var(--color-participant-2);
 }
-[data-participant-color='purple'] {
-  --participant-color: var(--color-accent-purple);
+[data-participant-color='p3'] {
+  --participant-color: var(--color-participant-3);
 }
-[data-participant-color='indigo'] {
-  --participant-color: var(--color-accent-indigo);
+[data-participant-color='p4'] {
+  --participant-color: var(--color-participant-4);
 }
-[data-participant-color='orange'] {
-  --participant-color: var(--color-accent-orange);
+[data-participant-color='p5'] {
+  --participant-color: var(--color-participant-5);
 }
-[data-participant-color='red'] {
-  --participant-color: var(--color-accent-red);
+[data-participant-color='p6'] {
+  --participant-color: var(--color-participant-6);
+}
+[data-participant-color='p7'] {
+  --participant-color: var(--color-participant-7);
 }
 
 /* ── Theme overrides ── */

@@ -29,7 +29,7 @@ def _make_bridge(
     registry = _make_registry()
     config = RoomConfig(
         enabled=True,
-        participant_colors=colors or ["amber", "cyan", "emerald"],
+        participant_colors=colors or ["p1", "p2", "p3"],
     )
     bridge = RoomBridge(config=config, channels=registry, append_turn=append_turn)
     return bridge, registry
@@ -57,7 +57,7 @@ class TestParticipantRegistration:
         assert meta.peer_id == "peer-1"
         assert meta.persona == "Alice"
         assert meta.participant_type == "ravn"
-        assert meta.color in {"amber", "cyan", "emerald"}
+        assert meta.color in {"p1", "p2", "p3"}
         assert "peer-1" in bridge.participants
 
     @pytest.mark.asyncio
@@ -74,24 +74,24 @@ class TestParticipantRegistration:
 
     @pytest.mark.asyncio
     async def test_register_assigns_colors_from_pool(self):
-        bridge, registry = _make_bridge(colors=["amber", "cyan", "emerald"])
+        bridge, registry = _make_bridge(colors=["p1", "p2", "p3"])
 
         meta1 = await bridge.register("p1", "A", _fake_ws())
         meta2 = await bridge.register("p2", "B", _fake_ws())
         meta3 = await bridge.register("p3", "C", _fake_ws())
 
         colors = {meta1.color, meta2.color, meta3.color}
-        assert colors == {"amber", "cyan", "emerald"}
+        assert colors == {"p1", "p2", "p3"}
 
     @pytest.mark.asyncio
     async def test_register_cycles_colors_beyond_pool(self):
-        bridge, registry = _make_bridge(colors=["amber", "cyan"])
+        bridge, registry = _make_bridge(colors=["p1", "p2"])
 
         await bridge.register("p1", "A", _fake_ws())
         await bridge.register("p2", "B", _fake_ws())
         meta = await bridge.register("p3", "C", _fake_ws())
 
-        assert meta.color == "amber"  # cycles back
+        assert meta.color == "p1"  # cycles back
 
     @pytest.mark.asyncio
     async def test_register_reconnect_updates_persona(self):
@@ -446,7 +446,7 @@ class TestCliParticipantHelpers:
         assert msg["content"] == "Hello from CLI"
         assert msg["participantId"] == "skuld-1"
         assert msg["participant"]["persona"] == "coder"
-        assert msg["participant"]["color"] in {"amber", "cyan", "emerald"}
+        assert msg["participant"]["color"] in {"p1", "p2", "p3"}
 
     @pytest.mark.asyncio
     async def test_broadcast_cli_message_noop_for_unknown_peer(self):
