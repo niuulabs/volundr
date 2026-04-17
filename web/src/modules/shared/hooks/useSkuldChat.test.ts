@@ -2452,6 +2452,34 @@ describe('useSkuldChat', () => {
       expect(result.current.participants.size).toBe(0);
     });
 
+    it('room_message with camelCase participantId resolves sender', () => {
+      const { handlers } = setupMock();
+      const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+      act(() => handlers.onOpen?.());
+      act(() =>
+        handlers.onMessage?.(
+          JSON.stringify({
+            type: 'room_message',
+            id: 'rm-camel',
+            content: 'camelCase test',
+            participantId: 'peer-2',
+            participant: {
+              peer_id: 'peer-2',
+              persona: 'Skuld',
+              color: 'cyan',
+              participant_type: 'ravn',
+            },
+          })
+        )
+      );
+
+      expect(result.current.messages).toHaveLength(1);
+      const msg = result.current.messages[0];
+      expect(msg.participantId).toBe('peer-2');
+      expect(msg.participant?.color).toBe('cyan');
+    });
+
     it('ignores room_activity with empty peer_id', () => {
       const { handlers } = setupMock();
       const { result } = renderHook(() => useSkuldChat('wss://test/session'));

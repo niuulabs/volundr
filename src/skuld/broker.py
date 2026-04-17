@@ -874,6 +874,11 @@ class Broker:
         # Report activity state transitions to Volundr
         if event_type == "assistant":
             asyncio.create_task(self._report_activity_state("active"))
+            # Emit room activity for CLI participant so room UI shows "thinking"
+            if self._room_bridge is not None and self._mesh_adapter is not None:
+                await self._room_bridge.broadcast_cli_activity(
+                    self._mesh_adapter.peer_id, "thinking"
+                )
         elif event_type == "result":
             asyncio.create_task(self._report_activity_state("idle"))
             asyncio.create_task(self._on_result_publish_mesh())
@@ -993,6 +998,12 @@ class Broker:
                     "model": result_model,
                 }
             )
+
+            # Emit CLI turn as room_message so it shows participant color
+            if self._room_bridge is not None and self._mesh_adapter is not None and content:
+                await self._room_bridge.broadcast_cli_message(self._mesh_adapter.peer_id, content)
+                await self._room_bridge.broadcast_cli_activity(self._mesh_adapter.peer_id, "idle")
+
             first_line = ""
             if content:
                 for line in content.strip().splitlines():

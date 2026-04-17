@@ -304,6 +304,37 @@ class TestActivityFrameTranslation:
         assert activities[0]["activityType"] == "idle"
 
     @pytest.mark.asyncio
+    async def test_task_started_frame_broadcasts_busy(self):
+        bridge, registry = _make_bridge()
+        await bridge.register("p1", "Alice", _fake_ws())
+        registry.broadcast.reset_mock()
+
+        await bridge.handle_ravn_frame(
+            "p1", {"type": "task_started", "data": "starting", "metadata": {}}
+        )
+
+        calls = [c[0][0] for c in registry.broadcast.call_args_list]
+        activities = [e for e in calls if e["type"] == "room_activity"]
+        assert len(activities) == 1
+        assert activities[0]["activityType"] == "busy"
+        assert activities[0]["participantId"] == "p1"
+
+    @pytest.mark.asyncio
+    async def test_decision_frame_broadcasts_thinking(self):
+        bridge, registry = _make_bridge()
+        await bridge.register("p1", "Alice", _fake_ws())
+        registry.broadcast.reset_mock()
+
+        await bridge.handle_ravn_frame(
+            "p1", {"type": "decision", "data": "deciding", "metadata": {}}
+        )
+
+        calls = [c[0][0] for c in registry.broadcast.call_args_list]
+        activities = [e for e in calls if e["type"] == "room_activity"]
+        assert len(activities) == 1
+        assert activities[0]["activityType"] == "thinking"
+
+    @pytest.mark.asyncio
     async def test_unknown_frame_type_is_silently_ignored(self):
         bridge, registry = _make_bridge()
         await bridge.register("p1", "Alice", _fake_ws())
@@ -369,6 +400,76 @@ class TestHistoryPersistence:
 
         # Should not raise even without a persistence callback
         await bridge.handle_ravn_frame("p1", {"type": "response", "data": "Hello", "metadata": {}})
+
+
+# ---------------------------------------------------------------------------
+# CLI participant helpers
+# ---------------------------------------------------------------------------
+
+
+class TestCliParticipantHelpers:
+    @pytest.mark.asyncio
+    async def test_broadcast_cli_activity_emits_room_activity(self):
+        bridge, registry = _make_bridge()
+        await bridge.register_mesh_peer("skuld-1", "coder", display_name="skuld")
+        registry.broadcast.reset_mock()
+
+        await bridge.broadcast_cli_activity("skuld-1", "thinking")
+
+        registry.broadcast.assert_awaited_once()
+        event = registry.broadcast.call_args[0][0]
+        assert event["type"] == "room_activity"
+        assert event["participantId"] == "skuld-1"
+        assert event["activityType"] == "thinking"
+
+    @pytest.mark.asyncio
+    async def test_broadcast_cli_activity_noop_for_unknown_peer(self):
+        bridge, registry = _make_bridge()
+        registry.broadcast.reset_mock()
+
+        await bridge.broadcast_cli_activity("ghost", "thinking")
+
+        registry.broadcast.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_broadcast_cli_message_emits_room_message(self):
+        bridge, registry = _make_bridge()
+        await bridge.register_mesh_peer("skuld-1", "coder", display_name="skuld")
+        registry.broadcast.reset_mock()
+
+        await bridge.broadcast_cli_message("skuld-1", "Hello from CLI")
+
+        calls = [c[0][0] for c in registry.broadcast.call_args_list]
+        room_msgs = [e for e in calls if e["type"] == "room_message"]
+        assert len(room_msgs) == 1
+        msg = room_msgs[0]
+        assert msg["content"] == "Hello from CLI"
+        assert msg["participantId"] == "skuld-1"
+        assert msg["participant"]["persona"] == "coder"
+        assert msg["participant"]["color"] in {"amber", "cyan", "emerald"}
+
+    @pytest.mark.asyncio
+    async def test_broadcast_cli_message_noop_for_unknown_peer(self):
+        bridge, registry = _make_bridge()
+        registry.broadcast.reset_mock()
+
+        await bridge.broadcast_cli_message("ghost", "Hello")
+
+        registry.broadcast.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_broadcast_cli_message_persists_turn(self):
+        turns = []
+        bridge, _ = _make_bridge(append_turn=turns.append)
+        await bridge.register_mesh_peer("skuld-1", "coder", display_name="skuld")
+
+        await bridge.broadcast_cli_message("skuld-1", "Completed task")
+
+        assert len(turns) == 1
+        turn = turns[0]
+        assert turn.role == "assistant"
+        assert turn.content == "Completed task"
+        assert turn.participant_id == "skuld-1"
 
 
 # ---------------------------------------------------------------------------
