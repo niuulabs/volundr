@@ -225,6 +225,7 @@ class DispatchConfig:
     flock_default_personas: list[str] = field(default_factory=lambda: ["coordinator", "reviewer"])
     flock_mimir_hosted_url: str = ""
     flock_sleipnir_publish_urls: list[str] = field(default_factory=list)
+    flock_llm_config: dict = field(default_factory=dict)
 
 
 class DispatchService:
@@ -808,6 +809,8 @@ class DispatchService:
             workload_config["sleipnir_publish_urls"] = self._config.flock_sleipnir_publish_urls
         if self._config.flock_mimir_hosted_url:
             workload_config["mimir_hosted_url"] = self._config.flock_mimir_hosted_url
+        if self._config.flock_llm_config:
+            workload_config["llm_config"] = self._config.flock_llm_config
 
         return SpawnRequest(
             name=session_name,

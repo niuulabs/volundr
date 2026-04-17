@@ -55,6 +55,7 @@ def _build_ravn_config(
     sleipnir_publish_urls: list[str],
     max_concurrent_tasks: int,
     mesh_host: str = "0.0.0.0",
+    llm_config: dict | None = None,
 ) -> str:
     """Generate the ravn daemon YAML config for a single flock node."""
     pub, rep, _hs = _ports_for(index, base_port)
@@ -120,6 +121,9 @@ def _build_ravn_config(
         },
         "logging": {"level": "INFO"},
     }
+
+    if llm_config:
+        config["llm"] = llm_config
 
     if sleipnir_publish_urls:
         config["sleipnir"] = {
@@ -194,6 +198,7 @@ class RavnFlockContributor(SessionContributor):
         sleipnir_publish_urls: list[str] = sleipnir_cfg.get("publish_urls", [])
         mesh_transport: str = mesh_cfg.get("transport", "nng")
         max_concurrent_tasks: int = wc.get("max_concurrent_tasks", _DEFAULT_MAX_CONCURRENT_TASKS)
+        llm_config: dict | None = wc.get("llm_config") or None
 
         values, pod_spec = self._build_flock_spec(
             session=session,
@@ -202,6 +207,7 @@ class RavnFlockContributor(SessionContributor):
             mimir_hosted_url=mimir_hosted_url,
             sleipnir_publish_urls=sleipnir_publish_urls,
             max_concurrent_tasks=max_concurrent_tasks,
+            llm_config=llm_config,
         )
 
         return SessionContribution(values=values, pod_spec=pod_spec)
@@ -231,6 +237,7 @@ class RavnFlockContributor(SessionContributor):
         mimir_hosted_url: str | None,
         sleipnir_publish_urls: list[str],
         max_concurrent_tasks: int,
+        llm_config: dict | None = None,
     ) -> tuple[dict[str, Any], PodSpecAdditions]:
         session_id = str(session.id)
         base_port = self._base_port
@@ -282,6 +289,7 @@ class RavnFlockContributor(SessionContributor):
                 sleipnir_publish_urls=sleipnir_publish_urls,
                 max_concurrent_tasks=max_concurrent_tasks,
                 mesh_host=self._mesh_host,
+                llm_config=llm_config,
             )
 
             ravn_env: list[dict] = [

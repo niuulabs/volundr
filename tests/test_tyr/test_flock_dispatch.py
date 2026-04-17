@@ -218,6 +218,51 @@ class TestBuildSpawnRequestFlockEnabled:
 
         assert "mimir_hosted_url" not in req.workload_config
 
+    def test_workload_config_contains_llm_config(self) -> None:
+        llm = {
+            "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+            "max_tokens": 8192,
+            "provider": {"adapter": "ravn.adapters.llm.openai.OpenAICompatibleAdapter"},
+        }
+        config = _make_flock_config(flock_llm_config=llm)
+        saga = _make_saga()
+        issue = _make_issue()
+        item = DispatchItem(saga_id=str(saga.id), issue_id="i-1", repo="org/repo-a")
+
+        svc = MagicMock()
+        svc._config = config
+        req = DispatchService._build_spawn_request(
+            svc,
+            item=item,
+            saga=saga,
+            issue=issue,
+            effective_model="claude-sonnet-4-6",
+            effective_prompt="",
+            integration_ids=[],
+        )
+
+        assert req.workload_config["llm_config"] == llm
+
+    def test_no_llm_config_key_when_empty(self) -> None:
+        config = _make_flock_config(flock_llm_config={})
+        saga = _make_saga()
+        issue = _make_issue()
+        item = DispatchItem(saga_id=str(saga.id), issue_id="i-1", repo="org/repo-a")
+
+        svc = MagicMock()
+        svc._config = config
+        req = DispatchService._build_spawn_request(
+            svc,
+            item=item,
+            saga=saga,
+            issue=issue,
+            effective_model="claude-sonnet-4-6",
+            effective_prompt="",
+            integration_ids=[],
+        )
+
+        assert "llm_config" not in req.workload_config
+
 
 # ---------------------------------------------------------------------------
 # 2. SpawnRequest construction — flock disabled
