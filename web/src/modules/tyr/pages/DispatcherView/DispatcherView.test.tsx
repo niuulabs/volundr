@@ -275,7 +275,9 @@ describe('DispatcherView', () => {
         expect.any(Array),
         'claude-sonnet-4-6',
         'test prompt',
-        'c2'
+        'c2',
+        undefined,
+        undefined
       );
     });
   });
