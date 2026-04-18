@@ -55,9 +55,9 @@ MESH_PATTERNS: list[str] = ["ravn.mesh.*"]
 
 #: RavnEventType string fragments → room activity type.
 _RAVN_TYPE_TO_ACTIVITY: dict[str, str] = {
-    "TOOL_START": "tool_executing",
-    "TOOL_RESULT": "idle",
-    "THOUGHT": "thinking",
+    "tool_start": "tool_executing",
+    "tool_result": "idle",
+    "thought": "thinking",
 }
 
 
@@ -160,7 +160,13 @@ class RoomMeshBridge:
 
     async def _handle_event(self, event: SleipnirEvent) -> None:
         """Translate a single mesh Sleipnir event into room wire events."""
+        logger.info(
+            "RoomMeshBridge: received event type=%s corr=%s",
+            event.event_type,
+            event.correlation_id,
+        )
         if not self._matches_session(event):
+            logger.info("RoomMeshBridge: session mismatch, dropping")
             return
 
         peer_id = _extract_peer_id(event)
@@ -177,7 +183,7 @@ class RoomMeshBridge:
         parts = event.event_type.split(".", 2)
         mesh_topic = parts[2] if len(parts) == 3 else ""
 
-        if "OUTCOME" in ravn_type:
+        if "outcome" in ravn_type.lower():
             await self._translate_outcome(peer_id, mesh_topic, ravn_event_payload)
             return
 
