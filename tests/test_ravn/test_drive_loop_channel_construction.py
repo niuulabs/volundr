@@ -1,0 +1,135 @@
+"""Tests for DriveLoop channel construction with mesh (NIU-634).
+
+Verifies that MeshActivityChannel is included in the composite channel
+when mesh is enabled, and that the channel construction falls back
+correctly when mesh is not available.
+"""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from ravn.adapters.channels.composite import CompositeChannel
+from ravn.adapters.channels.mesh_channel import MeshActivityChannel
+from ravn.adapters.channels.silent import SilentChannel
+from ravn.config import InitiativeConfig
+from ravn.domain.models import AgentTask, OutputMode
+from ravn.drive_loop import DriveLoop
+
+
+def _make_task(task_id: str = "t1") -> AgentTask:
+    return AgentTask(
+        task_id=task_id,
+        title="test",
+        initiative_context="do it",
+        triggered_by="test",
+        output_mode=OutputMode.SILENT,
+    )
+
+
+def _make_drive_loop_with_mesh(
+    *,
+    cascade_enabled: bool = False,
+    skuld_enabled: bool = False,
+    mesh_enabled: bool = True,
+    peer_id: str = "ravn-peer",
+) -> tuple[DriveLoop, list]:
+    """Build a DriveLoop with mesh configured; return (loop, captured_channels)."""
+    captured: list = []
+
+    def _agent_factory(channel, task_id, persona, triggered_by):
+        captured.append(channel)
+        agent = AsyncMock()
+        fake_usage = MagicMock(input_tokens=0, output_tokens=0)
+        agent.run_turn = AsyncMock(
+            return_value=MagicMock(usage=fake_usage, cost_usd=0.0)
+        )
+        return agent
+
+    cfg = InitiativeConfig(
+        enabled=True,
+        max_concurrent_tasks=1,
+        task_queue_max=10,
+        queue_journal_path="/proc/no_such_dir/queue.json",
+    )
+    settings = MagicMock()
+    settings.skuld.enabled = skuld_enabled
+    settings.cascade.enabled = cascade_enabled
+    settings.mesh.enabled = mesh_enabled
+    settings.mesh.own_peer_id = peer_id
+    settings.budget.daily_cap_usd = 100.0
+    settings.budget.warn_at_percent = 80
+    settings.budget.input_token_cost_per_million = 3.0
+    settings.budget.output_token_cost_per_million = 15.0
+
+    dl = DriveLoop(agent_factory=_agent_factory, config=cfg, settings=settings)
+    return dl, captured
+
+
+class TestDriveLoopChannelConstruction:
+    """Verify channel composition logic in _run_task."""
+
+    @pytest.mark.asyncio
+    async def test_mesh_enabled_no_cascade_uses_mesh_channel(self):
+        """Mesh enabled, no cascade → channel is MeshActivityChannel."""
+        dl, captured = _make_drive_loop_with_mesh(cascade_enabled=False)
+        mock_mesh = AsyncMock()
+        dl._mesh = mock_mesh
+
+        await dl._run_task(_make_task())
+
+        assert len(captured) == 1
+        channel = captured[0]
+        assert isinstance(channel, MeshActivityChannel)
+
+    @pytest.mark.asyncio
+    async def test_mesh_disabled_no_cascade_uses_silent(self):
+        """Mesh disabled, no cascade → SilentChannel."""
+        dl, captured = _make_drive_loop_with_mesh(
+            cascade_enabled=False, mesh_enabled=False
+        )
+        dl._mesh = None
+
+        await dl._run_task(_make_task())
+
+        assert isinstance(captured[0], SilentChannel)
+
+    @pytest.mark.asyncio
+    async def test_mesh_no_peer_id_uses_silent(self):
+        """Mesh enabled but peer_id empty → SilentChannel (no publish target)."""
+        dl, captured = _make_drive_loop_with_mesh(
+            cascade_enabled=False, peer_id=""
+        )
+        dl._mesh = AsyncMock()
+
+        await dl._run_task(_make_task())
+
+        assert isinstance(captured[0], SilentChannel)
+
+    @pytest.mark.asyncio
+    async def test_cascade_with_mesh_uses_composite(self):
+        """cascade.enabled=True + mesh → CompositeChannel including MeshActivityChannel."""
+        dl, captured = _make_drive_loop_with_mesh(cascade_enabled=True)
+        mock_mesh = AsyncMock()
+        dl._mesh = mock_mesh
+
+        await dl._run_task(_make_task())
+
+        assert isinstance(captured[0], CompositeChannel)
+        channel_types = [type(ch) for ch in captured[0]._channels]
+        assert MeshActivityChannel in channel_types
+
+    @pytest.mark.asyncio
+    async def test_cascade_without_mesh_uses_capture_only(self):
+        """cascade.enabled=True, mesh=None → CaptureChannel only (no composite)."""
+        from ravn.adapters.channels.capture import CaptureChannel
+
+        dl, captured = _make_drive_loop_with_mesh(cascade_enabled=True)
+        dl._mesh = None
+
+        await dl._run_task(_make_task())
+
+        # With cascade and no mesh/skuld_channel, channel is capture_channel alone
+        assert isinstance(captured[0], CaptureChannel)
