@@ -2,31 +2,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FlockSettingsSection } from './FlockSettingsSection';
 
-vi.mock('@/modules/tyr/hooks/useDispatchQueue', () => ({
-  useDispatchQueue: vi.fn(),
-}));
-
 vi.mock('@/modules/tyr/hooks/useFlockConfig', () => ({
   useFlockConfig: vi.fn(),
 }));
 
-import { useDispatchQueue } from '@/modules/tyr/hooks/useDispatchQueue';
 import { useFlockConfig } from '@/modules/tyr/hooks/useFlockConfig';
 
-const mockDefaults = {
-  default_system_prompt: '',
-  default_model: 'claude-sonnet-4-6',
-  models: [],
-  flock_enabled: false,
-  flock_default_personas: [
-    { name: 'coordinator', llm: {} },
-    { name: 'reviewer', llm: {} },
-  ],
-  flock_llm_config: {},
-  flock_sleipnir_publish_urls: [],
-};
-
 const mockFlockConfig = {
+  config: {
+    flock_enabled: false,
+    flock_default_personas: [
+      { name: 'coordinator', llm: {} },
+      { name: 'reviewer', llm: {} },
+    ],
+    flock_llm_config: {},
+    flock_sleipnir_publish_urls: [],
+  },
+  loading: false,
   updating: false,
   error: null,
   setFlockEnabled: vi.fn().mockResolvedValue(undefined),
@@ -37,16 +29,6 @@ const mockFlockConfig = {
 
 describe('FlockSettingsSection', () => {
   beforeEach(() => {
-    vi.mocked(useDispatchQueue).mockReturnValue({
-      queue: [],
-      defaults: mockDefaults,
-      clusters: [],
-      loading: false,
-      error: null,
-      dispatching: false,
-      refresh: vi.fn(),
-      dispatch: vi.fn(),
-    });
     vi.mocked(useFlockConfig).mockReturnValue(mockFlockConfig);
   });
 
@@ -56,15 +38,9 @@ describe('FlockSettingsSection', () => {
   });
 
   it('renders loading state', () => {
-    vi.mocked(useDispatchQueue).mockReturnValue({
-      queue: [],
-      defaults: mockDefaults,
-      clusters: [],
+    vi.mocked(useFlockConfig).mockReturnValue({
+      ...mockFlockConfig,
       loading: true,
-      error: null,
-      dispatching: false,
-      refresh: vi.fn(),
-      dispatch: vi.fn(),
     });
     render(<FlockSettingsSection />);
     expect(screen.getByText(/loading flock settings/i)).toBeInTheDocument();
@@ -82,15 +58,9 @@ describe('FlockSettingsSection', () => {
   });
 
   it('shows sub-settings when flock enabled', () => {
-    vi.mocked(useDispatchQueue).mockReturnValue({
-      queue: [],
-      defaults: { ...mockDefaults, flock_enabled: true },
-      clusters: [],
-      loading: false,
-      error: null,
-      dispatching: false,
-      refresh: vi.fn(),
-      dispatch: vi.fn(),
+    vi.mocked(useFlockConfig).mockReturnValue({
+      ...mockFlockConfig,
+      config: { ...mockFlockConfig.config, flock_enabled: true },
     });
     render(<FlockSettingsSection />);
     expect(screen.getByText('Default personas')).toBeInTheDocument();
@@ -114,15 +84,9 @@ describe('FlockSettingsSection', () => {
   });
 
   it('shows preset selector when flock enabled', () => {
-    vi.mocked(useDispatchQueue).mockReturnValue({
-      queue: [],
-      defaults: { ...mockDefaults, flock_enabled: true },
-      clusters: [],
-      loading: false,
-      error: null,
-      dispatching: false,
-      refresh: vi.fn(),
-      dispatch: vi.fn(),
+    vi.mocked(useFlockConfig).mockReturnValue({
+      ...mockFlockConfig,
+      config: { ...mockFlockConfig.config, flock_enabled: true },
     });
     render(<FlockSettingsSection />);
     expect(screen.getByText('Local vLLM (Qwen)')).toBeInTheDocument();

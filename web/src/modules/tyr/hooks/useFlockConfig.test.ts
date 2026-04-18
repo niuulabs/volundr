@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useFlockConfig } from './useFlockConfig';
 
+const mockGet = vi.hoisted(() => vi.fn());
 const mockPatch = vi.hoisted(() => vi.fn());
 
 vi.mock('@/modules/shared/api/client', () => ({
   createApiClient: () => ({
+    get: mockGet,
     patch: mockPatch,
   }),
 }));
@@ -19,13 +21,26 @@ const successResponse = {
 
 describe('useFlockConfig', () => {
   beforeEach(() => {
+    mockGet.mockResolvedValue(successResponse);
     mockPatch.mockResolvedValue(successResponse);
   });
 
-  it('starts with no error and not updating', () => {
+  it('starts with loading true and no error', () => {
+    const { result } = renderHook(() => useFlockConfig());
+    expect(result.current.loading).toBe(true);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('loads config on mount', async () => {
+    const { result } = renderHook(() => useFlockConfig());
+    await act(async () => {});
+    expect(result.current.loading).toBe(false);
+    expect(result.current.config).toEqual(successResponse);
+  });
+
+  it('starts with not updating', () => {
     const { result } = renderHook(() => useFlockConfig());
     expect(result.current.updating).toBe(false);
-    expect(result.current.error).toBeNull();
   });
 
   it('setFlockEnabled resolves without error', async () => {
