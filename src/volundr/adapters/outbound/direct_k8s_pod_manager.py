@@ -517,6 +517,10 @@ echo "Git credential helper configured"
             }
         )
 
+        # Append contributor-provided init containers (e.g. ravn config writers).
+        if spec.pod_spec:
+            containers.extend(spec.pod_spec.init_containers)
+
         return containers
 
     def _build_deployment_manifest(

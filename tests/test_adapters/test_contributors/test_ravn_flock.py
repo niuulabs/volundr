@@ -23,6 +23,29 @@ from volundr.domain.models import (
 from volundr.domain.ports import SessionContext
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _extract_mounted_config(pod_spec, persona: str) -> str:
+    """Extract the YAML written by the init container for *persona*.
+
+    The heredoc format is:
+      cat > /etc/ravn/config.yaml <<'__RAVN_EOF__'\\n<yaml>__RAVN_EOF__\\n
+    """
+    init_name = f"write-ravn-cfg-{persona}"
+    for ic in pod_spec.init_containers:
+        if ic["name"] == init_name:
+            cmd = ic["command"][2]
+            open_marker = "'__RAVN_EOF__'\n"
+            close_marker = "__RAVN_EOF__\n"
+            start = cmd.index(open_marker) + len(open_marker)
+            end = cmd.rindex(close_marker)
+            return cmd[start:end]
+    raise AssertionError(f"init container {init_name!r} not found")
+
+
+# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
@@ -306,12 +329,95 @@ class TestContributorOutput:
 
 
 # ---------------------------------------------------------------------------
-# Config generation
+# Mounted config (replaces RAVN_CONFIG_INLINE)
+# ---------------------------------------------------------------------------
+
+
+class TestMountedConfig:
+    async def test_ravn_config_inline_absent(self, session, flock_template):
+        """RAVN_CONFIG_INLINE must not appear in any container env."""
+        provider = MagicMock()
+        provider.get.return_value = flock_template
+        c = RavnFlockContributor(template_provider=provider)
+        ctx = SessionContext(template_name="ravn-flock")
+        result = await c.contribute(session, ctx)
+
+        for ctr in result.pod_spec.extra_containers:
+            env_names = {e["name"] for e in ctr["env"]}
+            assert "RAVN_CONFIG_INLINE" not in env_names
+
+    async def test_ravn_config_env_points_to_mount(self, session, flock_template):
+        """Each sidecar has RAVN_CONFIG=/etc/ravn/config.yaml."""
+        provider = MagicMock()
+        provider.get.return_value = flock_template
+        c = RavnFlockContributor(template_provider=provider)
+        ctx = SessionContext(template_name="ravn-flock")
+        result = await c.contribute(session, ctx)
+
+        for ctr in result.pod_spec.extra_containers:
+            env = {e["name"]: e["value"] for e in ctr["env"]}
+            assert env["RAVN_CONFIG"] == "/etc/ravn/config.yaml"
+
+    async def test_per_sidecar_config_volume(self, session, flock_template):
+        """Each persona gets its own config emptyDir volume."""
+        provider = MagicMock()
+        provider.get.return_value = flock_template
+        c = RavnFlockContributor(template_provider=provider)
+        ctx = SessionContext(template_name="ravn-flock")
+        result = await c.contribute(session, ctx)
+
+        vol_names = [v["name"] for v in result.pod_spec.volumes]
+        assert "ravn-cfg-coordinator" in vol_names
+        assert "ravn-cfg-reviewer" in vol_names
+
+    async def test_per_sidecar_init_container(self, session, flock_template):
+        """Each persona gets an init container that writes its config."""
+        provider = MagicMock()
+        provider.get.return_value = flock_template
+        c = RavnFlockContributor(template_provider=provider)
+        ctx = SessionContext(template_name="ravn-flock")
+        result = await c.contribute(session, ctx)
+
+        ic_names = [ic["name"] for ic in result.pod_spec.init_containers]
+        assert "write-ravn-cfg-coordinator" in ic_names
+        assert "write-ravn-cfg-reviewer" in ic_names
+
+    async def test_init_container_writes_to_correct_volume(self, session, flock_template):
+        """Init container mounts the matching config volume."""
+        provider = MagicMock()
+        provider.get.return_value = flock_template
+        c = RavnFlockContributor(template_provider=provider)
+        ctx = SessionContext(template_name="ravn-flock")
+        result = await c.contribute(session, ctx)
+
+        for ic in result.pod_spec.init_containers:
+            persona = ic["name"].replace("write-ravn-cfg-", "")
+            vol_name = f"ravn-cfg-{persona}"
+            mounts = {m["name"]: m["mountPath"] for m in ic["volumeMounts"]}
+            assert mounts[vol_name] == "/etc/ravn"
+
+    async def test_sidecar_mounts_config_readonly(self, session, flock_template):
+        """Sidecar mounts the config volume read-only at /etc/ravn."""
+        provider = MagicMock()
+        provider.get.return_value = flock_template
+        c = RavnFlockContributor(template_provider=provider)
+        ctx = SessionContext(template_name="ravn-flock")
+        result = await c.contribute(session, ctx)
+
+        for ctr in result.pod_spec.extra_containers:
+            persona = ctr["name"].replace("ravn-", "")
+            cfg_mount = next(m for m in ctr["volumeMounts"] if m["mountPath"] == "/etc/ravn")
+            assert cfg_mount["name"] == f"ravn-cfg-{persona}"
+            assert cfg_mount.get("readOnly") is True
+
+
+# ---------------------------------------------------------------------------
+# Config generation (via init container command)
 # ---------------------------------------------------------------------------
 
 
 class TestConfigGeneration:
-    async def test_ravn_config_inline_has_persona(self, session, flock_template):
+    async def test_mounted_config_has_persona(self, session, flock_template):
         provider = MagicMock()
         provider.get.return_value = flock_template
         c = RavnFlockContributor(template_provider=provider)
@@ -323,95 +429,85 @@ class TestConfigGeneration:
             assert "RAVN_PEER_ID" in env
             assert env["RAVN_PEER_ID"].startswith("flock-")
 
-            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
             persona = env["RAVN_PERSONA"]
-            assert persona in inline_cfg
+            cfg = _extract_mounted_config(result.pod_spec, persona)
+            assert persona in cfg
 
-    async def test_ravn_config_has_mesh_section(self, session, flock_template):
+    async def test_mounted_config_has_mesh_section(self, session, flock_template):
         provider = MagicMock()
         provider.get.return_value = flock_template
         c = RavnFlockContributor(template_provider=provider)
         ctx = SessionContext(template_name="ravn-flock")
         result = await c.contribute(session, ctx)
 
-        for ctr in result.pod_spec.extra_containers:
-            env = {e["name"]: e["value"] for e in ctr["env"]}
-            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
-            assert "mesh:" in inline_cfg
-            assert "enabled: true" in inline_cfg
+        for persona in ("coordinator", "reviewer"):
+            cfg = _extract_mounted_config(result.pod_spec, persona)
+            assert "mesh:" in cfg
+            assert "enabled: true" in cfg
 
-    async def test_ravn_config_has_mimir_instances(self, session, flock_template):
+    async def test_mounted_config_has_mimir_instances(self, session, flock_template):
         provider = MagicMock()
         provider.get.return_value = flock_template
         c = RavnFlockContributor(template_provider=provider)
         ctx = SessionContext(template_name="ravn-flock")
         result = await c.contribute(session, ctx)
 
-        for ctr in result.pod_spec.extra_containers:
-            env = {e["name"]: e["value"] for e in ctr["env"]}
-            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
-            assert "mimir:" in inline_cfg
-            assert "instances:" in inline_cfg
-            assert "/mimir/local" in inline_cfg
+        for persona in ("coordinator", "reviewer"):
+            cfg = _extract_mounted_config(result.pod_spec, persona)
+            assert "mimir:" in cfg
+            assert "instances:" in cfg
+            assert "/mimir/local" in cfg
 
-    async def test_ravn_config_has_write_routing(self, session, flock_template):
+    async def test_mounted_config_has_write_routing(self, session, flock_template):
         provider = MagicMock()
         provider.get.return_value = flock_template
         c = RavnFlockContributor(template_provider=provider)
         ctx = SessionContext(template_name="ravn-flock")
         result = await c.contribute(session, ctx)
 
-        for ctr in result.pod_spec.extra_containers:
-            env = {e["name"]: e["value"] for e in ctr["env"]}
-            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
-            assert "write_routing:" in inline_cfg
-            # self/ always routes to local
-            assert "self/" in inline_cfg
+        for persona in ("coordinator", "reviewer"):
+            cfg = _extract_mounted_config(result.pod_spec, persona)
+            assert "write_routing:" in cfg
+            assert "self/" in cfg
 
-    async def test_ravn_config_hosted_url_in_instances(self, session, flock_template):
+    async def test_mounted_config_hosted_url_in_instances(self, session, flock_template):
         provider = MagicMock()
         provider.get.return_value = flock_template
         c = RavnFlockContributor(template_provider=provider)
         ctx = SessionContext(template_name="ravn-flock")
         result = await c.contribute(session, ctx)
 
-        for ctr in result.pod_spec.extra_containers:
-            env = {e["name"]: e["value"] for e in ctr["env"]}
-            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
-            # Hosted URL from flock_template is present as a mimir instance
-            assert "https://mimir.niuu.internal/api/v1" in inline_cfg
-            # Hosted instance routes project/ and entity/ pages
-            assert "project/" in inline_cfg
-            assert "entity/" in inline_cfg
+        for persona in ("coordinator", "reviewer"):
+            cfg = _extract_mounted_config(result.pod_spec, persona)
+            assert "https://mimir.niuu.internal/api/v1" in cfg
+            assert "project/" in cfg
+            assert "entity/" in cfg
 
-    async def test_ravn_config_no_hosted_url_only_local(self, session, flock_profile):
+    async def test_mounted_config_no_hosted_url_only_local(self, session, flock_profile):
         """When no hosted URL configured, config only has local mimir instance."""
         provider = MagicMock()
-        provider.get.return_value = flock_profile  # flock_profile has mimir: {}
+        provider.get.return_value = flock_profile
         c = RavnFlockContributor(profile_provider=provider)
         ctx = SessionContext(profile_name="ravn-flock")
         result = await c.contribute(session, ctx)
 
-        for ctr in result.pod_spec.extra_containers:
-            env = {e["name"]: e["value"] for e in ctr["env"]}
-            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
-            assert "/mimir/local" in inline_cfg
-            # No hosted instance — project/ and entity/ prefixes absent
-            assert "project/" not in inline_cfg
-            assert "entity/" not in inline_cfg
+        for persona in ("coordinator", "reviewer"):
+            cfg = _extract_mounted_config(result.pod_spec, persona)
+            assert "/mimir/local" in cfg
+            assert "project/" not in cfg
+            assert "entity/" not in cfg
 
-    async def test_ravn_config_sleipnir_webhook(self, session, flock_template):
+    async def test_mounted_config_sleipnir_webhook(self, session, flock_template):
         provider = MagicMock()
         provider.get.return_value = flock_template
         c = RavnFlockContributor(template_provider=provider)
         ctx = SessionContext(template_name="ravn-flock")
         result = await c.contribute(session, ctx)
 
-        for ctr in result.pod_spec.extra_containers:
-            env = {e["name"]: e["value"] for e in ctr["env"]}
-            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
-            assert "sleipnir:" in inline_cfg
-            assert "webhook" in inline_cfg
+        for persona in ("coordinator", "reviewer"):
+            cfg = _extract_mounted_config(result.pod_spec, persona)
+            assert "sleipnir:" in cfg
+            assert "webhook" in cfg
 
 
 # ---------------------------------------------------------------------------
@@ -490,6 +586,9 @@ class TestContributorPipelineMerge:
         # Mimir volume present
         volume_names = [v["name"] for v in spec.pod_spec.volumes]
         assert "mimir-local" in volume_names
+
+        # Init containers merged
+        assert len(spec.pod_spec.init_containers) == 2
 
     async def test_merge_preserves_skuld_env(self, session, flock_template):
         template_provider = MagicMock()
@@ -631,12 +730,11 @@ class TestLLMConfigPassthrough:
         ctx = SessionContext(template_name="ravn-flock-llm")
         result = await c.contribute(session, ctx)
 
-        for ctr in result.pod_spec.extra_containers:
-            env = {e["name"]: e["value"] for e in ctr["env"]}
-            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
-            assert "llm:" in inline_cfg
-            assert "Qwen/Qwen3-Coder-30B-A3B-Instruct" in inline_cfg
-            assert "vllm.valaskjalf.asgard.niuu.world" in inline_cfg
+        for persona in ("coordinator", "reviewer"):
+            cfg = _extract_mounted_config(result.pod_spec, persona)
+            assert "llm:" in cfg
+            assert "Qwen/Qwen3-Coder-30B-A3B-Instruct" in cfg
+            assert "vllm.valaskjalf.asgard.niuu.world" in cfg
 
     async def test_no_llm_block_when_not_provided(self, session, flock_template):
         """flock_template has no llm_config — no llm: block emitted."""
@@ -646,10 +744,9 @@ class TestLLMConfigPassthrough:
         ctx = SessionContext(template_name="ravn-flock")
         result = await c.contribute(session, ctx)
 
-        for ctr in result.pod_spec.extra_containers:
-            env = {e["name"]: e["value"] for e in ctr["env"]}
-            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
-            assert "llm:" not in inline_cfg
+        for persona in ("coordinator", "reviewer"):
+            cfg = _extract_mounted_config(result.pod_spec, persona)
+            assert "llm:" not in cfg
 
     async def test_llm_config_from_workload_context(self, session):
         """When workload_type comes directly via SessionContext (SpawnRequest path)."""
@@ -664,11 +761,9 @@ class TestLLMConfigPassthrough:
         result = await c.contribute(session, ctx)
 
         assert result.pod_spec is not None
-        ravn_ctr = result.pod_spec.extra_containers[0]
-        env = {e["name"]: e["value"] for e in ravn_ctr["env"]}
-        inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
-        assert "llm:" in inline_cfg
-        assert "Qwen/Qwen3-Coder-30B-A3B-Instruct" in inline_cfg
+        cfg = _extract_mounted_config(result.pod_spec, "coordinator")
+        assert "llm:" in cfg
+        assert "Qwen/Qwen3-Coder-30B-A3B-Instruct" in cfg
 
     async def test_empty_llm_config_dict_not_emitted(self, session):
         """An empty llm_config dict should not produce an llm: block."""
@@ -682,10 +777,8 @@ class TestLLMConfigPassthrough:
         )
         result = await c.contribute(session, ctx)
 
-        ravn_ctr = result.pod_spec.extra_containers[0]
-        env = {e["name"]: e["value"] for e in ravn_ctr["env"]}
-        inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
-        assert "llm:" not in inline_cfg
+        cfg = _extract_mounted_config(result.pod_spec, "coordinator")
+        assert "llm:" not in cfg
 
     async def test_all_nodes_receive_same_llm_config(self, session):
         """All ravn nodes in a flock receive the same llm_config."""
@@ -700,10 +793,9 @@ class TestLLMConfigPassthrough:
         )
         result = await c.contribute(session, ctx)
 
-        for ctr in result.pod_spec.extra_containers:
-            env = {e["name"]: e["value"] for e in ctr["env"]}
-            inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
-            assert "claude-sonnet-4-6" in inline_cfg
+        for persona in ("coordinator", "reviewer"):
+            cfg = _extract_mounted_config(result.pod_spec, persona)
+            assert "claude-sonnet-4-6" in cfg
 
 
 # ---------------------------------------------------------------------------

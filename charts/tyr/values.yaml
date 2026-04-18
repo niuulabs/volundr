@@ -53,6 +53,19 @@ config:
 
 # Dispatcher configuration
 dispatch:
+  # -- In-process (single-turn) dispatch configuration.
+  # Controls the LLM used by the RavnDispatcher when running review-arbiter
+  # and decomposer personas inline (no mesh, no pod).
+  # When llmConfig is empty, falls back to dispatch.flock.llmConfig.
+  #
+  # Example — force opus for all in-process calls:
+  #   inProcess:
+  #     llmConfig:
+  #       model: claude-opus-4-6
+  #       max_tokens: 8192
+  inProcess:
+    llmConfig: {}
+
   # -- Default system prompt injected into every dispatched session
   defaultSystemPrompt: |
     You are a senior software engineer working on the Niuu platform.

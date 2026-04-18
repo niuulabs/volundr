@@ -4,6 +4,8 @@ When workload_type == "ravn_flock", this contributor replaces the default
 single-CLI layout with:
   - Skuld container with mesh.enabled=true + nng ports + Sleipnir webhook
   - N ravn daemon sidecar containers (one per persona in workload_config.personas)
+  - Per-sidecar initContainer that writes YAML config to an emptyDir volume
+    mounted read-only at /etc/ravn/config.yaml (RAVN_CONFIG env var points here)
   - nng mesh ports allocated via the same scheme as ravn flock init
   - Mimir emptyDir volume for ephemeral local memory
   - Sleipnir webhook transport config in both skuld and ravn containers
@@ -22,7 +24,7 @@ from typing import Any
 
 import yaml
 
-from niuu.domain.llm_merge import _SECURITY_KEYS
+from niuu.domain.llm_merge import _SECURITY_KEYS, merge_llm
 from niuu.mesh import nng_gateway_port_for as _gateway_port_for
 from niuu.mesh import nng_ports_for as _ports_for
 from volundr.domain.models import ForgeProfile, PodSpecAdditions, Session, WorkspaceTemplate
@@ -43,6 +45,10 @@ _MIMIR_MOUNT_PATH = "/mimir/local"
 _WORKSPACE_VOLUME_NAME = "workspace"
 _WORKSPACE_MOUNT_PATH = "/workspace"
 _RAVN_IMAGE_DEFAULT = "ghcr.io/niuulabs/ravn:latest"
+_RAVN_CONFIG_MOUNT_PATH = "/etc/ravn/config.yaml"
+_RAVN_CONFIG_VOLUME_PREFIX = "ravn-cfg"
+_RAVN_CONFIG_DIR = "/etc/ravn"
+_INIT_WRITER_IMAGE = "busybox:latest"
 
 
 def _normalize_personas(raw: list) -> list[dict]:
@@ -180,6 +186,7 @@ class RavnFlockContributor(SessionContributor):
     workload_config.personas + mesh/mimir/sleipnir settings, then:
       - Emits skuld mesh env vars (MESH_ENABLED, MESH_PEER_ID, nng addresses)
       - Emits one ravn sidecar container per persona with RAVN_CONFIG env
+      - Emits per-sidecar initContainer + emptyDir volume for mounted config
       - Emits a Mimir emptyDir volume
       - Emits Sleipnir webhook env vars for both skuld and ravn containers
 
@@ -231,7 +238,6 @@ class RavnFlockContributor(SessionContributor):
         # Normalize personas to list[dict] — accept both legacy list[str]
         # and new list[dict] with per-persona overrides.
         persona_dicts: list[dict] = _normalize_personas(raw_personas)
-        personas: list[str] = [p["name"] for p in persona_dicts]
 
         mesh_cfg: dict = wc.get("mesh", {})
         mimir_cfg: dict = wc.get("mimir", {})
@@ -245,7 +251,7 @@ class RavnFlockContributor(SessionContributor):
 
         values, pod_spec = self._build_flock_spec(
             session=session,
-            personas=personas,
+            persona_dicts=persona_dicts,
             mesh_transport=mesh_transport,
             mimir_hosted_url=mimir_hosted_url,
             sleipnir_publish_urls=sleipnir_publish_urls,
@@ -275,7 +281,7 @@ class RavnFlockContributor(SessionContributor):
     def _build_flock_spec(
         self,
         session: Session,
-        personas: list[str],
+        persona_dicts: list[dict],
         mesh_transport: str,
         mimir_hosted_url: str | None,
         sleipnir_publish_urls: list[str],
@@ -284,6 +290,7 @@ class RavnFlockContributor(SessionContributor):
     ) -> tuple[dict[str, Any], PodSpecAdditions]:
         session_id = str(session.id)
         base_port = self._base_port
+        personas: list[str] = [p["name"] for p in persona_dicts]
 
         # Skuld (index 0) + ravn nodes start at index 1
         skuld_peer_id = f"skuld-{session_id[:8]}"
@@ -315,11 +322,25 @@ class RavnFlockContributor(SessionContributor):
 
         # Ravn sidecar containers (indices 1..N)
         extra_containers: list[dict] = []
-        for i, persona in enumerate(personas):
+        config_volumes: list[dict] = []
+        init_containers: list[dict] = []
+
+        for i, persona_dict in enumerate(persona_dicts):
+            persona = persona_dict["name"]
             ravn_index = i + 1
             peer_id = f"flock-{persona}"
             pub, rep, hs = _ports_for(ravn_index, base_port)
             gw = _gateway_port_for(ravn_index, base_port)
+
+            # Merge global llm_config with per-persona llm override (last wins).
+            per_persona_llm = persona_dict.get("llm") or None
+            effective_llm: dict | None = (
+                merge_llm(
+                    global_override=llm_config or None,
+                    persona_override=per_persona_llm,
+                )
+                or None
+            )
 
             config_yaml = _build_ravn_config(
                 index=ravn_index,
@@ -332,13 +353,32 @@ class RavnFlockContributor(SessionContributor):
                 sleipnir_publish_urls=sleipnir_publish_urls,
                 max_concurrent_tasks=max_concurrent_tasks,
                 mesh_host=self._mesh_host,
-                llm_config=llm_config,
+                llm_config=effective_llm,
+            )
+
+            # Per-sidecar emptyDir volume for the mounted config file
+            cfg_vol_name = f"{_RAVN_CONFIG_VOLUME_PREFIX}-{persona}"
+            config_volumes.append({"name": cfg_vol_name, "emptyDir": {}})
+
+            # Init container writes YAML into the volume
+            heredoc = (
+                f"cat > {_RAVN_CONFIG_MOUNT_PATH} <<'__RAVN_EOF__'\n{config_yaml}__RAVN_EOF__\n"
+            )
+            init_containers.append(
+                {
+                    "name": f"write-ravn-cfg-{persona}",
+                    "image": _INIT_WRITER_IMAGE,
+                    "command": ["sh", "-c", heredoc],
+                    "volumeMounts": [
+                        {"name": cfg_vol_name, "mountPath": _RAVN_CONFIG_DIR},
+                    ],
+                }
             )
 
             ravn_env: list[dict] = [
                 {"name": "RAVN_PERSONA", "value": persona},
                 {"name": "RAVN_PEER_ID", "value": peer_id},
-                {"name": "RAVN_CONFIG_INLINE", "value": config_yaml},
+                {"name": "RAVN_CONFIG", "value": _RAVN_CONFIG_MOUNT_PATH},
             ]
 
             if sleipnir_publish_urls:
@@ -366,19 +406,23 @@ class RavnFlockContributor(SessionContributor):
                         "mountPath": _WORKSPACE_MOUNT_PATH,
                         "readOnly": True,
                     },
+                    {
+                        "name": cfg_vol_name,
+                        "mountPath": _RAVN_CONFIG_DIR,
+                        "readOnly": True,
+                    },
                 ],
             }
             extra_containers.append(container)
 
         pod_spec = PodSpecAdditions(
             volumes=(
-                {
-                    "name": _MIMIR_VOLUME_NAME,
-                    "emptyDir": {},
-                },
+                {"name": _MIMIR_VOLUME_NAME, "emptyDir": {}},
+                *config_volumes,
             ),
             env=tuple(skuld_env),
             extra_containers=tuple(extra_containers),
+            init_containers=tuple(init_containers),
         )
 
         values: dict[str, Any] = {
