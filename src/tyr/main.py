@@ -437,6 +437,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             llm_adapter = llm_cls(**llm_kwargs)
             logger.info("LLM adapter: %s", llm_cfg.adapter.rsplit(".", 1)[-1])
 
+            # Determine effective LLM config for in-process RavnDispatcher.
+            # Prefers dispatch.in_process.llm_config; falls back to
+            # dispatch.flock.llm_config so both paths share the same model by default.
+            in_process_llm_config: dict = dict(settings.dispatch.in_process.llm_config) or dict(
+                settings.dispatch.flock.llm_config
+            )
+
             # Wire Sleipnir publisher into the LLM adapter when both are enabled.
             if sleipnir_bus is not None and hasattr(llm_adapter, "set_publisher"):
                 from tyr.adapters.bifrost_publisher import BifrostPublisher  # noqa: PLC0415
@@ -447,6 +454,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
                 llm_adapter.set_publisher(bifrost_pub)
                 logger.info("Bifrost publisher wired to Sleipnir")
+
+            # Wire default LLM config into the LLM adapter (BifrostAdapter decomposer path).
+            if in_process_llm_config and hasattr(llm_adapter, "set_default_llm_config"):
+                llm_adapter.set_default_llm_config(in_process_llm_config)
+                logger.info(
+                    "BifrostAdapter: default_llm_config injected keys=%s",
+                    list(in_process_llm_config.keys()),
+                )
 
             async def _resolve_llm() -> _LLMPort:
                 return llm_adapter
@@ -466,6 +481,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if settings.notification.enabled:
                 await notification_service.start()
 
+            # Wire RavnDispatcher (shared instance for in-process single-turn calls)
+            from tyr.adapters.ravn_dispatcher import RavnDispatcher  # noqa: PLC0415
+
+            ravn_dispatcher: RavnDispatcher | None = None
+            if settings.review.ravn_arbiter_enabled:
+                llm_kwargs_for_ravn = resolve_secret_kwargs(
+                    settings.llm.kwargs, settings.llm.secret_kwargs_env
+                )
+                ravn_dispatcher = RavnDispatcher(
+                    base_url=llm_kwargs_for_ravn.get("base_url", "https://api.anthropic.com"),
+                    api_key=llm_kwargs_for_ravn.get("api_key", ""),
+                    model=settings.review.ravn_arbiter_model,
+                    timeout=settings.review.ravn_arbiter_timeout,
+                    default_llm_config=in_process_llm_config or None,
+                )
+                logger.info(
+                    "RavnDispatcher wired: model=%s llm_config_keys=%s",
+                    settings.review.ravn_arbiter_model,
+                    list(in_process_llm_config.keys()) if in_process_llm_config else [],
+                )
+
             # Wire automated review engine (subscribes to raid.state_changed events)
             reviewer_service = ReviewerSessionService(
                 volundr_factory=app.state.volundr_factory,
@@ -480,6 +516,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 reviewer_service=reviewer_service,
                 dispatcher_repo=dispatcher_repo,
                 dispatch_service=dispatch_svc,
+                ravn_dispatcher=ravn_dispatcher,
             )
             app.state.review_engine = review_engine
             await review_engine.start()
@@ -576,6 +613,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if tyr_sleipnir_bridge is not None:
                 await tyr_sleipnir_bridge.stop()
             await review_engine.stop()
+            if ravn_dispatcher is not None:
+                await ravn_dispatcher.close()
             await notification_service.stop()
             await telegram_reply_client.close()
             if hasattr(llm_adapter, "close"):

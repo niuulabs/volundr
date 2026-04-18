@@ -143,6 +143,16 @@ class BifrostAdapter(LLMPort):
         """Inject the Sleipnir publisher.  Called from main.py after wiring."""
         self._publisher = publisher
 
+    def set_default_llm_config(self, config: dict) -> None:
+        """Inject the default LLM config into the embedded RavnDispatcher.
+
+        Called from main.py after the in-process LLM config is resolved so that
+        the ravn decomposer path honours the same model/max_tokens overrides as
+        the review-arbiter path.  No-ops when ravn_decomposer_enabled=False.
+        """
+        if self._ravn is not None:
+            self._ravn._default_llm_config = config
+
     async def decompose_spec(self, spec: str, repo: str, *, model: str) -> SagaStructure:
         # Try decomposer ravn persona first when enabled
         if self._ravn_decomposer_enabled and self._ravn is not None:
