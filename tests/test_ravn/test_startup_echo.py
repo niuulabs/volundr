@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import logging
 import os
+from unittest.mock import patch
 
 import pytest
+from typer.testing import CliRunner
 
-from ravn.cli.commands import _log_effective_config
+from ravn.cli.commands import _log_effective_config, app
 from ravn.config import Settings
+
+runner = CliRunner()
 
 
 @pytest.fixture
@@ -95,3 +99,27 @@ class TestStartupEcho:
         budget = settings.llm.extended_thinking.budget_tokens
         assert f"thinking={thinking}" in msg
         assert f"budget={budget}" in msg
+
+
+class TestDaemonCallsConfigEcho:
+    """Verify daemon and listen commands call _log_effective_config."""
+
+    @pytest.mark.usefixtures("_clean_env")
+    def test_daemon_emits_config_log(self):
+        with (
+            patch("ravn.cli.commands._log_effective_config") as mock_log,
+            patch("ravn.cli.commands.asyncio.run"),
+        ):
+            runner.invoke(app, ["daemon"])
+
+        mock_log.assert_called_once()
+
+    @pytest.mark.usefixtures("_clean_env")
+    def test_listen_emits_config_log(self):
+        with (
+            patch("ravn.cli.commands._log_effective_config") as mock_log,
+            patch("ravn.cli.commands.asyncio.run"),
+        ):
+            runner.invoke(app, ["listen"])
+
+        mock_log.assert_called_once()
