@@ -77,7 +77,7 @@ def _make_issue(
 def _make_flock_config(**overrides) -> DispatchConfig:
     defaults = dict(
         flock_enabled=True,
-        flock_default_personas=["coordinator", "reviewer"],
+        flock_default_personas=[{"name": "coordinator"}, {"name": "reviewer"}],
         flock_mimir_hosted_url="https://mimir.example.com",
         flock_sleipnir_publish_urls=["nats://sleipnir.example.com"],
     )
@@ -114,7 +114,9 @@ class TestBuildSpawnRequestFlockEnabled:
         assert req.workload_type == "ravn_flock"
 
     def test_workload_config_contains_personas(self) -> None:
-        config = _make_flock_config(flock_default_personas=["coordinator", "reviewer"])
+        config = _make_flock_config(
+            flock_default_personas=[{"name": "coordinator"}, {"name": "reviewer"}]
+        )
         saga = _make_saga()
         issue = _make_issue()
         item = DispatchItem(saga_id=str(saga.id), issue_id="i-1", repo="org/repo-a")
@@ -131,7 +133,7 @@ class TestBuildSpawnRequestFlockEnabled:
             integration_ids=[],
         )
 
-        assert req.workload_config["personas"] == ["coordinator", "reviewer"]
+        assert req.workload_config["personas"] == [{"name": "coordinator"}, {"name": "reviewer"}]
 
     def test_workload_config_contains_sleipnir_publish_urls(self) -> None:
         config = _make_flock_config(
