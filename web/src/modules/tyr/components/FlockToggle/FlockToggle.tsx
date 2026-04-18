@@ -1,3 +1,4 @@
+import { Toggle } from '@/modules/shared';
 import styles from './FlockToggle.module.css';
 
 interface PersonaOption {
@@ -31,16 +32,7 @@ export function FlockToggle({
     <div className={styles.container}>
       <div className={styles.row}>
         <span className={styles.label}>Dispatch as flock</span>
-        <button
-          type="button"
-          className={styles.toggle}
-          role="switch"
-          aria-label="Dispatch as flock"
-          aria-checked={enabled}
-          onClick={() => onToggle(!enabled)}
-        >
-          <span className={styles.toggleThumb} />
-        </button>
+        <Toggle checked={enabled} onChange={onToggle} label="Dispatch as flock" accent="purple" />
       </div>
       {enabled && personas.length > 0 && (
         <div className={styles.personas}>

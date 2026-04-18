@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useDispatchQueue } from '@/modules/tyr/hooks/useDispatchQueue';
+import { Toggle } from '@/modules/shared';
 import { useFlockConfig } from '@/modules/tyr/hooks/useFlockConfig';
 import styles from './FlockSettingsSection.module.css';
 
@@ -20,9 +20,16 @@ const LLM_PRESETS: Record<string, Record<string, unknown>> = {
 };
 
 export function FlockSettingsSection() {
-  const { defaults, loading } = useDispatchQueue();
-  const { updating, error, setFlockEnabled, setDefaultPersonas, setLlmConfig, setSleipnirUrls } =
-    useFlockConfig();
+  const {
+    config,
+    loading,
+    updating,
+    error,
+    setFlockEnabled,
+    setDefaultPersonas,
+    setLlmConfig,
+    setSleipnirUrls,
+  } = useFlockConfig();
 
   const [localEnabled, setLocalEnabled] = useState<boolean | null>(null);
   const [localPersonas, setLocalPersonas] = useState<string | null>(null);
@@ -40,15 +47,16 @@ export function FlockSettingsSection() {
     );
   }
 
-  const flockEnabled = localEnabled ?? defaults.flock_enabled;
-  const personasText = localPersonas ?? defaults.flock_default_personas.map(p => p.name).join(', ');
-  const urlsText = localUrls ?? defaults.flock_sleipnir_publish_urls.join('\n');
-  const llmJson = localLlmJson ?? JSON.stringify(defaults.flock_llm_config, null, 2);
+  const flockEnabled = localEnabled ?? config?.flock_enabled ?? false;
+  const personasText =
+    localPersonas ?? (config?.flock_default_personas.map(p => p.name).join(', ') ?? '');
+  const urlsText = localUrls ?? (config?.flock_sleipnir_publish_urls.join('\n') ?? '');
+  const llmJson = localLlmJson ?? JSON.stringify(config?.flock_llm_config ?? {}, null, 2);
 
   const handleToggle = async () => {
     const next = !flockEnabled;
-    setLocalEnabled(next);
     await setFlockEnabled(next);
+    setLocalEnabled(next);
   };
 
   const handlePersonasSave = async () => {
@@ -114,16 +122,13 @@ export function FlockSettingsSection() {
             Gate all flock UI and dispatch behaviour
           </span>
         </div>
-        <button
-          type="button"
-          className={styles.toggle}
-          role="switch"
-          aria-checked={flockEnabled}
-          onClick={() => void handleToggle()}
+        <Toggle
+          checked={flockEnabled}
+          onChange={() => void handleToggle()}
+          label="Flock enabled"
+          accent="purple"
           disabled={updating}
-        >
-          <span className={styles.toggleThumb} />
-        </button>
+        />
       </div>
 
       {flockEnabled && (

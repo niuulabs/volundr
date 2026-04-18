@@ -7,7 +7,7 @@ import {
   useHealthDetailed,
   useSagas,
 } from '../../hooks';
-import { useDispatchQueue } from '../../hooks/useDispatchQueue';
+import { useFlockConfig } from '../../hooks/useFlockConfig';
 import type { SseEvent } from '../../hooks';
 import type { RaidStatus } from '../../models';
 import { DashboardTopBar } from '../../components/DashboardTopBar';
@@ -27,7 +27,7 @@ export function DashboardView() {
   const [showCompleted, setShowCompleted] = useState(false);
 
   const { raids, loading: raidsLoading, refresh: refreshRaids, patchRaid } = useActiveRaids();
-  const { defaults: dispatchDefaults } = useDispatchQueue();
+  const { config: flockConfig } = useFlockConfig();
 
   const summary = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -144,7 +144,7 @@ export function DashboardView() {
             </div>
             <SystemsHealth health={health} loading={healthLoading} />
           </div>
-          {dispatchDefaults.flock_enabled && (
+          {flockConfig?.flock_enabled && (
             <div className={styles.panel}>
               <div className={styles.panelHeader}>
                 <span className={styles.panelTitle}>Flock</span>
@@ -154,15 +154,15 @@ export function DashboardView() {
                 <span className={styles.flockStat}>
                   <span className={styles.flockStatLabel}>Personas</span>
                   <span className={styles.flockStatValue}>
-                    {dispatchDefaults.flock_default_personas.map(p => p.name).join(', ') || '—'}
+                    {flockConfig.flock_default_personas.map(p => p.name).join(', ') || '—'}
                   </span>
                 </span>
-                {dispatchDefaults.flock_llm_config &&
-                  Object.keys(dispatchDefaults.flock_llm_config).length > 0 && (
+                {flockConfig.flock_llm_config &&
+                  Object.keys(flockConfig.flock_llm_config).length > 0 && (
                     <span className={styles.flockStat}>
                       <span className={styles.flockStatLabel}>Model</span>
                       <span className={styles.flockStatValue}>
-                        {String(dispatchDefaults.flock_llm_config.model ?? '—')}
+                        {String(flockConfig.flock_llm_config.model ?? '—')}
                       </span>
                     </span>
                   )}

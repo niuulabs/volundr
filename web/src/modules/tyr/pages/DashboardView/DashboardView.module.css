@@ -82,7 +82,7 @@
 .flockStat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1);
 }
 
 .flockStatLabel {

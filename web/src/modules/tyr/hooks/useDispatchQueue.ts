@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createApiClient } from '@/modules/shared/api/client';
+import type { PersonaConfig } from './useFlockConfig';
+
+export type { PersonaConfig };
 
 const api = createApiClient('/api/v1/tyr/dispatch');
 
@@ -24,11 +27,6 @@ export interface QueueItem {
 export interface ModelOption {
   id: string;
   name: string;
-}
-
-export interface PersonaConfig {
-  name: string;
-  llm: Record<string, unknown>;
 }
 
 export interface DispatchDefaults {
@@ -75,7 +73,9 @@ interface UseDispatchQueueResult {
     items: DispatchItem[],
     model: string,
     systemPrompt: string,
-    connectionId?: string
+    connectionId?: string,
+    workloadType?: string,
+    workloadConfig?: Record<string, unknown>
   ) => Promise<DispatchResult[]>;
 }
 
@@ -123,7 +123,9 @@ export function useDispatchQueue(): UseDispatchQueueResult {
       items: DispatchItem[],
       model: string,
       systemPrompt: string,
-      connectionId?: string
+      connectionId?: string,
+      workloadType?: string,
+      workloadConfig?: Record<string, unknown>
     ): Promise<DispatchResult[]> => {
       setDispatching(true);
       try {
@@ -132,6 +134,8 @@ export function useDispatchQueue(): UseDispatchQueueResult {
           model,
           system_prompt: systemPrompt,
           ...(connectionId ? { connection_id: connectionId } : {}),
+          ...(workloadType ? { workload_type: workloadType } : {}),
+          ...(workloadConfig ? { workload_config: workloadConfig } : {}),
         });
         // Remove dispatched items from queue locally
         const dispatched = new Set(

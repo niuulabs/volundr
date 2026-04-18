@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { LoadingIndicator } from '@/modules/shared';
 import { useTyrSessions } from '../../hooks';
-import { useDispatchQueue } from '../../hooks/useDispatchQueue';
+import { useFlockConfig } from '../../hooks/useFlockConfig';
 import type { VolundrSession, TimelineResponse, TimelineEvent } from '../../hooks/useTyrSessions';
 import { BranchTag } from '../../components/BranchTag';
 import { FlockBadge } from '../../components/FlockBadge';
@@ -176,7 +176,7 @@ function SessionRow({
 
 export function SessionsView() {
   const { sessions, loading, error, getTimeline } = useTyrSessions();
-  const { defaults } = useDispatchQueue();
+  const { config: flockConfig } = useFlockConfig();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [timelines, setTimelines] = useState<Record<string, TimelineResponse | null>>({});
   const [loadingTimelines, setLoadingTimelines] = useState<Set<string>>(new Set());
@@ -225,7 +225,7 @@ export function SessionsView() {
     return (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
   });
 
-  const flockEnabled = defaults.flock_enabled;
+  const flockEnabled = flockConfig?.flock_enabled ?? false;
   const flockCount = flockEnabled
     ? sessions.filter(s => s.workload_type === 'ravn_flock').length
     : 0;

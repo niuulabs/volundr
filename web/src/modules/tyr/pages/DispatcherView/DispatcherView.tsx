@@ -50,11 +50,16 @@ export function DispatcherView() {
       return;
     }
 
+    const workloadType = flockEnabled ? 'ravn_flock' : undefined;
+    const workloadConfig = flockEnabled ? { personas: selectedPersonas } : undefined;
+
     const results = await dispatch(
       items,
       modelOverride ?? defaults.default_model,
       promptOverride ?? defaults.default_system_prompt,
-      selectedCluster || undefined
+      selectedCluster || undefined,
+      workloadType,
+      workloadConfig
     );
     setLastResults(results);
     setSelected(new Set());
