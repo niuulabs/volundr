@@ -236,6 +236,24 @@ envoy:
   # -- Extra upstream clusters
   extraClusters: []
 
+# Flock flow configuration — reusable named persona compositions
+flockFlows:
+  # -- Enable flock flow ConfigMap and RBAC
+  enabled: false
+  # -- Fully-qualified adapter class path
+  adapter: "tyr.adapters.flows.config.ConfigFlockFlowProvider"
+  # -- Extra kwargs forwarded to the adapter constructor
+  kwargs: {}
+  # -- Predefined flows (rendered into the ConfigMap)
+  flows: []
+  #   - name: code-review-flow
+  #     description: "Standard code review with coordinator + reviewer"
+  #     personas:
+  #       - name: coordinator
+  #       - name: reviewer
+  #     mesh_transport: nng
+  #     max_concurrent_tasks: 3
+
 credentialStore:
   # -- Fully-qualified class path for the credential store adapter
   adapter: "niuu.adapters.memory_credential_store.MemoryCredentialStore"

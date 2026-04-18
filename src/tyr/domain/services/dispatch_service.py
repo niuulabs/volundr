@@ -7,6 +7,8 @@ auto-continue and future consumers without an HTTP request context.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import re
 import string
@@ -35,6 +37,7 @@ from tyr.domain.templates import BUNDLED_TEMPLATES_DIR, TemplatePhase, load_temp
 from tyr.domain.utils import _slugify
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
+from tyr.ports.flock_flow import FlockFlowProvider
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerFactory, TrackerPort
 from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrPort
@@ -212,6 +215,12 @@ def _format_persona_label(persona: dict) -> str:
     return f"{name}({alias}{suffix})"
 
 
+def _snapshot_hash(personas: list[dict]) -> str:
+    """Return a short hash of the persona snapshot for log correlation."""
+    raw = json.dumps(personas, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode()).hexdigest()[:8]
+
+
 def resolve_target_adapter(
     connection_id: str | None,
     adapter_by_name: dict[str, VolundrPort],
@@ -266,6 +275,7 @@ class DispatchService:
         config: DispatchConfig,
         sleipnir_publisher: object | None = None,
         event_bus: EventBusPort | None = None,
+        flow_provider: FlockFlowProvider | None = None,
     ) -> None:
         self._tracker_factory = tracker_factory
         self._volundr_factory = volundr_factory
@@ -275,6 +285,7 @@ class DispatchService:
         self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._sleipnir_publisher = sleipnir_publisher
         self._event_bus = event_bus
+        self._flow_provider = flow_provider
 
     async def find_ready_issues(
         self,
@@ -796,8 +807,16 @@ class DispatchService:
         effective_model: str,
         effective_prompt: str,
         integration_ids: list[str],
+        flock_flow: str = "",
+        persona_overrides: list[dict] | None = None,
     ) -> SpawnRequest:
-        """Build a SpawnRequest — flock or solo — based on config."""
+        """Build a SpawnRequest — flock or solo — based on config.
+
+        When *flock_flow* names a registered flow, the flow is resolved via the
+        ``FlockFlowProvider`` and **snapshotted** inline into the workload config.
+        Per-dispatch *persona_overrides* take precedence over flow-level overrides
+        which in turn take precedence over persona defaults.
+        """
         session_name = issue.identifier.lower()
         if not self._config.flock_enabled:
             return SpawnRequest(
@@ -818,25 +837,72 @@ class DispatchService:
                 integration_ids=integration_ids,
             )
 
-        personas = self._config.flock_default_personas
-        logger.info(
-            "flock dispatch session=%s personas=[%s]",
-            session_name,
-            ", ".join(_format_persona_label(p) for p in personas),
-        )
+        # Resolve personas — flow snapshot takes precedence over config defaults
+        personas = list(self._config.flock_default_personas)
+        flow_name_for_log = ""
+        mimir_url = self._config.flock_mimir_hosted_url
+        sleipnir_urls = list(self._config.flock_sleipnir_publish_urls)
+
+        if flock_flow and self._flow_provider is not None:
+            flow = self._flow_provider.get(flock_flow)
+            if flow is not None:
+                flow_name_for_log = flow.name
+                # SNAPSHOT: expand flow personas inline
+                personas = [p.to_dict() for p in flow.personas]
+                if flow.mimir_hosted_url:
+                    mimir_url = flow.mimir_hosted_url
+                if flow.sleipnir_publish_urls:
+                    sleipnir_urls = list(flow.sleipnir_publish_urls)
+            else:
+                logger.warning("Flock flow '%s' not found, using default personas", flock_flow)
+
+        # Apply per-dispatch persona overrides (precedence: dispatch > flow > defaults)
+        if persona_overrides:
+            override_map = {o["name"]: o for o in persona_overrides}
+            merged: list[dict] = []
+            for p in personas:
+                name = p.get("name", p) if isinstance(p, dict) else p
+                if name in override_map:
+                    base = dict(p) if isinstance(p, dict) else {"name": p}
+                    base.update(override_map.pop(name))
+                    merged.append(base)
+                else:
+                    merged.append(p if isinstance(p, dict) else {"name": p})
+            # Append any overrides that aren't already in the list
+            for remaining in override_map.values():
+                merged.append(remaining)
+            personas = merged
+
+        # Snapshot hash for log correlation
+        snapshot_hash = _snapshot_hash(personas)
+        if flow_name_for_log:
+            logger.info(
+                "flock dispatch session=%s flow=%s snapshot=%s personas=[%s]",
+                session_name,
+                flow_name_for_log,
+                snapshot_hash,
+                ", ".join(_format_persona_label(p) for p in personas),
+            )
+        else:
+            logger.info(
+                "flock dispatch session=%s personas=[%s]",
+                session_name,
+                ", ".join(_format_persona_label(p) for p in personas),
+            )
+
         workload_config: dict = {
             "personas": personas,
             "initiative_context": build_flock_prompt(
                 issue,
                 item.repo,
                 saga.feature_branch,
-                mimir_hosted_url=self._config.flock_mimir_hosted_url,
+                mimir_hosted_url=mimir_url,
             ),
         }
-        if self._config.flock_sleipnir_publish_urls:
-            workload_config["sleipnir_publish_urls"] = self._config.flock_sleipnir_publish_urls
-        if self._config.flock_mimir_hosted_url:
-            workload_config["mimir_hosted_url"] = self._config.flock_mimir_hosted_url
+        if sleipnir_urls:
+            workload_config["sleipnir_publish_urls"] = sleipnir_urls
+        if mimir_url:
+            workload_config["mimir_hosted_url"] = mimir_url
         if self._config.flock_llm_config:
             workload_config["llm_config"] = self._config.flock_llm_config
 
