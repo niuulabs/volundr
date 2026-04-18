@@ -191,12 +191,96 @@ const markdownComponents: Record<string, React.ComponentType<any>> = {
   hr: () => <hr className={styles.hr} />,
 };
 
+/* ------------------------------------------------------------------ */
+/*  OutcomeCard                                                         */
+/* ------------------------------------------------------------------ */
+
+const VERDICT_COLORS: Record<string, string> = {
+  approve: 'var(--color-accent-emerald)',
+  pass: 'var(--color-accent-emerald)',
+  retry: 'var(--color-accent-amber)',
+  escalate: 'var(--color-accent-red)',
+  fail: 'var(--color-accent-red)',
+};
+
+function parseOutcomeFields(raw: string): Record<string, string> {
+  const fields: Record<string, string> = {};
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+
+  if (lines.length > 1) {
+    for (const line of lines) {
+      const idx = line.indexOf(':');
+      if (idx < 1) continue;
+      fields[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+    }
+    return fields;
+  }
+
+  const text = lines[0] ?? raw.trim();
+  const pattern = /(\w+):\s*/g;
+  const matches = [...text.matchAll(pattern)];
+  for (let i = 0; i < matches.length; i++) {
+    const key = matches[i][1];
+    const start = matches[i].index! + matches[i][0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index! : text.length;
+    fields[key] = text.slice(start, end).trim();
+  }
+  return fields;
+}
+
+function OutcomeCard({ yaml }: { yaml: string }) {
+  const fields = parseOutcomeFields(yaml);
+  const verdict = fields['verdict'] ?? '';
+  const verdictColor = VERDICT_COLORS[verdict] ?? 'var(--color-text-secondary)';
+
+  return (
+    <div className={styles.outcomeCard}>
+      <div className={styles.outcomeHeader}>
+        <span className={styles.outcomeLabel}>Outcome</span>
+        {verdict && (
+          <span className={styles.outcomeBadge} style={{ color: verdictColor, borderColor: verdictColor }}>
+            {verdict}
+          </span>
+        )}
+      </div>
+      <div className={styles.outcomeFields}>
+        {Object.entries(fields)
+          .filter(([k]) => k !== 'verdict')
+          .map(([key, value]) => (
+            <div key={key} className={styles.outcomeField}>
+              <span className={styles.outcomeKey}>{key}</span>
+              <span className={styles.outcomeValue}>{value}</span>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  MarkdownContent                                                     */
+/* ------------------------------------------------------------------ */
+
+const OUTCOME_RE = /(---outcome---[\s\S]*?---end---)/gi;
+const OUTCOME_EXTRACT_RE = /---outcome---\s*([\s\S]*?)---end---/i;
+
 export function MarkdownContent({ content, isStreaming, className }: MarkdownContentProps) {
+  const segments = content.split(OUTCOME_RE);
+
   return (
     <div className={cn(styles.content, className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-        {content}
-      </ReactMarkdown>
+      {segments.map((segment, i) => {
+        const match = segment.match(OUTCOME_EXTRACT_RE);
+        if (match) {
+          return <OutcomeCard key={`outcome-${i}`} yaml={match[1]} />;
+        }
+        if (!segment.trim()) return null;
+        return (
+          <ReactMarkdown key={`md-${i}`} remarkPlugins={[remarkGfm]} components={markdownComponents}>
+            {segment}
+          </ReactMarkdown>
+        );
+      })}
       {isStreaming && <span className={styles.streamingCursor} />}
     </div>
   );
