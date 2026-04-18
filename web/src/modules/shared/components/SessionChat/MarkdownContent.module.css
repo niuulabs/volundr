@@ -391,6 +391,12 @@
   letter-spacing: 0.05em;
 }
 
+.outcomeHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .outcomeBadge {
   font-size: var(--text-xs);
   font-family: var(--font-mono);
@@ -400,6 +406,43 @@
   border: 1px solid;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.outcomeBadge[data-verdict='approve'],
+.outcomeBadge[data-verdict='pass'] {
+  color: var(--color-accent-emerald);
+  border-color: var(--color-accent-emerald);
+}
+
+.outcomeBadge[data-verdict='retry'] {
+  color: var(--color-accent-amber);
+  border-color: var(--color-accent-amber);
+}
+
+.outcomeBadge[data-verdict='escalate'],
+.outcomeBadge[data-verdict='fail'] {
+  color: var(--color-accent-red);
+  border-color: var(--color-accent-red);
+}
+
+.outcomeBadge[data-verdict='unknown'] {
+  color: var(--color-text-secondary);
+  border-color: var(--color-text-secondary);
+}
+
+.outcomeRawToggle {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--color-text-faint);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--transition-fast);
+}
+
+.outcomeRawToggle:hover {
+  color: var(--color-text-muted);
 }
 
 .outcomeFields {
@@ -426,4 +469,18 @@
 .outcomeValue {
   color: var(--color-text-secondary);
   word-break: break-word;
+}
+
+.outcomeRaw {
+  border-top: 1px solid var(--color-border-subtle);
+  padding: var(--space-3) var(--space-4);
+}
+
+.outcomeRawYaml {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
 }

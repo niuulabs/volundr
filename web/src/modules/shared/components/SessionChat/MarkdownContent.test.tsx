@@ -224,3 +224,126 @@ describe('MarkdownContent', () => {
     expect(screen.getByText(/line10/)).toBeInTheDocument();
   });
 });
+
+/* ================================================================== */
+/*  MarkdownContent — Outcome blocks                                   */
+/* ================================================================== */
+
+describe('MarkdownContent — outcome blocks', () => {
+  const outcomeBlock = `---outcome---
+verdict: approve
+tests_passing: true
+scope_adherence: 0.95
+summary: Implementation complete with full test coverage
+---end---`;
+
+  it('renders an outcome block as a card instead of raw text', () => {
+    const { container } = render(<MarkdownContent content={outcomeBlock} />);
+
+    expect(screen.queryByText(/---outcome---/)).toBeNull();
+    expect(screen.queryByText(/---end---/)).toBeNull();
+
+    expect(screen.getByText('Outcome')).toBeInTheDocument();
+    expect(container.querySelector('[class*="outcomeCard"]')).toBeInTheDocument();
+  });
+
+  it('renders the verdict as a badge', () => {
+    render(<MarkdownContent content={outcomeBlock} />);
+
+    expect(screen.getByText('approve')).toBeInTheDocument();
+  });
+
+  it('sets data-verdict="approve" on the badge', () => {
+    const { container } = render(<MarkdownContent content={outcomeBlock} />);
+
+    const badge = container.querySelector('[class*="outcomeBadge"]');
+    expect(badge).not.toBeNull();
+    expect(badge).toHaveAttribute('data-verdict', 'approve');
+  });
+
+  it('sets data-verdict="retry" for retry verdict', () => {
+    const content = '---outcome---\nverdict: retry\nsummary: needs more work\n---end---';
+    const { container } = render(<MarkdownContent content={content} />);
+
+    const badge = container.querySelector('[class*="outcomeBadge"]');
+    expect(badge).toHaveAttribute('data-verdict', 'retry');
+  });
+
+  it('sets data-verdict="fail" for fail verdict', () => {
+    const content = '---outcome---\nverdict: fail\nsummary: failed\n---end---';
+    const { container } = render(<MarkdownContent content={content} />);
+
+    const badge = container.querySelector('[class*="outcomeBadge"]');
+    expect(badge).toHaveAttribute('data-verdict', 'fail');
+  });
+
+  it('sets data-verdict="unknown" for unrecognized verdicts', () => {
+    const content = '---outcome---\nverdict: custom_status\nsummary: unusual\n---end---';
+    const { container } = render(<MarkdownContent content={content} />);
+
+    const badge = container.querySelector('[class*="outcomeBadge"]');
+    expect(badge).toHaveAttribute('data-verdict', 'unknown');
+  });
+
+  it('renders non-verdict fields as key-value pairs', () => {
+    render(<MarkdownContent content={outcomeBlock} />);
+
+    expect(screen.getByText('tests_passing')).toBeInTheDocument();
+    expect(screen.getByText('true')).toBeInTheDocument();
+    expect(screen.getByText('scope_adherence')).toBeInTheDocument();
+    expect(screen.getByText('0.95')).toBeInTheDocument();
+    expect(screen.getByText('summary')).toBeInTheDocument();
+    expect(screen.getByText('Implementation complete with full test coverage')).toBeInTheDocument();
+  });
+
+  it('shows "Show raw" button initially', () => {
+    render(<MarkdownContent content={outcomeBlock} />);
+
+    expect(screen.getByText('Show raw')).toBeInTheDocument();
+    expect(screen.queryByText('Hide raw')).toBeNull();
+  });
+
+  it('shows raw YAML when "Show raw" is clicked', async () => {
+    render(<MarkdownContent content={outcomeBlock} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Show raw'));
+    });
+
+    expect(screen.getByText('Hide raw')).toBeInTheDocument();
+    const pre = screen.getByText(/verdict: approve/);
+    expect(pre.tagName).toBe('PRE');
+  });
+
+  it('hides raw YAML when "Hide raw" is clicked', async () => {
+    render(<MarkdownContent content={outcomeBlock} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Show raw'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Hide raw'));
+    });
+
+    expect(screen.getByText('Show raw')).toBeInTheDocument();
+    expect(screen.queryByText(/verdict: approve/)).toBeNull();
+  });
+
+  it('strips outcome markers from surrounding message text', () => {
+    const content = `Some intro text.\n\n${outcomeBlock}\n\nSome conclusion text.`;
+    render(<MarkdownContent content={content} />);
+
+    expect(screen.getByText(/Some intro text/)).toBeInTheDocument();
+    expect(screen.getByText(/Some conclusion text/)).toBeInTheDocument();
+    expect(screen.getByText('Outcome')).toBeInTheDocument();
+  });
+
+  it('handles outcome block with no verdict gracefully', () => {
+    const content = '---outcome---\nsummary: no verdict here\n---end---';
+    render(<MarkdownContent content={content} />);
+
+    expect(screen.getByText('Outcome')).toBeInTheDocument();
+    expect(screen.getByText('no verdict here')).toBeInTheDocument();
+  });
+});

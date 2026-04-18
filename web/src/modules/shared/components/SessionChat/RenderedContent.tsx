@@ -219,22 +219,30 @@ function parseOutcomeYaml(raw: string): Record<string, string> {
 }
 
 function OutcomeCard({ yaml, cardKey }: { yaml: string; cardKey: string }) {
+  const [showRaw, setShowRaw] = useState(false);
   const fields = parseOutcomeYaml(yaml);
   const verdict = fields['verdict'] ?? '';
-  const verdictColor = VERDICT_COLORS[verdict] ?? 'var(--color-text-secondary)';
+  const knownVerdict = verdict in VERDICT_COLORS ? verdict : 'unknown';
 
   return (
     <div key={cardKey} className={styles.outcomeCard}>
       <div className={styles.outcomeHeader}>
         <span className={styles.outcomeLabel}>Outcome</span>
-        {verdict && (
-          <span
-            className={styles.outcomeBadge}
-            style={{ color: verdictColor, borderColor: verdictColor }}
+        <div className={styles.outcomeHeaderRight}>
+          {verdict && (
+            <span className={styles.outcomeBadge} data-verdict={knownVerdict}>
+              {verdict}
+            </span>
+          )}
+          <button
+            type="button"
+            className={styles.outcomeRawToggle}
+            onClick={() => setShowRaw(prev => !prev)}
+            aria-expanded={showRaw}
           >
-            {verdict}
-          </span>
-        )}
+            {showRaw ? 'Hide raw' : 'Show raw'}
+          </button>
+        </div>
       </div>
       <div className={styles.outcomeFields}>
         {Object.entries(fields)
@@ -246,6 +254,11 @@ function OutcomeCard({ yaml, cardKey }: { yaml: string; cardKey: string }) {
             </div>
           ))}
       </div>
+      {showRaw && (
+        <div className={styles.outcomeRaw}>
+          <pre className={styles.outcomeRawYaml}>{yaml.trim()}</pre>
+        </div>
+      )}
     </div>
   );
 }
