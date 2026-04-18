@@ -143,19 +143,23 @@ class TestSave:
         body = call_kwargs[1]["body"] if "body" in call_kwargs[1] else call_kwargs[0][2]
         assert "reviewer.yaml" in body["data"]
 
-    def test_preserves_existing_keys_on_save(self) -> None:
+    def test_patches_only_changed_key(self) -> None:
+        """Strategic merge patch only needs the new/updated key — other keys are
+        preserved by the merge semantics, so we should NOT re-send them."""
         registry, mock_api = _make_registry({"coder.yaml": _SAMPLE_YAML})
 
         registry.save(_SAMPLE_CONFIG)
 
         call_kwargs = mock_api.patch_namespaced_config_map.call_args
         body = call_kwargs[1]["body"] if "body" in call_kwargs[1] else call_kwargs[0][2]
-        assert "coder.yaml" in body["data"]
+        # Only the saved key should be in the patch body
         assert "reviewer.yaml" in body["data"]
+        assert "coder.yaml" not in body["data"]
 
     def test_auto_creates_configmap_when_missing(self) -> None:
         registry, mock_api = _make_registry()
-        mock_api.read_namespaced_config_map.side_effect = _make_404_exception()
+        # Patch returns 404 → triggers auto-create fallback
+        mock_api.patch_namespaced_config_map.side_effect = _make_404_exception()
 
         registry.save(_SAMPLE_CONFIG)
 
@@ -168,18 +172,18 @@ class TestSave:
         else:
             assert "reviewer.yaml" in body["data"]
 
-    def test_propagates_non_404_read_errors(self) -> None:
+    def test_propagates_non_404_patch_errors(self) -> None:
         registry, mock_api = _make_registry()
         exc = Exception("Forbidden")
         exc.status = 403  # type: ignore[attr-defined]
-        mock_api.read_namespaced_config_map.side_effect = exc
-        with pytest.raises(RuntimeError, match="Failed to read ConfigMap before save"):
+        mock_api.patch_namespaced_config_map.side_effect = exc
+        with pytest.raises(RuntimeError, match="Failed to save persona to ConfigMap"):
             registry.save(_SAMPLE_CONFIG)
 
-    def test_propagates_patch_errors(self) -> None:
+    def test_propagates_patch_conflict_errors(self) -> None:
         registry, mock_api = _make_registry({"reviewer.yaml": _SAMPLE_YAML})
         mock_api.patch_namespaced_config_map.side_effect = Exception("conflict")
-        with pytest.raises(RuntimeError, match="Failed to patch ConfigMap"):
+        with pytest.raises(RuntimeError, match="Failed to save persona to ConfigMap"):
             registry.save(_SAMPLE_CONFIG)
 
 
@@ -198,7 +202,8 @@ class TestDelete:
         mock_api.patch_namespaced_config_map.assert_called_once()
         call_kwargs = mock_api.patch_namespaced_config_map.call_args
         body = call_kwargs[1]["body"] if "body" in call_kwargs[1] else call_kwargs[0][2]
-        assert "reviewer.yaml" not in body["data"]
+        # Null-value patch signals strategic merge patch to delete the key
+        assert body["data"]["reviewer.yaml"] is None
 
     def test_returns_false_when_key_absent(self) -> None:
         registry, mock_api = _make_registry({"coder.yaml": _SAMPLE_YAML})
@@ -216,7 +221,7 @@ class TestDelete:
         exc = Exception("Server Error")
         exc.status = 500  # type: ignore[attr-defined]
         mock_api.read_namespaced_config_map.side_effect = exc
-        with pytest.raises(RuntimeError, match="Failed to read ConfigMap before delete"):
+        with pytest.raises(RuntimeError, match="Failed to read ConfigMap"):
             registry.delete("reviewer")
 
     def test_propagates_patch_errors(self) -> None:

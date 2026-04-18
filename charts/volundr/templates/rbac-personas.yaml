@@ -1,8 +1,8 @@
 {{- if and .Values.rbac.create (eq .Values.personaSource.mode "mountedVolume") }}
 ---
 # Role granting volundr least-privilege write access to the personas ConfigMap.
-# Verbs are intentionally limited — no create/delete of ConfigMaps themselves,
-# only get/list/watch/update/patch on the ravn-personas ConfigMap.
+# Verbs: get/list/watch/update/patch scoped to the named ConfigMap, plus
+# create (unscoped by resourceNames) for auto-creation on first save.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:

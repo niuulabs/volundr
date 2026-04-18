@@ -193,25 +193,28 @@ class KubernetesConfigMapPersonaRegistry(PersonaRegistryPort):
     # ------------------------------------------------------------------
 
     def save(self, config: PersonaConfig) -> None:
-        """Persist *config* to the ConfigMap, auto-creating it if absent."""
-        api = self._get_api()
+        """Persist *config* to the ConfigMap, auto-creating it if absent.
+
+        Attempts a strategic merge patch first (adds/updates a single key).
+        Falls back to creating the ConfigMap when it doesn't exist yet.
+        """
         key = f"{config.name}.yaml"
         yaml_text = FilesystemPersonaAdapter.to_yaml(config)
 
+        api = self._get_api()
         try:
-            cm = api.read_namespaced_config_map(
+            api.patch_namespaced_config_map(
                 name=self._configmap_name,
                 namespace=self._namespace,
+                body={"data": {key: yaml_text}},
             )
         except Exception as exc:
             if getattr(exc, "status", None) == 404:
                 self._create_configmap({key: yaml_text})
                 return
-            raise RuntimeError(f"Failed to read ConfigMap before save: {exc}") from exc
-
-        data = cm.data or {}
-        data[key] = yaml_text
-        self._patch_data(data)
+            raise RuntimeError(
+                f"Failed to save persona to ConfigMap {self._configmap_name!r}: {exc}"
+            ) from exc
         logger.debug("Saved persona %r to ConfigMap %r", config.name, self._configmap_name)
 
     def delete(self, name: str) -> bool:
@@ -219,26 +222,29 @@ class KubernetesConfigMapPersonaRegistry(PersonaRegistryPort):
 
         Returns ``True`` when the key was present and removed.
         Returns ``False`` when the key was not found (including missing ConfigMap).
+
+        Uses a null-value patch so that strategic merge patch actually removes
+        the key (absent keys are preserved, not deleted).
         """
-        api = self._get_api()
         key = f"{name}.yaml"
 
-        try:
-            cm = api.read_namespaced_config_map(
-                name=self._configmap_name,
-                namespace=self._namespace,
-            )
-        except Exception as exc:
-            if getattr(exc, "status", None) == 404:
-                return False
-            raise RuntimeError(f"Failed to read ConfigMap before delete: {exc}") from exc
-
-        data = cm.data or {}
+        # Check the key exists before issuing the delete patch.
+        data = self._read_data()
         if key not in data:
             return False
 
-        del data[key]
-        self._patch_data(data)
+        # Null-value in a strategic merge patch deletes the key.
+        api = self._get_api()
+        try:
+            api.patch_namespaced_config_map(
+                name=self._configmap_name,
+                namespace=self._namespace,
+                body={"data": {key: None}},
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to patch ConfigMap {self._configmap_name!r}: {exc}"
+            ) from exc
         logger.debug("Deleted persona %r from ConfigMap %r", name, self._configmap_name)
         return True
 
