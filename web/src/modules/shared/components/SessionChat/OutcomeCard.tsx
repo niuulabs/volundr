@@ -6,8 +6,7 @@ import styles from './OutcomeCard.module.css';
 /*  Regexes — exported so callers can split/extract outcome blocks     */
 /* ------------------------------------------------------------------ */
 
-export const OUTCOME_RE =
-  /(---outcome---[\s\S]*?(?:---end---|(?:^|\n)---(?:\s*$|\n)))/gim;
+export const OUTCOME_RE = /(---outcome---[\s\S]*?(?:---end---|(?:^|\n)---(?:\s*$|\n)))/gim;
 
 export const OUTCOME_EXTRACT_RE =
   /---outcome---\s*([\s\S]*?)(?:---end---|(?:^|\n)---(?:\s*$|\n))/im;

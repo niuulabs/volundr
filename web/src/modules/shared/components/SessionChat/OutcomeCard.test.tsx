@@ -80,9 +80,7 @@ summary: Implementation complete with full test coverage`;
   });
 
   it('sets data-verdict="retry" for retry verdict', () => {
-    const { container } = render(
-      <OutcomeCard yaml={'verdict: retry\nsummary: needs more work'} />
-    );
+    const { container } = render(<OutcomeCard yaml={'verdict: retry\nsummary: needs more work'} />);
     const badge = container.querySelector('[class*="outcomeBadge"]');
     expect(badge).toHaveAttribute('data-verdict', 'retry');
   });
@@ -102,9 +100,7 @@ summary: Implementation complete with full test coverage`;
   });
 
   it('sets data-verdict="unknown" for unrecognized verdicts', () => {
-    const { container } = render(
-      <OutcomeCard yaml={'verdict: custom_status\nsummary: unusual'} />
-    );
+    const { container } = render(<OutcomeCard yaml={'verdict: custom_status\nsummary: unusual'} />);
     const badge = container.querySelector('[class*="outcomeBadge"]');
     expect(badge).toHaveAttribute('data-verdict', 'unknown');
   });
