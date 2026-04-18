@@ -41,6 +41,7 @@ from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.dispatcher import resolve_event_bus as dispatcher_resolve_event_bus
 from tyr.api.events import create_events_router, resolve_event_bus
+from tyr.api.flock_config import create_flock_config_router
 from tyr.api.flock_flows import (
     create_flock_flows_router,
     resolve_flow_provider,
@@ -181,6 +182,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_events_router(settings.events.keepalive_interval))
     app.include_router(create_pipelines_router())
     app.include_router(create_flock_flows_router())
+    app.include_router(create_flock_config_router())
     from tyr.adapters.inbound.auth import extract_principal as _extract_principal
 
     app.include_router(create_pats_router(_extract_principal))

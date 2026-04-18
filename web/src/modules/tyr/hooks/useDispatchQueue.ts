@@ -26,10 +26,19 @@ export interface ModelOption {
   name: string;
 }
 
+export interface PersonaConfig {
+  name: string;
+  llm: Record<string, unknown>;
+}
+
 export interface DispatchDefaults {
   default_system_prompt: string;
   default_model: string;
   models: ModelOption[];
+  flock_enabled: boolean;
+  flock_default_personas: PersonaConfig[];
+  flock_llm_config: Record<string, unknown>;
+  flock_sleipnir_publish_urls: string[];
 }
 
 export interface ClusterInfo {
@@ -76,6 +85,10 @@ export function useDispatchQueue(): UseDispatchQueueResult {
     default_system_prompt: '',
     default_model: 'claude-sonnet-4-6',
     models: [],
+    flock_enabled: false,
+    flock_default_personas: [],
+    flock_llm_config: {},
+    flock_sleipnir_publish_urls: [],
   });
   const [clusters, setClusters] = useState<ClusterInfo[]>([]);
   const [loading, setLoading] = useState(true);
