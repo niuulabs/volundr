@@ -340,6 +340,13 @@ class TestInProcessParity:
 class TestMountedVolumeScenario:
     """Kind-cluster test: persona source = mountedVolume.
 
+    Scope: infrastructure wiring only.  This scenario verifies that the
+    MountedVolume adapter correctly delivers personas from the ``ravn-personas``
+    ConfigMap to the sidecar's ``/etc/ravn/config.yaml``.  It does NOT test
+    pipeline dispatch or stage-level ``persona_overrides`` — those code paths
+    are exercised by ``TestInProcessParity`` which runs in every CI run without
+    a kind cluster.
+
     Flow:
       1. Create kind cluster.
       2. Install Volundr chart with personaSource.mode=mountedVolume and
@@ -347,12 +354,11 @@ class TestMountedVolumeScenario:
       3. Seed ``reviewer`` persona via REST.
       4. Wait for ConfigMap projection (kubelet syncs within ~60 s).
       5. Create ``code-review-flow`` via REST.
-      6. Dispatch a pipeline template that references the flow with
-         ``reviewer.llm.thinking_enabled: true`` stage override.
-      7. Poll for sidecar pod readiness.
-      8. Assert /etc/ravn/config.yaml on the sidecar matches expected merged config.
-      9. Assert ravn startup log reflects effective config.
-     10. Tear down.
+      6. Poll for sidecar pod readiness.
+      7. Assert /etc/ravn/config.yaml on the sidecar reflects the flow-level
+         LLM model override from the ``code-review-flow`` definition.
+      8. Assert ravn startup log reflects effective config.
+      9. Tear down.
     """
 
     @pytest.fixture(scope="class")
@@ -443,23 +449,23 @@ class TestMountedVolumeScenario:
             },
         )
 
-        # Step 7: Poll for sidecar pod
+        # Step 6: Poll for sidecar pod
         pod_name = wait_for_pod(
             kind_cluster,
             label_selector="app.kubernetes.io/component=ravn-sidecar",
             namespace="default",
         )
 
-        # Step 8: Assert /etc/ravn/config.yaml
+        # Step 7: Assert /etc/ravn/config.yaml reflects the flow-level model override.
+        # Stage-level persona_overrides (e.g. thinking_enabled) are applied at dispatch
+        # time by Tyr — not installed here — and are covered by TestInProcessParity.
         config = read_sidecar_config(kind_cluster, pod_name, namespace="default")
         persona_cfg = config.get("persona", {})
         llm_cfg = persona_cfg.get("llm", {})
 
-        assert llm_cfg.get("model") == "claude-opus-4-6", (
-            f"Expected model='claude-opus-4-6' but got {llm_cfg.get('model')!r}"
-        )
-        assert llm_cfg.get("thinking_enabled") is True, (
-            "thinking_enabled should be True from stage override"
+        got_model = llm_cfg.get("model")
+        assert got_model == "claude-opus-4-6", (
+            f"Expected model='claude-opus-4-6' from flow-level override but got {got_model!r}"
         )
 
     def test_sidecar_startup_log_reflects_effective_config(
@@ -495,6 +501,11 @@ class TestMountedVolumeScenario:
 @_SKIP_KIND
 class TestHTTPScenario:
     """Kind-cluster test: persona source = http (PAT auth).
+
+    Scope: infrastructure wiring only.  Verifies that the HTTP adapter correctly
+    delivers personas from the Volundr REST API to the sidecar startup config.
+    Pipeline dispatch and stage-level ``persona_overrides`` are not exercised here;
+    see ``TestInProcessParity`` for that coverage.
 
     The sidecar pulls persona definitions from the Volundr REST API using a PAT
     mounted as a Kubernetes secret.  No ConfigMap projection occurs — effective

@@ -145,9 +145,10 @@ jobs:
 
       - name: Delete kind cluster (always)
         if: always()
+        env:
+          KIND_CLUSTER_NAME: ${{ github.event.inputs.cluster_name || 'niuu-mv-integ' }}
         run: |
-          kind delete cluster --name "${{ github.event.inputs.cluster_name || 'niuu-mv-integ' }}" \
-            || true
+          kind delete cluster --name "$KIND_CLUSTER_NAME" || true
 
   # ---------------------------------------------------------------------------
   # HTTP scenario (Scenario 2)
@@ -205,6 +206,7 @@ jobs:
 
       - name: Delete kind cluster (always)
         if: always()
+        env:
+          KIND_CLUSTER_NAME: ${{ github.event.inputs.cluster_name || 'niuu-http-integ' }}
         run: |
-          kind delete cluster --name "${{ github.event.inputs.cluster_name || 'niuu-http-integ' }}" \
-            || true
+          kind delete cluster --name "$KIND_CLUSTER_NAME" || true

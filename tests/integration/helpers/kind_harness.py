@@ -45,9 +45,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -80,11 +83,7 @@ def check_tools_available() -> None:
 
 
 def _which(name: str) -> str | None:
-    try:
-        result = subprocess.run(["which", name], capture_output=True, text=True, check=False)
-        return result.stdout.strip() or None
-    except OSError:
-        return None
+    return shutil.which(name)
 
 
 # ---------------------------------------------------------------------------
@@ -196,8 +195,14 @@ class KindCluster:
 
     def create_namespace(self, namespace: str) -> None:
         """Create a namespace if it does not exist."""
-        self.kubectl("create", "namespace", namespace, "--dry-run=client", "-o", "yaml")
-        self.kubectl("apply", "-f", "-")
+        result = self.kubectl("create", "namespace", namespace, "--dry-run=client", "-o", "yaml")
+        subprocess.run(
+            ["kubectl", "--kubeconfig", self.kubeconfig, "apply", "-f", "-"],
+            input=result.stdout,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -499,8 +504,6 @@ def seed_persona_via_rest(
 
     Raises ``RuntimeError`` on non-201 responses.
     """
-    import urllib.request  # stdlib only — no extra deps
-
     body = json.dumps(persona_payload).encode()
     headers = {"Content-Type": "application/json"}
     if token:
@@ -512,11 +515,17 @@ def seed_persona_via_rest(
         headers=headers,
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        if resp.status not in (200, 201):
-            raise RuntimeError(
-                f"seed_persona_via_rest: POST /api/v1/ravn/personas returned {resp.status}"
-            )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status not in (200, 201):
+                raise RuntimeError(
+                    f"seed_persona_via_rest: POST /api/v1/ravn/personas returned {resp.status}"
+                )
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(
+            f"seed_persona_via_rest: POST /api/v1/ravn/personas returned {exc.code}: "
+            f"{exc.read().decode()}"
+        ) from exc
 
 
 def create_flow_via_rest(
@@ -534,8 +543,6 @@ def create_flow_via_rest(
 
     Raises ``RuntimeError`` on non-201 responses.
     """
-    import urllib.request
-
     body = json.dumps(flow_payload).encode()
     headers = {"Content-Type": "application/json"}
     if token:
@@ -547,8 +554,14 @@ def create_flow_via_rest(
         headers=headers,
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        if resp.status not in (200, 201):
-            raise RuntimeError(
-                f"create_flow_via_rest: POST /api/v1/flock-flows returned {resp.status}"
-            )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status not in (200, 201):
+                raise RuntimeError(
+                    f"create_flow_via_rest: POST /api/v1/flock-flows returned {resp.status}"
+                )
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(
+            f"create_flow_via_rest: POST /api/v1/flock-flows returned {exc.code}: "
+            f"{exc.read().decode()}"
+        ) from exc
