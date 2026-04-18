@@ -92,6 +92,13 @@ class DispatchItemRequest(BaseModel):
         default=None,
         description="Target a specific Volundr cluster for this item (overrides request-level)",
     )
+    flock_flow: str | None = Field(
+        default=None,
+        description=(
+            "Named flock flow to use for this item. "
+            "The flow's personas are snapshotted at dispatch time."
+        ),
+    )
 
 
 class DispatchResultResponse(BaseModel):
@@ -246,6 +253,7 @@ def create_dispatch_router() -> APIRouter:
                 issue_id=item.issue_id,
                 repo=item.repo,
                 connection_id=item.connection_id,
+                flock_flow=item.flock_flow,
             )
             for item in body.items
         ]

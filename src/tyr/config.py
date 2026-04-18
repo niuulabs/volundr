@@ -859,6 +859,35 @@ class EventsConfig(BaseModel):
     )
 
 
+class FlockFlowsConfig(BaseModel):
+    """Flock flow provider configuration (dynamic adapter pattern).
+
+    Example ``tyr.yaml`` for dev (YAML file)::
+
+        flock_flows:
+          adapter: tyr.adapters.flows.ConfigFlockFlowProvider
+          kwargs:
+            path: /etc/tyr/flock_flows.yaml
+
+    Example for k8s (ConfigMap)::
+
+        flock_flows:
+          adapter: tyr.adapters.flows.KubernetesConfigMapFlockFlowProvider
+          kwargs:
+            namespace: tyr
+            configmap_name: flock-flows
+    """
+
+    adapter: str = Field(
+        default="tyr.adapters.flows.ConfigFlockFlowProvider",
+        description="Fully-qualified class path for the FlockFlowProvider adapter.",
+    )
+    kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra kwargs forwarded verbatim to the adapter constructor.",
+    )
+
+
 class Settings(BaseSettings):
     """Application settings.
 
@@ -909,6 +938,7 @@ class Settings(BaseSettings):
     sleipnir: SleipnirConfig = Field(default_factory=SleipnirConfig)
     event_triggers: EventTriggerConfig = Field(default_factory=EventTriggerConfig)
     ravn_outcome: RavnOutcomeConfig = Field(default_factory=RavnOutcomeConfig)
+    flock_flows: FlockFlowsConfig = Field(default_factory=FlockFlowsConfig)
 
     @classmethod
     def settings_customise_sources(

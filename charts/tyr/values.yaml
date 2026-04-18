@@ -306,6 +306,35 @@ extraEnv: []
 extraVolumeMounts: []
 extraVolumes: []
 
+flockFlows:
+  # -- Enable the flock-flows ConfigMap and optional RBAC resources.
+  enabled: false
+  # -- Fully-qualified adapter class path.
+  # Dev default (YAML file):
+  #   adapter: tyr.adapters.flows.ConfigFlockFlowProvider
+  # K8s default (ConfigMap):
+  #   adapter: tyr.adapters.flows.KubernetesConfigMapFlockFlowProvider
+  adapter: "tyr.adapters.flows.ConfigFlockFlowProvider"
+  # -- Kwargs forwarded to the adapter constructor.
+  # For ConfigFlockFlowProvider: path: /etc/tyr/flock_flows.yaml
+  # For KubernetesConfigMapFlockFlowProvider: namespace + configmap_name
+  kwargs: {}
+  # -- ConfigMap name (used by KubernetesConfigMapFlockFlowProvider and the RBAC role).
+  configmapName: "flock-flows"
+  # -- Initial list of flows embedded in the ConfigMap.
+  # Each entry must have at least a ``name`` key.
+  # Example:
+  #   flows:
+  #     - name: code-review-flow
+  #       description: Standard code-review flock
+  #       personas:
+  #         - name: coordinator
+  #         - name: reviewer
+  #           llm:
+  #             primary_alias: powerful
+  #             thinking_enabled: true
+  flows: []
+
 global:
   imagePullSecrets: []
   image:

@@ -1,0 +1,33 @@
+{{- if and .Values.serviceAccount.create .Values.flockFlows.enabled (contains "KubernetesConfigMapFlockFlowProvider" .Values.flockFlows.adapter) }}
+---
+# Role granting Tyr read/write access to the flock-flows ConfigMap.
+# Required only when using KubernetesConfigMapFlockFlowProvider.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "tyr.fullname" . }}-flock-flows
+  labels:
+    {{- include "tyr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: flock-flows
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: [{{ .Values.flockFlows.configmapName | default "flock-flows" | quote }}]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "tyr.fullname" . }}-flock-flows
+  labels:
+    {{- include "tyr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: flock-flows
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "tyr.fullname" . }}-flock-flows
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "tyr.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

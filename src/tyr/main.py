@@ -41,6 +41,7 @@ from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.dispatcher import resolve_event_bus as dispatcher_resolve_event_bus
 from tyr.api.events import create_events_router, resolve_event_bus
+from tyr.api.flock_flows import create_flock_flows_router
 from tyr.api.health import create_health_router
 from tyr.api.pipelines import create_pipelines_router, resolve_pipeline_executor
 from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
@@ -175,6 +176,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_dispatcher_router())
     app.include_router(create_events_router(settings.events.keepalive_interval))
     app.include_router(create_pipelines_router())
+    app.include_router(create_flock_flows_router())
     from tyr.adapters.inbound.auth import extract_principal as _extract_principal
 
     app.include_router(create_pats_router(_extract_principal))
@@ -277,6 +279,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 sl_cls = import_class(settings.sleipnir.adapter)
                 sleipnir_bus = sl_cls(**settings.sleipnir.kwargs)
 
+            # Wire FlockFlowProvider (dynamic adapter pattern)
+            ff_cfg = settings.flock_flows
+            ff_cls = import_class(ff_cfg.adapter)
+            flock_flow_provider = ff_cls(**ff_cfg.kwargs)
+            app.state.flock_flow_provider = flock_flow_provider
+            logger.info("FlockFlowProvider: %s", ff_cfg.adapter.rsplit(".", 1)[-1])
+
+            # Wire persona source for flow persona-name validation (best-effort)
+            try:
+                from ravn.adapters.personas.loader import FilesystemPersonaAdapter  # noqa: PLC0415
+
+                app.state.flock_flow_persona_source = FilesystemPersonaAdapter()
+                logger.info("FlockFlow persona source: FilesystemPersonaAdapter (bundled)")
+            except Exception:
+                app.state.flock_flow_persona_source = None
+                logger.info("FlockFlow persona source: unavailable, persona validation skipped")
+
             # Wire DispatchService
             dispatch_svc = DispatchService(
                 tracker_factory=app.state.tracker_factory,
@@ -296,6 +315,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     flock_llm_config=dict(settings.dispatch.flock.llm_config),
                 ),
                 sleipnir_publisher=sleipnir_bus,
+                flock_flow_provider=flock_flow_provider,
             )
             app.state.dispatch_service = dispatch_svc
 

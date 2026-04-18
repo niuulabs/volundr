@@ -7,6 +7,8 @@ auto-continue and future consumers without an HTTP request context.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import re
 import string
@@ -35,6 +37,7 @@ from tyr.domain.templates import BUNDLED_TEMPLATES_DIR, TemplatePhase, load_temp
 from tyr.domain.utils import _slugify
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
+from tyr.ports.flock_flow import FlockFlowProvider
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerFactory, TrackerPort
 from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrPort
@@ -91,6 +94,7 @@ class DispatchItem:
     issue_id: str
     repo: str
     connection_id: str | None = None
+    flock_flow: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +216,15 @@ def _format_persona_label(persona: dict) -> str:
     return f"{name}({alias}{suffix})"
 
 
+def _snapshot_hash(personas: list[dict]) -> str:
+    """Return an 8-character hex digest of the serialised persona snapshot.
+
+    Used in log lines so dispatches can be correlated across log streams.
+    """
+    payload = json.dumps(personas, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode()).hexdigest()[:8]
+
+
 def resolve_target_adapter(
     connection_id: str | None,
     adapter_by_name: dict[str, VolundrPort],
@@ -266,6 +279,7 @@ class DispatchService:
         config: DispatchConfig,
         sleipnir_publisher: object | None = None,
         event_bus: EventBusPort | None = None,
+        flock_flow_provider: FlockFlowProvider | None = None,
     ) -> None:
         self._tracker_factory = tracker_factory
         self._volundr_factory = volundr_factory
@@ -275,6 +289,7 @@ class DispatchService:
         self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._sleipnir_publisher = sleipnir_publisher
         self._event_bus = event_bus
+        self._flock_flow_provider = flock_flow_provider
 
     async def find_ready_issues(
         self,
@@ -787,6 +802,27 @@ class DispatchService:
                     continue
         return issue_cache
 
+    def _resolve_flock_personas(self, item: DispatchItem) -> list[dict]:
+        """Return the snapshotted persona list for a flock dispatch.
+
+        Resolution order:
+        1. If ``item.flock_flow`` names a flow and the provider resolves it,
+           use the flow's personas (snapshot — deep copy at resolution time).
+        2. Fall back to ``config.flock_default_personas``.
+
+        The snapshot is taken here so that any mutation of the flow after this
+        point cannot affect the in-flight SpawnRequest (NIU-643 §6.2 Q3).
+        """
+        if item.flock_flow and self._flock_flow_provider is not None:
+            flow = self._flock_flow_provider.get(item.flock_flow)
+            if flow is not None:
+                return flow.snapshot_personas()
+            logger.warning(
+                "flock dispatch: flow '%s' not found, falling back to default personas",
+                item.flock_flow,
+            )
+        return list(self._config.flock_default_personas)
+
     def _build_spawn_request(
         self,
         *,
@@ -818,11 +854,15 @@ class DispatchService:
                 integration_ids=integration_ids,
             )
 
-        personas = self._config.flock_default_personas
+        # Snapshot personas at dispatch time — see _resolve_flock_personas docstring.
+        personas = self._resolve_flock_personas(item)
+        snap_hash = _snapshot_hash(personas)
         logger.info(
-            "flock dispatch session=%s personas=[%s]",
+            "flock dispatch session=%s flow=%s personas=[%s] snapshot=%s",
             session_name,
+            item.flock_flow or "(default)",
             ", ".join(_format_persona_label(p) for p in personas),
+            snap_hash,
         )
         workload_config: dict = {
             "personas": personas,
