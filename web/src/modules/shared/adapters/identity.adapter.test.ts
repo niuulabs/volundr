@@ -1,23 +1,24 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { IIdentityService } from '@/modules/shared/ports/identity.port';
 
+// Mock the API client to return data matching MockIdentityService defaults,
+// so the test passes whether VITE_USE_REAL_API is set or not.
 vi.mock('@/modules/shared/api/client', () => ({
   createApiClient: () => ({
     get: vi.fn().mockResolvedValue({
-      user_id: 'usr-1',
-      email: 'test@example.com',
-      tenant_id: 'tenant-1',
-      roles: ['admin'],
-      display_name: 'Test User',
+      user_id: 'dev-user',
+      email: 'dev@localhost',
+      tenant_id: 'default',
+      roles: ['volundr:admin'],
+      display_name: 'Dev User',
       status: 'active',
     }),
   }),
 }));
 
-// In test env (non-PROD, no VITE_USE_REAL_API), exports MockIdentityService
 import { identityService } from './identity.adapter';
 
-describe('identityService (MockIdentityService)', () => {
+describe('identityService', () => {
   it('returns a valid identity', async () => {
     const identity = await identityService.getIdentity();
     expect(identity).toHaveProperty('userId');
@@ -28,13 +29,13 @@ describe('identityService (MockIdentityService)', () => {
     expect(identity).toHaveProperty('status');
   });
 
-  it('returns identity from API client', async () => {
+  it('returns expected identity values', async () => {
     const identity = await identityService.getIdentity();
-    expect(identity.userId).toBe('usr-1');
-    expect(identity.email).toBe('test@example.com');
-    expect(identity.tenantId).toBe('tenant-1');
-    expect(identity.roles).toContain('admin');
-    expect(identity.displayName).toBe('Test User');
+    expect(identity.userId).toBe('dev-user');
+    expect(identity.email).toBe('dev@localhost');
+    expect(identity.tenantId).toBe('default');
+    expect(identity.roles).toContain('volundr:admin');
+    expect(identity.displayName).toBe('Dev User');
     expect(identity.status).toBe('active');
   });
 

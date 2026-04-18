@@ -864,7 +864,8 @@ describe('SessionChat', () => {
 
   describe('bookmark localStorage errors', () => {
     it('returns false for bookmarked when localStorage.getItem throws (AssistantMessage)', () => {
-      const getItemSpy = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+      const origGetItem = localStorage.getItem.bind(localStorage);
+      localStorage.getItem = vi.fn(() => {
         throw new Error('SecurityError: localStorage access denied');
       });
 
@@ -886,11 +887,12 @@ describe('SessionChat', () => {
       // The bookmark button should show "Bookmark" (not "Remove bookmark")
       expect(screen.getByTitle('Bookmark')).toBeInTheDocument();
 
-      getItemSpy.mockRestore();
+      localStorage.getItem = origGetItem;
     });
 
     it('returns false for bookmarked when localStorage.getItem throws (RoomMessage)', () => {
-      const getItemSpy = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+      const origGetItem = localStorage.getItem.bind(localStorage);
+      localStorage.getItem = vi.fn(() => {
         throw new Error('SecurityError: localStorage access denied');
       });
 
@@ -916,11 +918,13 @@ describe('SessionChat', () => {
       // Should render without crashing
       expect(screen.getByTestId('room-message')).toBeInTheDocument();
 
-      getItemSpy.mockRestore();
+      localStorage.getItem = origGetItem;
     });
 
     it('handles localStorage.setItem gracefully when bookmarking', () => {
-      const setItemSpy = vi.spyOn(localStorage, 'setItem');
+      const origSetItem = localStorage.setItem.bind(localStorage);
+      const setItemSpy = vi.fn(origSetItem);
+      localStorage.setItem = setItemSpy;
 
       const messages: SkuldChatMessage[] = [
         { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },
@@ -941,12 +945,16 @@ describe('SessionChat', () => {
 
       expect(setItemSpy).toHaveBeenCalledWith('bookmark:a1', '1');
 
-      setItemSpy.mockRestore();
+      localStorage.setItem = origSetItem;
     });
 
     it('calls localStorage.removeItem on un-bookmark', () => {
-      const getItemSpy = vi.spyOn(localStorage, 'getItem').mockReturnValue('1');
-      const removeItemSpy = vi.spyOn(localStorage, 'removeItem');
+      // Pre-set bookmark so the component initializes with bookmarked=true
+      localStorage.setItem('bookmark:a1', '1');
+
+      const origRemoveItem = localStorage.removeItem.bind(localStorage);
+      const removeItemSpy = vi.fn(origRemoveItem);
+      localStorage.removeItem = removeItemSpy;
 
       const messages: SkuldChatMessage[] = [
         { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },
@@ -967,8 +975,7 @@ describe('SessionChat', () => {
 
       expect(removeItemSpy).toHaveBeenCalledWith('bookmark:a1');
 
-      getItemSpy.mockRestore();
-      removeItemSpy.mockRestore();
+      localStorage.removeItem = origRemoveItem;
     });
   });
 
@@ -1170,7 +1177,10 @@ describe('SessionChat', () => {
   // ── handleBookmark ───────────────────────────────────────────
 
   it('stores bookmark in localStorage when bookmark button is clicked', () => {
-    const setItemSpy = vi.spyOn(localStorage, 'setItem');
+    const origSetItem = localStorage.setItem.bind(localStorage);
+    const setItemSpy = vi.fn(origSetItem);
+    localStorage.setItem = setItemSpy;
+
     const messages: SkuldChatMessage[] = [
       { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },
       { id: 'a1', role: 'assistant', content: 'World', createdAt: new Date(), status: 'complete' },
@@ -1182,7 +1192,7 @@ describe('SessionChat', () => {
     fireEvent.click(bookmarkBtn);
 
     expect(setItemSpy).toHaveBeenCalledWith('bookmark:a1', '1');
-    setItemSpy.mockRestore();
+    localStorage.setItem = origSetItem;
   });
 
   // ── handleCopy ───────────────────────────────────────────────
