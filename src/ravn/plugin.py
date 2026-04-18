@@ -49,19 +49,21 @@ class RavnPlugin(ServicePlugin):
     def register_service(self) -> ServiceDefinition:
         return ServiceDefinition(
             name="ravn",
-            description="AI agent with tool calling",
+            description="Persona registry and agent management",
             factory=_RavnService,
             default_enabled=True,
-            depends_on=[],
+            depends_on=["postgres"],
         )
 
     def create_service(self) -> Service:
         return self.register_service().factory()
 
     def create_api_app(self) -> Any:
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
         from ravn.api import create_app
 
-        return create_app()
+        persona_loader = FilesystemPersonaAdapter()
+        return create_app(persona_loader=persona_loader)
 
     def create_api_client(self) -> Any:
         return CLIAPIClient(base_url="http://localhost:8080", service_name="Ravn")

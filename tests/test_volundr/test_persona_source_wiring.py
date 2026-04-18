@@ -101,7 +101,7 @@ class TestVolundrDynamicWiring:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
-        from volundr.adapters.inbound.rest_personas import create_personas_router
+        from ravn.api.personas import create_personas_router
 
         adapter = StubPersonaRegistry()
         app = FastAPI()
@@ -117,7 +117,7 @@ class TestVolundrDynamicWiring:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
-        from volundr.adapters.inbound.rest_personas import create_personas_router
+        from ravn.api.personas import create_personas_router
 
         adapter = StubPersonaRegistry()
         app = FastAPI()

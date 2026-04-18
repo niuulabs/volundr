@@ -30,7 +30,7 @@ from starlette.testclient import TestClient
 
 from ravn.adapters.personas.http import HttpPersonaAdapter
 from ravn.adapters.personas.loader import FilesystemPersonaAdapter, PersonaConfig
-from volundr.adapters.inbound.rest_personas import create_personas_router
+from ravn.api.personas import create_personas_router
 
 # ---------------------------------------------------------------------------
 # Helpers
