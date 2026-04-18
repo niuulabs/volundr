@@ -192,6 +192,26 @@ def build_flock_prompt(
     return "\n".join(parts)
 
 
+def _format_persona_label(persona: dict) -> str:
+    """Return a log-friendly label for one persona dict.
+
+    Examples:
+      ``coordinator`` → ``coordinator(inherit)``
+      ``reviewer`` with ``llm.primary_alias=powerful, thinking_enabled=True``
+        → ``reviewer(powerful/thinking)``
+      ``security-auditor`` with ``llm.primary_alias=balanced``
+        → ``security-auditor(balanced)``
+    """
+    name = persona.get("name", "?")
+    llm = persona.get("llm", {})
+    alias = llm.get("primary_alias", "")
+    thinking = llm.get("thinking_enabled", False)
+    if not alias:
+        return f"{name}(inherit)"
+    suffix = "/thinking" if thinking else ""
+    return f"{name}({alias}{suffix})"
+
+
 def resolve_target_adapter(
     connection_id: str | None,
     adapter_by_name: dict[str, VolundrPort],
@@ -222,7 +242,9 @@ class DispatchConfig:
     templates_dir: Path = BUNDLED_TEMPLATES_DIR
     initial_confidence: float = 0.5
     flock_enabled: bool = False
-    flock_default_personas: list[str] = field(default_factory=lambda: ["coordinator", "reviewer"])
+    flock_default_personas: list[dict] = field(
+        default_factory=lambda: [{"name": "coordinator"}, {"name": "reviewer"}]
+    )
     flock_mimir_hosted_url: str = ""
     flock_sleipnir_publish_urls: list[str] = field(default_factory=list)
     flock_llm_config: dict = field(default_factory=dict)
@@ -796,8 +818,14 @@ class DispatchService:
                 integration_ids=integration_ids,
             )
 
+        personas = self._config.flock_default_personas
+        logger.info(
+            "flock dispatch session=%s personas=[%s]",
+            session_name,
+            ", ".join(_format_persona_label(p) for p in personas),
+        )
         workload_config: dict = {
-            "personas": self._config.flock_default_personas,
+            "personas": personas,
             "initiative_context": build_flock_prompt(
                 issue,
                 item.repo,

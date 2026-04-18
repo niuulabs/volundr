@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -388,6 +388,40 @@ class PlannerConfig(BaseModel):
     )
 
 
+class PersonaOverride(BaseModel):
+    """Per-persona LLM and iteration override for flock dispatch.
+
+    Accepted in ``FlockConfig.default_personas`` alongside bare strings (legacy).
+    The ``llm`` dict is forwarded verbatim as the per-persona ``llm`` key in
+    ``workload_config.personas``; ravn merges it over the global ``llm_config``.
+    """
+
+    name: str = Field(description="Ravn persona name (e.g. 'coordinator', 'reviewer').")
+    llm: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Per-persona LLM override merged over the global llm_config.",
+    )
+    system_prompt_extra: str | None = Field(
+        default=None,
+        description="Extra instructions appended to this persona's system prompt.",
+    )
+    iteration_budget: int | None = Field(
+        default=None,
+        description="Max iterations for this persona; overrides the persona's own default.",
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to the wire dict format consumed by workload_config.personas."""
+        d: dict[str, Any] = {"name": self.name}
+        if self.llm:
+            d["llm"] = dict(self.llm)
+        if self.system_prompt_extra:
+            d["system_prompt_extra"] = self.system_prompt_extra
+        if self.iteration_budget is not None:
+            d["iteration_budget"] = self.iteration_budget
+        return d
+
+
 class FlockConfig(BaseModel):
     """Flock dispatch configuration."""
 
@@ -395,10 +429,31 @@ class FlockConfig(BaseModel):
         default=False,
         description="When True, eligible raids are dispatched as ravn_flock sessions.",
     )
-    default_personas: list[str] = Field(
-        default=["coordinator", "reviewer"],
-        description="Ravn persona names included in every flock session.",
+    default_personas: list[PersonaOverride] = Field(
+        default_factory=lambda: [
+            PersonaOverride(name="coordinator"),
+            PersonaOverride(name="reviewer"),
+        ],
+        description=(
+            "Ravn persona names included in every flock session. "
+            "Accepts bare strings (legacy) or per-persona override objects."
+        ),
     )
+
+    @field_validator("default_personas", mode="before")
+    @classmethod
+    def _coerce_personas(cls, v: Any) -> list[Any]:
+        """Accept both legacy list[str] and new list[dict|PersonaOverride]."""
+        if not isinstance(v, list):
+            return v
+        result = []
+        for item in v:
+            if isinstance(item, str):
+                result.append({"name": item})
+            else:
+                result.append(item)
+        return result
+
     mimir_hosted_url: str = Field(
         default="",
         description="URL of the Mimir knowledge base for coordinator context queries.",
