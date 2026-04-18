@@ -875,6 +875,24 @@ class RavnOutcomeConfig(BaseModel):
     )
 
 
+class FlockFlowsConfig(BaseModel):
+    """Flock flow provider configuration (dynamic adapter pattern).
+
+    Example YAML::
+
+        flock_flows:
+          adapter: "tyr.adapters.flows.config.ConfigFlockFlowProvider"
+          kwargs:
+            path: /etc/tyr/flock_flows.yaml
+    """
+
+    adapter: str = Field(
+        default="tyr.adapters.flows.config.ConfigFlockFlowProvider",
+        description="Fully-qualified class path for the flock flow provider.",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+
+
 class NotificationConfig(BaseModel):
     """Notification service configuration."""
 
@@ -946,6 +964,7 @@ class Settings(BaseSettings):
     sleipnir: SleipnirConfig = Field(default_factory=SleipnirConfig)
     event_triggers: EventTriggerConfig = Field(default_factory=EventTriggerConfig)
     ravn_outcome: RavnOutcomeConfig = Field(default_factory=RavnOutcomeConfig)
+    flock_flows: FlockFlowsConfig = Field(default_factory=FlockFlowsConfig)
 
     @classmethod
     def settings_customise_sources(

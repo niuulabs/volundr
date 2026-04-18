@@ -41,6 +41,10 @@ from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.dispatcher import resolve_event_bus as dispatcher_resolve_event_bus
 from tyr.api.events import create_events_router, resolve_event_bus
+from tyr.api.flock_flows import (
+    create_flock_flows_router,
+    resolve_flow_provider,
+)
 from tyr.api.health import create_health_router
 from tyr.api.pipelines import create_pipelines_router, resolve_pipeline_executor
 from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
@@ -64,6 +68,7 @@ from tyr.domain.services.reviewer_session import ReviewerSessionService
 from tyr.infrastructure.database import database_pool
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort
+from tyr.ports.flock_flow import FlockFlowProvider
 from tyr.ports.git import GitPort
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
@@ -175,6 +180,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_dispatcher_router())
     app.include_router(create_events_router(settings.events.keepalive_interval))
     app.include_router(create_pipelines_router())
+    app.include_router(create_flock_flows_router())
     from tyr.adapters.inbound.auth import extract_principal as _extract_principal
 
     app.include_router(create_pats_router(_extract_principal))
@@ -277,6 +283,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 sl_cls = import_class(settings.sleipnir.adapter)
                 sleipnir_bus = sl_cls(**settings.sleipnir.kwargs)
 
+            # Wire flock flow provider (dynamic adapter pattern)
+            ff_cfg = settings.flock_flows
+            ff_cls = import_class(ff_cfg.adapter)
+            flow_provider: FlockFlowProvider = ff_cls(**ff_cfg.kwargs)
+            app.state.flow_provider = flow_provider
+            logger.info("Flock flow provider: %s", ff_cfg.adapter.rsplit(".", 1)[-1])
+
+            async def _resolve_flow_provider() -> FlockFlowProvider:
+                return flow_provider
+
+            app.dependency_overrides[resolve_flow_provider] = _resolve_flow_provider
+
             # Wire DispatchService
             dispatch_svc = DispatchService(
                 tracker_factory=app.state.tracker_factory,
@@ -296,6 +314,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     flock_llm_config=dict(settings.dispatch.flock.llm_config),
                 ),
                 sleipnir_publisher=sleipnir_bus,
+                flow_provider=flow_provider,
             )
             app.state.dispatch_service = dispatch_svc
 
