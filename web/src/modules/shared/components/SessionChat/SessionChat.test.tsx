@@ -921,11 +921,7 @@ describe('SessionChat', () => {
       localStorage.getItem = origGetItem;
     });
 
-    it('handles localStorage.setItem gracefully when bookmarking', () => {
-      const origSetItem = localStorage.setItem.bind(localStorage);
-      const setItemSpy = vi.fn(origSetItem);
-      localStorage.setItem = setItemSpy;
-
+    it('toggles bookmark on when clicking Bookmark button', () => {
       const messages: SkuldChatMessage[] = [
         { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },
         {
@@ -939,22 +935,19 @@ describe('SessionChat', () => {
       mockSkuldChat({ connected: true, messages });
       render(<SessionChat url="wss://test/session" />);
 
-      // Clicking bookmark triggers handleBookmark which calls localStorage.setItem
+      // Initially not bookmarked
       const bookmarkBtn = screen.getByTitle('Bookmark');
       fireEvent.click(bookmarkBtn);
 
-      expect(setItemSpy).toHaveBeenCalledWith('bookmark:a1', '1');
-
-      localStorage.setItem = origSetItem;
+      // After click, bookmark is active — button title changes
+      expect(screen.getByTitle('Remove bookmark')).toBeInTheDocument();
+      // localStorage should have the bookmark persisted
+      expect(localStorage.getItem('bookmark:a1')).toBe('1');
     });
 
-    it('calls localStorage.removeItem on un-bookmark', () => {
+    it('toggles bookmark off when clicking Remove bookmark button', () => {
       // Pre-set bookmark so the component initializes with bookmarked=true
       localStorage.setItem('bookmark:a1', '1');
-
-      const origRemoveItem = localStorage.removeItem.bind(localStorage);
-      const removeItemSpy = vi.fn(origRemoveItem);
-      localStorage.removeItem = removeItemSpy;
 
       const messages: SkuldChatMessage[] = [
         { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },
@@ -969,13 +962,14 @@ describe('SessionChat', () => {
       mockSkuldChat({ connected: true, messages });
       render(<SessionChat url="wss://test/session" />);
 
-      // Initially bookmarked (getItem returns '1'), so button says "Remove bookmark"
+      // Initially bookmarked
       const bookmarkBtn = screen.getByTitle('Remove bookmark');
       fireEvent.click(bookmarkBtn);
 
-      expect(removeItemSpy).toHaveBeenCalledWith('bookmark:a1');
-
-      localStorage.removeItem = origRemoveItem;
+      // After click, bookmark is removed — button title changes back
+      expect(screen.getByTitle('Bookmark')).toBeInTheDocument();
+      // localStorage should no longer have the bookmark
+      expect(localStorage.getItem('bookmark:a1')).toBeNull();
     });
   });
 
@@ -1177,10 +1171,6 @@ describe('SessionChat', () => {
   // ── handleBookmark ───────────────────────────────────────────
 
   it('stores bookmark in localStorage when bookmark button is clicked', () => {
-    const origSetItem = localStorage.setItem.bind(localStorage);
-    const setItemSpy = vi.fn(origSetItem);
-    localStorage.setItem = setItemSpy;
-
     const messages: SkuldChatMessage[] = [
       { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },
       { id: 'a1', role: 'assistant', content: 'World', createdAt: new Date(), status: 'complete' },
@@ -1191,8 +1181,8 @@ describe('SessionChat', () => {
     const bookmarkBtn = screen.getByTitle('Bookmark');
     fireEvent.click(bookmarkBtn);
 
-    expect(setItemSpy).toHaveBeenCalledWith('bookmark:a1', '1');
-    localStorage.setItem = origSetItem;
+    expect(screen.getByTitle('Remove bookmark')).toBeInTheDocument();
+    expect(localStorage.getItem('bookmark:a1')).toBe('1');
   });
 
   // ── handleCopy ───────────────────────────────────────────────
