@@ -49,8 +49,8 @@ export function FlockSettingsSection() {
 
   const flockEnabled = localEnabled ?? config?.flock_enabled ?? false;
   const personasText =
-    localPersonas ?? (config?.flock_default_personas.map(p => p.name).join(', ') ?? '');
-  const urlsText = localUrls ?? (config?.flock_sleipnir_publish_urls.join('\n') ?? '');
+    localPersonas ?? config?.flock_default_personas.map(p => p.name).join(', ') ?? '';
+  const urlsText = localUrls ?? config?.flock_sleipnir_publish_urls.join('\n') ?? '';
   const llmJson = localLlmJson ?? JSON.stringify(config?.flock_llm_config ?? {}, null, 2);
 
   const handleToggle = async () => {

@@ -41,11 +41,7 @@ export function DispatcherSettingsSection() {
             Automatically dispatch newly unblocked raids after merge
           </span>
         </div>
-        <Toggle
-          checked={state.auto_continue}
-          onChange={handleToggle}
-          label="Auto-continue"
-        />
+        <Toggle checked={state.auto_continue} onChange={handleToggle} label="Auto-continue" />
       </div>
     </section>
   );
