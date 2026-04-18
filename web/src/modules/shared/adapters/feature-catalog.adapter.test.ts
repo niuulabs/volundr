@@ -1,18 +1,70 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { IFeatureCatalogService } from '@/modules/shared/ports/feature-catalog.port';
 
+const mockFeatures = [
+  {
+    key: 'users',
+    label: 'Users',
+    icon: 'Users',
+    scope: 'admin',
+    enabled: true,
+    default_enabled: true,
+    admin_only: true,
+    order: 1,
+  },
+  {
+    key: 'tenants',
+    label: 'Tenants',
+    icon: 'Building2',
+    scope: 'admin',
+    enabled: true,
+    default_enabled: true,
+    admin_only: true,
+    order: 2,
+  },
+  {
+    key: 'tokens',
+    label: 'Access Tokens',
+    icon: 'ShieldCheck',
+    scope: 'user',
+    enabled: true,
+    default_enabled: true,
+    admin_only: false,
+    order: 1,
+  },
+  {
+    key: 'credentials',
+    label: 'Credentials',
+    icon: 'KeyRound',
+    scope: 'user',
+    enabled: true,
+    default_enabled: true,
+    admin_only: false,
+    order: 2,
+  },
+];
+
 vi.mock('@/modules/shared/api/client', () => ({
   createApiClient: () => ({
-    get: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
+    get: vi.fn().mockImplementation((path: string) => {
+      if (path.includes('preferences')) return Promise.resolve([]);
+      const scopeMatch = path.match(/scope=(\w+)/);
+      if (scopeMatch) return Promise.resolve(mockFeatures.filter(f => f.scope === scopeMatch[1]));
+      return Promise.resolve(mockFeatures);
+    }),
+    put: vi.fn().mockImplementation((_path: string, body: unknown) => Promise.resolve(body)),
+    patch: vi.fn().mockImplementation((path: string, body: { enabled: boolean }) => {
+      const keyMatch = path.match(/features\/(\w+)/);
+      const key = keyMatch?.[1] ?? 'unknown';
+      const base = mockFeatures.find(f => f.key === key) ?? mockFeatures[0];
+      return Promise.resolve({ ...base, key, enabled: body.enabled });
+    }),
   }),
 }));
 
-// In test env (non-PROD, no VITE_USE_REAL_API), the module exports MockFeatureCatalogService
 import { featureCatalogService } from './feature-catalog.adapter';
 
-describe('featureCatalogService (MockFeatureCatalogService)', () => {
+describe('featureCatalogService', () => {
   describe('getFeatureModules', () => {
     it('returns all features when no scope is provided', async () => {
       const modules = await featureCatalogService.getFeatureModules();

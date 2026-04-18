@@ -152,6 +152,7 @@ function mockSkuldChat(overrides: Partial<ReturnType<typeof useSkuldChat>> = {})
 describe('SessionChat', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   it('renders disconnected state', () => {
@@ -863,7 +864,7 @@ describe('SessionChat', () => {
 
   describe('bookmark localStorage errors', () => {
     it('returns false for bookmarked when localStorage.getItem throws (AssistantMessage)', () => {
-      const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      const getItemSpy = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
         throw new Error('SecurityError: localStorage access denied');
       });
 
@@ -889,7 +890,7 @@ describe('SessionChat', () => {
     });
 
     it('returns false for bookmarked when localStorage.getItem throws (RoomMessage)', () => {
-      const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      const getItemSpy = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
         throw new Error('SecurityError: localStorage access denied');
       });
 
@@ -919,7 +920,7 @@ describe('SessionChat', () => {
     });
 
     it('handles localStorage.setItem gracefully when bookmarking', () => {
-      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+      const setItemSpy = vi.spyOn(localStorage, 'setItem');
 
       const messages: SkuldChatMessage[] = [
         { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },
@@ -944,8 +945,8 @@ describe('SessionChat', () => {
     });
 
     it('calls localStorage.removeItem on un-bookmark', () => {
-      const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockReturnValue('1');
-      const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem');
+      const getItemSpy = vi.spyOn(localStorage, 'getItem').mockReturnValue('1');
+      const removeItemSpy = vi.spyOn(localStorage, 'removeItem');
 
       const messages: SkuldChatMessage[] = [
         { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },
@@ -1169,7 +1170,7 @@ describe('SessionChat', () => {
   // ── handleBookmark ───────────────────────────────────────────
 
   it('stores bookmark in localStorage when bookmark button is clicked', () => {
-    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+    const setItemSpy = vi.spyOn(localStorage, 'setItem');
     const messages: SkuldChatMessage[] = [
       { id: 'u1', role: 'user', content: 'Hello', createdAt: new Date(), status: 'complete' },
       { id: 'a1', role: 'assistant', content: 'World', createdAt: new Date(), status: 'complete' },

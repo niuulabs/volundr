@@ -42,11 +42,11 @@ describe('PersonasView', () => {
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
 
-  it('shows empty state when no personas returned', async () => {
+  it('falls back to mock data when no personas returned', async () => {
     mockOk([]);
     wrap(<PersonasView />);
     await waitFor(() => {
-      expect(screen.getByText(/no personas found/i)).toBeInTheDocument();
+      expect(screen.getByText(/demo data/i)).toBeInTheDocument();
     });
   });
 
@@ -59,7 +59,7 @@ describe('PersonasView', () => {
     });
   });
 
-  it('shows error message on API failure', async () => {
+  it('falls back to mock data on API failure', async () => {
     mockFetch.mockResolvedValue({
       ok: false,
       status: 500,
@@ -67,7 +67,7 @@ describe('PersonasView', () => {
     });
     wrap(<PersonasView />);
     await waitFor(() => {
-      expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
+      expect(screen.getByText(/demo data/i)).toBeInTheDocument();
     });
   });
 
@@ -106,7 +106,7 @@ describe('PersonasView', () => {
     mockOk([]);
     wrap(<PersonasView />);
 
-    await waitFor(() => screen.getByText(/no personas/i));
+    await waitFor(() => screen.getByText(/demo data/i));
 
     mockOk([mkSummary('my-custom', false)]);
     fireEvent.click(screen.getByRole('button', { name: 'Custom' }));

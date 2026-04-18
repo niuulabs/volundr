@@ -28,13 +28,13 @@ describe('identityService (MockIdentityService)', () => {
     expect(identity).toHaveProperty('status');
   });
 
-  it('returns mock dev user identity', async () => {
+  it('returns identity from API client', async () => {
     const identity = await identityService.getIdentity();
-    expect(identity.userId).toBe('dev-user');
-    expect(identity.email).toBe('dev@localhost');
-    expect(identity.tenantId).toBe('default');
-    expect(identity.roles).toContain('volundr:admin');
-    expect(identity.displayName).toBe('Dev User');
+    expect(identity.userId).toBe('usr-1');
+    expect(identity.email).toBe('test@example.com');
+    expect(identity.tenantId).toBe('tenant-1');
+    expect(identity.roles).toContain('admin');
+    expect(identity.displayName).toBe('Test User');
     expect(identity.status).toBe('active');
   });
 
