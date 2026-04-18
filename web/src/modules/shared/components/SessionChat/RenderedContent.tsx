@@ -1,5 +1,6 @@
 import { useCallback, useState, type ReactNode } from 'react';
 import { cn } from '@/utils';
+import { OutcomeCard, OUTCOME_RE, OUTCOME_EXTRACT_RE } from './OutcomeCard';
 import styles from './RenderedContent.module.css';
 
 /* ------------------------------------------------------------------ */
@@ -175,88 +176,12 @@ function renderProseBlock(block: string, blockKey: number): ReactNode[] {
 }
 
 /* ------------------------------------------------------------------ */
-/*  OutcomeCard                                                         */
-/* ------------------------------------------------------------------ */
-
-const VERDICT_COLORS: Record<string, string> = {
-  approve: 'var(--color-accent-emerald)',
-  pass: 'var(--color-accent-emerald)',
-  retry: 'var(--color-accent-amber)',
-  escalate: 'var(--color-accent-red)',
-  fail: 'var(--color-accent-red)',
-};
-
-function parseOutcomeYaml(raw: string): Record<string, string> {
-  const fields: Record<string, string> = {};
-
-  // Try line-by-line first (multi-line YAML)
-  const lines = raw
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l && !l.startsWith('#'));
-
-  if (lines.length > 1) {
-    for (const line of lines) {
-      const colonIdx = line.indexOf(':');
-      if (colonIdx < 1) continue;
-      fields[line.slice(0, colonIdx).trim()] = line.slice(colonIdx + 1).trim();
-    }
-    return fields;
-  }
-
-  // Single-line: split on known field names via regex
-  // e.g. "verdict: pass findings_count: 2 summary: some text here"
-  const text = lines[0] ?? raw.trim();
-  const fieldPattern = /(\w+):\s*/g;
-  const matches = [...text.matchAll(fieldPattern)];
-  for (let i = 0; i < matches.length; i++) {
-    const key = matches[i][1];
-    const valueStart = matches[i].index! + matches[i][0].length;
-    const valueEnd = i + 1 < matches.length ? matches[i + 1].index! : text.length;
-    fields[key] = text.slice(valueStart, valueEnd).trim();
-  }
-  return fields;
-}
-
-function OutcomeCard({ yaml, cardKey }: { yaml: string; cardKey: string }) {
-  const fields = parseOutcomeYaml(yaml);
-  const verdict = fields['verdict'] ?? '';
-  const verdictColor = VERDICT_COLORS[verdict] ?? 'var(--color-text-secondary)';
-
-  return (
-    <div key={cardKey} className={styles.outcomeCard}>
-      <div className={styles.outcomeHeader}>
-        <span className={styles.outcomeLabel}>Outcome</span>
-        {verdict && (
-          <span
-            className={styles.outcomeBadge}
-            style={{ color: verdictColor, borderColor: verdictColor }}
-          >
-            {verdict}
-          </span>
-        )}
-      </div>
-      <div className={styles.outcomeFields}>
-        {Object.entries(fields)
-          .filter(([k]) => k !== 'verdict')
-          .map(([key, value]) => (
-            <div key={key} className={styles.outcomeField}>
-              <span className={styles.outcomeKey}>{key}</span>
-              <span className={styles.outcomeValue}>{value}</span>
-            </div>
-          ))}
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  RenderedContent                                                     */
 /* ------------------------------------------------------------------ */
 
 export function RenderedContent({ content, className }: RenderedContentProps) {
-  // Split by outcome blocks first: ---outcome--- ... ---end---
-  const segments = content.split(/(---outcome---[\s\S]*?---end---)/gi);
+  // Split by outcome blocks first: ---outcome--- ... ---end--- (or standalone ---)
+  const segments = content.split(OUTCOME_RE);
 
   const rendered: ReactNode[] = [];
 
@@ -264,11 +189,9 @@ export function RenderedContent({ content, className }: RenderedContentProps) {
     const segment = segments[si];
 
     // Outcome block
-    const outcomeMatch = segment.match(/---outcome---\s*([\s\S]*?)---end---/i);
+    const outcomeMatch = segment.match(OUTCOME_EXTRACT_RE);
     if (outcomeMatch) {
-      rendered.push(
-        <OutcomeCard key={`outcome-${si}`} yaml={outcomeMatch[1]} cardKey={`outcome-${si}`} />
-      );
+      rendered.push(<OutcomeCard key={`outcome-${si}`} yaml={outcomeMatch[1]} />);
       continue;
     }
 
