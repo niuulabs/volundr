@@ -142,3 +142,18 @@ class TestDriveLoopChannelConstruction:
         assert isinstance(captured[0], CompositeChannel)
         channel_types = [type(ch) for ch in captured[0]._channels]
         assert MeshActivityChannel in channel_types
+
+    @pytest.mark.asyncio
+    async def test_cascade_skuld_and_mesh_uses_composite_with_all(self):
+        """cascade + skuld_channel + mesh → CompositeChannel([capture, skuld, mesh])."""
+        dl, captured = _make_drive_loop_with_mesh(cascade_enabled=True)
+        mock_skuld = MagicMock()
+        mock_skuld.emit = AsyncMock()
+        dl._skuld_channel = mock_skuld
+        dl._mesh = AsyncMock()
+
+        await dl._run_task(_make_task())
+
+        assert isinstance(captured[0], CompositeChannel)
+        channel_types = [type(ch) for ch in captured[0]._channels]
+        assert MeshActivityChannel in channel_types

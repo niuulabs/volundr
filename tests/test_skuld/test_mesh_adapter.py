@@ -11,7 +11,7 @@ Covers:
 
 import asyncio
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -939,4 +939,68 @@ class TestBrokerMeshIntegration:
         assert b._mesh_adapter is not None
         assert b._mesh_adapter.is_running is True
 
+        await b._mesh_adapter.stop()
+
+    @pytest.mark.asyncio
+    async def test_start_mesh_adapter_nng_builds_sleipnir(self, tmp_path):
+        """_start_mesh_adapter with nng transport builds SleipnirMeshAdapter (NIU-634)."""
+        from skuld.broker import Broker
+
+        settings = SkuldSettings(
+            session={"id": "s1", "workspace_dir": str(tmp_path)},
+            transport="subprocess",
+            mesh={"enabled": True, "peer_id": "test-peer", "transport": "nng"},
+        )
+        b = Broker(settings=settings)
+        b._transport = MagicMock()
+
+        mock_nng = MagicMock()
+        mock_mesh = MagicMock()
+        mock_mesh.start = AsyncMock()
+        mock_mesh.stop = AsyncMock()
+        mock_mesh.subscribe = AsyncMock()
+        mock_mesh.unsubscribe = AsyncMock()
+
+        with (
+            patch(
+                "niuu.mesh.transport_builder.build_nng_transport",
+                return_value=mock_nng,
+            ),
+            patch(
+                "ravn.adapters.mesh.sleipnir_mesh.SleipnirMeshAdapter",
+                return_value=mock_mesh,
+            ),
+            patch("skuld.broker.build_discovery_adapters", return_value=None),
+            patch("niuu.mesh.cluster.read_cluster_pub_addresses", return_value=[]),
+        ):
+            await b._start_mesh_adapter()
+
+        assert b._mesh_adapter is not None
+        assert b._mesh_adapter.is_running is True
+        await b._mesh_adapter.stop()
+
+    @pytest.mark.asyncio
+    async def test_start_mesh_adapter_nng_import_error_falls_back(self, tmp_path):
+        """_start_mesh_adapter falls back to in-process when nng raises ImportError."""
+        from skuld.broker import Broker
+
+        settings = SkuldSettings(
+            session={"id": "s1", "workspace_dir": str(tmp_path)},
+            transport="subprocess",
+            mesh={"enabled": True, "peer_id": "test-peer", "transport": "nng"},
+        )
+        b = Broker(settings=settings)
+        b._transport = MagicMock()
+
+        with (
+            patch(
+                "niuu.mesh.transport_builder.build_nng_transport",
+                side_effect=ImportError("nng not available"),
+            ),
+            patch("skuld.broker.build_discovery_adapters", return_value=None),
+        ):
+            await b._start_mesh_adapter()
+
+        assert b._mesh_adapter is not None
+        assert b._mesh_adapter.is_running is True
         await b._mesh_adapter.stop()
