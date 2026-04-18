@@ -188,14 +188,29 @@ const VERDICT_COLORS: Record<string, string> = {
 
 function parseOutcomeYaml(raw: string): Record<string, string> {
   const fields: Record<string, string> = {};
-  for (const line of raw.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const colonIdx = trimmed.indexOf(':');
-    if (colonIdx < 1) continue;
-    const key = trimmed.slice(0, colonIdx).trim();
-    const value = trimmed.slice(colonIdx + 1).trim();
-    fields[key] = value;
+
+  // Try line-by-line first (multi-line YAML)
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+
+  if (lines.length > 1) {
+    for (const line of lines) {
+      const colonIdx = line.indexOf(':');
+      if (colonIdx < 1) continue;
+      fields[line.slice(0, colonIdx).trim()] = line.slice(colonIdx + 1).trim();
+    }
+    return fields;
+  }
+
+  // Single-line: split on known field names via regex
+  // e.g. "verdict: pass findings_count: 2 summary: some text here"
+  const text = lines[0] ?? raw.trim();
+  const fieldPattern = /(\w+):\s*/g;
+  const matches = [...text.matchAll(fieldPattern)];
+  for (let i = 0; i < matches.length; i++) {
+    const key = matches[i][1];
+    const valueStart = matches[i].index! + matches[i][0].length;
+    const valueEnd = i + 1 < matches.length ? matches[i + 1].index! : text.length;
+    fields[key] = text.slice(valueStart, valueEnd).trim();
   }
   return fields;
 }
@@ -243,7 +258,7 @@ export function RenderedContent({ content, className }: RenderedContentProps) {
     const segment = segments[si];
 
     // Outcome block
-    const outcomeMatch = segment.match(/---outcome---\s*\n([\s\S]*?)---end---/i);
+    const outcomeMatch = segment.match(/---outcome---\s*([\s\S]*?)---end---/i);
     if (outcomeMatch) {
       rendered.push(<OutcomeCard key={`outcome-${si}`} yaml={outcomeMatch[1]} cardKey={`outcome-${si}`} />);
       continue;
