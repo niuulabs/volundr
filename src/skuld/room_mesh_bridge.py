@@ -250,8 +250,9 @@ class RoomMeshBridge:
     @staticmethod
     def _ravn_type_to_activity(ravn_type: str) -> str:
         """Map a RavnEventType string to a room activity type, or '' if unknown."""
+        ravn_type_lower = ravn_type.lower()
         for fragment, activity in _RAVN_TYPE_TO_ACTIVITY.items():
-            if fragment in ravn_type:
+            if fragment in ravn_type_lower:
                 return activity
         return ""
 
