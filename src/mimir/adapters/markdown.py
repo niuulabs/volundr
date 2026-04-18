@@ -455,7 +455,7 @@ class MarkdownMimirAdapter(MimirPort):
             raise FileExistsError(f"Thread already exists: threads/{slug}")
 
         now = datetime.now(UTC)
-        first_ref_summary = context_refs[0].summary if context_refs else ""
+        first_ref_summary = context_refs[0].ref_summary if context_refs else ""
         schema = ThreadYamlSchema(
             title=title,
             state=ThreadState.open,
