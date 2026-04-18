@@ -43,9 +43,7 @@ def _make_drive_loop_with_mesh(
         captured.append(channel)
         agent = AsyncMock()
         fake_usage = MagicMock(input_tokens=0, output_tokens=0)
-        agent.run_turn = AsyncMock(
-            return_value=MagicMock(usage=fake_usage, cost_usd=0.0)
-        )
+        agent.run_turn = AsyncMock(return_value=MagicMock(usage=fake_usage, cost_usd=0.0))
         return agent
 
     cfg = InitiativeConfig(
@@ -87,9 +85,7 @@ class TestDriveLoopChannelConstruction:
     @pytest.mark.asyncio
     async def test_mesh_disabled_no_cascade_uses_silent(self):
         """Mesh disabled, no cascade → SilentChannel."""
-        dl, captured = _make_drive_loop_with_mesh(
-            cascade_enabled=False, mesh_enabled=False
-        )
+        dl, captured = _make_drive_loop_with_mesh(cascade_enabled=False, mesh_enabled=False)
         dl._mesh = None
 
         await dl._run_task(_make_task())
@@ -99,9 +95,7 @@ class TestDriveLoopChannelConstruction:
     @pytest.mark.asyncio
     async def test_mesh_no_peer_id_uses_silent(self):
         """Mesh enabled but peer_id empty → SilentChannel (no publish target)."""
-        dl, captured = _make_drive_loop_with_mesh(
-            cascade_enabled=False, peer_id=""
-        )
+        dl, captured = _make_drive_loop_with_mesh(cascade_enabled=False, peer_id="")
         dl._mesh = AsyncMock()
 
         await dl._run_task(_make_task())
@@ -133,3 +127,18 @@ class TestDriveLoopChannelConstruction:
 
         # With cascade and no mesh/skuld_channel, channel is capture_channel alone
         assert isinstance(captured[0], CaptureChannel)
+
+    @pytest.mark.asyncio
+    async def test_no_cascade_skuld_and_mesh_uses_composite(self):
+        """No cascade, skuld_channel + mesh → CompositeChannel(sinks) with both."""
+        dl, captured = _make_drive_loop_with_mesh(cascade_enabled=False)
+        mock_skuld = MagicMock()
+        mock_skuld.emit = AsyncMock()
+        dl._skuld_channel = mock_skuld
+        dl._mesh = AsyncMock()
+
+        await dl._run_task(_make_task())
+
+        assert isinstance(captured[0], CompositeChannel)
+        channel_types = [type(ch) for ch in captured[0]._channels]
+        assert MeshActivityChannel in channel_types

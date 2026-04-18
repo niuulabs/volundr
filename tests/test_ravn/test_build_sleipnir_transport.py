@@ -7,7 +7,9 @@ _build_mesh via niuu.mesh.transport_builder.build_transport directly.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from niuu.mesh.transport_builder import TRANSPORT_ALIASES as _TRANSPORT_ALIASES
 from ravn.cli.commands import _resolve_transport_kwargs
@@ -101,6 +103,146 @@ class TestResolveTransportKwargs:
         settings = _make_settings()
         kwargs = _resolve_transport_kwargs(settings, "in_process")
         assert kwargs == {}
+
+
+class TestBuildMesh:
+    """Verify _build_mesh creates the correct mesh adapter (legacy + list paths)."""
+
+    def test_legacy_nng_returns_sleipnir_adapter(self):
+        """Legacy nng adapter (default) → SleipnirMeshAdapter is constructed."""
+        from ravn.cli.commands import _build_mesh
+
+        settings = _make_settings()
+        with (
+            patch("niuu.mesh.transport_builder.build_transport", return_value=MagicMock()),
+            patch("ravn.adapters.mesh.sleipnir_mesh.SleipnirMeshAdapter") as mock_cls,
+            patch("niuu.mesh.cluster.read_cluster_pub_addresses", return_value=[]),
+        ):
+            _build_mesh(settings)
+        mock_cls.assert_called_once()
+
+    def test_legacy_rabbitmq_no_env_returns_none(self):
+        """Legacy rabbitmq adapter with no AMQP_URL env → returns None (guard fires)."""
+        from ravn.cli.commands import _build_mesh
+
+        settings = _make_settings()
+        settings.mesh.adapter = "rabbitmq"
+        with patch.dict("os.environ", {}, clear=True):
+            result = _build_mesh(settings)
+        assert result is None
+
+    def test_adapters_list_exercises_closure_body(self):
+        """When mesh.adapters list is set, _sleipnir_tb closure body is exercised."""
+        from ravn.cli.commands import _build_mesh
+
+        settings = _make_settings()
+        settings.mesh.adapters = [{"role": "pub_sub", "transport": "nng"}]
+
+        captured: list = []
+
+        def _fake_build_mesh(
+            adapters, own_peer_id, rpc_timeout_s, discovery, sleipnir_transport_builder
+        ):
+            captured.append(sleipnir_transport_builder)
+            return MagicMock()
+
+        with (
+            patch("niuu.mesh.build_mesh_from_adapters_list", side_effect=_fake_build_mesh),
+            patch("niuu.mesh.transport_builder.build_transport", return_value=MagicMock()),
+            patch("niuu.mesh.cluster.read_cluster_pub_addresses", return_value=[]),
+        ):
+            _build_mesh(settings)
+            assert captured, "sleipnir_transport_builder was not passed to helper"
+            nng_result = captured[0]({"transport": "nng"})
+        assert nng_result is not None
+
+    def test_adapters_list_closure_rabbitmq_no_env_returns_none(self):
+        """_sleipnir_tb closure returns None when rabbitmq env is missing."""
+        from ravn.cli.commands import _build_mesh
+
+        settings = _make_settings()
+        settings.mesh.adapters = [{"role": "pub_sub", "transport": "rabbitmq"}]
+
+        captured: list = []
+
+        def _fake_build_mesh(
+            adapters, own_peer_id, rpc_timeout_s, discovery, sleipnir_transport_builder
+        ):
+            captured.append(sleipnir_transport_builder)
+            return MagicMock()
+
+        with (
+            patch("niuu.mesh.build_mesh_from_adapters_list", side_effect=_fake_build_mesh),
+            patch("niuu.mesh.transport_builder.build_transport", return_value=MagicMock()),
+            patch.dict("os.environ", {}, clear=True),
+        ):
+            _build_mesh(settings)
+            assert captured
+            result = captured[0]({"transport": "rabbitmq"})
+        assert result is None
+
+
+class TestBuildDiscovery:
+    """Verify _build_discovery delegates to niuu.mesh.discovery_builder."""
+
+    def test_returns_discovery_adapter(self):
+        """_build_discovery calls build_discovery_adapters and returns its result."""
+        from ravn.cli.commands import _build_discovery
+
+        settings = _make_settings()
+        mock_discovery = MagicMock()
+        with (
+            patch(
+                "ravn.adapters.discovery._identity.load_or_create_peer_id",
+                return_value="p1",
+            ),
+            patch(
+                "ravn.adapters.discovery._identity.load_or_create_realm_key",
+                return_value=b"key",
+            ),
+            patch(
+                "ravn.adapters.discovery._identity.realm_id_from_key",
+                return_value="realm-1",
+            ),
+            patch("importlib.metadata.version", return_value="0.0.0"),
+            patch(
+                "niuu.mesh.discovery_builder.build_discovery_adapters",
+                return_value=mock_discovery,
+            ),
+        ):
+            result = _build_discovery(settings)
+        assert result is mock_discovery
+
+
+class TestRunPeers:
+    """Verify _run_peers calls build_discovery_adapters and exits early when None."""
+
+    @pytest.mark.asyncio
+    async def test_run_peers_no_discovery_returns_early(self):
+        """_run_peers exits early (no exception) when discovery is None."""
+        from ravn.cli.commands import _run_peers
+
+        settings = _make_settings()
+        with (
+            patch(
+                "ravn.adapters.discovery._identity.load_or_create_peer_id",
+                return_value="p1",
+            ),
+            patch(
+                "ravn.adapters.discovery._identity.load_or_create_realm_key",
+                return_value=b"key",
+            ),
+            patch(
+                "ravn.adapters.discovery._identity.realm_id_from_key",
+                return_value="realm-1",
+            ),
+            patch("importlib.metadata.version", return_value="0.0.0"),
+            patch(
+                "niuu.mesh.discovery_builder.build_discovery_adapters",
+                return_value=None,
+            ),
+        ):
+            await _run_peers(settings, verbose=False, force_scan=False)
 
     def test_unknown_adapter_returns_empty(self):
         settings = _make_settings()
