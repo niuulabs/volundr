@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -30,6 +31,8 @@ from niuu.domain.mimir import (
     MimirQueryResult,
     MimirSource,
     MimirSourceMeta,
+    ThreadOwnershipError,
+    ThreadState,
 )
 from niuu.ports.mimir import MimirPort
 from ravn.domain.mimir import MimirAuth
@@ -124,6 +127,7 @@ class HttpMimirAdapter(MimirPort):
         path: str,
         content: str,
         mimir: str | None = None,
+        meta: MimirPageMeta | None = None,
     ) -> None:
         """PUT /mimir/page — create or replace a wiki page."""
         client = self._get_client()
@@ -192,6 +196,82 @@ class HttpMimirAdapter(MimirPort):
             ingested_at=datetime.fromisoformat(data["ingested_at"]),
         )
 
+    async def get_thread_queue(
+        self,
+        owner_id: str | None = None,
+        limit: int = 50,
+    ) -> list[MimirPage]:
+        """GET /api/threads/queue — return open threads sorted by weight descending."""
+        client = self._get_client()
+        params: dict[str, Any] = {"limit": limit}
+        if owner_id:
+            params["owner_id"] = owner_id
+        response = await client.get("/api/threads/queue", params=params)
+        response.raise_for_status()
+        return [_parse_thread_page(p) for p in response.json()]
+
+    async def list_threads(
+        self,
+        state: ThreadState | None = None,
+        limit: int = 100,
+    ) -> list[MimirPage]:
+        """GET /api/threads — list threads, optionally filtered by state."""
+        client = self._get_client()
+        params: dict[str, Any] = {"limit": limit}
+        if state is not None:
+            params["state"] = state.value
+        response = await client.get("/api/threads", params=params)
+        response.raise_for_status()
+        return [_parse_thread_page(p) for p in response.json()]
+
+    async def update_thread_state(self, path: str, state: ThreadState) -> None:
+        """PATCH /api/threads/{encoded_path}/state — transition a thread to *state*."""
+        client = self._get_client()
+        response = await client.patch(
+            f"/api/threads/{_encode_path(path)}/state",
+            json={"state": state.value},
+        )
+        if response.status_code == 404:
+            raise FileNotFoundError(f"Mímir thread not found: {path}")
+        response.raise_for_status()
+
+    async def update_thread_weight(
+        self,
+        path: str,
+        weight: float,
+        signals: dict | None = None,
+    ) -> None:
+        """PATCH /api/threads/{encoded_path}/weight — update the weight score for a thread."""
+        client = self._get_client()
+        payload: dict[str, Any] = {"weight": weight}
+        if signals is not None:
+            payload["signals"] = signals
+        response = await client.patch(
+            f"/api/threads/{_encode_path(path)}/weight",
+            json=payload,
+        )
+        if response.status_code == 404:
+            raise FileNotFoundError(f"Mímir thread not found: {path}")
+        response.raise_for_status()
+
+    async def assign_thread_owner(self, path: str, owner_id: str | None) -> None:
+        """POST /api/threads/{encoded_path}/owner — assign or clear the owner of a thread.
+
+        Raises ``ThreadOwnershipError`` if the thread already has a different owner
+        (server returns 409 Conflict).
+        """
+        client = self._get_client()
+        response = await client.post(
+            f"/api/threads/{_encode_path(path)}/owner",
+            json={"owner_id": owner_id},
+        )
+        if response.status_code == 409:
+            data = response.json()
+            raise ThreadOwnershipError(path, data["current_owner"])
+        if response.status_code == 404:
+            raise FileNotFoundError(f"Mímir thread not found: {path}")
+        response.raise_for_status()
+
     async def list_sources(self, *, unprocessed_only: bool = False) -> list[MimirSourceMeta]:
         """GET /mimir/sources — list raw sources, optionally unprocessed only."""
         client = self._get_client()
@@ -221,6 +301,28 @@ class HttpMimirAdapter(MimirPort):
 # ---------------------------------------------------------------------------
 # Parse helpers
 # ---------------------------------------------------------------------------
+
+
+def _encode_path(path: str) -> str:
+    """URL-encode a thread path for use in a URL segment."""
+    return quote(path, safe="")
+
+
+def _parse_thread_page(data: dict) -> MimirPage:
+    """Parse a thread response dict into a ``MimirPage`` with thread metadata."""
+    state_raw = data.get("state")
+    meta = MimirPageMeta(
+        path=data["path"],
+        title=data["title"],
+        summary=data.get("summary", ""),
+        category=data.get("category", "threads"),
+        updated_at=datetime.fromisoformat(data["updated_at"]),
+        source_ids=data.get("source_ids", []),
+        thread_state=ThreadState(state_raw) if state_raw else None,
+        thread_weight=data.get("weight"),
+        is_thread=True,
+    )
+    return MimirPage(meta=meta, content=data.get("content", ""))
 
 
 def _parse_page_meta(data: dict) -> MimirPageMeta:

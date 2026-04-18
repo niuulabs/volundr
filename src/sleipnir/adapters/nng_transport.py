@@ -56,7 +56,7 @@ try:
     import pynng.exceptions
 
     _PYNNG_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     _PYNNG_AVAILABLE = False
 
 from sleipnir.adapters._subscriber_support import (
@@ -527,7 +527,7 @@ class NngTransport(SleipnirPublisher, SleipnirSubscriber):
 
 
 def _require_pynng() -> None:
-    if not _PYNNG_AVAILABLE:
+    if not _PYNNG_AVAILABLE:  # pragma: no cover
         raise ImportError(
             "pynng is required for the nng transport adapter. Install it with: pip install pynng"
         )

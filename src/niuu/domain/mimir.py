@@ -9,16 +9,78 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
+# ---------------------------------------------------------------------------
+# Compiled-truth page taxonomy enums
+# ---------------------------------------------------------------------------
+
+
+class PageType(StrEnum):
+    """Controlled vocabulary for the ``type`` frontmatter field."""
+
+    directive = "directive"
+    decision = "decision"
+    goal = "goal"
+    preference = "preference"
+    observation = "observation"
+    entity = "entity"
+    topic = "topic"
+
+
+class PageConfidence(StrEnum):
+    """Epistemic confidence level for a Mímir page."""
+
+    high = "high"
+    medium = "medium"
+    low = "low"
+
+
+class EntityType(StrEnum):
+    """Sub-type for pages whose ``type`` is ``entity``."""
+
+    person = "person"
+    project = "project"
+    concept = "concept"
+    technology = "technology"
+    organization = "organization"
+    strategy = "strategy"
+
 
 def compute_content_hash(content: str) -> str:
     """Return the SHA-256 hex digest of *content*."""
     return hashlib.sha256(content.encode()).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Slug utility
+# ---------------------------------------------------------------------------
+
+
+def slugify(title: str) -> str:
+    """Convert *title* to a URL/filename-safe slug.
+
+    Lowercased, ASCII-safe, hyphens instead of spaces/punctuation.
+    """
+    # Normalise unicode to ASCII-compatible form
+    normalised = unicodedata.normalize("NFKD", title)
+    ascii_text = normalised.encode("ascii", "ignore").decode("ascii")
+    # Replace non-alphanumeric characters with hyphens
+    slug = re.sub(r"[^\w\s-]", "", ascii_text).strip()
+    slug = re.sub(r"[\s_]+", "-", slug)
+    slug = re.sub(r"-+", "-", slug)
+    return slug.lower()
+
+
+# ---------------------------------------------------------------------------
+# Core domain models
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -65,6 +127,15 @@ class ThreadContextRef:
     ref_summary: str
 
 
+class ThreadOwnershipError(RuntimeError):
+    """Raised when assign_thread_owner detects a conflicting owner."""
+
+    def __init__(self, path: str, current_owner: str) -> None:
+        super().__init__(f"Thread '{path}' already owned by '{current_owner}'")
+        self.path = path
+        self.current_owner = current_owner
+
+
 # ---------------------------------------------------------------------------
 # Wiki page types
 # ---------------------------------------------------------------------------
@@ -72,15 +143,23 @@ class ThreadContextRef:
 
 @dataclass
 class MimirPageMeta:
-    """Lightweight metadata record for a Mímir wiki page."""
+    """Lightweight metadata record for a Mímir wiki page or thread."""
 
-    path: str  # e.g. "technical/volundr/auth.md"
+    path: str  # e.g. "technical/volundr/auth.md" or "threads/retrieval-architecture"
     title: str
     summary: str  # one-line summary used in index.md
-    category: str  # top-level category: "technical", "projects", etc.
+    category: str  # top-level category: "technical", "projects", "threads", etc.
     updated_at: datetime
     source_ids: list[str] = field(default_factory=list)
-
+    # Compiled-truth frontmatter fields (additive — all optional for backwards compat)
+    page_type: PageType | None = None
+    confidence: PageConfidence | None = None
+    entity_type: EntityType | None = None
+    related_entities: list[str] = field(default_factory=list)
+    is_thread: bool = False
+    # Set by action shapes when they write artifacts derived from a thread.
+    # The enricher skips pages with this flag to prevent feedback loops.
+    produced_by_thread: bool = False
     # Thread fields — all None / empty for non-thread pages
     thread_state: ThreadState | None = None
     thread_weight: float | None = None
@@ -93,7 +172,7 @@ class MimirPageMeta:
 
 @dataclass
 class MimirPage:
-    """A single Mímir wiki page with full content and metadata."""
+    """A single Mímir wiki page or thread with full content and metadata."""
 
     meta: MimirPageMeta
     content: str  # full Markdown content

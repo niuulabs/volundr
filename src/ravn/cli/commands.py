@@ -14,7 +14,13 @@ from typing import Any
 import typer
 
 from ravn.agent import PostToolHook, PreToolHook, RavnAgent
-from ravn.config import InitiativeConfig, OutcomeConfig, ProjectConfig, Settings, ToolGroupConfig
+from ravn.config import (
+    InitiativeConfig,
+    ProjectConfig,
+    Settings,
+    ToolGroupConfig,
+    resolve_trust_tools,
+)
 from ravn.domain.checkpoint import InterruptReason
 from ravn.domain.models import (
     Message,
@@ -200,7 +206,7 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
             )
             return None
         bc = settings.buri
-        reflection_model = settings.agent.outcome.reflection_model
+        reflection_model = settings.memory.reflection_model
         return BuriMemoryAdapter(
             dsn=dsn,
             prefetch_budget=settings.memory.prefetch_budget,
@@ -224,26 +230,6 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
     except Exception as exc:
         logger.warning("Failed to load custom memory backend %r: %s", backend, exc)
         return None
-
-
-# ---------------------------------------------------------------------------
-# Builder: Outcome
-# ---------------------------------------------------------------------------
-
-
-def _build_outcome(settings: Settings) -> tuple[Any, OutcomeConfig | None]:
-    """Build the outcome adapter, or (None, None) if disabled."""
-    oc = settings.agent.outcome
-    if not oc.enabled:
-        return None, None
-
-    from ravn.adapters.memory.outcome import SQLiteOutcomeAdapter
-
-    adapter = SQLiteOutcomeAdapter(
-        path=oc.path,
-        lessons_token_budget=oc.lessons_token_budget,
-    )
-    return adapter, oc
 
 
 # ---------------------------------------------------------------------------
@@ -484,6 +470,30 @@ def _build_tools(
     return tools
 
 
+def _in_groups(name: str, groups: set[str]) -> bool:
+    """Return True if *name* matches any group prefix in *groups*.
+
+    A match means either an exact hit (``name == group``) or a prefixed
+    hit (``name`` starts with ``group_``).
+    """
+    return any(name == g or name.startswith(g + "_") for g in groups)
+
+
+def _apply_trust_filter(
+    tools: list[Any],
+    settings: Settings,
+    triggered_by: str | None,
+) -> list[Any]:
+    """Remove tools forbidden by the trust gradient for thread-triggered tasks."""
+    if not triggered_by or not triggered_by.startswith("thread:"):
+        return tools
+    _allowed, forbidden = resolve_trust_tools(settings.trust)
+    if not forbidden:
+        return tools
+    forbidden_set = set(forbidden)
+    return [t for t in tools if not _in_groups(t.name, forbidden_set)]
+
+
 def _filter_tools(
     tools: list[Any],
     settings: Settings,
@@ -505,9 +515,6 @@ def _filter_tools(
             allowed_groups = set(persona_config.allowed_tools)
         if persona_config.forbidden_tools:
             forbidden_groups = set(persona_config.forbidden_tools)
-
-    def _in_groups(name: str, groups: set[str]) -> bool:
-        return any(name == g or name.startswith(g + "_") for g in groups)
 
     if allowed_groups or enabled_names:
         tools = [
@@ -953,7 +960,6 @@ def _build_agent(
     )
     memory = _build_memory(settings, llm=llm)
     mimir = _build_mimir(settings)
-    outcome_port, outcome_config = _build_outcome(settings)
     iteration_budget = IterationBudget(
         total=settings.iteration_budget.total,
         near_limit_threshold=settings.iteration_budget.near_limit_threshold,
@@ -998,8 +1004,11 @@ def _build_agent(
         iteration_budget=iteration_budget,
         compressor=compressor,
         prompt_builder=prompt_builder,
-        outcome_port=outcome_port,
-        outcome_config=outcome_config,
+        reflection_model=settings.memory.reflection_model,
+        reflection_max_tokens=settings.memory.reflection_max_tokens,
+        task_summary_max_chars=settings.memory.task_summary_max_chars,
+        input_token_cost_per_million=settings.memory.input_token_cost_per_million,
+        output_token_cost_per_million=settings.memory.output_token_cost_per_million,
         extended_thinking=extended_thinking,
         checkpoint_port=checkpoint_port if cp_cfg.enabled else None,
         task_id=task_id,
@@ -1207,6 +1216,7 @@ async def _chat(
     settings: Settings,
     prompt: str,
     show_usage: bool,
+    interaction_tracker: Any | None = None,
 ) -> None:
     """Run a single-turn or multi-turn conversation."""
     from ravn.adapters.slash_commands import handle as handle_slash
@@ -1234,6 +1244,8 @@ async def _chat(
                 typer.echo(slash_output)
                 continue
 
+            if interaction_tracker is not None:
+                interaction_tracker.touch()
             await _run_turn(agent, channel, user_input, show_usage=show_usage)
     finally:
         await _shutdown_mcp(mcp_manager)
@@ -1403,33 +1415,26 @@ async def _run_evolve(settings: Settings) -> None:
         typer.echo("Memory backend not available — evolution requires memory.", err=True)
         raise typer.Exit(1)
 
-    outcome_port, _ = _build_outcome(settings)
-    if outcome_port is None:
-        typer.echo("Outcome recording not enabled — evolution requires outcomes.", err=True)
-        raise typer.Exit(1)
-
     evo = settings.evolution
     state_path = Path(evo.state_path).expanduser()
     state = load_state(state_path)
-    current_count = await outcome_port.count_all_outcomes()
+    current_count = await memory.count_episodes()
 
     if not should_run(state, current_count, min_new=evo.min_new_outcomes):
         typer.echo(
-            f"Not enough new outcomes ({current_count - state.outcome_count_at_last_run} "
+            f"Not enough new episodes ({current_count - state.outcome_count_at_last_run} "
             f"since last run, need {evo.min_new_outcomes})."
         )
         return
 
     typer.echo(
-        f"Analysing {current_count} outcomes "
+        f"Analysing {current_count} episodes "
         f"({current_count - state.outcome_count_at_last_run} new)..."
     )
 
     extractor = PatternExtractor(
         memory,
-        outcome_port,
         max_episodes_to_analyze=evo.max_episodes_to_analyze,
-        max_outcomes_to_analyze=evo.max_outcomes_to_analyze,
         skill_suggestion_min_occurrences=evo.skill_suggestion_min_occurrences,
         error_warning_min_occurrences=evo.error_warning_min_occurrences,
         strategy_min_occurrences=evo.strategy_min_occurrences,
@@ -1596,7 +1601,6 @@ async def _run_gateway(
     workspace = _resolve_workspace(settings)
     llm = _build_llm(settings)
     memory = _build_memory(settings, llm=llm)
-    outcome_port, outcome_config = _build_outcome(settings)
     compressor = _build_compressor(settings, llm)
     prompt_builder = _build_prompt_builder(settings)
     pre_hooks, post_hooks = _build_hooks(settings)
@@ -1665,8 +1669,11 @@ async def _run_gateway(
             iteration_budget=budget,
             compressor=compressor,
             prompt_builder=prompt_builder,
-            outcome_port=outcome_port,
-            outcome_config=outcome_config,
+            reflection_model=settings.memory.reflection_model,
+            reflection_max_tokens=settings.memory.reflection_max_tokens,
+            task_summary_max_chars=settings.memory.task_summary_max_chars,
+            input_token_cost_per_million=settings.memory.input_token_cost_per_million,
+            output_token_cost_per_million=settings.memory.output_token_cost_per_million,
             extended_thinking=extended_thinking,
         )
 
@@ -1807,7 +1814,6 @@ async def _run_daemon(
     workspace = _resolve_workspace(settings)
     llm = _build_llm(settings)
     memory = _build_memory(settings)
-    outcome_port, outcome_config = _build_outcome(settings)
     compressor = _build_compressor(settings, llm)
     prompt_builder = _build_prompt_builder(settings)
     pre_hooks, post_hooks = _build_hooks(settings)
@@ -1828,6 +1834,7 @@ async def _run_daemon(
         channel: ChannelPort,
         task_id: str | None = None,
         task_persona: str | None = None,
+        triggered_by: str | None = None,
     ) -> Any:
         # Resolve per-task persona — triggered tasks may request a different persona.
         resolved_persona = persona_config
@@ -1894,6 +1901,9 @@ async def _run_daemon(
             if cron_tools:
                 tools.extend(cron_tools)
 
+        # NIU-571: Apply trust gradient constraints for thread-triggered tasks
+        tools = _apply_trust_filter(tools, settings, triggered_by)
+
         return RavnAgent(
             llm=llm,
             tools=tools,
@@ -1913,12 +1923,21 @@ async def _run_daemon(
             iteration_budget=budget,
             compressor=compressor,
             prompt_builder=prompt_builder,
-            outcome_port=outcome_port,
-            outcome_config=outcome_config,
+            reflection_model=settings.memory.reflection_model,
+            reflection_max_tokens=settings.memory.reflection_max_tokens,
+            task_summary_max_chars=settings.memory.task_summary_max_chars,
+            input_token_cost_per_million=settings.memory.input_token_cost_per_million,
+            output_token_cost_per_million=settings.memory.output_token_cost_per_million,
             extended_thinking=extended_thinking,
         )
 
     tasks: list[asyncio.Task] = []
+
+    # Create interaction tracker early so it can be shared between gateway
+    # channels (touch on operator message) and the wakefulness trigger (read).
+    from ravn.domain.interaction_tracker import LastInteractionTracker
+
+    interaction_tracker = LastInteractionTracker()
 
     # Gateway channels (human-initiated turns)
     gw_tasks: list[str] = []
@@ -1932,7 +1951,12 @@ async def _run_daemon(
         or channels_cfg.whatsapp.enabled
     )
     if _any_channel:
-        gw = RavnGateway(settings.gateway, _agent_factory, profile=profile)
+        gw = RavnGateway(
+            settings.gateway,
+            _agent_factory,
+            profile=profile,
+            interaction_tracker=interaction_tracker,
+        )
 
         if channels_cfg.telegram.enabled:
             tg = TelegramGateway(channels_cfg.telegram, gw)
@@ -1968,13 +1992,20 @@ async def _run_daemon(
             settings=settings,
             event_publisher=event_publisher,
             resume=resume,
+            mimir=daemon_mimir,
         )
         _cron_jobs = _wire_triggers(drive_loop, settings.initiative)
         cron_tools[:] = _wire_cron(drive_loop, _cron_jobs, settings.initiative)
 
-        # Wire Mímir triggers (source synthesis + staleness refresh)
+        # Wire Mímir triggers (source synthesis + staleness refresh + threads)
         if daemon_mimir is not None:
-            _wire_mimir_triggers(drive_loop, daemon_mimir, settings)
+            _wire_mimir_triggers(
+                drive_loop,
+                daemon_mimir,
+                settings,
+                llm=llm,
+                interaction_tracker=interaction_tracker,
+            )
 
         # Wire task dispatch subscription when requested (--listen / --daemon)
         if task_dispatch and settings.sleipnir.enabled:
@@ -2060,11 +2091,18 @@ def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> list[Any]:
     return []
 
 
-def _wire_mimir_triggers(drive_loop: Any, mimir: Any, settings: Settings) -> None:
-    """Register Mímir source and staleness triggers on the drive loop.
+def _wire_mimir_triggers(
+    drive_loop: Any,
+    mimir: Any,
+    settings: Settings,
+    llm: Any = None,
+    interaction_tracker: Any = None,
+) -> None:
+    """Register Mímir source, staleness, and thread triggers on the drive loop.
 
-    Both triggers are gated by their individual ``enabled`` flags in
-    ``settings.mimir.source_trigger`` and ``settings.mimir.staleness_trigger``.
+    All triggers are gated by their individual ``enabled`` flags in
+    ``settings.mimir.source_trigger``, ``settings.mimir.staleness_trigger``,
+    and ``settings.thread``.
     """
     mc = settings.mimir
 
@@ -2092,6 +2130,72 @@ def _wire_mimir_triggers(drive_loop: Any, mimir: Any, settings: Settings) -> Non
             mc.staleness_trigger.top_n,
             mc.staleness_trigger.persona,
         )
+
+    # Thread queue trigger — wired always; only fires when thread.enabled=True.
+    from ravn.adapters.triggers.thread_queue import ThreadQueueTrigger
+
+    drive_loop.register_trigger(ThreadQueueTrigger(mimir=mimir, config=settings.thread))
+    logger.info(
+        "thread: queue trigger registered (enabled=%s, poll_interval=%ds)",
+        settings.thread.enabled,
+        settings.thread.enricher_poll_interval_seconds,
+    )
+
+    # Thread enricher (Sjón) — classifies new Mímir pages as threads.
+    if settings.thread.enabled and llm is not None:
+        from ravn.adapters.triggers.thread_enricher import ThreadEnricher
+
+        drive_loop.register_trigger(ThreadEnricher(mimir=mimir, llm=llm, config=settings.thread))
+        logger.info(
+            "thread: enricher registered (poll=%ds, confidence=%.2f, llm_alias=%s)",
+            settings.thread.enricher_poll_interval_seconds,
+            settings.thread.confidence_threshold,
+            settings.thread.enricher_llm_alias,
+        )
+
+    # Wakefulness trigger (NIU-565) — detects silence, reflects, emits intents.
+    if settings.wakefulness.enabled and llm is not None:
+        if interaction_tracker is None:
+            logger.warning("wakefulness: no interaction tracker provided — skipping")
+        else:
+            from ravn.adapters.triggers.wakefulness import WakefulnessTrigger
+
+            drive_loop.register_trigger(
+                WakefulnessTrigger(
+                    tracker=interaction_tracker,
+                    mimir=mimir,
+                    llm=llm,
+                    config=settings.wakefulness,
+                )
+            )
+            logger.info(
+                "wakefulness: trigger registered (silence=%ds, cooldown=%ds, poll=%ds)",
+                settings.wakefulness.silence_threshold_seconds,
+                settings.wakefulness.reflection_cooldown_seconds,
+                settings.wakefulness.poll_interval_seconds,
+            )
+
+    # Recap trigger (NIU-569) — surfaces overnight work on operator return.
+    if settings.recap.enabled:
+        if interaction_tracker is None:
+            logger.warning("recap: no interaction tracker provided — skipping")
+        else:
+            from ravn.adapters.triggers.recap import RecapTrigger
+
+            drive_loop.register_trigger(
+                RecapTrigger(
+                    mimir=mimir,
+                    config=settings.recap,
+                    last_interaction=interaction_tracker.last,
+                )
+            )
+            logger.info(
+                "recap: trigger registered (absence=%ds, window=%ds, cron=%r, poll=%ds)",
+                settings.recap.absence_threshold_seconds,
+                settings.recap.return_detection_window_seconds,
+                settings.recap.scheduled_recap_cron,
+                settings.recap.poll_interval_seconds,
+            )
 
 
 def _wire_cron(

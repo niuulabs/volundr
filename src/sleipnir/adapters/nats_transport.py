@@ -75,7 +75,7 @@ try:
     import nats.js.api as js_api
 
     _NATS_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     _NATS_AVAILABLE = False
 
 from sleipnir.adapters._subscriber_support import (
@@ -130,7 +130,7 @@ def nats_available() -> bool:
 
 
 def _require_nats() -> None:
-    if not _NATS_AVAILABLE:
+    if not _NATS_AVAILABLE:  # pragma: no cover
         raise ImportError(
             "nats-py is required for the NATS transport adapter. "
             "Install it with: pip install nats-py"

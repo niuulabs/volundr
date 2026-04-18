@@ -39,7 +39,7 @@ try:
     import redis.asyncio as aioredis
 
     _REDIS_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     _REDIS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
@@ -193,7 +193,7 @@ class RedisStreamsTransport(SleipnirPublisher, SleipnirSubscriber):
         """Open the Redis connection (no-op if a client was injected)."""
         if self._redis is not None:
             return
-        if not _REDIS_AVAILABLE:
+        if not _REDIS_AVAILABLE:  # pragma: no cover
             raise ImportError(
                 "redis is not installed. Install it with: pip install 'volundr[redis]'"
             )

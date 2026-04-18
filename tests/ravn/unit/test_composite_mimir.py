@@ -59,8 +59,10 @@ def _mock_port(
     port.search = AsyncMock(return_value=pages)
     port.query = AsyncMock(return_value=MimirQueryResult(question="q", answer="", sources=pages))
     port.list_pages = AsyncMock(return_value=[p.meta for p in pages])
+    port.list_threads = AsyncMock(return_value=pages)
     port.ingest = AsyncMock(return_value=[])
     port.upsert_page = AsyncMock(return_value=None)
+    port.update_thread_weight = AsyncMock(return_value=None)
     port.lint = AsyncMock(
         return_value=lint_report
         or MimirLintReport(orphans=[], contradictions=[], stale=[], gaps=[], pages_checked=0)
@@ -430,12 +432,14 @@ def _error_port(error: Exception = RuntimeError("mount down")) -> object:
     port.query = AsyncMock(side_effect=error)
     port.search = AsyncMock(side_effect=error)
     port.list_pages = AsyncMock(side_effect=error)
+    port.list_threads = AsyncMock(side_effect=error)
     port.list_sources = AsyncMock(side_effect=error)
     port.lint = AsyncMock(side_effect=error)
     port.read_source = AsyncMock(side_effect=error)
     port.read_page = AsyncMock(side_effect=error)
     port.get_page = AsyncMock(side_effect=error)
     port.upsert_page = AsyncMock(side_effect=error)
+    port.update_thread_weight = AsyncMock(side_effect=error)
     return port
 
 
@@ -564,3 +568,81 @@ async def test_upsert_exception_in_mount_logged_not_raised() -> None:
     adapter = CompositeMimirAdapter(mounts=[bad])
     # Should not raise
     await adapter.upsert_page("wiki/page.md", "content")
+
+
+# ---------------------------------------------------------------------------
+# CompositeMimirAdapter — list_threads (NIU-559)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_threads_dedup_by_path() -> None:
+    page_a = _make_page("threads/alpha")
+    page_b = _make_page("threads/beta")
+
+    local = _make_mount("local", priority=0, pages=[page_a])
+    shared = _make_mount("shared", priority=1, role="shared", pages=[page_a, page_b])
+
+    adapter = CompositeMimirAdapter(mounts=[local, shared])
+    results = await adapter.list_threads()
+
+    paths = [p.meta.path for p in results]
+    assert paths.count("threads/alpha") == 1
+    assert "threads/beta" in paths
+
+
+@pytest.mark.asyncio
+async def test_list_threads_respects_limit() -> None:
+    pages = [_make_page(f"threads/t{i}") for i in range(5)]
+    local = _make_mount("local", priority=0, pages=pages)
+    adapter = CompositeMimirAdapter(mounts=[local])
+    results = await adapter.list_threads(limit=3)
+    assert len(results) == 3
+
+
+@pytest.mark.asyncio
+async def test_list_threads_exception_in_one_mount_continues_others() -> None:
+    bad_port = _error_port()
+    bad_port.list_threads = AsyncMock(side_effect=RuntimeError("down"))
+    good_port = _mock_port(pages=[_make_page("threads/alpha")])
+    bad = MimirMount(name="bad", port=bad_port, role="local", read_priority=0)
+    good = MimirMount(name="good", port=good_port, role="shared", read_priority=1)
+    adapter = CompositeMimirAdapter(mounts=[bad, good])
+    results = await adapter.list_threads()
+    assert isinstance(results, list)
+    good_port.list_threads.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# CompositeMimirAdapter — update_thread_weight (NIU-559)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_update_thread_weight_routes_to_default_mount() -> None:
+    local_port = _mock_port()
+    shared_port = _mock_port()
+
+    local = MimirMount(name="local", port=local_port, role="local", read_priority=0)
+    shared = MimirMount(name="shared", port=shared_port, role="shared", read_priority=1)
+
+    routing = WriteRouting(rules=[], default=["local"])
+    adapter = CompositeMimirAdapter(mounts=[local, shared], write_routing=routing)
+
+    await adapter.update_thread_weight("threads/my-thread", 0.75)
+
+    local_port.update_thread_weight.assert_called_once_with("threads/my-thread", 0.75, None)
+    shared_port.update_thread_weight.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_thread_weight_passes_signals() -> None:
+    local_port = _mock_port()
+    local = MimirMount(name="local", port=local_port, role="local", read_priority=0)
+    routing = WriteRouting(rules=[], default=["local"])
+    adapter = CompositeMimirAdapter(mounts=[local], write_routing=routing)
+
+    signals = {"age_days": 2.0, "mention_count": 3}
+    await adapter.update_thread_weight("threads/my-thread", 0.8, signals)
+
+    local_port.update_thread_weight.assert_called_once_with("threads/my-thread", 0.8, signals)

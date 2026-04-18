@@ -36,6 +36,20 @@ class BudgetWarningEvent:
     type: str = "bifrost.cost.budget_warning"
 
 
+@dataclass
+class BudgetDegradedEvent:
+    """Emitted when a request is routed to a cheaper model due to budget pressure."""
+
+    agent_id: str
+    session_id: str
+    original_model: str
+    degraded_model: str
+    budget_pct_consumed: float
+    daily_limit_usd: float
+    spent_usd: float
+    type: str = "bifrost.budget.degraded"
+
+
 class CostEventEmitter(ABC):
     """Port for publishing cost events to downstream consumers."""
 
@@ -46,6 +60,10 @@ class CostEventEmitter(ABC):
     @abstractmethod
     async def emit_budget_warning(self, event: BudgetWarningEvent) -> None:
         """Publish a budget-warning event."""
+
+    @abstractmethod
+    async def emit_budget_degraded(self, event: BudgetDegradedEvent) -> None:
+        """Publish a budget-degraded event when a request is downgraded to a cheaper model."""
 
     async def close(self) -> None:
         """Release resources held by this emitter."""

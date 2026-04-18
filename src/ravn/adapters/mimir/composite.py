@@ -46,6 +46,8 @@ from niuu.domain.mimir import (
     MimirQueryResult,
     MimirSource,
     MimirSourceMeta,
+    ThreadOwnershipError,
+    ThreadState,
 )
 from niuu.ports.mimir import MimirPort
 from ravn.domain.mimir import MimirMount, WriteRouting
@@ -218,6 +220,116 @@ class CompositeMimirAdapter(MimirPort):
 
         return merged
 
+    async def list_threads(
+        self,
+        state: ThreadState | None = None,
+        limit: int = 100,
+    ) -> list[MimirPage]:
+        """List threads from all mounts in priority order, de-dup by path."""
+        seen_paths: set[str] = set()
+        results: list[MimirPage] = []
+
+        for mount in self._mounts:
+            try:
+                pages = await mount.port.list_threads(state=state, limit=limit)
+                for page in pages:
+                    if page.meta.path not in seen_paths:
+                        seen_paths.add(page.meta.path)
+                        results.append(page)
+                        if len(results) >= limit:
+                            return results
+            except Exception as exc:
+                logger.warning("composite mimir: list_threads failed on %r: %s", mount.name, exc)
+
+        return results
+
+    async def get_thread_queue(
+        self,
+        owner_id: str | None = None,
+        limit: int = 50,
+    ) -> list[MimirPage]:
+        """Return open threads sorted by weight from all mounts, de-dup by path."""
+        seen_paths: set[str] = set()
+        results: list[MimirPage] = []
+
+        for mount in self._mounts:
+            try:
+                pages = await mount.port.get_thread_queue(owner_id=owner_id, limit=limit)
+                for page in pages:
+                    if page.meta.path not in seen_paths:
+                        seen_paths.add(page.meta.path)
+                        results.append(page)
+            except Exception as exc:
+                logger.warning(
+                    "composite mimir: get_thread_queue failed on %r: %s",
+                    mount.name,
+                    exc,
+                )
+
+        results.sort(key=lambda p: p.meta.thread_weight or 0.0, reverse=True)
+        return results[:limit]
+
+    async def update_thread_state(self, path: str, state: ThreadState) -> None:
+        """Transition thread state on routed mounts."""
+        target_names = self._write_routing.resolve(path)
+        for name in target_names:
+            mount = self._mount_map.get(name)
+            if mount is None:
+                logger.warning(
+                    "composite mimir: write routing named unknown mount %r for path %r",
+                    name,
+                    path,
+                )
+                continue
+            try:
+                await mount.port.update_thread_state(path, state)
+            except Exception as exc:
+                logger.warning("composite mimir: update_thread_state failed on %r: %s", name, exc)
+
+    async def assign_thread_owner(self, path: str, owner_id: str | None) -> None:
+        """Claim thread ownership on routed mounts.
+
+        Re-raises ``ThreadOwnershipError`` — callers must handle the race.
+        """
+        target_names = self._write_routing.resolve(path)
+        for name in target_names:
+            mount = self._mount_map.get(name)
+            if mount is None:
+                logger.warning(
+                    "composite mimir: write routing named unknown mount %r for path %r",
+                    name,
+                    path,
+                )
+                continue
+            try:
+                await mount.port.assign_thread_owner(path, owner_id)
+            except ThreadOwnershipError:
+                raise
+            except Exception as exc:
+                logger.warning("composite mimir: assign_thread_owner failed on %r: %s", name, exc)
+
+    async def update_thread_weight(
+        self,
+        path: str,
+        weight: float,
+        signals: dict | None = None,
+    ) -> None:
+        """Update thread weight on routed mounts (same routing as upsert_page)."""
+        target_names = self._write_routing.resolve(path)
+        for name in target_names:
+            mount = self._mount_map.get(name)
+            if mount is None:
+                logger.warning(
+                    "composite mimir: write routing named unknown mount %r for path %r",
+                    name,
+                    path,
+                )
+                continue
+            try:
+                await mount.port.update_thread_weight(path, weight, signals)
+            except Exception as exc:
+                logger.warning("composite mimir: update_thread_weight failed on %r: %s", name, exc)
+
     # ------------------------------------------------------------------
     # MimirPort — write operations (routed)
     # ------------------------------------------------------------------
@@ -227,6 +339,7 @@ class CompositeMimirAdapter(MimirPort):
         path: str,
         content: str,
         mimir: str | None = None,
+        meta: MimirPageMeta | None = None,
     ) -> None:
         """Write *path* to the mounts selected by routing config or explicit *mimir*.
 
@@ -246,7 +359,7 @@ class CompositeMimirAdapter(MimirPort):
                 )
                 continue
             try:
-                await mount.port.upsert_page(path, content)
+                await mount.port.upsert_page(path, content, meta=meta)
                 logger.debug("composite mimir: wrote %r to mount %r", path, name)
             except Exception as exc:
                 logger.warning("composite mimir: upsert_page failed on %r: %s", name, exc)

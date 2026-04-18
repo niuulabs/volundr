@@ -54,6 +54,10 @@ def _make_drive_loop(cascade_enabled: bool = False) -> DriveLoop:
     cfg = InitiativeConfig(enabled=True, max_concurrent_tasks=3, task_queue_max=50)
     settings = MagicMock()
     settings.cascade.enabled = cascade_enabled
+    settings.budget.daily_cap_usd = 1.0
+    settings.budget.warn_at_percent = 80
+    settings.budget.input_token_cost_per_million = 3.0
+    settings.budget.output_token_cost_per_million = 15.0
     return DriveLoop(agent_factory=agent_factory, config=cfg, settings=settings)
 
 
@@ -331,7 +335,7 @@ class TestDriveLoopCaptureIntegration:
         mock_agent = MagicMock()
         mock_agent.run_turn = _mock_run_turn
 
-        def _agent_factory(channel, task_id=None, persona=None):  # noqa: ANN001
+        def _agent_factory(channel, task_id=None, persona=None, triggered_by=None):  # noqa: ANN001
             captured_channels.append(channel)
             return mock_agent
 
@@ -370,7 +374,7 @@ class TestDriveLoopCaptureIntegration:
         mock_agent = MagicMock()
         mock_agent.run_turn = _mock_run_turn
 
-        def _agent_factory(channel, task_id=None, persona=None):  # noqa: ANN001
+        def _agent_factory(channel, task_id=None, persona=None, triggered_by=None):  # noqa: ANN001
             captured_channels.append(channel)
             return mock_agent
 
@@ -403,7 +407,7 @@ class TestDriveLoopCaptureIntegration:
         mock_agent = MagicMock()
         mock_agent.run_turn = _mock_run_turn_raises
 
-        def _agent_factory(channel, task_id=None, persona=None):  # noqa: ANN001
+        def _agent_factory(channel, task_id=None, persona=None, triggered_by=None):  # noqa: ANN001
             return mock_agent
 
         cfg = InitiativeConfig(enabled=True, max_concurrent_tasks=1, task_queue_max=10)
@@ -606,7 +610,7 @@ async def test_integration_two_local_tasks_progress_and_collect():
 
     run_turn_map = {task_1: _run_task1, task_2: _run_task2}
 
-    def _agent_factory(channel, task_id=None, persona=None):  # noqa: ANN001
+    def _agent_factory(channel, task_id=None, persona=None, triggered_by=None):  # noqa: ANN001
         if task_id is not None:
             channel_map[task_id] = channel
         agent = MagicMock()

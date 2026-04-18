@@ -456,6 +456,27 @@ class MemoryConfig(BaseModel):
         default=100_000,
         description="Maximum characters of episode content returned per session in session_search.",
     )
+    # Reflection config (merged from OutcomeConfig, NIU-574)
+    reflection_model: str = Field(
+        default="claude-haiku-4-5-20251001",
+        description="Model alias used for the compact post-task reflection call.",
+    )
+    reflection_max_tokens: int = Field(
+        default=512,
+        description="Maximum tokens for the reflection LLM call.",
+    )
+    task_summary_max_chars: int = Field(
+        default=200,
+        description="Maximum characters of the user input stored as the task description.",
+    )
+    input_token_cost_per_million: float = Field(
+        default=3.0,
+        description="Input token cost in USD per million tokens (used to estimate cost_usd).",
+    )
+    output_token_cost_per_million: float = Field(
+        default=15.0,
+        description="Output token cost in USD per million tokens (used to estimate cost_usd).",
+    )
 
 
 class PermissionRuleConfig(BaseModel):
@@ -666,47 +687,6 @@ class ContextConfig(BaseModel):
     )
 
 
-class OutcomeConfig(BaseModel):
-    """Task outcome recording and post-task reflection configuration."""
-
-    enabled: bool = Field(
-        default=True,
-        description="Enable outcome recording and self-reflection after each task.",
-    )
-    path: str = Field(
-        default="~/.ravn/memory.db",
-        description="SQLite database path for outcome storage (can share with memory backend).",
-    )
-    reflection_model: str = Field(
-        default="claude-haiku-4-5-20251001",
-        description="Model alias used for the compact post-task reflection call ('fast').",
-    )
-    reflection_max_tokens: int = Field(
-        default=512,
-        description="Maximum tokens for the reflection LLM call.",
-    )
-    lessons_limit: int = Field(
-        default=3,
-        description="Number of past outcomes injected as 'lessons learned' per turn.",
-    )
-    task_summary_max_chars: int = Field(
-        default=200,
-        description="Maximum characters of the user input stored as the task summary.",
-    )
-    lessons_token_budget: int = Field(
-        default=1500,
-        description="Maximum approximate tokens of lessons-learned content injected per turn.",
-    )
-    input_token_cost_per_million: float = Field(
-        default=3.0,
-        description="Input token cost in USD per million tokens (used to estimate cost_usd).",
-    )
-    output_token_cost_per_million: float = Field(
-        default=15.0,
-        description="Output token cost in USD per million tokens (used to estimate cost_usd).",
-    )
-
-
 class AgentConfig(BaseModel):
     """Core agent behaviour configuration."""
 
@@ -726,10 +706,6 @@ class AgentConfig(BaseModel):
     episode_task_max_chars: int = Field(
         default=200,
         description="Maximum characters of the user input stored as the episode task description.",
-    )
-    outcome: OutcomeConfig = Field(
-        default_factory=OutcomeConfig,
-        description="Task outcome recording and self-reflection configuration.",
     )
 
 
@@ -1179,6 +1155,30 @@ class TriggerAdapterConfig(BaseModel):
     secret_kwargs_env: dict[str, str] = Field(
         default_factory=dict,
         description="Map of kwarg name → env var name for secret values.",
+    )
+
+
+class BudgetConfig(BaseModel):
+    """Per-Ravn daily API budget configuration (NIU-570)."""
+
+    daily_cap_usd: float = Field(
+        default=1.0,
+        description="Maximum USD spend per UTC day before new initiative tasks are gated.",
+    )
+    input_token_cost_per_million: float = Field(
+        default=3.0,
+        description="Input token cost in USD per million tokens (used to estimate task cost).",
+    )
+    output_token_cost_per_million: float = Field(
+        default=15.0,
+        description="Output token cost in USD per million tokens (used to estimate task cost).",
+    )
+    warn_at_percent: int = Field(
+        default=80,
+        description=(
+            "Publish a DECISION warning event when daily spend reaches this percentage "
+            "of the daily cap."
+        ),
     )
 
 
@@ -1666,7 +1666,7 @@ class BuriConfig(BaseModel):
     extraction_model: str = Field(
         default="",
         description=(
-            "Model to use for fact extraction. Empty = use settings.agent.outcome.reflection_model."
+            "Model to use for fact extraction. Empty = use settings.memory.reflection_model."
         ),
     )
     min_confidence: float = Field(
@@ -1782,6 +1782,358 @@ class CheckpointConfig(BaseModel):
             "fractions (e.g. 0.5 = 50%%).  Empty list disables milestone checkpointing."
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# NIU-558: Thread enrichment config
+# ---------------------------------------------------------------------------
+
+
+class ThreadConfig(BaseModel):
+    """Thread enrichment queue configuration (NIU-558).
+
+    Controls the background enricher that scores and prioritises Mímir pages
+    into the wakefulness thread queue.  Disabled by default — M2 activates
+    it by setting ``thread.enabled: true`` in the deployment YAML.
+
+    All timing values and weight coefficients are overridable via environment
+    variables (``RAVN_THREAD__DECAY_RATE_PER_DAY``, etc.) or the ``thread:``
+    section of ``ravn.yaml``.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable the thread enricher.  Off until M2 activates the trigger; "
+            "flip to true in the deployment ravn.yaml to start queueing."
+        ),
+    )
+    max_queue_size: int = Field(
+        default=200,
+        description="Maximum number of entries held in the wakefulness thread queue.",
+    )
+    enricher_poll_interval_seconds: int = Field(
+        default=300,
+        description="How often (seconds) the enricher checks Mímir for new pages.",
+    )
+    enricher_llm_alias: str = Field(
+        default="fast",
+        description=(
+            "LLM alias used by the enricher.  Should resolve to the cheapest/fastest "
+            "model configured in the llm aliases map."
+        ),
+    )
+    decay_rate_per_day: float = Field(
+        default=0.05,
+        description="Exponential score decay applied per calendar day of inactivity.",
+    )
+    recency_weight: float = Field(
+        default=1.0,
+        description="Weight applied to the recency signal when computing thread score.",
+    )
+    mention_weight: float = Field(
+        default=0.3,
+        description="Weight applied to the mention-count signal.",
+    )
+    engagement_weight: float = Field(
+        default=0.5,
+        description="Weight applied to the engagement signal.",
+    )
+    peer_weight: float = Field(
+        default=0.2,
+        description="Weight applied to the peer-reference signal.",
+    )
+    sub_thread_weight: float = Field(
+        default=0.4,
+        description="Weight applied to the sub-thread depth signal.",
+    )
+    owner_id: str | None = Field(
+        default=None,
+        description=(
+            "This Ravn instance's ID for ownership claims on queue entries.  "
+            "Defaults to the runtime instance ID when None; set explicitly in "
+            "the deployment YAML so co-deployed instances can share a queue."
+        ),
+    )
+    confidence_threshold: float = Field(
+        default=0.7,
+        description=(
+            "Minimum LLM confidence score (0.0–1.0) required to classify a page "
+            "as a thread.  Pages below this threshold are silently skipped."
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# NIU-565: Wakefulness trigger config
+# ---------------------------------------------------------------------------
+
+
+class WakefulnessConfig(BaseModel):
+    """Wakefulness trigger configuration (NIU-565).
+
+    Controls the background trigger that detects operator silence, runs a
+    cheap LLM reflection on the conversation, and emits 0–N follow-up
+    intents as threads into Mímir via ``create_thread()``.
+
+    Disabled by default — enable via ``wakefulness.enabled: true`` in the
+    deployment YAML.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable the wakefulness trigger.  Off until explicitly activated; "
+            "flip to true in the deployment ravn.yaml."
+        ),
+    )
+    silence_threshold_seconds: int = Field(
+        default=1800,
+        description="Seconds of operator silence before a reflection fires (30 min).",
+    )
+    reflection_cooldown_seconds: int = Field(
+        default=3600,
+        description="Minimum seconds between shallow reflections (1 h).",
+    )
+    deep_reflection_threshold_seconds: int = Field(
+        default=7200,
+        description="Seconds of silence before a deep reflection fires (2 h).",
+    )
+    deep_reflection_cooldown_seconds: int = Field(
+        default=14400,
+        description="Minimum seconds between deep reflections (4 h).",
+    )
+    llm_alias: str = Field(
+        default="fast",
+        description=(
+            "LLM alias for the reflection call.  Should resolve to a cheap/fast "
+            "model in the LLM aliases map."
+        ),
+    )
+    max_intents_per_reflection: int = Field(
+        default=5,
+        description="Cap on follow-up intents emitted per reflection.",
+    )
+    initial_thread_weight: float = Field(
+        default=5.0,
+        description="Weight assigned to newly created wakefulness threads.",
+    )
+    poll_interval_seconds: int = Field(
+        default=60,
+        description="How often (seconds) the trigger checks for silence.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# NIU-569: Recap trigger config
+# ---------------------------------------------------------------------------
+
+
+class RecapConfig(BaseModel):
+    """Recap trigger configuration (NIU-569).
+
+    Controls the trigger that fires on operator return after absence to assemble
+    and surface a summary of what happened overnight (or since last interaction).
+
+    Disabled by default — enable via ``recap.enabled: true`` in the deployment YAML.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable the recap trigger.  Off until explicitly activated; "
+            "flip to true in the deployment ravn.yaml."
+        ),
+    )
+    absence_threshold_seconds: int = Field(
+        default=3600,
+        description="Minimum absence gap (seconds) that counts as 'was away'.",
+    )
+    return_detection_window_seconds: int = Field(
+        default=300,
+        description=(
+            "How recently (seconds) the operator must have interacted to count as having returned."
+        ),
+    )
+    scheduled_recap_cron: str = Field(
+        default="",
+        description=(
+            "Optional cron expression for a daily scheduled recap fallback "
+            "(e.g. '0 7 * * *').  Empty string disables the scheduled fallback."
+        ),
+    )
+    max_threads_in_recap: int = Field(
+        default=10,
+        description="Maximum number of closed threads included in a single recap.",
+    )
+    persona: str = Field(
+        default="produce-recap",
+        description="Persona used when running the recap agent task.",
+    )
+    channel: str = Field(
+        default="",
+        description="Output channel for the recap (empty = TUI only).",
+    )
+    poll_interval_seconds: int = Field(
+        default=60,
+        description="How often (seconds) the trigger checks for operator return.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# NIU-571: Trust gradient — constrains tool availability per category
+# ---------------------------------------------------------------------------
+
+TrustLevel = Literal["free", "approval", "never"]
+
+
+class TrustGradientConfig(BaseModel):
+    """Trust gradient policy for wakefulness personas (NIU-571).
+
+    Each category maps to a trust level that controls whether the Ravn can
+    perform the action freely, must request operator approval (by writing a
+    Mímir page under ``approvals/``), or is permanently forbidden.
+
+    Levels:
+      - ``"free"``     — action is allowed without operator intervention.
+      - ``"approval"`` — tool is forbidden at runtime; agent writes an
+                         approval request to ``approvals/{slug}.md``.
+      - ``"never"``    — tool is unconditionally forbidden.
+
+    Override via ``trust:`` section in ``ravn.yaml`` or ``RAVN_TRUST__*``
+    environment variables.
+    """
+
+    reading: TrustLevel = Field(
+        default="free",
+        description="Papers, docs, code, ingest.",
+    )
+    writing_notes: TrustLevel = Field(
+        default="free",
+        description="Drafts to Mímir.",
+    )
+    sandbox_experiments: TrustLevel = Field(
+        default="free",
+        description="Völundr sessions.",
+    )
+    consulting_peers: TrustLevel = Field(
+        default="free",
+        description="Bifröst cloud calls within budget.",
+    )
+    drafting_tickets: TrustLevel = Field(
+        default="free",
+        description="Linear drafts (not creation).",
+    )
+    producing_recaps: TrustLevel = Field(
+        default="free",
+        description="Recap generation.",
+    )
+    opening_tickets: TrustLevel = Field(
+        default="approval",
+        description="Creating Linear tickets.",
+    )
+    closing_tickets: TrustLevel = Field(
+        default="approval",
+        description="Closing Linear tickets.",
+    )
+    pushing_branches: TrustLevel = Field(
+        default="approval",
+        description="Git push to feature branches.",
+    )
+    pushing_main: TrustLevel = Field(
+        default="never",
+        description="Git push to main.",
+    )
+    external_messages: TrustLevel = Field(
+        default="approval",
+        description="Slack, email, Telegram to non-operator.",
+    )
+    spending_beyond_cap: TrustLevel = Field(
+        default="approval",
+        description="Exceeding daily budget.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# NIU-571: Trust gradient tool resolution
+# ---------------------------------------------------------------------------
+
+# Maps trust categories → concrete tool name prefixes.  A category may map to
+# multiple tools (e.g. ``reading`` covers several tool prefixes).  Tool names
+# are matched by prefix — ``"mimir"`` matches ``mimir_query``, ``mimir_write``,
+# etc. — consistent with PersonaConfig's existing prefix-match convention.
+TRUST_CATEGORY_TOOLS: dict[str, list[str]] = {
+    "reading": ["file_read", "web_search", "web_fetch", "mimir_query", "mimir_search"],
+    "writing_notes": ["mimir_write", "mimir_ingest"],
+    "sandbox_experiments": ["volundr", "bash", "terminal"],
+    "consulting_peers": ["cascade", "bifrost"],
+    "drafting_tickets": ["linear_draft"],
+    "producing_recaps": ["recap"],
+    "opening_tickets": ["linear_create"],
+    "closing_tickets": ["linear_close", "linear_update"],
+    "pushing_branches": ["git_push"],
+    "pushing_main": ["git_push_main"],
+    "external_messages": ["slack", "email", "telegram"],
+    "spending_beyond_cap": ["budget_override"],
+}
+
+
+def resolve_trust_tools(
+    config: TrustGradientConfig,
+    persona_allowed: list[str] | None = None,
+    persona_forbidden: list[str] | None = None,
+) -> tuple[list[str], list[str]]:
+    """Map trust gradient config to concrete allowed/forbidden tool lists.
+
+    Returns ``(allowed, forbidden)`` where each list contains tool name
+    prefixes.  The caller should apply these as additional constraints on
+    top of the persona's own tool lists.
+
+    When *persona_allowed* or *persona_forbidden* are provided, the result
+    is merged via intersection semantics:
+
+    - A tool is allowed only if **both** the trust gradient and persona
+      permit it (intersection, not union).
+    - A tool is forbidden if **either** the trust gradient or persona
+      forbids it (union of forbidden sets).
+    """
+    trust_allowed: list[str] = []
+    trust_forbidden: list[str] = []
+
+    for category, level in _iter_trust_categories(config):
+        tools = TRUST_CATEGORY_TOOLS.get(category, [])
+        if level == "free":
+            trust_allowed.extend(tools)
+        else:
+            # Both "approval" and "never" result in tools being forbidden
+            trust_forbidden.extend(tools)
+
+    # Merge with persona constraints
+    if persona_forbidden:
+        merged_forbidden = list(dict.fromkeys(trust_forbidden + persona_forbidden))
+    else:
+        merged_forbidden = trust_forbidden
+
+    if persona_allowed:
+        # Intersection: only tools allowed by BOTH persona and trust gradient
+        trust_allowed_set = set(trust_allowed)
+        all_trust = _ALL_TRUST_TOOLS
+        merged_allowed = [
+            t for t in persona_allowed if t in trust_allowed_set or t not in all_trust
+        ]
+    else:
+        merged_allowed = trust_allowed
+
+    return merged_allowed, merged_forbidden
+
+
+def _iter_trust_categories(config: TrustGradientConfig):
+    """Yield ``(category_name, trust_level)`` for each field."""
+    for field_name in TrustGradientConfig.model_fields:
+        yield field_name, getattr(config, field_name)
+
+
+_ALL_TRUST_TOOLS: set[str] = {t for tools in TRUST_CATEGORY_TOOLS.values() for t in tools}
 
 
 # ---------------------------------------------------------------------------
@@ -1932,6 +2284,21 @@ class Settings(BaseSettings):
 
     # NIU-539: drive loop / initiative engine
     initiative: InitiativeConfig = Field(default_factory=InitiativeConfig)
+
+    # NIU-570: daily API budget gates
+    budget: BudgetConfig = Field(default_factory=BudgetConfig)
+
+    # NIU-558: thread enrichment queue
+    thread: ThreadConfig = Field(default_factory=ThreadConfig)
+
+    # NIU-565: wakefulness trigger
+    wakefulness: WakefulnessConfig = Field(default_factory=WakefulnessConfig)
+
+    # NIU-569: recap trigger
+    recap: RecapConfig = Field(default_factory=RecapConfig)
+
+    # NIU-571: trust gradient — constrains wakefulness tool availability
+    trust: TrustGradientConfig = Field(default_factory=TrustGradientConfig)
 
     # NIU-541: Búri knowledge memory substrate
     buri: BuriConfig = Field(default_factory=BuriConfig)

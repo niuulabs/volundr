@@ -932,7 +932,7 @@ async def test_drive_loop_runs_agent_turn_from_cron(tmp_path: Path) -> None:
 
     mock_agent.run_turn = _capture_run_turn
 
-    def agent_factory(channel, task_id=None, persona=None):
+    def agent_factory(channel, task_id=None, persona=None, triggered_by=None):
         return mock_agent
 
     drive_loop = DriveLoop(agent_factory=agent_factory, config=config, settings=settings)
@@ -957,3 +957,141 @@ async def test_drive_loop_runs_agent_turn_from_cron(tmp_path: Path) -> None:
     assert "INITIATIVE TASK" in turn_inputs[0]
     assert "integration_test" in turn_inputs[0]
     assert "run integration check" in turn_inputs[0]
+
+
+# ---------------------------------------------------------------------------
+# DriveLoop — thread lifecycle (_finalise_thread)
+# ---------------------------------------------------------------------------
+
+
+def _make_thread_task(path: str = "threads/test-thread") -> AgentTask:
+    hex_ts = hex(int(time.time() * 1000))[2:]
+    return AgentTask(
+        task_id=f"task_{hex_ts}_thread",
+        title="thread task",
+        initiative_context="work on thread",
+        triggered_by=f"thread:{path}",
+        output_mode=OutputMode.AMBIENT,
+        priority=5,
+    )
+
+
+def _make_drive_loop_with_mimir(tmp_path: Path) -> tuple[DriveLoop, MagicMock, AsyncMock]:
+    journal = tmp_path / "queue.json"
+    config = _make_initiative_config(queue_journal_path=str(journal))
+    settings = Settings()
+    factory = MagicMock(return_value=MagicMock())
+    mock_mimir = AsyncMock()
+    mock_mimir.update_thread_state = AsyncMock()
+    mock_mimir.assign_thread_owner = AsyncMock()
+    loop = DriveLoop(agent_factory=factory, config=config, settings=settings, mimir=mock_mimir)
+    return loop, factory, mock_mimir
+
+
+@pytest.mark.asyncio
+async def test_finalise_thread_success_closes_thread(tmp_path: Path) -> None:
+    """Thread-triggered task success → state becomes closed."""
+    from niuu.domain.mimir import ThreadState
+
+    loop, factory, mock_mimir = _make_drive_loop_with_mimir(tmp_path)
+
+    mock_agent = AsyncMock()
+    mock_agent.run_turn = AsyncMock(return_value=None)
+    factory.return_value = mock_agent
+
+    task = _make_thread_task("threads/my-thread")
+    await loop._run_task(task)
+
+    mock_mimir.update_thread_state.assert_awaited_once_with("threads/my-thread", ThreadState.closed)
+    mock_mimir.assign_thread_owner.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_finalise_thread_failure_reopens_and_releases(tmp_path: Path) -> None:
+    """Thread-triggered task failure → state returns to open, ownership released."""
+    from niuu.domain.mimir import ThreadState
+
+    loop, factory, mock_mimir = _make_drive_loop_with_mimir(tmp_path)
+
+    mock_agent = AsyncMock()
+    mock_agent.run_turn = AsyncMock(side_effect=RuntimeError("agent exploded"))
+    factory.return_value = mock_agent
+
+    task = _make_thread_task("threads/failing-thread")
+    await loop._run_task(task)
+
+    mock_mimir.update_thread_state.assert_awaited_once_with(
+        "threads/failing-thread", ThreadState.open
+    )
+    mock_mimir.assign_thread_owner.assert_awaited_once_with("threads/failing-thread", None)
+
+
+@pytest.mark.asyncio
+async def test_finalise_thread_skipped_for_non_thread_task(tmp_path: Path) -> None:
+    """Non-thread task (cron, event) → no thread lifecycle logic runs."""
+    loop, factory, mock_mimir = _make_drive_loop_with_mimir(tmp_path)
+
+    mock_agent = AsyncMock()
+    mock_agent.run_turn = AsyncMock(return_value=None)
+    factory.return_value = mock_agent
+
+    task = _make_task()  # triggered_by="cron:test"
+    await loop._run_task(task)
+
+    mock_mimir.update_thread_state.assert_not_awaited()
+    mock_mimir.assign_thread_owner.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_finalise_thread_mimir_error_is_logged_not_raised(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Mímir errors during finalisation → logged, not propagated."""
+    import logging
+
+    loop, factory, mock_mimir = _make_drive_loop_with_mimir(tmp_path)
+    mock_mimir.update_thread_state = AsyncMock(side_effect=Exception("mimir down"))
+
+    mock_agent = AsyncMock()
+    mock_agent.run_turn = AsyncMock(return_value=None)
+    factory.return_value = mock_agent
+
+    task = _make_thread_task("threads/error-thread")
+    with caplog.at_level(logging.WARNING, logger="ravn.drive_loop"):
+        await loop._run_task(task)  # must not raise
+
+    assert any("failed to finalise thread" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_finalise_thread_no_mimir_skips_gracefully(tmp_path: Path) -> None:
+    """Drive loop without mimir (None) → finalisation skipped gracefully."""
+    loop, factory = _make_drive_loop(tmp_path)  # no mimir
+
+    mock_agent = AsyncMock()
+    mock_agent.run_turn = AsyncMock(return_value=None)
+    factory.return_value = mock_agent
+
+    task = _make_thread_task("threads/no-mimir-thread")
+    # Should complete without error even though mimir is None
+    await loop._run_task(task)
+
+
+@pytest.mark.asyncio
+async def test_finalise_thread_on_cancelled_task(tmp_path: Path) -> None:
+    """Cancelled thread task → state returns to open, ownership released."""
+    from niuu.domain.mimir import ThreadState
+
+    loop, factory, mock_mimir = _make_drive_loop_with_mimir(tmp_path)
+
+    mock_agent = AsyncMock()
+    mock_agent.run_turn = AsyncMock(side_effect=asyncio.CancelledError())
+    factory.return_value = mock_agent
+
+    task = _make_thread_task("threads/cancelled-thread")
+    await loop._run_task(task)
+
+    mock_mimir.update_thread_state.assert_awaited_once_with(
+        "threads/cancelled-thread", ThreadState.open
+    )
+    mock_mimir.assign_thread_owner.assert_awaited_once_with("threads/cancelled-thread", None)

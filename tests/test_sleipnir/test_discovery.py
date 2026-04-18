@@ -251,8 +251,15 @@ def test_service_entry_is_frozen():
 # NngPublisher / NngSubscriber with discovery — unit tests (mocked pynng)
 # ---------------------------------------------------------------------------
 
+# These tests require pynng; skip them individually when it is not installed.
+try:
+    import pynng as _pynng_module  # noqa: F401
 
-pynng = pytest.importorskip("pynng", reason="pynng not installed; skipping nng tests")
+    _pynng_available = True
+except ImportError:
+    _pynng_available = False
+
+_skip_without_pynng = pytest.mark.skipif(not _pynng_available, reason="pynng not installed")
 
 
 @pytest.fixture
@@ -285,6 +292,7 @@ def mock_registry() -> MagicMock:
     return reg
 
 
+@_skip_without_pynng
 @pytest.mark.asyncio
 async def test_publisher_registers_on_start(short_ipc):
     """NngPublisher calls registry.register() after binding."""
@@ -297,6 +305,7 @@ async def test_publisher_registers_on_start(short_ipc):
         reg.register.assert_called_once_with("svc-a", address)
 
 
+@_skip_without_pynng
 @pytest.mark.asyncio
 async def test_publisher_deregisters_on_stop(short_ipc):
     """NngPublisher calls registry.deregister() on stop."""
@@ -311,6 +320,7 @@ async def test_publisher_deregisters_on_stop(short_ipc):
     reg.deregister.assert_called_once_with("svc-a")
 
 
+@_skip_without_pynng
 @pytest.mark.asyncio
 async def test_publisher_no_registry_no_registration(short_ipc):
     """NngPublisher without registry does not attempt registration."""
@@ -322,6 +332,7 @@ async def test_publisher_no_registry_no_registration(short_ipc):
         pass  # no AttributeError expected
 
 
+@_skip_without_pynng
 @pytest.mark.asyncio
 async def test_subscriber_dials_discovered_addresses(short_ipc):
     """NngSubscriber with registry dials all discovered sockets."""
@@ -352,6 +363,7 @@ async def test_subscriber_dials_discovered_addresses(short_ipc):
         pub_b.close()
 
 
+@_skip_without_pynng
 @pytest.mark.asyncio
 async def test_subscriber_falls_back_to_address_when_registry_empty(short_ipc):
     """NngSubscriber falls back to address when registry returns no services."""
@@ -374,6 +386,7 @@ async def test_subscriber_falls_back_to_address_when_registry_empty(short_ipc):
         pub.close()
 
 
+@_skip_without_pynng
 @pytest.mark.asyncio
 async def test_subscriber_no_registry_uses_address(short_ipc):
     """NngSubscriber without registry dials the single address (baseline)."""
@@ -392,6 +405,7 @@ async def test_subscriber_no_registry_uses_address(short_ipc):
         pub.close()
 
 
+@_skip_without_pynng
 @pytest.mark.asyncio
 async def test_transport_passes_registry_to_both_components(short_ipc):
     """NngTransport propagates service_id and registry to publisher and subscriber."""
