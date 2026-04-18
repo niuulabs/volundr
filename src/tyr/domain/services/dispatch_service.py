@@ -7,6 +7,7 @@ auto-continue and future consumers without an HTTP request context.
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import json
 import logging
@@ -838,23 +839,20 @@ class DispatchService:
             )
 
         # Resolve personas — flow snapshot takes precedence over config defaults
-        personas = list(self._config.flock_default_personas)
+        personas = copy.deepcopy(self._config.flock_default_personas)
         flow_name_for_log = ""
         mimir_url = self._config.flock_mimir_hosted_url
         sleipnir_urls = list(self._config.flock_sleipnir_publish_urls)
 
-        if flock_flow and self._flow_provider is not None:
-            flow = self._flow_provider.get(flock_flow)
-            if flow is not None:
-                flow_name_for_log = flow.name
-                # SNAPSHOT: expand flow personas inline
-                personas = [p.to_dict() for p in flow.personas]
-                if flow.mimir_hosted_url:
-                    mimir_url = flow.mimir_hosted_url
-                if flow.sleipnir_publish_urls:
-                    sleipnir_urls = list(flow.sleipnir_publish_urls)
-            else:
-                logger.warning("Flock flow '%s' not found, using default personas", flock_flow)
+        flow = self._flow_provider.get(flock_flow) if flock_flow and self._flow_provider else None
+        if flow is None and flock_flow:
+            logger.warning("Flock flow '%s' not found, using default personas", flock_flow)
+        if flow is not None:
+            flow_name_for_log = flow.name
+            personas = [p.to_dict() for p in flow.personas]
+            mimir_url = flow.mimir_hosted_url or mimir_url
+            if flow.sleipnir_publish_urls:
+                sleipnir_urls = list(flow.sleipnir_publish_urls)
 
         # Apply per-dispatch persona overrides (precedence: dispatch > flow > defaults)
         if persona_overrides:

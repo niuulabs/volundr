@@ -1,6 +1,7 @@
 """Tests for KubernetesConfigMapFlockFlowProvider — mocked k8s client.
 
-Contract-test parity with ConfigFlockFlowProvider.
+Contract-test parity with ConfigFlockFlowProvider via shared contract suite,
+plus k8s-specific edge-case tests.
 """
 
 from __future__ import annotations
@@ -8,26 +9,15 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
 import yaml
 
+from tests.test_tyr.test_flock_flows.contract import (
+    FlockFlowProviderContract,
+    make_flow,
+)
 from tyr.adapters.flows.configmap import KubernetesConfigMapFlockFlowProvider
-from tyr.domain.flock_flow import FlockFlowConfig, FlockPersonaOverride
-from tyr.ports.flock_flow import FlockFlowProvider
-
-
-def _make_flow(name: str = "test-flow") -> FlockFlowConfig:
-    return FlockFlowConfig(
-        name=name,
-        description="A test flow",
-        personas=[
-            FlockPersonaOverride(name="coordinator"),
-            FlockPersonaOverride(name="reviewer", llm={"model": "claude-opus-4-6"}),
-        ],
-        mesh_transport="nng",
-        mimir_hosted_url="http://mimir:8080",
-        sleipnir_publish_urls=["http://sleipnir:4222"],
-        max_concurrent_tasks=5,
-    )
+from tyr.domain.flock_flow import FlockFlowConfig
 
 
 def _make_configmap(flows: list[dict] | None = None) -> SimpleNamespace:
@@ -38,13 +28,24 @@ def _make_configmap(flows: list[dict] | None = None) -> SimpleNamespace:
     return SimpleNamespace(data=data)
 
 
+def _make_stateful_client(initial_flows: list[dict] | None = None) -> MagicMock:
+    """Build a mock k8s client that reflects writes back to reads."""
+    client = MagicMock()
+    cm = _make_configmap(initial_flows or [])
+
+    def _patch(*, name: str, namespace: str, body: dict) -> None:
+        cm.data = body["data"]
+
+    client.read_namespaced_config_map.return_value = cm
+    client.patch_namespaced_config_map.side_effect = _patch
+    return client
+
+
 def _make_provider(
     flows: list[dict] | None = None,
 ) -> tuple[KubernetesConfigMapFlockFlowProvider, MagicMock]:
     """Build a provider with a mocked k8s client pre-loaded with flows."""
-    client = MagicMock()
-    cm = _make_configmap(flows)
-    client.read_namespaced_config_map.return_value = cm
+    client = _make_stateful_client(flows)
     provider = KubernetesConfigMapFlockFlowProvider(
         namespace="tyr",
         configmap_name="flock-flows",
@@ -53,51 +54,31 @@ def _make_provider(
     return provider, client
 
 
-class TestKubernetesConfigMapFlockFlowProvider:
-    """Contract tests — same interface as ConfigFlockFlowProvider."""
+class TestKubernetesConfigMapFlockFlowProviderContract(FlockFlowProviderContract):
+    """Run the shared contract suite against the ConfigMap provider."""
 
-    def test_implements_port(self) -> None:
-        provider, _ = _make_provider()
-        assert isinstance(provider, FlockFlowProvider)
+    @pytest.fixture()
+    def provider(self) -> KubernetesConfigMapFlockFlowProvider:
+        client = _make_stateful_client([])
+        return KubernetesConfigMapFlockFlowProvider(
+            namespace="tyr",
+            configmap_name="flock-flows",
+            kube_client=client,
+        )
 
-    def test_empty_configmap(self) -> None:
-        provider, _ = _make_provider(flows=[])
-        assert provider.list() == []
-        assert provider.get("nonexistent") is None
 
-    def test_save_and_get(self) -> None:
+class TestKubernetesConfigMapFlockFlowProviderSpecific:
+    """K8s-specific tests beyond the shared contract."""
+
+    def test_save_calls_patch(self) -> None:
         provider, client = _make_provider(flows=[])
-        flow = _make_flow()
-        provider.save(flow)
-
-        # Verify patch was called
+        provider.save(make_flow())
         client.patch_namespaced_config_map.assert_called_once()
         call_kwargs = client.patch_namespaced_config_map.call_args
         assert call_kwargs.kwargs["name"] == "flock-flows"
 
-    def test_get_from_existing(self) -> None:
-        flow_data = [_make_flow("existing").to_dict()]
-        provider, _ = _make_provider(flows=flow_data)
-
-        result = provider.get("existing")
-        assert result is not None
-        assert result.name == "existing"
-        assert len(result.personas) == 2
-
-    def test_get_nonexistent(self) -> None:
-        provider, _ = _make_provider(flows=[_make_flow().to_dict()])
-        assert provider.get("nonexistent") is None
-
-    def test_list(self) -> None:
-        flow_data = [_make_flow("flow-a").to_dict(), _make_flow("flow-b").to_dict()]
-        provider, _ = _make_provider(flows=flow_data)
-
-        flows = provider.list()
-        names = {f.name for f in flows}
-        assert names == {"flow-a", "flow-b"}
-
     def test_save_overwrites_existing(self) -> None:
-        flow_data = [_make_flow("test-flow").to_dict()]
+        flow_data = [make_flow("test-flow").to_dict()]
         provider, client = _make_provider(flows=flow_data)
 
         updated = FlockFlowConfig(name="test-flow", description="Updated")
@@ -109,17 +90,17 @@ class TestKubernetesConfigMapFlockFlowProvider:
         assert saved_data[0]["description"] == "Updated"
 
     def test_save_appends_new(self) -> None:
-        flow_data = [_make_flow("existing").to_dict()]
+        flow_data = [make_flow("existing").to_dict()]
         provider, client = _make_provider(flows=flow_data)
 
-        provider.save(_make_flow("new-flow"))
+        provider.save(make_flow("new-flow"))
 
         call_body = client.patch_namespaced_config_map.call_args.kwargs["body"]
         saved_data = yaml.safe_load(call_body["data"]["flows.yaml"])
         assert len(saved_data) == 2
 
-    def test_delete_existing(self) -> None:
-        flow_data = [_make_flow("to-delete").to_dict()]
+    def test_delete_calls_patch(self) -> None:
+        flow_data = [make_flow("to-delete").to_dict()]
         provider, client = _make_provider(flows=flow_data)
 
         assert provider.delete("to-delete") is True
@@ -128,10 +109,10 @@ class TestKubernetesConfigMapFlockFlowProvider:
         saved_data = yaml.safe_load(call_body["data"]["flows.yaml"])
         assert saved_data == []
 
-    def test_delete_nonexistent(self) -> None:
-        provider, client = _make_provider(flows=[])
-        assert provider.delete("nonexistent") is False
-        client.patch_namespaced_config_map.assert_not_called()
+    def test_no_client_raises_on_save(self) -> None:
+        provider = KubernetesConfigMapFlockFlowProvider(kube_client=None)
+        with pytest.raises(RuntimeError, match="No k8s client"):
+            provider.save(make_flow())
 
     def test_no_client_returns_empty(self) -> None:
         provider = KubernetesConfigMapFlockFlowProvider(kube_client=None)
@@ -141,6 +122,12 @@ class TestKubernetesConfigMapFlockFlowProvider:
     def test_no_client_delete_returns_false(self) -> None:
         provider = KubernetesConfigMapFlockFlowProvider(kube_client=None)
         assert provider.delete("anything") is False
+
+    def test_write_failure_propagates(self) -> None:
+        provider, client = _make_provider(flows=[])
+        client.patch_namespaced_config_map.side_effect = RuntimeError("k8s write error")
+        with pytest.raises(RuntimeError, match="k8s write error"):
+            provider.save(make_flow())
 
     def test_read_error_returns_empty(self) -> None:
         client = MagicMock()

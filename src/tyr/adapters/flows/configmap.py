@@ -67,24 +67,18 @@ class KubernetesConfigMapFlockFlowProvider(FlockFlowProvider):
             return []
 
     def _write_configmap(self, flows: list[dict]) -> None:
-        """Write flows YAML back to the ConfigMap."""
+        """Write flows YAML back to the ConfigMap.
+
+        Raises on failure so callers know the write did not persist.
+        """
         if self._client is None:
-            logger.error("No k8s client available; cannot write ConfigMap")
-            return
+            raise RuntimeError("No k8s client available; cannot write ConfigMap")
         body = {"data": {_DATA_KEY: yaml.dump(flows, default_flow_style=False)}}
-        try:
-            self._client.patch_namespaced_config_map(
-                name=self._configmap_name,
-                namespace=self._namespace,
-                body=body,
-            )
-        except Exception:
-            logger.error(
-                "Failed to write ConfigMap %s/%s",
-                self._namespace,
-                self._configmap_name,
-                exc_info=True,
-            )
+        self._client.patch_namespaced_config_map(
+            name=self._configmap_name,
+            namespace=self._namespace,
+            body=body,
+        )
 
     def get(self, name: str) -> FlockFlowConfig | None:
         for entry in self._read_configmap():

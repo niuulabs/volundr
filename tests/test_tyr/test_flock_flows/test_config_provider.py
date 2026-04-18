@@ -1,86 +1,26 @@
-"""Tests for ConfigFlockFlowProvider — YAML round-trip + runtime additions."""
+"""Tests for ConfigFlockFlowProvider — contract + YAML round-trip + runtime additions."""
 
 from __future__ import annotations
 
 import textwrap
 from pathlib import Path
 
+import pytest
+
+from tests.test_tyr.test_flock_flows.contract import (
+    FlockFlowProviderContract,
+    make_flow,
+)
 from tyr.adapters.flows.config import ConfigFlockFlowProvider
-from tyr.domain.flock_flow import FlockFlowConfig, FlockPersonaOverride
-from tyr.ports.flock_flow import FlockFlowProvider
+from tyr.domain.flock_flow import FlockFlowConfig
 
 
-def _make_flow(name: str = "test-flow") -> FlockFlowConfig:
-    return FlockFlowConfig(
-        name=name,
-        description="A test flow",
-        personas=[
-            FlockPersonaOverride(name="coordinator"),
-            FlockPersonaOverride(name="reviewer", llm={"model": "claude-opus-4-6"}),
-        ],
-        mesh_transport="nng",
-        mimir_hosted_url="http://mimir:8080",
-        sleipnir_publish_urls=["http://sleipnir:4222"],
-        max_concurrent_tasks=5,
-    )
+class TestConfigFlockFlowProvider(FlockFlowProviderContract):
+    """Runs the shared contract suite against ConfigFlockFlowProvider."""
 
-
-class TestConfigFlockFlowProvider:
-    """Contract tests for ConfigFlockFlowProvider."""
-
-    def test_implements_port(self) -> None:
-        provider = ConfigFlockFlowProvider()
-        assert isinstance(provider, FlockFlowProvider)
-
-    def test_empty_by_default(self) -> None:
-        provider = ConfigFlockFlowProvider()
-        assert provider.list() == []
-        assert provider.get("nonexistent") is None
-
-    def test_save_and_get(self) -> None:
-        provider = ConfigFlockFlowProvider()
-        flow = _make_flow()
-        provider.save(flow)
-
-        result = provider.get("test-flow")
-        assert result is not None
-        assert result.name == "test-flow"
-        assert result.description == "A test flow"
-        assert len(result.personas) == 2
-        assert result.personas[0].name == "coordinator"
-        assert result.personas[1].llm == {"model": "claude-opus-4-6"}
-        assert result.max_concurrent_tasks == 5
-
-    def test_save_overwrites(self) -> None:
-        provider = ConfigFlockFlowProvider()
-        provider.save(_make_flow())
-
-        updated = FlockFlowConfig(name="test-flow", description="Updated")
-        provider.save(updated)
-
-        result = provider.get("test-flow")
-        assert result is not None
-        assert result.description == "Updated"
-
-    def test_list(self) -> None:
-        provider = ConfigFlockFlowProvider()
-        provider.save(_make_flow("flow-a"))
-        provider.save(_make_flow("flow-b"))
-
-        flows = provider.list()
-        names = {f.name for f in flows}
-        assert names == {"flow-a", "flow-b"}
-
-    def test_delete_existing(self) -> None:
-        provider = ConfigFlockFlowProvider()
-        provider.save(_make_flow())
-
-        assert provider.delete("test-flow") is True
-        assert provider.get("test-flow") is None
-
-    def test_delete_nonexistent(self) -> None:
-        provider = ConfigFlockFlowProvider()
-        assert provider.delete("nonexistent") is False
+    @pytest.fixture()
+    def provider(self) -> ConfigFlockFlowProvider:
+        return ConfigFlockFlowProvider()
 
 
 class TestConfigFlockFlowProviderYAML:
@@ -133,7 +73,7 @@ class TestConfigFlockFlowProviderYAML:
         yaml_file.write_text(yaml_content)
 
         provider = ConfigFlockFlowProvider(path=str(yaml_file))
-        provider.save(_make_flow("runtime-flow"))
+        provider.save(make_flow("runtime-flow"))
 
         assert len(provider.list()) == 2
         assert provider.get("initial-flow") is not None
@@ -154,8 +94,8 @@ class TestConfigFlockFlowProviderYAML:
         assert provider.list() == []
 
     def test_yaml_round_trip(self, tmp_path: Path) -> None:
-        """Test that to_dict → from_dict round-trips correctly."""
-        original = _make_flow("roundtrip")
+        """Test that to_dict -> from_dict round-trips correctly."""
+        original = make_flow("roundtrip")
         d = original.to_dict()
         restored = FlockFlowConfig.from_dict(d)
 
