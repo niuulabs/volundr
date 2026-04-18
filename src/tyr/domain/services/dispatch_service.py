@@ -521,6 +521,13 @@ class DispatchService:
         """
         template = load_template(template_name, self._config.templates_dir, payload)
 
+        if template.flock_flow and self._flow_provider is not None:
+            if self._flow_provider.get(template.flock_flow) is None:
+                raise ValueError(
+                    f"flock_flow '{template.flock_flow}' not found — "
+                    "register the flow before referencing it in a pipeline"
+                )
+
         now = datetime.now(UTC)
         saga_id = uuid.uuid4()
         slug = _slugify(template.name)[:60]

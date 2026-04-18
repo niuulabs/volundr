@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from niuu.domain.llm_merge import concat_prompt_extras, merge_llm
+from niuu.domain.llm_merge import concat_prompt_extras, is_empty, merge_llm
 from tyr.domain.templates import TemplateRaid
 from tyr.ports.flock_flow import FlockFlowProvider
 
@@ -54,7 +54,7 @@ def merge_persona_override(flow_persona: dict, stage_override: dict) -> dict:
     for k, v in stage_override.items():
         if k in ("name", "llm", "system_prompt_extra"):
             continue
-        if v:
+        if not is_empty(v):
             result[k] = v
 
     return result

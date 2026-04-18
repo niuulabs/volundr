@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 _SECURITY_KEYS = frozenset({"allowed_tools", "forbidden_tools"})
 
 
-def _is_empty(value: object) -> bool:
+def is_empty(value: object) -> bool:
     """Return True when *value* should be treated as "inherit from below".
 
     ``None``, empty string, and integer zero mean "inherit".  ``False`` is
@@ -69,7 +69,7 @@ def merge_llm(
                     layer_name,
                 )
                 continue
-            if _is_empty(value):
+            if is_empty(value):
                 continue
             result[key] = value
 

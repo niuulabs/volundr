@@ -1425,18 +1425,17 @@ class TestFlockFlowPipelineDispatch:
         assert volundr.spawned[0].workload_config == {}
 
     @pytest.mark.asyncio
-    async def test_unknown_flow_falls_back_to_solo_dispatch(self):
-        """When flow is referenced but not found, dispatch falls back to solo."""
+    async def test_unknown_flow_raises_value_error(self):
+        """When flow is referenced but not registered, create_from_yaml raises ValueError."""
         provider = StubFlockFlowProvider()  # empty — flow not registered
         volundr = StubVolundrPort()
         executor, _, _ = _make_executor_with_flow(provider, volundr)
 
-        await executor.create_from_yaml(_FLOCK_FLOW_PIPELINE, auto_start=True)
+        with pytest.raises(ValueError, match="not found"):
+            await executor.create_from_yaml(_FLOCK_FLOW_PIPELINE, auto_start=True)
 
-        # Should still dispatch (not crash)
-        assert len(volundr.spawned) == 2
-        for req in volundr.spawned:
-            assert req.workload_type == "default"
+        # Nothing dispatched — error raised before dispatch
+        assert len(volundr.spawned) == 0
 
     @pytest.mark.asyncio
     async def test_flock_flow_stored_in_executor(self):
