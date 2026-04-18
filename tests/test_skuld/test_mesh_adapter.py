@@ -11,7 +11,7 @@ Covers:
 
 import asyncio
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -79,8 +79,11 @@ def mock_transport():
 
 @pytest.fixture
 def adapter(mock_mesh, mock_transport, mesh_config):
+    from niuu.mesh.participant import MeshParticipant
+
+    participant = MeshParticipant(mesh=mock_mesh, discovery=None, peer_id=mesh_config.peer_id)
     return SkuldMeshAdapter(
-        mesh=mock_mesh,
+        participant=participant,
         transport=mock_transport,
         config=mesh_config,
         session_id="test-session-42",
@@ -177,13 +180,15 @@ class TestSkuldMeshAdapterLifecycle:
 
     @pytest.mark.asyncio
     async def test_start_with_discovery(self, mock_mesh, mock_transport, mesh_config):
+        from niuu.mesh.participant import MeshParticipant
+
         discovery = AsyncMock()
+        participant = MeshParticipant(mesh=mock_mesh, discovery=discovery, peer_id="s1")
         adapter = SkuldMeshAdapter(
-            mesh=mock_mesh,
+            participant=participant,
             transport=mock_transport,
             config=mesh_config,
             session_id="s1",
-            discovery=discovery,
         )
         await adapter.start()
 
@@ -200,13 +205,15 @@ class TestSkuldMeshAdapterLifecycle:
 
     @pytest.mark.asyncio
     async def test_stop_with_discovery(self, mock_mesh, mock_transport, mesh_config):
+        from niuu.mesh.participant import MeshParticipant
+
         discovery = AsyncMock()
+        participant = MeshParticipant(mesh=mock_mesh, discovery=discovery, peer_id="s1")
         adapter = SkuldMeshAdapter(
-            mesh=mock_mesh,
+            participant=participant,
             transport=mock_transport,
             config=mesh_config,
             session_id="s1",
-            discovery=discovery,
         )
         await adapter.start()
         await adapter.stop()
@@ -231,26 +238,32 @@ class TestSkuldMeshAdapterLifecycle:
 
     @pytest.mark.asyncio
     async def test_peer_id_defaults_to_hostname(self, mock_mesh, mock_transport):
+        import socket
+
+        from niuu.mesh.participant import MeshParticipant
+
         cfg = MeshConfig(enabled=True, peer_id="")
+        participant = MeshParticipant(mesh=mock_mesh, discovery=None, peer_id="")
         adapter = SkuldMeshAdapter(
-            mesh=mock_mesh,
+            participant=participant,
             transport=mock_transport,
             config=cfg,
             session_id="s1",
         )
-        import socket
-
         assert adapter.peer_id == socket.gethostname()
 
     @pytest.mark.asyncio
     async def test_multiple_event_type_subscriptions(self, mock_mesh, mock_transport):
+        from niuu.mesh.participant import MeshParticipant
+
         cfg = MeshConfig(
             enabled=True,
             peer_id="s1",
             consumes_event_types=["code.requested", "review.requested"],
         )
+        participant = MeshParticipant(mesh=mock_mesh, discovery=None, peer_id="s1")
         adapter = SkuldMeshAdapter(
-            mesh=mock_mesh,
+            participant=participant,
             transport=mock_transport,
             config=cfg,
             session_id="s1",
@@ -363,13 +376,16 @@ class TestWorkRequestHandling:
     @pytest.mark.asyncio
     async def test_work_request_uses_config_default_timeout(self, mock_mesh, mock_transport):
         """When no timeout_s in message, use config.default_work_timeout_s."""
+        from niuu.mesh.participant import MeshParticipant
+
         cfg = MeshConfig(
             enabled=True,
             peer_id="s1",
             default_work_timeout_s=0.05,
         )
+        participant = MeshParticipant(mesh=mock_mesh, discovery=None, peer_id="s1")
         adapter = SkuldMeshAdapter(
-            mesh=mock_mesh,
+            participant=participant,
             transport=mock_transport,
             config=cfg,
             session_id="s1",
@@ -611,13 +627,16 @@ class TestOutcomeEventHandling:
     @pytest.mark.asyncio
     async def test_outcome_uses_config_response_urgency(self, mock_mesh, mock_transport):
         """Published outcome event uses config.default_response_urgency."""
+        from niuu.mesh.participant import MeshParticipant
+
         cfg = MeshConfig(
             enabled=True,
             peer_id="urg-test",
             default_response_urgency=0.7,
         )
+        participant = MeshParticipant(mesh=mock_mesh, discovery=None, peer_id="urg-test")
         adapter = SkuldMeshAdapter(
-            mesh=mock_mesh,
+            participant=participant,
             transport=mock_transport,
             config=cfg,
             session_id="s1",
@@ -726,8 +745,11 @@ class TestMeshRoundTrip:
             consumes_event_types=["code.requested"],
         )
 
+        from niuu.mesh.participant import MeshParticipant
+
+        participant = MeshParticipant(mesh=mesh, discovery=None, peer_id="skuld-integration")
         adapter = SkuldMeshAdapter(
-            mesh=mesh,
+            participant=participant,
             transport=transport,
             config=config,
             session_id="int-session",
@@ -891,55 +913,6 @@ class TestBrokerMeshIntegration:
         assert b._mesh_adapter is None
 
     @pytest.mark.asyncio
-    async def test_build_mesh_in_process(self, tmp_path):
-        from skuld.broker import Broker
-
-        settings = SkuldSettings(
-            session={"id": "s1", "workspace_dir": str(tmp_path)},
-            mesh={"enabled": True, "peer_id": "test", "transport": "in_process"},
-        )
-        b = Broker(settings=settings)
-        mesh = b._build_mesh(settings.mesh)
-        assert mesh is not None
-
-    @pytest.mark.asyncio
-    async def test_build_mesh_with_adapters_list_falls_back_to_in_process(self, tmp_path):
-        """adapters list in MeshConfig is for discovery, not mesh transport.
-
-        _build_mesh uses the transport field (nng / in_process).  When NNG is
-        unavailable it falls back to in-process, which always succeeds.
-        """
-        from skuld.broker import Broker
-
-        settings = SkuldSettings(
-            session={"id": "s1", "workspace_dir": str(tmp_path)},
-            mesh={
-                "enabled": True,
-                "peer_id": "test",
-                "adapters": [
-                    {
-                        "adapter": "ravn.adapters.discovery.static.StaticDiscoveryAdapter",
-                    }
-                ],
-            },
-        )
-        b = Broker(settings=settings)
-        mesh = b._build_mesh(settings.mesh)
-        # Falls back to in-process when NNG unavailable — always non-None
-        assert mesh is not None
-
-    @pytest.mark.asyncio
-    async def test_build_discovery_returns_none(self, tmp_path):
-        from skuld.broker import Broker
-
-        settings = SkuldSettings(
-            session={"id": "s1", "workspace_dir": str(tmp_path)},
-            mesh={"enabled": True},
-        )
-        b = Broker(settings=settings)
-        assert b._build_discovery(settings.mesh) is None
-
-    @pytest.mark.asyncio
     async def test_start_mesh_adapter_integrates(self, tmp_path):
         """Test _start_mesh_adapter with in_process transport."""
         from skuld.broker import Broker
@@ -966,4 +939,68 @@ class TestBrokerMeshIntegration:
         assert b._mesh_adapter is not None
         assert b._mesh_adapter.is_running is True
 
+        await b._mesh_adapter.stop()
+
+    @pytest.mark.asyncio
+    async def test_start_mesh_adapter_nng_builds_sleipnir(self, tmp_path):
+        """_start_mesh_adapter with nng transport builds SleipnirMeshAdapter (NIU-634)."""
+        from skuld.broker import Broker
+
+        settings = SkuldSettings(
+            session={"id": "s1", "workspace_dir": str(tmp_path)},
+            transport="subprocess",
+            mesh={"enabled": True, "peer_id": "test-peer", "transport": "nng"},
+        )
+        b = Broker(settings=settings)
+        b._transport = MagicMock()
+
+        mock_nng = MagicMock()
+        mock_mesh = MagicMock()
+        mock_mesh.start = AsyncMock()
+        mock_mesh.stop = AsyncMock()
+        mock_mesh.subscribe = AsyncMock()
+        mock_mesh.unsubscribe = AsyncMock()
+
+        with (
+            patch(
+                "niuu.mesh.transport_builder.build_nng_transport",
+                return_value=mock_nng,
+            ),
+            patch(
+                "ravn.adapters.mesh.sleipnir_mesh.SleipnirMeshAdapter",
+                return_value=mock_mesh,
+            ),
+            patch("skuld.broker.build_discovery_adapters", return_value=None),
+            patch("niuu.mesh.cluster.read_cluster_pub_addresses", return_value=[]),
+        ):
+            await b._start_mesh_adapter()
+
+        assert b._mesh_adapter is not None
+        assert b._mesh_adapter.is_running is True
+        await b._mesh_adapter.stop()
+
+    @pytest.mark.asyncio
+    async def test_start_mesh_adapter_nng_import_error_falls_back(self, tmp_path):
+        """_start_mesh_adapter falls back to in-process when nng raises ImportError."""
+        from skuld.broker import Broker
+
+        settings = SkuldSettings(
+            session={"id": "s1", "workspace_dir": str(tmp_path)},
+            transport="subprocess",
+            mesh={"enabled": True, "peer_id": "test-peer", "transport": "nng"},
+        )
+        b = Broker(settings=settings)
+        b._transport = MagicMock()
+
+        with (
+            patch(
+                "niuu.mesh.transport_builder.build_nng_transport",
+                side_effect=ImportError("nng not available"),
+            ),
+            patch("skuld.broker.build_discovery_adapters", return_value=None),
+        ):
+            await b._start_mesh_adapter()
+
+        assert b._mesh_adapter is not None
+        assert b._mesh_adapter.is_running is True
         await b._mesh_adapter.stop()

@@ -3,6 +3,8 @@
 Gives Skuld a mesh identity so it can participate in a ravn flock as a peer.
 Subscribes to task topics and feeds received prompts to the CLI transport.
 Results (including outcome blocks) are published back as response events.
+
+NIU-634: wired to use niuu.mesh.MeshParticipant for lifecycle management.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from niuu.domain.outcome import parse_outcome_block
+from niuu.mesh.participant import MeshParticipant
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.ports.mesh import MeshPort
 from skuld.config import MeshConfig
@@ -28,24 +31,23 @@ class SkuldMeshAdapter:
     """Bridge between the ravn mesh and the CLI transport.
 
     Lifecycle:
-        start() — register with discovery, subscribe to task topics
-        stop()  — unsubscribe, deregister from discovery
+        start() — start participant (mesh + discovery), subscribe to task topics
+        stop()  — unsubscribe, stop participant (mesh + discovery)
     """
 
     def __init__(
         self,
-        mesh: MeshPort,
+        participant: MeshParticipant,
         transport: CLITransport,
         config: MeshConfig,
         session_id: str,
-        discovery: Any | None = None,
     ) -> None:
-        self._mesh = mesh
+        self._participant = participant
+        self._mesh: MeshPort | None = participant.mesh
         self._transport = transport
         self._config = config
         self._session_id = session_id
-        self._discovery = discovery
-        self._peer_id = config.peer_id or socket.gethostname()
+        self._peer_id = participant.peer_id or config.peer_id or socket.gethostname()
         self._running = False
         self._pending_responses: dict[str, asyncio.Future[str]] = {}
         self._execute_lock = asyncio.Lock()
@@ -68,26 +70,23 @@ class SkuldMeshAdapter:
         return getattr(self._mesh, "subscriber", None)
 
     async def start(self) -> None:
-        """Register with discovery and subscribe to task topics."""
+        """Start participant (mesh + discovery) and subscribe to task topics."""
         if self._running:
             return
 
-        await self._mesh.start()
-        logger.info("mesh adapter: mesh transport started (peer_id=%s)", self._peer_id)
-
-        if self._discovery is not None:
-            await self._discovery.start()
-            logger.info("mesh adapter: discovery started")
+        await self._participant.start()
+        logger.info("mesh adapter: participant started (peer_id=%s)", self._peer_id)
 
         # Set up RPC handler for work_request messages
-        if hasattr(self._mesh, "set_rpc_handler"):
+        if self._mesh is not None and hasattr(self._mesh, "set_rpc_handler"):
             self._mesh.set_rpc_handler(self._handle_rpc)
             logger.info("mesh adapter: RPC handler registered")
 
         # Subscribe to consumed event types
-        for event_type in self._config.consumes_event_types:
-            await self._mesh.subscribe(event_type, self._handle_outcome_event)
-            logger.info("mesh adapter: subscribed to topic %r", event_type)
+        if self._mesh is not None:
+            for event_type in self._config.consumes_event_types:
+                await self._mesh.subscribe(event_type, self._handle_outcome_event)
+                logger.info("mesh adapter: subscribed to topic %r", event_type)
 
         self._running = True
         logger.info(
@@ -98,14 +97,15 @@ class SkuldMeshAdapter:
         )
 
     async def stop(self) -> None:
-        """Unsubscribe from topics and deregister from discovery."""
+        """Unsubscribe from topics and stop participant (mesh + discovery)."""
         if not self._running:
             return
 
         self._running = False
 
-        for event_type in self._config.consumes_event_types:
-            await self._mesh.unsubscribe(event_type)
+        if self._mesh is not None:
+            for event_type in self._config.consumes_event_types:
+                await self._mesh.unsubscribe(event_type)
 
         # Cancel any pending response futures
         for fut in self._pending_responses.values():
@@ -113,10 +113,7 @@ class SkuldMeshAdapter:
                 fut.cancel()
         self._pending_responses.clear()
 
-        await self._mesh.stop()
-
-        if self._discovery is not None:
-            await self._discovery.stop()
+        await self._participant.stop()
 
         logger.info("mesh adapter: stopped (peer_id=%s)", self._peer_id)
 
@@ -293,6 +290,7 @@ class SkuldMeshAdapter:
             session_id=self._session_id,
         )
 
-        topic = f"{self._config.persona}.completed"
-        await self._mesh.publish(response_event, topic=topic)
-        logger.info("mesh adapter: published response to topic %r", topic)
+        if self._mesh is not None:
+            topic = f"{self._config.persona}.completed"
+            await self._mesh.publish(response_event, topic=topic)
+            logger.info("mesh adapter: published response to topic %r", topic)
