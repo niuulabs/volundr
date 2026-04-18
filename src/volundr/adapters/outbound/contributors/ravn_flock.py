@@ -22,6 +22,7 @@ from typing import Any
 
 import yaml
 
+from niuu.domain.llm_merge import _SECURITY_KEYS
 from niuu.mesh import nng_gateway_port_for as _gateway_port_for
 from niuu.mesh import nng_ports_for as _ports_for
 from volundr.domain.models import ForgeProfile, PodSpecAdditions, Session, WorkspaceTemplate
@@ -42,6 +43,43 @@ _MIMIR_MOUNT_PATH = "/mimir/local"
 _WORKSPACE_VOLUME_NAME = "workspace"
 _WORKSPACE_MOUNT_PATH = "/workspace"
 _RAVN_IMAGE_DEFAULT = "ghcr.io/niuulabs/ravn:latest"
+
+
+def _normalize_personas(raw: list) -> list[dict]:
+    """Normalize personas to list[dict].
+
+    Accepts both legacy ``list[str]`` and new ``list[dict]`` with per-persona
+    overrides.  Mixed lists (some strings, some dicts) are also supported.
+
+    Security keys (``allowed_tools``, ``forbidden_tools``) are stripped with
+    a WARN log — they are not overridable at the workload_config layer.
+    """
+    result: list[dict] = []
+    for entry in raw:
+        if isinstance(entry, str):
+            result.append({"name": entry})
+            continue
+
+        if not isinstance(entry, dict):
+            logger.warning("ravn_flock: skipping non-str/dict persona entry: %r", entry)
+            continue
+
+        if "name" not in entry:
+            logger.warning("ravn_flock: skipping persona dict without 'name': %r", entry)
+            continue
+
+        cleaned = dict(entry)
+        for security_key in _SECURITY_KEYS:
+            if security_key in cleaned:
+                logger.warning(
+                    "ravn_flock: dropping security key %r from persona %r — "
+                    "not overridable at the workload_config layer",
+                    security_key,
+                    cleaned["name"],
+                )
+                del cleaned[security_key]
+        result.append(cleaned)
+    return result
 
 
 def _build_ravn_config(
@@ -182,13 +220,18 @@ class RavnFlockContributor(SessionContributor):
             if source is None or source.workload_type != "ravn_flock":
                 return SessionContribution()
             wc = source.workload_config
-        personas: list[str] = list(wc.get("personas", []))
+        raw_personas: list = list(wc.get("personas", []))
 
-        if not personas:
+        if not raw_personas:
             logger.warning(
                 "ravn_flock workload_config has no personas — skipping flock contribution"
             )
             return SessionContribution()
+
+        # Normalize personas to list[dict] — accept both legacy list[str]
+        # and new list[dict] with per-persona overrides.
+        persona_dicts: list[dict] = _normalize_personas(raw_personas)
+        personas: list[str] = [p["name"] for p in persona_dicts]
 
         mesh_cfg: dict = wc.get("mesh", {})
         mimir_cfg: dict = wc.get("mimir", {})
