@@ -22,6 +22,7 @@ from typing import Any
 
 import yaml
 
+from niuu.domain.llm_merge import _SECURITY_KEYS
 from niuu.mesh import nng_gateway_port_for as _gateway_port_for
 from niuu.mesh import nng_ports_for as _ports_for
 from volundr.domain.models import ForgeProfile, PodSpecAdditions, Session, WorkspaceTemplate
@@ -68,7 +69,7 @@ def _normalize_personas(raw: list) -> list[dict]:
             continue
 
         cleaned = dict(entry)
-        for security_key in ("allowed_tools", "forbidden_tools"):
+        for security_key in _SECURITY_KEYS:
             if security_key in cleaned:
                 logger.warning(
                     "ravn_flock: dropping security key %r from persona %r — "

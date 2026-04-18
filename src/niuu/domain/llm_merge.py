@@ -34,7 +34,7 @@ def _is_empty(value: object) -> bool:
         return True
     if value == "":
         return True
-    if value is not False and value == 0:
+    if type(value) is int and value == 0:
         return True
     return False
 

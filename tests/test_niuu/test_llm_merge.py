@@ -116,6 +116,13 @@ class TestMergeLlmInheritance:
         )
         assert result["thinking_enabled"] is False
 
+    def test_float_zero_is_not_empty(self):
+        result = merge_llm(
+            defaults={"temperature": 0.7},
+            global_override={"temperature": 0.0},
+        )
+        assert result["temperature"] == 0.0
+
     def test_negative_number_is_not_empty(self):
         """Negative numbers are meaningful, not treated as empty."""
         result = merge_llm(
