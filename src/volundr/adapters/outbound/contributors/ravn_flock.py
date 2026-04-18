@@ -89,19 +89,27 @@ def _normalize_personas(raw: list) -> list[dict]:
 
 
 def _build_ravn_config(
-    index: int,
+    *,
     persona: str,
+    persona_override: dict,
+    global_llm: dict | None,
+    index: int,
     peer_id: str,
     base_port: int,
     all_personas: list[str],
     skuld_peer_id: str,
     mimir_hosted_url: str | None,
     sleipnir_publish_urls: list[str],
-    max_concurrent_tasks: int,
+    global_max_concurrent_tasks: int = _DEFAULT_MAX_CONCURRENT_TASKS,
     mesh_host: str = "0.0.0.0",
-    llm_config: dict | None = None,
 ) -> str:
-    """Generate the ravn daemon YAML config for a single flock node."""
+    """Generate the ravn daemon YAML config for a single flock node.
+
+    Per-persona overrides from *persona_override* are merged on top of
+    *global_llm* via :func:`niuu.domain.llm_merge.merge_llm`.  The resulting
+    effective LLM config, system_prompt_extra, and iteration_budget are all
+    embedded in the sidecar YAML so that ravn can apply them at runtime.
+    """
     pub, rep, _hs = _ports_for(index, base_port)
     gw = _gateway_port_for(index, base_port)
 
@@ -131,6 +139,8 @@ def _build_ravn_config(
             ]
         )
 
+    max_tasks = persona_override.get("max_concurrent_tasks") or global_max_concurrent_tasks
+
     config: dict[str, Any] = {
         "persona": persona,
         "mesh": {
@@ -153,7 +163,7 @@ def _build_ravn_config(
         },
         "initiative": {
             "enabled": True,
-            "max_concurrent_tasks": max_concurrent_tasks,
+            "max_concurrent_tasks": max_tasks,
         },
         "mimir": {
             "enabled": True,
@@ -166,8 +176,29 @@ def _build_ravn_config(
         "logging": {"level": "INFO"},
     }
 
-    if llm_config:
-        config["llm"] = llm_config
+    # Merge LLM config: global override → per-persona override (last wins).
+    effective_llm = merge_llm(
+        defaults=None,
+        global_override=global_llm,
+        persona_override=persona_override.get("llm"),
+    )
+    if effective_llm:
+        config["llm"] = effective_llm
+
+    # Per-persona behavioral overrides — applied by ravn at persona load time.
+    # Both system_prompt_extra and iteration_budget must land in persona_overrides
+    # so that PersonaOverridesConfig (ravn/config.py) picks them up via pydantic.
+    # iteration_budget is also mirrored to initiative for future initiative-level use.
+    po: dict = {}
+    system_prompt_extra = persona_override.get("system_prompt_extra") or ""
+    if system_prompt_extra.strip():
+        po["system_prompt_extra"] = system_prompt_extra
+    budget = persona_override.get("iteration_budget") or 0
+    if budget:
+        po["iteration_budget"] = int(budget)
+        config["initiative"]["iteration_budget"] = int(budget)
+    if po:
+        config["persona_overrides"] = po
 
     if sleipnir_publish_urls:
         config["sleipnir"] = {
@@ -246,8 +277,10 @@ class RavnFlockContributor(SessionContributor):
         mimir_hosted_url: str | None = mimir_cfg.get("hosted_url")
         sleipnir_publish_urls: list[str] = sleipnir_cfg.get("publish_urls", [])
         mesh_transport: str = mesh_cfg.get("transport", "nng")
-        max_concurrent_tasks: int = wc.get("max_concurrent_tasks", _DEFAULT_MAX_CONCURRENT_TASKS)
-        llm_config: dict | None = wc.get("llm_config") or None
+        global_max_concurrent_tasks: int = wc.get(
+            "max_concurrent_tasks", _DEFAULT_MAX_CONCURRENT_TASKS
+        )
+        global_llm: dict | None = wc.get("llm_config") or None
 
         values, pod_spec = self._build_flock_spec(
             session=session,
@@ -255,8 +288,8 @@ class RavnFlockContributor(SessionContributor):
             mesh_transport=mesh_transport,
             mimir_hosted_url=mimir_hosted_url,
             sleipnir_publish_urls=sleipnir_publish_urls,
-            max_concurrent_tasks=max_concurrent_tasks,
-            llm_config=llm_config,
+            global_max_concurrent_tasks=global_max_concurrent_tasks,
+            global_llm=global_llm,
         )
 
         return SessionContribution(values=values, pod_spec=pod_spec)
@@ -285,12 +318,12 @@ class RavnFlockContributor(SessionContributor):
         mesh_transport: str,
         mimir_hosted_url: str | None,
         sleipnir_publish_urls: list[str],
-        max_concurrent_tasks: int,
-        llm_config: dict | None = None,
+        global_max_concurrent_tasks: int,
+        global_llm: dict | None = None,
     ) -> tuple[dict[str, Any], PodSpecAdditions]:
         session_id = str(session.id)
         base_port = self._base_port
-        personas: list[str] = [p["name"] for p in persona_dicts]
+        all_personas = [pd["name"] for pd in persona_dicts]
 
         # Skuld (index 0) + ravn nodes start at index 1
         skuld_peer_id = f"skuld-{session_id[:8]}"
@@ -332,28 +365,19 @@ class RavnFlockContributor(SessionContributor):
             pub, rep, hs = _ports_for(ravn_index, base_port)
             gw = _gateway_port_for(ravn_index, base_port)
 
-            # Merge global llm_config with per-persona llm override (last wins).
-            per_persona_llm = persona_dict.get("llm") or None
-            effective_llm: dict | None = (
-                merge_llm(
-                    global_override=llm_config or None,
-                    persona_override=per_persona_llm,
-                )
-                or None
-            )
-
             config_yaml = _build_ravn_config(
-                index=ravn_index,
                 persona=persona,
+                persona_override=persona_dict,
+                global_llm=global_llm,
+                index=ravn_index,
                 peer_id=peer_id,
                 base_port=base_port,
-                all_personas=personas,
+                all_personas=all_personas,
                 skuld_peer_id=skuld_peer_id,
                 mimir_hosted_url=mimir_hosted_url,
                 sleipnir_publish_urls=sleipnir_publish_urls,
-                max_concurrent_tasks=max_concurrent_tasks,
+                global_max_concurrent_tasks=global_max_concurrent_tasks,
                 mesh_host=self._mesh_host,
-                llm_config=effective_llm,
             )
 
             # Per-sidecar emptyDir volume for the mounted config file
@@ -443,7 +467,7 @@ class RavnFlockContributor(SessionContributor):
             "ravn_flock: session=%s skuld peer=%s ravn personas=%s base_port=%d",
             session_id[:8],
             skuld_peer_id,
-            personas,
+            all_personas,
             base_port,
         )
 

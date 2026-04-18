@@ -825,6 +825,17 @@ def _resolve_persona(
         typer.echo(f"Warning: persona '{name}' not found — using defaults.", err=True)
         return None
 
+    # Apply per-sidecar overrides injected by Volundr at flock dispatch time.
+    # These live in settings.persona_overrides and are only present when the
+    # sidecar YAML was generated with per-persona system_prompt_extra /
+    # iteration_budget overrides (NIU-638).
+    if settings is not None:
+        from ravn.adapters.personas.overrides import apply_config_overrides  # noqa: PLC0415
+
+        overrides = settings.persona_overrides.model_dump(exclude_defaults=True)
+        if overrides:
+            persona = apply_config_overrides(persona, overrides)
+
     if project_config is not None:
         # merge() is a pure data transform on PersonaConfig + ProjectConfig,
         # not adapter-specific — safe to call on the concrete class directly.
