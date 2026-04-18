@@ -2355,6 +2355,35 @@ class ProfileSourceConfig(BaseModel):
     )
 
 
+class PersonaOverridesConfig(BaseModel):
+    """Per-sidecar persona overrides injected by Volundr at flock dispatch time.
+
+    Volundr embeds this block into each sidecar's ``/etc/ravn/config.yaml``
+    when the flock workload has per-persona ``system_prompt_extra`` or
+    ``iteration_budget`` settings.  Ravn reads them here and applies them to
+    the loaded PersonaConfig via
+    :func:`ravn.adapters.personas.overrides.apply_config_overrides`.
+
+    Example sidecar YAML snippet::
+
+        persona_overrides:
+          system_prompt_extra: |
+            Pay special attention to security vulnerabilities.
+          iteration_budget: 40
+    """
+
+    system_prompt_extra: str = Field(
+        default="",
+        description=(
+            "Extra system prompt text appended to the persona's system_prompt_template at runtime."
+        ),
+    )
+    iteration_budget: int = Field(
+        default=0,
+        description=("Override the persona's iteration budget (0 = use persona default)."),
+    )
+
+
 class Settings(BaseSettings):
     """Ravn application settings.
 
@@ -2460,6 +2489,12 @@ class Settings(BaseSettings):
     profile_source: ProfileSourceConfig = Field(
         default_factory=ProfileSourceConfig,
         description="Deployment profile source adapter.",
+    )
+
+    # NIU-638: per-sidecar overrides injected by Volundr at flock dispatch
+    persona_overrides: PersonaOverridesConfig = Field(
+        default_factory=PersonaOverridesConfig,
+        description="Per-sidecar persona overrides injected by Volundr at flock dispatch.",
     )
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work

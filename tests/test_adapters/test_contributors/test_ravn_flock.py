@@ -1007,3 +1007,197 @@ class TestWorkloadPersonaOverride:
         override = WorkloadPersonaOverride(name="coordinator")
         with pytest.raises(AttributeError):
             override.name = "reviewer"  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# Per-persona LLM overrides — acceptance criteria from NIU-638
+# ---------------------------------------------------------------------------
+
+
+class TestPerPersonaLLMOverrides:
+    async def test_two_sidecars_with_different_llm_aliases_produce_distinct_yaml(self, session):
+        """reviewer(powerful, thinking=true) + security-auditor(balanced) → distinct YAML."""
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": [
+                    {
+                        "name": "reviewer",
+                        "llm": {"primary_alias": "powerful", "thinking_enabled": True},
+                    },
+                    {
+                        "name": "security-auditor",
+                        "llm": {"primary_alias": "balanced"},
+                    },
+                ],
+            },
+        )
+        result = await c.contribute(session, ctx)
+
+        reviewer_cfg = _extract_mounted_config(result.pod_spec, "reviewer")
+        auditor_cfg = _extract_mounted_config(result.pod_spec, "security-auditor")
+
+        # Each sidecar has an llm: section
+        assert "llm:" in reviewer_cfg
+        assert "llm:" in auditor_cfg
+
+        # The two sidecars have distinct LLM aliases
+        assert "powerful" in reviewer_cfg
+        assert "balanced" in auditor_cfg
+        assert "balanced" not in reviewer_cfg
+        assert "powerful" not in auditor_cfg
+
+        # thinking_enabled only appears in reviewer
+        assert "thinking_enabled: true" in reviewer_cfg
+        assert "thinking_enabled" not in auditor_cfg
+
+    async def test_per_persona_llm_overrides_global_llm(self, session):
+        """Per-persona LLM alias overrides the global llm_config alias."""
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": [
+                    {"name": "coordinator"},
+                    {
+                        "name": "reviewer",
+                        "llm": {"primary_alias": "powerful"},
+                    },
+                ],
+                "llm_config": {"primary_alias": "balanced", "max_tokens": 4096},
+            },
+        )
+        result = await c.contribute(session, ctx)
+
+        coordinator_cfg = _extract_mounted_config(result.pod_spec, "coordinator")
+        reviewer_cfg = _extract_mounted_config(result.pod_spec, "reviewer")
+
+        # coordinator inherits global alias
+        assert "balanced" in coordinator_cfg
+        assert "4096" in coordinator_cfg
+
+        # reviewer overrides alias but inherits max_tokens from global
+        assert "powerful" in reviewer_cfg
+        assert "4096" in reviewer_cfg
+        assert "balanced" not in reviewer_cfg
+
+    async def test_system_prompt_extra_embedded_in_sidecar_yaml(self, session):
+        """system_prompt_extra is written to persona_overrides block in sidecar YAML."""
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": [
+                    {
+                        "name": "reviewer",
+                        "system_prompt_extra": "Be extra thorough about security.",
+                    },
+                    {"name": "coordinator"},
+                ],
+            },
+        )
+        result = await c.contribute(session, ctx)
+
+        reviewer_cfg = _extract_mounted_config(result.pod_spec, "reviewer")
+        coordinator_cfg = _extract_mounted_config(result.pod_spec, "coordinator")
+
+        assert "persona_overrides:" in reviewer_cfg
+        assert "Be extra thorough about security." in reviewer_cfg
+        assert "persona_overrides:" not in coordinator_cfg
+
+    async def test_iteration_budget_embedded_in_initiative_block(self, session):
+        """iteration_budget is written to initiative block in sidecar YAML."""
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": [
+                    {"name": "reviewer", "iteration_budget": 40},
+                    {"name": "coordinator"},
+                ],
+            },
+        )
+        result = await c.contribute(session, ctx)
+
+        reviewer_cfg = _extract_mounted_config(result.pod_spec, "reviewer")
+        coordinator_cfg = _extract_mounted_config(result.pod_spec, "coordinator")
+
+        assert "iteration_budget: 40" in reviewer_cfg
+        assert "iteration_budget" not in coordinator_cfg
+
+    async def test_per_persona_max_concurrent_tasks(self, session):
+        """max_concurrent_tasks from persona override replaces global value in initiative."""
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": [
+                    {"name": "reviewer", "max_concurrent_tasks": 1},
+                    {"name": "coordinator"},
+                ],
+                "max_concurrent_tasks": 5,
+            },
+        )
+        result = await c.contribute(session, ctx)
+
+        reviewer_cfg = _extract_mounted_config(result.pod_spec, "reviewer")
+        coordinator_cfg = _extract_mounted_config(result.pod_spec, "coordinator")
+
+        import yaml as _yaml
+
+        reviewer_parsed = _yaml.safe_load(reviewer_cfg)
+        coordinator_parsed = _yaml.safe_load(coordinator_cfg)
+
+        assert reviewer_parsed["initiative"]["max_concurrent_tasks"] == 1
+        assert coordinator_parsed["initiative"]["max_concurrent_tasks"] == 5
+
+    async def test_no_persona_overrides_block_when_no_extra(self, session):
+        """No persona_overrides block emitted when system_prompt_extra is absent."""
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={"personas": ["coordinator", "reviewer"]},
+        )
+        result = await c.contribute(session, ctx)
+
+        for persona in ("coordinator", "reviewer"):
+            cfg = _extract_mounted_config(result.pod_spec, persona)
+            assert "persona_overrides:" not in cfg
+
+    async def test_merge_precedence_persona_over_global(self, session):
+        """Merge precedence: persona-override > global."""
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": [
+                    {"name": "reviewer", "llm": {"primary_alias": "powerful"}},
+                ],
+                "llm_config": {"primary_alias": "balanced"},
+            },
+        )
+        result = await c.contribute(session, ctx)
+
+        cfg = _extract_mounted_config(result.pod_spec, "reviewer")
+        assert "powerful" in cfg
+        assert "balanced" not in cfg
+
+    async def test_allowed_tools_in_persona_override_stripped(self, session, caplog):
+        """allowed_tools in persona dict is stripped with a WARN (security boundary)."""
+        with caplog.at_level(logging.WARNING):
+            c = RavnFlockContributor()
+            ctx = SessionContext(
+                workload_type="ravn_flock",
+                workload_config={
+                    "personas": [
+                        {"name": "reviewer", "allowed_tools": ["bash", "read"]},
+                    ],
+                },
+            )
+            result = await c.contribute(session, ctx)
+
+        assert result.pod_spec is not None
+        assert "dropping security key" in caplog.text
+        cfg = _extract_mounted_config(result.pod_spec, "reviewer")
+        assert "allowed_tools" not in cfg
