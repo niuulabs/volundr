@@ -1699,8 +1699,24 @@ class Broker:
                 self._mesh_adapter.peer_id,
                 len(self._artifacts.files_changed),
             )
-            # Room UI receives this via RoomMeshBridge subscribing to
-            # ravn.mesh.* — no separate broadcast needed here.
+            # NNG pub/sub doesn't loopback — our own subscriber won't
+            # see this event, so broadcast directly to the room UI.
+            if self._room_bridge is not None:
+                from dataclasses import asdict
+
+                meta = self._room_bridge._participants.get(self._mesh_adapter.peer_id)
+                if meta is not None:
+                    await self._channels.broadcast(
+                        {
+                            "type": "room_outcome",
+                            "participantId": meta.peer_id,
+                            "participant": asdict(meta),
+                            "persona": meta.persona,
+                            "eventType": "code.changed",
+                            "fields": outcome_payload,
+                            "summary": outcome_payload.get("summary", ""),
+                        }
+                    )
 
         except Exception:
             logger.warning("Mesh: failed to publish code.changed", exc_info=True)
