@@ -319,7 +319,7 @@ class PersonaSaveTool(ToolPort):
             return ToolResult(
                 tool_call_id="",
                 content=(
-                    f"Round-trip verification failed: FilesystemPersonaAdapter could not load '{name}' "
+                    f"Round-trip verification failed: adapter could not load '{name}' "
                     f"from {dest}. The file was not saved."
                 ),
                 is_error=True,

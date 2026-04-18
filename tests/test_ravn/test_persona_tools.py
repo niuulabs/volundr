@@ -203,7 +203,9 @@ class TestPersonaValidateTool:
     def test_persona_loader_parse_none_returns_error(self, monkeypatch):
         from ravn.adapters.personas import loader as _loader_module
 
-        monkeypatch.setattr(_loader_module.FilesystemPersonaAdapter, "parse", staticmethod(lambda _: None))
+        monkeypatch.setattr(
+            _loader_module.FilesystemPersonaAdapter, "parse", staticmethod(lambda _: None)
+        )
         # Valid YAML but mocked parse returns None
         result = _run(self.tool.execute({"yaml_content": _MINIMAL_YAML}))
         assert result.is_error

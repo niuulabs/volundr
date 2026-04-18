@@ -6,11 +6,11 @@ from pathlib import Path
 
 from ravn.adapters.personas.loader import (
     _BUILTIN_PERSONAS_DIR,
+    FilesystemPersonaAdapter,
     PersonaConfig,
     PersonaConsumes,
     PersonaFanIn,
     PersonaLLMConfig,
-    FilesystemPersonaAdapter,
     PersonaProduces,
 )
 from ravn.ports.persona import PersonaPort, PersonaRegistryPort

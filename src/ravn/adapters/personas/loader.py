@@ -125,7 +125,7 @@ class PersonaConfig:
     stop_on_outcome: bool = False
 
     def to_dict(self) -> dict:
-        """Serialize this persona to a plain dict compatible with :meth:`FilesystemPersonaAdapter.parse`.
+        """Serialize to a dict compatible with :meth:`FilesystemPersonaAdapter.parse`.
 
         Zero-value fields (empty string, empty list, ``0``, ``False``) are
         omitted to keep the resulting YAML clean.  Nested dataclasses are

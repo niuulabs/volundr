@@ -11,7 +11,6 @@ from ravn.adapters.personas.loader import PersonaConfig
 from ravn.ports.persona import PersonaRegistryPort
 from volundr.config import PersonaSourceConfig, RavnConfig
 
-
 # ---------------------------------------------------------------------------
 # Recording stub adapter
 # ---------------------------------------------------------------------------

@@ -10,10 +10,10 @@ from pathlib import Path
 from niuu.domain.outcome import OutcomeField
 from ravn.adapters.personas.loader import (
     _BUILTIN_PERSONAS_DIR,
+    FilesystemPersonaAdapter,
     PersonaConfig,
     PersonaConsumes,
     PersonaFanIn,
-    FilesystemPersonaAdapter,
     PersonaProduces,
     _apply_outcome_instruction,
     _parse_consumes,

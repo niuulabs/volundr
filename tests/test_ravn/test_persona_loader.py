@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 from ravn.adapters.personas.loader import (
     _BUILTIN_PERSONAS_DIR,
+    FilesystemPersonaAdapter,
     PersonaConfig,
     PersonaLLMConfig,
-    FilesystemPersonaAdapter,
     _safe_bool,
 )
 from ravn.config import ProjectConfig, _safe_int
