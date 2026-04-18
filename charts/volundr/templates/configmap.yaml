@@ -333,6 +333,25 @@ data:
       {{- end }}
     {{- end }}
 
+    {{- if .Values.personaSource }}
+    ravn:
+      persona_source:
+        {{- $mode := .Values.personaSource.mode | default "filesystem" }}
+        {{- if eq $mode "mountedVolume" }}
+        adapter: "volundr.adapters.personas.configmap.KubernetesConfigMapPersonaRegistry"
+        kwargs:
+          namespace: {{ .Release.Namespace | quote }}
+          configmap_name: {{ .Values.personaSource.configmapName | default "ravn-personas" | quote }}
+        {{- else if eq $mode "http" }}
+        adapter: "ravn.adapters.personas.http.HttpPersonaAdapter"
+        kwargs:
+          base_url: {{ .Values.personaSource.httpBaseUrl | default "http://volundr:8080" | quote }}
+        {{- else }}
+        adapter: "ravn.adapters.personas.loader.FilesystemPersonaAdapter"
+        kwargs: {}
+        {{- end }}
+    {{- end }}
+
     {{- if .Values.sessionContributors }}
     session_contributors:
       {{- range $i, $contributor := .Values.sessionContributors }}

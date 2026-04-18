@@ -50,6 +50,17 @@ _RAVN_CONFIG_VOLUME_PREFIX = "ravn-cfg"
 _RAVN_CONFIG_DIR = "/etc/ravn"
 _INIT_WRITER_IMAGE = "busybox:latest"
 
+# Persona source modes
+_PERSONA_SOURCE_FILESYSTEM = "filesystem"
+_PERSONA_SOURCE_MOUNTED_VOLUME = "mountedVolume"
+_PERSONA_SOURCE_HTTP = "http"
+
+# Persona ConfigMap volume name (shared across all ravn sidecars in the pod)
+_PERSONA_CM_VOLUME_NAME = "ravn-personas"
+_PERSONA_CM_DEFAULT_NAME = "ravn-personas"
+_PERSONA_CM_DEFAULT_MOUNT_PATH = "/etc/ravn/personas"
+_PERSONA_TOKEN_ENV = "RAVN_VOLUNDR_TOKEN"
+
 
 def _normalize_personas(raw: list) -> list[dict]:
     """Normalize personas to list[dict].
@@ -102,6 +113,9 @@ def _build_ravn_config(
     sleipnir_publish_urls: list[str],
     global_max_concurrent_tasks: int = _DEFAULT_MAX_CONCURRENT_TASKS,
     mesh_host: str = "0.0.0.0",
+    persona_source_mode: str = _PERSONA_SOURCE_FILESYSTEM,
+    persona_source_mount_path: str = _PERSONA_CM_DEFAULT_MOUNT_PATH,
+    persona_source_http_base_url: str = "",
 ) -> str:
     """Generate the ravn daemon YAML config for a single flock node.
 
@@ -200,6 +214,17 @@ def _build_ravn_config(
     if po:
         config["persona_overrides"] = po
 
+    if persona_source_mode == _PERSONA_SOURCE_MOUNTED_VOLUME:
+        config["persona_source"] = {
+            "adapter": "ravn.adapters.personas.mounted_volume.MountedVolumePersonaAdapter",
+            "kwargs": {"mount_path": persona_source_mount_path},
+        }
+    elif persona_source_mode == _PERSONA_SOURCE_HTTP and persona_source_http_base_url:
+        config["persona_source"] = {
+            "adapter": "ravn.adapters.personas.http.HttpPersonaAdapter",
+            "kwargs": {"base_url": persona_source_http_base_url},
+        }
+
     if sleipnir_publish_urls:
         config["sleipnir"] = {
             "enabled": True,
@@ -232,6 +257,11 @@ class RavnFlockContributor(SessionContributor):
         ravn_image: str = _RAVN_IMAGE_DEFAULT,
         base_port: int = _DEFAULT_BASE_PORT,
         mesh_host: str = "0.0.0.0",
+        persona_source_mode: str = _PERSONA_SOURCE_FILESYSTEM,
+        persona_source_configmap_name: str = _PERSONA_CM_DEFAULT_NAME,
+        persona_source_mount_path: str = _PERSONA_CM_DEFAULT_MOUNT_PATH,
+        persona_source_token_secret_name: str = "",
+        persona_source_http_base_url: str = "",
         **_extra: object,
     ) -> None:
         self._template_provider = template_provider
@@ -239,6 +269,11 @@ class RavnFlockContributor(SessionContributor):
         self._ravn_image = ravn_image
         self._base_port = base_port
         self._mesh_host = mesh_host
+        self._persona_source_mode = persona_source_mode
+        self._persona_source_configmap_name = persona_source_configmap_name
+        self._persona_source_mount_path = persona_source_mount_path
+        self._persona_source_token_secret_name = persona_source_token_secret_name
+        self._persona_source_http_base_url = persona_source_http_base_url
 
     @property
     def name(self) -> str:
@@ -290,6 +325,11 @@ class RavnFlockContributor(SessionContributor):
             sleipnir_publish_urls=sleipnir_publish_urls,
             global_max_concurrent_tasks=global_max_concurrent_tasks,
             global_llm=global_llm,
+            persona_source_mode=self._persona_source_mode,
+            persona_source_configmap_name=self._persona_source_configmap_name,
+            persona_source_mount_path=self._persona_source_mount_path,
+            persona_source_token_secret_name=self._persona_source_token_secret_name,
+            persona_source_http_base_url=self._persona_source_http_base_url,
         )
 
         return SessionContribution(values=values, pod_spec=pod_spec)
@@ -320,6 +360,11 @@ class RavnFlockContributor(SessionContributor):
         sleipnir_publish_urls: list[str],
         global_max_concurrent_tasks: int,
         global_llm: dict | None = None,
+        persona_source_mode: str = _PERSONA_SOURCE_FILESYSTEM,
+        persona_source_configmap_name: str = _PERSONA_CM_DEFAULT_NAME,
+        persona_source_mount_path: str = _PERSONA_CM_DEFAULT_MOUNT_PATH,
+        persona_source_token_secret_name: str = "",
+        persona_source_http_base_url: str = "",
     ) -> tuple[dict[str, Any], PodSpecAdditions]:
         session_id = str(session.id)
         base_port = self._base_port
@@ -353,6 +398,38 @@ class RavnFlockContributor(SessionContributor):
             {"containerPort": skuld_hs, "name": "mesh-hs", "protocol": "TCP"},
         ]
 
+        # Persona source volume (shared across all ravn sidecars)
+        persona_source_volumes: list[dict] = []
+        persona_source_volume_mounts: list[dict] = []
+        persona_source_envs: list[dict] = []
+
+        if persona_source_mode == _PERSONA_SOURCE_MOUNTED_VOLUME:
+            persona_source_volumes.append(
+                {
+                    "name": _PERSONA_CM_VOLUME_NAME,
+                    "configMap": {"name": persona_source_configmap_name},
+                }
+            )
+            persona_source_volume_mounts.append(
+                {
+                    "name": _PERSONA_CM_VOLUME_NAME,
+                    "mountPath": persona_source_mount_path,
+                    "readOnly": True,
+                }
+            )
+        elif persona_source_mode == _PERSONA_SOURCE_HTTP and persona_source_token_secret_name:
+            persona_source_envs.append(
+                {
+                    "name": _PERSONA_TOKEN_ENV,
+                    "valueFrom": {
+                        "secretKeyRef": {
+                            "name": persona_source_token_secret_name,
+                            "key": "token",
+                        }
+                    },
+                }
+            )
+
         # Ravn sidecar containers (indices 1..N)
         extra_containers: list[dict] = []
         config_volumes: list[dict] = []
@@ -378,6 +455,9 @@ class RavnFlockContributor(SessionContributor):
                 sleipnir_publish_urls=sleipnir_publish_urls,
                 global_max_concurrent_tasks=global_max_concurrent_tasks,
                 mesh_host=self._mesh_host,
+                persona_source_mode=persona_source_mode,
+                persona_source_mount_path=persona_source_mount_path,
+                persona_source_http_base_url=persona_source_http_base_url,
             )
 
             # Per-sidecar emptyDir volume for the mounted config file
@@ -413,6 +493,23 @@ class RavnFlockContributor(SessionContributor):
                     }
                 )
 
+            ravn_env.extend(persona_source_envs)
+
+            volume_mounts: list[dict] = [
+                {"name": _MIMIR_VOLUME_NAME, "mountPath": _MIMIR_MOUNT_PATH},
+                {
+                    "name": _WORKSPACE_VOLUME_NAME,
+                    "mountPath": _WORKSPACE_MOUNT_PATH,
+                    "readOnly": True,
+                },
+                {
+                    "name": cfg_vol_name,
+                    "mountPath": _RAVN_CONFIG_DIR,
+                    "readOnly": True,
+                },
+            ]
+            volume_mounts.extend(persona_source_volume_mounts)
+
             container: dict[str, Any] = {
                 "name": f"ravn-{persona}",
                 "image": self._ravn_image,
@@ -423,19 +520,7 @@ class RavnFlockContributor(SessionContributor):
                     {"containerPort": hs, "name": f"r{ravn_index}-hs", "protocol": "TCP"},
                     {"containerPort": gw, "name": f"r{ravn_index}-gw", "protocol": "TCP"},
                 ],
-                "volumeMounts": [
-                    {"name": _MIMIR_VOLUME_NAME, "mountPath": _MIMIR_MOUNT_PATH},
-                    {
-                        "name": _WORKSPACE_VOLUME_NAME,
-                        "mountPath": _WORKSPACE_MOUNT_PATH,
-                        "readOnly": True,
-                    },
-                    {
-                        "name": cfg_vol_name,
-                        "mountPath": _RAVN_CONFIG_DIR,
-                        "readOnly": True,
-                    },
-                ],
+                "volumeMounts": volume_mounts,
             }
             extra_containers.append(container)
 
@@ -443,6 +528,7 @@ class RavnFlockContributor(SessionContributor):
             volumes=(
                 {"name": _MIMIR_VOLUME_NAME, "emptyDir": {}},
                 *config_volumes,
+                *persona_source_volumes,
             ),
             env=tuple(skuld_env),
             extra_containers=tuple(extra_containers),

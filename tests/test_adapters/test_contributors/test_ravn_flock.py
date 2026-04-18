@@ -1011,6 +1011,178 @@ class TestWorkloadPersonaOverride:
 
 
 # ---------------------------------------------------------------------------
+# Persona source wiring (NIU-642)
+# ---------------------------------------------------------------------------
+
+
+_FLOCK_WORKLOAD_CONFIG = {
+    "personas": ["coordinator", "reviewer"],
+    "mesh": {"transport": "nng"},
+    "mimir": {},
+    "sleipnir": {},
+}
+
+
+def _make_flock_contributor(**kwargs) -> RavnFlockContributor:  # noqa: ANN001
+    """Return a contributor backed by an in-context flock workload_config."""
+    return RavnFlockContributor(**kwargs)
+
+
+async def _contribute_with_mode(session, mode: str, **extra_kwargs) -> tuple:
+    """Contribute via direct workload_config injection and return (values, pod_spec)."""
+    c = _make_flock_contributor(persona_source_mode=mode, **extra_kwargs)
+    ctx = SessionContext(
+        workload_type="ravn_flock",
+        workload_config=_FLOCK_WORKLOAD_CONFIG,
+    )
+    result = await c.contribute(session, ctx)
+    return result.values, result.pod_spec
+
+
+class TestPersonaSourceMountedVolume:
+    async def test_configmap_volume_added_to_pod_spec(self, session) -> None:
+        _, pod_spec = await _contribute_with_mode(
+            session,
+            "mountedVolume",
+            persona_source_configmap_name="ravn-personas",
+            persona_source_mount_path="/etc/ravn/personas",
+        )
+        volume_names = {v["name"] for v in pod_spec.volumes}
+        assert "ravn-personas" in volume_names
+
+    async def test_configmap_volume_references_correct_configmap(self, session) -> None:
+        _, pod_spec = await _contribute_with_mode(
+            session,
+            "mountedVolume",
+            persona_source_configmap_name="my-custom-personas",
+        )
+        cm_vols = [v for v in pod_spec.volumes if v.get("name") == "ravn-personas"]
+        assert len(cm_vols) == 1
+        assert cm_vols[0]["configMap"]["name"] == "my-custom-personas"
+
+    async def test_mount_added_to_every_ravn_sidecar(self, session) -> None:
+        mount_path = "/etc/ravn/personas"
+        _, pod_spec = await _contribute_with_mode(
+            session,
+            "mountedVolume",
+            persona_source_mount_path=mount_path,
+        )
+        for container in pod_spec.extra_containers:
+            mount_paths = {m["mountPath"] for m in container["volumeMounts"]}
+            assert mount_path in mount_paths, (
+                f"Container {container['name']!r} missing persona mount"
+            )
+
+    async def test_persona_mount_is_readonly(self, session) -> None:
+        _, pod_spec = await _contribute_with_mode(session, "mountedVolume")
+        for container in pod_spec.extra_containers:
+            persona_mounts = [m for m in container["volumeMounts"] if m["name"] == "ravn-personas"]
+            assert len(persona_mounts) == 1
+            assert persona_mounts[0].get("readOnly") is True
+
+    async def test_ravn_config_includes_mounted_volume_adapter(self, session) -> None:
+        mount_path = "/mnt/personas"
+        _, pod_spec = await _contribute_with_mode(
+            session,
+            "mountedVolume",
+            persona_source_mount_path=mount_path,
+        )
+        # Verify the init container YAML config has persona_source pointing to MountedVolume
+        config_yaml = _extract_mounted_config(pod_spec, "coordinator")
+        assert "MountedVolumePersonaAdapter" in config_yaml
+        assert mount_path in config_yaml
+
+    async def test_no_token_env_injected(self, session) -> None:
+        _, pod_spec = await _contribute_with_mode(session, "mountedVolume")
+        for container in pod_spec.extra_containers:
+            env_names = {e["name"] for e in container["env"]}
+            assert "RAVN_VOLUNDR_TOKEN" not in env_names
+
+
+class TestPersonaSourceFilesystem:
+    async def test_no_configmap_volume(self, session) -> None:
+        _, pod_spec = await _contribute_with_mode(session, "filesystem")
+        volume_names = {v["name"] for v in pod_spec.volumes}
+        assert "ravn-personas" not in volume_names
+
+    async def test_no_persona_mount_on_sidecars(self, session) -> None:
+        _, pod_spec = await _contribute_with_mode(session, "filesystem")
+        for container in pod_spec.extra_containers:
+            mount_names = {m["name"] for m in container["volumeMounts"]}
+            assert "ravn-personas" not in mount_names
+
+    async def test_no_token_env_injected(self, session) -> None:
+        _, pod_spec = await _contribute_with_mode(session, "filesystem")
+        for container in pod_spec.extra_containers:
+            env_names = {e["name"] for e in container["env"]}
+            assert "RAVN_VOLUNDR_TOKEN" not in env_names
+
+    async def test_ravn_config_has_no_persona_source(self, session) -> None:
+        _, pod_spec = await _contribute_with_mode(session, "filesystem")
+        config_yaml = _extract_mounted_config(pod_spec, "coordinator")
+        assert "persona_source" not in config_yaml
+
+
+class TestPersonaSourceHttp:
+    async def test_no_configmap_volume(self, session) -> None:
+        _, pod_spec = await _contribute_with_mode(
+            session,
+            "http",
+            persona_source_http_base_url="http://volundr:8080",
+            persona_source_token_secret_name="volundr-ravn-token",
+        )
+        volume_names = {v["name"] for v in pod_spec.volumes}
+        assert "ravn-personas" not in volume_names
+
+    async def test_token_env_injected_from_secret(self, session) -> None:
+        _, pod_spec = await _contribute_with_mode(
+            session,
+            "http",
+            persona_source_http_base_url="http://volundr:8080",
+            persona_source_token_secret_name="volundr-ravn-token",
+        )
+        for container in pod_spec.extra_containers:
+            token_envs = [e for e in container["env"] if e["name"] == "RAVN_VOLUNDR_TOKEN"]
+            assert len(token_envs) == 1
+            ref = token_envs[0]["valueFrom"]["secretKeyRef"]
+            assert ref["name"] == "volundr-ravn-token"
+            assert ref["key"] == "token"
+
+    async def test_no_token_env_without_secret_name(self, session) -> None:
+        """When no token secret name is given, no env var is injected."""
+        _, pod_spec = await _contribute_with_mode(
+            session,
+            "http",
+            persona_source_http_base_url="http://volundr:8080",
+        )
+        for container in pod_spec.extra_containers:
+            env_names = {e["name"] for e in container["env"]}
+            assert "RAVN_VOLUNDR_TOKEN" not in env_names
+
+    async def test_ravn_config_includes_http_adapter(self, session) -> None:
+        base_url = "http://volundr:8080"
+        _, pod_spec = await _contribute_with_mode(
+            session,
+            "http",
+            persona_source_http_base_url=base_url,
+            persona_source_token_secret_name="volundr-ravn-token",
+        )
+        config_yaml = _extract_mounted_config(pod_spec, "coordinator")
+        assert "HttpPersonaAdapter" in config_yaml
+        assert base_url in config_yaml
+
+    async def test_no_persona_mount_on_sidecars(self, session) -> None:
+        _, pod_spec = await _contribute_with_mode(
+            session,
+            "http",
+            persona_source_http_base_url="http://volundr:8080",
+        )
+        for container in pod_spec.extra_containers:
+            mount_names = {m["name"] for m in container["volumeMounts"]}
+            assert "ravn-personas" not in mount_names
+
+
+# ---------------------------------------------------------------------------
 # Per-persona LLM overrides — acceptance criteria from NIU-638
 # ---------------------------------------------------------------------------
 
