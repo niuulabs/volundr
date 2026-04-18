@@ -4,6 +4,8 @@ When workload_type == "ravn_flock", this contributor replaces the default
 single-CLI layout with:
   - Skuld container with mesh.enabled=true + nng ports + Sleipnir webhook
   - N ravn daemon sidecar containers (one per persona in workload_config.personas)
+  - Per-sidecar initContainer that writes YAML config to an emptyDir volume
+    mounted read-only at /etc/ravn/config.yaml (RAVN_CONFIG env var points here)
   - nng mesh ports allocated via the same scheme as ravn flock init
   - Mimir emptyDir volume for ephemeral local memory
   - Sleipnir webhook transport config in both skuld and ravn containers
@@ -43,6 +45,10 @@ _MIMIR_MOUNT_PATH = "/mimir/local"
 _WORKSPACE_VOLUME_NAME = "workspace"
 _WORKSPACE_MOUNT_PATH = "/workspace"
 _RAVN_IMAGE_DEFAULT = "ghcr.io/niuulabs/ravn:latest"
+_RAVN_CONFIG_MOUNT_PATH = "/etc/ravn/config.yaml"
+_RAVN_CONFIG_VOLUME_PREFIX = "ravn-cfg"
+_RAVN_CONFIG_DIR = "/etc/ravn"
+_INIT_WRITER_IMAGE = "busybox:latest"
 
 
 def _normalize_personas(raw: list) -> list[dict]:
@@ -180,6 +186,7 @@ class RavnFlockContributor(SessionContributor):
     workload_config.personas + mesh/mimir/sleipnir settings, then:
       - Emits skuld mesh env vars (MESH_ENABLED, MESH_PEER_ID, nng addresses)
       - Emits one ravn sidecar container per persona with RAVN_CONFIG env
+      - Emits per-sidecar initContainer + emptyDir volume for mounted config
       - Emits a Mimir emptyDir volume
       - Emits Sleipnir webhook env vars for both skuld and ravn containers
 
@@ -315,6 +322,9 @@ class RavnFlockContributor(SessionContributor):
 
         # Ravn sidecar containers (indices 1..N)
         extra_containers: list[dict] = []
+        config_volumes: list[dict] = []
+        init_containers: list[dict] = []
+
         for i, persona in enumerate(personas):
             ravn_index = i + 1
             peer_id = f"flock-{persona}"
@@ -335,10 +345,29 @@ class RavnFlockContributor(SessionContributor):
                 llm_config=llm_config,
             )
 
+            # Per-sidecar emptyDir volume for the mounted config file
+            cfg_vol_name = f"{_RAVN_CONFIG_VOLUME_PREFIX}-{persona}"
+            config_volumes.append({"name": cfg_vol_name, "emptyDir": {}})
+
+            # Init container writes YAML into the volume
+            heredoc = (
+                f"cat > {_RAVN_CONFIG_MOUNT_PATH} <<'__RAVN_EOF__'\n{config_yaml}__RAVN_EOF__\n"
+            )
+            init_containers.append(
+                {
+                    "name": f"write-ravn-cfg-{persona}",
+                    "image": _INIT_WRITER_IMAGE,
+                    "command": ["sh", "-c", heredoc],
+                    "volumeMounts": [
+                        {"name": cfg_vol_name, "mountPath": _RAVN_CONFIG_DIR},
+                    ],
+                }
+            )
+
             ravn_env: list[dict] = [
                 {"name": "RAVN_PERSONA", "value": persona},
                 {"name": "RAVN_PEER_ID", "value": peer_id},
-                {"name": "RAVN_CONFIG_INLINE", "value": config_yaml},
+                {"name": "RAVN_CONFIG", "value": _RAVN_CONFIG_MOUNT_PATH},
             ]
 
             if sleipnir_publish_urls:
@@ -366,19 +395,23 @@ class RavnFlockContributor(SessionContributor):
                         "mountPath": _WORKSPACE_MOUNT_PATH,
                         "readOnly": True,
                     },
+                    {
+                        "name": cfg_vol_name,
+                        "mountPath": _RAVN_CONFIG_DIR,
+                        "readOnly": True,
+                    },
                 ],
             }
             extra_containers.append(container)
 
         pod_spec = PodSpecAdditions(
             volumes=(
-                {
-                    "name": _MIMIR_VOLUME_NAME,
-                    "emptyDir": {},
-                },
+                {"name": _MIMIR_VOLUME_NAME, "emptyDir": {}},
+                *config_volumes,
             ),
             env=tuple(skuld_env),
             extra_containers=tuple(extra_containers),
+            init_containers=tuple(init_containers),
         )
 
         values: dict[str, Any] = {

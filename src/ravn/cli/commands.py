@@ -101,6 +101,23 @@ def _configure_logging(settings: Settings) -> None:
     logging.basicConfig(level=level, format=fmt, force=True)
 
 
+def _log_effective_config(settings: Settings) -> None:
+    """Emit an INFO log with the effective config for drift detection."""
+    source = os.environ.get("RAVN_CONFIG", "defaults")
+    persona = os.environ.get("RAVN_PERSONA", "default")
+    llm_alias = settings.effective_model()
+    thinking = settings.llm.extended_thinking.enabled
+    budget = settings.llm.extended_thinking.budget_tokens
+    logger.info(
+        "ravn effective config: persona=%s llm_alias=%s thinking=%s budget=%d source=%s",
+        persona,
+        llm_alias,
+        thinking,
+        budget,
+        source,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Builder: LLM
 # ---------------------------------------------------------------------------
@@ -1772,6 +1789,7 @@ def daemon(
 
     settings = Settings()
     _configure_logging(settings)
+    _log_effective_config(settings)
     project_config = ProjectConfig.discover()
     ravn_profile = _resolve_profile(profile)
     effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
@@ -1808,6 +1826,7 @@ def listen(
 
     settings = Settings()
     _configure_logging(settings)
+    _log_effective_config(settings)
     project_config = ProjectConfig.discover()
     ravn_profile = _resolve_profile(profile)
     effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
