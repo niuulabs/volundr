@@ -67,9 +67,9 @@ def _make_llm_with_response(response_text: str) -> LLMPort:
 
 def _reviewer_persona() -> PersonaConfig:
     """Return the built-in reviewer persona config (with schema)."""
-    from ravn.adapters.personas.loader import PersonaLoader
+    from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-    persona = PersonaLoader().load("reviewer")
+    persona = FilesystemPersonaAdapter().load("reviewer")
     assert persona is not None, "reviewer persona must exist in built-ins"
     return persona
 

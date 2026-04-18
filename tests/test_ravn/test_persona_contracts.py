@@ -13,7 +13,7 @@ from ravn.adapters.personas.loader import (
     PersonaConfig,
     PersonaConsumes,
     PersonaFanIn,
-    PersonaLoader,
+    FilesystemPersonaAdapter,
     PersonaProduces,
     _apply_outcome_instruction,
     _parse_consumes,
@@ -308,13 +308,13 @@ class TestParseFanIn:
 
 
 # ---------------------------------------------------------------------------
-# PersonaLoader.parse — new sections
+# FilesystemPersonaAdapter.parse — new sections
 # ---------------------------------------------------------------------------
 
 
-class TestPersonaLoaderParseContracts:
+class TestFilesystemPersonaAdapterParseContracts:
     def test_reviewer_yaml_parses_produces(self) -> None:
-        cfg = PersonaLoader.parse(_REVIEWER_YAML)
+        cfg = FilesystemPersonaAdapter.parse(_REVIEWER_YAML)
         assert cfg is not None
         assert cfg.produces.event_type == "review.completed"
         assert "verdict" in cfg.produces.schema
@@ -324,7 +324,7 @@ class TestPersonaLoaderParseContracts:
         assert "summary" in cfg.produces.schema
 
     def test_reviewer_yaml_parses_consumes(self) -> None:
-        cfg = PersonaLoader.parse(_REVIEWER_YAML)
+        cfg = FilesystemPersonaAdapter.parse(_REVIEWER_YAML)
         assert cfg is not None
         assert "code.changed" in cfg.consumes.event_types
         assert "review.requested" in cfg.consumes.event_types
@@ -333,13 +333,13 @@ class TestPersonaLoaderParseContracts:
         assert "diff_url" in cfg.consumes.injects
 
     def test_reviewer_yaml_parses_fan_in(self) -> None:
-        cfg = PersonaLoader.parse(_REVIEWER_YAML)
+        cfg = FilesystemPersonaAdapter.parse(_REVIEWER_YAML)
         assert cfg is not None
         assert cfg.fan_in.strategy == "all_must_pass"
         assert cfg.fan_in.contributes_to == "review.verdict"
 
     def test_security_auditor_yaml_parses_contract(self) -> None:
-        cfg = PersonaLoader.parse(_SECURITY_AUDITOR_YAML)
+        cfg = FilesystemPersonaAdapter.parse(_SECURITY_AUDITOR_YAML)
         assert cfg is not None
         assert cfg.produces.event_type == "security.completed"
         assert "verdict" in cfg.produces.schema
@@ -348,7 +348,7 @@ class TestPersonaLoaderParseContracts:
         assert cfg.fan_in.strategy == "all_must_pass"
 
     def test_qa_agent_yaml_parses_contract(self) -> None:
-        cfg = PersonaLoader.parse(_QA_AGENT_YAML)
+        cfg = FilesystemPersonaAdapter.parse(_QA_AGENT_YAML)
         assert cfg is not None
         assert cfg.produces.event_type == "qa.completed"
         assert cfg.produces.schema["verdict"].enum_values == ["pass", "fail"]
@@ -358,7 +358,7 @@ class TestPersonaLoaderParseContracts:
         assert "test.requested" in cfg.consumes.event_types
 
     def test_ship_agent_yaml_parses_contract(self) -> None:
-        cfg = PersonaLoader.parse(_SHIP_AGENT_YAML)
+        cfg = FilesystemPersonaAdapter.parse(_SHIP_AGENT_YAML)
         assert cfg is not None
         assert cfg.produces.event_type == "ship.completed"
         assert cfg.produces.schema["verdict"].enum_values == ["shipped", "blocked"]
@@ -367,7 +367,7 @@ class TestPersonaLoaderParseContracts:
         assert "qa.completed" in cfg.consumes.event_types
 
     def test_retro_analyst_yaml_parses_contract(self) -> None:
-        cfg = PersonaLoader.parse(_RETRO_ANALYST_YAML)
+        cfg = FilesystemPersonaAdapter.parse(_RETRO_ANALYST_YAML)
         assert cfg is not None
         assert cfg.produces.event_type == "retro.completed"
         assert "items_shipped" in cfg.produces.schema
@@ -378,7 +378,7 @@ class TestPersonaLoaderParseContracts:
         assert cfg.fan_in.strategy == "merge"
 
     def test_persona_without_contract_keeps_defaults(self) -> None:
-        cfg = PersonaLoader.parse(_NO_CONTRACT_YAML)
+        cfg = FilesystemPersonaAdapter.parse(_NO_CONTRACT_YAML)
         assert cfg is not None
         assert cfg.produces.event_type == ""
         assert cfg.produces.schema == {}
@@ -457,20 +457,20 @@ class TestApplyOutcomeInstruction:
 
 
 # ---------------------------------------------------------------------------
-# PersonaLoader.load — outcome injection
+# FilesystemPersonaAdapter.load — outcome injection
 # ---------------------------------------------------------------------------
 
 
-class TestPersonaLoaderLoadInjection:
+class TestFilesystemPersonaAdapterLoadInjection:
     def test_reviewer_builtin_has_outcome_instruction(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("reviewer")
         assert persona is not None
         assert "---outcome---" in persona.system_prompt_template
         assert "---end---" in persona.system_prompt_template
 
     def test_reviewer_outcome_includes_verdict_field(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("reviewer")
         assert persona is not None
         assert "verdict:" in persona.system_prompt_template
@@ -478,7 +478,7 @@ class TestPersonaLoaderLoadInjection:
 
     def test_coding_agent_has_outcome_instruction(self) -> None:
         """coding-agent now produces code.changed events with outcome schema."""
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("coding-agent")
         assert persona is not None
         assert "---outcome---" in persona.system_prompt_template
@@ -486,35 +486,35 @@ class TestPersonaLoaderLoadInjection:
         assert "summary" in persona.system_prompt_template
 
     def test_security_auditor_has_outcome_instruction(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("security-auditor")
         assert persona is not None
         assert "---outcome---" in persona.system_prompt_template
         assert "pass | fail | needs_review" in persona.system_prompt_template
 
     def test_qa_agent_has_outcome_instruction(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("qa-agent")
         assert persona is not None
         assert "---outcome---" in persona.system_prompt_template
         assert "tests_run" in persona.system_prompt_template
 
     def test_ship_agent_has_outcome_instruction(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("ship-agent")
         assert persona is not None
         assert "---outcome---" in persona.system_prompt_template
         assert "shipped | blocked" in persona.system_prompt_template
 
     def test_retro_analyst_has_outcome_instruction(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("retro-analyst")
         assert persona is not None
         assert "---outcome---" in persona.system_prompt_template
         assert "items_shipped" in persona.system_prompt_template
 
     def test_mimir_curator_has_outcome_instruction(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("mimir-curator")
         assert persona is not None
         assert "---outcome---" in persona.system_prompt_template
@@ -522,7 +522,7 @@ class TestPersonaLoaderLoadInjection:
     def test_file_persona_with_contract_gets_injection(self, tmp_path: Path) -> None:
         p = tmp_path / "my-persona.yaml"
         p.write_text(_REVIEWER_YAML, encoding="utf-8")
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         persona = loader.load("my-persona")
         assert persona is not None
         assert "---outcome---" in persona.system_prompt_template
@@ -530,21 +530,21 @@ class TestPersonaLoaderLoadInjection:
     def test_file_persona_without_contract_no_injection(self, tmp_path: Path) -> None:
         p = tmp_path / "simple.yaml"
         p.write_text(_NO_CONTRACT_YAML, encoding="utf-8")
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         persona = loader.load("simple")
         assert persona is not None
         assert "---outcome---" not in persona.system_prompt_template
 
 
 # ---------------------------------------------------------------------------
-# PersonaLoader E2E — matches delivery criteria
+# FilesystemPersonaAdapter E2E — matches delivery criteria
 # ---------------------------------------------------------------------------
 
 
 class TestPersonaContractE2E:
     def test_persona_outcome_instruction_injected(self) -> None:
         """Loading reviewer persona → effective system prompt ends with outcome block."""
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("reviewer")
         assert persona is not None
         assert "---outcome---" in persona.system_prompt_template
@@ -553,54 +553,54 @@ class TestPersonaContractE2E:
 
     def test_persona_without_contract_unchanged(self) -> None:
         """Loading research-agent (no produces) → no outcome block in system prompt."""
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("research-agent")
         assert "---outcome---" not in persona.system_prompt_template
 
 
 # ---------------------------------------------------------------------------
-# PersonaLoader.find_consumers / find_producers
+# FilesystemPersonaAdapter.find_consumers / find_producers
 # ---------------------------------------------------------------------------
 
 
 class TestFindConsumersProducers:
     def test_find_consumers_code_changed_returns_reviewer_and_security_auditor(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         consumers = loader.find_consumers("code.changed")
         names = [p.name for p in consumers]
         assert "reviewer" in names
         assert "security-auditor" in names
 
     def test_find_consumers_review_completed_returns_qa_agent(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         consumers = loader.find_consumers("review.completed")
         names = [p.name for p in consumers]
         assert "qa-agent" in names
 
     def test_find_consumers_unknown_event_returns_empty(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         consumers = loader.find_consumers("does.not.exist")
         assert consumers == []
 
     def test_find_producers_review_completed_returns_reviewer(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         producers = loader.find_producers("review.completed")
         names = [p.name for p in producers]
         assert "reviewer" in names
 
     def test_find_producers_qa_completed_returns_qa_agent(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         producers = loader.find_producers("qa.completed")
         names = [p.name for p in producers]
         assert "qa-agent" in names
 
     def test_find_producers_unknown_event_returns_empty(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         producers = loader.find_producers("no.such.event")
         assert producers == []
 
     def test_find_consumers_returns_personas_with_injected_instructions(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         consumers = loader.find_consumers("code.changed")
         for persona in consumers:
             if persona.produces.schema:
@@ -609,7 +609,7 @@ class TestFindConsumersProducers:
     def test_find_consumers_with_custom_dir_includes_file_personas(self, tmp_path: Path) -> None:
         p = tmp_path / "custom-reviewer.yaml"
         p.write_text(_REVIEWER_YAML.replace("name: reviewer", "name: custom-reviewer"), "utf-8")
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         consumers = loader.find_consumers("code.changed")
         names = [p.name for p in consumers]
         # Built-in reviewer still present, plus our custom one from file
@@ -617,7 +617,7 @@ class TestFindConsumersProducers:
         assert "custom-reviewer" in names
 
     def test_find_producers_dream_completed_returns_mimir_curator(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         producers = loader.find_producers("dream.completed")
         names = [p.name for p in producers]
         assert "mimir-curator" in names
@@ -629,7 +629,7 @@ class TestFindConsumersProducers:
 
 
 class TestBuiltinSpecialistContracts:
-    _loader = PersonaLoader()
+    _loader = FilesystemPersonaAdapter()
 
     def _load(self, name: str) -> PersonaConfig:
         cfg = self._loader.load_from_file(_BUILTIN_PERSONAS_DIR / f"{name}.yaml")
@@ -711,11 +711,11 @@ class TestBuiltinSpecialistContracts:
 
 
 # ---------------------------------------------------------------------------
-# PersonaLoader.merge — new fields preserved
+# FilesystemPersonaAdapter.merge — new fields preserved
 # ---------------------------------------------------------------------------
 
 
-class TestPersonaLoaderMergeWithContracts:
+class TestFilesystemPersonaAdapterMergeWithContracts:
     def _make_project(self):  # type: ignore[return]
         from ravn.config import ProjectConfig
 
@@ -735,20 +735,20 @@ class TestPersonaLoaderMergeWithContracts:
             schema={"v": OutcomeField(type="string", description="v")},
         )
         persona = PersonaConfig(name="x", produces=produces)
-        merged = PersonaLoader.merge(persona, self._make_project())
+        merged = FilesystemPersonaAdapter.merge(persona, self._make_project())
         assert merged.produces.event_type == "x.done"
         assert "v" in merged.produces.schema
 
     def test_merge_preserves_consumes(self) -> None:
         consumes = PersonaConsumes(event_types=["a.b"], injects=["x"])
         persona = PersonaConfig(name="x", consumes=consumes)
-        merged = PersonaLoader.merge(persona, self._make_project())
+        merged = FilesystemPersonaAdapter.merge(persona, self._make_project())
         assert merged.consumes.event_types == ["a.b"]
         assert merged.consumes.injects == ["x"]
 
     def test_merge_preserves_fan_in(self) -> None:
         fan_in = PersonaFanIn(strategy="all_must_pass", contributes_to="verdict")
         persona = PersonaConfig(name="x", fan_in=fan_in)
-        merged = PersonaLoader.merge(persona, self._make_project())
+        merged = FilesystemPersonaAdapter.merge(persona, self._make_project())
         assert merged.fan_in.strategy == "all_must_pass"
         assert merged.fan_in.contributes_to == "verdict"

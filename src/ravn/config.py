@@ -2300,18 +2300,19 @@ class PersonaSourceConfig(BaseModel):
     :class:`~ravn.ports.persona.PersonaPort` to use a different source
     (database, remote API, generated at runtime, etc.).
 
+    Constructor kwargs are forwarded directly to the adapter class, so the
+    ``kwargs`` dict must match the adapter's ``__init__`` signature.
+
     Example ``ravn.yaml``::
 
         persona_source:
-          adapter: mycompany.ravn.DbPersonaAdapter
+          adapter: ravn.adapters.personas.loader.FilesystemPersonaAdapter
           kwargs:
-            table: ravn_personas
-          secret_kwargs_env:
-            dsn: PERSONA_DB_DSN
+            persona_dirs: [".ravn/personas", "~/.ravn/personas"]
     """
 
     adapter: str = Field(
-        default="ravn.adapters.personas.loader.PersonaLoader",
+        default="ravn.adapters.personas.loader.FilesystemPersonaAdapter",
         description="Fully-qualified class path for the PersonaPort implementation.",
     )
     kwargs: dict[str, Any] = Field(
@@ -2321,14 +2322,6 @@ class PersonaSourceConfig(BaseModel):
     secret_kwargs_env: dict[str, str] = Field(
         default_factory=dict,
         description="Map of kwarg name → env var name for secret values.",
-    )
-    persona_dirs: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Extra directories to search for persona YAML files, "
-            "in addition to the default .ravn/personas/ and ~/.ravn/personas/ paths. "
-            "Paths are searched in order; earlier entries have higher priority."
-        ),
     )
 
 

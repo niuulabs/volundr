@@ -29,7 +29,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from ravn.adapters.channels._rabbitmq_base import RabbitMQPublishMixin
-from ravn.adapters.personas.loader import PersonaLoader
+from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 from ravn.domain.models import AgentTask, OutputMode
 from ravn.ports.trigger import TriggerPort
 
@@ -93,7 +93,7 @@ class TaskDispatchChannel(TriggerPort, RabbitMQPublishMixin):
 
     1. Parse the dispatch payload — reject with ``ravn.task.rejected`` if JSON
        is malformed or the ``task`` field is missing/empty.
-    2. Validate the requested persona via ``PersonaLoader``.
+    2. Validate the requested persona via ``FilesystemPersonaAdapter``.
     3. If persona unknown → publish ``ravn.task.rejected`` and discard.
     4. If persona valid → publish ``ravn.task.accepted`` and call ``enqueue``.
 
@@ -106,7 +106,7 @@ class TaskDispatchChannel(TriggerPort, RabbitMQPublishMixin):
         Sleipnir section from Ravn settings.
     persona_loader:
         Used to validate persona names from dispatch payloads.  Defaults to a
-        standard ``PersonaLoader`` (built-in personas + ``~/.ravn/personas``).
+        standard ``FilesystemPersonaAdapter`` (built-in personas + ``~/.ravn/personas``).
     """
 
     _log_prefix = "task_dispatch"
@@ -115,11 +115,11 @@ class TaskDispatchChannel(TriggerPort, RabbitMQPublishMixin):
         self,
         config: SleipnirConfig,
         *,
-        persona_loader: PersonaLoader | None = None,
+        persona_loader: FilesystemPersonaAdapter | None = None,
     ) -> None:
         self._config = config
         self._agent_id = config.agent_id or socket.gethostname()
-        self._persona_loader = persona_loader or PersonaLoader()
+        self._persona_loader = persona_loader or FilesystemPersonaAdapter()
         self._init_publish_state()
 
     # ------------------------------------------------------------------

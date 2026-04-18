@@ -9,7 +9,7 @@ import yaml
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from ravn.adapters.personas.loader import PersonaLoader
+from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 from volundr.adapters.inbound.rest_personas import create_personas_router
 
 # ---------------------------------------------------------------------------
@@ -32,13 +32,13 @@ def tmp_persona_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture()
-def loader(tmp_persona_dir: Path) -> PersonaLoader:
-    """PersonaLoader with a single custom dir + built-ins enabled."""
-    return PersonaLoader(persona_dirs=[str(tmp_persona_dir)], include_builtin=True)
+def loader(tmp_persona_dir: Path) -> FilesystemPersonaAdapter:
+    """FilesystemPersonaAdapter with a single custom dir + built-ins enabled."""
+    return FilesystemPersonaAdapter(persona_dirs=[str(tmp_persona_dir)], include_builtin=True)
 
 
 @pytest.fixture()
-def client(loader: PersonaLoader) -> TestClient:
+def client(loader: FilesystemPersonaAdapter) -> TestClient:
     """TestClient with the personas router mounted."""
     app = FastAPI()
     app.include_router(create_personas_router(loader))

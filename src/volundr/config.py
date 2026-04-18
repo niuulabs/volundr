@@ -991,16 +991,38 @@ class WebhooksConfig(BaseModel):
     github: GitHubWebhookConfig = Field(default_factory=GitHubWebhookConfig)
 
 
+class PersonaSourceConfig(BaseModel):
+    """Config for persona configuration source adapter.
+
+    Example ``config.yaml``::
+
+        ravn:
+          persona_source:
+            adapter: ravn.adapters.personas.loader.FilesystemPersonaAdapter
+            kwargs:
+              persona_dirs: [".ravn/personas"]
+    """
+
+    adapter: str = Field(
+        default="ravn.adapters.personas.loader.FilesystemPersonaAdapter",
+        description="Fully-qualified class path for the PersonaRegistryPort implementation.",
+    )
+    kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Keyword arguments passed to the adapter constructor.",
+    )
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of kwarg name → env var name for secret values.",
+    )
+
+
 class RavnConfig(BaseModel):
     """Ravn agent runtime configuration."""
 
-    persona_dirs: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Additional directories to search for persona YAML files "
-            "(highest priority first). When empty, PersonaLoader uses its "
-            "default two-layer discovery: <cwd>/.ravn/personas/ → ~/.ravn/personas/."
-        ),
+    persona_source: PersonaSourceConfig = Field(
+        default_factory=PersonaSourceConfig,
+        description="Persona configuration source adapter.",
     )
 
 

@@ -187,68 +187,68 @@ def _failing_pr(git: StubGit, pr_id: str) -> None:
 
 class TestReviewArbiterPersona:
     def test_persona_loads(self) -> None:
-        """review-arbiter.yaml must be loadable by PersonaLoader."""
-        from ravn.adapters.personas.loader import PersonaLoader
+        """review-arbiter.yaml must be loadable by FilesystemPersonaAdapter."""
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("review-arbiter")
         assert persona is not None, "review-arbiter persona not found"
 
     def test_persona_name(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("review-arbiter")
+        persona = FilesystemPersonaAdapter().load("review-arbiter")
         assert persona is not None
         assert persona.name == "review-arbiter"
 
     def test_persona_has_system_prompt(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("review-arbiter")
+        persona = FilesystemPersonaAdapter().load("review-arbiter")
         assert persona is not None
         assert len(persona.system_prompt_template) > 50
 
     def test_persona_schema_has_verdict(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("review-arbiter")
+        persona = FilesystemPersonaAdapter().load("review-arbiter")
         assert persona is not None
         assert "verdict" in persona.produces.schema
 
     def test_persona_verdict_enum_values(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("review-arbiter")
+        persona = FilesystemPersonaAdapter().load("review-arbiter")
         assert persona is not None
         verdict_field = persona.produces.schema["verdict"]
         assert verdict_field.enum_values is not None
         assert set(verdict_field.enum_values) == {"approve", "retry", "escalate"}
 
     def test_persona_has_reason_field(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("review-arbiter")
+        persona = FilesystemPersonaAdapter().load("review-arbiter")
         assert persona is not None
         assert "reason" in persona.produces.schema
 
     def test_persona_iteration_budget(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("review-arbiter")
+        persona = FilesystemPersonaAdapter().load("review-arbiter")
         assert persona is not None
         assert persona.iteration_budget == 5
 
     def test_persona_stop_on_outcome(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("review-arbiter")
+        persona = FilesystemPersonaAdapter().load("review-arbiter")
         assert persona is not None
         assert persona.stop_on_outcome is True
 
     def test_persona_allowed_tools_non_empty(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("review-arbiter")
+        persona = FilesystemPersonaAdapter().load("review-arbiter")
         assert persona is not None
         assert len(persona.allowed_tools) > 0
 

@@ -786,10 +786,16 @@ def _resolve_persona(
     cwd: Path | None = None,
 ) -> Any:
     """Load and merge a persona with optional ProjectConfig overrides."""
-    from ravn.adapters.personas.loader import PersonaLoader
+    from niuu.utils import import_class, resolve_secret_kwargs  # noqa: PLC0415
+    from ravn.adapters.personas.loader import FilesystemPersonaAdapter  # noqa: PLC0415
 
-    persona_dirs = list(settings.persona_source.persona_dirs) if settings else []
-    loader = PersonaLoader(persona_dirs or None, cwd=cwd)
+    if settings is not None:
+        cfg = settings.persona_source
+        cls = import_class(cfg.adapter)
+        kwargs = resolve_secret_kwargs(cfg.kwargs, cfg.secret_kwargs_env)
+        loader = cls(**kwargs)
+    else:
+        loader = FilesystemPersonaAdapter(cwd=cwd)
 
     name = persona_name.strip() or (
         project_config.persona.strip() if project_config is not None else ""
@@ -803,7 +809,7 @@ def _resolve_persona(
         return None
 
     if project_config is not None:
-        persona = PersonaLoader.merge(persona, project_config)
+        persona = FilesystemPersonaAdapter.merge(persona, project_config)
 
     return persona
 
@@ -2531,9 +2537,9 @@ def _wire_cascade(
         # When discovery is active, only include personas that are actual
         # peers in the flock — not all installed personas.
         if persona_config and persona_config.fan_in.contributes_to:
-            from ravn.adapters.personas.loader import PersonaLoader  # noqa: PLC0415
+            from ravn.adapters.personas.loader import FilesystemPersonaAdapter  # noqa: PLC0415
 
-            loader = PersonaLoader()
+            loader = FilesystemPersonaAdapter()
             target = persona_config.fan_in.contributes_to
             contributors = loader.find_contributors(target)
 
