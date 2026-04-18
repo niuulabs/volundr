@@ -689,11 +689,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.include_router(presets_router)
 
             # Ravn persona management — dynamic adapter via config
-            from niuu.utils import resolve_secret_kwargs
-
             persona_cfg = settings.ravn.persona_source
             persona_cls = import_class(persona_cfg.adapter)
-            persona_kwargs = resolve_secret_kwargs(
+            persona_kwargs = _resolve_secret_kwargs(
                 persona_cfg.kwargs, persona_cfg.secret_kwargs_env
             )
             persona_registry = persona_cls(**persona_kwargs)

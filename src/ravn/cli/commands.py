@@ -809,6 +809,8 @@ def _resolve_persona(
         return None
 
     if project_config is not None:
+        # merge() is a pure data transform on PersonaConfig + ProjectConfig,
+        # not adapter-specific — safe to call on the concrete class directly.
         persona = FilesystemPersonaAdapter.merge(persona, project_config)
 
     return persona
