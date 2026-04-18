@@ -1,4 +1,4 @@
-"""Tests for PersonaRegistryPort and multi-directory PersonaLoader."""
+"""Tests for PersonaRegistryPort and multi-directory FilesystemPersonaAdapter."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ from pathlib import Path
 
 from ravn.adapters.personas.loader import (
     _BUILTIN_PERSONAS_DIR,
+    FilesystemPersonaAdapter,
     PersonaConfig,
     PersonaConsumes,
     PersonaFanIn,
     PersonaLLMConfig,
-    PersonaLoader,
     PersonaProduces,
 )
 from ravn.ports.persona import PersonaPort, PersonaRegistryPort
@@ -57,11 +57,11 @@ def _write_persona(directory: Path, name: str, content: str) -> Path:
 
 class TestPortContracts:
     def test_persona_loader_is_persona_port(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         assert isinstance(loader, PersonaPort)
 
     def test_persona_loader_is_registry_port(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         assert isinstance(loader, PersonaRegistryPort)
 
     def test_persona_registry_port_is_abstract(self) -> None:
@@ -92,7 +92,7 @@ class TestPortContracts:
 class TestConstructor:
     def test_default_no_args(self, tmp_path: Path) -> None:
         """Default constructor sets dirs to project-local + user-global."""
-        loader = PersonaLoader(cwd=tmp_path)
+        loader = FilesystemPersonaAdapter(cwd=tmp_path)
         dirs = loader._resolve_dirs()
         assert dirs[0] == tmp_path / ".ravn" / "personas"
         assert dirs[1] == Path.home() / ".ravn" / "personas"
@@ -100,7 +100,7 @@ class TestConstructor:
     def test_explicit_persona_dirs(self, tmp_path: Path) -> None:
         """Explicit persona_dirs replaces default discovery dirs."""
         custom = tmp_path / "custom"
-        loader = PersonaLoader([str(custom)])
+        loader = FilesystemPersonaAdapter([str(custom)])
         dirs = loader._resolve_dirs()
         assert dirs[0] == custom
         # Builtin dir appended when include_builtin=True (default)
@@ -108,28 +108,28 @@ class TestConstructor:
 
     def test_empty_persona_dirs_list_uses_explicit_empty(self, tmp_path: Path) -> None:
         """Passing an empty list means only bundled dir (when include_builtin)."""
-        loader = PersonaLoader([])
+        loader = FilesystemPersonaAdapter([])
         dirs = loader._resolve_dirs()
         assert dirs == [_BUILTIN_PERSONAS_DIR]
 
     def test_empty_persona_dirs_no_builtin(self, tmp_path: Path) -> None:
         """Passing an empty list with include_builtin=False means no dirs."""
-        loader = PersonaLoader([], include_builtin=False)
+        loader = FilesystemPersonaAdapter([], include_builtin=False)
         dirs = loader._resolve_dirs()
         assert dirs == []
 
     def test_expanduser_in_persona_dirs(self, tmp_path: Path) -> None:
         """~ is expanded in persona_dirs entries."""
-        loader = PersonaLoader(["~/some/dir"])
+        loader = FilesystemPersonaAdapter(["~/some/dir"])
         dirs = loader._resolve_dirs()
         assert dirs[0] == Path.home() / "some" / "dir"
 
     def test_include_builtin_default_true(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         assert loader._include_builtin is True
 
     def test_include_builtin_false(self) -> None:
-        loader = PersonaLoader(include_builtin=False)
+        loader = FilesystemPersonaAdapter(include_builtin=False)
         assert loader._include_builtin is False
 
 
@@ -140,14 +140,14 @@ class TestConstructor:
 
 class TestListNames:
     def test_includes_builtin_names_by_default(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         names = loader.list_names()
         for builtin in _BUILTIN_NAMES:
             assert builtin in names
 
     def test_includes_file_names(self, tmp_path: Path) -> None:
         _write_persona(tmp_path, "custom-agent", _SIMPLE_PERSONA_YAML)
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         names = loader.list_names()
         assert "custom-agent" in names
 
@@ -156,7 +156,7 @@ class TestListNames:
         dir_b = tmp_path / "b"
         _write_persona(dir_a, "alpha", _SIMPLE_PERSONA_YAML.replace("custom-agent", "alpha"))
         _write_persona(dir_b, "beta", _SIMPLE_PERSONA_YAML.replace("custom-agent", "beta"))
-        loader = PersonaLoader([str(dir_a), str(dir_b)])
+        loader = FilesystemPersonaAdapter([str(dir_a), str(dir_b)])
         names = loader.list_names()
         assert "alpha" in names
         assert "beta" in names
@@ -166,25 +166,25 @@ class TestListNames:
         dir_b = tmp_path / "b"
         _write_persona(dir_a, "shared", _SIMPLE_PERSONA_YAML.replace("custom-agent", "shared"))
         _write_persona(dir_b, "shared", _OTHER_PERSONA_YAML.replace("other-agent", "shared"))
-        loader = PersonaLoader([str(dir_a), str(dir_b)])
+        loader = FilesystemPersonaAdapter([str(dir_a), str(dir_b)])
         names = loader.list_names()
         assert names.count("shared") == 1
 
     def test_missing_directory_is_silently_skipped(self, tmp_path: Path) -> None:
         missing = tmp_path / "does-not-exist"
-        loader = PersonaLoader([str(missing)])
+        loader = FilesystemPersonaAdapter([str(missing)])
         names = loader.list_names()
         # no crash; built-ins still included since include_builtin defaults True
         assert isinstance(names, list)
 
     def test_no_builtin_when_include_builtin_false(self, tmp_path: Path) -> None:
-        loader = PersonaLoader([], include_builtin=False)
+        loader = FilesystemPersonaAdapter([], include_builtin=False)
         names = loader.list_names()
         for builtin in _BUILTIN_NAMES:
             assert builtin not in names
 
     def test_names_are_sorted(self, tmp_path: Path) -> None:
-        loader = PersonaLoader(cwd=tmp_path)
+        loader = FilesystemPersonaAdapter(cwd=tmp_path)
         names = loader.list_names()
         assert names == sorted(names)
 
@@ -205,7 +205,7 @@ class TestLoad:
         _write_persona(project_local, "custom-agent", project_yaml)
         _write_persona(user_global, "custom-agent", user_yaml)
 
-        loader = PersonaLoader(
+        loader = FilesystemPersonaAdapter(
             [str(project_local), str(user_global)],
         )
         persona = loader.load("custom-agent")
@@ -223,31 +223,31 @@ class TestLoad:
                 "You are a custom agent.", "SECOND"
             ),
         )
-        loader = PersonaLoader([str(dir_a), str(dir_b)])
+        loader = FilesystemPersonaAdapter([str(dir_a), str(dir_b)])
         persona = loader.load("agent")
         assert persona is not None
         # dir_a (index 0) has higher priority
         assert "You are a custom agent." in persona.system_prompt_template
 
     def test_falls_back_to_builtin(self, tmp_path: Path) -> None:
-        loader = PersonaLoader([str(tmp_path / "empty")])
+        loader = FilesystemPersonaAdapter([str(tmp_path / "empty")])
         persona = loader.load("coding-agent")
         assert persona is not None
         assert persona.name == "coding-agent"
 
     def test_returns_none_for_unknown_name(self, tmp_path: Path) -> None:
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         assert loader.load("nonexistent-persona-xyz") is None
 
     def test_outcome_instruction_injected_for_builtin_with_schema(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("reviewer")
         assert persona is not None
         assert "outcome" in persona.system_prompt_template.lower()
 
     def test_no_injection_when_no_schema(self, tmp_path: Path) -> None:
         _write_persona(tmp_path, "custom-agent", _SIMPLE_PERSONA_YAML)
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         persona = loader.load("custom-agent")
         assert persona is not None
         # no produces schema → no injection marker
@@ -258,7 +258,7 @@ class TestLoad:
         project_personas = tmp_path / ".ravn" / "personas"
         yaml = _SIMPLE_PERSONA_YAML.replace("custom-agent", "proj-persona")
         _write_persona(project_personas, "proj-persona", yaml)
-        loader = PersonaLoader(cwd=tmp_path)
+        loader = FilesystemPersonaAdapter(cwd=tmp_path)
         persona = loader.load("proj-persona")
         assert persona is not None
         assert persona.name == "proj-persona"
@@ -290,7 +290,7 @@ class TestSave:
             mock_path_cls.home.return_value = tmp_path
             mock_path_cls.cwd = real_path.cwd
 
-            loader = PersonaLoader()
+            loader = FilesystemPersonaAdapter()
             loader.save(config)
 
         assert dest_dir.is_dir()
@@ -318,11 +318,11 @@ class TestSave:
             mock_path_cls.home.return_value = tmp_path
             mock_path_cls.cwd = real_path.cwd
 
-            loader = PersonaLoader()
+            loader = FilesystemPersonaAdapter()
             loader.save(config)
 
         # Load it back from the written file
-        loader2 = PersonaLoader([str(dest_dir)])
+        loader2 = FilesystemPersonaAdapter([str(dest_dir)])
         loaded = loader2.load("round-trip")
         assert loaded is not None
         assert loaded.name == "round-trip"
@@ -368,10 +368,10 @@ class TestSave:
             mock_path_cls.home.return_value = tmp_path
             mock_path_cls.cwd = real_path.cwd
 
-            loader = PersonaLoader()
+            loader = FilesystemPersonaAdapter()
             loader.save(config)
 
-        loader2 = PersonaLoader([str(dest_dir)], include_builtin=False)
+        loader2 = FilesystemPersonaAdapter([str(dest_dir)], include_builtin=False)
         loaded = loader2.load("contract-agent")
         assert loaded is not None
         # produces round-trips
@@ -400,7 +400,7 @@ class TestSave:
             mock_path_cls.home.return_value = tmp_path
             mock_path_cls.cwd = real_path.cwd
 
-            loader = PersonaLoader()
+            loader = FilesystemPersonaAdapter()
             loader.save(config)
 
         assert dest_dir.is_dir()
@@ -421,7 +421,7 @@ class TestSave:
             mock_path_cls.home.return_value = tmp_path
             mock_path_cls.cwd = real_path.cwd
 
-            loader = PersonaLoader()
+            loader = FilesystemPersonaAdapter()
             loader.save(config)
 
         content = (dest_dir / "agent.yaml").read_text()
@@ -437,19 +437,19 @@ class TestDelete:
     def test_delete_existing_file_returns_true(self, tmp_path: Path) -> None:
         yaml = _SIMPLE_PERSONA_YAML.replace("custom-agent", "my-agent")
         _write_persona(tmp_path, "my-agent", yaml)
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         result = loader.delete("my-agent")
         assert result is True
         assert not (tmp_path / "my-agent.yaml").exists()
 
     def test_delete_nonexistent_returns_false(self, tmp_path: Path) -> None:
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         result = loader.delete("does-not-exist")
         assert result is False
 
     def test_delete_builtin_without_override_returns_false(self, tmp_path: Path) -> None:
         """Pure built-in with no file returns False."""
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         # coding-agent is built-in but no file in tmp_path
         result = loader.delete("coding-agent")
         assert result is False
@@ -461,7 +461,7 @@ class TestDelete:
         )
         _write_persona(tmp_path, "coding-agent", builtin_yaml)
 
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         persona_before = loader.load("coding-agent")
         assert persona_before is not None
         assert "Override!" in persona_before.system_prompt_template
@@ -478,7 +478,7 @@ class TestDelete:
         _write_persona(dir_a, "shared", _SIMPLE_PERSONA_YAML.replace("custom-agent", "shared"))
         _write_persona(dir_b, "shared", _OTHER_PERSONA_YAML.replace("other-agent", "shared"))
 
-        loader = PersonaLoader([str(dir_a), str(dir_b)])
+        loader = FilesystemPersonaAdapter([str(dir_a), str(dir_b)])
         result = loader.delete("shared")
         assert result is True
         # dir_a file should be gone
@@ -494,19 +494,19 @@ class TestDelete:
 
 class TestIsBuiltin:
     def test_builtin_returns_true(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         for name in _BUILTIN_NAMES:
             assert loader.is_builtin(name) is True
 
     def test_custom_name_returns_false(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         assert loader.is_builtin("my-custom-agent") is False
 
     def test_is_builtin_checks_bundled_dir_only(self, tmp_path: Path) -> None:
         """is_builtin checks the bundled dir, not user persona dirs."""
         yaml = _SIMPLE_PERSONA_YAML.replace("custom-agent", "file-only")
         _write_persona(tmp_path, "file-only", yaml)
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         assert loader.is_builtin("file-only") is False
 
 
@@ -517,30 +517,30 @@ class TestIsBuiltin:
 
 class TestLoadAll:
     def test_load_all_returns_list(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         all_personas = loader.load_all()
         assert isinstance(all_personas, list)
         assert len(all_personas) > 0
 
     def test_load_all_contains_all_builtins(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         names = {p.name for p in loader.load_all()}
         for builtin in _BUILTIN_NAMES:
             assert builtin in names
 
     def test_load_all_includes_file_personas(self, tmp_path: Path) -> None:
         _write_persona(tmp_path, "custom-agent", _SIMPLE_PERSONA_YAML)
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         names = {p.name for p in loader.load_all()}
         assert "custom-agent" in names
 
     def test_load_all_no_none_entries(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         all_personas = loader.load_all()
         assert all(p is not None for p in all_personas)
 
     def test_load_all_are_persona_config_instances(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         for persona in loader.load_all():
             assert isinstance(persona, PersonaConfig)
 
@@ -552,13 +552,13 @@ class TestLoadAll:
 
 class TestSource:
     def test_source_returns_builtin_for_builtin_name(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         src = loader.source("coding-agent")
         assert src == "[built-in]"
 
     def test_source_returns_file_path_for_file_persona(self, tmp_path: Path) -> None:
         expected = _write_persona(tmp_path, "custom-agent", _SIMPLE_PERSONA_YAML)
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         src = loader.source("custom-agent")
         assert src == str(expected)
 
@@ -570,12 +570,12 @@ class TestSource:
         file_a = _write_persona(dir_a, "shared", yaml_a)
         _write_persona(dir_b, "shared", yaml_b)
 
-        loader = PersonaLoader([str(dir_a), str(dir_b)])
+        loader = FilesystemPersonaAdapter([str(dir_a), str(dir_b)])
         src = loader.source("shared")
         assert src == str(file_a)
 
     def test_source_returns_empty_string_for_unknown(self, tmp_path: Path) -> None:
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         src = loader.source("completely-unknown-persona")
         assert src == ""
 
@@ -586,17 +586,17 @@ class TestSource:
             "coding-agent",
             _SIMPLE_PERSONA_YAML.replace("custom-agent", "coding-agent"),
         )
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         src = loader.source("coding-agent")
         assert src == str(file)
 
     def test_source_builtin_without_files(self, tmp_path: Path) -> None:
-        loader = PersonaLoader([], include_builtin=True)
+        loader = FilesystemPersonaAdapter([], include_builtin=True)
         src = loader.source("reviewer")
         assert src == "[built-in]"
 
     def test_source_returns_empty_when_builtin_excluded(self, tmp_path: Path) -> None:
-        loader = PersonaLoader([], include_builtin=False)
+        loader = FilesystemPersonaAdapter([], include_builtin=False)
         src = loader.source("coding-agent")
         assert src == ""
 
@@ -609,13 +609,13 @@ class TestSource:
 class TestBackwardCompat:
     def test_default_constructor_loads_builtin(self) -> None:
         """Default (no args) still resolves built-in personas."""
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("coding-agent")
         assert persona is not None
         assert persona.name == "coding-agent"
 
     def test_default_constructor_list_names_has_builtins(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         names = loader.list_names()
         assert "coding-agent" in names
         assert "reviewer" in names
@@ -628,7 +628,7 @@ class TestBackwardCompat:
             "local-persona",
             _SIMPLE_PERSONA_YAML.replace("custom-agent", "local-persona"),
         )
-        loader = PersonaLoader(cwd=tmp_path)
+        loader = FilesystemPersonaAdapter(cwd=tmp_path)
         assert "local-persona" in loader.list_names()
         persona = loader.load("local-persona")
         assert persona is not None

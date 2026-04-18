@@ -1,4 +1,4 @@
-"""Tests for PersonaConfig.to_dict() and PersonaLoader.to_yaml() serialization.
+"""Tests for PersonaConfig.to_dict() and FilesystemPersonaAdapter.to_yaml() serialization.
 
 Round-trip invariant: parse(to_yaml(config)) == config for every built-in persona.
 """
@@ -10,11 +10,11 @@ import pytest
 from niuu.domain.outcome import OutcomeField
 from ravn.adapters.personas.loader import (
     _BUILTIN_PERSONAS_DIR,
+    FilesystemPersonaAdapter,
     PersonaConfig,
     PersonaConsumes,
     PersonaFanIn,
     PersonaLLMConfig,
-    PersonaLoader,
     PersonaProduces,
 )
 
@@ -22,7 +22,7 @@ from ravn.adapters.personas.loader import (
 # Round-trip: all built-in personas
 # ---------------------------------------------------------------------------
 
-_loader = PersonaLoader()
+_loader = FilesystemPersonaAdapter()
 _builtin_personas = {
     p.stem: _loader.load_from_file(p) for p in sorted(_BUILTIN_PERSONAS_DIR.glob("*.yaml"))
 }
@@ -31,8 +31,8 @@ _builtin_personas = {
 @pytest.mark.parametrize("name,persona", list(_builtin_personas.items()))
 def test_round_trip_builtin_persona(name: str, persona: PersonaConfig) -> None:
     """parse(to_yaml(config)) == config for every built-in persona."""
-    yaml_text = PersonaLoader.to_yaml(persona)
-    restored = PersonaLoader.parse(yaml_text)
+    yaml_text = FilesystemPersonaAdapter.to_yaml(persona)
+    restored = FilesystemPersonaAdapter.parse(yaml_text)
     assert restored is not None, f"parse() returned None for persona '{name}'"
     assert restored == persona, f"Round-trip failed for persona '{name}'"
 
@@ -236,7 +236,7 @@ def test_to_yaml_uses_block_scalar_for_multiline_prompt() -> None:
         name="test",
         system_prompt_template="Line one.\nLine two.\nLine three.",
     )
-    yaml_text = PersonaLoader.to_yaml(p)
+    yaml_text = FilesystemPersonaAdapter.to_yaml(p)
     # Block scalar indicator must be present
     assert "|-" in yaml_text or "|\n" in yaml_text or "|+" in yaml_text
 
@@ -244,8 +244,8 @@ def test_to_yaml_uses_block_scalar_for_multiline_prompt() -> None:
 def test_to_yaml_multiline_prompt_round_trips() -> None:
     original = "Line one.\nLine two.\nLine three."
     p = PersonaConfig(name="test", system_prompt_template=original)
-    yaml_text = PersonaLoader.to_yaml(p)
-    restored = PersonaLoader.parse(yaml_text)
+    yaml_text = FilesystemPersonaAdapter.to_yaml(p)
+    restored = FilesystemPersonaAdapter.parse(yaml_text)
     assert restored is not None
     assert restored.system_prompt_template == original
 
@@ -253,8 +253,8 @@ def test_to_yaml_multiline_prompt_round_trips() -> None:
 def test_to_yaml_single_line_prompt_round_trips() -> None:
     original = "You are a simple agent."
     p = PersonaConfig(name="test", system_prompt_template=original)
-    yaml_text = PersonaLoader.to_yaml(p)
-    restored = PersonaLoader.parse(yaml_text)
+    yaml_text = FilesystemPersonaAdapter.to_yaml(p)
+    restored = FilesystemPersonaAdapter.parse(yaml_text)
     assert restored is not None
     assert restored.system_prompt_template == original
 
@@ -268,7 +268,7 @@ def test_to_yaml_output_is_valid_yaml() -> None:
     import yaml
 
     p = _builtin_personas["reviewer"]
-    yaml_text = PersonaLoader.to_yaml(p)
+    yaml_text = FilesystemPersonaAdapter.to_yaml(p)
     parsed = yaml.safe_load(yaml_text)
     assert isinstance(parsed, dict)
     assert parsed["name"] == "reviewer"

@@ -688,13 +688,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             presets_router = create_presets_router(preset_service)
             app.include_router(presets_router)
 
-            # Ravn persona management
-            from ravn.adapters.personas.loader import PersonaLoader
-
-            persona_loader = PersonaLoader(
-                persona_dirs=settings.ravn.persona_dirs or None,
+            # Ravn persona management — dynamic adapter via config
+            persona_cfg = settings.ravn.persona_source
+            persona_cls = import_class(persona_cfg.adapter)
+            persona_kwargs = _resolve_secret_kwargs(
+                persona_cfg.kwargs, persona_cfg.secret_kwargs_env
             )
-            personas_router = create_personas_router(persona_loader)
+            persona_registry = persona_cls(**persona_kwargs)
+            personas_router = create_personas_router(persona_registry)
             app.include_router(personas_router)
 
             # Personal access tokens

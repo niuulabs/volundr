@@ -425,9 +425,9 @@ class PersonaCommand(SlashCommandPort):
                 )
 
     def _list(self) -> str:
-        from ravn.adapters.personas.loader import PersonaLoader  # noqa: PLC0415
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter  # noqa: PLC0415
 
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         names = loader.list_names()
         if not names:
             return "No personas found."
@@ -446,9 +446,9 @@ class PersonaCommand(SlashCommandPort):
         if not name:
             return "Usage: /persona show <name>"
 
-        from ravn.adapters.personas.loader import PersonaLoader  # noqa: PLC0415
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter  # noqa: PLC0415
 
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load(name)
         if persona is None:
             return f"Persona '{name}' not found. Use '/persona list' to see available personas."
@@ -511,9 +511,9 @@ class PersonaCommand(SlashCommandPort):
         if not name:
             return "Usage: /persona delete <name>"
 
-        from ravn.adapters.personas.loader import PersonaLoader  # noqa: PLC0415
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter  # noqa: PLC0415
 
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
 
         source = loader.source(name)
         if not source:

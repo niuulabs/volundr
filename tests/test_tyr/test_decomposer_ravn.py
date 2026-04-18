@@ -74,69 +74,69 @@ def _api_response(text: str) -> dict:
 
 class TestDecomposerPersona:
     def test_persona_loads(self) -> None:
-        """decomposer.yaml must be loadable by PersonaLoader."""
-        from ravn.adapters.personas.loader import PersonaLoader
+        """decomposer.yaml must be loadable by FilesystemPersonaAdapter."""
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         persona = loader.load("decomposer")
         assert persona is not None, "decomposer persona not found"
 
     def test_persona_name(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("decomposer")
+        persona = FilesystemPersonaAdapter().load("decomposer")
         assert persona is not None
         assert persona.name == "decomposer"
 
     def test_persona_has_system_prompt(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("decomposer")
+        persona = FilesystemPersonaAdapter().load("decomposer")
         assert persona is not None
         assert len(persona.system_prompt_template) > 50
 
     def test_persona_schema_has_phases_field(self) -> None:
         """decomposer must declare a 'phases' field in its produces schema."""
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("decomposer")
+        persona = FilesystemPersonaAdapter().load("decomposer")
         assert persona is not None
         assert "phases" in persona.produces.schema
 
     def test_persona_phases_field_is_string(self) -> None:
         """'phases' field must be type 'string' (JSON-encoded SagaStructure)."""
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("decomposer")
+        persona = FilesystemPersonaAdapter().load("decomposer")
         assert persona is not None
         phases_field = persona.produces.schema["phases"]
         assert phases_field.type == "string"
 
     def test_persona_iteration_budget(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("decomposer")
+        persona = FilesystemPersonaAdapter().load("decomposer")
         assert persona is not None
         assert persona.iteration_budget == 20
 
     def test_persona_stop_on_outcome(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("decomposer")
+        persona = FilesystemPersonaAdapter().load("decomposer")
         assert persona is not None
         assert persona.stop_on_outcome is True
 
     def test_persona_allowed_tools_include_file_tools(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("decomposer")
+        persona = FilesystemPersonaAdapter().load("decomposer")
         assert persona is not None
         assert "file_read" in persona.allowed_tools or "glob" in persona.allowed_tools
 
     def test_persona_allowed_tools_include_mimir(self) -> None:
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        persona = PersonaLoader().load("decomposer")
+        persona = FilesystemPersonaAdapter().load("decomposer")
         assert persona is not None
         assert any("mimir" in t for t in persona.allowed_tools)
 

@@ -8,7 +8,7 @@ from dataclasses import replace as _dc_replace
 from fastapi import APIRouter, HTTPException, Path, Query, Response, status
 from pydantic import BaseModel, Field
 
-from ravn.adapters.personas.loader import PersonaConfig, PersonaLoader
+from ravn.adapters.personas.loader import FilesystemPersonaAdapter, PersonaConfig
 from ravn.ports.persona import PersonaRegistryPort
 
 logger = logging.getLogger(__name__)
@@ -309,7 +309,7 @@ def create_personas_router(loader: PersonaRegistryPort) -> APIRouter:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Persona not found: {name}",
             )
-        yaml_text = PersonaLoader.to_yaml(config)
+        yaml_text = FilesystemPersonaAdapter.to_yaml(config)
         return Response(content=yaml_text, media_type="text/yaml")
 
     @router.post(

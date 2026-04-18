@@ -15,7 +15,8 @@ from typing import Any
 import httpx
 
 from niuu.domain.outcome import OutcomeSchema, parse_outcome_block
-from ravn.adapters.personas.loader import PersonaConfig, PersonaLoader
+from ravn.adapters.personas.loader import FilesystemPersonaAdapter, PersonaConfig
+from ravn.ports.persona import PersonaPort
 from tyr.adapters.anthropic_client import anthropic_messages_call
 
 logger = logging.getLogger(__name__)
@@ -41,8 +42,8 @@ class RavnDispatcher:
     max_tokens:
         Maximum tokens for the LLM response.
     persona_loader:
-        Loader used to resolve persona configs.  When ``None`` the default
-        :class:`~ravn.adapters.personas.loader.PersonaLoader` is used.
+        Any :class:`~ravn.ports.persona.PersonaPort` implementation used to
+        resolve persona configs.  Defaults to ``FilesystemPersonaAdapter``.
     """
 
     def __init__(
@@ -53,14 +54,14 @@ class RavnDispatcher:
         model: str = "claude-sonnet-4-6",
         timeout: float = 60.0,
         max_tokens: int = 4096,
-        persona_loader: PersonaLoader | None = None,
+        persona_loader: PersonaPort | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._model = model
         self._max_tokens = max_tokens
         self._client = httpx.AsyncClient(timeout=timeout)
-        self._loader = persona_loader or PersonaLoader()
+        self._loader = persona_loader or FilesystemPersonaAdapter()
 
     async def close(self) -> None:
         """Close the underlying HTTP client."""

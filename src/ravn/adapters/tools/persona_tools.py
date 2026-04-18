@@ -127,12 +127,12 @@ def _validate_yaml(yaml_content: str) -> tuple[list[str], list[str], dict | None
     if errors:
         return errors, warnings, None
 
-    from ravn.adapters.personas.loader import PersonaLoader  # noqa: PLC0415
+    from ravn.adapters.personas.loader import FilesystemPersonaAdapter  # noqa: PLC0415
 
-    parsed = PersonaLoader.parse(yaml_content)
+    parsed = FilesystemPersonaAdapter.parse(yaml_content)
     if parsed is None:
         errors.append(
-            "PersonaLoader.parse() returned None — the YAML is structurally invalid. "
+            "FilesystemPersonaAdapter.parse() returned None — the YAML is structurally invalid. "
             "Ensure 'name' is present and the document is a valid YAML mapping."
         )
         return errors, warnings, None
@@ -175,7 +175,7 @@ class PersonaValidateTool(ToolPort):
     """Validate a persona YAML string without writing anything.
 
     Checks syntax, required fields, known enum values, and verifies that
-    ``PersonaLoader.parse()`` can parse the result.  Returns a success
+    ``FilesystemPersonaAdapter.parse()`` can parse the result.  Returns a success
     summary or detailed diagnostic messages with line numbers.
     """
 
@@ -230,7 +230,7 @@ class PersonaSaveTool(ToolPort):
 
     Validates the YAML first (same checks as ``persona_validate``).
     On success, writes ``<name>.yaml`` to the target directory, then
-    verifies the round-trip by loading it back with ``PersonaLoader``.
+    verifies the round-trip by loading it back with ``FilesystemPersonaAdapter``.
 
     The optional ``directory`` parameter lets you save to a project-local
     ``.ravn/personas/`` instead of the default ``~/.ravn/personas/``.
@@ -307,9 +307,9 @@ class PersonaSaveTool(ToolPort):
                 is_error=True,
             )
 
-        from ravn.adapters.personas.loader import PersonaLoader  # noqa: PLC0415
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter  # noqa: PLC0415
 
-        loader = PersonaLoader(
+        loader = FilesystemPersonaAdapter(
             persona_dirs=[str(target_dir)],
             include_builtin=False,
         )
@@ -319,7 +319,7 @@ class PersonaSaveTool(ToolPort):
             return ToolResult(
                 tool_call_id="",
                 content=(
-                    f"Round-trip verification failed: PersonaLoader could not load '{name}' "
+                    f"Round-trip verification failed: adapter could not load '{name}' "
                     f"from {dest}. The file was not saved."
                 ),
                 is_error=True,

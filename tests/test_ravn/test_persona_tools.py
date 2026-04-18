@@ -203,11 +203,13 @@ class TestPersonaValidateTool:
     def test_persona_loader_parse_none_returns_error(self, monkeypatch):
         from ravn.adapters.personas import loader as _loader_module
 
-        monkeypatch.setattr(_loader_module.PersonaLoader, "parse", staticmethod(lambda _: None))
+        monkeypatch.setattr(
+            _loader_module.FilesystemPersonaAdapter, "parse", staticmethod(lambda _: None)
+        )
         # Valid YAML but mocked parse returns None
         result = _run(self.tool.execute({"yaml_content": _MINIMAL_YAML}))
         assert result.is_error
-        assert "PersonaLoader" in result.content or "parse" in result.content.lower()
+        assert "FilesystemPersonaAdapter" in result.content or "parse" in result.content.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -271,9 +273,9 @@ class TestPersonaSaveTool:
         saved = tmp_path / "reviewer.yaml"
         assert saved.exists()
 
-        from ravn.adapters.personas.loader import PersonaLoader
+        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 
-        loader = PersonaLoader(persona_dirs=[str(tmp_path)], include_builtin=False)
+        loader = FilesystemPersonaAdapter(persona_dirs=[str(tmp_path)], include_builtin=False)
         persona = loader.load("reviewer")
         assert persona is not None
         assert persona.name == "reviewer"

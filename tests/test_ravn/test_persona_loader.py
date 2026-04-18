@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 from ravn.adapters.personas.loader import (
     _BUILTIN_PERSONAS_DIR,
+    FilesystemPersonaAdapter,
     PersonaConfig,
     PersonaLLMConfig,
-    PersonaLoader,
     _safe_bool,
 )
 from ravn.config import ProjectConfig, _safe_int
@@ -105,13 +105,13 @@ class TestSafeInt:
 
 
 # ---------------------------------------------------------------------------
-# PersonaLoader.parse
+# FilesystemPersonaAdapter.parse
 # ---------------------------------------------------------------------------
 
 
-class TestPersonaLoaderParse:
+class TestFilesystemPersonaAdapterParse:
     def test_full_yaml_parses_all_fields(self) -> None:
-        cfg = PersonaLoader.parse(_FULL_PERSONA_YAML)
+        cfg = FilesystemPersonaAdapter.parse(_FULL_PERSONA_YAML)
         assert cfg is not None
         assert cfg.name == "test-agent"
         assert "test agent" in cfg.system_prompt_template
@@ -123,7 +123,7 @@ class TestPersonaLoaderParse:
         assert cfg.iteration_budget == 25
 
     def test_minimal_yaml_defaults_empty_fields(self) -> None:
-        cfg = PersonaLoader.parse(_MINIMAL_PERSONA_YAML)
+        cfg = FilesystemPersonaAdapter.parse(_MINIMAL_PERSONA_YAML)
         assert cfg is not None
         assert cfg.name == "minimal-agent"
         assert cfg.system_prompt_template == ""
@@ -135,73 +135,73 @@ class TestPersonaLoaderParse:
         assert cfg.iteration_budget == 0
 
     def test_missing_name_returns_none(self) -> None:
-        assert PersonaLoader.parse(_NO_NAME_YAML) is None
+        assert FilesystemPersonaAdapter.parse(_NO_NAME_YAML) is None
 
     def test_invalid_yaml_returns_none(self) -> None:
-        assert PersonaLoader.parse(_INVALID_YAML) is None
+        assert FilesystemPersonaAdapter.parse(_INVALID_YAML) is None
 
     def test_empty_string_returns_none(self) -> None:
-        assert PersonaLoader.parse("") is None
+        assert FilesystemPersonaAdapter.parse("") is None
 
     def test_whitespace_only_returns_none(self) -> None:
-        assert PersonaLoader.parse("   \n  ") is None
+        assert FilesystemPersonaAdapter.parse("   \n  ") is None
 
     def test_non_dict_yaml_returns_none(self) -> None:
-        assert PersonaLoader.parse(_NOT_A_DICT_YAML) is None
+        assert FilesystemPersonaAdapter.parse(_NOT_A_DICT_YAML) is None
 
     def test_allowed_tools_non_list_becomes_empty(self) -> None:
         yaml = "name: x\nallowed_tools: not-a-list\n"
-        cfg = PersonaLoader.parse(yaml)
+        cfg = FilesystemPersonaAdapter.parse(yaml)
         assert cfg is not None
         assert cfg.allowed_tools == []
 
     def test_forbidden_tools_non_list_becomes_empty(self) -> None:
         yaml = "name: x\nforbidden_tools: not-a-list\n"
-        cfg = PersonaLoader.parse(yaml)
+        cfg = FilesystemPersonaAdapter.parse(yaml)
         assert cfg is not None
         assert cfg.forbidden_tools == []
 
     def test_llm_non_dict_uses_defaults(self) -> None:
         yaml = "name: x\nllm: some-string\n"
-        cfg = PersonaLoader.parse(yaml)
+        cfg = FilesystemPersonaAdapter.parse(yaml)
         assert cfg is not None
         assert cfg.llm.primary_alias == ""
         assert cfg.llm.thinking_enabled is False
 
     def test_thinking_enabled_string_true(self) -> None:
         yaml = "name: x\nllm:\n  thinking_enabled: 'yes'\n"
-        cfg = PersonaLoader.parse(yaml)
+        cfg = FilesystemPersonaAdapter.parse(yaml)
         assert cfg is not None
         assert cfg.llm.thinking_enabled is True
 
     def test_iteration_budget_invalid_string_becomes_zero(self) -> None:
         yaml = "name: x\niteration_budget: many\n"
-        cfg = PersonaLoader.parse(yaml)
+        cfg = FilesystemPersonaAdapter.parse(yaml)
         assert cfg is not None
         assert cfg.iteration_budget == 0
 
 
 # ---------------------------------------------------------------------------
-# PersonaLoader.load_from_file
+# FilesystemPersonaAdapter.load_from_file
 # ---------------------------------------------------------------------------
 
 
-class TestPersonaLoaderLoadFromFile:
+class TestFilesystemPersonaAdapterLoadFromFile:
     def test_load_valid_file(self, tmp_path: Path) -> None:
         p = tmp_path / "test-agent.yaml"
         p.write_text(_FULL_PERSONA_YAML, encoding="utf-8")
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         cfg = loader.load_from_file(p)
         assert cfg is not None
         assert cfg.name == "test-agent"
 
     def test_load_missing_file_returns_none(self, tmp_path: Path) -> None:
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         result = loader.load_from_file(tmp_path / "nonexistent.yaml")
         assert result is None
 
     def test_load_unreadable_path_returns_none(self, tmp_path: Path) -> None:
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         # Directory is not a readable YAML file.
         result = loader.load_from_file(tmp_path)
         assert result is None
@@ -209,19 +209,19 @@ class TestPersonaLoaderLoadFromFile:
     def test_load_invalid_yaml_returns_none(self, tmp_path: Path) -> None:
         p = tmp_path / "bad.yaml"
         p.write_text(_INVALID_YAML, encoding="utf-8")
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         result = loader.load_from_file(p)
         assert result is None
 
 
 # ---------------------------------------------------------------------------
-# PersonaLoader.list_builtin_names
+# FilesystemPersonaAdapter.list_builtin_names
 # ---------------------------------------------------------------------------
 
 
 class TestListBuiltinNames:
     def test_returns_expected_personas(self) -> None:
-        names = PersonaLoader().list_builtin_names()
+        names = FilesystemPersonaAdapter().list_builtin_names()
         assert "coding-agent" in names
         assert "research-agent" in names
         assert "planning-agent" in names
@@ -230,11 +230,11 @@ class TestListBuiltinNames:
         assert "research-and-distill" in names
 
     def test_returns_sorted_list(self) -> None:
-        names = PersonaLoader().list_builtin_names()
+        names = FilesystemPersonaAdapter().list_builtin_names()
         assert names == sorted(names)
 
     def test_matches_builtin_dir_files(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         expected = {p.stem for p in _BUILTIN_PERSONAS_DIR.glob("*.yaml")}
         assert set(loader.list_builtin_names()) == expected
 
@@ -245,7 +245,7 @@ class TestListBuiltinNames:
 
 
 class TestBuiltinPersonas:
-    _loader = PersonaLoader()
+    _loader = FilesystemPersonaAdapter()
 
     def _load(self, name: str) -> PersonaConfig:
         cfg = self._loader.load_from_file(_BUILTIN_PERSONAS_DIR / f"{name}.yaml")
@@ -349,19 +349,19 @@ class TestBuiltinPersonas:
 
 
 # ---------------------------------------------------------------------------
-# PersonaLoader.load — file vs built-in resolution
+# FilesystemPersonaAdapter.load — file vs built-in resolution
 # ---------------------------------------------------------------------------
 
 
-class TestPersonaLoaderLoad:
+class TestFilesystemPersonaAdapterLoad:
     def test_load_builtin_by_name(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         cfg = loader.load("coding-agent")
         assert cfg is not None
         assert cfg.name == "coding-agent"
 
     def test_load_unknown_name_returns_none(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         assert loader.load("nonexistent-persona") is None
 
     def test_file_persona_takes_precedence_over_builtin(self, tmp_path: Path) -> None:
@@ -371,7 +371,7 @@ class TestPersonaLoaderLoad:
             "name: coding-agent\nsystem_prompt_template: overridden prompt\n",
             encoding="utf-8",
         )
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         cfg = loader.load("coding-agent")
         assert cfg is not None
         assert cfg.system_prompt_template == "overridden prompt"
@@ -379,7 +379,7 @@ class TestPersonaLoaderLoad:
     def test_custom_persona_from_file(self, tmp_path: Path) -> None:
         custom = tmp_path / "my-persona.yaml"
         custom.write_text(_FULL_PERSONA_YAML, encoding="utf-8")
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         cfg = loader.load("test-agent")  # name inside the file, not filename
         # Only the builtin lookup uses name; file lookup uses filename key
         assert cfg is None  # filename is my-persona.yaml, not test-agent.yaml
@@ -387,25 +387,25 @@ class TestPersonaLoaderLoad:
     def test_load_uses_filename_not_yaml_name(self, tmp_path: Path) -> None:
         p = tmp_path / "myfile.yaml"
         p.write_text("name: other-name\niteration_budget: 7\n", encoding="utf-8")
-        loader = PersonaLoader([str(tmp_path)])
+        loader = FilesystemPersonaAdapter([str(tmp_path)])
         cfg = loader.load("myfile")  # lookup by filename stem
         assert cfg is not None
         assert cfg.name == "other-name"
         assert cfg.iteration_budget == 7
 
     def test_default_personas_dir_used_when_not_specified(self) -> None:
-        loader = PersonaLoader()
+        loader = FilesystemPersonaAdapter()
         # Just ensure it doesn't crash; no ~/.ravn/personas likely in test env.
         result = loader.load("coding-agent")
         assert result is not None  # falls back to builtin
 
 
 # ---------------------------------------------------------------------------
-# PersonaLoader.merge
+# FilesystemPersonaAdapter.merge
 # ---------------------------------------------------------------------------
 
 
-class TestPersonaLoaderMerge:
+class TestFilesystemPersonaAdapterMerge:
     def _make_persona(self, **overrides) -> PersonaConfig:
         defaults = dict(
             name="base",
@@ -435,7 +435,7 @@ class TestPersonaLoaderMerge:
     def test_empty_project_config_returns_persona_unchanged(self) -> None:
         persona = self._make_persona()
         project = self._make_project()
-        merged = PersonaLoader.merge(persona, project)
+        merged = FilesystemPersonaAdapter.merge(persona, project)
         assert merged.allowed_tools == ["file"]
         assert merged.forbidden_tools == ["cascade"]
         assert merged.permission_mode == "workspace-write"
@@ -444,62 +444,62 @@ class TestPersonaLoaderMerge:
     def test_project_allowed_tools_override(self) -> None:
         persona = self._make_persona(allowed_tools=["file"])
         project = self._make_project(allowed_tools=["web", "git"])
-        merged = PersonaLoader.merge(persona, project)
+        merged = FilesystemPersonaAdapter.merge(persona, project)
         assert merged.allowed_tools == ["web", "git"]
 
     def test_project_forbidden_tools_override(self) -> None:
         persona = self._make_persona(forbidden_tools=["cascade"])
         project = self._make_project(forbidden_tools=["volundr", "cascade"])
-        merged = PersonaLoader.merge(persona, project)
+        merged = FilesystemPersonaAdapter.merge(persona, project)
         assert merged.forbidden_tools == ["volundr", "cascade"]
 
     def test_project_permission_mode_override(self) -> None:
         persona = self._make_persona(permission_mode="workspace-write")
         project = self._make_project(permission_mode="read-only")
-        merged = PersonaLoader.merge(persona, project)
+        merged = FilesystemPersonaAdapter.merge(persona, project)
         assert merged.permission_mode == "read-only"
 
     def test_project_iteration_budget_override(self) -> None:
         persona = self._make_persona(iteration_budget=40)
         project = self._make_project(iteration_budget=10)
-        merged = PersonaLoader.merge(persona, project)
+        merged = FilesystemPersonaAdapter.merge(persona, project)
         assert merged.iteration_budget == 10
 
     def test_llm_config_preserved_from_persona(self) -> None:
         persona = self._make_persona()
         project = self._make_project(permission_mode="read-only")
-        merged = PersonaLoader.merge(persona, project)
+        merged = FilesystemPersonaAdapter.merge(persona, project)
         assert merged.llm.primary_alias == "balanced"
         assert merged.llm.thinking_enabled is True
 
     def test_system_prompt_preserved_from_persona(self) -> None:
         persona = self._make_persona(system_prompt_template="special prompt")
         project = self._make_project()
-        merged = PersonaLoader.merge(persona, project)
+        merged = FilesystemPersonaAdapter.merge(persona, project)
         assert merged.system_prompt_template == "special prompt"
 
     def test_name_preserved_from_persona(self) -> None:
         persona = self._make_persona(name="original")
         project = self._make_project()
-        merged = PersonaLoader.merge(persona, project)
+        merged = FilesystemPersonaAdapter.merge(persona, project)
         assert merged.name == "original"
 
     def test_project_zero_budget_keeps_persona_budget(self) -> None:
         persona = self._make_persona(iteration_budget=40)
         project = self._make_project(iteration_budget=0)
-        merged = PersonaLoader.merge(persona, project)
+        merged = FilesystemPersonaAdapter.merge(persona, project)
         assert merged.iteration_budget == 40
 
     def test_project_empty_tools_keep_persona_tools(self) -> None:
         persona = self._make_persona(allowed_tools=["file", "git"])
         project = self._make_project(allowed_tools=[])
-        merged = PersonaLoader.merge(persona, project)
+        merged = FilesystemPersonaAdapter.merge(persona, project)
         assert merged.allowed_tools == ["file", "git"]
 
     def test_returns_new_instance_not_mutating_original(self) -> None:
         persona = self._make_persona()
         project = self._make_project(permission_mode="read-only")
-        merged = PersonaLoader.merge(persona, project)
+        merged = FilesystemPersonaAdapter.merge(persona, project)
         assert merged is not persona
         assert persona.permission_mode == "workspace-write"
 

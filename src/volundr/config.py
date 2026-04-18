@@ -31,6 +31,7 @@ from niuu.config import (
     GitLabConfig,  # noqa: F401
     GitLabInstance,  # noqa: F401
 )
+from ravn.config import PersonaSourceConfig
 
 
 # Config file search paths (in order of priority).
@@ -994,13 +995,9 @@ class WebhooksConfig(BaseModel):
 class RavnConfig(BaseModel):
     """Ravn agent runtime configuration."""
 
-    persona_dirs: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Additional directories to search for persona YAML files "
-            "(highest priority first). When empty, PersonaLoader uses its "
-            "default two-layer discovery: <cwd>/.ravn/personas/ → ~/.ravn/personas/."
-        ),
+    persona_source: PersonaSourceConfig = Field(
+        default_factory=PersonaSourceConfig,
+        description="Persona configuration source adapter.",
     )
 
 

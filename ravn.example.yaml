@@ -151,6 +151,21 @@ trust:
   spending_beyond_cap: approval
 
 # ---------------------------------------------------------------------------
+# Persona source (NIU-639)
+#
+# Swap the persona backend without editing container wiring.  The adapter
+# class is loaded dynamically via import_class(); kwargs are forwarded to
+# its constructor.
+#
+# Default: FilesystemPersonaAdapter — three-layer YAML lookup:
+#   <cwd>/.ravn/personas/ → ~/.ravn/personas/ → bundled
+# ---------------------------------------------------------------------------
+# persona_source:
+#   adapter: ravn.adapters.personas.loader.FilesystemPersonaAdapter
+#   kwargs:
+#     persona_dirs: [".ravn/personas"]
+
+# ---------------------------------------------------------------------------
 # Mímir
 # ---------------------------------------------------------------------------
 # mimir:

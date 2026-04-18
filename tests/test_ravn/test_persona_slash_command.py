@@ -88,9 +88,9 @@ class TestPersonaCommandList:
         )
         _make_custom_persona(tmp_path, "my-test-persona")
 
-        # PersonaLoader uses _DEFAULT_PERSONAS_DIR indirectly via Path.home()
-        # We need to patch PersonaLoader construction inside PersonaCommand._list
-        original_loader_init = _loader_module.PersonaLoader.__init__
+        # FilesystemPersonaAdapter uses _DEFAULT_PERSONAS_DIR indirectly via Path.home()
+        # We need to patch FilesystemPersonaAdapter construction inside PersonaCommand._list
+        original_loader_init = _loader_module.FilesystemPersonaAdapter.__init__
 
         def patched_init(self_loader, persona_dirs=None, *, include_builtin=True, cwd=None):
             if persona_dirs is None:
@@ -99,7 +99,7 @@ class TestPersonaCommandList:
                 self_loader, persona_dirs=persona_dirs, include_builtin=include_builtin, cwd=cwd
             )
 
-        monkeypatch.setattr(_loader_module.PersonaLoader, "__init__", patched_init)
+        monkeypatch.setattr(_loader_module.FilesystemPersonaAdapter, "__init__", patched_init)
 
         result = self.cmd.handle("list", self.ctx)
         assert "my-test-persona" in result
@@ -159,7 +159,7 @@ class TestPersonaCommandDelete:
         persona_name = "delete-test-persona"
         _make_custom_persona(tmp_path, persona_name)
 
-        original_loader_init = _loader_module.PersonaLoader.__init__
+        original_loader_init = _loader_module.FilesystemPersonaAdapter.__init__
 
         def patched_init(self_loader, persona_dirs=None, *, include_builtin=True, cwd=None):
             if persona_dirs is None:
@@ -168,7 +168,7 @@ class TestPersonaCommandDelete:
                 self_loader, persona_dirs=persona_dirs, include_builtin=include_builtin, cwd=cwd
             )
 
-        monkeypatch.setattr(_loader_module.PersonaLoader, "__init__", patched_init)
+        monkeypatch.setattr(_loader_module.FilesystemPersonaAdapter, "__init__", patched_init)
 
         result = self.cmd.handle(f"delete {persona_name}", self.ctx)
         assert "deleted" in result.lower()
