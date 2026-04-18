@@ -27,11 +27,18 @@ Supports two template formats:
     base_branch: "{event.base_branch}"
     repos:
       - "{event.repo}"
+    flock_flow: code-review-flow          # optional named flock flow (NIU-644)
     stages:
       - name: parallel-review
         parallel:
           - persona: reviewer
             prompt: "Review the diff"
+            persona_overrides:            # optional per-stage overrides (NIU-644)
+              llm:
+                primary_alias: powerful
+                thinking_enabled: true
+              system_prompt_extra: |
+                Production-critical change; be thorough.
           - persona: security-auditor
             prompt: "Security audit"
         fan_in: all_must_pass
@@ -44,6 +51,11 @@ Supports two template formats:
         gate: human
         notify: [slack]
         condition: "stages.test.verdict == pass"
+
+``persona_overrides`` merges onto the matching persona from ``flock_flow``.
+The keys ``allowed_tools`` and ``forbidden_tools`` are rejected at parse
+time — they are a security boundary that cannot be overridden at the
+pipeline layer.
 """
 
 from __future__ import annotations
@@ -75,6 +87,7 @@ class TemplateRaid:
     estimate_hours: float
     prompt: str
     persona: str = ""
+    persona_overrides: dict | None = None  # NIU-644: per-stage flock persona overrides
 
 
 @dataclass(frozen=True)
@@ -100,6 +113,7 @@ class SagaTemplate:
     base_branch: str
     repos: list[str]
     phases: list[TemplatePhase]
+    flock_flow: str | None = None  # NIU-644: named flock flow for all stages in this pipeline
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +169,7 @@ def _parse_raid_from_dict(r: dict, phase_name: str) -> TemplateRaid:
         estimate_hours=float(r.get("estimate_hours", 2.0)),
         prompt=r.get("prompt", ""),
         persona=r.get("persona", ""),
+        persona_overrides=r.get("persona_overrides") or None,
     )
 
 
@@ -170,6 +185,7 @@ def _parse_participant_as_raid(p: dict, stage_name: str) -> TemplateRaid:
         estimate_hours=float(p.get("estimate_hours", 1.0)),
         prompt=p.get("prompt", ""),
         persona=persona,
+        persona_overrides=p.get("persona_overrides") or None,
     )
 
 
@@ -254,6 +270,29 @@ def _parse_phases(data: dict) -> list[TemplatePhase]:
 
 
 # ---------------------------------------------------------------------------
+# Security boundary keys that cannot be overridden at the pipeline layer
+# ---------------------------------------------------------------------------
+
+_SECURITY_OVERRIDE_KEYS = frozenset({"allowed_tools", "forbidden_tools"})
+
+
+def _check_persona_overrides_security(overrides: dict, path: str) -> None:
+    """Reject security-boundary keys inside a persona_overrides block.
+
+    :raises ValueError: When ``allowed_tools`` or ``forbidden_tools`` appear
+        in *overrides*.  The error message cites the offending path so the
+        caller can quickly locate the problem in their YAML.
+    """
+    for key in _SECURITY_OVERRIDE_KEYS:
+        if key in overrides:
+            raise ValueError(
+                f"persona_overrides at '{path}' sets '{key}', which is a "
+                "security boundary and cannot be overridden at the pipeline "
+                "layer. Remove it from the YAML."
+            )
+
+
+# ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
 
@@ -262,7 +301,8 @@ def _validate_template(data: dict) -> None:
     """Validate parsed (and interpolated) template data.
 
     :raises ValueError: When mandatory fields are missing or the template
-        structure is invalid.
+        structure is invalid, including security-boundary violations in
+        ``persona_overrides`` blocks.
     """
     if not data.get("name"):
         raise ValueError("Template is missing required field 'name'")
@@ -282,6 +322,15 @@ def _validate_template(data: dict) -> None:
                 raise ValueError(
                     f"Stage '{stage_name}' must have 'parallel', 'sequential', or 'gate: human'"
                 )
+            # Validate persona_overrides security boundaries in all participants
+            for participant_list_key in ("parallel", "sequential"):
+                for p_idx, p in enumerate(stage.get(participant_list_key) or []):
+                    overrides = p.get("persona_overrides")
+                    if overrides:
+                        path = (
+                            f"stages.{stage_name}.{participant_list_key}[{p_idx}].persona_overrides"
+                        )
+                        _check_persona_overrides_security(overrides, path)
         return
 
     if not has_phases:
@@ -308,6 +357,10 @@ def _validate_template(data: dict) -> None:
                     f"Raid '{raid_name}' in phase '{phase_name}'"
                     " is missing required field 'persona'"
                 )
+            overrides = raid.get("persona_overrides")
+            if overrides:
+                path = f"phases.{phase_name}.raids[{raid_idx}].persona_overrides"
+                _check_persona_overrides_security(overrides, path)
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +408,7 @@ def load_template(name: str, templates_dir: Path, payload: dict) -> SagaTemplate
         base_branch=data.get("base_branch", "main"),
         repos=data.get("repos", []),
         phases=phases,
+        flock_flow=data.get("flock_flow") or None,
     )
 
 
@@ -382,4 +436,5 @@ def load_template_from_string(yaml_str: str, payload: dict) -> SagaTemplate:
         base_branch=data.get("base_branch", "main"),
         repos=data.get("repos", []),
         phases=phases,
+        flock_flow=data.get("flock_flow") or None,
     )
