@@ -175,33 +175,100 @@ function renderProseBlock(block: string, blockKey: number): ReactNode[] {
 }
 
 /* ------------------------------------------------------------------ */
+/*  OutcomeCard                                                         */
+/* ------------------------------------------------------------------ */
+
+const VERDICT_COLORS: Record<string, string> = {
+  approve: 'var(--color-accent-emerald)',
+  pass: 'var(--color-accent-emerald)',
+  retry: 'var(--color-accent-amber)',
+  escalate: 'var(--color-accent-red)',
+  fail: 'var(--color-accent-red)',
+};
+
+function parseOutcomeYaml(raw: string): Record<string, string> {
+  const fields: Record<string, string> = {};
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const colonIdx = trimmed.indexOf(':');
+    if (colonIdx < 1) continue;
+    const key = trimmed.slice(0, colonIdx).trim();
+    const value = trimmed.slice(colonIdx + 1).trim();
+    fields[key] = value;
+  }
+  return fields;
+}
+
+function OutcomeCard({ yaml, cardKey }: { yaml: string; cardKey: string }) {
+  const fields = parseOutcomeYaml(yaml);
+  const verdict = fields['verdict'] ?? '';
+  const verdictColor = VERDICT_COLORS[verdict] ?? 'var(--color-text-secondary)';
+
+  return (
+    <div key={cardKey} className={styles.outcomeCard}>
+      <div className={styles.outcomeHeader}>
+        <span className={styles.outcomeLabel}>Outcome</span>
+        {verdict && (
+          <span className={styles.outcomeBadge} style={{ color: verdictColor, borderColor: verdictColor }}>
+            {verdict}
+          </span>
+        )}
+      </div>
+      <div className={styles.outcomeFields}>
+        {Object.entries(fields)
+          .filter(([k]) => k !== 'verdict')
+          .map(([key, value]) => (
+            <div key={key} className={styles.outcomeField}>
+              <span className={styles.outcomeKey}>{key}</span>
+              <span className={styles.outcomeValue}>{value}</span>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  RenderedContent                                                     */
 /* ------------------------------------------------------------------ */
 
 export function RenderedContent({ content, className }: RenderedContentProps) {
-  // Split by fenced code blocks: ```lang\n...\n```
-  const blocks = content.split(/(```\w*\n[\s\S]*?```)/g);
+  // Split by outcome blocks first: ---outcome--- ... ---end---
+  const segments = content.split(/(---outcome---[\s\S]*?---end---)/gi);
 
   const rendered: ReactNode[] = [];
 
-  for (let i = 0; i < blocks.length; i++) {
-    const block = blocks[i];
+  for (let si = 0; si < segments.length; si++) {
+    const segment = segments[si];
 
-    // Fenced code block
-    const codeMatch = block.match(/^```(\w*)\n([\s\S]*?)```$/);
-    if (codeMatch) {
-      rendered.push(
-        <CodeBlock
-          key={`code-${i}`}
-          language={codeMatch[1]}
-          code={codeMatch[2].replace(/\n$/, '')}
-        />
-      );
+    // Outcome block
+    const outcomeMatch = segment.match(/---outcome---\s*\n([\s\S]*?)---end---/i);
+    if (outcomeMatch) {
+      rendered.push(<OutcomeCard key={`outcome-${si}`} yaml={outcomeMatch[1]} cardKey={`outcome-${si}`} />);
       continue;
     }
 
-    // Prose content
-    rendered.push(...renderProseBlock(block, i));
+    // Split remaining content by fenced code blocks: ```lang\n...\n```
+    const blocks = segment.split(/(```\w*\n[\s\S]*?```)/g);
+
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
+
+      const codeMatch = block.match(/^```(\w*)\n([\s\S]*?)```$/);
+      if (codeMatch) {
+        rendered.push(
+          <CodeBlock
+            key={`code-${si}-${i}`}
+            language={codeMatch[1]}
+            code={codeMatch[2].replace(/\n$/, '')}
+          />
+        );
+        continue;
+      }
+
+      rendered.push(...renderProseBlock(block, si * 100 + i));
+    }
   }
 
   return <div className={cn(styles.content, className)}>{rendered}</div>;
