@@ -7,8 +7,15 @@ import uuid
 
 import pytest
 
-from tests.test_tyr.stubs import InMemorySagaRepository, StubVolundrFactory, StubVolundrPort
+from tests.test_tyr.stubs import (
+    InMemorySagaRepository,
+    StubFlockFlowProvider,
+    StubVolundrFactory,
+    StubVolundrPort,
+)
 from tyr.adapters.memory_event_bus import InMemoryEventBus
+from tyr.domain.flock_flow import FlockFlowConfig, FlockPersonaOverride
+from tyr.domain.flock_merge import build_flock_workload_config, merge_persona_override
 from tyr.domain.models import PhaseStatus, RaidStatus, SagaStatus
 from tyr.domain.pipeline_executor import (
     TemplateAwarePipelineExecutor,
@@ -1058,3 +1065,457 @@ class TestContextInjectionE2E:
         resolved = interpolate_stage_refs(prompt, {"review": merge_stage_outcomes(stage1_outcomes)})
         assert "pass" in resolved
         assert "Minor issues only" in resolved
+
+
+# ---------------------------------------------------------------------------
+# NIU-644: flock_flow reference + per-stage persona_overrides merge
+# ---------------------------------------------------------------------------
+
+
+def _make_flow(
+    name: str = "code-review-flow",
+    reviewer_alias: str = "balanced",
+) -> FlockFlowConfig:
+    """Build a minimal FlockFlowConfig for tests."""
+    return FlockFlowConfig(
+        name=name,
+        personas=[
+            FlockPersonaOverride(
+                name="reviewer",
+                llm={"primary_alias": reviewer_alias},
+                system_prompt_extra="Standard review instructions.",
+            ),
+            FlockPersonaOverride(name="security-auditor"),
+        ],
+    )
+
+
+def _make_executor_with_flow(
+    flow_provider: StubFlockFlowProvider | None = None,
+    volundr: StubVolundrPort | None = None,
+) -> tuple[TemplateAwarePipelineExecutor, InMemorySagaRepository, InMemoryEventBus]:
+    repo = InMemorySagaRepository()
+    bus = InMemoryEventBus()
+    factory = StubVolundrFactory(volundr or StubVolundrPort())
+    executor = TemplateAwarePipelineExecutor(
+        saga_repo=repo,
+        volundr_factory=factory,
+        event_bus=bus,
+        owner_id=_OWNER,
+        flow_provider=flow_provider,
+    )
+    return executor, repo, bus
+
+
+class TestMergePersonaOverride:
+    """Unit tests for the merge_persona_override helper."""
+
+    def test_llm_alias_overridden(self):
+        flow_persona = {"name": "reviewer", "llm": {"primary_alias": "balanced"}}
+        override = {"llm": {"primary_alias": "powerful"}}
+        result = merge_persona_override(flow_persona, override)
+        assert result["llm"]["primary_alias"] == "powerful"
+
+    def test_llm_thinking_added(self):
+        flow_persona = {"name": "reviewer", "llm": {"primary_alias": "balanced"}}
+        override = {"llm": {"thinking_enabled": True}}
+        result = merge_persona_override(flow_persona, override)
+        assert result["llm"]["thinking_enabled"] is True
+        assert result["llm"]["primary_alias"] == "balanced"  # preserved
+
+    def test_system_prompt_extra_concatenated(self):
+        flow_persona = {"name": "reviewer", "system_prompt_extra": "Base instructions."}
+        override = {"system_prompt_extra": "Extra context."}
+        result = merge_persona_override(flow_persona, override)
+        assert "Base instructions." in result["system_prompt_extra"]
+        assert "Extra context." in result["system_prompt_extra"]
+
+    def test_name_always_preserved(self):
+        flow_persona = {"name": "reviewer"}
+        override = {"name": "should-be-ignored", "llm": {"primary_alias": "powerful"}}
+        result = merge_persona_override(flow_persona, override)
+        assert result["name"] == "reviewer"
+
+    def test_empty_override_leaves_persona_unchanged(self):
+        flow_persona = {"name": "reviewer", "llm": {"primary_alias": "balanced"}}
+        result = merge_persona_override(flow_persona, {})
+        assert result == flow_persona
+
+    def test_extra_non_empty_fields_applied(self):
+        flow_persona = {"name": "reviewer"}
+        override = {"iteration_budget": 5}
+        result = merge_persona_override(flow_persona, override)
+        assert result["iteration_budget"] == 5
+
+    def test_zero_extra_field_not_applied(self):
+        """Zero values are treated as 'inherit' — not applied."""
+        flow_persona = {"name": "reviewer", "iteration_budget": 3}
+        override = {"iteration_budget": 0}
+        result = merge_persona_override(flow_persona, override)
+        # 0 is falsy → not overridden
+        assert result["iteration_budget"] == 3
+
+
+class TestBuildFlockWorkloadConfig:
+    """Unit tests for build_flock_workload_config."""
+
+    def test_no_flow_name_returns_none(self):
+        from tyr.domain.templates import TemplateRaid
+
+        tpl_raid = TemplateRaid(
+            name="r",
+            description="",
+            acceptance_criteria=[],
+            declared_files=[],
+            estimate_hours=1.0,
+            prompt="do it",
+            persona="reviewer",
+        )
+        assert build_flock_workload_config("", tpl_raid, StubFlockFlowProvider(), "prompt") is None
+
+    def test_no_provider_returns_none(self):
+        from tyr.domain.templates import TemplateRaid
+
+        tpl_raid = TemplateRaid(
+            name="r",
+            description="",
+            acceptance_criteria=[],
+            declared_files=[],
+            estimate_hours=1.0,
+            prompt="do it",
+            persona="reviewer",
+        )
+        assert build_flock_workload_config("my-flow", tpl_raid, None, "prompt") is None
+
+    def test_unknown_flow_returns_none(self):
+        from tyr.domain.templates import TemplateRaid
+
+        tpl_raid = TemplateRaid(
+            name="r",
+            description="",
+            acceptance_criteria=[],
+            declared_files=[],
+            estimate_hours=1.0,
+            prompt="do it",
+            persona="reviewer",
+        )
+        provider = StubFlockFlowProvider()  # empty — no flows
+        assert build_flock_workload_config("no-such-flow", tpl_raid, provider, "prompt") is None
+
+    def test_flow_only_returns_flow_personas(self):
+        from tyr.domain.templates import TemplateRaid
+
+        flow = _make_flow()
+        provider = StubFlockFlowProvider({"code-review-flow": flow})
+        tpl_raid = TemplateRaid(
+            name="r",
+            description="",
+            acceptance_criteria=[],
+            declared_files=[],
+            estimate_hours=1.0,
+            prompt="review it",
+            persona="reviewer",
+        )
+        config = build_flock_workload_config("code-review-flow", tpl_raid, provider, "review it")
+        assert config is not None
+        assert len(config["personas"]) == 2
+        reviewer = next(p for p in config["personas"] if p["name"] == "reviewer")
+        assert reviewer["llm"]["primary_alias"] == "balanced"
+
+    def test_initiative_context_set_to_initial_prompt(self):
+        from tyr.domain.templates import TemplateRaid
+
+        flow = _make_flow()
+        provider = StubFlockFlowProvider({"code-review-flow": flow})
+        tpl_raid = TemplateRaid(
+            name="r",
+            description="",
+            acceptance_criteria=[],
+            declared_files=[],
+            estimate_hours=1.0,
+            prompt="my prompt",
+            persona="reviewer",
+        )
+        config = build_flock_workload_config("code-review-flow", tpl_raid, provider, "my prompt")
+        assert config["initiative_context"] == "my prompt"
+
+    def test_stage_override_merged_onto_matching_persona(self):
+        from tyr.domain.templates import TemplateRaid
+
+        flow = _make_flow()
+        provider = StubFlockFlowProvider({"code-review-flow": flow})
+        tpl_raid = TemplateRaid(
+            name="r",
+            description="",
+            acceptance_criteria=[],
+            declared_files=[],
+            estimate_hours=1.0,
+            prompt="review it",
+            persona="reviewer",
+            persona_overrides={"llm": {"primary_alias": "powerful", "thinking_enabled": True}},
+        )
+        config = build_flock_workload_config("code-review-flow", tpl_raid, provider, "review it")
+        assert config is not None
+        reviewer = next(p for p in config["personas"] if p["name"] == "reviewer")
+        assert reviewer["llm"]["primary_alias"] == "powerful"
+        assert reviewer["llm"]["thinking_enabled"] is True
+
+    def test_non_matching_persona_unaffected_by_override(self):
+        from tyr.domain.templates import TemplateRaid
+
+        flow = _make_flow()
+        provider = StubFlockFlowProvider({"code-review-flow": flow})
+        tpl_raid = TemplateRaid(
+            name="r",
+            description="",
+            acceptance_criteria=[],
+            declared_files=[],
+            estimate_hours=1.0,
+            prompt="review it",
+            persona="reviewer",
+            persona_overrides={"llm": {"primary_alias": "powerful"}},
+        )
+        config = build_flock_workload_config("code-review-flow", tpl_raid, provider, "review it")
+        # security-auditor has no overrides → should be unchanged
+        auditor = next(p for p in config["personas"] if p["name"] == "security-auditor")
+        assert "llm" not in auditor  # flow didn't set llm for auditor
+
+    def test_mimir_url_included_when_set(self):
+        from tyr.domain.templates import TemplateRaid
+
+        flow = FlockFlowConfig(
+            name="my-flow",
+            mimir_hosted_url="https://mimir.example.com",
+            personas=[FlockPersonaOverride(name="reviewer")],
+        )
+        provider = StubFlockFlowProvider({"my-flow": flow})
+        tpl_raid = TemplateRaid(
+            name="r",
+            description="",
+            acceptance_criteria=[],
+            declared_files=[],
+            estimate_hours=1.0,
+            prompt="p",
+            persona="reviewer",
+        )
+        config = build_flock_workload_config("my-flow", tpl_raid, provider, "p")
+        assert config["mimir_hosted_url"] == "https://mimir.example.com"
+
+
+# ---------------------------------------------------------------------------
+# NIU-644 E2E: YAML → executor → SpawnRequest
+# ---------------------------------------------------------------------------
+
+_FLOCK_FLOW_PIPELINE = textwrap.dedent(
+    """
+    name: "flock-pipeline"
+    feature_branch: "feat/flock"
+    base_branch: "main"
+    repos:
+      - "test/repo"
+    flock_flow: code-review-flow
+    stages:
+      - name: review
+        parallel:
+          - persona: reviewer
+            prompt: "Review this code"
+          - persona: security-auditor
+            prompt: "Audit this code"
+        fan_in: all_must_pass
+    """
+)
+
+_FLOCK_FLOW_WITH_OVERRIDE_PIPELINE = textwrap.dedent(
+    """
+    name: "flock-override-pipeline"
+    feature_branch: "feat/flock"
+    base_branch: "main"
+    repos:
+      - "test/repo"
+    flock_flow: code-review-flow
+    stages:
+      - name: review
+        parallel:
+          - persona: reviewer
+            prompt: "Review this code"
+            persona_overrides:
+              llm:
+                primary_alias: powerful
+                thinking_enabled: true
+              system_prompt_extra: |
+                Production-critical; be thorough.
+          - persona: security-auditor
+            prompt: "Audit this code"
+        fan_in: all_must_pass
+    """
+)
+
+
+class TestFlockFlowPipelineDispatch:
+    """E2E tests: YAML with flock_flow → executor → SpawnRequest assertions."""
+
+    @pytest.mark.asyncio
+    async def test_flow_only_dispatch_uses_ravn_flock_workload_type(self):
+        """With flock_flow set and no overrides, workload_type is ravn_flock."""
+        flow = _make_flow()
+        provider = StubFlockFlowProvider({"code-review-flow": flow})
+        volundr = StubVolundrPort()
+        executor, _, _ = _make_executor_with_flow(provider, volundr)
+
+        await executor.create_from_yaml(_FLOCK_FLOW_PIPELINE, auto_start=True)
+
+        assert len(volundr.spawned) == 2
+        for req in volundr.spawned:
+            assert req.workload_type == "ravn_flock"
+
+    @pytest.mark.asyncio
+    async def test_flow_only_dispatch_carries_flow_personas(self):
+        """With flock_flow and no overrides, workload_config.personas equals flow personas."""
+        flow = _make_flow()
+        provider = StubFlockFlowProvider({"code-review-flow": flow})
+        volundr = StubVolundrPort()
+        executor, _, _ = _make_executor_with_flow(provider, volundr)
+
+        await executor.create_from_yaml(_FLOCK_FLOW_PIPELINE, auto_start=True)
+
+        for req in volundr.spawned:
+            personas = req.workload_config.get("personas", [])
+            names = [p["name"] for p in personas]
+            assert "reviewer" in names
+            assert "security-auditor" in names
+
+    @pytest.mark.asyncio
+    async def test_reviewer_override_applied_security_auditor_unchanged(self):
+        """Stage override for reviewer: powerful alias; security-auditor uses flow default."""
+        flow = _make_flow(reviewer_alias="balanced")
+        provider = StubFlockFlowProvider({"code-review-flow": flow})
+        volundr = StubVolundrPort()
+        executor, _, _ = _make_executor_with_flow(provider, volundr)
+
+        await executor.create_from_yaml(_FLOCK_FLOW_WITH_OVERRIDE_PIPELINE, auto_start=True)
+
+        # 2 raids dispatched (reviewer + security-auditor)
+        assert len(volundr.spawned) == 2
+
+        # The reviewer raid dispatch: its workload_config should have reviewer with powerful alias
+        reviewer_req = next(r for r in volundr.spawned if r.profile == "reviewer")
+        reviewer_personas = reviewer_req.workload_config["personas"]
+        reviewer_p = next(p for p in reviewer_personas if p["name"] == "reviewer")
+        assert reviewer_p["llm"]["primary_alias"] == "powerful"
+        assert reviewer_p["llm"]["thinking_enabled"] is True
+        assert "Production-critical" in reviewer_p.get("system_prompt_extra", "")
+
+        # The security-auditor raid dispatch: its workload_config should have auditor unchanged
+        auditor_req = next(r for r in volundr.spawned if r.profile == "security-auditor")
+        auditor_personas = auditor_req.workload_config["personas"]
+        reviewer_in_auditor_dispatch = next(p for p in auditor_personas if p["name"] == "reviewer")
+        # In the auditor's dispatch, the reviewer persona uses flow default (no override applied)
+        assert reviewer_in_auditor_dispatch["llm"]["primary_alias"] == "balanced"
+
+    @pytest.mark.asyncio
+    async def test_no_flock_flow_solo_dispatch(self):
+        """Without flock_flow, workload_type is default (solo dispatch)."""
+        volundr = StubVolundrPort()
+        executor, _, _ = _make_executor_with_flow(None, volundr)
+
+        await executor.create_from_yaml(_SINGLE_STAGE_PIPELINE, auto_start=True)
+
+        assert len(volundr.spawned) == 1
+        assert volundr.spawned[0].workload_type == "default"
+        assert volundr.spawned[0].workload_config == {}
+
+    @pytest.mark.asyncio
+    async def test_unknown_flow_falls_back_to_solo_dispatch(self):
+        """When flow is referenced but not found, dispatch falls back to solo."""
+        provider = StubFlockFlowProvider()  # empty — flow not registered
+        volundr = StubVolundrPort()
+        executor, _, _ = _make_executor_with_flow(provider, volundr)
+
+        await executor.create_from_yaml(_FLOCK_FLOW_PIPELINE, auto_start=True)
+
+        # Should still dispatch (not crash)
+        assert len(volundr.spawned) == 2
+        for req in volundr.spawned:
+            assert req.workload_type == "default"
+
+    @pytest.mark.asyncio
+    async def test_flock_flow_stored_in_executor(self):
+        """The saga's flock_flow name is stored in _saga_flock_flows."""
+        flow = _make_flow()
+        provider = StubFlockFlowProvider({"code-review-flow": flow})
+        executor, _, _ = _make_executor_with_flow(provider)
+
+        saga = await executor.create_from_yaml(_FLOCK_FLOW_PIPELINE, auto_start=False)
+
+        assert executor._saga_flock_flows.get(str(saga.id)) == "code-review-flow"
+
+    @pytest.mark.asyncio
+    async def test_no_flock_flow_stored_as_none(self):
+        """Without flock_flow in YAML, stored value is None."""
+        executor, _, _ = _make_executor_with_flow(None)
+
+        saga = await executor.create_from_yaml(_SINGLE_STAGE_PIPELINE, auto_start=False)
+
+        assert executor._saga_flock_flows.get(str(saga.id)) is None
+
+    @pytest.mark.asyncio
+    async def test_flock_flow_used_in_second_stage(self):
+        """After phase 1 completes, phase 2 is also dispatched with flock config."""
+        flow = _make_flow()
+        provider = StubFlockFlowProvider({"code-review-flow": flow})
+        volundr = StubVolundrPort()
+        executor, repo, _ = _make_executor_with_flow(provider, volundr)
+
+        two_stage_yaml = textwrap.dedent(
+            """
+            name: "two-stage-flock"
+            feature_branch: "feat/f"
+            base_branch: "main"
+            repos: ["test/repo"]
+            flock_flow: code-review-flow
+            stages:
+              - name: review
+                sequential:
+                  - persona: reviewer
+                    prompt: "Review it"
+              - name: test
+                sequential:
+                  - persona: security-auditor
+                    prompt: "Audit it"
+            """
+        )
+        saga = await executor.create_from_yaml(two_stage_yaml, auto_start=True)
+
+        # Phase 1 dispatched
+        assert len(volundr.spawned) == 1
+        p1_req = volundr.spawned[0]
+        assert p1_req.workload_type == "ravn_flock"
+
+        # Complete phase 1
+        phases = await repo.get_phases_by_saga(saga.id)
+        raids = await repo.get_raids_by_phase(phases[0].id)
+        await executor.receive_outcome(raid_id=raids[0].id, outcome={"verdict": "pass"})
+
+        # Phase 2 dispatched — also flock
+        assert len(volundr.spawned) == 2
+        p2_req = volundr.spawned[1]
+        assert p2_req.workload_type == "ravn_flock"
+
+    @pytest.mark.asyncio
+    async def test_flow_only_dispatches_identical_workload_config_for_both_raids(self):
+        """Flow-only: both raiders in a parallel stage get identical flow personas."""
+        flow = _make_flow()
+        provider = StubFlockFlowProvider({"code-review-flow": flow})
+        volundr = StubVolundrPort()
+        executor, _, _ = _make_executor_with_flow(provider, volundr)
+
+        await executor.create_from_yaml(_FLOCK_FLOW_PIPELINE, auto_start=True)
+
+        # Both requests should carry the same flow personas (no overrides)
+        personas_0 = volundr.spawned[0].workload_config["personas"]
+        personas_1 = volundr.spawned[1].workload_config["personas"]
+        # Both should have reviewer with "balanced" alias (flow default)
+        r0 = next(p for p in personas_0 if p["name"] == "reviewer")
+        r1 = next(p for p in personas_1 if p["name"] == "reviewer")
+        assert r0["llm"]["primary_alias"] == "balanced"
+        assert r1["llm"]["primary_alias"] == "balanced"

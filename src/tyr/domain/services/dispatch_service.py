@@ -24,6 +24,7 @@ try:
 except ImportError:
     _catalog_saga_completed = None  # type: ignore[assignment]
 
+from tyr.domain.flock_merge import build_flock_workload_config
 from tyr.domain.models import (
     Phase,
     PhaseStatus,
@@ -607,7 +608,14 @@ class DispatchService:
 
         if auto_start and phases_data:
             first_phase, first_raids, first_tpl = phases_data[0]
-            await self._dispatch_template_phase(saga, first_phase, first_raids, first_tpl, owner_id)
+            await self._dispatch_template_phase(
+                saga,
+                first_phase,
+                first_raids,
+                first_tpl,
+                owner_id,
+                flock_flow_name=template.flock_flow or "",
+            )
 
         return str(saga_id)
 
@@ -618,8 +626,15 @@ class DispatchService:
         raids: list[Raid],
         tpl_phase: TemplatePhase,
         owner_id: str,
+        flock_flow_name: str = "",
     ) -> None:
-        """Spawn Volundr sessions for all raids in a template phase."""
+        """Spawn Volundr sessions for all raids in a template phase.
+
+        When *flock_flow_name* is provided and a matching flow is registered,
+        each raid is dispatched as a flock session with the flow's personas.
+        Per-raid ``persona_overrides`` from the template YAML are merged onto
+        the matching flow persona before dispatch.
+        """
         volundr = await self._volundr_factory.primary_for_owner(owner_id)
         if volundr is None:
             logger.error(
@@ -632,22 +647,29 @@ class DispatchService:
         repo = saga.repos[0] if saga.repos else ""
         for raid, tpl_raid in zip(raids, tpl_phase.raids):
             session_name = re.sub(r"[^a-z0-9]+", "-", raid.name.lower()).strip("-")[:48]
+            workload_config = build_flock_workload_config(
+                flock_flow_name,
+                tpl_raid,
+                self._flow_provider,
+                tpl_raid.prompt,
+            )
+            request = SpawnRequest(
+                name=session_name,
+                repo=repo,
+                branch=saga.feature_branch,
+                base_branch=saga.base_branch,
+                model=self._config.default_model,
+                tracker_issue_id=raid.tracker_id,
+                tracker_issue_url="",
+                system_prompt=self._config.default_system_prompt,
+                initial_prompt=tpl_raid.prompt,
+                profile=tpl_raid.persona or None,
+                integration_ids=[],
+                workload_type="ravn_flock" if workload_config else "default",
+                workload_config=workload_config or {},
+            )
             try:
-                session = await volundr.spawn_session(
-                    request=SpawnRequest(
-                        name=session_name,
-                        repo=repo,
-                        branch=saga.feature_branch,
-                        base_branch=saga.base_branch,
-                        model=self._config.default_model,
-                        tracker_issue_id=raid.tracker_id,
-                        tracker_issue_url="",
-                        system_prompt=self._config.default_system_prompt,
-                        initial_prompt=tpl_raid.prompt,
-                        profile=tpl_raid.persona or None,
-                        integration_ids=[],
-                    ),
-                )
+                session = await volundr.spawn_session(request=request)
                 updated = Raid(
                     id=raid.id,
                     phase_id=raid.phase_id,
@@ -670,10 +692,12 @@ class DispatchService:
                 )
                 await self._saga_repo.save_raid(updated)
                 logger.info(
-                    "DispatchService: dispatched template raid %s → session %s (persona=%s)",
+                    "DispatchService: dispatched template raid %s → session %s"
+                    " (persona=%s, flock=%s)",
                     raid.name,
                     session.id,
                     tpl_raid.persona or "(none)",
+                    flock_flow_name or "(none)",
                 )
             except Exception:
                 logger.exception(

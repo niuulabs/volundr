@@ -39,6 +39,7 @@ from typing import Any
 from uuid import UUID
 
 from tyr.domain.condition_evaluator import ConditionError, evaluate_condition
+from tyr.domain.flock_merge import build_flock_workload_config
 from tyr.domain.models import (
     Phase,
     PhaseStatus,
@@ -50,6 +51,7 @@ from tyr.domain.models import (
 from tyr.domain.templates import SagaTemplate, TemplatePhase, load_template_from_string
 from tyr.domain.utils import _session_name, _slugify
 from tyr.ports.event_bus import EventBusPort, TyrEvent
+from tyr.ports.flock_flow import FlockFlowProvider
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.volundr import SpawnRequest, VolundrFactory
 
@@ -830,12 +832,19 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
 
     Stores the template phases in memory after creation so that ``receive_outcome``
     can evaluate the correct fan-in strategy and condition expressions.
+
+    When a ``flow_provider`` is supplied and the template declares a
+    ``flock_flow``, dispatched raids are wrapped in a flock workload config
+    with per-stage ``persona_overrides`` merged in.
     """
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, *, flow_provider: FlockFlowProvider | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
+        self._flow_provider = flow_provider
         # Maps saga_id → list of (Phase, TemplatePhase) pairs, ordered by phase number
         self._saga_templates: dict[str, list[tuple[Phase, TemplatePhase]]] = {}
+        # Maps saga_id → flock_flow name (or None)
+        self._saga_flock_flows: dict[str, str | None] = {}
 
     async def create_from_yaml(
         self,
@@ -845,13 +854,121 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
         auto_start: bool = True,
     ) -> Saga:
         template = load_template_from_string(yaml_str, payload=context or {})
-        saga = await self._create_saga(template, auto_start=auto_start)
 
-        # After creation, index phases by number from DB
+        # Always create WITHOUT auto_start so template context is indexed first.
+        # We dispatch manually below — this ensures _saga_flock_flows is populated
+        # before _dispatch_phase is called.
+        saga = await self._create_saga(template, auto_start=False)
+
+        # Index phases by number from DB and store template context
         phases = await self._saga_repo.get_phases_by_saga(saga.id)
         pairs = list(zip(sorted(phases, key=lambda p: p.number), template.phases))
         self._saga_templates[str(saga.id)] = pairs
+        self._saga_flock_flows[str(saga.id)] = template.flock_flow
+
+        # Now dispatch Phase 1 with full template context available
+        if auto_start and template.phases:
+            await self._dispatch_phase(saga, phase_num=1, tpl_phase=template.phases[0])
+
         return saga
+
+    async def _dispatch_phase(
+        self,
+        saga: Saga,
+        *,
+        phase_num: int,
+        tpl_phase: TemplatePhase,
+    ) -> None:
+        """Template-aware Phase-1 dispatch: injects flock config when a flow is set."""
+        if tpl_phase.gate == "human":
+            await self._gate_phase(saga, phase_num=phase_num, tpl_phase=tpl_phase)
+            return
+
+        phases = await self._saga_repo.get_phases_by_saga(saga.id)
+        phase = next((p for p in phases if p.number == phase_num), None)
+        if phase is None:
+            logger.error("PipelineExecutor: phase %d not found for saga %s", phase_num, saga.id)
+            return
+
+        active_phase = Phase(
+            id=phase.id,
+            saga_id=phase.saga_id,
+            tracker_id=phase.tracker_id,
+            number=phase.number,
+            name=phase.name,
+            status=PhaseStatus.ACTIVE,
+            confidence=phase.confidence,
+        )
+        await self._saga_repo.save_phase(active_phase)
+
+        volundr = await self._volundr_factory.primary_for_owner(self._owner_id)
+        if volundr is None:
+            logger.error(
+                "PipelineExecutor: no Volundr adapter for owner %s, cannot dispatch phase %d",
+                self._owner_id,
+                phase_num,
+            )
+            return
+
+        flock_flow_name = self._saga_flock_flows.get(str(saga.id))
+        raids = await self._saga_repo.get_raids_by_phase(phase.id)
+        repo = saga.repos[0] if saga.repos else ""
+
+        for raid, tpl_raid in zip(raids, tpl_phase.raids):
+            session_name = _session_name(raid.name)
+            prompt = tpl_raid.prompt
+            workload_config = build_flock_workload_config(
+                flock_flow_name or "",
+                tpl_raid,
+                self._flow_provider,
+                prompt,
+            )
+            request = SpawnRequest(
+                name=session_name,
+                repo=repo,
+                branch=saga.feature_branch,
+                base_branch=saga.base_branch,
+                model=self._default_model,
+                tracker_issue_id=raid.tracker_id,
+                tracker_issue_url="",
+                system_prompt="",
+                initial_prompt=prompt,
+                profile=tpl_raid.persona or None,
+                integration_ids=[],
+                workload_type="ravn_flock" if workload_config else "default",
+                workload_config=workload_config or {},
+            )
+            try:
+                session = await volundr.spawn_session(request=request)
+                updated = replace(
+                    raid,
+                    status=RaidStatus.RUNNING,
+                    session_id=session.id,
+                    updated_at=datetime.now(UTC),
+                )
+                await self._saga_repo.save_raid(updated)
+                await self._event_bus.emit(
+                    TyrEvent(
+                        event="raid.state_changed",
+                        data={
+                            "raid_id": str(raid.id),
+                            "new_status": RaidStatus.RUNNING.value,
+                            "session_id": session.id,
+                            "saga_id": str(saga.id),
+                            "owner_id": self._owner_id,
+                        },
+                        owner_id=self._owner_id,
+                    )
+                )
+                logger.info(
+                    "PipelineExecutor: dispatched raid %s → session %s (persona=%s, flock=%s)",
+                    raid.name,
+                    session.id,
+                    tpl_raid.persona or "(none)",
+                    flock_flow_name or "(none)",
+                )
+            except Exception:
+                logger.exception("PipelineExecutor: failed to spawn session for raid %s", raid.name)
 
     async def _finalize_phase(self, phase_id: UUID, *, raids: list[Raid]) -> None:
         """Fan-in-aware finalization using stored template context."""
@@ -926,7 +1043,7 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
         await self._transition_to_next_phase(saga, template_pairs=template_pairs)
 
     async def _advance_phase(self, saga: Saga, *, next_phase: Phase) -> None:
-        """Template-aware advance: injects prior stage context and uses stored template."""
+        """Template-aware advance: injects prior stage context and flock config."""
         active = Phase(
             id=next_phase.id,
             saga_id=next_phase.saga_id,
@@ -952,6 +1069,7 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
             (tpl for ph, tpl in template_pairs if ph.id == next_phase.id),
             None,
         )
+        flock_flow_name = self._saga_flock_flows.get(str(saga.id))
 
         # Build stage context from all completed phases for injection into prompts.
         all_phases = await self._saga_repo.get_phases_by_saga(saga.id)
@@ -984,23 +1102,34 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
             prompt = interpolate_stage_refs(base_prompt, stage_outcomes_for_interp)
             if context_block:
                 prompt = f"{context_block}\n\n{prompt}"
-            persona = tpl_raid.persona or None if tpl_raid else None
-            try:
-                session = await volundr.spawn_session(
-                    request=SpawnRequest(
-                        name=session_name,
-                        repo=repo,
-                        branch=saga.feature_branch,
-                        base_branch=saga.base_branch,
-                        model=self._default_model,
-                        tracker_issue_id=raid.tracker_id,
-                        tracker_issue_url="",
-                        system_prompt="",
-                        initial_prompt=prompt,
-                        profile=persona,
-                        integration_ids=[],
-                    ),
+            persona = (tpl_raid.persona or None) if tpl_raid else None
+            workload_config = (
+                build_flock_workload_config(
+                    flock_flow_name or "",
+                    tpl_raid,
+                    self._flow_provider,
+                    prompt,
                 )
+                if tpl_raid
+                else None
+            )
+            request = SpawnRequest(
+                name=session_name,
+                repo=repo,
+                branch=saga.feature_branch,
+                base_branch=saga.base_branch,
+                model=self._default_model,
+                tracker_issue_id=raid.tracker_id,
+                tracker_issue_url="",
+                system_prompt="",
+                initial_prompt=prompt,
+                profile=persona,
+                integration_ids=[],
+                workload_type="ravn_flock" if workload_config else "default",
+                workload_config=workload_config or {},
+            )
+            try:
+                session = await volundr.spawn_session(request=request)
                 updated = replace(
                     raid,
                     status=RaidStatus.RUNNING,
@@ -1022,10 +1151,11 @@ class TemplateAwarePipelineExecutor(PipelineExecutor):
                     )
                 )
                 logger.info(
-                    "PipelineExecutor: dispatched raid %s → session %s (persona=%s)",
+                    "PipelineExecutor: dispatched raid %s → session %s (persona=%s, flock=%s)",
                     raid.name,
                     session.id,
                     persona or "(none)",
+                    flock_flow_name or "(none)",
                 )
             except Exception:
                 logger.exception("PipelineExecutor: failed to spawn session for raid %s", raid.name)

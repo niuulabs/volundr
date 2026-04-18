@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+from tyr.domain.flock_flow import FlockFlowConfig
 from tyr.domain.models import (
     ConfidenceEvent,
     Phase,
@@ -20,6 +21,7 @@ from tyr.domain.models import (
     TrackerMilestone,
     TrackerProject,
 )
+from tyr.ports.flock_flow import FlockFlowProvider
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import (
@@ -191,6 +193,25 @@ class StubVolundrPort(VolundrPort):
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         return
         yield  # type: ignore[misc]
+
+
+class StubFlockFlowProvider(FlockFlowProvider):
+    """In-memory flock flow provider for tests."""
+
+    def __init__(self, flows: dict[str, FlockFlowConfig] | None = None) -> None:
+        self._flows: dict[str, FlockFlowConfig] = flows or {}
+
+    def get(self, name: str) -> FlockFlowConfig | None:
+        return self._flows.get(name)
+
+    def list(self) -> list[FlockFlowConfig]:
+        return list(self._flows.values())
+
+    def save(self, flow: FlockFlowConfig) -> None:
+        self._flows[flow.name] = flow
+
+    def delete(self, name: str) -> bool:
+        return self._flows.pop(name, None) is not None
 
 
 class StubVolundrFactory:
