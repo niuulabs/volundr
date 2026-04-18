@@ -3044,6 +3044,38 @@ def tui(
     ravn_tui.run()
 
 
+@app.command()
+def web(
+    port: int = typer.Option(7477, "--port", "-p", help="Port to listen on (default: 7477)."),
+    host: str = typer.Option("0.0.0.0", "--host", help="Bind address (default: 0.0.0.0)."),
+    persona_dirs: list[str] = typer.Option(
+        [],
+        "--persona-dir",
+        help="Extra directory to search for persona YAML files. May be repeated.",
+    ),
+    reload: bool = typer.Option(False, "--reload", help="Enable auto-reload (development only)."),
+) -> None:
+    """Start the standalone Ravn web UI with persona management.
+
+    Spins up a lightweight FastAPI + web UI server — no Volundr, Tyr, or
+    PostgreSQL required.  Personas are loaded from the filesystem.
+
+    \b
+    Examples:
+      ravn web                      — start on http://0.0.0.0:7477
+      ravn web --port 8080          — use a custom port
+      ravn web --persona-dir ./my-personas
+    """
+    from ravn.web import serve
+
+    serve(
+        host=host,
+        port=port,
+        persona_dirs=persona_dirs if persona_dirs else None,
+        reload=reload,
+    )
+
+
 def main() -> None:
     app()
 

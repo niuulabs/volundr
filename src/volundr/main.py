@@ -22,7 +22,6 @@ from volundr.adapters.inbound.rest_git import create_git_router
 from volundr.adapters.inbound.rest_integrations import create_integrations_router
 from volundr.adapters.inbound.rest_issues import create_issues_router
 from volundr.adapters.inbound.rest_oauth import create_oauth_router
-from volundr.adapters.inbound.rest_personas import create_personas_router
 from volundr.adapters.inbound.rest_presets import create_presets_router
 from volundr.adapters.inbound.rest_profiles import create_profiles_router
 from volundr.adapters.inbound.rest_prompts import create_prompts_router
@@ -687,16 +686,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             preset_service = PresetService(preset_repository)
             presets_router = create_presets_router(preset_service)
             app.include_router(presets_router)
-
-            # Ravn persona management — dynamic adapter via config
-            persona_cfg = settings.ravn.persona_source
-            persona_cls = import_class(persona_cfg.adapter)
-            persona_kwargs = _resolve_secret_kwargs(
-                persona_cfg.kwargs, persona_cfg.secret_kwargs_env
-            )
-            persona_registry = persona_cls(**persona_kwargs)
-            personas_router = create_personas_router(persona_registry)
-            app.include_router(personas_router)
 
             # Personal access tokens
             from volundr.adapters.outbound.postgres_pats import PostgresPATRepository

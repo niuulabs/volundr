@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from ravn.adapters.personas.loader import FilesystemPersonaAdapter
-from volundr.adapters.inbound.rest_personas import create_personas_router
+from ravn.api.personas import create_personas_router
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -168,7 +168,7 @@ def test_get_yaml_nonexistent_returns_404(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_create_persona_writes_file(client: TestClient, tmp_path: Path) -> None:
+def test_create_persona_writes_file(client: TestClient, tmp_persona_dir: Path) -> None:
     payload = {
         "name": "new-agent",
         "system_prompt_template": "You are new.",
@@ -179,8 +179,8 @@ def test_create_persona_writes_file(client: TestClient, tmp_path: Path) -> None:
     assert resp.status_code == 201
     data = resp.json()
     assert data["name"] == "new-agent"
-    # Verify file on disk (Path.home() is redirected to tmp_path by autouse fixture)
-    saved_file = tmp_path / ".ravn" / "personas" / "new-agent.yaml"
+    # Verify file on disk (save() writes to the first configured persona_dir)
+    saved_file = tmp_persona_dir / "new-agent.yaml"
     assert saved_file.exists()
 
 
@@ -208,7 +208,7 @@ def test_create_persona_rejects_path_traversal(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_put_builtin_creates_override(client: TestClient, tmp_path: Path) -> None:
+def test_put_builtin_creates_override(client: TestClient, tmp_persona_dir: Path) -> None:
     payload = {
         "name": "coding-agent",
         "system_prompt_template": "Overridden.",
@@ -218,8 +218,8 @@ def test_put_builtin_creates_override(client: TestClient, tmp_path: Path) -> Non
     assert resp.status_code == 200
     data = resp.json()
     assert data["name"] == "coding-agent"
-    # Override file should now exist (Path.home() is redirected to tmp_path)
-    override_file = tmp_path / ".ravn" / "personas" / "coding-agent.yaml"
+    # Override file should exist in the first configured persona_dir
+    override_file = tmp_persona_dir / "coding-agent.yaml"
     assert override_file.exists()
 
 
@@ -257,9 +257,7 @@ def test_delete_nonexistent_returns_404(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_fork_creates_copy_with_new_name(
-    client: TestClient, tmp_persona_dir: Path, tmp_path: Path
-) -> None:
+def test_fork_creates_copy_with_new_name(client: TestClient, tmp_persona_dir: Path) -> None:
     write_persona(tmp_persona_dir, "source-agent", _CUSTOM_PERSONA | {"name": "source-agent"})
     resp = client.post(
         "/api/v1/ravn/personas/source-agent/fork",
@@ -268,11 +266,11 @@ def test_fork_creates_copy_with_new_name(
     assert resp.status_code == 201
     data = resp.json()
     assert data["name"] == "forked-agent"
-    forked_file = tmp_path / ".ravn" / "personas" / "forked-agent.yaml"
+    forked_file = tmp_persona_dir / "forked-agent.yaml"
     assert forked_file.exists()
 
 
-def test_fork_builtin_creates_custom(client: TestClient, tmp_path: Path) -> None:
+def test_fork_builtin_creates_custom(client: TestClient, tmp_persona_dir: Path) -> None:
     resp = client.post(
         "/api/v1/ravn/personas/coding-agent/fork",
         json={"new_name": "my-coding-agent"},
@@ -280,7 +278,7 @@ def test_fork_builtin_creates_custom(client: TestClient, tmp_path: Path) -> None
     assert resp.status_code == 201
     data = resp.json()
     assert data["name"] == "my-coding-agent"
-    forked_file = tmp_path / ".ravn" / "personas" / "my-coding-agent.yaml"
+    forked_file = tmp_persona_dir / "my-coding-agent.yaml"
     assert forked_file.exists()
 
 

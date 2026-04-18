@@ -410,12 +410,16 @@ class FilesystemPersonaAdapter(PersonaRegistryPort):
     # ------------------------------------------------------------------
 
     def save(self, config: PersonaConfig) -> None:
-        """Persist *config* to the user-global personas directory as YAML.
+        """Persist *config* as YAML.
 
-        Writes to ``~/.ravn/personas/<name>.yaml``, creating the directory if
-        it does not exist.
+        Saves to the first explicitly configured *persona_dir* when one was
+        provided at construction time.  Falls back to ``~/.ravn/personas/``
+        (user-global) when the adapter is operating in default mode.
         """
-        dest_dir = Path.home() / ".ravn" / "personas"
+        if self._persona_dirs:
+            dest_dir = self._persona_dirs[0]
+        else:
+            dest_dir = Path.home() / ".ravn" / "personas"
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / f"{config.name}.yaml"
         payload: dict[str, Any] = config.to_dict()
