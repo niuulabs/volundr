@@ -18,7 +18,10 @@ const mockDefaults = {
   default_model: 'claude-sonnet-4-6',
   models: [],
   flock_enabled: false,
-  flock_default_personas: [{ name: 'coordinator', llm: {} }, { name: 'reviewer', llm: {} }],
+  flock_default_personas: [
+    { name: 'coordinator', llm: {} },
+    { name: 'reviewer', llm: {} },
+  ],
   flock_llm_config: {},
   flock_sleipnir_publish_urls: [],
 };

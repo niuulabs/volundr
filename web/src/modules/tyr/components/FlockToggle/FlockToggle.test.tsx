@@ -2,11 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FlockToggle } from './FlockToggle';
 
-const personas = [
-  { name: 'coordinator' },
-  { name: 'reviewer' },
-  { name: 'security-auditor' },
-];
+const personas = [{ name: 'coordinator' }, { name: 'reviewer' }, { name: 'security-auditor' }];
 
 describe('FlockToggle', () => {
   it('renders toggle switch', () => {

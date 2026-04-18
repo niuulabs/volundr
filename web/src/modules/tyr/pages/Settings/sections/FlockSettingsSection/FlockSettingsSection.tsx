@@ -41,15 +41,9 @@ export function FlockSettingsSection() {
   }
 
   const flockEnabled = localEnabled ?? defaults.flock_enabled;
-  const personasText =
-    localPersonas ??
-    defaults.flock_default_personas
-      .map(p => p.name)
-      .join(', ');
-  const urlsText =
-    localUrls ?? defaults.flock_sleipnir_publish_urls.join('\n');
-  const llmJson =
-    localLlmJson ?? JSON.stringify(defaults.flock_llm_config, null, 2);
+  const personasText = localPersonas ?? defaults.flock_default_personas.map(p => p.name).join(', ');
+  const urlsText = localUrls ?? defaults.flock_sleipnir_publish_urls.join('\n');
+  const llmJson = localLlmJson ?? JSON.stringify(defaults.flock_llm_config, null, 2);
 
   const handleToggle = async () => {
     const next = !flockEnabled;
@@ -106,8 +100,8 @@ export function FlockSettingsSection() {
     <section className={styles.section}>
       <h3 className={styles.sectionTitle}>Flock Dispatch</h3>
       <p className={styles.sectionDescription}>
-        Enable multi-agent flock sessions. When enabled, raids are dispatched as ravn_flock
-        sessions with multiple collaborating personas.
+        Enable multi-agent flock sessions. When enabled, raids are dispatched as ravn_flock sessions
+        with multiple collaborating personas.
       </p>
 
       {error && <p className={styles.errorText}>{error}</p>}
@@ -137,7 +131,9 @@ export function FlockSettingsSection() {
           {/* Default personas */}
           <div className={styles.settingBlock}>
             <label className={styles.blockLabel}>Default personas</label>
-            <p className={styles.blockDescription}>Comma-separated persona names for every flock session.</p>
+            <p className={styles.blockDescription}>
+              Comma-separated persona names for every flock session.
+            </p>
             <div className={styles.inputRow}>
               <input
                 className={styles.textInput}
@@ -193,7 +189,9 @@ export function FlockSettingsSection() {
           {/* Sleipnir publish URLs */}
           <div className={styles.settingBlock}>
             <label className={styles.blockLabel}>Sleipnir publish URLs</label>
-            <p className={styles.blockDescription}>One URL per line. Event routing for flock task lifecycle.</p>
+            <p className={styles.blockDescription}>
+              One URL per line. Event routing for flock task lifecycle.
+            </p>
             <textarea
               className={styles.urlsTextarea}
               value={urlsText}
