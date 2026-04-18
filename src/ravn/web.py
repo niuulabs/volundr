@@ -33,8 +33,8 @@ DEFAULT_WEB_PORT = 7477
 _STANDALONE_CONFIG = {"modules": ["ravn"]}
 
 # Locate the compiled web UI dist directory.
-# Expects: web/dist/ relative to the repository root (two levels above src/).
-_REPO_ROOT = Path(__file__).parent.parent.parent.parent
+# web.py is at src/ravn/web.py → 3 parents reach the repo root.
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _WEB_DIST = _REPO_ROOT / "web" / "dist"
 
 
@@ -80,11 +80,13 @@ def create_standalone_app(persona_dirs: list[str] | None = None) -> FastAPI:
 
         app.mount("/assets", StaticFiles(directory=str(_dist / "assets")), name="assets")
 
+        _dist_resolved = _dist.resolve()
+
         @app.get("/{full_path:path}", include_in_schema=False)
         async def spa_fallback(full_path: str) -> FileResponse:
             """Return index.html for all non-API routes (SPA fallback)."""
-            candidate = _dist / full_path
-            if candidate.is_file():
+            candidate = (_dist / full_path).resolve()
+            if candidate.is_file() and candidate.is_relative_to(_dist_resolved):
                 return FileResponse(str(candidate))
             return FileResponse(str(_index))
 
@@ -114,6 +116,18 @@ def serve(
     """
     import uvicorn
 
+    if reload:
+        # reload mode requires an import string so uvicorn can re-import the
+        # module on changes. Custom persona_dirs are not supported in this mode.
+        uvicorn.run(
+            "ravn.web:create_standalone_app",
+            host=host,
+            port=port,
+            reload=True,
+            factory=True,
+        )
+        return
+
     app = create_standalone_app(persona_dirs=persona_dirs)
     logger.info("Starting Ravn standalone web UI on http://%s:%d", host, port)
-    uvicorn.run(app, host=host, port=port, reload=reload)
+    uvicorn.run(app, host=host, port=port)

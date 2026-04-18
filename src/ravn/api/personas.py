@@ -225,30 +225,8 @@ class PersonaForkRequest(BaseModel):
     )
 
 
-class PersonaValidateRequest(BaseModel):
+class PersonaValidateRequest(PersonaCreate):
     """Request body for validating a persona without saving."""
-
-    name: str = Field(
-        min_length=1,
-        max_length=128,
-        pattern=_NAME_PATTERN,
-        description="Persona name to validate",
-    )
-    system_prompt_template: str = Field(default="", description="System prompt template text")
-    allowed_tools: list[str] = Field(default_factory=list, description="Allowed tool groups")
-    forbidden_tools: list[str] = Field(default_factory=list, description="Forbidden tool groups")
-    permission_mode: str = Field(default="", description="Permission mode")
-    iteration_budget: int = Field(default=0, ge=0, description="Max iterations (0 = unlimited)")
-    llm_primary_alias: str = Field(default="", description="LLM alias")
-    llm_thinking_enabled: bool = Field(default=False, description="Enable extended thinking")
-    llm_max_tokens: int = Field(default=0, ge=0, description="Max tokens override")
-    produces_event_type: str = Field(default="", description="Event type produced on completion")
-    consumes_event_types: list[str] = Field(
-        default_factory=list, description="Consumed event types"
-    )
-    consumes_injects: list[str] = Field(default_factory=list, description="Injected context fields")
-    fan_in_strategy: str = Field(default="merge", description="Fan-in strategy")
-    fan_in_contributes_to: str = Field(default="", description="Parent event type")
 
 
 class PersonaValidateResponse(BaseModel):
@@ -322,12 +300,6 @@ def create_personas_router(loader: PersonaRegistryPort) -> APIRouter:
                 f"Must be one of: {', '.join(sorted(_VALID_FAN_IN_STRATEGIES))}"
             )
 
-        if data.iteration_budget < 0:
-            errors.append("iteration_budget must be >= 0")
-
-        if data.llm_max_tokens < 0:
-            errors.append("llm_max_tokens must be >= 0")
-
         return PersonaValidateResponse(valid=not errors, errors=errors)
 
     @router.get(
@@ -367,6 +339,10 @@ def create_personas_router(loader: PersonaRegistryPort) -> APIRouter:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Persona not found: {name}",
             )
+        # to_yaml() is a static serialization utility that operates on any
+        # PersonaConfig — it does not perform any filesystem I/O and is not an
+        # adapter-specific operation. It lives on FilesystemPersonaAdapter as
+        # the canonical YAML serializer for PersonaConfig objects.
         yaml_text = FilesystemPersonaAdapter.to_yaml(config)
         return Response(content=yaml_text, media_type="text/yaml")
 
