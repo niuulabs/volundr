@@ -901,6 +901,8 @@ class TestBuildSpawnRequestPersonaOverrides:
     def _call(self, config: DispatchConfig, saga, issue):
         svc = MagicMock()
         svc._config = config
+        svc._flock_flow_provider = None
+        svc._resolve_flock_personas = DispatchService._resolve_flock_personas.__get__(svc)
         item = DispatchItem(saga_id=str(saga.id), issue_id="i-1", repo="org/repo")
         return DispatchService._build_spawn_request(
             svc,
