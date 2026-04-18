@@ -248,7 +248,7 @@ class LocalProcessPodManager(PodManager):
 
             # Spawn ravn flock sidecars if the contributor produced extra containers
             if spec.pod_spec and spec.pod_spec.extra_containers:
-                flock_dir = await self._start_flock(spec, workspace, skuld_port=port)
+                flock_dir = await self._start_flock(spec, workspace)
                 info.flock_dir = str(flock_dir)
                 self._persist_state()
 
@@ -598,8 +598,6 @@ class LocalProcessPodManager(PodManager):
         self,
         spec: SessionSpec,
         workspace: Path,
-        *,
-        skuld_port: int = 0,
     ) -> Path:
         """Init and start a ravn flock alongside the Skuld session.
 
@@ -675,20 +673,6 @@ class LocalProcessPodManager(PodManager):
                 )
                 cluster_path.write_text(yaml.safe_dump(cluster, default_flow_style=False))
                 logger.info("Added Skuld peer to cluster.yaml: %s", skuld_peer_id)
-
-        # Patch each node config with skuld broker_url so ravn daemons
-        # connect via WebSocket and appear in the room UI.
-        if skuld_port:
-            broker_url = f"ws://127.0.0.1:{skuld_port}/ws/ravn"
-            for node_cfg_path in flock_dir.glob("node-*.yaml"):
-                node_cfg = yaml.safe_load(node_cfg_path.read_text()) or {}
-                node_cfg["skuld"] = {
-                    "enabled": True,
-                    "broker_url": broker_url,
-                    "display_name": node_cfg.get("persona", "ravn"),
-                }
-                node_cfg_path.write_text(yaml.safe_dump(node_cfg, default_flow_style=False))
-            logger.info("Patched flock node configs with skuld broker_url: %s", broker_url)
 
         # ravn flock start
         sp.run(

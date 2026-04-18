@@ -2679,13 +2679,14 @@ def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
     # New list-based config: delegate to shared niuu.mesh helper
     if mesh_cfg.adapters:
         from niuu.mesh import build_mesh_from_adapters_list  # noqa: PLC0415
+        from niuu.mesh.transport_builder import build_transport  # noqa: PLC0415
 
         def _sleipnir_tb(entry: dict[str, Any]) -> Any:
-            return _build_sleipnir_transport(
-                settings,
-                entry.get("transport", mesh_cfg.adapter or "nng"),
-                discovery=discovery,
-            )
+            adapter = entry.get("transport", mesh_cfg.adapter or "nng")
+            kwargs = _resolve_transport_kwargs(settings, adapter)
+            if adapter in ("sleipnir", "rabbitmq") and not kwargs:
+                return None
+            return build_transport(adapter, **kwargs)
 
         return build_mesh_from_adapters_list(
             adapters=mesh_cfg.adapters,
@@ -2696,14 +2697,17 @@ def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
         )
 
     # Legacy single-adapter mode for backward compatibility
-    legacy_adapter = mesh_cfg.adapter
-    if not legacy_adapter:
-        # Default to nng for local mesh
-        legacy_adapter = "nng"
+    legacy_adapter = mesh_cfg.adapter or "nng"
 
-    from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
+    from niuu.mesh.transport_builder import build_transport  # noqa: PLC0415
+    from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter  # noqa: PLC0415
 
-    transport = _build_sleipnir_transport(settings, legacy_adapter, discovery=discovery)
+    kwargs = _resolve_transport_kwargs(settings, legacy_adapter)
+    if legacy_adapter in ("sleipnir", "rabbitmq") and not kwargs:
+        logger.warning("mesh: failed to build transport, mesh disabled")
+        return None
+
+    transport = build_transport(legacy_adapter, **kwargs)
     if transport is None:
         logger.warning("mesh: failed to build transport, mesh disabled")
         return None
@@ -2717,30 +2721,17 @@ def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
     )
 
 
-def _read_cluster_pub_addresses(settings: Settings) -> list[str]:
-    """Read peer pub addresses from cluster.yaml files in discovery config.
-
-    Returns an empty list when no static discovery is configured or the
-    cluster file doesn't exist yet.
-    """
-    from niuu.mesh.cluster import read_cluster_pub_addresses
-
-    discovery_cfg = getattr(settings, "discovery", None)
-    if discovery_cfg is None:
-        return []
-
-    adapters_config = list(getattr(discovery_cfg, "adapters", []))
-    return read_cluster_pub_addresses(adapters_config)
-
-
 def _resolve_transport_kwargs(
     settings: Settings,
     adapter: str,
 ) -> dict[str, Any]:
     """Build constructor kwargs for a Sleipnir transport from settings."""
     if adapter == "nng":
+        from niuu.mesh.cluster import read_cluster_pub_addresses  # noqa: PLC0415
+
         nng_cfg = settings.mesh.nng
-        peer_addresses = _read_cluster_pub_addresses(settings)
+        adapters_config = list(getattr(getattr(settings, "discovery", None), "adapters", []))
+        peer_addresses = read_cluster_pub_addresses(adapters_config)
         return {
             "address": nng_cfg.pub_sub_address,
             "service_id": f"ravn:{settings.mesh.own_peer_id}",
@@ -2766,21 +2757,6 @@ def _resolve_transport_kwargs(
         return {"redis_url": redis_url}
 
     return {}
-
-
-def _build_sleipnir_transport(
-    settings: Settings,
-    adapter: str,
-    discovery: Any = None,
-) -> Any:
-    """Build the Sleipnir transport using the dynamic adapter pattern."""
-    from niuu.mesh.transport_builder import build_transport
-
-    kwargs = _resolve_transport_kwargs(settings, adapter)
-    if adapter in ("sleipnir", "rabbitmq") and not kwargs:
-        return None
-
-    return build_transport(adapter, **kwargs)
 
 
 def _build_discovery(
@@ -2834,7 +2810,14 @@ def _build_discovery(
         pub_address=pub_address,
     )
 
-    return _build_discovery_adapters(settings, identity)
+    from niuu.mesh.discovery_builder import build_discovery_adapters  # noqa: PLC0415
+
+    return build_discovery_adapters(
+        adapters_config=list(getattr(settings.discovery, "adapters", [])),
+        own_identity=identity,
+        heartbeat_interval_s=settings.discovery.heartbeat_interval_s,
+        peer_ttl_s=settings.discovery.peer_ttl_s,
+    )
 
 
 @app.command()
@@ -2894,7 +2877,14 @@ async def _run_peers(settings: Settings, *, verbose: bool, force_scan: bool) -> 
         version=version,
     )
 
-    discovery = _build_discovery_adapters(settings, identity)
+    from niuu.mesh.discovery_builder import build_discovery_adapters  # noqa: PLC0415
+
+    discovery = build_discovery_adapters(
+        adapters_config=list(getattr(settings.discovery, "adapters", [])),
+        own_identity=identity,
+        heartbeat_interval_s=settings.discovery.heartbeat_interval_s,
+        peer_ttl_s=settings.discovery.peer_ttl_s,
+    )
     if discovery is None:
         typer.echo("No discovery adapter configured.", err=True)
         return
@@ -2933,73 +2923,6 @@ async def _run_peers(settings: Settings, *, verbose: bool, force_scan: bool) -> 
         typer.echo(line)
 
     await discovery.stop()
-
-
-# Legacy aliases for backward compatibility with `adapter: mdns` style config
-_DISCOVERY_ALIASES: dict[str, str] = {
-    "mdns": "ravn.adapters.discovery.mdns.MdnsDiscoveryAdapter",
-    "sleipnir": "ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter",
-    "k8s": "ravn.adapters.discovery.k8s.K8sDiscoveryAdapter",
-    "static": "ravn.adapters.discovery.static.StaticDiscoveryAdapter",
-}
-
-
-def _build_discovery_adapters(
-    settings: Settings,
-    identity: Any,
-) -> Any:
-    """Build discovery adapters using dynamic import from config.
-
-    If settings.discovery.adapters is non-empty, delegates to the shared
-    ``niuu.mesh.discovery_builder`` for list-based config.
-    Falls back to legacy single-adapter mode for backward compatibility.
-    """
-    from niuu.mesh.discovery_builder import build_discovery_adapters
-
-    adapters_config = settings.discovery.adapters
-
-    # New list-based config: delegate to shared niuu builder
-    if adapters_config:
-        return build_discovery_adapters(
-            adapters_config=adapters_config,
-            own_identity=identity,
-            heartbeat_interval_s=settings.discovery.heartbeat_interval_s,
-            peer_ttl_s=settings.discovery.peer_ttl_s,
-        )
-
-    # Legacy single-adapter mode for backward compatibility
-    legacy_adapter = settings.discovery.adapter
-    if not legacy_adapter:
-        # Default to mdns if no adapter specified
-        legacy_adapter = "mdns"
-
-    fq_class = _DISCOVERY_ALIASES.get(legacy_adapter, legacy_adapter)
-
-    try:
-        cls = _import_class(fq_class)
-    except Exception as exc:
-        logger.warning("discovery: failed to import legacy adapter %s: %s", fq_class, exc)
-        return None
-
-    # Legacy adapters use config object for backward compatibility
-    kwargs: dict[str, Any] = {
-        "own_identity": identity,
-        "config": settings.discovery,
-    }
-
-    # Add sleipnir_config for Sleipnir adapter
-    if "sleipnir" in fq_class.lower():
-        kwargs["sleipnir_config"] = settings.sleipnir
-
-    # Add handshake_port for mDNS adapter
-    if "mdns" in fq_class.lower():
-        kwargs["handshake_port"] = settings.discovery.mdns.handshake_port
-
-    try:
-        return cls(**kwargs)
-    except Exception as exc:
-        logger.warning("discovery: failed to instantiate legacy adapter %s: %s", fq_class, exc)
-        return None
 
 
 @app.command()

@@ -541,23 +541,75 @@ class Broker:
         self._pending_reasoning_text = ""
 
     async def _start_mesh_adapter(self) -> None:
-        """Build and start the mesh adapter when mesh.enabled is True."""
+        """Build and start the mesh adapter when mesh.enabled is True.
+
+        Uses niuu.mesh functions to build transport and discovery, then wraps
+        them in a MeshParticipant for unified lifecycle management (NIU-634).
+        """
+        from niuu.mesh import build_in_process_mesh, resolve_peer_id
+        from niuu.mesh.participant import MeshParticipant
+        from niuu.mesh.transport_builder import build_nng_transport
         from skuld.mesh_adapter import SkuldMeshAdapter
 
         mesh_cfg = self._settings.mesh
-        mesh = self._build_mesh(mesh_cfg)
-        if mesh is None:
-            logger.warning("Mesh enabled but no mesh transport could be built")
-            return
+        own_peer_id = resolve_peer_id(mesh_cfg.peer_id)
 
-        discovery = self._build_discovery(mesh_cfg)
+        # Build mesh transport (nng preferred, in-process fallback)
+        mesh = None
+        if mesh_cfg.transport != "in_process":
+            try:
+                from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter  # noqa: PLC0415
+
+                nng_cfg = getattr(mesh_cfg, "nng", None)
+                address = (
+                    getattr(nng_cfg, "pub_sub_address", "tcp://127.0.0.1:0")
+                    if nng_cfg
+                    else "tcp://127.0.0.1:0"
+                )
+                peer_addresses = read_cluster_pub_addresses(mesh_cfg.adapters)
+                nng = build_nng_transport(
+                    address=address,
+                    service_id=f"skuld:{own_peer_id}",
+                    peer_addresses=peer_addresses or None,
+                )
+                if nng is not None:
+                    mesh = SleipnirMeshAdapter(
+                        publisher=nng,
+                        subscriber=nng,
+                        own_peer_id=own_peer_id,
+                        rpc_timeout_s=mesh_cfg.rpc_timeout_s,
+                    )
+            except ImportError:
+                logger.warning("mesh: nng transport not available, falling back to in-process")
+
+        if mesh is None:
+            mesh = build_in_process_mesh(own_peer_id, mesh_cfg.rpc_timeout_s)
+
+        # Build discovery adapter using shared niuu.mesh.discovery_builder
+        own_identity = MeshIdentity(
+            peer_id=mesh_cfg.peer_id or self.session_id or "skuld",
+            realm_id="",
+            persona=mesh_cfg.persona,
+            capabilities=list(mesh_cfg.capabilities),
+            permission_mode="full_access",
+            version="0.1.0",
+        )
+        discovery = build_discovery_adapters(
+            adapters_config=mesh_cfg.adapters,
+            own_identity=own_identity,
+        )
+
+        participant = MeshParticipant(
+            mesh=mesh,
+            discovery=discovery,
+            peer_id=own_peer_id,
+        )
 
         self._mesh_adapter = SkuldMeshAdapter(
-            mesh=mesh,
+            participant=participant,
             transport=self._transport,
             config=mesh_cfg,
             session_id=self.session_id,
-            discovery=discovery,
         )
 
         try:
@@ -616,70 +668,6 @@ class Broker:
         except Exception as exc:
             logger.error("Mesh adapter start failed: %r", exc, exc_info=True)
             self._mesh_adapter = None
-
-    def _build_mesh(self, mesh_cfg: Any) -> Any:
-        """Build mesh transport from config.
-
-        The ``adapters`` list in mesh config is reserved for **discovery**
-        adapters (handled by ``_build_discovery``).  Mesh transport is always
-        built from the ``transport`` field (nng or in_process).
-        """
-        from niuu.mesh import (
-            build_in_process_mesh,
-            resolve_peer_id,
-        )
-
-        own_peer_id = resolve_peer_id(mesh_cfg.peer_id)
-
-        # Build nng transport (fallback to in-process)
-        if mesh_cfg.transport != "in_process":
-            try:
-                from niuu.mesh.transport_builder import build_nng_transport  # noqa: PLC0415
-                from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter  # noqa: PLC0415
-
-                nng_cfg = getattr(mesh_cfg, "nng", None)
-                address = (
-                    getattr(nng_cfg, "pub_sub_address", "tcp://127.0.0.1:0")
-                    if nng_cfg
-                    else "tcp://127.0.0.1:0"
-                )
-                peer_addresses = read_cluster_pub_addresses(mesh_cfg.adapters)
-                nng = build_nng_transport(
-                    address=address,
-                    service_id=f"skuld:{own_peer_id}",
-                    peer_addresses=peer_addresses or None,
-                )
-                if nng is not None:
-                    return SleipnirMeshAdapter(
-                        publisher=nng,
-                        subscriber=nng,
-                        own_peer_id=own_peer_id,
-                        rpc_timeout_s=mesh_cfg.rpc_timeout_s,
-                    )
-            except ImportError:
-                logger.warning("mesh: nng transport not available, falling back to in-process")
-
-        return build_in_process_mesh(own_peer_id, mesh_cfg.rpc_timeout_s)
-
-    def _build_discovery(self, mesh_cfg: Any) -> Any:
-        """Build discovery adapter from mesh config, or return None.
-
-        Uses ``niuu.mesh.discovery_builder`` with a :class:`MeshIdentity`
-        constructed from Skuld's mesh config.  No cross-import from ravn.
-        """
-        own_identity = MeshIdentity(
-            peer_id=mesh_cfg.peer_id or self.session_id or "skuld",
-            realm_id="",
-            persona=mesh_cfg.persona,
-            capabilities=list(mesh_cfg.capabilities),
-            permission_mode="full_access",
-            version="0.1.0",
-        )
-
-        return build_discovery_adapters(
-            adapters_config=mesh_cfg.adapters,
-            own_identity=own_identity,
-        )
 
     def _build_transport_kwargs(self) -> dict:
         """Return superset of kwargs that any transport constructor might need."""

@@ -389,6 +389,34 @@ class TestActivityTranslation:
         await bridge.stop()
 
     @pytest.mark.asyncio
+    async def test_response_event_translated_to_response_frame(self):
+        room = _make_room_bridge(known_peers=["skuld-01"])
+        bus = InProcessBus()
+        bridge = RoomMeshBridge(
+            subscriber=bus,
+            room_bridge=room,
+            session_id="sess-abc",
+        )
+        await bridge.start()
+
+        evt = _make_event(
+            payload={
+                "ravn_event": {"text": "Here is the answer"},
+                "ravn_type": "RavnEventType.RESPONSE",
+                "ravn_source": "skuld-01",
+                "ravn_session_id": "sess-abc",
+                "ravn_urgency": 0.3,
+                "ravn_task_id": None,
+            }
+        )
+        await bridge._handle_event(evt)
+
+        room.handle_ravn_frame.assert_awaited_once()
+        _, frame = room.handle_ravn_frame.call_args[0]
+        assert frame["type"] == "response"
+        await bridge.stop()
+
+    @pytest.mark.asyncio
     async def test_unknown_ravn_type_is_ignored(self):
         room = _make_room_bridge(known_peers=["skuld-01"])
         bus = InProcessBus()
@@ -402,7 +430,7 @@ class TestActivityTranslation:
         evt = _make_event(
             payload={
                 "ravn_event": {},
-                "ravn_type": "RavnEventType.RESPONSE",
+                "ravn_type": "RavnEventType.DECISION",
                 "ravn_source": "skuld-01",
                 "ravn_session_id": "sess-abc",
                 "ravn_urgency": 0.3,
