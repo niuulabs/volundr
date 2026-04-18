@@ -1,5 +1,6 @@
 """Tests for RavnFlockContributor."""
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -8,6 +9,7 @@ from volundr.adapters.outbound.contributors.core import CoreSessionContributor
 from volundr.adapters.outbound.contributors.ravn_flock import (
     RavnFlockContributor,
     _gateway_port_for,
+    _normalize_personas,
     _ports_for,
 )
 from volundr.domain.models import (
@@ -15,6 +17,7 @@ from volundr.domain.models import (
     GitSource,
     Session,
     SessionSpec,
+    WorkloadPersonaOverride,
     WorkspaceTemplate,
 )
 from volundr.domain.ports import SessionContext
@@ -701,3 +704,214 @@ class TestLLMConfigPassthrough:
             env = {e["name"]: e["value"] for e in ctr["env"]}
             inline_cfg = env.get("RAVN_CONFIG_INLINE", "")
             assert "claude-sonnet-4-6" in inline_cfg
+
+
+# ---------------------------------------------------------------------------
+# _normalize_personas
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizePersonas:
+    def test_legacy_list_str(self):
+        result = _normalize_personas(["coordinator", "reviewer"])
+        assert result == [{"name": "coordinator"}, {"name": "reviewer"}]
+
+    def test_new_list_dict(self):
+        raw = [
+            {"name": "coordinator"},
+            {"name": "reviewer", "llm": {"primary_alias": "powerful"}},
+        ]
+        result = _normalize_personas(raw)
+        assert result == raw
+
+    def test_mixed_str_and_dict(self):
+        raw = ["coordinator", {"name": "reviewer", "llm": {"primary_alias": "powerful"}}]
+        result = _normalize_personas(raw)
+        assert result == [
+            {"name": "coordinator"},
+            {"name": "reviewer", "llm": {"primary_alias": "powerful"}},
+        ]
+
+    def test_dict_without_name_skipped(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            result = _normalize_personas([{"llm": {"model": "gpt-4"}}])
+        assert result == []
+        assert "without 'name'" in caplog.text
+
+    def test_non_str_non_dict_skipped(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            result = _normalize_personas([42])
+        assert result == []
+        assert "non-str/dict" in caplog.text
+
+    def test_allowed_tools_dropped(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            result = _normalize_personas([{"name": "reviewer", "allowed_tools": ["bash", "read"]}])
+        assert len(result) == 1
+        assert "allowed_tools" not in result[0]
+        assert "dropping security key" in caplog.text
+
+    def test_forbidden_tools_dropped(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            result = _normalize_personas([{"name": "reviewer", "forbidden_tools": ["rm"]}])
+        assert len(result) == 1
+        assert "forbidden_tools" not in result[0]
+        assert "dropping security key" in caplog.text
+
+    def test_empty_list(self):
+        assert _normalize_personas([]) == []
+
+    def test_preserves_extra_fields(self):
+        raw = [
+            {
+                "name": "reviewer",
+                "llm": {"primary_alias": "powerful"},
+                "system_prompt_extra": "Be thorough.",
+                "iteration_budget": 40,
+            }
+        ]
+        result = _normalize_personas(raw)
+        assert result[0]["system_prompt_extra"] == "Be thorough."
+        assert result[0]["iteration_budget"] == 40
+
+
+# ---------------------------------------------------------------------------
+# Persona dict format — end-to-end through contribute()
+# ---------------------------------------------------------------------------
+
+
+class TestPersonaDictFormat:
+    async def test_legacy_str_format_still_works(self, session):
+        """Regression: legacy list[str] personas keep working."""
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": ["coordinator", "reviewer"],
+            },
+        )
+        result = await c.contribute(session, ctx)
+
+        assert result.pod_spec is not None
+        names = [ctr["name"] for ctr in result.pod_spec.extra_containers]
+        assert "ravn-coordinator" in names
+        assert "ravn-reviewer" in names
+
+    async def test_new_dict_format_accepted(self, session):
+        """New list[dict] personas accepted and produce correct containers."""
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": [
+                    {"name": "coordinator"},
+                    {"name": "reviewer", "llm": {"primary_alias": "powerful"}},
+                ],
+            },
+        )
+        result = await c.contribute(session, ctx)
+
+        assert result.pod_spec is not None
+        names = [ctr["name"] for ctr in result.pod_spec.extra_containers]
+        assert "ravn-coordinator" in names
+        assert "ravn-reviewer" in names
+
+    async def test_mixed_format_accepted(self, session):
+        """Mixed str+dict personas in the same list are accepted."""
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": [
+                    "coordinator",
+                    {"name": "reviewer", "llm": {"primary_alias": "powerful"}},
+                    {"name": "security-auditor"},
+                ],
+            },
+        )
+        result = await c.contribute(session, ctx)
+
+        assert result.pod_spec is not None
+        assert len(result.pod_spec.extra_containers) == 3
+        names = [ctr["name"] for ctr in result.pod_spec.extra_containers]
+        assert "ravn-coordinator" in names
+        assert "ravn-reviewer" in names
+        assert "ravn-security-auditor" in names
+
+    async def test_dict_format_peer_ids_correct(self, session):
+        """Peer IDs use the name from the dict, not the dict itself."""
+        c = RavnFlockContributor()
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": [
+                    {"name": "coordinator"},
+                    {"name": "reviewer"},
+                ],
+            },
+        )
+        result = await c.contribute(session, ctx)
+
+        for ctr in result.pod_spec.extra_containers:
+            env = {e["name"]: e["value"] for e in ctr["env"]}
+            peer_id = env["RAVN_PEER_ID"]
+            assert peer_id.startswith("flock-")
+            assert peer_id in ("flock-coordinator", "flock-reviewer")
+
+
+# ---------------------------------------------------------------------------
+# WorkloadPersonaOverride typed helper
+# ---------------------------------------------------------------------------
+
+
+class TestWorkloadPersonaOverride:
+    def test_to_dict_minimal(self):
+        override = WorkloadPersonaOverride(name="coordinator")
+        d = override.to_dict()
+        assert d == {"name": "coordinator"}
+
+    def test_to_dict_with_llm(self):
+        override = WorkloadPersonaOverride(
+            name="reviewer",
+            llm={"primary_alias": "powerful", "thinking_enabled": True},
+        )
+        d = override.to_dict()
+        assert d == {
+            "name": "reviewer",
+            "llm": {"primary_alias": "powerful", "thinking_enabled": True},
+        }
+
+    def test_to_dict_with_all_fields(self):
+        override = WorkloadPersonaOverride(
+            name="reviewer",
+            llm={"primary_alias": "powerful"},
+            system_prompt_extra="Be thorough.",
+            iteration_budget=40,
+        )
+        d = override.to_dict()
+        assert d == {
+            "name": "reviewer",
+            "llm": {"primary_alias": "powerful"},
+            "system_prompt_extra": "Be thorough.",
+            "iteration_budget": 40,
+        }
+
+    def test_to_dict_usable_in_workload_config(self, session):
+        """WorkloadPersonaOverride.to_dict() produces valid workload_config entries."""
+        overrides = [
+            WorkloadPersonaOverride(name="coordinator").to_dict(),
+            WorkloadPersonaOverride(
+                name="reviewer",
+                llm={"primary_alias": "powerful"},
+            ).to_dict(),
+        ]
+        result = _normalize_personas(overrides)
+        assert len(result) == 2
+        assert result[0]["name"] == "coordinator"
+        assert result[1]["name"] == "reviewer"
+        assert result[1]["llm"] == {"primary_alias": "powerful"}
+
+    def test_frozen(self):
+        override = WorkloadPersonaOverride(name="coordinator")
+        with pytest.raises(AttributeError):
+            override.name = "reviewer"  # type: ignore[misc]
