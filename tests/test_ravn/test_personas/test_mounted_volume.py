@@ -372,8 +372,10 @@ class TestWriteOperationsNotImplemented:
             adapter.delete("dummy")
 
     def test_not_implemented_message_content(self, tmp_path: Path) -> None:
+        from ravn.adapters.personas.loader import PersonaConfig
+
         adapter = MountedVolumePersonaAdapter(mount_path=str(tmp_path))
         with pytest.raises(NotImplementedError) as exc_info:
-            adapter.save(object())  # type: ignore[arg-type]
+            adapter.save(PersonaConfig(name="dummy"))
         assert "volundr REST API" in str(exc_info.value)
         assert "ConfigMap" in str(exc_info.value)

@@ -33,8 +33,6 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import yaml as _yaml
-
 from ravn.ports.persona import PersonaPort
 
 if TYPE_CHECKING:
@@ -118,27 +116,6 @@ class MountedVolumePersonaAdapter(PersonaPort):
             logger.warning("MountedVolumePersonaAdapter: cannot read %s: %s", path, exc)
             return None
 
-        if not text.strip():
-            logger.warning("MountedVolumePersonaAdapter: empty file %s — skipping", path)
-            return None
-
-        try:
-            raw = _yaml.safe_load(text)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "MountedVolumePersonaAdapter: malformed YAML in %s — skipping: %s",
-                path,
-                exc,
-            )
-            return None
-
-        if not isinstance(raw, dict):
-            logger.warning(
-                "MountedVolumePersonaAdapter: %s does not contain a YAML mapping — skipping",
-                path,
-            )
-            return None
-
         # Import here to avoid a circular import at module load time.
         from ravn.adapters.personas.loader import FilesystemPersonaAdapter  # noqa: PLC0415
 
@@ -156,11 +133,16 @@ class MountedVolumePersonaAdapter(PersonaPort):
 
     def load(self, name: str) -> PersonaConfig | None:
         """Return the named persona, or ``None`` if not found or unparseable."""
+        from ravn.adapters.personas.loader import _apply_outcome_instruction  # noqa: PLC0415
+
         all_files = self._scan_all()
         path = all_files.get(name)
         if path is None:
             return None
-        return self._parse_file(path)
+        persona = self._parse_file(path)
+        if persona is None:
+            return None
+        return _apply_outcome_instruction(persona)
 
     def list_names(self) -> list[str]:
         """Return a sorted list of all resolvable persona names."""
@@ -168,11 +150,13 @@ class MountedVolumePersonaAdapter(PersonaPort):
 
     def load_all(self) -> list[PersonaConfig]:
         """Return all parseable personas discovered across all mount paths."""
+        from ravn.adapters.personas.loader import _apply_outcome_instruction  # noqa: PLC0415
+
         result: list[PersonaConfig] = []
         for name, path in self._scan_all().items():
             persona = self._parse_file(path)
             if persona is not None:
-                result.append(persona)
+                result.append(_apply_outcome_instruction(persona))
         return result
 
     def source(self, name: str) -> str:
@@ -190,8 +174,8 @@ class MountedVolumePersonaAdapter(PersonaPort):
     # Write operations — not supported
     # ------------------------------------------------------------------
 
-    def save(self, config: object) -> None:  # type: ignore[override]
+    def save(self, config: PersonaConfig) -> None:
         raise NotImplementedError(_NOT_IMPLEMENTED_MSG)
 
-    def delete(self, name: str) -> bool:  # type: ignore[override]
+    def delete(self, name: str) -> bool:
         raise NotImplementedError(_NOT_IMPLEMENTED_MSG)
