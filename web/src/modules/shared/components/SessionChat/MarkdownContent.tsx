@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Copy, Check, WrapText } from 'lucide-react';
 import { cn } from '@/utils';
+import { OutcomeCard, OUTCOME_RE, OUTCOME_EXTRACT_RE } from './OutcomeCard';
 import styles from './MarkdownContent.module.css';
 
 const COLLAPSE_LINE_THRESHOLD = 25;
@@ -192,96 +193,8 @@ const markdownComponents: Record<string, React.ComponentType<any>> = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  OutcomeCard                                                         */
-/* ------------------------------------------------------------------ */
-
-const VERDICT_COLORS: Record<string, string> = {
-  approve: 'var(--color-accent-emerald)',
-  pass: 'var(--color-accent-emerald)',
-  retry: 'var(--color-accent-amber)',
-  escalate: 'var(--color-accent-red)',
-  fail: 'var(--color-accent-red)',
-};
-
-function parseOutcomeFields(raw: string): Record<string, string> {
-  const fields: Record<string, string> = {};
-  const lines = raw
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l && !l.startsWith('#'));
-
-  if (lines.length > 1) {
-    for (const line of lines) {
-      const idx = line.indexOf(':');
-      if (idx < 1) continue;
-      fields[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-    }
-    return fields;
-  }
-
-  const text = lines[0] ?? raw.trim();
-  const pattern = /(\w+):\s*/g;
-  const matches = [...text.matchAll(pattern)];
-  for (let i = 0; i < matches.length; i++) {
-    const key = matches[i][1];
-    const start = matches[i].index! + matches[i][0].length;
-    const end = i + 1 < matches.length ? matches[i + 1].index! : text.length;
-    fields[key] = text.slice(start, end).trim();
-  }
-  return fields;
-}
-
-function OutcomeCard({ yaml }: { yaml: string }) {
-  const [showRaw, setShowRaw] = useState(false);
-  const fields = parseOutcomeFields(yaml);
-  const verdict = fields['verdict'] ?? '';
-  const knownVerdict = verdict in VERDICT_COLORS ? verdict : 'unknown';
-
-  return (
-    <div className={styles.outcomeCard}>
-      <div className={styles.outcomeHeader}>
-        <span className={styles.outcomeLabel}>Outcome</span>
-        <div className={styles.outcomeHeaderRight}>
-          {verdict && (
-            <span className={styles.outcomeBadge} data-verdict={knownVerdict}>
-              {verdict}
-            </span>
-          )}
-          <button
-            type="button"
-            className={styles.outcomeRawToggle}
-            onClick={() => setShowRaw(prev => !prev)}
-            aria-expanded={showRaw}
-          >
-            {showRaw ? 'Hide raw' : 'Show raw'}
-          </button>
-        </div>
-      </div>
-      <div className={styles.outcomeFields}>
-        {Object.entries(fields)
-          .filter(([k]) => k !== 'verdict')
-          .map(([key, value]) => (
-            <div key={key} className={styles.outcomeField}>
-              <span className={styles.outcomeKey}>{key}</span>
-              <span className={styles.outcomeValue}>{value}</span>
-            </div>
-          ))}
-      </div>
-      {showRaw && (
-        <div className={styles.outcomeRaw}>
-          <pre className={styles.outcomeRawYaml}>{yaml.trim()}</pre>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  MarkdownContent                                                     */
 /* ------------------------------------------------------------------ */
-
-const OUTCOME_RE = /(---outcome---[\s\S]*?---end---)/gi;
-const OUTCOME_EXTRACT_RE = /---outcome---\s*([\s\S]*?)---end---/i;
 
 export function MarkdownContent({ content, isStreaming, className }: MarkdownContentProps) {
   const segments = content.split(OUTCOME_RE);
