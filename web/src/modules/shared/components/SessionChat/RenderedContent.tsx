@@ -190,7 +190,10 @@ function parseOutcomeYaml(raw: string): Record<string, string> {
   const fields: Record<string, string> = {};
 
   // Try line-by-line first (multi-line YAML)
-  const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+  const lines = raw
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('#'));
 
   if (lines.length > 1) {
     for (const line of lines) {
@@ -225,7 +228,10 @@ function OutcomeCard({ yaml, cardKey }: { yaml: string; cardKey: string }) {
       <div className={styles.outcomeHeader}>
         <span className={styles.outcomeLabel}>Outcome</span>
         {verdict && (
-          <span className={styles.outcomeBadge} style={{ color: verdictColor, borderColor: verdictColor }}>
+          <span
+            className={styles.outcomeBadge}
+            style={{ color: verdictColor, borderColor: verdictColor }}
+          >
             {verdict}
           </span>
         )}
@@ -260,7 +266,9 @@ export function RenderedContent({ content, className }: RenderedContentProps) {
     // Outcome block
     const outcomeMatch = segment.match(/---outcome---\s*([\s\S]*?)---end---/i);
     if (outcomeMatch) {
-      rendered.push(<OutcomeCard key={`outcome-${si}`} yaml={outcomeMatch[1]} cardKey={`outcome-${si}`} />);
+      rendered.push(
+        <OutcomeCard key={`outcome-${si}`} yaml={outcomeMatch[1]} cardKey={`outcome-${si}`} />
+      );
       continue;
     }
 

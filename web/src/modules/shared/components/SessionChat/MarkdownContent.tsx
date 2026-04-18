@@ -205,7 +205,10 @@ const VERDICT_COLORS: Record<string, string> = {
 
 function parseOutcomeFields(raw: string): Record<string, string> {
   const fields: Record<string, string> = {};
-  const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+  const lines = raw
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('#'));
 
   if (lines.length > 1) {
     for (const line of lines) {
@@ -238,7 +241,10 @@ function OutcomeCard({ yaml }: { yaml: string }) {
       <div className={styles.outcomeHeader}>
         <span className={styles.outcomeLabel}>Outcome</span>
         {verdict && (
-          <span className={styles.outcomeBadge} style={{ color: verdictColor, borderColor: verdictColor }}>
+          <span
+            className={styles.outcomeBadge}
+            style={{ color: verdictColor, borderColor: verdictColor }}
+          >
             {verdict}
           </span>
         )}
@@ -276,7 +282,11 @@ export function MarkdownContent({ content, isStreaming, className }: MarkdownCon
         }
         if (!segment.trim()) return null;
         return (
-          <ReactMarkdown key={`md-${i}`} remarkPlugins={[remarkGfm]} components={markdownComponents}>
+          <ReactMarkdown
+            key={`md-${i}`}
+            remarkPlugins={[remarkGfm]}
+            components={markdownComponents}
+          >
             {segment}
           </ReactMarkdown>
         );

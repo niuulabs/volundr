@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listPersonas } from '../api/client';
+import { MOCK_PERSONAS } from '../api/mockData';
 import type { PersonaSummary, PersonaFilter } from '../api/types';
 import { PersonaCard } from '../components/PersonaCard';
 import { cn } from '@/modules/shared/utils/classnames';
@@ -12,24 +13,39 @@ const FILTERS: { key: PersonaFilter; label: string }[] = [
   { key: 'custom', label: 'Custom' },
 ];
 
+function filterMockPersonas(filter: PersonaFilter): PersonaSummary[] {
+  if (filter === 'builtin') return MOCK_PERSONAS.filter(p => p.isBuiltin);
+  if (filter === 'custom') return MOCK_PERSONAS.filter(p => !p.isBuiltin);
+  return MOCK_PERSONAS;
+}
+
 export function PersonasView() {
   const navigate = useNavigate();
   const [personas, setPersonas] = useState<PersonaSummary[]>([]);
   const [loadedFilter, setLoadedFilter] = useState<PersonaFilter | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<PersonaFilter>('all');
+  const [usingMock, setUsingMock] = useState(false);
 
   const loading = loadedFilter !== filter;
 
   useEffect(() => {
     listPersonas(filter)
       .then(data => {
-        setPersonas(data);
+        if (data.length > 0) {
+          setPersonas(data);
+          setUsingMock(false);
+        } else {
+          setPersonas(filterMockPersonas(filter));
+          setUsingMock(true);
+        }
         setError(null);
         setLoadedFilter(filter);
       })
       .catch(() => {
-        setError('Failed to load personas');
+        setPersonas(filterMockPersonas(filter));
+        setUsingMock(true);
+        setError(null);
         setLoadedFilter(filter);
       });
   }, [filter]);
@@ -52,6 +68,8 @@ export function PersonasView() {
           New Persona
         </button>
       </div>
+
+      {usingMock && <div className={styles.demoBanner}>Demo data — backend not connected</div>}
 
       {loading && <div className={styles.status}>Loading personas…</div>}
 
