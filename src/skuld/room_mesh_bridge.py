@@ -58,6 +58,7 @@ _RAVN_TYPE_TO_ACTIVITY: dict[str, str] = {
     "tool_start": "tool_executing",
     "tool_result": "idle",
     "thought": "thinking",
+    "response": "response",
 }
 
 
@@ -263,4 +264,5 @@ _ACTIVITY_TO_FRAME_TYPE: dict[str, str] = {
     "tool_executing": "tool_start",
     "idle": "tool_result",
     "thinking": "thought",
+    "response": "response",
 }

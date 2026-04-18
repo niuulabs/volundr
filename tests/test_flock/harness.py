@@ -410,8 +410,15 @@ class FlockTestHarness:
             consumes_event_types=[],
             default_work_timeout_s=10.0,
         )
-        self.skuld = SkuldMeshAdapter(
+        from niuu.mesh.participant import MeshParticipant
+
+        _skuld_participant = MeshParticipant(
             mesh=self.mesh,
+            discovery=None,
+            peer_id=mesh_config.peer_id,
+        )
+        self.skuld = SkuldMeshAdapter(
+            participant=_skuld_participant,
             transport=self.cli,
             config=mesh_config,
             session_id=skuld_session_id,

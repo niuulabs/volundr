@@ -26,6 +26,7 @@ from niuu.domain.outcome import parse_outcome_block
 from niuu.ports.mimir import MimirPort
 from ravn.adapters.channels.capture import CaptureChannel, TaskResult, TaskResultStore
 from ravn.adapters.channels.composite import CompositeChannel
+from ravn.adapters.channels.mesh_channel import MeshActivityChannel
 from ravn.adapters.channels.silent import SilentChannel
 from ravn.adapters.channels.skuld_channel import SkuldChannel
 from ravn.adapters.events.noop_publisher import NoOpEventPublisher
@@ -729,19 +730,29 @@ class DriveLoop:
 
         # Track the capture channel separately for response_text access
         capture_channel: CaptureChannel | None = None
+        peer_id = self._settings.mesh.own_peer_id if self._settings.mesh.enabled else ""
         if self._settings.cascade.enabled:
             self._result_store.start(task.task_id, task.triggered_by)
             capture_channel = CaptureChannel(task.task_id, self._result_store)
-            # Wrap with skuld channel for browser delivery when enabled
+            extra: list[ChannelPort] = []
             if self._skuld_channel is not None:
                 self._skuld_channel._persona = task.persona  # Update persona for this task
-                channel: ChannelPort = CompositeChannel([capture_channel, self._skuld_channel])
+                extra.append(self._skuld_channel)
+            if self._mesh is not None and peer_id:
+                extra.append(MeshActivityChannel(self._mesh, peer_id))
+            if extra:
+                channel: ChannelPort = CompositeChannel([capture_channel, *extra])
             else:
                 channel = capture_channel
         else:
+            sinks: list[ChannelPort] = []
             if self._skuld_channel is not None:
                 self._skuld_channel._persona = task.persona
-                channel = self._skuld_channel
+                sinks.append(self._skuld_channel)
+            if self._mesh is not None and peer_id:
+                sinks.append(MeshActivityChannel(self._mesh, peer_id))
+            if sinks:
+                channel = CompositeChannel(sinks) if len(sinks) > 1 else sinks[0]
             else:
                 channel = SilentChannel()
         agent = self._agent_factory(channel, task.task_id, task.persona, task.triggered_by)
