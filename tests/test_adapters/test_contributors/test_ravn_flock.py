@@ -4,6 +4,7 @@ import logging
 from unittest.mock import MagicMock
 
 import pytest
+import yaml
 
 from volundr.adapters.outbound.contributors.core import CoreSessionContributor
 from volundr.adapters.outbound.contributors.ravn_flock import (
@@ -1107,7 +1108,7 @@ class TestPerPersonaLLMOverrides:
         assert "persona_overrides:" not in coordinator_cfg
 
     async def test_iteration_budget_embedded_in_initiative_block(self, session):
-        """iteration_budget is written to initiative block in sidecar YAML."""
+        """iteration_budget is written to both initiative and persona_overrides blocks."""
         c = RavnFlockContributor()
         ctx = SessionContext(
             workload_type="ravn_flock",
@@ -1123,7 +1124,10 @@ class TestPerPersonaLLMOverrides:
         reviewer_cfg = _extract_mounted_config(result.pod_spec, "reviewer")
         coordinator_cfg = _extract_mounted_config(result.pod_spec, "coordinator")
 
+        # Must appear in both initiative (future use) and persona_overrides (ravn reads it here)
         assert "iteration_budget: 40" in reviewer_cfg
+        reviewer_parsed = yaml.safe_load(reviewer_cfg)
+        assert reviewer_parsed["persona_overrides"]["iteration_budget"] == 40
         assert "iteration_budget" not in coordinator_cfg
 
     async def test_per_persona_max_concurrent_tasks(self, session):

@@ -186,13 +186,19 @@ def _build_ravn_config(
         config["llm"] = effective_llm
 
     # Per-persona behavioral overrides — applied by ravn at persona load time.
+    # Both system_prompt_extra and iteration_budget must land in persona_overrides
+    # so that PersonaOverridesConfig (ravn/config.py) picks them up via pydantic.
+    # iteration_budget is also mirrored to initiative for future initiative-level use.
+    po: dict = {}
     system_prompt_extra = persona_override.get("system_prompt_extra") or ""
     if system_prompt_extra.strip():
-        config["persona_overrides"] = {"system_prompt_extra": system_prompt_extra}
-
+        po["system_prompt_extra"] = system_prompt_extra
     budget = persona_override.get("iteration_budget") or 0
     if budget:
+        po["iteration_budget"] = int(budget)
         config["initiative"]["iteration_budget"] = int(budget)
+    if po:
+        config["persona_overrides"] = po
 
     if sleipnir_publish_urls:
         config["sleipnir"] = {
