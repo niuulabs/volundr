@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from niuu.domain.models import IntegrationType, Principal
 from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
+from tyr.api.flock_config import FlockPersonaResponse
 from tyr.domain.services.dispatch_service import (
     DispatchItem as ServiceDispatchItem,
 )
@@ -68,6 +69,10 @@ class DispatchConfigResponse(BaseModel):
     default_system_prompt: str = ""
     default_model: str = "claude-sonnet-4-6"
     models: list[ModelOption] = []
+    flock_enabled: bool = False
+    flock_default_personas: list[FlockPersonaResponse] = []
+    flock_llm_config: dict = {}
+    flock_sleipnir_publish_urls: list[str] = []
 
 
 class DispatchRequest(BaseModel):
@@ -79,6 +84,14 @@ class DispatchRequest(BaseModel):
     connection_id: str | None = Field(
         default=None,
         description="Target a specific Volundr cluster by connection ID",
+    )
+    workload_type: str = Field(
+        default="solo",
+        description="'solo' for a single Ravn session or 'ravn_flock' for a multi-agent flock",
+    )
+    workload_config: dict = Field(
+        default_factory=dict,
+        description="Flock config — passes 'personas' list to override server defaults",
     )
 
 
@@ -208,10 +221,17 @@ def create_dispatch_router() -> APIRouter:
     ) -> DispatchConfigResponse:
         """Get dispatch defaults from server configuration."""
         settings = request.app.state.settings
+        flock = settings.dispatch.flock
         return DispatchConfigResponse(
             default_system_prompt=settings.dispatch.default_system_prompt,
             default_model=settings.dispatch.default_model,
             models=[ModelOption(id=m.id, name=m.name) for m in settings.ai_models],
+            flock_enabled=flock.enabled,
+            flock_default_personas=[
+                FlockPersonaResponse(name=p.name, llm=dict(p.llm)) for p in flock.default_personas
+            ],
+            flock_llm_config=dict(flock.llm_config),
+            flock_sleipnir_publish_urls=list(flock.sleipnir_publish_urls),
         )
 
     @router.get("/queue", response_model=list[QueueItemResponse])
@@ -250,6 +270,12 @@ def create_dispatch_router() -> APIRouter:
             for item in body.items
         ]
 
+        persona_overrides: list[dict] | None = None
+        if body.workload_type == "ravn_flock":
+            raw = body.workload_config.get("personas")
+            if isinstance(raw, list) and raw:
+                persona_overrides = [{"name": p} if isinstance(p, str) else p for p in raw]
+
         results = await service.dispatch_issues(
             owner_id=principal.user_id,
             items=service_items,
@@ -257,6 +283,7 @@ def create_dispatch_router() -> APIRouter:
             model=body.model or settings.dispatch.default_model,
             system_prompt=body.system_prompt or settings.dispatch.default_system_prompt,
             connection_id=body.connection_id,
+            persona_overrides=persona_overrides,
         )
         return [_result_to_response(r) for r in results]
 

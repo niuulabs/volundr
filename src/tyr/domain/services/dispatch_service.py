@@ -365,6 +365,7 @@ class DispatchService:
         model: str = "",
         system_prompt: str = "",
         connection_id: str | None = None,
+        persona_overrides: list[dict] | None = None,
     ) -> list[DispatchResult]:
         """Spawn Volundr sessions for the given items."""
         await self._dispatcher_repo.get_or_create(owner_id)
@@ -427,6 +428,7 @@ class DispatchService:
                 integration_ids=integration_ids,
                 auth_token=auth_token,
                 owner_id=owner_id,
+                persona_overrides=persona_overrides,
             )
             results.append(result)
 
@@ -963,6 +965,7 @@ class DispatchService:
         integration_ids: list[str],
         auth_token: str | None,
         owner_id: str,
+        persona_overrides: list[dict] | None = None,
     ) -> DispatchResult:
         """Spawn a single session and update raid progress."""
         try:
@@ -973,6 +976,7 @@ class DispatchService:
                 effective_model=effective_model,
                 effective_prompt=effective_prompt,
                 integration_ids=integration_ids,
+                persona_overrides=persona_overrides,
             )
             session = await target_volundr.spawn_session(
                 request=request,
