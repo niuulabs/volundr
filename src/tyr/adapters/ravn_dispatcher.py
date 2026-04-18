@@ -9,11 +9,13 @@ Used by ReviewEngine (review-arbiter) and BifrostAdapter (decomposer).
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from typing import Any
 
 import httpx
 
+from niuu.domain.llm_merge import merge_llm
 from niuu.domain.outcome import OutcomeSchema, parse_outcome_block
 from ravn.adapters.personas.loader import FilesystemPersonaAdapter, PersonaConfig
 from ravn.ports.persona import PersonaPort
@@ -36,14 +38,22 @@ class RavnDispatcher:
     api_key:
         API key forwarded as ``x-api-key``.
     model:
-        Default model; callers may override per-dispatch.
+        Default model used when neither persona nor ``default_llm_config``
+        specifies one.
     timeout:
         HTTP timeout in seconds.
     max_tokens:
-        Maximum tokens for the LLM response.
+        Maximum tokens for the LLM response (used when not overridden by config).
     persona_loader:
         Any :class:`~ravn.ports.persona.PersonaPort` implementation used to
         resolve persona configs.  Defaults to ``FilesystemPersonaAdapter``.
+    default_llm_config:
+        Global LLM override applied at every dispatch.  Merged on top of the
+        persona's own ``llm`` settings using :func:`~niuu.domain.llm_merge.merge_llm`.
+        Typically sourced from ``dispatch.in_process.llm_config`` (falling back
+        to ``dispatch.flock.llm_config``).  Recognised keys: ``model``,
+        ``max_tokens``.  Security keys (``allowed_tools``,
+        ``forbidden_tools``) are silently dropped.
     """
 
     def __init__(
@@ -55,6 +65,7 @@ class RavnDispatcher:
         timeout: float = 60.0,
         max_tokens: int = 4096,
         persona_loader: PersonaPort | None = None,
+        default_llm_config: dict | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
@@ -62,6 +73,7 @@ class RavnDispatcher:
         self._max_tokens = max_tokens
         self._client = httpx.AsyncClient(timeout=timeout)
         self._loader = persona_loader or FilesystemPersonaAdapter()
+        self._default_llm_config: dict = default_llm_config or {}
 
     async def close(self) -> None:
         """Close the underlying HTTP client."""
@@ -110,7 +122,21 @@ class RavnDispatcher:
             schema = OutcomeSchema(fields=persona.produces.schema)
 
         system_prompt = persona.system_prompt_template.strip()
-        used_model = model or self._model
+
+        # Resolve effective LLM config: merge persona defaults with global override.
+        # Persona's llm.primary_alias hints at the desired tier; default_llm_config
+        # provides the concrete model.  Last-wins semantics: global_override beats
+        # persona defaults for any non-empty key.
+        persona_llm_dict = dataclasses.asdict(persona.llm)
+        effective = merge_llm(
+            defaults=persona_llm_dict,
+            global_override=self._default_llm_config or None,
+        )
+        effective_model = effective.get("model") or self._model
+        effective_max_tokens = int(effective.get("max_tokens") or self._max_tokens)
+
+        used_model = model or effective_model
+        used_max_tokens = effective_max_tokens
 
         try:
             text, _ = await anthropic_messages_call(
@@ -118,7 +144,7 @@ class RavnDispatcher:
                 base_url=self._base_url,
                 api_key=self._api_key,
                 model=used_model,
-                max_tokens=self._max_tokens,
+                max_tokens=used_max_tokens,
                 messages=[{"role": "user", "content": initiative_context}],
                 system=system_prompt or None,
             )

@@ -24,7 +24,7 @@ from typing import Any
 
 import yaml
 
-from niuu.domain.llm_merge import _SECURITY_KEYS
+from niuu.domain.llm_merge import _SECURITY_KEYS, merge_llm
 from niuu.mesh import nng_gateway_port_for as _gateway_port_for
 from niuu.mesh import nng_ports_for as _ports_for
 from volundr.domain.models import ForgeProfile, PodSpecAdditions, Session, WorkspaceTemplate
@@ -238,7 +238,6 @@ class RavnFlockContributor(SessionContributor):
         # Normalize personas to list[dict] — accept both legacy list[str]
         # and new list[dict] with per-persona overrides.
         persona_dicts: list[dict] = _normalize_personas(raw_personas)
-        personas: list[str] = [p["name"] for p in persona_dicts]
 
         mesh_cfg: dict = wc.get("mesh", {})
         mimir_cfg: dict = wc.get("mimir", {})
@@ -252,7 +251,7 @@ class RavnFlockContributor(SessionContributor):
 
         values, pod_spec = self._build_flock_spec(
             session=session,
-            personas=personas,
+            persona_dicts=persona_dicts,
             mesh_transport=mesh_transport,
             mimir_hosted_url=mimir_hosted_url,
             sleipnir_publish_urls=sleipnir_publish_urls,
@@ -282,7 +281,7 @@ class RavnFlockContributor(SessionContributor):
     def _build_flock_spec(
         self,
         session: Session,
-        personas: list[str],
+        persona_dicts: list[dict],
         mesh_transport: str,
         mimir_hosted_url: str | None,
         sleipnir_publish_urls: list[str],
@@ -291,6 +290,7 @@ class RavnFlockContributor(SessionContributor):
     ) -> tuple[dict[str, Any], PodSpecAdditions]:
         session_id = str(session.id)
         base_port = self._base_port
+        personas: list[str] = [p["name"] for p in persona_dicts]
 
         # Skuld (index 0) + ravn nodes start at index 1
         skuld_peer_id = f"skuld-{session_id[:8]}"
@@ -325,11 +325,22 @@ class RavnFlockContributor(SessionContributor):
         config_volumes: list[dict] = []
         init_containers: list[dict] = []
 
-        for i, persona in enumerate(personas):
+        for i, persona_dict in enumerate(persona_dicts):
+            persona = persona_dict["name"]
             ravn_index = i + 1
             peer_id = f"flock-{persona}"
             pub, rep, hs = _ports_for(ravn_index, base_port)
             gw = _gateway_port_for(ravn_index, base_port)
+
+            # Merge global llm_config with per-persona llm override (last wins).
+            per_persona_llm = persona_dict.get("llm") or None
+            effective_llm: dict | None = (
+                merge_llm(
+                    global_override=llm_config or None,
+                    persona_override=per_persona_llm,
+                )
+                or None
+            )
 
             config_yaml = _build_ravn_config(
                 index=ravn_index,
@@ -342,7 +353,7 @@ class RavnFlockContributor(SessionContributor):
                 sleipnir_publish_urls=sleipnir_publish_urls,
                 max_concurrent_tasks=max_concurrent_tasks,
                 mesh_host=self._mesh_host,
-                llm_config=llm_config,
+                llm_config=effective_llm,
             )
 
             # Per-sidecar emptyDir volume for the mounted config file

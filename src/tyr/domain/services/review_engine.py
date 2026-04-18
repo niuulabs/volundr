@@ -778,7 +778,6 @@ class ReviewEngine:
             outcome = await self._ravn.dispatch(
                 "review-arbiter",
                 context,
-                model=self._cfg.ravn_arbiter_model,
             )
         except Exception:
             logger.warning(

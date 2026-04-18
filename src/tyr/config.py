@@ -472,12 +472,49 @@ class FlockConfig(BaseModel):
     )
 
 
+class InProcessDispatchConfig(BaseModel):
+    """In-process (single-turn) dispatch configuration.
+
+    Controls the LLM used by :class:`~tyr.adapters.ravn_dispatcher.RavnDispatcher`
+    when running single-turn agent calls in-process (as opposed to spinning up a
+    flock pod).
+
+    Fallback chain for ``llm_config``:
+      1. ``dispatch.in_process.llm_config`` — if non-empty, use this.
+      2. ``dispatch.flock.llm_config`` — if in_process is absent/empty, mirror
+         flock config so both paths use the same model without duplication.
+
+    Example YAML::
+
+        dispatch:
+          flock:
+            llm_config:
+              model: claude-opus-4-6
+              max_tokens: 8192
+          # Optional: override model for cheaper in-process single-turn calls.
+          in_process:
+            llm_config:
+              model: claude-sonnet-4-6
+              max_tokens: 4096
+    """
+
+    llm_config: dict = Field(
+        default_factory=dict,
+        description=(
+            "LLM config for in-process RavnDispatcher calls. "
+            "Dict matching ravn's `llm:` config block (model, max_tokens, timeout). "
+            "When empty, falls back to dispatch.flock.llm_config."
+        ),
+    )
+
+
 class DispatchConfig(BaseModel):
     """Dispatcher configuration."""
 
     default_system_prompt: str = Field(default="")
     default_model: str = Field(default="claude-sonnet-4-6")
     flock: FlockConfig = Field(default_factory=FlockConfig)
+    in_process: InProcessDispatchConfig = Field(default_factory=InProcessDispatchConfig)
     dispatch_prompt_template: str = Field(
         default=(
             "# Task: {identifier} — {title}\n"
