@@ -244,7 +244,13 @@ def resolve_target_adapter(
 
 @dataclass
 class DispatchConfig:
-    """Dispatch-related config values needed by the service."""
+    """Dispatch-related config values needed by the service.
+
+    When *live_flock* is provided, flock fields are read from the live
+    settings object so that in-memory API changes take effect immediately.
+    When tests construct a ``DispatchConfig`` directly with ``flock_enabled``
+    etc., those values are used as-is (no live reference needed).
+    """
 
     default_system_prompt: str = ""
     default_model: str = "claude-sonnet-4-6"
@@ -259,6 +265,23 @@ class DispatchConfig:
     flock_mimir_hosted_url: str = ""
     flock_sleipnir_publish_urls: list[str] = field(default_factory=list)
     flock_llm_config: dict = field(default_factory=dict)
+    live_flock: object | None = field(default=None, repr=False)
+
+    def __getattribute__(self, name: str) -> object:
+        live = super().__getattribute__("live_flock")
+        if live is None:
+            return super().__getattribute__(name)
+        if name == "flock_enabled":
+            return live.enabled  # type: ignore[union-attr]
+        if name == "flock_default_personas":
+            return [p.to_dict() for p in live.default_personas]  # type: ignore[union-attr]
+        if name == "flock_mimir_hosted_url":
+            return live.mimir_hosted_url  # type: ignore[union-attr]
+        if name == "flock_sleipnir_publish_urls":
+            return list(live.sleipnir_publish_urls)  # type: ignore[union-attr]
+        if name == "flock_llm_config":
+            return dict(live.llm_config)  # type: ignore[union-attr]
+        return super().__getattribute__(name)
 
 
 class DispatchService:

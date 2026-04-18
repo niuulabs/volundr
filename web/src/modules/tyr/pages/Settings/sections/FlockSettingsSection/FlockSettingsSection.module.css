@@ -98,7 +98,7 @@
 }
 
 .textInput:focus {
-  border-color: var(--color-accent-purple);
+  border-color: var(--color-brand);
 }
 
 .presetRow {
@@ -132,7 +132,7 @@
 
 .jsonTextarea:focus,
 .urlsTextarea:focus {
-  border-color: var(--color-accent-purple);
+  border-color: var(--color-brand);
 }
 
 .saveButton {
@@ -140,16 +140,16 @@
   padding: var(--space-1) var(--space-3);
   font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--color-accent-purple);
-  background-color: color-mix(in srgb, var(--color-accent-purple) 15%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-accent-purple) 30%, transparent);
+  color: var(--color-brand);
+  background-color: color-mix(in srgb, var(--color-brand) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 30%, transparent);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background-color 0.15s;
 }
 
 .saveButton:hover:not(:disabled) {
-  background-color: color-mix(in srgb, var(--color-accent-purple) 25%, transparent);
+  background-color: color-mix(in srgb, var(--color-brand) 25%, transparent);
 }
 
 .saveButton:disabled {

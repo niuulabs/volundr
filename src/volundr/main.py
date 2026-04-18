@@ -266,6 +266,13 @@ def _create_contributors(
 
     contributors.append(PromptContributor())
 
+    # Auto-wire RavnFlockContributor so ravn_flock workloads spawn
+    # multi-sidecar sessions (locally via ravn flock init/start).
+    from volundr.adapters.outbound.contributors.ravn_flock import RavnFlockContributor
+
+    contributors.append(RavnFlockContributor(**ports))
+    logger.info("Session contributor: ravn_flock (auto-wired)")
+
     return contributors
 
 

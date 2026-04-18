@@ -126,7 +126,6 @@ export function FlockSettingsSection() {
           checked={flockEnabled}
           onChange={() => void handleToggle()}
           label="Flock enabled"
-          accent="purple"
           disabled={updating}
         />
       </div>

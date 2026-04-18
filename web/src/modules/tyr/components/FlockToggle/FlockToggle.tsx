@@ -32,7 +32,7 @@ export function FlockToggle({
     <div className={styles.container}>
       <div className={styles.row}>
         <span className={styles.label}>Dispatch as flock</span>
-        <Toggle checked={enabled} onChange={onToggle} label="Dispatch as flock" accent="purple" />
+        <Toggle checked={enabled} onChange={onToggle} label="Dispatch as flock" />
       </div>
       {enabled && personas.length > 0 && (
         <div className={styles.personas}>
