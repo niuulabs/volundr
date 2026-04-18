@@ -101,6 +101,8 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
+        svc._flock_flow_provider = None
+        svc._resolve_flock_personas = DispatchService._resolve_flock_personas.__get__(svc)
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -123,6 +125,8 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
+        svc._flock_flow_provider = None
+        svc._resolve_flock_personas = DispatchService._resolve_flock_personas.__get__(svc)
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -145,6 +149,8 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
+        svc._flock_flow_provider = None
+        svc._resolve_flock_personas = DispatchService._resolve_flock_personas.__get__(svc)
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -168,6 +174,8 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
+        svc._flock_flow_provider = None
+        svc._resolve_flock_personas = DispatchService._resolve_flock_personas.__get__(svc)
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -188,6 +196,8 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
+        svc._flock_flow_provider = None
+        svc._resolve_flock_personas = DispatchService._resolve_flock_personas.__get__(svc)
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -208,6 +218,8 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
+        svc._flock_flow_provider = None
+        svc._resolve_flock_personas = DispatchService._resolve_flock_personas.__get__(svc)
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -233,6 +245,8 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
+        svc._flock_flow_provider = None
+        svc._resolve_flock_personas = DispatchService._resolve_flock_personas.__get__(svc)
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -253,6 +267,8 @@ class TestBuildSpawnRequestFlockEnabled:
 
         svc = MagicMock()
         svc._config = config
+        svc._flock_flow_provider = None
+        svc._resolve_flock_personas = DispatchService._resolve_flock_personas.__get__(svc)
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -282,6 +298,8 @@ class TestBuildSpawnRequestFlockDisabled:
 
         svc = MagicMock()
         svc._config = config
+        svc._flock_flow_provider = None
+        svc._resolve_flock_personas = DispatchService._resolve_flock_personas.__get__(svc)
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -302,6 +320,8 @@ class TestBuildSpawnRequestFlockDisabled:
 
         svc = MagicMock()
         svc._config = config
+        svc._flock_flow_provider = None
+        svc._resolve_flock_personas = DispatchService._resolve_flock_personas.__get__(svc)
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
@@ -322,6 +342,8 @@ class TestBuildSpawnRequestFlockDisabled:
 
         svc = MagicMock()
         svc._config = config
+        svc._flock_flow_provider = None
+        svc._resolve_flock_personas = DispatchService._resolve_flock_personas.__get__(svc)
         req = DispatchService._build_spawn_request(
             svc,
             item=item,
