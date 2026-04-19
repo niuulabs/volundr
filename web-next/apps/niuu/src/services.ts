@@ -1,5 +1,10 @@
 import { createMockHelloService, buildHelloHttpAdapter } from '@niuulabs/plugin-hello';
 import { createMimirMockAdapter, buildMimirHttpAdapter } from '@niuulabs/plugin-mimir';
+import {
+  createMockRegistryRepository,
+  createMockTopologyStream,
+  createMockEventStream,
+} from '@niuulabs/plugin-observatory';
 import { createApiClient } from '@niuulabs/query';
 import type { NiuuConfig, ServicesMap } from '@niuulabs/plugin-sdk';
 
@@ -17,5 +22,11 @@ export function buildServices(config: NiuuConfig): ServicesMap {
       ? buildMimirHttpAdapter(createApiClient(mimirSvc.baseUrl))
       : createMimirMockAdapter();
 
-  return { hello, mimir };
+  return {
+    hello,
+    mimir,
+    'observatory.registry': createMockRegistryRepository(),
+    'observatory.topology': createMockTopologyStream(),
+    'observatory.events': createMockEventStream(),
+  };
 }
