@@ -9,6 +9,7 @@ import {
   useConfig,
 } from '@niuulabs/plugin-sdk';
 import { createQueryClient } from '@niuulabs/query';
+import { AuthProvider } from '@niuulabs/auth';
 import { Shell } from '@niuulabs/shell';
 import { plugins } from './plugins';
 import { buildServices } from './services';
@@ -18,11 +19,13 @@ function AppInner() {
   const services = useMemo(() => buildServices(config), [config]);
 
   return (
-    <ServicesProvider services={services}>
-      <FeatureCatalogProvider>
-        <Shell plugins={plugins} />
-      </FeatureCatalogProvider>
-    </ServicesProvider>
+    <AuthProvider>
+      <ServicesProvider services={services}>
+        <FeatureCatalogProvider>
+          <Shell plugins={plugins} />
+        </FeatureCatalogProvider>
+      </ServicesProvider>
+    </AuthProvider>
   );
 }
 
