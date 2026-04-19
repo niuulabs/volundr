@@ -269,6 +269,75 @@ describe('buildMimirHttpAdapter', () => {
     });
   });
 
+  describe('mounts.getRecentWrites', () => {
+    it('calls GET /mounts/recent-writes without limit when none specified', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).mounts.getRecentWrites();
+      const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(call).toContain('/mounts/recent-writes');
+      expect(call).not.toContain('limit=');
+    });
+
+    it('passes explicit limit', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).mounts.getRecentWrites(5);
+      const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(call).toContain('limit=5');
+    });
+
+    it('maps raw recent write fields', async () => {
+      const raw = [
+        {
+          id: 'rw-1',
+          timestamp: '2026-04-19T10:00:00Z',
+          mount: 'local',
+          page: '/arch/overview',
+          ravn: 'ravn-fjolnir',
+          kind: 'write',
+          message: 'Updated architecture overview',
+        },
+      ];
+      const client = makeClient({ get: vi.fn().mockResolvedValue(raw) });
+      const writes = await buildMimirHttpAdapter(client).mounts.getRecentWrites();
+      expect(writes[0]).toMatchObject({
+        id: 'rw-1',
+        mount: 'local',
+        page: '/arch/overview',
+        ravn: 'ravn-fjolnir',
+        kind: 'write',
+      });
+    });
+  });
+
+  describe('pages.listSources', () => {
+    it('calls GET /sources without query string when no options', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).pages.listSources();
+      expect(client.get).toHaveBeenCalledWith('/sources');
+    });
+
+    it('appends origin_type and mount query params', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).pages.listSources({
+        originType: 'web',
+        mountName: 'local',
+      });
+      const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(call).toContain('origin_type=web');
+      expect(call).toContain('mount=local');
+    });
+  });
+
+  describe('pages.getPageSources', () => {
+    it('calls GET /page/sources with encoded path', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).pages.getPageSources('/arch/overview');
+      const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(call).toContain('/page/sources');
+      expect(call).toContain('path=%2Farch%2Foverview');
+    });
+  });
+
   describe('pages.listEntities', () => {
     it('calls GET /entities without query string when no options', async () => {
       const client = makeClient({ get: vi.fn().mockResolvedValue([]) });

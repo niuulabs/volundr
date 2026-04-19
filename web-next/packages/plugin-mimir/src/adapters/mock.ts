@@ -7,6 +7,8 @@ import type { Source } from '../domain/source';
 import type { MimirStats, MimirGraph } from '../domain/api-types';
 import type { EmbeddingSearchResult } from '../ports/IEmbeddingStore';
 import type { EntityMeta } from '../domain/entity';
+import type { WriteRoutingRule } from '../domain/routing';
+import type { RavnBinding } from '../domain/ravn-binding';
 import { tallySeverity } from '../domain/lint';
 import { toPageMeta } from '../domain/page';
 
@@ -354,7 +356,7 @@ const MOCK_GRAPH: MimirGraph = {
 // Seed data — Lint issues
 // ---------------------------------------------------------------------------
 
-const MOCK_LINT_ISSUES: LintIssue[] = [
+const INITIAL_LINT_ISSUES: LintIssue[] = [
   {
     id: 'lint-001',
     rule: 'L05',
@@ -383,6 +385,25 @@ const MOCK_LINT_ISSUES: LintIssue[] = [
     autoFix: true,
     message: 'Missing required frontmatter field: `owner`',
   },
+  {
+    id: 'lint-004',
+    rule: 'L02',
+    severity: 'warn',
+    page: '/infra/k8s',
+    mount: 'platform',
+    autoFix: true,
+    message: 'Stale page — source updated 3 days ago but page not recompiled',
+  },
+  {
+    id: 'lint-005',
+    rule: 'L11',
+    severity: 'error',
+    page: '/arch/overview',
+    mount: 'shared',
+    assignee: 'ravn-fjolnir',
+    autoFix: true,
+    message: 'Stale mount index — index out of sync with page store',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -409,6 +430,99 @@ const MOCK_DREAM_CYCLES: DreamCycle[] = [
     entitiesCreated: 5,
     lintFixes: 3,
     durationMs: 67000,
+  },
+  {
+    id: 'dream-003',
+    timestamp: '2026-04-17T03:00:00Z',
+    ravn: 'ravn-skald',
+    mounts: ['platform'],
+    pagesUpdated: 6,
+    entitiesCreated: 1,
+    lintFixes: 0,
+    durationMs: 28000,
+  },
+  {
+    id: 'dream-004',
+    timestamp: '2026-04-16T03:00:00Z',
+    ravn: 'ravn-fjolnir',
+    mounts: ['local', 'shared', 'platform'],
+    pagesUpdated: 22,
+    entitiesCreated: 8,
+    lintFixes: 5,
+    durationMs: 91000,
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Seed data — write-routing rules
+// ---------------------------------------------------------------------------
+
+const INITIAL_ROUTING_RULES: WriteRoutingRule[] = [
+  {
+    id: 'route-001',
+    prefix: '/infra',
+    mountName: 'platform',
+    priority: 5,
+    active: true,
+    desc: 'Infrastructure pages → platform mount',
+  },
+  {
+    id: 'route-002',
+    prefix: '/api',
+    mountName: 'shared',
+    priority: 10,
+    active: true,
+    desc: 'API docs → shared mount',
+  },
+  {
+    id: 'route-003',
+    prefix: '/entities',
+    mountName: 'shared',
+    priority: 15,
+    active: true,
+    desc: 'Entity pages → shared mount',
+  },
+  {
+    id: 'route-004',
+    prefix: '/',
+    mountName: 'local',
+    priority: 99,
+    active: true,
+    desc: 'Catch-all → local mount',
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Seed data — ravn bindings
+// ---------------------------------------------------------------------------
+
+const MOCK_RAVN_BINDINGS: RavnBinding[] = [
+  {
+    ravnId: 'ravn-fjolnir',
+    ravnRune: 'ᚠ',
+    role: 'index',
+    state: 'active',
+    mountNames: ['local', 'shared', 'platform'],
+    writeMount: 'local',
+    lastDream: MOCK_DREAM_CYCLES[0] ?? null,
+  },
+  {
+    ravnId: 'ravn-skald',
+    ravnRune: 'ᛋ',
+    role: 'build',
+    state: 'idle',
+    mountNames: ['shared', 'platform'],
+    writeMount: 'shared',
+    lastDream: MOCK_DREAM_CYCLES[2] ?? null,
+  },
+  {
+    ravnId: 'ravn-galdra',
+    ravnRune: 'ᚷ',
+    role: 'verify',
+    state: 'offline',
+    mountNames: ['shared'],
+    writeMount: 'shared',
+    lastDream: null,
   },
 ];
 
@@ -496,10 +610,36 @@ const MOCK_RECENT_WRITES: RecentWrite[] = [
 // ---------------------------------------------------------------------------
 
 export function createMimirMockAdapter(): IMimirService {
+  // Mutable copies for write operations
+  let lintIssues = [...INITIAL_LINT_ISSUES];
+  let routingRules = [...INITIAL_ROUTING_RULES];
+
   return {
     mounts: {
       async listMounts(): Promise<Mount[]> {
         return MOCK_MOUNTS;
+      },
+
+      async listRoutingRules(): Promise<WriteRoutingRule[]> {
+        return [...routingRules].sort((a, b) => a.priority - b.priority);
+      },
+
+      async upsertRoutingRule(rule: WriteRoutingRule): Promise<WriteRoutingRule> {
+        const idx = routingRules.findIndex((r) => r.id === rule.id);
+        if (idx >= 0) {
+          routingRules[idx] = rule;
+        } else {
+          routingRules = [...routingRules, rule];
+        }
+        return rule;
+      },
+
+      async deleteRoutingRule(id: string): Promise<void> {
+        routingRules = routingRules.filter((r) => r.id !== id);
+      },
+
+      async listRavnBindings(): Promise<RavnBinding[]> {
+        return MOCK_RAVN_BINDINGS;
       },
 
       async getRecentWrites(limit = 20): Promise<RecentWrite[]> {
@@ -617,22 +757,34 @@ export function createMimirMockAdapter(): IMimirService {
     },
 
     lint: {
-      async getLintReport(): Promise<LintReport> {
+      async getLintReport(mountName?: string): Promise<LintReport> {
+        const issues = mountName ? lintIssues.filter((i) => i.mount === mountName) : lintIssues;
         return {
-          issues: MOCK_LINT_ISSUES,
+          issues,
           pagesChecked: MOCK_PAGES.length,
-          summary: tallySeverity(MOCK_LINT_ISSUES),
+          summary: tallySeverity(issues),
         };
       },
 
       async runAutoFix(issueIds?: string[]): Promise<LintReport> {
-        const remaining = issueIds
-          ? MOCK_LINT_ISSUES.filter((i) => !issueIds.includes(i.id) || !i.autoFix)
-          : MOCK_LINT_ISSUES.filter((i) => !i.autoFix);
+        if (issueIds) {
+          lintIssues = lintIssues.filter((i) => !issueIds.includes(i.id) || !i.autoFix);
+        } else {
+          lintIssues = lintIssues.filter((i) => !i.autoFix);
+        }
         return {
-          issues: remaining,
+          issues: lintIssues,
           pagesChecked: MOCK_PAGES.length,
-          summary: tallySeverity(remaining),
+          summary: tallySeverity(lintIssues),
+        };
+      },
+
+      async reassignIssues(issueIds: string[], assignee: string): Promise<LintReport> {
+        lintIssues = lintIssues.map((i) => (issueIds.includes(i.id) ? { ...i, assignee } : i));
+        return {
+          issues: lintIssues,
+          pagesChecked: MOCK_PAGES.length,
+          summary: tallySeverity(lintIssues),
         };
       },
 

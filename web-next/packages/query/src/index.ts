@@ -7,6 +7,8 @@ export {
   type ApiError,
 } from './http-client';
 
+export { openEventStream, type EventStreamOptions, type EventStreamHandle } from './event-stream';
+
 import { QueryClient, type QueryClientConfig } from '@tanstack/react-query';
 
 export function createQueryClient(overrides: QueryClientConfig = {}): QueryClient {

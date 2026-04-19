@@ -1,0 +1,232 @@
+.lint-page {
+  padding: var(--space-6);
+  max-width: 960px;
+}
+
+.lint-page__title {
+  margin: 0 0 var(--space-5);
+}
+
+.lint-page__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.lint-page__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.lint-page__btn {
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.lint-page__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lint-page__btn--fix {
+  background: var(--brand-500);
+  border-color: var(--brand-500);
+  color: var(--color-bg-primary);
+  font-weight: 500;
+}
+
+.lint-page__severity-filter {
+  display: flex;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.lint-page__filter-btn {
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.lint-page__filter-btn--active {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.lint-page__filter-btn--error {
+  color: var(--color-critical);
+}
+
+.lint-page__filter-btn--warn {
+  color: var(--color-accent-amber);
+}
+
+.lint-page__filter-btn--info {
+  color: var(--color-accent-cyan);
+}
+
+.lint-page__bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--brand-500) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-500) 20%, transparent);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.lint-page__bulk-count {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.lint-page__assignee-select {
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+}
+
+.lint-page__select-all {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.lint-page__select-all-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.lint-page__empty {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.lint-page__issues {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.lint-page__issue {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.lint-page__issue--error {
+  border-left: 3px solid var(--color-critical);
+}
+
+.lint-page__issue--warn {
+  border-left: 3px solid var(--color-accent-amber);
+}
+
+.lint-page__issue--info {
+  border-left: 3px solid var(--color-accent-cyan);
+}
+
+.lint-page__issue--selected {
+  background: color-mix(in srgb, var(--brand-500) 6%, var(--color-bg-secondary));
+}
+
+.lint-page__issue-check {
+  margin-top: 3px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.lint-page__issue-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.lint-page__issue-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-1);
+}
+
+.lint-page__issue-rule {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--color-bg-tertiary);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: help;
+}
+
+.lint-page__issue-page {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lint-page__issue-assignee {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.lint-page__issue-message {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  word-break: break-word;
+}
+
+.lint-page__fix-btn {
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--brand-500) 40%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--brand-400);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  padding: 2px var(--space-2);
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.lint-page__fix-btn:hover {
+  background: color-mix(in srgb, var(--brand-500) 10%, transparent);
+}
+
+.lint-page__fix-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

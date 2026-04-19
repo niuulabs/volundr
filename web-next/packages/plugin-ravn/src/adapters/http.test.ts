@@ -2,7 +2,13 @@
  * HTTP adapter tests — adapted from web/src/modules/ravn/api/client.test.ts
  */
 import { describe, it, expect, vi } from 'vitest';
-import { buildRavnPersonaAdapter } from './http';
+import {
+  buildRavnPersonaAdapter,
+  buildRavnRavenAdapter,
+  buildRavnSessionAdapter,
+  buildRavnTriggerAdapter,
+  buildRavnBudgetAdapter,
+} from './http';
 import type { IPersonaStore, PersonaCreateRequest } from '../ports';
 
 // ---------------------------------------------------------------------------
@@ -282,5 +288,162 @@ describe('buildRavnPersonaAdapter', () => {
     expect(typeof store.updatePersona).toBe('function');
     expect(typeof store.deletePersona).toBe('function');
     expect(typeof store.forkPersona).toBe('function');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildRavnRavenAdapter
+// ---------------------------------------------------------------------------
+
+const rawRavn = {
+  id: '11111111-1111-4111-8111-111111111111',
+  persona_name: 'coding-agent',
+  status: 'active',
+  model: 'balanced',
+  created_at: '2026-04-01T12:00:00Z',
+  updated_at: '2026-04-02T09:30:00Z',
+};
+
+describe('buildRavnRavenAdapter', () => {
+  it('lists ravens from GET /ravens and camel-cases the response', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue([rawRavn]);
+    const result = await buildRavnRavenAdapter(client).listRavens();
+    expect(client.get).toHaveBeenCalledWith('/ravens');
+    expect(result).toEqual([
+      {
+        id: rawRavn.id,
+        personaName: 'coding-agent',
+        status: 'active',
+        model: 'balanced',
+        createdAt: rawRavn.created_at,
+        updatedAt: rawRavn.updated_at,
+      },
+    ]);
+  });
+
+  it('fetches a single raven by id', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue(rawRavn);
+    const result = await buildRavnRavenAdapter(client).getRaven(rawRavn.id);
+    expect(client.get).toHaveBeenCalledWith(`/ravens/${rawRavn.id}`);
+    expect(result.personaName).toBe('coding-agent');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildRavnSessionAdapter
+// ---------------------------------------------------------------------------
+
+const rawSession = {
+  id: '22222222-2222-4222-8222-222222222222',
+  ravn_id: '11111111-1111-4111-8111-111111111111',
+  persona_name: 'coding-agent',
+  status: 'running',
+  model: 'balanced',
+  created_at: '2026-04-01T12:00:00Z',
+};
+
+const rawMsg = {
+  id: '33333333-3333-4333-8333-333333333333',
+  session_id: rawSession.id,
+  kind: 'asst',
+  content: 'hello',
+  ts: '2026-04-01T12:00:05Z',
+  tool_name: undefined,
+};
+
+describe('buildRavnSessionAdapter', () => {
+  it('lists sessions and camel-cases', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue([rawSession]);
+    const result = await buildRavnSessionAdapter(client).listSessions();
+    expect(client.get).toHaveBeenCalledWith('/sessions');
+    expect(result[0]!.ravnId).toBe(rawSession.ravn_id);
+  });
+
+  it('fetches a session by id', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue(rawSession);
+    await buildRavnSessionAdapter(client).getSession(rawSession.id);
+    expect(client.get).toHaveBeenCalledWith(`/sessions/${rawSession.id}`);
+  });
+
+  it('fetches messages for a session', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue([rawMsg]);
+    const result = await buildRavnSessionAdapter(client).getMessages(rawSession.id);
+    expect(client.get).toHaveBeenCalledWith(`/sessions/${rawSession.id}/messages`);
+    expect(result[0]!.sessionId).toBe(rawSession.id);
+    expect(result[0]!.kind).toBe('asst');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildRavnTriggerAdapter
+// ---------------------------------------------------------------------------
+
+const rawTrigger = {
+  id: '44444444-4444-4444-8444-444444444444',
+  kind: 'cron',
+  persona_name: 'coding-agent',
+  spec: '0 * * * *',
+  enabled: true,
+  created_at: '2026-04-01T12:00:00Z',
+};
+
+describe('buildRavnTriggerAdapter', () => {
+  it('lists triggers', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue([rawTrigger]);
+    const result = await buildRavnTriggerAdapter(client).listTriggers();
+    expect(result[0]!.personaName).toBe('coding-agent');
+  });
+
+  it('creates a trigger with snake_case body', async () => {
+    const client = makeClient();
+    client.post.mockResolvedValue(rawTrigger);
+    await buildRavnTriggerAdapter(client).createTrigger({
+      kind: 'cron',
+      personaName: 'coding-agent',
+      spec: '0 * * * *',
+      enabled: true,
+    });
+    expect(client.post).toHaveBeenCalledWith('/triggers', {
+      kind: 'cron',
+      persona_name: 'coding-agent',
+      spec: '0 * * * *',
+      enabled: true,
+    });
+  });
+
+  it('deletes a trigger by id', async () => {
+    const client = makeClient();
+    client.delete.mockResolvedValue(undefined);
+    await buildRavnTriggerAdapter(client).deleteTrigger(rawTrigger.id);
+    expect(client.delete).toHaveBeenCalledWith(`/triggers/${rawTrigger.id}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildRavnBudgetAdapter
+// ---------------------------------------------------------------------------
+
+const rawBudget = { spent_usd: 42.5, cap_usd: 100, warn_at: 0.8 };
+
+describe('buildRavnBudgetAdapter', () => {
+  it('fetches per-ravn budget', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue(rawBudget);
+    const result = await buildRavnBudgetAdapter(client).getBudget('ravn-1');
+    expect(client.get).toHaveBeenCalledWith('/budget/ravn-1');
+    expect(result).toEqual({ spentUsd: 42.5, capUsd: 100, warnAt: 0.8 });
+  });
+
+  it('fetches the fleet budget', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue(rawBudget);
+    await buildRavnBudgetAdapter(client).getFleetBudget();
+    expect(client.get).toHaveBeenCalledWith('/budget/fleet');
   });
 });

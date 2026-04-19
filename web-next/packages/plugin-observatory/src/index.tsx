@@ -27,6 +27,11 @@ export {
   createMockTopologyStream,
   createMockEventStream,
 } from './adapters/mock';
+export {
+  buildObservatoryRegistryHttpAdapter,
+  buildObservatoryTopologySseStream,
+  buildObservatoryEventsSseStream,
+} from './adapters/http';
 export type { IRegistryRepository, ILiveTopologyStream, IEventStream } from './ports';
 export type {
   EntityType,

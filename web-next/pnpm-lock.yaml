@@ -379,6 +379,9 @@ importers:
       '@niuulabs/plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk
+      '@niuulabs/query':
+        specifier: workspace:*
+        version: link:../query
       '@niuulabs/ui':
         specifier: workspace:*
         version: link:../ui
@@ -496,6 +499,9 @@ importers:
       '@niuulabs/plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk
+      '@niuulabs/query':
+        specifier: workspace:*
+        version: link:../query
       '@niuulabs/ui':
         specifier: workspace:*
         version: link:../ui

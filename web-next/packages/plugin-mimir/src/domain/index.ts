@@ -40,6 +40,11 @@ export type { EntityKind, EntityMeta } from './entity';
 export type { LintRule, IssueSeverity, LintIssue, LintReport, DreamCycle } from './lint';
 export { isAutoFixable, tallySeverity } from './lint';
 
+export type { WriteRoutingRule, RouteTestResult } from './routing';
+export { resolveRoute } from './routing';
+
+export type { RavnState, RavnBinding } from './ravn-binding';
+
 export type { FileTreeDir, FileTreeLeaf, FileTreeItem } from './tree';
 export { buildFileTree, mergeFileTrees, countLeaves, collectLeaves } from './tree';
 

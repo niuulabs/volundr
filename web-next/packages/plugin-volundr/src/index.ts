@@ -54,6 +54,7 @@ export { createMockPtyStream } from './adapters/mock';
 export { createMockMetricsStream } from './adapters/mock';
 export { createMockFileSystemPort } from './adapters/mock';
 export { buildVolundrHttpAdapter } from './adapters/http';
+export { buildVolundrPtyWsAdapter, buildVolundrMetricsSseAdapter } from './adapters/streams';
 
 // Port types
 export type { IVolundrService } from './ports/IVolundrService';

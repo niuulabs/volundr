@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import { renderWithMimir as wrap } from '../testing/renderWithMimir';
 import { PagesView } from './PagesView';
-import { createMimirMockAdapter } from '../adapters/mock';
-import type { IMimirService } from '../ports';
 
 describe('PagesView', () => {
   it('renders the page tree sidebar', async () => {

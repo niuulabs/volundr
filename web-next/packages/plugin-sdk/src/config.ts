@@ -9,6 +9,12 @@ export const pluginConfigSchema = z.object({
 export const serviceConfigSchema = z
   .object({
     baseUrl: z.string().url().optional(),
+    /**
+     * Optional WebSocket URL for services with a bidirectional stream
+     * component (e.g. Völundr PTY). Accepts ws:// or wss://. When present it
+     * overrides `baseUrl` for the streaming adapter only.
+     */
+    wsUrl: z.string().url().optional(),
     mode: z.enum(['http', 'mock', 'ws']).default('http'),
   })
   .catchall(z.unknown());
