@@ -1,22 +1,59 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { ObservatoryPage } from './ObservatoryPage';
-import {
-  createMockTopologyStream,
-  createMockEventStream,
-} from '../adapters/mock';
+import { createMockTopologyStream } from '../adapters/mock';
+
+// ── Canvas mock (same stub as TopologyCanvas.test.tsx) ────────────────────────
+
+function makeCtxMock() {
+  const gradient = { addColorStop: vi.fn() };
+  return {
+    clearRect: vi.fn(),
+    fillRect: vi.fn(),
+    strokeRect: vi.fn(),
+    beginPath: vi.fn(),
+    closePath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    quadraticCurveTo: vi.fn(),
+    arc: vi.fn(),
+    fill: vi.fn(),
+    stroke: vi.fn(),
+    fillText: vi.fn(),
+    strokeText: vi.fn(),
+    save: vi.fn(),
+    restore: vi.fn(),
+    translate: vi.fn(),
+    scale: vi.fn(),
+    setTransform: vi.fn(),
+    setLineDash: vi.fn(),
+    createRadialGradient: vi.fn().mockReturnValue(gradient),
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    font: '',
+    textAlign: 'left' as CanvasTextAlign,
+    textBaseline: 'alphabetic' as CanvasTextBaseline,
+    lineCap: 'butt' as CanvasLineCap,
+    lineDashOffset: 0,
+  };
+}
+
+beforeEach(() => {
+  HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue(makeCtxMock());
+  vi.stubGlobal('requestAnimationFrame', vi.fn().mockReturnValue(0));
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  vi.stubGlobal('devicePixelRatio', 1);
+});
 
 function wrap(ui: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <ServicesProvider
-        services={{
-          'observatory.topology': createMockTopologyStream(),
-          'observatory.events': createMockEventStream(),
-        }}
+        services={{ 'observatory.topology': createMockTopologyStream() }}
       >
         {ui}
       </ServicesProvider>
@@ -25,45 +62,54 @@ function wrap(ui: React.ReactNode) {
 }
 
 describe('ObservatoryPage', () => {
-  it('renders the Observatory title and subtitle', () => {
+  it('renders the observatory page wrapper', () => {
     wrap(<ObservatoryPage />);
-    expect(screen.getByText('Observatory')).toBeInTheDocument();
-    expect(screen.getByText(/live topology/)).toBeInTheDocument();
+    expect(screen.getByTestId('observatory-page')).toBeInTheDocument();
   });
 
-  it('displays node and edge counts from the topology snapshot', () => {
+  it('renders the topology canvas', () => {
     wrap(<ObservatoryPage />);
-    expect(screen.getByText('nodes')).toBeInTheDocument();
-    expect(screen.getByText('edges')).toBeInTheDocument();
+    expect(screen.getByTestId('topology-canvas')).toBeInTheDocument();
   });
 
-  it('renders recent events from the event stream', () => {
+  it('renders camera controls', () => {
     wrap(<ObservatoryPage />);
-    expect(screen.getByText('Recent events')).toBeInTheDocument();
-    expect(screen.getAllByText(/huginn/).length).toBeGreaterThan(0);
+    expect(screen.getByTestId('camera-controls')).toBeInTheDocument();
   });
 
-  it('shows connecting state when topology is null', () => {
+  it('renders the minimap panel', () => {
+    wrap(<ObservatoryPage />);
+    expect(screen.getByTestId('minimap-panel')).toBeInTheDocument();
+  });
+
+  it('renders zoom controls', () => {
+    wrap(<ObservatoryPage />);
+    expect(screen.getByRole('button', { name: /zoom in/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /zoom out/i })).toBeInTheDocument();
+  });
+
+  it('renders camera reset button', () => {
+    wrap(<ObservatoryPage />);
+    expect(screen.getByTestId('camera-reset')).toBeInTheDocument();
+  });
+
+  it('renders without crash when topology stream has no data yet', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const nullTopologyStream = {
+    const nullStream = {
       getSnapshot: () => null,
       subscribe: (listener: (t: never) => void) => {
         void listener;
         return () => {};
       },
     };
-    render(
-      <QueryClientProvider client={client}>
-        <ServicesProvider
-          services={{
-            'observatory.topology': nullTopologyStream,
-            'observatory.events': createMockEventStream(),
-          }}
-        >
-          <ObservatoryPage />
-        </ServicesProvider>
-      </QueryClientProvider>,
-    );
-    expect(screen.getByText('connecting…')).toBeInTheDocument();
+    expect(() =>
+      render(
+        <QueryClientProvider client={client}>
+          <ServicesProvider services={{ 'observatory.topology': nullStream }}>
+            <ObservatoryPage />
+          </ServicesProvider>
+        </QueryClientProvider>,
+      ),
+    ).not.toThrow();
   });
 });
