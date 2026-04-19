@@ -89,7 +89,10 @@ describe('Sparkline', () => {
     const { container } = render(<Sparkline id="x" />);
     const linePath = container.querySelectorAll('path')[1]!;
     // 24 points → "M..." + 23 "L..." segments = 24 coordinate pairs
-    const segments = linePath.getAttribute('d')!.split(/(?=[ML])/).filter(Boolean);
+    const segments = linePath
+      .getAttribute('d')!
+      .split(/(?=[ML])/)
+      .filter(Boolean);
     expect(segments.length).toBe(24);
   });
 });
