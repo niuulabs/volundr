@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test('navigate to /mimir renders the page header', async ({ page }) => {
   await page.goto('/mimir');
-  await expect(page.getByText('Mímir')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Mímir' })).toBeVisible();
   await expect(page.getByText('the well of knowledge')).toBeVisible();
 });
 
@@ -15,8 +15,8 @@ test('/mimir renders tab navigation', async ({ page }) => {
 
 test('Overview tab shows KPI strip', async ({ page }) => {
   await page.goto('/mimir');
-  await expect(page.getByText('pages')).toBeVisible({ timeout: 5000 });
-  await expect(page.getByText('sources')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('pages', { exact: true })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('sources', { exact: true })).toBeVisible({ timeout: 5000 });
   await expect(page.getByText('lint issues')).toBeVisible({ timeout: 5000 });
 });
 
@@ -41,14 +41,22 @@ test('switching to Pages tab shows the file tree', async ({ page }) => {
   await expect(page.getByRole('complementary', { name: /page tree/ })).toBeVisible({
     timeout: 5000,
   });
-  await expect(page.getByText('arch/')).toBeVisible({ timeout: 5000 });
+  await expect(
+    page
+      .getByRole('complementary', { name: /page tree/ })
+      .getByText('arch/')
+      .first(),
+  ).toBeVisible({ timeout: 5000 });
 });
 
 test('can open a page and see its title', async ({ page }) => {
   await page.goto('/mimir');
   await page.getByRole('tab', { name: 'Pages' }).click();
   // Click on the arch/ dir then overview leaf
-  const archDir = page.getByText('arch/');
+  const archDir = page
+    .getByRole('complementary', { name: /page tree/ })
+    .getByText('arch/')
+    .first();
   await expect(archDir).toBeVisible({ timeout: 5000 });
   // Leaf node for overview
   await page
