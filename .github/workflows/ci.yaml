@@ -1182,6 +1182,7 @@ jobs:
   # ---------------------------------------------------------------------------
   dependency-review:
     name: Dependency Review
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Harden runner
