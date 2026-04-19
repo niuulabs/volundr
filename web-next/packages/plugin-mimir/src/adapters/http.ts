@@ -377,22 +377,6 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
         await client.put<void>('/page', body);
       },
 
-      async listSources(options): Promise<Source[]> {
-        const params = new URLSearchParams();
-        if (options?.originType) params.set('originType', options.originType);
-        if (options?.mountName) params.set('mount', options.mountName);
-        const qs = params.toString() ? `?${params.toString()}` : '';
-        const raw = await client.get<RawSource[]>(`/sources${qs}`);
-        return raw.map(toSource);
-      },
-
-      async getPageSources(path: string): Promise<Source[]> {
-        const raw = await client.get<RawSource[]>(
-          `/pages/sources?path=${encodeURIComponent(path)}`,
-        );
-        return raw.map(toSource);
-      },
-
       async search(query: string, mode: SearchMode = 'hybrid'): Promise<SearchResult[]> {
         const raw = await client.get<RawSearchResult[]>(
           `/search?q=${encodeURIComponent(query)}&mode=${mode}`,
@@ -424,11 +408,13 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
         if (options?.originType) params.set('origin_type', options.originType);
         if (options?.mountName) params.set('mount', options.mountName);
         const qs = params.toString() ? `?${params.toString()}` : '';
-        return client.get<Source[]>(`/sources${qs}`);
+        const raw = await client.get<RawSource[]>(`/sources${qs}`);
+        return raw.map(toSource);
       },
 
       async getPageSources(path: string): Promise<Source[]> {
-        return client.get<Source[]>(`/page/sources?path=${encodeURIComponent(path)}`);
+        const raw = await client.get<RawSource[]>(`/page/sources?path=${encodeURIComponent(path)}`);
+        return raw.map(toSource);
       },
     },
 
