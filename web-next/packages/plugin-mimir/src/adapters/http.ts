@@ -13,6 +13,8 @@ import type { LintReport, DreamCycle, LintIssue, IssueSeverity, LintRule } from 
 import type { MimirStats, MimirGraph, GraphNode, GraphEdge } from '../domain/api-types';
 import type { EmbeddingSearchResult } from '../ports/IEmbeddingStore';
 import type { EntityKind, EntityMeta } from '../domain/entity';
+import type { WriteRoutingRule } from '../domain/routing';
+import type { RavnBinding } from '../domain/ravn-binding';
 import { tallySeverity } from '../domain/lint';
 
 // ---------------------------------------------------------------------------
@@ -268,6 +270,22 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
         const raw = await client.get<RawMount[]>('/mounts');
         return raw.map(toMount);
       },
+
+      async listRoutingRules(): Promise<WriteRoutingRule[]> {
+        return client.get<WriteRoutingRule[]>('/routing/rules');
+      },
+
+      async upsertRoutingRule(rule: WriteRoutingRule): Promise<WriteRoutingRule> {
+        return client.put<WriteRoutingRule>(`/routing/rules/${rule.id}`, rule);
+      },
+
+      async deleteRoutingRule(id: string): Promise<void> {
+        await client.delete<void>(`/routing/rules/${id}`);
+      },
+
+      async listRavnBindings(): Promise<RavnBinding[]> {
+        return client.get<RavnBinding[]>('/ravns/bindings');
+      },
     },
 
     pages: {
@@ -363,6 +381,14 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
       async getDreamCycles(limit = 20): Promise<DreamCycle[]> {
         const raw = await client.get<RawDreamCycle[]>(`/dreams?limit=${limit}`);
         return raw.map(toDreamCycle);
+      },
+
+      async reassignIssues(issueIds: string[], assignee: string): Promise<LintReport> {
+        const raw = await client.post<RawLintReport>('/lint/reassign', {
+          issue_ids: issueIds,
+          assignee,
+        });
+        return toLintReport(raw);
       },
     },
   };
