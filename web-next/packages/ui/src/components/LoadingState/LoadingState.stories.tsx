@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { LoadingState } from './LoadingState';
+import '../__stories__/showcase.css';
 
 const meta: Meta<typeof LoadingState> = {
   title: 'Components/LoadingState',
@@ -24,18 +25,7 @@ export const WithCancelAction: Story = {
   args: {
     title: 'Running query…',
     action: (
-      <button
-        type="button"
-        style={{
-          padding: 'var(--space-1) var(--space-3)',
-          background: 'transparent',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-sm)',
-          cursor: 'pointer',
-          color: 'var(--color-text-secondary)',
-          fontSize: 'var(--text-sm)',
-        }}
-      >
+      <button type="button" className="niuu-story-btn niuu-story-btn--ghost">
         Cancel
       </button>
     ),

@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { Table, type ColumnDef, type SortState } from './Table';
 import { StateDot } from '../../primitives/StateDot';
 import { Chip } from '../../primitives/Chip';
+import '../__stories__/showcase.css';
 
 interface Demo {
   id: string;
@@ -31,7 +32,7 @@ const columns: ColumnDef<Demo>[] = [
     key: 'status',
     header: 'Status',
     cell: (r) => (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+      <div className="niuu-story-flex-cell">
         <StateDot state={r.status} />
         {r.status}
       </div>

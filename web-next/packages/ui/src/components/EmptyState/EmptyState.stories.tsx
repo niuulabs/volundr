@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { EmptyState } from './EmptyState';
+import '../__stories__/showcase.css';
 
 const meta: Meta<typeof EmptyState> = {
   title: 'Components/EmptyState',
@@ -22,19 +23,7 @@ export const WithIconAndAction: Story = {
     title: 'No sessions yet',
     description: 'Sessions will appear here once a raven completes its first run.',
     action: (
-      <button
-        type="button"
-        style={{
-          padding: 'var(--space-2) var(--space-4)',
-          background: 'var(--color-brand)',
-          color: '#000',
-          border: 'none',
-          borderRadius: 'var(--radius-md)',
-          cursor: 'pointer',
-          fontSize: 'var(--text-sm)',
-          fontWeight: 600,
-        }}
-      >
+      <button type="button" className="niuu-story-btn niuu-story-btn--brand">
         Create session
       </button>
     ),

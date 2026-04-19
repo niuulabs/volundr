@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { FilterBar, FilterChip, FilterToggle } from './FilterBar';
+import '../__stories__/showcase.css';
 
 const meta: Meta<typeof FilterBar> = {
   title: 'Components/FilterBar',
@@ -78,7 +79,7 @@ export const FullFeatured: Story = {
         searchValue={q}
         onSearchChange={setQ}
         actions={
-          <button type="button" style={{ fontSize: 11 }}>
+          <button type="button" className="niuu-story-btn niuu-story-btn--ghost">
             ⬇ Export
           </button>
         }

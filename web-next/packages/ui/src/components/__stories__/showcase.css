@@ -1,0 +1,42 @@
+/* Shared demo button styles for Storybook stories */
+
+.niuu-story-btn {
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+/* Brand action — e.g. "Create session", "Clear filters" */
+.niuu-story-btn--brand {
+  background: var(--color-brand);
+  color: #000;
+  font-weight: 600;
+}
+
+/* Danger action — e.g. "↻ Retry" */
+.niuu-story-btn--danger {
+  background: var(--color-critical-bg);
+  border: 1px solid var(--color-critical-bo);
+  color: var(--color-critical-fg);
+}
+
+/* Ghost/outline action — e.g. "Cancel", "⬇ Export" */
+.niuu-story-btn--ghost {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  padding: var(--space-1) var(--space-3);
+  font-size: 11px;
+}
+
+/* Flex cell — e.g. status column with icon + text */
+.niuu-story-flex-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

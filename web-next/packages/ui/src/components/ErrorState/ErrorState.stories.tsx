@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { ErrorState } from './ErrorState';
+import '../__stories__/showcase.css';
 
 const meta: Meta<typeof ErrorState> = {
   title: 'Components/ErrorState',
@@ -23,19 +24,7 @@ export const WithRetryAction: Story = {
     title: 'Failed to load sessions',
     description: 'The session service is unavailable. Check connectivity and try again.',
     action: (
-      <button
-        type="button"
-        style={{
-          padding: 'var(--space-2) var(--space-4)',
-          background: 'var(--color-critical-bg)',
-          border: '1px solid var(--color-critical-bo)',
-          borderRadius: 'var(--radius-md)',
-          cursor: 'pointer',
-          color: 'var(--color-critical-fg)',
-          fontSize: 'var(--text-sm)',
-          fontWeight: 500,
-        }}
-      >
+      <button type="button" className="niuu-story-btn niuu-story-btn--danger">
         ↻ Retry
       </button>
     ),

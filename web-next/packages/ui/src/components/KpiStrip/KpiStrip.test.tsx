@@ -32,4 +32,13 @@ describe('KpiStrip', () => {
     );
     expect(container.querySelector('.custom')).toBeInTheDocument();
   });
+
+  it('forwards data-* attributes to the root div', () => {
+    const { container } = render(
+      <KpiStrip data-testid="kpi-strip">
+        <KpiCard label="A" value={1} />
+      </KpiStrip>,
+    );
+    expect(container.querySelector('[data-testid="kpi-strip"]')).toBeInTheDocument();
+  });
 });

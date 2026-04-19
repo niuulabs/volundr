@@ -113,10 +113,7 @@ export function Table<T>({
 
   return (
     <div className={cn('niuu-table-wrap', className)} role="region" aria-label={ariaLabel}>
-      <table
-        className={cn('niuu-table', stickyHeader && 'niuu-table--sticky-header')}
-        aria-label={ariaLabel}
-      >
+      <table className={cn('niuu-table', stickyHeader && 'niuu-table--sticky-header')}>
         <thead className="niuu-table__head">
           <tr>
             {selectable && (

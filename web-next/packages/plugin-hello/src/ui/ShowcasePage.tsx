@@ -14,6 +14,7 @@ import {
   StateDot,
   Chip,
 } from '@niuulabs/ui';
+import './ShowcasePage.css';
 
 // ── Demo data ──────────────────────────────────────────────────────────────
 
@@ -43,7 +44,7 @@ const COLUMNS: ColumnDef<Session>[] = [
     key: 'status',
     header: 'Status',
     cell: (r) => (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+      <div className="niuu-showcase-status-cell">
         <StateDot state={r.status} />
         {r.status}
       </div>
@@ -87,20 +88,12 @@ export function ShowcasePage() {
     });
 
   return (
-    <div
-      style={{
-        padding: 'var(--space-6)',
-        maxWidth: 900,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--space-8)',
-      }}
-    >
-      <h2 style={{ margin: 0 }}>Data Surfaces · Showcase</h2>
+    <div className="niuu-showcase-page">
+      <h2>Data Surfaces · Showcase</h2>
 
       {/* ── KPI Strip ──────────────────────────────────────── */}
       <section>
-        <h3 style={{ margin: '0 0 var(--space-3)' }}>KPI Strip</h3>
+        <h3 className="niuu-showcase-section-title">KPI Strip</h3>
         <KpiStrip data-testid="kpi-strip">
           <KpiCard
             label="Active Sessions"
@@ -133,7 +126,7 @@ export function ShowcasePage() {
 
       {/* ── Filter Bar ─────────────────────────────────────── */}
       <section>
-        <h3 style={{ margin: '0 0 var(--space-3)' }}>Filter Bar</h3>
+        <h3 className="niuu-showcase-section-title">Filter Bar</h3>
         <FilterBar
           searchValue={search}
           onSearchChange={setSearch}
@@ -159,26 +152,16 @@ export function ShowcasePage() {
 
       {/* ── Table ─────────────────────────────────────────── */}
       <section>
-        <h3 style={{ margin: '0 0 var(--space-3)' }}>
+        <h3 className="niuu-showcase-section-title">
           Table
-          <span
-            style={{ marginLeft: 'var(--space-3)', gap: 'var(--space-2)', display: 'inline-flex' }}
-          >
+          <span className="niuu-showcase-state-btns">
             {(['loaded', 'loading', 'empty', 'error'] as DataSurfaceState[]).map((s) => (
               <button
                 key={s}
                 type="button"
                 data-testid={`state-btn-${s}`}
                 onClick={() => setTableState(s)}
-                style={{
-                  fontSize: 11,
-                  padding: '2px 8px',
-                  borderRadius: 'var(--radius-full)',
-                  border: '1px solid var(--color-border-subtle)',
-                  background: tableState === s ? 'var(--color-brand)' : 'transparent',
-                  color: tableState === s ? '#000' : 'var(--color-text-secondary)',
-                  cursor: 'pointer',
-                }}
+                className={`niuu-showcase-state-btn${tableState === s ? ' niuu-showcase-state-btn--active' : ''}`}
               >
                 {s}
               </button>
@@ -205,16 +188,7 @@ export function ShowcasePage() {
                   setStatusFilter(undefined);
                   setPinned(false);
                 }}
-                style={{
-                  padding: 'var(--space-2) var(--space-4)',
-                  background: 'var(--color-brand)',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  fontSize: 'var(--text-sm)',
-                  fontWeight: 600,
-                }}
+                className="niuu-showcase-action-btn"
               >
                 Clear filters
               </button>
@@ -226,18 +200,7 @@ export function ShowcasePage() {
             title="Failed to load sessions"
             description="Error: connect ECONNREFUSED 127.0.0.1:8080"
             action={
-              <button
-                type="button"
-                style={{
-                  padding: 'var(--space-2) var(--space-4)',
-                  background: 'var(--color-critical-bg)',
-                  border: '1px solid var(--color-critical-bo)',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  color: 'var(--color-critical-fg)',
-                  fontSize: 'var(--text-sm)',
-                }}
-              >
+              <button type="button" className="niuu-showcase-action-btn--danger">
                 ↻ Retry
               </button>
             }
@@ -256,7 +219,7 @@ export function ShowcasePage() {
             expandedKeys={expanded}
             onExpandChange={setExpanded}
             renderExpanded={(r) => (
-              <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
+              <div className="niuu-showcase-expanded-row">
                 Session ID: <code>{r.id}</code> · Region: {r.region} · Score: {r.score}
               </div>
             )}
@@ -272,7 +235,7 @@ export function ShowcasePage() {
                       setStatusFilter(undefined);
                       setPinned(false);
                     }}
-                    style={{ fontSize: 'var(--text-xs)', cursor: 'pointer' }}
+                    className="niuu-showcase-clear-btn"
                   >
                     Clear
                   </button>
