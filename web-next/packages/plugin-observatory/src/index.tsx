@@ -28,6 +28,7 @@ export type {
   EntityType,
   EntityTypeField,
   EntityShape,
+  EntityCategory,
   Registry,
   EdgeKind,
   NodeStatus,

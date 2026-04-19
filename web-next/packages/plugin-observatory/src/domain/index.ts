@@ -1,29 +1,23 @@
 /**
  * Observatory domain — pure value objects describing the live topology and
  * entity-type registry. No framework imports.
+ *
+ * Shared cross-plugin types (`EntityShape`, `EntityCategory`, `TypeRegistry`)
+ * are re-exported verbatim from `@niuulabs/domain`. Observatory-specific
+ * rendering + editor fields are layered on top of the canonical `EntityType`
+ * via extension — no local copies.
  */
 
-/** The 5 connection styles in the topology edge taxonomy. */
-export type EdgeKind = 'solid' | 'dashed-anim' | 'dashed-long' | 'soft' | 'raid';
+// ── Base types re-exported from @niuulabs/domain ──────────────────────────────
+// Import the domain bases we extend locally.
+import type { EntityType as BaseEntityType, TypeRegistry } from '@niuulabs/domain';
 
-/** SVG shape primitives used when rendering topology nodes. */
-export type EntityShape =
-  | 'ring'
-  | 'ring-dashed'
-  | 'rounded-rect'
-  | 'diamond'
-  | 'triangle'
-  | 'hex'
-  | 'chevron'
-  | 'square'
-  | 'square-sm'
-  | 'pentagon'
-  | 'halo'
-  | 'mimir'
-  | 'mimir-small'
-  | 'dot';
+// Re-export shared primitives so consumers can import from a single package.
+export type { EntityShape, EntityCategory, TypeRegistry } from '@niuulabs/domain';
 
-/** A single configurable field on an EntityType. */
+// ── Observatory-specific field definition ─────────────────────────────────────
+
+/** A configurable field descriptor on an EntityType used by the registry editor. */
 export interface EntityTypeField {
   key: string;
   label: string;
@@ -32,29 +26,32 @@ export interface EntityTypeField {
   options?: string[];
 }
 
-/** A type definition entry in the entity registry. */
-export interface EntityType {
-  id: string;
-  label: string;
-  rune: string;
+/**
+ * Observatory-extended entity type.
+ * Inherits `id`, `label`, `category` (typed enum), `rune`, `shape`, `color`,
+ * `description`, `parentTypes`, `canContain` from `@niuulabs/domain`
+ * `EntityType` and adds observatory rendering + registry-editor fields.
+ */
+export interface EntityType extends BaseEntityType {
   icon: string;
-  shape: EntityShape;
-  color: string;
   size: number;
   border: 'solid' | 'dashed';
-  canContain: string[];
-  parentTypes: string[];
-  category: string;
-  description: string;
   fields: EntityTypeField[];
 }
 
-/** Versioned snapshot of all entity type definitions. */
-export interface Registry {
-  version: number;
-  updatedAt: string;
+/**
+ * Versioned registry of observatory-extended entity types.
+ * Structurally compatible with `TypeRegistry` from `@niuulabs/domain` but
+ * narrows `types` to the richer `EntityType` extension.
+ */
+export interface Registry extends Omit<TypeRegistry, 'types'> {
   types: EntityType[];
 }
+
+// ── Topology graph ────────────────────────────────────────────────────────────
+
+/** The 5 connection styles in the topology edge taxonomy. */
+export type EdgeKind = 'solid' | 'dashed-anim' | 'dashed-long' | 'soft' | 'raid';
 
 /** Runtime health status of a topology node. */
 export type NodeStatus =
@@ -94,6 +91,8 @@ export interface Topology {
   edges: TopologyEdge[];
   timestamp: string;
 }
+
+// ── Event log ─────────────────────────────────────────────────────────────────
 
 /** Severity level of an observatory event. */
 export type EventSeverity = 'debug' | 'info' | 'warn' | 'error';
