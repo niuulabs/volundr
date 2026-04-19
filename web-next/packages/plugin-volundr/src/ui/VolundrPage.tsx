@@ -118,7 +118,7 @@ function KpiTile({ label, value }: { label: string; value: number | string }) {
       >
         {value}
       </div>
-      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 4 }}>
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 'var(--space-1)' }}>
         {label}
       </div>
     </div>

@@ -46,7 +46,6 @@ import type {
   UserFeaturePreference,
   PersonalAccessToken,
   CreatePATResult,
-  TrackerIssue as TrackerIssueType,
 } from '../models/volundr.model';
 
 /** Minimal HTTP client — structurally compatible with ApiClient from @niuulabs/query. */
@@ -136,7 +135,7 @@ export function buildVolundrHttpAdapter(client: HttpClient): IVolundrService {
       ),
     getProjectRepoMappings: () => client.get<ProjectRepoMapping[]>('/tracker/repo-mappings'),
     updateTrackerIssueStatus: (issueId, status) =>
-      client.patch<TrackerIssueType>(`/tracker/issues/${issueId}`, { status }),
+      client.patch<TrackerIssue>(`/tracker/issues/${issueId}`, { status }),
 
     getIdentity: () => client.get<VolundrIdentity>('/identity'),
     listUsers: () => client.get<VolundrUser[]>('/admin/users'),

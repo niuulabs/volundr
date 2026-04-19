@@ -282,7 +282,7 @@ describe('buildVolundrHttpAdapter — full method sweep', () => {
     await svc.listTokens();
 
     // POST methods
-    await svc.connectSession({ name: 'c', source: { type: 'git' as const, repo: 'r', branch: 'b' }, model: 'm' });
+    await svc.connectSession({ name: 'c', hostname: 'host.example.com' });
     await svc.resumeSession('sess-1');
     await svc.archiveSession('sess-1');
     await svc.restoreSession('sess-1');
