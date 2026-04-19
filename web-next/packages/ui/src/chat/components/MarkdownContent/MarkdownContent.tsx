@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { Copy, Check, ChevronRight, ChevronDown, WrapText } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 import { OutcomeCard, extractOutcomeBlock } from '../OutcomeCard';
+import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import './MarkdownContent.css';
 
 const CURSOR_CHAR = '▊';
@@ -12,15 +13,9 @@ interface CodeBlockProps {
 }
 
 function CodeBlock({ language, code }: CodeBlockProps) {
-  const [copied, setCopied] = useState(false);
+  const [copied, handleCopy] = useCopyFeedback(code);
   const [collapsed, setCollapsed] = useState(false);
   const [wordWrap, setWordWrap] = useState(false);
-
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(code).catch(() => undefined);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [code]);
 
   return (
     <div className="niuu-chat-md-codeblock" data-testid="code-block">

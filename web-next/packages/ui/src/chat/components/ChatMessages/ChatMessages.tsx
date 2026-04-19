@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import {
   Hammer,
   Copy,
@@ -105,12 +106,11 @@ export function AssistantMessage({
   onCopy,
   onRegenerate,
   onBookmark,
-  bookmarked: bookmarkedProp = false,
+  bookmarked = false,
 }: AssistantMessageProps) {
-  const [copied, setCopied] = useState(false);
+  const [copied, handleCopyClick] = useCopyFeedback(message.content);
   const [thumbState, setThumbState] = useState<'up' | 'down' | null>(null);
   const [reasoningOpen, setReasoningOpen] = useState(false);
-  const [bookmarked, setBookmarked] = useState(bookmarkedProp);
 
   const reasoningParts = (message.parts?.filter(p => p.type === 'reasoning') ?? []) as Array<{
     readonly type: 'reasoning';
@@ -123,15 +123,9 @@ export function AssistantMessage({
   const tokens = meta?.usage ? extractTokens(meta.usage) : null;
 
   const handleCopy = useCallback(() => {
-    const text = message.content;
-    if (onCopy) {
-      onCopy(text);
-    } else {
-      navigator.clipboard?.writeText(text).catch(() => undefined);
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [message.content, onCopy]);
+    if (onCopy) onCopy(message.content);
+    handleCopyClick();
+  }, [message.content, onCopy, handleCopyClick]);
 
   return (
     <div className="niuu-chat-assistant-wrapper" data-testid="assistant-message">
@@ -215,11 +209,7 @@ export function AssistantMessage({
           <button
             type="button"
             className={cn('niuu-chat-action-btn', bookmarked && 'niuu-chat-action-btn--active')}
-            onClick={() => {
-              const next = !bookmarked;
-              setBookmarked(next);
-              onBookmark?.(message.id, next);
-            }}
+            onClick={() => onBookmark?.(message.id, !bookmarked)}
             title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
           >
             <Bookmark className="niuu-chat-action-icon" />

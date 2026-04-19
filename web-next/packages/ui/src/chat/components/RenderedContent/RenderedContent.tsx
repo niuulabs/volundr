@@ -1,6 +1,6 @@
-import { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { OutcomeCard, extractOutcomeBlock } from '../OutcomeCard';
+import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import './RenderedContent.css';
 
 interface RenderedContentProps {
@@ -9,13 +9,7 @@ interface RenderedContentProps {
 }
 
 function InlineCode({ children }: { children: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(children).catch(() => undefined);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const [copied, handleCopy] = useCopyFeedback(children);
 
   return (
     <div className="niuu-chat-rc-codeblock" data-testid="rendered-code-block">
