@@ -85,14 +85,17 @@ jobs:
       - name: Hardcode all changes to true for testing
         id: override
         run: |
-          HEAD="${{ github.head_ref }}"
+          # For pull_request events, github.head_ref / github.base_ref are set.
+          # For workflow_dispatch, fall back to github.ref_name (the dispatched branch).
+          HEAD="${{ github.head_ref || github.ref_name }}"
           BASE="${{ github.base_ref }}"
           # web-next scaffold branches: run only the web-next test suite.
           # Python backend + web/ frontend tests are disabled here to speed up
           # the new UI build. Revert when web-next reaches parity.
-          # Matches feat/web-next* and feat/niuu* (composable plugin UI branches).
+          # Matches feat/web-next*, feat/niuu*, and niu-* feature branches.
           if [[ "$HEAD" == feat/web-next* ]] || [[ "$BASE" == feat/web-next* ]] || \
-             [[ "$HEAD" == feat/niuu* ]] || [[ "$BASE" == feat/niuu* ]]; then
+             [[ "$HEAD" == feat/niuu* ]] || [[ "$BASE" == feat/niuu* ]] || \
+             [[ "$HEAD" == niu-* ]]; then
             echo "python=false" >> $GITHUB_OUTPUT
             echo "web=false" >> $GITHUB_OUTPUT
             echo "helm=false" >> $GITHUB_OUTPUT
