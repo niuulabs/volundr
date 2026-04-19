@@ -18,10 +18,12 @@ export const Default: Story = {
   decorators: [
     (Story) => (
       <QueryClientProvider client={client}>
-        <ServicesProvider services={{
-          'ravn.budget': createMockBudgetStream(),
-          'ravn.ravens': createMockRavenStream(),
-        }}>
+        <ServicesProvider
+          services={{
+            'ravn.budget': createMockBudgetStream(),
+            'ravn.ravens': createMockRavenStream(),
+          }}
+        >
           <Story />
         </ServicesProvider>
       </QueryClientProvider>

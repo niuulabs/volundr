@@ -35,9 +35,7 @@ describe('PagesView', () => {
       expect(screen.getAllByRole('button', { name: /overview/ }).length).toBeGreaterThan(0),
     );
     fireEvent.click(screen.getAllByRole('button', { name: /overview/ })[0]);
-    await waitFor(() =>
-      expect(screen.getByText('Architecture Overview')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Architecture Overview')).toBeInTheDocument());
   });
 
   it('renders zone blocks for the selected page', async () => {
@@ -46,9 +44,7 @@ describe('PagesView', () => {
       expect(screen.getAllByRole('button', { name: /overview/ }).length).toBeGreaterThan(0),
     );
     fireEvent.click(screen.getAllByRole('button', { name: /overview/ })[0]);
-    await waitFor(() =>
-      expect(screen.getByText('Key facts')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Key facts')).toBeInTheDocument());
   });
 
   it('shows an edit button for each zone in idle state', async () => {

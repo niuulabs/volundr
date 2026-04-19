@@ -41,7 +41,9 @@ describe('MessageRow', () => {
 
   describe('system kind', () => {
     it('renders content with italic style class', () => {
-      const { container } = render(<MessageRow message={msg({ kind: 'system', content: 'system context' })} />);
+      const { container } = render(
+        <MessageRow message={msg({ kind: 'system', content: 'system context' })} />,
+      );
       expect(screen.getByText('system context')).toBeInTheDocument();
       expect(container.querySelector('.rv-msg__body--italic')).toBeInTheDocument();
     });
@@ -49,17 +51,25 @@ describe('MessageRow', () => {
 
   describe('tool_call kind', () => {
     it('renders tool name', () => {
-      render(<MessageRow message={msg({ kind: 'tool_call', toolName: 'file.read', content: '{"path":"x"}' })} />);
+      render(
+        <MessageRow
+          message={msg({ kind: 'tool_call', toolName: 'file.read', content: '{"path":"x"}' })}
+        />,
+      );
       expect(screen.getByText('file.read')).toBeInTheDocument();
     });
 
     it('renders call badge', () => {
-      render(<MessageRow message={msg({ kind: 'tool_call', toolName: 'file.read', content: '{}' })} />);
+      render(
+        <MessageRow message={msg({ kind: 'tool_call', toolName: 'file.read', content: '{}' })} />,
+      );
       expect(screen.getByText('call')).toBeInTheDocument();
     });
 
     it('renders content as code', () => {
-      const { container } = render(<MessageRow message={msg({ kind: 'tool_call', content: '{"path":"x"}' })} />);
+      const { container } = render(
+        <MessageRow message={msg({ kind: 'tool_call', content: '{"path":"x"}' })} />,
+      );
       expect(container.querySelector('pre')).toBeInTheDocument();
     });
 
@@ -78,12 +88,20 @@ describe('MessageRow', () => {
 
   describe('emit kind', () => {
     it('renders emit badge', () => {
-      render(<MessageRow message={msg({ kind: 'emit', content: '{"event":"code.changed","payload":{}}' })} />);
+      render(
+        <MessageRow
+          message={msg({ kind: 'emit', content: '{"event":"code.changed","payload":{}}' })}
+        />,
+      );
       expect(screen.getByText('emit')).toBeInTheDocument();
     });
 
     it('renders event name from JSON', () => {
-      render(<MessageRow message={msg({ kind: 'emit', content: '{"event":"code.changed","payload":{}}' })} />);
+      render(
+        <MessageRow
+          message={msg({ kind: 'emit', content: '{"event":"code.changed","payload":{}}' })}
+        />,
+      );
       expect(screen.getByText('code.changed')).toBeInTheDocument();
     });
 

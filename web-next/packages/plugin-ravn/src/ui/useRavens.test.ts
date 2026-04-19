@@ -34,7 +34,14 @@ describe('useRavens', () => {
   });
 
   it('sets isError on failure', async () => {
-    const failing = { listRavens: async () => { throw new Error('fail'); }, getRaven: async () => { throw new Error('fail'); } };
+    const failing = {
+      listRavens: async () => {
+        throw new Error('fail');
+      },
+      getRaven: async () => {
+        throw new Error('fail');
+      },
+    };
     const { result } = renderHook(() => useRavens(), {
       wrapper: makeWrapper({ 'ravn.ravens': failing }),
     });

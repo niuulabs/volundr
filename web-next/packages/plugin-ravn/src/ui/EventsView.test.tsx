@@ -72,7 +72,11 @@ describe('EventsView', () => {
   });
 
   it('shows error state when service fails', async () => {
-    const failing = { listPersonas: async () => { throw new Error('fetch failed'); } };
+    const failing = {
+      listPersonas: async () => {
+        throw new Error('fetch failed');
+      },
+    };
     render(<EventsView />, { wrapper: wrap({ 'ravn.personas': failing }) });
     await waitFor(() => expect(screen.getByText(/failed to load personas/i)).toBeInTheDocument());
   });

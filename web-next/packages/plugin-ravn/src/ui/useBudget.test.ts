@@ -35,10 +35,9 @@ describe('useFleetBudget', () => {
 
 describe('useRavnBudget', () => {
   it('returns budget for a specific ravn', async () => {
-    const { result } = renderHook(
-      () => useRavnBudget('a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c'),
-      { wrapper: makeWrapper(svc) },
-    );
+    const { result } = renderHook(() => useRavnBudget('a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c'), {
+      wrapper: makeWrapper(svc),
+    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.spentUsd).toBe(1.24);
   });

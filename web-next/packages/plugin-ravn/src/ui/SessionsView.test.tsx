@@ -54,18 +54,28 @@ describe('SessionsView', () => {
 
   it('shows transcript message count', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() => expect(screen.getByText(/messages/)).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByText(/messages/)).toBeInTheDocument(), {
+      timeout: 3000,
+    });
   });
 
   it('shows error state when service fails', async () => {
-    const failing = { listSessions: async () => { throw new Error('fetch failed'); } };
-    render(<SessionsView />, { wrapper: wrap({ 'ravn.sessions': failing, 'ravn.ravens': createMockRavenStream() }) });
+    const failing = {
+      listSessions: async () => {
+        throw new Error('fetch failed');
+      },
+    };
+    render(<SessionsView />, {
+      wrapper: wrap({ 'ravn.sessions': failing, 'ravn.ravens': createMockRavenStream() }),
+    });
     await waitFor(() => expect(screen.getByText(/failed to load sessions/i)).toBeInTheDocument());
   });
 
   it('clicking a session item selects it', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() => expect(screen.getAllByRole('button', { name: /session/ }).length).toBeGreaterThan(1));
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /session/ }).length).toBeGreaterThan(1),
+    );
     const items = screen.getAllByRole('button', { name: /session/ });
     fireEvent.click(items[1]!);
     expect(items[1]).toHaveAttribute('aria-pressed', 'true');

@@ -59,7 +59,9 @@ describe('RavnPage', () => {
     render(<RavnPage />, { wrapper: wrap(allServices) });
     fireEvent.click(screen.getByRole('tab', { name: 'Triggers' }));
     expect(screen.getByRole('tab', { name: 'Triggers' })).toHaveAttribute('aria-selected', 'true');
-    await waitFor(() => expect(screen.getByRole('region', { name: /cron triggers/i })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: /cron triggers/i })).toBeInTheDocument(),
+    );
   });
 
   it('switching to Events tab shows events content', async () => {

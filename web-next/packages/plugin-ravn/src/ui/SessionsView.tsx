@@ -68,7 +68,11 @@ function Transcript({ session }: { session: Session }) {
   }
 
   if (isError) {
-    return <div className="rv-transcript__empty rv-transcript__empty--error">failed to load messages</div>;
+    return (
+      <div className="rv-transcript__empty rv-transcript__empty--error">
+        failed to load messages
+      </div>
+    );
   }
 
   return (
@@ -79,7 +83,9 @@ function Transcript({ session }: { session: Session }) {
         <span className="rv-transcript__count">{messages?.length ?? 0} messages</span>
       </div>
       <div className="rv-transcript__body">
-        {messages?.map((msg) => <MessageRow key={msg.id} message={msg} />)}
+        {messages?.map((msg) => (
+          <MessageRow key={msg.id} message={msg} />
+        ))}
         <ActiveCursor status={session.status} className="rv-transcript__cursor" />
         <div ref={bottomRef} />
       </div>
@@ -91,7 +97,9 @@ export function SessionsView() {
   const { data: sessions, isLoading, isError } = useSessions();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const sorted = sessions ? [...sessions].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) : [];
+  const sorted = sessions
+    ? [...sessions].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    : [];
   const selected = sorted.find((s) => s.id === selectedId) ?? sorted[0] ?? null;
 
   if (isLoading) {

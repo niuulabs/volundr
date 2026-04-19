@@ -31,7 +31,11 @@ export const Default: Story = {
         'ravn.sessions': createMockSessionStream(),
         'ravn.ravens': createMockRavenStream(),
       });
-      return <Wrapper><Story /></Wrapper>;
+      return (
+        <Wrapper>
+          <Story />
+        </Wrapper>
+      );
     },
   ],
 };
@@ -40,10 +44,18 @@ export const ErrorState: Story = {
   decorators: [
     (Story) => {
       const Wrapper = withProviders({
-        'ravn.sessions': { listSessions: async () => { throw new Error('service unavailable'); } },
+        'ravn.sessions': {
+          listSessions: async () => {
+            throw new Error('service unavailable');
+          },
+        },
         'ravn.ravens': createMockRavenStream(),
       });
-      return <Wrapper><Story /></Wrapper>;
+      return (
+        <Wrapper>
+          <Story />
+        </Wrapper>
+      );
     },
   ],
 };

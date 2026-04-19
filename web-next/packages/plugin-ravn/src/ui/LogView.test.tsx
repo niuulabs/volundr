@@ -24,7 +24,9 @@ const services = {
 describe('LogView', () => {
   it('renders the log table', async () => {
     render(<LogView />, { wrapper: wrap(services) });
-    await waitFor(() => expect(screen.getByLabelText(/log stream/i)).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByLabelText(/log stream/i)).toBeInTheDocument(), {
+      timeout: 3000,
+    });
   });
 
   it('shows all four column headers', async () => {
@@ -40,11 +42,16 @@ describe('LogView', () => {
   it('shows log entries from sessions', async () => {
     render(<LogView />, { wrapper: wrap(services) });
     // Wait for entries to appear (mock sessions have messages)
-    await waitFor(() => expect(screen.getByRole('log', { name: /event log/i })).toBeInTheDocument());
-    await waitFor(() => {
-      const rows = document.querySelectorAll('.rv-log-row');
-      expect(rows.length).toBeGreaterThan(0);
-    }, { timeout: 3000 });
+    await waitFor(() =>
+      expect(screen.getByRole('log', { name: /event log/i })).toBeInTheDocument(),
+    );
+    await waitFor(
+      () => {
+        const rows = document.querySelectorAll('.rv-log-row');
+        expect(rows.length).toBeGreaterThan(0);
+      },
+      { timeout: 3000 },
+    );
   });
 
   it('renders the search input', () => {
@@ -84,7 +91,9 @@ describe('LogView', () => {
 
   it('shows footer with entry count', async () => {
     render(<LogView />, { wrapper: wrap(services) });
-    await waitFor(() => expect(screen.getByText(/entries/i)).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByText(/entries/i)).toBeInTheDocument(), {
+      timeout: 3000,
+    });
   });
 
   it('raven selector renders options', async () => {

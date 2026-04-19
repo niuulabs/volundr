@@ -58,7 +58,11 @@ describe('TriggersView', () => {
   });
 
   it('shows error state when service fails', async () => {
-    const failing = { listTriggers: async () => { throw new Error('fetch failed'); } };
+    const failing = {
+      listTriggers: async () => {
+        throw new Error('fetch failed');
+      },
+    };
     render(<TriggersView />, { wrapper: wrap({ 'ravn.triggers': failing }) });
     await waitFor(() => expect(screen.getByText(/failed to load triggers/i)).toBeInTheDocument());
   });

@@ -34,7 +34,10 @@ test('renders all five tabs', async ({ page }) => {
 
 test('Sessions tab is active by default', async ({ page }) => {
   await page.goto('/ravn');
-  await expect(page.getByRole('tab', { name: 'Sessions' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Sessions' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -65,7 +68,9 @@ test('/ravn — transcript shows message kinds', async ({ page }) => {
 test('/ravn — running session shows active cursor', async ({ page }) => {
   await page.goto('/ravn');
   // coding-agent session status=running, so ActiveCursor should appear
-  await expect(page.getByRole('status', { name: /session in progress/i })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole('status', { name: /session in progress/i })).toBeVisible({
+    timeout: 5000,
+  });
 });
 
 test('/ravn — think message shows toggle button', async ({ page }) => {
@@ -93,7 +98,9 @@ test('/ravn — Triggers tab shows trigger groups', async ({ page }) => {
 test('/ravn — Triggers shows event triggers', async ({ page }) => {
   await page.goto('/ravn');
   await page.getByRole('tab', { name: 'Triggers' }).click();
-  await expect(page.getByRole('region', { name: /event triggers/i })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole('region', { name: /event triggers/i })).toBeVisible({
+    timeout: 5000,
+  });
 });
 
 test('/ravn — Triggers shows cron spec', async ({ page }) => {
@@ -150,7 +157,9 @@ test('/ravn — Budget tab shows hero card', async ({ page }) => {
 test('/ravn — Budget shows three attention columns', async ({ page }) => {
   await page.goto('/ravn');
   await page.getByRole('tab', { name: 'Budget' }).click();
-  await expect(page.getByRole('group', { name: /budget attention/i })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole('group', { name: /budget attention/i })).toBeVisible({
+    timeout: 5000,
+  });
   await expect(page.getByLabel('Burning fast')).toBeVisible();
   await expect(page.getByLabel('Near cap')).toBeVisible();
   await expect(page.getByLabel('Idle')).toBeVisible();
@@ -203,7 +212,9 @@ test('/ravn — Log has kind filter buttons', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'emit' })).toBeVisible();
 });
 
-test('/ravn — Log — join a live session and observe tool_call → tool_result → emit', async ({ page }) => {
+test('/ravn — Log — join a live session and observe tool_call → tool_result → emit', async ({
+  page,
+}) => {
   await page.goto('/ravn');
   // The first session (coding-agent) is running and has tool_call, tool_result, emit messages
   await expect(page.getByText('coding-agent').first()).toBeVisible({ timeout: 5000 });
@@ -214,7 +225,10 @@ test('/ravn — Log — join a live session and observe tool_call → tool_resul
   // Filter to tool_call kind
   await page.getByRole('button', { name: 'tool_call' }).click();
   // tool_call entries should now be visible
-  await expect(page.getByRole('button', { name: 'tool_call' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'tool_call' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 });
 
 test('/ravn — Log — filter the log by typing in search', async ({ page }) => {

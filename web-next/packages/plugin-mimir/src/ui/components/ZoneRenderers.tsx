@@ -1,7 +1,13 @@
 import { Fragment } from 'react';
 import { resolveWikilink } from '../../domain';
 import { WikilinkPill } from './WikilinkPill';
-import type { Zone, ZoneKeyFacts, ZoneRelationships, ZoneAssessment, ZoneTimeline } from '../../domain/page';
+import type {
+  Zone,
+  ZoneKeyFacts,
+  ZoneRelationships,
+  ZoneAssessment,
+  ZoneTimeline,
+} from '../../domain/page';
 import type { PageMeta } from '../../domain/page';
 
 interface ZoneRendererProps {
@@ -50,14 +56,8 @@ function RelationshipsZone({
         const target = resolveWikilink(rel.slug, pages);
         return (
           <li key={i}>
-            <WikilinkPill
-              slug={rel.slug}
-              broken={target.broken}
-              onNavigate={onNavigate}
-            />
-            {rel.note && (
-              <span className="mm-rel-note">— {rel.note}</span>
-            )}
+            <WikilinkPill slug={rel.slug} broken={target.broken} onNavigate={onNavigate} />
+            {rel.note && <span className="mm-rel-note">— {rel.note}</span>}
           </li>
         );
       })}
@@ -78,9 +78,7 @@ function TimelineZone({ zone }: { zone: ZoneTimeline }) {
           <span className="mm-timeline-note">{entry.note}</span>
         </div>
       ))}
-      {zone.items.length === 0 && (
-        <p className="mm-timeline-empty">no timeline entries yet</p>
-      )}
+      {zone.items.length === 0 && <p className="mm-timeline-empty">no timeline entries yet</p>}
     </div>
   );
 }

@@ -34,10 +34,9 @@ describe('useSessions', () => {
 
 describe('useSession', () => {
   it('returns a specific session', async () => {
-    const { result } = renderHook(
-      () => useSession('10000001-0000-4000-8000-000000000001'),
-      { wrapper: makeWrapper(svc) },
-    );
+    const { result } = renderHook(() => useSession('10000001-0000-4000-8000-000000000001'), {
+      wrapper: makeWrapper(svc),
+    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.personaName).toBe('coding-agent');
   });
@@ -50,10 +49,9 @@ describe('useSession', () => {
 
 describe('useMessages', () => {
   it('returns messages for a session', async () => {
-    const { result } = renderHook(
-      () => useMessages('10000001-0000-4000-8000-000000000001'),
-      { wrapper: makeWrapper(svc) },
-    );
+    const { result } = renderHook(() => useMessages('10000001-0000-4000-8000-000000000001'), {
+      wrapper: makeWrapper(svc),
+    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.length).toBeGreaterThan(0);
   });

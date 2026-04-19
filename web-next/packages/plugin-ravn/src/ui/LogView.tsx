@@ -8,10 +8,23 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSessions, useMessages } from './useSessions';
 import { useRavens } from './useRavens';
-import { applyLogFilter, EMPTY_LOG_FILTER, type LogEntry, type LogFilter } from '../application/logFilter';
+import {
+  applyLogFilter,
+  EMPTY_LOG_FILTER,
+  type LogEntry,
+  type LogFilter,
+} from '../application/logFilter';
 import type { MessageKind } from '../domain/message';
 
-const ALL_KINDS: MessageKind[] = ['user', 'asst', 'system', 'tool_call', 'tool_result', 'emit', 'think'];
+const ALL_KINDS: MessageKind[] = [
+  'user',
+  'asst',
+  'system',
+  'tool_call',
+  'tool_result',
+  'emit',
+  'think',
+];
 
 const KIND_COLOR: Record<MessageKind, string> = {
   user: 'rv-log-row__kind--user',
@@ -72,16 +85,56 @@ function useAllLogEntries(): LogEntry[] {
     return Array.from({ length: MAX_SESSIONS }, (_, i) => arr[i] ?? null);
   }, [sessions]);
 
-  const e0 = useSessionLog(padded[0]?.id ?? '', padded[0]?.ravnId ?? '', padded[0]?.personaName ?? '');
-  const e1 = useSessionLog(padded[1]?.id ?? '', padded[1]?.ravnId ?? '', padded[1]?.personaName ?? '');
-  const e2 = useSessionLog(padded[2]?.id ?? '', padded[2]?.ravnId ?? '', padded[2]?.personaName ?? '');
-  const e3 = useSessionLog(padded[3]?.id ?? '', padded[3]?.ravnId ?? '', padded[3]?.personaName ?? '');
-  const e4 = useSessionLog(padded[4]?.id ?? '', padded[4]?.ravnId ?? '', padded[4]?.personaName ?? '');
-  const e5 = useSessionLog(padded[5]?.id ?? '', padded[5]?.ravnId ?? '', padded[5]?.personaName ?? '');
-  const e6 = useSessionLog(padded[6]?.id ?? '', padded[6]?.ravnId ?? '', padded[6]?.personaName ?? '');
-  const e7 = useSessionLog(padded[7]?.id ?? '', padded[7]?.ravnId ?? '', padded[7]?.personaName ?? '');
-  const e8 = useSessionLog(padded[8]?.id ?? '', padded[8]?.ravnId ?? '', padded[8]?.personaName ?? '');
-  const e9 = useSessionLog(padded[9]?.id ?? '', padded[9]?.ravnId ?? '', padded[9]?.personaName ?? '');
+  const e0 = useSessionLog(
+    padded[0]?.id ?? '',
+    padded[0]?.ravnId ?? '',
+    padded[0]?.personaName ?? '',
+  );
+  const e1 = useSessionLog(
+    padded[1]?.id ?? '',
+    padded[1]?.ravnId ?? '',
+    padded[1]?.personaName ?? '',
+  );
+  const e2 = useSessionLog(
+    padded[2]?.id ?? '',
+    padded[2]?.ravnId ?? '',
+    padded[2]?.personaName ?? '',
+  );
+  const e3 = useSessionLog(
+    padded[3]?.id ?? '',
+    padded[3]?.ravnId ?? '',
+    padded[3]?.personaName ?? '',
+  );
+  const e4 = useSessionLog(
+    padded[4]?.id ?? '',
+    padded[4]?.ravnId ?? '',
+    padded[4]?.personaName ?? '',
+  );
+  const e5 = useSessionLog(
+    padded[5]?.id ?? '',
+    padded[5]?.ravnId ?? '',
+    padded[5]?.personaName ?? '',
+  );
+  const e6 = useSessionLog(
+    padded[6]?.id ?? '',
+    padded[6]?.ravnId ?? '',
+    padded[6]?.personaName ?? '',
+  );
+  const e7 = useSessionLog(
+    padded[7]?.id ?? '',
+    padded[7]?.ravnId ?? '',
+    padded[7]?.personaName ?? '',
+  );
+  const e8 = useSessionLog(
+    padded[8]?.id ?? '',
+    padded[8]?.ravnId ?? '',
+    padded[8]?.personaName ?? '',
+  );
+  const e9 = useSessionLog(
+    padded[9]?.id ?? '',
+    padded[9]?.ravnId ?? '',
+    padded[9]?.personaName ?? '',
+  );
 
   return useMemo(() => {
     const all = [...e0, ...e1, ...e2, ...e3, ...e4, ...e5, ...e6, ...e7, ...e8, ...e9];
@@ -100,9 +153,7 @@ function useAllLogEntries(): LogEntry[] {
 
 function LogRow({ entry }: { entry: LogEntry }) {
   const { message, personaName } = entry;
-  const body = message.toolName
-    ? `[${message.toolName}] ${message.content}`
-    : message.content;
+  const body = message.toolName ? `[${message.toolName}] ${message.content}` : message.content;
 
   return (
     <tr className="rv-log-row" data-kind={message.kind}>

@@ -34,7 +34,17 @@ describe('useTriggers', () => {
   });
 
   it('sets isError on failure', async () => {
-    const failing = { listTriggers: async () => { throw new Error('fail'); }, createTrigger: async () => { throw new Error(); }, deleteTrigger: async () => { throw new Error(); } };
+    const failing = {
+      listTriggers: async () => {
+        throw new Error('fail');
+      },
+      createTrigger: async () => {
+        throw new Error();
+      },
+      deleteTrigger: async () => {
+        throw new Error();
+      },
+    };
     const { result } = renderHook(() => useTriggers(), {
       wrapper: makeWrapper({ 'ravn.triggers': failing }),
     });

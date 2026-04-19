@@ -20,10 +20,35 @@ function entry(overrides: Partial<Message & { ravnId?: string; personaName?: str
 
 describe('applyLogFilter', () => {
   const entries: LogEntry[] = [
-    entry({ id: '1', kind: 'user', content: 'hello world', ravnId: 'ravn-1', personaName: 'coder' }),
-    entry({ id: '2', kind: 'tool_call', content: '{"path":"src/main.ts"}', ravnId: 'ravn-1', personaName: 'coder', toolName: 'file.read' }),
-    entry({ id: '3', kind: 'emit', content: '{"event":"code.changed"}', ravnId: 'ravn-2', personaName: 'reviewer' }),
-    entry({ id: '4', kind: 'think', content: 'reasoning step', ravnId: 'ravn-2', personaName: 'reviewer' }),
+    entry({
+      id: '1',
+      kind: 'user',
+      content: 'hello world',
+      ravnId: 'ravn-1',
+      personaName: 'coder',
+    }),
+    entry({
+      id: '2',
+      kind: 'tool_call',
+      content: '{"path":"src/main.ts"}',
+      ravnId: 'ravn-1',
+      personaName: 'coder',
+      toolName: 'file.read',
+    }),
+    entry({
+      id: '3',
+      kind: 'emit',
+      content: '{"event":"code.changed"}',
+      ravnId: 'ravn-2',
+      personaName: 'reviewer',
+    }),
+    entry({
+      id: '4',
+      kind: 'think',
+      content: 'reasoning step',
+      ravnId: 'ravn-2',
+      personaName: 'reviewer',
+    }),
   ];
 
   it('returns all entries with empty filter', () => {
@@ -70,7 +95,11 @@ describe('applyLogFilter', () => {
   });
 
   it('combines ravnId and kind filters', () => {
-    const result = applyLogFilter(entries, { ...EMPTY_LOG_FILTER, ravnId: 'ravn-1', kinds: ['user'] });
+    const result = applyLogFilter(entries, {
+      ...EMPTY_LOG_FILTER,
+      ravnId: 'ravn-1',
+      kinds: ['user'],
+    });
     expect(result).toHaveLength(1);
     expect(result[0]?.message.kind).toBe('user');
   });

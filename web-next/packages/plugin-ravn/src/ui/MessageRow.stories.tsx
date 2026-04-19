@@ -26,11 +26,21 @@ export const User: Story = {
 };
 
 export const Assistant: Story = {
-  args: { message: msg({ kind: 'asst', content: "I'll create the login form at `src/auth/LoginForm.tsx`." }) },
+  args: {
+    message: msg({
+      kind: 'asst',
+      content: "I'll create the login form at `src/auth/LoginForm.tsx`.",
+    }),
+  },
 };
 
 export const System: Story = {
-  args: { message: msg({ kind: 'system', content: '# coding-agent\nYou are a senior software engineer.' }) },
+  args: {
+    message: msg({
+      kind: 'system',
+      content: '# coding-agent\nYou are a senior software engineer.',
+    }),
+  },
 };
 
 export const ToolCall: Story = {
@@ -48,7 +58,11 @@ export const ToolResult: Story = {
     message: msg({
       kind: 'tool_result',
       toolName: 'file.read',
-      content: JSON.stringify({ content: '// LoginForm.tsx\nexport function LoginForm() {}' }, null, 2),
+      content: JSON.stringify(
+        { content: '// LoginForm.tsx\nexport function LoginForm() {}' },
+        null,
+        2,
+      ),
     }),
   },
 };
@@ -57,7 +71,10 @@ export const Emit: Story = {
   args: {
     message: msg({
       kind: 'emit',
-      content: JSON.stringify({ event: 'code.changed', payload: { file: 'src/auth/LoginForm.tsx' } }),
+      content: JSON.stringify({
+        event: 'code.changed',
+        payload: { file: 'src/auth/LoginForm.tsx' },
+      }),
     }),
   },
 };
@@ -66,7 +83,8 @@ export const Think: Story = {
   args: {
     message: msg({
       kind: 'think',
-      content: 'I need to check the existing auth setup first. Let me read the directory structure.',
+      content:
+        'I need to check the existing auth setup first. Let me read the directory structure.',
     }),
   },
 };
@@ -76,12 +94,38 @@ export const Gallery: Story = {
   render: () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16 }}>
       <MessageRow message={msg({ kind: 'user', content: 'Please implement the login form' })} />
-      <MessageRow message={msg({ kind: 'asst', content: "I'll create the login form at `src/auth/LoginForm.tsx`." })} />
-      <MessageRow message={msg({ kind: 'system', content: '# System: coding-agent persona active.' })} />
-      <MessageRow message={msg({ kind: 'tool_call', toolName: 'file.read', content: '{"path":"src/auth/LoginForm.tsx"}' })} />
-      <MessageRow message={msg({ kind: 'tool_result', toolName: 'file.read', content: '{"content":"// file not found"}' })} />
-      <MessageRow message={msg({ kind: 'emit', content: '{"event":"code.changed","payload":{"file":"src/auth/LoginForm.tsx"}}' })} />
-      <MessageRow message={msg({ kind: 'think', content: 'I need to check the existing auth setup first.' })} />
+      <MessageRow
+        message={msg({
+          kind: 'asst',
+          content: "I'll create the login form at `src/auth/LoginForm.tsx`.",
+        })}
+      />
+      <MessageRow
+        message={msg({ kind: 'system', content: '# System: coding-agent persona active.' })}
+      />
+      <MessageRow
+        message={msg({
+          kind: 'tool_call',
+          toolName: 'file.read',
+          content: '{"path":"src/auth/LoginForm.tsx"}',
+        })}
+      />
+      <MessageRow
+        message={msg({
+          kind: 'tool_result',
+          toolName: 'file.read',
+          content: '{"content":"// file not found"}',
+        })}
+      />
+      <MessageRow
+        message={msg({
+          kind: 'emit',
+          content: '{"event":"code.changed","payload":{"file":"src/auth/LoginForm.tsx"}}',
+        })}
+      />
+      <MessageRow
+        message={msg({ kind: 'think', content: 'I need to check the existing auth setup first.' })}
+      />
     </div>
   ),
 };

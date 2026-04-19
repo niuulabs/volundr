@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  classifyBudget,
-  budgetRunway,
-  budgetRatio,
-} from './budgetAttention';
+import { classifyBudget, budgetRunway, budgetRatio } from './budgetAttention';
 import type { BudgetState } from '@niuulabs/domain';
 
 const budget = (spentUsd: number, capUsd: number, warnAt = 0.8): BudgetState => ({

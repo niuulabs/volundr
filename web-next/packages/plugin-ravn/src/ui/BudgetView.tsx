@@ -11,7 +11,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { BudgetBar, StateDot } from '@niuulabs/ui';
 import { useRavens } from './useRavens';
 import { useFleetBudget, useRavnBudget } from './useBudget';
-import { classifyBudget, budgetRunway, budgetRatio, type BudgetAttention } from '../application/budgetAttention';
+import {
+  classifyBudget,
+  budgetRunway,
+  budgetRatio,
+  type BudgetAttention,
+} from '../application/budgetAttention';
 import type { Ravn } from '../domain/ravn';
 import type { BudgetState } from '@niuulabs/domain';
 
@@ -142,12 +147,15 @@ export function BudgetView() {
   // Cache per-ravn budget data collected by attention entries
   const [budgetCache, setBudgetCache] = useState<Record<string, BudgetState>>({});
 
-  const handleClassified = useCallback((ravnId: string, _attention: BudgetAttention, budget: BudgetState) => {
-    setBudgetCache((prev) => {
-      if (prev[ravnId] === budget) return prev;
-      return { ...prev, [ravnId]: budget };
-    });
-  }, []);
+  const handleClassified = useCallback(
+    (ravnId: string, _attention: BudgetAttention, budget: BudgetState) => {
+      setBudgetCache((prev) => {
+        if (prev[ravnId] === budget) return prev;
+        return { ...prev, [ravnId]: budget };
+      });
+    },
+    [],
+  );
 
   if (ravensLoading || fleetLoading) {
     return (

@@ -27,7 +27,9 @@ function TriggerRow({ trigger }: { trigger: Trigger }) {
       </td>
       <td className="rv-trigger-row__enabled">
         <StateDot state={trigger.enabled ? 'healthy' : 'idle'} />
-        <span className="rv-trigger-row__enabled-label">{trigger.enabled ? 'active' : 'disabled'}</span>
+        <span className="rv-trigger-row__enabled-label">
+          {trigger.enabled ? 'active' : 'disabled'}
+        </span>
       </td>
       <td className="rv-trigger-row__created">{trigger.createdAt.slice(0, 10)}</td>
     </tr>
@@ -37,11 +39,7 @@ function TriggerRow({ trigger }: { trigger: Trigger }) {
 function TriggerGroup({ kind, triggers }: { kind: TriggerKind; triggers: Trigger[] }) {
   if (!triggers.length) return null;
   return (
-    <section
-      className="rv-trigger-group"
-      aria-label={`${kind} triggers`}
-      data-kind={kind}
-    >
+    <section className="rv-trigger-group" aria-label={`${kind} triggers`} data-kind={kind}>
       <h3 className="rv-trigger-group__title">{KIND_LABEL[kind]}</h3>
       <table className="rv-trigger-table" aria-label={`${kind} triggers table`}>
         <thead>
@@ -105,9 +103,7 @@ export function TriggersView() {
       {total === 0 ? (
         <div className="rv-triggers-view__empty">no triggers configured</div>
       ) : (
-        KIND_ORDER.map((kind) => (
-          <TriggerGroup key={kind} kind={kind} triggers={grouped[kind]} />
-        ))
+        KIND_ORDER.map((kind) => <TriggerGroup key={kind} kind={kind} triggers={grouped[kind]} />)
       )}
     </div>
   );

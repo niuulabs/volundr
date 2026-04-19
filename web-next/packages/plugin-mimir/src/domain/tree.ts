@@ -47,12 +47,7 @@ export function buildFileTree(pages: PageMeta[]): FileTreeDir {
   return root;
 }
 
-function insertPage(
-  node: FileTreeDir,
-  parts: string[],
-  page: PageMeta,
-  currentPath: string,
-): void {
+function insertPage(node: FileTreeDir, parts: string[], page: PageMeta, currentPath: string): void {
   const [head, ...rest] = parts;
   if (head === undefined) return;
 

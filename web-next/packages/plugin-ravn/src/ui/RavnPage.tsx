@@ -33,7 +33,9 @@ export function RavnPage() {
         <Rune glyph="ᚱ" size={28} />
         <div>
           <h2>Ravn</h2>
-          <p className="rv-page-subtitle">personas · ravens · sessions · triggers · events · budget · log</p>
+          <p className="rv-page-subtitle">
+            personas · ravens · sessions · triggers · events · budget · log
+          </p>
         </div>
       </div>
 
