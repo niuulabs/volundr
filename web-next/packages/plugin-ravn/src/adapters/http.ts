@@ -8,6 +8,7 @@
  * @niuulabs/query (i.e. has get/post/put/delete methods).
  */
 
+import type { ApiClient } from '@niuulabs/query';
 import type {
   IPersonaStore,
   PersonaSummary,
@@ -16,17 +17,6 @@ import type {
   PersonaForkRequest,
   PersonaFilter,
 } from '../ports';
-
-// ---------------------------------------------------------------------------
-// Minimal HTTP client interface (structurally compatible with ApiClient)
-// ---------------------------------------------------------------------------
-
-interface HttpClient {
-  get<T>(endpoint: string): Promise<T>;
-  post<T>(endpoint: string, body?: unknown): Promise<T>;
-  put<T>(endpoint: string, body: unknown): Promise<T>;
-  delete<T>(endpoint: string): Promise<T>;
-}
 
 // ---------------------------------------------------------------------------
 // Internal raw types (snake_case server responses)
@@ -145,7 +135,7 @@ function toRequestBody(req: PersonaCreateRequest): Record<string, unknown> {
  *
  * @param client - HTTP client scoped to the Ravn base path (e.g. /api/v1/ravn).
  */
-export function buildRavnPersonaAdapter(client: HttpClient): IPersonaStore {
+export function buildRavnPersonaAdapter(client: ApiClient): IPersonaStore {
   return {
     async listPersonas(filter: PersonaFilter = 'all') {
       const raw = await client.get<RawPersonaSummary[]>(`/personas?source=${filter}`);

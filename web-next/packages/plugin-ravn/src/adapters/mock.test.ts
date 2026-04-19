@@ -192,7 +192,7 @@ describe('createMockSessionStream', () => {
 
   it('getSession returns by id', async () => {
     const stream = createMockSessionStream();
-    const session = await stream.getSession('a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c');
+    const session = await stream.getSession('10000001-0000-4000-8000-000000000001');
     expect(session.personaName).toBe('coding-agent');
   });
 
@@ -205,16 +205,16 @@ describe('createMockSessionStream', () => {
 
   it('getMessages returns messages for a session', async () => {
     const stream = createMockSessionStream();
-    const messages = await stream.getMessages('a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c');
+    const messages = await stream.getMessages('10000001-0000-4000-8000-000000000001');
     expect(messages.length).toBeGreaterThan(0);
-    expect(messages.every((m) => m.sessionId === 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c')).toBe(
+    expect(messages.every((m) => m.sessionId === '10000001-0000-4000-8000-000000000001')).toBe(
       true,
     );
   });
 
   it('getMessages returns empty array for session with no messages', async () => {
     const stream = createMockSessionStream();
-    const messages = await stream.getMessages('b7e2c9d1-3a4f-4b8e-a1c6-5d7f8e9a0b2c');
+    const messages = await stream.getMessages('10000001-0000-4000-8000-000000000002');
     expect(messages).toHaveLength(0);
   });
 });

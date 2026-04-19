@@ -293,7 +293,7 @@ const SEED_RAVENS: Ravn[] = [
 
 const SEED_SESSIONS: Session[] = [
   {
-    id: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
+    id: '10000001-0000-4000-8000-000000000001',
     ravnId: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
     personaName: 'coding-agent',
     status: 'running',
@@ -301,7 +301,7 @@ const SEED_SESSIONS: Session[] = [
     createdAt: '2026-04-15T09:12:34Z',
   },
   {
-    id: 'b7e2c9d1-3a4f-4b8e-a1c6-5d7f8e9a0b2c',
+    id: '10000001-0000-4000-8000-000000000002',
     ravnId: 'b7e2c9d1-3a4f-4b8e-a1c6-5d7f8e9a0b2c',
     personaName: 'reviewer',
     status: 'running',
@@ -309,7 +309,7 @@ const SEED_SESSIONS: Session[] = [
     createdAt: '2026-04-15T08:45:11Z',
   },
   {
-    id: 'c4d5e6f7-1a2b-4c3d-8e9f-0a1b2c3d4e5f',
+    id: '10000001-0000-4000-8000-000000000003',
     ravnId: 'c4d5e6f7-1a2b-4c3d-8e9f-0a1b2c3d4e5f',
     personaName: 'security',
     status: 'idle',
@@ -317,7 +317,7 @@ const SEED_SESSIONS: Session[] = [
     createdAt: '2026-04-15T08:30:00Z',
   },
   {
-    id: 'd8e9f0a1-2b3c-4d5e-6f7a-8b9c0d1e2f3a',
+    id: '10000001-0000-4000-8000-000000000004',
     ravnId: 'd8e9f0a1-2b3c-4d5e-6f7a-8b9c0d1e2f3a',
     personaName: 'qa-agent',
     status: 'running',
@@ -325,7 +325,7 @@ const SEED_SESSIONS: Session[] = [
     createdAt: '2026-04-15T07:55:22Z',
   },
   {
-    id: 'e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b',
+    id: '10000001-0000-4000-8000-000000000005',
     ravnId: 'e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b',
     personaName: 'investigator',
     status: 'stopped',
@@ -333,7 +333,7 @@ const SEED_SESSIONS: Session[] = [
     createdAt: '2026-04-14T22:10:45Z',
   },
   {
-    id: 'f5a6b7c8-9d0e-4f1a-2b3c-4d5e6f7a8b9c',
+    id: '10000001-0000-4000-8000-000000000006',
     ravnId: 'f5a6b7c8-9d0e-4f1a-2b3c-4d5e6f7a8b9c',
     personaName: 'health-auditor',
     status: 'idle',
@@ -388,21 +388,21 @@ const SEED_TRIGGERS: Trigger[] = [
 const SEED_MESSAGES: Message[] = [
   {
     id: '00000001-0000-4000-8000-000000000001',
-    sessionId: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
+    sessionId: '10000001-0000-4000-8000-000000000001',
     kind: 'user',
     content: 'Please implement the login form',
     ts: '2026-04-15T09:12:35Z',
   },
   {
     id: '00000001-0000-4000-8000-000000000002',
-    sessionId: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
+    sessionId: '10000001-0000-4000-8000-000000000001',
     kind: 'think',
     content: 'I need to check the existing auth setup first.',
     ts: '2026-04-15T09:12:36Z',
   },
   {
     id: '00000001-0000-4000-8000-000000000003',
-    sessionId: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
+    sessionId: '10000001-0000-4000-8000-000000000001',
     kind: 'tool_call',
     content: '{"path": "src/auth/LoginForm.tsx"}',
     ts: '2026-04-15T09:12:37Z',
@@ -410,7 +410,7 @@ const SEED_MESSAGES: Message[] = [
   },
   {
     id: '00000001-0000-4000-8000-000000000004',
-    sessionId: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
+    sessionId: '10000001-0000-4000-8000-000000000001',
     kind: 'tool_result',
     content: '{"content": "// file not found"}',
     ts: '2026-04-15T09:12:38Z',
@@ -418,14 +418,14 @@ const SEED_MESSAGES: Message[] = [
   },
   {
     id: '00000001-0000-4000-8000-000000000005',
-    sessionId: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
+    sessionId: '10000001-0000-4000-8000-000000000001',
     kind: 'asst',
     content: "I'll create the login form at `src/auth/LoginForm.tsx`.",
     ts: '2026-04-15T09:12:40Z',
   },
   {
     id: '00000001-0000-4000-8000-000000000006',
-    sessionId: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
+    sessionId: '10000001-0000-4000-8000-000000000001',
     kind: 'emit',
     content: '{"event":"code.changed","payload":{"file":"src/auth/LoginForm.tsx"}}',
     ts: '2026-04-15T09:13:01Z',
@@ -461,12 +461,6 @@ function toDetail(summary: PersonaSummary, req?: PersonaCreateRequest): PersonaD
     },
     yamlSource: '[mock]',
   };
-}
-
-let nextTriggerSeq = 6;
-function nextTriggerUuid(): string {
-  const n = nextTriggerSeq++;
-  return `aa000001-0000-4000-8000-${String(n).padStart(12, '0')}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -578,6 +572,11 @@ export function createMockSessionStream(): ISessionStream {
 /** Create a mock ITriggerStore with seeded triggers. */
 export function createMockTriggerStore(): ITriggerStore {
   const store = new Map<string, Trigger>(SEED_TRIGGERS.map((t) => [t.id, t]));
+  let nextSeq = SEED_TRIGGERS.length + 1;
+  function nextTriggerUuid(): string {
+    const n = nextSeq++;
+    return `aa000001-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  }
 
   return {
     async listTriggers() {

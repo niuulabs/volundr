@@ -28,7 +28,6 @@ describe('RavnPage', () => {
     render(<RavnPage />, {
       wrapper: wrap({ 'ravn.personas': createMockPersonaStore() }),
     });
-    expect(screen.getByText(/loading/).or ? screen.queryByText(/loading/) : null);
     await waitFor(() => expect(screen.getByText(/21 personas loaded/)).toBeInTheDocument());
   });
 
