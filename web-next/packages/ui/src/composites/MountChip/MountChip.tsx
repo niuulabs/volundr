@@ -1,4 +1,5 @@
 import { cn } from '../../utils/cn';
+import type { MountRole } from '@niuulabs/domain';
 import './MountChip.css';
 
 /**
@@ -8,10 +9,10 @@ import './MountChip.css';
 export type MountBindingRole = 'primary' | 'archive' | 'ro';
 
 /**
- * Mímir mount roles — describes the mount's place in the deployment.
+ * Mímir mount-kind roles — re-exported from @niuulabs/domain.
  * local (operator-private), shared (realm-wide), domain (prefix-scoped).
  */
-export type MountKindRole = 'local' | 'shared' | 'domain';
+export type MountKindRole = MountRole;
 
 export type MountChipRole = MountBindingRole | MountKindRole;
 
