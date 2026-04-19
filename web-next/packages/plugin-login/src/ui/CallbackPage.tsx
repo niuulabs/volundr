@@ -25,7 +25,11 @@ export function CallbackPage(): ReactNode {
     }
   }, [loading, authenticated, navigate]);
 
-  const label = loading ? 'Completing sign-in…' : authenticated ? 'Redirecting…' : 'Sign-in failed.';
+  const label = loading
+    ? 'Completing sign-in…'
+    : authenticated
+      ? 'Redirecting…'
+      : 'Sign-in failed.';
 
   return (
     <div className={styles.page} data-testid="callback-page">

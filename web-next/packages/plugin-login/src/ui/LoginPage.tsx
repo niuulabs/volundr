@@ -21,7 +21,13 @@ function LogoKnot({ size = 56, stroke = 1.6, glow = false }: LogoProps) {
       aria-hidden
       className={glow ? styles.logoGlow : undefined}
     >
-      <g fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <path d="M10 44 V12 L28 38 V14" />
         <path d="M46 44 V16 L28 42 V14" opacity="0.85" />
         <circle cx="28" cy="28" r="1.6" fill="currentColor" />

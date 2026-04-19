@@ -37,20 +37,22 @@ export function ShellLayout() {
         <div className="niuu-shell__rail-brand" title="Niuu">
           {brand}
         </div>
-        {plugins.filter((p) => !p.navHidden).map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            className={clsx(
-              'niuu-shell__rail-item',
-              active?.id === p.id && 'niuu-shell__rail-item--active',
-            )}
-            title={`${p.title} · ${p.subtitle}`}
-            onClick={() => navigate({ to: `/${p.id}` })}
-          >
-            {p.rune}
-          </button>
-        ))}
+        {plugins
+          .filter((p) => !p.navHidden)
+          .map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={clsx(
+                'niuu-shell__rail-item',
+                active?.id === p.id && 'niuu-shell__rail-item--active',
+              )}
+              title={`${p.title} · ${p.subtitle}`}
+              onClick={() => navigate({ to: `/${p.id}` })}
+            >
+              {p.rune}
+            </button>
+          ))}
         <div className="niuu-shell__rail-spacer" />
         <div className="niuu-shell__rail-foot">v{version}</div>
       </aside>

@@ -60,9 +60,7 @@ test.describe('Login plugin', () => {
     await page.route(`${MOCK_AUTHORITY}/.well-known/openid-configuration`, (route) =>
       route.fulfill({ json: discoveryDoc }),
     );
-    await page.route(`${MOCK_AUTHORITY}/jwks`, (route) =>
-      route.fulfill({ json: { keys: [] } }),
-    );
+    await page.route(`${MOCK_AUTHORITY}/jwks`, (route) => route.fulfill({ json: { keys: [] } }));
   });
 
   test('unauthenticated user navigating to /login sees the Sign in button', async ({ page }) => {
