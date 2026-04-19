@@ -3,10 +3,24 @@ import { Rune } from '@niuulabs/ui';
 import { OverviewPage } from './OverviewPage';
 import { RavensPage } from './RavensPage';
 import { PersonasPage } from './PersonasPage';
+import { SessionsView } from './SessionsView';
+import { TriggersView } from './TriggersView';
+import { EventsView } from './EventsView';
+import { BudgetView } from './BudgetView';
+import { LogView } from './LogView';
 import { loadStorage, saveStorage } from './storage';
 import './RavnPage.css';
+import './ravn-views.css';
 
-export type RavnTab = 'overview' | 'ravens' | 'personas';
+export type RavnTab =
+  | 'overview'
+  | 'ravens'
+  | 'personas'
+  | 'sessions'
+  | 'triggers'
+  | 'events'
+  | 'budget'
+  | 'log';
 
 const TAB_STORAGE_KEY = 'ravn.tab';
 
@@ -14,6 +28,11 @@ const TABS: { id: RavnTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'ravens', label: 'Ravens' },
   { id: 'personas', label: 'Personas' },
+  { id: 'sessions', label: 'Sessions' },
+  { id: 'triggers', label: 'Triggers' },
+  { id: 'events', label: 'Events' },
+  { id: 'budget', label: 'Budget' },
+  { id: 'log', label: 'Log' },
 ];
 
 export function RavnPage() {
@@ -60,6 +79,11 @@ export function RavnPage() {
         {activeTab === 'overview' && <OverviewPage />}
         {activeTab === 'ravens' && <RavensPage />}
         {activeTab === 'personas' && <PersonasPage />}
+        {activeTab === 'sessions' && <SessionsView />}
+        {activeTab === 'triggers' && <TriggersView />}
+        {activeTab === 'events' && <EventsView />}
+        {activeTab === 'budget' && <BudgetView />}
+        {activeTab === 'log' && <LogView />}
       </main>
     </div>
   );

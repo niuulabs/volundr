@@ -1,6 +1,7 @@
 import { createRoute } from '@tanstack/react-router';
 import { definePlugin } from '@niuulabs/plugin-sdk';
 import { TyrPage } from './ui/TyrPage';
+import { DispatchView } from './ui/DispatchView';
 
 export const tyrPlugin = definePlugin({
   id: 'tyr',
@@ -13,6 +14,11 @@ export const tyrPlugin = definePlugin({
       path: '/tyr',
       component: TyrPage,
     }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/dispatch',
+      component: DispatchView,
+    }),
   ],
 });
 
@@ -23,6 +29,7 @@ export {
   createMockTyrSessionService,
   createMockTrackerService,
   createMockTyrIntegrationService,
+  createMockDispatchBus,
 } from './adapters/mock';
 
 // HTTP adapters
@@ -32,6 +39,7 @@ export {
   buildTyrSessionHttpAdapter,
   buildTrackerHttpAdapter,
   buildTyrIntegrationHttpAdapter,
+  buildDispatchBusHttpAdapter,
 } from './adapters/http';
 
 // Port interfaces + request/response types
@@ -41,6 +49,8 @@ export type {
   ITyrSessionService,
   ITrackerBrowserService,
   ITyrIntegrationService,
+  IDispatchBus,
+  DispatchResult,
   CommitSagaRequest,
   PlanSession,
   RaidSpec,
@@ -62,6 +72,19 @@ export type {
   TrackerIssue,
   RepoInfo,
 } from './ports';
+
+// Application layer — feasibility engine
+export {
+  checkFeasibility,
+  checkRavenResolution,
+  checkConfidence,
+  checkUpstreamBlocked,
+  checkClusterHealth,
+  type FeasibilityGateName,
+  type FeasibilityGate,
+  type FeasibilityResult,
+  type FeasibilityContext,
+} from './application/dispatch-feasibility';
 
 // Domain types (schemas + value objects)
 export {

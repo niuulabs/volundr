@@ -22,7 +22,19 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,css,md,json,yaml,yml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,css,md,json,yaml,yml}\"",
     "typecheck": "pnpm -r typecheck",
+    "bootstrap": "bash scripts/bootstrap.sh",
     "clean": "pnpm -r exec rm -rf dist node_modules .turbo && rm -rf node_modules"
+  },
+  "dependencies": {
+    "@niuulabs/design-tokens": "workspace:*",
+    "@niuulabs/ui": "workspace:*",
+    "@niuulabs/shell": "workspace:*",
+    "@niuulabs/plugin-hello": "workspace:*",
+    "@niuulabs/plugin-login": "workspace:*",
+    "@niuulabs/plugin-mimir": "workspace:*",
+    "@niuulabs/plugin-observatory": "workspace:*",
+    "@niuulabs/plugin-ravn": "workspace:*",
+    "@niuulabs/plugin-volundr": "workspace:*"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

@@ -1,0 +1,31 @@
+.obs-minimap {
+  position: fixed;
+  bottom: var(--space-4);
+  right: var(--space-4);
+  z-index: 40;
+  width: 160px;
+  height: 120px;
+  background: color-mix(in srgb, var(--color-bg-secondary) 90%, transparent);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.obs-minimap--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.obs-minimap__empty-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.obs-minimap__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

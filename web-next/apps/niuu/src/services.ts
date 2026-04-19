@@ -16,10 +16,12 @@ import {
   createMockDispatcherService,
   createMockTyrSessionService,
   createMockTrackerService,
+  createMockDispatchBus,
   buildTyrHttpAdapter,
   buildDispatcherHttpAdapter,
   buildTyrSessionHttpAdapter,
   buildTrackerHttpAdapter,
+  buildDispatchBusHttpAdapter,
 } from '@niuulabs/plugin-tyr';
 import { createMimirMockAdapter, buildMimirHttpAdapter } from '@niuulabs/plugin-mimir';
 import {
@@ -126,6 +128,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const trackerService = tyrClient
     ? buildTrackerHttpAdapter(tyrClient)
     : createMockTrackerService();
+  const dispatchBus = tyrClient ? buildDispatchBusHttpAdapter(tyrClient) : createMockDispatchBus();
 
   return {
     hello,
@@ -133,6 +136,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     'tyr.dispatcher': dispatcherService,
     'tyr.sessions': tyrSessionService,
     'tyr.tracker': trackerService,
+    'tyr.dispatch': dispatchBus,
     'ravn.personas': ravnPersonas,
     'ravn.ravens': ravnRavens,
     'ravn.sessions': ravnSessions,
