@@ -221,31 +221,8 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
         except Exception as exc:
             logger.warning("Failed to load custom memory backend %r: %s", backend, exc)
             return None
-        bc = settings.buri
-        reflection_model = settings.memory.reflection_model
-        return BuriMemoryAdapter(
-            dsn=dsn,
-            prefetch_budget=settings.memory.prefetch_budget,
-            prefetch_limit=settings.memory.prefetch_limit,
-            prefetch_min_relevance=settings.memory.prefetch_min_relevance,
-            recency_half_life_days=settings.memory.recency_half_life_days,
-            session_search_truncate_chars=settings.memory.session_search_truncate_chars,
-            cluster_merge_threshold=bc.cluster_merge_threshold,
-            extraction_model=bc.extraction_model,
-            reflection_model=reflection_model,
-            min_confidence=bc.min_confidence,
-            session_summary_max_tokens=bc.session_summary_max_tokens,
-            supersession_cosine_threshold=bc.supersession_cosine_threshold,
-            llm=llm,
-        )
 
-    # Custom backend via fully-qualified class path
-    try:
-        cls = _import_class(backend)
-        return cls(path=settings.memory.path)
-    except Exception as exc:
-        logger.warning("Failed to load custom memory backend %r: %s", backend, exc)
-        return None
+    return adapter
 
 
 # ---------------------------------------------------------------------------
