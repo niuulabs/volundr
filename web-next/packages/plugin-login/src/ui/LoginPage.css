@@ -13,6 +13,7 @@
   justify-content: center;
   background: var(--color-bg-primary);
   color: var(--brand-400);
+  --_btn-contrast: color-mix(in srgb, var(--color-bg-primary) 85%, var(--brand-500));
 }
 
 /* ── Ambient pulse background ──────────────────────────────── */
@@ -194,7 +195,7 @@
     box-shadow 140ms,
     transform 80ms;
   background: var(--brand-500);
-  color: #06222e;
+  color: var(--_btn-contrast);
   border: 1px solid var(--brand-400);
   box-shadow: 0 0 24px color-mix(in srgb, var(--brand-500) 35%, transparent);
 }
@@ -218,8 +219,8 @@
   display: inline-block;
   width: 14px;
   height: 14px;
-  border: 2px solid color-mix(in srgb, #06222e 30%, transparent);
-  border-top-color: #06222e;
+  border: 2px solid color-mix(in srgb, var(--_btn-contrast) 30%, transparent);
+  border-top-color: var(--_btn-contrast);
   border-radius: 50%;
   animation: login-spin 0.7s linear infinite;
   flex-shrink: 0;
