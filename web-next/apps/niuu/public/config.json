@@ -2,9 +2,10 @@
   "theme": "ice",
   "plugins": {
     "hello": { "enabled": true, "order": 1 },
-    "mimir": { "enabled": true, "order": 2 },
-    "observatory": { "enabled": true, "order": 3 },
-    "volundr": { "enabled": true, "order": 4 }
+    "showcase": { "enabled": true, "order": 2 },
+    "mimir": { "enabled": true, "order": 3 },
+    "observatory": { "enabled": true, "order": 4 },
+    "volundr": { "enabled": true, "order": 5 }
   },
   "services": {
     "hello": { "mode": "mock" },

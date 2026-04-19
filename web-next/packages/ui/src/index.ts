@@ -12,4 +12,8 @@ export * from './primitives/Drawer';
 export * from './primitives/Popover';
 export * from './primitives/Tooltip';
 export * from './primitives/Toast';
+export * from './data/Table';
+export * from './data/FilterBar';
+export * from './data/KpiStrip';
+export * from './data/states';
 export { cn } from './utils/cn';
