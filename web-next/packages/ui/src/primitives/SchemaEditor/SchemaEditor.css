@@ -90,7 +90,9 @@
   color: var(--color-text-muted);
   cursor: pointer;
   font-size: var(--text-xs);
-  transition: background-color var(--transition-fast), color var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .niuu-schema-editor__remove-btn:hover {
@@ -116,7 +118,9 @@
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: border-color var(--transition-fast), color var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .niuu-schema-editor__add-btn:hover {
