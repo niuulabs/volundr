@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  availableCapacity,
-  isClusterHealthy,
-  nodeStatusCounts,
-  type Cluster,
-} from './cluster';
+import { availableCapacity, isClusterHealthy, nodeStatusCounts, type Cluster } from './cluster';
 
 const BASE_CLUSTER: Cluster = {
   id: 'c1',

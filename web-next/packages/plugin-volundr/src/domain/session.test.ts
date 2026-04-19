@@ -72,7 +72,13 @@ describe('canTransition', () => {
 
   it('rejects terminated → anything', () => {
     const targets: SessionState[] = [
-      'requested', 'provisioning', 'ready', 'running', 'idle', 'terminating', 'failed',
+      'requested',
+      'provisioning',
+      'ready',
+      'running',
+      'idle',
+      'terminating',
+      'failed',
     ];
     for (const to of targets) {
       expect(canTransition('terminated', to)).toBe(false);
@@ -81,7 +87,13 @@ describe('canTransition', () => {
 
   it('rejects failed → anything', () => {
     const targets: SessionState[] = [
-      'requested', 'provisioning', 'ready', 'running', 'idle', 'terminating', 'terminated',
+      'requested',
+      'provisioning',
+      'ready',
+      'running',
+      'idle',
+      'terminating',
+      'terminated',
     ];
     for (const to of targets) {
       expect(canTransition('failed', to)).toBe(false);
@@ -150,7 +162,12 @@ describe('isTerminalState', () => {
 
   it('returns false for all non-terminal states', () => {
     const live: SessionState[] = [
-      'requested', 'provisioning', 'ready', 'running', 'idle', 'terminating',
+      'requested',
+      'provisioning',
+      'ready',
+      'running',
+      'idle',
+      'terminating',
     ];
     for (const s of live) {
       expect(isTerminalState(s)).toBe(false);
@@ -169,7 +186,12 @@ describe('isActiveState', () => {
 
   it('returns false for non-active states', () => {
     const inactive: SessionState[] = [
-      'requested', 'provisioning', 'ready', 'terminating', 'terminated', 'failed',
+      'requested',
+      'provisioning',
+      'ready',
+      'terminating',
+      'terminated',
+      'failed',
     ];
     for (const s of inactive) {
       expect(isActiveState(s)).toBe(false);
@@ -188,7 +210,12 @@ describe('isProvisioningState', () => {
 
   it('returns false for ready and beyond', () => {
     const others: SessionState[] = [
-      'ready', 'running', 'idle', 'terminating', 'terminated', 'failed',
+      'ready',
+      'running',
+      'idle',
+      'terminating',
+      'terminated',
+      'failed',
     ];
     for (const s of others) {
       expect(isProvisioningState(s)).toBe(false);
