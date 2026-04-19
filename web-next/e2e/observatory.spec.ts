@@ -3,8 +3,8 @@ import { test, expect } from '@playwright/test';
 test('observatory rail button navigates to /observatory', async ({ page }) => {
   await page.goto('/');
 
-  // The rail should contain a button for the Observatory plugin (rune ᚠ)
-  const railButton = page.getByRole('button', { name: /observatory/i });
+  // The rail button uses the plugin title in its `title` attribute (tooltip)
+  const railButton = page.locator('button[title*="Observatory"]');
   await expect(railButton).toBeVisible();
 
   await railButton.click();
