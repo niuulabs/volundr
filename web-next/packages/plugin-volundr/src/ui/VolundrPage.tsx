@@ -1,134 +1,300 @@
-import { Rune, StateDot, Chip } from '@niuulabs/ui';
+import { useNavigate } from '@tanstack/react-router';
+import { Rune, KpiStrip, KpiCard, Table, LifecycleBadge, LoadingState, ErrorState } from '@niuulabs/ui';
+import type { TableColumn } from '@niuulabs/ui';
 import { useVolundrSessions, useVolundrStats } from './useVolundrSessions';
+import { useVolundrClusters } from './hooks/useVolundrClusters';
+import { useSessionList } from './hooks/useSessionStore';
+import type { Session, SessionState } from '../domain/session';
+import type { Cluster } from '../domain/cluster';
 
-export function VolundrPage() {
-  const sessions = useVolundrSessions();
-  const stats = useVolundrStats();
+// ---------------------------------------------------------------------------
+// Cluster health grid
+// ---------------------------------------------------------------------------
 
+function cpuPct(cluster: Cluster): number {
+  return cluster.capacity.cpu > 0 ? cluster.used.cpu / cluster.capacity.cpu : 0;
+}
+
+function memPct(cluster: Cluster): number {
+  return cluster.capacity.memMi > 0 ? cluster.used.memMi / cluster.capacity.memMi : 0;
+}
+
+function UsageBar({ value, label }: { value: number; label: string }) {
+  const pct = Math.min(1, value) * 100;
+  const colorClass =
+    value > 0.85 ? 'niuu-bg-critical' : value > 0.6 ? 'niuu-bg-yellow-400' : 'niuu-bg-brand';
   return (
-    <div style={{ padding: 'var(--space-6)', maxWidth: 800 }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-3)',
-          marginBottom: 'var(--space-4)',
-        }}
-      >
-        <Rune glyph="ᚲ" size={32} />
-        <h2 style={{ margin: 0 }}>Völundr · session forge</h2>
+    <div className="niuu-flex niuu-flex-col niuu-gap-1">
+      <div className="niuu-flex niuu-justify-between niuu-text-xs niuu-text-text-muted">
+        <span>{label}</span>
+        <span>{pct.toFixed(0)}%</span>
       </div>
-
-      <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)' }}>
-        Provisions and manages remote dev pods. Sessions move through a lifecycle: requested →
-        provisioning → ready → running → idle → terminating → terminated.
-      </p>
-
-      {stats.data && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 'var(--space-3)',
-            marginBottom: 'var(--space-6)',
-          }}
-        >
-          <KpiTile label="active" value={stats.data.activeSessions} />
-          <KpiTile label="total" value={stats.data.totalSessions} />
-          <KpiTile label="tokens today" value={stats.data.tokensToday.toLocaleString()} />
-        </div>
-      )}
-
-      {sessions.isLoading && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <StateDot state="processing" pulse />
-          <span>loading sessions…</span>
-        </div>
-      )}
-
-      {sessions.isError && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <StateDot state="failed" />
-          <span>
-            {sessions.error instanceof Error ? sessions.error.message : 'failed to load sessions'}
-          </span>
-        </div>
-      )}
-
-      {sessions.data && sessions.data.length === 0 && (
-        <p style={{ color: 'var(--color-text-muted)' }}>
-          No sessions yet — start one to get going.
-        </p>
-      )}
-
-      {sessions.data && sessions.data.length > 0 && (
-        <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 'var(--space-3)' }}>
-          {sessions.data.map((s) => (
-            <li
-              key={s.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-3)',
-                padding: 'var(--space-3)',
-                border: '1px solid var(--color-border-subtle)',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--color-bg-secondary)',
-              }}
-            >
-              <StateDot
-                state={
-                  s.status === 'running'
-                    ? 'healthy'
-                    : s.status === 'error'
-                      ? 'failed'
-                      : s.status === 'stopped' || s.status === 'archived'
-                        ? 'idle'
-                        : 'processing'
-                }
-              />
-              <span style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
-                {s.name}
-              </span>
-              <Chip tone="muted">{s.status}</Chip>
-              <Chip tone="brand">{s.model}</Chip>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div
+        className="niuu-h-1.5 niuu-rounded-full niuu-bg-bg-elevated"
+        role="progressbar"
+        aria-valuenow={Math.round(pct)}
+        aria-valuemax={100}
+        aria-label={label}
+      >
+        <div className={`niuu-h-full niuu-rounded-full ${colorClass}`} style={{ width: `${pct.toFixed(1)}%` }} />
+      </div>
     </div>
   );
 }
 
-function KpiTile({ label, value }: { label: string; value: number | string }) {
+function ClusterCard({ cluster }: { cluster: Cluster }) {
+  const allReady = cluster.nodes.every((n) => n.status === 'ready');
   return (
     <div
-      style={{
-        padding: 'var(--space-4)',
-        border: '1px solid var(--color-border-subtle)',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--color-bg-secondary)',
-      }}
+      className="niuu-flex niuu-flex-col niuu-gap-3 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
+      data-testid="cluster-card"
     >
-      <div
-        style={{
-          fontSize: 'var(--text-2xl)',
-          fontWeight: 700,
-          fontFamily: 'var(--font-mono)',
-          color: 'var(--color-text-primary)',
-        }}
-      >
-        {value}
+      <div className="niuu-flex niuu-items-center niuu-justify-between">
+        <span className="niuu-font-medium niuu-text-sm niuu-text-text-primary">{cluster.name}</span>
+        <span
+          className={`niuu-rounded-full niuu-px-2 niuu-py-0.5 niuu-text-xs ${allReady ? 'niuu-bg-green-900/30 niuu-text-green-400' : 'niuu-bg-yellow-900/30 niuu-text-yellow-400'}`}
+        >
+          {cluster.nodes.length} nodes
+        </span>
       </div>
-      <div
-        style={{
-          fontSize: 'var(--text-xs)',
-          color: 'var(--color-text-muted)',
-          marginTop: 'var(--space-1)',
-        }}
-      >
-        {label}
+      <UsageBar value={cpuPct(cluster)} label="CPU" />
+      <UsageBar value={memPct(cluster)} label="Mem" />
+      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-text-xs niuu-text-text-muted">
+        <span>{cluster.runningSessions} running</span>
+        {cluster.queuedProvisions > 0 && (
+          <span className="niuu-text-yellow-400">{cluster.queuedProvisions} queued</span>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Active sessions row
+// ---------------------------------------------------------------------------
+
+function sessionBadgeState(
+  state: SessionState,
+): 'provisioning' | 'running' | 'idle' | 'terminating' | 'terminated' | 'failed' | 'ready' {
+  if (state === 'requested') return 'provisioning';
+  return state as 'provisioning' | 'running' | 'idle' | 'terminating' | 'terminated' | 'failed' | 'ready';
+}
+
+type ActiveSessionRow = Session & { id: string };
+
+function buildActiveColumns(
+  onView: (id: string) => void,
+): TableColumn<ActiveSessionRow>[] {
+  return [
+    {
+      key: 'id',
+      header: 'Session',
+      render: (s) => (
+        <span className="niuu-font-mono niuu-text-xs niuu-text-text-primary">{s.id}</span>
+      ),
+    },
+    {
+      key: 'persona',
+      header: 'Persona',
+      render: (s) => (
+        <span className="niuu-text-sm niuu-text-text-secondary">{s.personaName}</span>
+      ),
+    },
+    {
+      key: 'state',
+      header: 'State',
+      render: (s) => <LifecycleBadge state={sessionBadgeState(s.state)} />,
+    },
+    {
+      key: 'cluster',
+      header: 'Cluster',
+      render: (s) => (
+        <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">{s.clusterId}</span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (s) => (
+        <button
+          className="niuu-rounded niuu-px-2 niuu-py-1 niuu-text-xs niuu-text-brand hover:niuu-bg-bg-elevated"
+          onClick={() => onView(s.id)}
+          data-testid={`open-session-${s.id}`}
+          aria-label={`Open session ${s.id}`}
+        >
+          Open →
+        </button>
+      ),
+    },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Overview page
+// ---------------------------------------------------------------------------
+
+/** Völundr Overview — KPI strip, active sessions, cluster health, terminations. */
+export function VolundrPage() {
+  const navigate = useNavigate();
+
+  const legacySessions = useVolundrSessions();
+  const stats = useVolundrStats();
+  const clusters = useVolundrClusters();
+  const domainSessions = useSessionList();
+
+  function handleView(sessionId: string) {
+    void navigate({ to: `/volundr/session/$sessionId`, params: { sessionId } });
+  }
+
+  const activeCols = buildActiveColumns(handleView);
+
+  // Derive KPI values from domain sessions.
+  const runningCount = domainSessions.data?.filter((s) => s.state === 'running').length ?? 0;
+  const idleCount = domainSessions.data?.filter((s) => s.state === 'idle').length ?? 0;
+  const provisioningCount =
+    domainSessions.data?.filter((s) => s.state === 'provisioning' || s.state === 'requested')
+      .length ?? 0;
+
+  // Cluster-level aggregates.
+  const totalCpuCap = clusters.data?.reduce((s, c) => s + c.capacity.cpu, 0) ?? 0;
+  const totalCpuUsed = clusters.data?.reduce((s, c) => s + c.used.cpu, 0) ?? 0;
+  const totalMemCapMi = clusters.data?.reduce((s, c) => s + c.capacity.memMi, 0) ?? 0;
+  const totalMemUsedMi = clusters.data?.reduce((s, c) => s + c.used.memMi, 0) ?? 0;
+  const totalGpuCap = clusters.data?.reduce((s, c) => s + c.capacity.gpu, 0) ?? 0;
+  const totalGpuUsed = clusters.data?.reduce((s, c) => s + c.used.gpu, 0) ?? 0;
+  const totalQueued = clusters.data?.reduce((s, c) => s + c.queuedProvisions, 0) ?? 0;
+
+  // Active + recently terminated (from domain sessions).
+  const activeSessions = (domainSessions.data?.filter(
+    (s) => s.state === 'running' || s.state === 'idle',
+  ) ?? []) as ActiveSessionRow[];
+
+  const recentTerminations = (domainSessions.data?.filter(
+    (s) => s.state === 'terminated' || s.state === 'failed',
+  ) ?? []) as ActiveSessionRow[];
+
+  return (
+    <div className="niuu-flex niuu-flex-col niuu-gap-8 niuu-p-6" data-testid="volundr-overview">
+      {/* Header */}
+      <div className="niuu-flex niuu-items-center niuu-gap-3">
+        <Rune glyph="ᚲ" size={32} />
+        <div>
+          <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">
+            Völundr · session forge
+          </h2>
+          <p className="niuu-text-sm niuu-text-text-muted">
+            Provisions and manages remote dev pods.
+          </p>
+        </div>
+      </div>
+
+      {/* KPI strip */}
+      <section aria-label="Session KPIs">
+        {(legacySessions.isLoading || clusters.isLoading) && (
+          <LoadingState label="Loading metrics…" />
+        )}
+        {!legacySessions.isLoading && !clusters.isLoading && (
+          <KpiStrip>
+            <KpiCard label="active" value={runningCount} data-testid="kpi-active" />
+            <KpiCard label="idle" value={idleCount} data-testid="kpi-idle" />
+            <KpiCard
+              label="total CPU"
+              value={`${totalCpuUsed} / ${totalCpuCap}`}
+              data-testid="kpi-cpu"
+            />
+            <KpiCard
+              label="total mem"
+              value={
+                totalMemCapMi > 0
+                  ? `${(totalMemUsedMi / 1024).toFixed(1)} / ${(totalMemCapMi / 1024).toFixed(0)} GiB`
+                  : '—'
+              }
+              data-testid="kpi-mem"
+            />
+            <KpiCard label="GPU" value={`${totalGpuUsed} / ${totalGpuCap}`} data-testid="kpi-gpu" />
+            <KpiCard
+              label="provisioning queue"
+              value={totalQueued + provisioningCount}
+              data-testid="kpi-queue"
+            />
+          </KpiStrip>
+        )}
+      </section>
+
+      {/* Active sessions */}
+      <section className="niuu-flex niuu-flex-col niuu-gap-3" aria-label="Active sessions">
+        <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">Active sessions</h3>
+        {domainSessions.isLoading && <LoadingState label="Loading sessions…" />}
+        {domainSessions.isError && (
+          <ErrorState
+            title="Failed to load sessions"
+            message={
+              domainSessions.error instanceof Error
+                ? domainSessions.error.message
+                : 'Unknown error'
+            }
+          />
+        )}
+        {domainSessions.data && activeSessions.length === 0 && (
+          <p className="niuu-text-sm niuu-text-text-muted" data-testid="no-active-sessions">
+            No active sessions. Start one to get going.
+          </p>
+        )}
+        {activeSessions.length > 0 && (
+          <Table<ActiveSessionRow>
+            columns={activeCols}
+            rows={activeSessions}
+            aria-label="Active sessions"
+          />
+        )}
+      </section>
+
+      {/* Cluster health grid */}
+      <section className="niuu-flex niuu-flex-col niuu-gap-3" aria-label="Cluster health">
+        <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">Cluster health</h3>
+        {clusters.isLoading && <LoadingState label="Loading clusters…" />}
+        {clusters.isError && (
+          <ErrorState title="Failed to load clusters" message="Could not reach the cluster API." />
+        )}
+        {clusters.data && clusters.data.length === 0 && (
+          <p className="niuu-text-sm niuu-text-text-muted">No clusters registered.</p>
+        )}
+        {clusters.data && clusters.data.length > 0 && (
+          <div className="niuu-grid niuu-grid-cols-[repeat(auto-fill,minmax(240px,1fr))] niuu-gap-4">
+            {clusters.data.map((c) => (
+              <ClusterCard key={c.id} cluster={c} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Recent terminations */}
+      {recentTerminations.length > 0 && (
+        <section className="niuu-flex niuu-flex-col niuu-gap-3" aria-label="Recent terminations">
+          <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">
+            Recent terminations
+          </h3>
+          <Table<ActiveSessionRow>
+            columns={activeCols}
+            rows={recentTerminations}
+            aria-label="Recent terminations"
+          />
+        </section>
+      )}
+
+      {/* Stats footer (from legacy service) */}
+      {stats.data && (
+        <p className="niuu-text-xs niuu-text-text-muted">
+          Tokens today:{' '}
+          <span className="niuu-font-mono niuu-text-text-secondary">
+            {stats.data.tokensToday.toLocaleString()}
+          </span>{' '}
+          · Cost:{' '}
+          <span className="niuu-font-mono niuu-text-text-secondary">
+            ${stats.data.costToday.toFixed(2)}
+          </span>
+        </p>
+      )}
     </div>
   );
 }
