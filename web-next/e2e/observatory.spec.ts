@@ -313,6 +313,8 @@ test('registry: cycle is rejected — dragging ancestor onto descendant does not
   const after = await page.getByTestId('json-output').textContent();
   const versionAfter = JSON.parse(after ?? '{}').version as number;
   expect(versionAfter).toBe(versionBefore);
+});
+
 // ── NIU-665 overlay e2e tests ─────────────────────────────────────────────
 
 test('clicking a topology node opens the EntityDrawer', async ({ page }) => {
