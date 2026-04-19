@@ -88,7 +88,7 @@ test('/volundr/templates — saving with blank name shows validation error', asy
   await nameInput.clear();
 
   await page.getByRole('button', { name: /save template/i }).click();
-  await expect(page.getByText(/name is required/i)).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText(/name is required/i).first()).toBeVisible({ timeout: 5_000 });
 });
 
 test('/volundr/templates — edit, change image, save updates the template', async ({ page }) => {
@@ -180,6 +180,7 @@ test('/volundr/history shows filter controls', async ({ page }) => {
 
 test('/volundr/history — filter by outcome (failed)', async ({ page }) => {
   await page.goto('/volundr/history');
+  await expect(page.getByTestId('history-row').first()).toBeVisible({ timeout: 5_000 });
   const initialRows = await page.getByTestId('history-row').count();
   await expect(initialRows).toBeGreaterThan(1);
 
