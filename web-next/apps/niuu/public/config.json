@@ -1,9 +1,11 @@
 {
   "theme": "ice",
   "plugins": {
-    "hello": { "enabled": true, "order": 1 }
+    "hello": { "enabled": true, "order": 1 },
+    "mimir": { "enabled": true, "order": 2 }
   },
   "services": {
-    "hello": { "mode": "mock" }
+    "hello": { "mode": "mock" },
+    "mimir": { "mode": "mock" }
   }
 }
