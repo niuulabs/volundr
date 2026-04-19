@@ -53,3 +53,4 @@ export function topBudgetSpenders(
     .sort((a, b) => (budgets[b.id]?.spentUsd ?? 0) - (budgets[a.id]?.spentUsd ?? 0))
     .slice(0, n);
 }
+
