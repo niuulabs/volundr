@@ -8,4 +8,5 @@ export * from './primitives/Drawer';
 export * from './primitives/Popover';
 export * from './primitives/Tooltip';
 export * from './primitives/Toast';
+export * from './primitives/ShapeSvg';
 export { cn } from './utils/cn';
