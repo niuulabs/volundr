@@ -70,3 +70,4 @@ test.describe('Dialog — Storybook iframe', () => {
     await expect(page.getByRole('dialog')).not.toBeVisible();
   });
 });
+// e2e
