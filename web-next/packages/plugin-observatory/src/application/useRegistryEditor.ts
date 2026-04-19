@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Registry } from '../domain';
 import { isDescendant, reparent } from '../domain/containment';
 
@@ -18,9 +18,11 @@ export function useRegistryEditor(initial: Registry): RegistryEditorState {
   const [registry, setRegistry] = useState<Registry>(initial);
   const [selectedId, setSelectedId] = useState<string | null>(initial.types[0]?.id ?? null);
 
+  const byId = useMemo(() => new Map(registry.types.map((t) => [t.id, t])), [registry.types]);
+
   const tryReparent = (childId: string, newParentId: string): boolean => {
     if (childId === newParentId) return false;
-    if (isDescendant(registry, childId, newParentId)) return false;
+    if (isDescendant(registry, childId, newParentId, byId)) return false;
     setRegistry((r) => reparent(r, childId, newParentId));
     return true;
   };

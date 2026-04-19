@@ -19,36 +19,22 @@ export function ObservatoryPage() {
   const recentEvents = events.slice(-5);
 
   return (
-    <div style={{ padding: 'var(--space-6)', maxWidth: 960 }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-3)',
-          marginBottom: 'var(--space-2)',
-        }}
-      >
+    <div className="niuu-p-6 niuu-max-w-[960px]">
+      <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-mb-2">
         <Rune glyph="ᚠ" size={32} />
-        <h2 style={{ margin: 0 }}>Observatory</h2>
+        <h2 className="niuu-m-0">Observatory</h2>
       </div>
-      <p style={{ margin: '0 0 var(--space-6)', color: 'var(--color-text-secondary)' }}>
+      <p className="niuu-m-0 niuu-mb-6 niuu-text-text-secondary">
         live topology · canvas coming soon
       </p>
 
       {topology ? (
-        <div style={{ display: 'flex', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+        <div className="niuu-flex niuu-gap-4 niuu-mb-6">
           <StatCard label="nodes" value={nodeCount} />
           <StatCard label="edges" value={edgeCount} />
         </div>
       ) : (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-2)',
-            marginBottom: 'var(--space-6)',
-          }}
-        >
+        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-mb-6">
           <StateDot state="processing" pulse />
           <span>connecting…</span>
         </div>
@@ -56,35 +42,16 @@ export function ObservatoryPage() {
 
       {recentEvents.length > 0 && (
         <section>
-          <h3
-            style={{
-              margin: '0 0 var(--space-3)',
-              fontSize: 'var(--text-sm)',
-              color: 'var(--color-text-muted)',
-            }}
-          >
-            Recent events
-          </h3>
-          <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 'var(--space-2)' }}>
+          <h3 className="niuu-m-0 niuu-mb-3 niuu-text-sm niuu-text-text-muted">Recent events</h3>
+          <ul className="niuu-list-none niuu-p-0 niuu-grid niuu-gap-2">
             {recentEvents.map((ev) => (
               <li
                 key={ev.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-2)',
-                  padding: 'var(--space-2) var(--space-3)',
-                  border: '1px solid var(--color-border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'var(--color-bg-secondary)',
-                  fontSize: 'var(--text-sm)',
-                }}
+                className="niuu-flex niuu-items-center niuu-gap-2 niuu-py-2 niuu-px-3 niuu-border niuu-border-border-subtle niuu-rounded-md niuu-bg-bg-secondary niuu-text-sm"
               >
                 <StateDot state={severityToDotState(ev.severity)} />
-                <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                  {ev.sourceId}
-                </span>
-                <span style={{ flex: 1 }}>{ev.message}</span>
+                <span className="niuu-text-text-muted niuu-font-mono">{ev.sourceId}</span>
+                <span className="niuu-flex-1">{ev.message}</span>
               </li>
             ))}
           </ul>
@@ -96,17 +63,9 @@ export function ObservatoryPage() {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div
-      style={{
-        padding: 'var(--space-4)',
-        border: '1px solid var(--color-border-subtle)',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--color-bg-secondary)',
-        minWidth: 100,
-      }}
-    >
-      <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700 }}>{value}</div>
-      <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>{label}</div>
+    <div className="niuu-p-4 niuu-border niuu-border-border-subtle niuu-rounded-md niuu-bg-bg-secondary niuu-min-w-[100px]">
+      <div className="niuu-text-2xl niuu-font-bold">{value}</div>
+      <div className="niuu-text-text-muted niuu-text-xs">{label}</div>
     </div>
   );
 }

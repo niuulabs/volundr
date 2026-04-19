@@ -1,4 +1,4 @@
-import type { Registry } from './index';
+import type { Registry, EntityType } from './index';
 
 /**
  * Returns true if `descendantId` appears anywhere beneath `ancestorId` in the
@@ -6,21 +6,25 @@ import type { Registry } from './index';
  *
  * Also returns true when ancestorId === descendantId, so callers can use this
  * as the single "would this drop create a cycle?" guard.
+ *
+ * Pass a pre-built `byId` map (e.g. from a memoized value) to avoid
+ * rebuilding it on every call — important during drag operations.
  */
 export function isDescendant(
   registry: Registry,
   ancestorId: string,
   descendantId: string,
+  byId?: Map<string, EntityType>,
 ): boolean {
   if (ancestorId === descendantId) return true;
 
-  const byId = new Map(registry.types.map((t) => [t.id, t]));
+  const lookup = byId ?? new Map(registry.types.map((t) => [t.id, t]));
   const seen = new Set<string>();
 
   const walk = (id: string): boolean => {
     if (seen.has(id)) return false;
     seen.add(id);
-    const t = byId.get(id);
+    const t = lookup.get(id);
     if (!t) return false;
     for (const childId of t.canContain) {
       if (childId === descendantId) return true;

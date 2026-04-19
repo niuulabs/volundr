@@ -25,170 +25,54 @@ function TypePreviewDrawer({ type, onClose }: TypePreviewDrawerProps) {
   return (
     <div
       data-testid="type-preview-drawer"
-      style={{
-        width: 320,
-        flexShrink: 0,
-        borderLeft: '1px solid var(--color-border-subtle)',
-        background: 'var(--color-bg-secondary)',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-      }}
+      className="niuu-w-[320px] niuu-shrink-0 niuu-border-l niuu-border-border-subtle niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-hidden"
     >
-      <div
-        style={{
-          padding: 'var(--space-4)',
-          borderBottom: '1px solid var(--color-border-subtle)',
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 'var(--space-3)',
-        }}
-      >
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--color-bg-tertiary)',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--color-border-subtle)',
-            flexShrink: 0,
-          }}
-        >
+      <div className="niuu-p-4 niuu-border-b niuu-border-border-subtle niuu-flex niuu-items-start niuu-gap-3">
+        <div className="niuu-w-12 niuu-h-12 niuu-flex niuu-items-center niuu-justify-center niuu-bg-bg-tertiary niuu-rounded-md niuu-border niuu-border-border-subtle niuu-shrink-0">
           <ShapeSvg shape={type.shape} color={type.color} size={28} />
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              color: 'var(--color-text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.07em',
-              marginBottom: 2,
-            }}
-          >
+        <div className="niuu-flex-1 niuu-min-w-0">
+          <div className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted niuu-uppercase niuu-tracking-[0.07em] niuu-mb-[2px]">
             {type.category}
           </div>
-          <div
-            style={{
-              fontSize: 'var(--text-lg)',
-              fontWeight: 600,
-              letterSpacing: '-0.015em',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
+          <div className="niuu-text-lg niuu-font-semibold niuu-tracking-[-0.015em] niuu-flex niuu-items-center niuu-gap-2">
             {type.label}
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                color: 'var(--color-brand)',
-                fontSize: 16,
-                fontWeight: 700,
-              }}
-            >
+            <span className="niuu-font-mono niuu-text-brand niuu-text-base niuu-font-bold">
               {type.rune}
             </span>
           </div>
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              color: 'var(--color-text-muted)',
-              marginTop: 2,
-            }}
-          >
+          <div className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted niuu-mt-[2px]">
             {type.id}
           </div>
         </div>
         <button
           aria-label="Close preview"
           onClick={onClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--color-text-muted)',
-            padding: 4,
-            lineHeight: 1,
-            fontSize: 16,
-          }}
+          className="niuu-bg-transparent niuu-border-0 niuu-cursor-pointer niuu-text-text-muted niuu-p-1 niuu-leading-none niuu-text-base"
         >
           ✕
         </button>
       </div>
 
-      <div style={{ padding: 'var(--space-4)', overflowY: 'auto', flex: 1 }}>
-        <p
-          style={{
-            margin: '0 0 var(--space-4)',
-            fontSize: 'var(--text-sm)',
-            color: 'var(--color-text-secondary)',
-            lineHeight: 1.5,
-          }}
-        >
+      <div className="niuu-p-4 niuu-overflow-y-auto niuu-flex-1">
+        <p className="niuu-m-0 niuu-mb-4 niuu-text-sm niuu-text-text-secondary niuu-leading-[1.5]">
           {type.description}
         </p>
 
-        <div className="section-head" style={{ marginTop: 0 }}>
-          Visual
-        </div>
-        <dl
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '80px 1fr',
-            gap: 'var(--space-1) var(--space-3)',
-            margin: '0 0 var(--space-4)',
-            fontSize: 'var(--text-sm)',
-          }}
-        >
-          <dt style={{ color: 'var(--color-text-muted)' }}>shape</dt>
-          <dd
-            style={{
-              margin: 0,
-              fontFamily: 'var(--font-mono)',
-              color: 'var(--color-text-secondary)',
-            }}
-          >
-            {type.shape}
-          </dd>
-          <dt style={{ color: 'var(--color-text-muted)' }}>size</dt>
-          <dd
-            style={{
-              margin: 0,
-              fontFamily: 'var(--font-mono)',
-              color: 'var(--color-text-secondary)',
-            }}
-          >
-            {type.size}
-          </dd>
-          <dt style={{ color: 'var(--color-text-muted)' }}>border</dt>
-          <dd
-            style={{
-              margin: 0,
-              fontFamily: 'var(--font-mono)',
-              color: 'var(--color-text-secondary)',
-            }}
-          >
-            {type.border}
-          </dd>
+        <div className="registry-section-head">Visual</div>
+        <dl className="niuu-grid niuu-grid-cols-[80px_1fr] niuu-gap-x-3 niuu-gap-y-1 niuu-m-0 niuu-mb-4 niuu-text-sm">
+          <dt className="niuu-text-text-muted">shape</dt>
+          <dd className="niuu-m-0 niuu-font-mono niuu-text-text-secondary">{type.shape}</dd>
+          <dt className="niuu-text-text-muted">size</dt>
+          <dd className="niuu-m-0 niuu-font-mono niuu-text-text-secondary">{type.size}</dd>
+          <dt className="niuu-text-text-muted">border</dt>
+          <dd className="niuu-m-0 niuu-font-mono niuu-text-text-secondary">{type.border}</dd>
         </dl>
 
         {type.parentTypes.length > 0 && (
           <>
-            <div className="section-head">Lives inside</div>
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 'var(--space-1)',
-                marginBottom: 'var(--space-4)',
-              }}
-            >
+            <div className="registry-section-head">Lives inside</div>
+            <div className="niuu-flex niuu-flex-wrap niuu-gap-1 niuu-mb-4">
               {type.parentTypes.map((id) => (
                 <Chip key={id} tone="muted">
                   {id}
@@ -200,15 +84,8 @@ function TypePreviewDrawer({ type, onClose }: TypePreviewDrawerProps) {
 
         {type.canContain.length > 0 && (
           <>
-            <div className="section-head">Can contain</div>
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 'var(--space-1)',
-                marginBottom: 'var(--space-4)',
-              }}
-            >
+            <div className="registry-section-head">Can contain</div>
+            <div className="niuu-flex niuu-flex-wrap niuu-gap-1 niuu-mb-4">
               {type.canContain.map((id) => (
                 <Chip key={id} tone="muted">
                   {id}
@@ -220,25 +97,12 @@ function TypePreviewDrawer({ type, onClose }: TypePreviewDrawerProps) {
 
         {type.fields.length > 0 && (
           <>
-            <div className="section-head">Fields</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            <div className="registry-section-head">Fields</div>
+            <div className="niuu-flex niuu-flex-col niuu-gap-2">
               {type.fields.map((f) => (
-                <div
-                  key={f.key}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                >
-                  <span style={{ color: 'var(--color-text-secondary)' }}>{f.label}</span>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 11,
-                      color: 'var(--color-text-muted)',
-                    }}
-                  >
+                <div key={f.key} className="niuu-flex niuu-justify-between niuu-text-sm">
+                  <span className="niuu-text-text-secondary">{f.label}</span>
+                  <span className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
                     {f.type}
                     {f.required && ' *'}
                   </span>
@@ -285,124 +149,50 @@ function TypesTab({ registry, selectedId, onSelect }: TypesTabProps) {
 
   return (
     <div>
-      <div style={{ marginBottom: 'var(--space-4)' }}>
+      <div className="niuu-mb-4">
         <input
           aria-label="Filter types"
           placeholder="filter types…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{
-            width: '100%',
-            height: 36,
-            padding: '0 var(--space-3)',
-            background: 'var(--color-bg-tertiary)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-sm)',
-            color: 'var(--color-text-primary)',
-            fontSize: 'var(--text-sm)',
-            fontFamily: 'var(--font-sans)',
-            boxSizing: 'border-box',
-          }}
+          className="niuu-w-full niuu-h-9 niuu-px-3 niuu-bg-bg-tertiary niuu-border niuu-border-border niuu-rounded-sm niuu-text-text-primary niuu-text-sm niuu-font-sans niuu-box-border"
         />
       </div>
 
       {filtered.length === 0 && (
-        <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
-          No types match your search.
-        </p>
+        <p className="niuu-text-text-muted niuu-text-sm">No types match your search.</p>
       )}
 
       {[...byCategory.entries()].map(([cat, types]) => (
-        <div key={cat} style={{ marginBottom: 'var(--space-5)' }}>
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              textTransform: 'uppercase',
-              letterSpacing: '0.07em',
-              color: 'var(--color-text-muted)',
-              marginBottom: 'var(--space-2)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-2)',
-            }}
-          >
+        <div key={cat} className="niuu-mb-5">
+          <div className="niuu-font-mono niuu-text-[11px] niuu-uppercase niuu-tracking-[0.07em] niuu-text-text-muted niuu-mb-2 niuu-flex niuu-items-center niuu-gap-2">
             {cat}
-            <span
-              style={{ fontWeight: 400, color: 'var(--color-text-faint, var(--color-text-muted))' }}
-            >
-              · {types.length}
-            </span>
+            <span className="niuu-font-normal niuu-text-text-muted">· {types.length}</span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+          <div className="niuu-flex niuu-flex-col niuu-gap-1">
             {types.map((t) => (
               <button
                 key={t.id}
                 data-testid={`type-row-${t.id}`}
                 onClick={() => onSelect(t.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-3)',
-                  padding: 'var(--space-2) var(--space-3)',
-                  background: selectedId === t.id ? 'var(--color-bg-tertiary)' : 'transparent',
-                  border:
-                    selectedId === t.id ? '1px solid var(--color-border)' : '1px solid transparent',
-                  borderRadius: 'var(--radius-sm)',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  width: '100%',
-                  color: 'inherit',
-                }}
+                className={`niuu-flex niuu-items-center niuu-gap-3 niuu-py-2 niuu-px-3 niuu-rounded-sm niuu-cursor-pointer niuu-text-left niuu-w-full niuu-border ${
+                  selectedId === t.id
+                    ? 'niuu-bg-bg-tertiary niuu-border-border'
+                    : 'niuu-bg-transparent niuu-border-transparent'
+                }`}
+                style={{ color: 'inherit' }}
               >
-                <span
-                  style={{
-                    width: 22,
-                    height: 22,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
+                <span className="niuu-w-[22px] niuu-h-[22px] niuu-inline-flex niuu-items-center niuu-justify-center niuu-shrink-0">
                   <ShapeSvg shape={t.shape} color={t.color} size={18} />
                 </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 16,
-                    color: 'var(--color-brand)',
-                    fontWeight: 700,
-                    width: 20,
-                    textAlign: 'center',
-                    flexShrink: 0,
-                  }}
-                >
+                <span className="niuu-font-mono niuu-text-base niuu-text-brand niuu-font-bold niuu-w-5 niuu-text-center niuu-shrink-0">
                   {t.rune}
                 </span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ fontWeight: 500, display: 'block' }}>{t.label}</span>
-                  <span
-                    style={{
-                      color: 'var(--color-text-muted)',
-                      fontSize: 'var(--text-xs)',
-                      fontFamily: 'var(--font-mono)',
-                    }}
-                  >
-                    {t.id}
-                  </span>
+                <span className="niuu-flex-1 niuu-min-w-0">
+                  <span className="niuu-font-medium niuu-block">{t.label}</span>
+                  <span className="niuu-text-text-muted niuu-text-xs niuu-font-mono">{t.id}</span>
                 </span>
-                <span
-                  style={{
-                    color: 'var(--color-text-muted)',
-                    fontSize: 'var(--text-xs)',
-                    maxWidth: 180,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                  }}
-                >
+                <span className="niuu-text-text-muted niuu-text-xs niuu-max-w-[180px] niuu-overflow-hidden niuu-text-ellipsis niuu-whitespace-nowrap niuu-shrink-0">
                   {t.description.split('.')[0]}.
                 </span>
               </button>
@@ -455,7 +245,7 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
 
   const getDropState = (targetId: string): DropState => {
     if (!dragId) return 'none';
-    const invalid = isDescendant(registry, dragId, targetId) || dragId === targetId;
+    const invalid = isDescendant(registry, dragId, targetId, byId) || dragId === targetId;
     if (overId === targetId) return invalid ? 'invalid' : 'target';
     if (!invalid) return 'ok';
     return 'none';
@@ -475,7 +265,7 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
 
   const handleDragOver = (e: React.DragEvent, targetId: string) => {
     if (!dragId) return;
-    const invalid = isDescendant(registry, dragId, targetId) || dragId === targetId;
+    const invalid = isDescendant(registry, dragId, targetId, byId) || dragId === targetId;
     try {
       if (e.dataTransfer) e.dataTransfer.dropEffect = invalid ? 'none' : 'move';
     } catch {
@@ -509,38 +299,16 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
     const dropState = getDropState(t.id);
     const isDragging = dragId === t.id;
 
-    const nodeStyle: React.CSSProperties = {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 'var(--space-2)',
-      padding: '4px 8px',
-      borderRadius: 'var(--radius-sm)',
-      cursor: isDragging ? 'grabbing' : 'grab',
-      opacity: isDragging ? 0.4 : 1,
-      marginLeft: depth * 20,
-      border: '1px solid transparent',
-      background: selectedId === t.id ? 'var(--color-bg-tertiary)' : 'transparent',
-      ...(dropState === 'ok' && {
-        border: '1px dashed color-mix(in srgb, var(--color-brand) 30%, transparent)',
-      }),
-      ...(dropState === 'target' && {
-        border: '1px solid var(--color-brand)',
-        background: 'color-mix(in srgb, var(--color-brand) 20%, transparent)',
-      }),
-      ...(dropState === 'invalid' && {
-        border: '1px solid var(--color-critical, #ef4444)',
-        background: 'color-mix(in srgb, var(--color-critical, #ef4444) 15%, transparent)',
-        cursor: 'not-allowed',
-      }),
-    };
-
     return (
       <div key={t.id}>
         <div
           data-testid={`tree-node-${t.id}`}
           data-drag-state={dropState}
+          data-selected={selectedId === t.id ? 'true' : undefined}
+          data-dragging={isDragging ? 'true' : undefined}
           draggable
-          style={nodeStyle}
+          className="registry-tree-node"
+          style={{ '--tree-depth': depth } as React.CSSProperties}
           onDragStart={(e) => handleDragStart(e, t.id)}
           onDragOver={(e) => handleDragOver(e, t.id)}
           onDragLeave={(e) => handleDragLeave(e, t.id)}
@@ -550,45 +318,18 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
         >
           <span
             aria-hidden
-            style={{
-              color: 'var(--color-text-muted)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              userSelect: 'none',
-            }}
+            className="niuu-text-text-muted niuu-font-mono niuu-text-[11px] niuu-select-none"
           >
             ⋮⋮
           </span>
-          <span
-            style={{
-              width: 16,
-              display: 'inline-flex',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
+          <span className="niuu-w-4 niuu-inline-flex niuu-justify-center niuu-shrink-0">
             <ShapeSvg shape={t.shape} color={t.color} size={14} />
           </span>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              color: 'var(--color-brand)',
-              fontSize: 13,
-              fontWeight: 700,
-              flexShrink: 0,
-            }}
-          >
+          <span className="niuu-font-mono niuu-text-brand niuu-text-[13px] niuu-font-bold niuu-shrink-0">
             {t.rune}
           </span>
-          <span style={{ fontWeight: 500, fontSize: 'var(--text-sm)' }}>{t.label}</span>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              color: 'var(--color-text-muted)',
-              marginLeft: 'auto',
-            }}
-          >
+          <span className="niuu-font-medium niuu-text-sm">{t.label}</span>
+          <span className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted niuu-ml-auto">
             {t.id}
           </span>
         </div>
@@ -599,19 +340,11 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
 
   return (
     <div>
-      <p
-        style={{
-          margin: '0 0 var(--space-4)',
-          fontSize: 'var(--text-sm)',
-          color: 'var(--color-text-muted)',
-          lineHeight: 1.5,
-        }}
-      >
+      <p className="niuu-m-0 niuu-mb-4 niuu-text-sm niuu-text-text-muted niuu-leading-[1.5]">
         <strong>Drag</strong> a type onto another to reparent it. The{' '}
-        <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>canContain</code> edge moves
-        to the new parent;{' '}
-        <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>parentTypes</code> on the
-        child updates. Cycles are blocked.
+        <code className="niuu-font-mono niuu-text-[11px]">canContain</code> edge moves to the new
+        parent; <code className="niuu-font-mono niuu-text-[11px]">parentTypes</code> on the child
+        updates. Cycles are blocked.
       </p>
 
       <div data-testid="containment-tree">{roots.map((r) => renderNode(r))}</div>
@@ -619,22 +352,9 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
       {orphans.length > 0 && (
         <div
           data-testid="orphans-section"
-          style={{
-            marginTop: 'var(--space-6)',
-            paddingTop: 'var(--space-4)',
-            borderTop: '1px solid var(--color-border-subtle)',
-          }}
+          className="niuu-mt-6 niuu-pt-4 niuu-border-t niuu-border-border-subtle"
         >
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              color: 'var(--color-text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.07em',
-              marginBottom: 'var(--space-2)',
-            }}
-          >
+          <div className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted niuu-uppercase niuu-tracking-[0.07em] niuu-mb-2">
             orphans — parent missing
           </div>
           {orphans.map((o) => renderNode(o))}
@@ -667,44 +387,20 @@ function JsonTab({ registry }: JsonTabProps) {
   };
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div className="niuu-relative">
       <button
         aria-label="Copy JSON"
         data-testid="copy-json-btn"
         onClick={handleCopy}
-        style={{
-          position: 'absolute',
-          top: 'var(--space-2)',
-          right: 'var(--space-2)',
-          background: 'var(--color-bg-elevated)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-sm)',
-          color: copied ? 'var(--color-brand)' : 'var(--color-text-secondary)',
-          cursor: 'pointer',
-          fontSize: 'var(--text-xs)',
-          fontFamily: 'var(--font-mono)',
-          padding: '4px 10px',
-          zIndex: 1,
-        }}
+        className={`niuu-absolute niuu-top-2 niuu-right-2 niuu-bg-bg-elevated niuu-border niuu-border-border niuu-rounded-sm niuu-cursor-pointer niuu-text-xs niuu-font-mono niuu-px-[10px] niuu-py-1 niuu-z-[1] ${
+          copied ? 'niuu-text-brand' : 'niuu-text-text-secondary'
+        }`}
       >
         {copied ? 'copied!' : 'copy'}
       </button>
       <pre
         data-testid="json-output"
-        style={{
-          margin: 0,
-          padding: 'var(--space-4)',
-          background: 'var(--color-bg-secondary)',
-          border: '1px solid var(--color-border-subtle)',
-          borderRadius: 'var(--radius-md)',
-          fontFamily: 'var(--font-mono)',
-          fontSize: 'var(--text-xs)',
-          color: 'var(--color-text-secondary)',
-          overflowX: 'auto',
-          lineHeight: 1.6,
-          maxHeight: 600,
-          overflowY: 'auto',
-        }}
+        className="niuu-m-0 niuu-p-4 niuu-bg-bg-secondary niuu-border niuu-border-border-subtle niuu-rounded-md niuu-font-mono niuu-text-xs niuu-text-text-secondary niuu-overflow-x-auto niuu-leading-[1.6] niuu-max-h-[600px] niuu-overflow-y-auto"
       >
         {json}
       </pre>
@@ -724,58 +420,16 @@ export function RegistryEditor({ registry: initialRegistry }: RegistryEditorProp
 
   const selectedType = registry.types.find((t) => t.id === selectedId) ?? null;
 
-  const tabButtonStyle = (tab: TabId): React.CSSProperties => ({
-    background: 'none',
-    border: 'none',
-    borderBottom: activeTab === tab ? '2px solid var(--color-brand)' : '2px solid transparent',
-    color: activeTab === tab ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-    cursor: 'pointer',
-    fontFamily: 'var(--font-sans)',
-    fontSize: 'var(--text-sm)',
-    fontWeight: activeTab === tab ? 600 : 400,
-    padding: 'var(--space-2) var(--space-3)',
-    marginBottom: -1,
-  });
-
   return (
-    <div
-      style={{
-        display: 'flex',
-        height: '100%',
-        overflow: 'hidden',
-        background: 'var(--color-bg-primary)',
-      }}
-    >
+    <div className="niuu-flex niuu-h-full niuu-overflow-hidden niuu-bg-bg-primary">
       {/* Main column */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="niuu-flex-1 niuu-flex niuu-flex-col niuu-overflow-hidden">
         {/* Header */}
-        <div
-          style={{
-            padding: 'var(--space-4) var(--space-6)',
-            borderBottom: '1px solid var(--color-border-subtle)',
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'baseline',
-              justifyContent: 'space-between',
-              marginBottom: 'var(--space-1)',
-            }}
-          >
-            <h2 style={{ margin: 0, fontSize: 'var(--text-xl)', fontWeight: 700 }}>
-              Entity type registry
-            </h2>
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                color: 'var(--color-text-muted)',
-              }}
-            >
-              rev{' '}
-              <strong style={{ color: 'var(--color-text-secondary)' }}>{registry.version}</strong>
+        <div className="niuu-py-4 niuu-px-6 niuu-border-b niuu-border-border-subtle niuu-shrink-0">
+          <div className="niuu-flex niuu-items-baseline niuu-justify-between niuu-mb-1">
+            <h2 className="niuu-m-0 niuu-text-xl niuu-font-bold">Entity type registry</h2>
+            <span className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
+              rev <strong className="niuu-text-text-secondary">{registry.version}</strong>
               {' · '}
               {registry.types.length} types
               {' · '}
@@ -787,12 +441,7 @@ export function RegistryEditor({ registry: initialRegistry }: RegistryEditorProp
         {/* Tabs */}
         <div
           role="tablist"
-          style={{
-            display: 'flex',
-            borderBottom: '1px solid var(--color-border-subtle)',
-            padding: '0 var(--space-6)',
-            flexShrink: 0,
-          }}
+          className="niuu-flex niuu-border-b niuu-border-border-subtle niuu-px-6 niuu-shrink-0"
         >
           {(['types', 'containment', 'json'] as TabId[]).map((tab) => (
             <button
@@ -801,7 +450,7 @@ export function RegistryEditor({ registry: initialRegistry }: RegistryEditorProp
               aria-selected={activeTab === tab}
               data-testid={`tab-${tab}`}
               onClick={() => setActiveTab(tab)}
-              style={tabButtonStyle(tab)}
+              className="registry-tab-btn"
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
@@ -809,14 +458,7 @@ export function RegistryEditor({ registry: initialRegistry }: RegistryEditorProp
         </div>
 
         {/* Tab content */}
-        <div
-          role="tabpanel"
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: 'var(--space-5) var(--space-6)',
-          }}
-        >
+        <div role="tabpanel" className="niuu-flex-1 niuu-overflow-y-auto niuu-py-5 niuu-px-6">
           {activeTab === 'types' && (
             <TypesTab registry={registry} selectedId={selectedId} onSelect={select} />
           )}
