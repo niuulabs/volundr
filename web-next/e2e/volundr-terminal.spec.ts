@@ -1,26 +1,37 @@
 import { test, expect } from '@playwright/test';
 
-// The session detail page at /volundr/session/sess-1 renders Terminal + FileTree.
+// The session detail page at /volundr/session/ds-1 renders Terminal + FileTree in tabs.
+
+async function openTerminalTab(page: import('@playwright/test').Page) {
+  await page.goto('/volundr/session/ds-1');
+  await expect(page.getByTestId('session-detail-page')).toBeVisible({ timeout: 8_000 });
+  await page.getByTestId('tab-terminal').click();
+}
+
+async function openFilesTab(page: import('@playwright/test').Page) {
+  await page.goto('/volundr/session/ds-1');
+  await expect(page.getByTestId('session-detail-page')).toBeVisible({ timeout: 8_000 });
+  await page.getByTestId('tab-files').click();
+}
 
 test('session page renders terminal container', async ({ page }) => {
-  await page.goto('/volundr/session/sess-1');
-  await expect(page.getByTestId('volundr-session-page')).toBeVisible({ timeout: 8_000 });
+  await openTerminalTab(page);
   await expect(page.getByTestId('terminal-container')).toBeVisible({ timeout: 8_000 });
 });
 
 test('terminal shows session id label', async ({ page }) => {
-  await page.goto('/volundr/session/sess-1');
-  await expect(page.getByTestId('session-id-label')).toHaveText('sess-1', { timeout: 8_000 });
+  await openTerminalTab(page);
+  await expect(page.getByTestId('session-id-label')).toHaveText('ds-1', { timeout: 8_000 });
 });
 
 test('terminal transitions from connecting to connected after data arrives', async ({ page }) => {
-  await page.goto('/volundr/session/sess-1');
+  await openTerminalTab(page);
   // The mock stream emits data after ~50ms — wait for the status badge to disappear.
   await expect(page.getByTestId('terminal-connection-status')).not.toBeVisible({ timeout: 5_000 });
 });
 
 test('type a command in terminal and see echoed output', async ({ page }) => {
-  await page.goto('/volundr/session/sess-1');
+  await openTerminalTab(page);
   // Wait for xterm to mount and connect.
   await expect(page.getByTestId('terminal-connection-status')).not.toBeVisible({ timeout: 5_000 });
 
@@ -38,30 +49,31 @@ test('type a command in terminal and see echoed output', async ({ page }) => {
 });
 
 test('reconnect button triggers re-subscription', async ({ page }) => {
-  await page.goto('/volundr/session/sess-1');
+  await openTerminalTab(page);
   await expect(page.getByTestId('terminal-reconnect-button')).toBeVisible({ timeout: 5_000 });
   await page.getByTestId('terminal-reconnect-button').click();
   // After reconnect, the connection badge should appear briefly then disappear.
-  // The mock stream re-connects in 50ms, so just wait for the badge to clear.
   await expect(page.getByTestId('terminal-connection-status')).not.toBeVisible({ timeout: 8_000 });
 });
 
-test('archived session page shows read-only badge', async ({ page }) => {
-  await page.goto('/volundr/session/sess-1/archived');
+test('archived session page shows read-only badge in terminal tab', async ({ page }) => {
+  await page.goto('/volundr/session/ds-5/archived');
+  await expect(page.getByTestId('session-detail-page')).toBeVisible({ timeout: 8_000 });
+  await page.getByTestId('tab-terminal').click();
   await expect(page.getByTestId('terminal-readonly-badge')).toBeVisible({ timeout: 8_000 });
   // Reconnect button should NOT be visible in read-only mode.
   await expect(page.getByTestId('terminal-reconnect-button')).not.toBeVisible();
 });
 
 test('file tree renders workspace files', async ({ page }) => {
-  await page.goto('/volundr/session/sess-1');
+  await openFilesTab(page);
   await expect(page.getByTestId('filetree-root')).toBeVisible({ timeout: 8_000 });
   await expect(page.getByText('package.json')).toBeVisible();
   await expect(page.getByText('src')).toBeVisible();
 });
 
 test('clicking a file opens the file viewer with highlighted content', async ({ page }) => {
-  await page.goto('/volundr/session/sess-1');
+  await openFilesTab(page);
   await expect(page.getByTestId('filetree-root')).toBeVisible({ timeout: 8_000 });
 
   await page.getByText('package.json').click();
@@ -78,7 +90,7 @@ test('clicking a file opens the file viewer with highlighted content', async ({ 
 });
 
 test('secret files show the secret badge and cannot be opened', async ({ page }) => {
-  await page.goto('/volundr/session/sess-1');
+  await openFilesTab(page);
   await expect(page.getByTestId('filetree-root')).toBeVisible({ timeout: 8_000 });
 
   // The secret mount badge should be visible.
