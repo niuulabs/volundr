@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+  workflow_dispatch:
 
 permissions: read-all
 
@@ -84,14 +85,17 @@ jobs:
       - name: Hardcode all changes to true for testing
         id: override
         run: |
-          HEAD="${{ github.head_ref }}"
+          # For pull_request events, github.head_ref / github.base_ref are set.
+          # For workflow_dispatch, fall back to github.ref_name (the dispatched branch).
+          HEAD="${{ github.head_ref || github.ref_name }}"
           BASE="${{ github.base_ref }}"
           # web-next scaffold branches: run only the web-next test suite.
           # Python backend + web/ frontend tests are disabled here to speed up
           # the new UI build. Revert when web-next reaches parity.
-          # Covers both feat/web-next-* (original) and feat/niuu-web-* (current naming).
+          # Covers feat/web-next-* (original), feat/niuu-web-* (current), and niu-* feature branches.
           if [[ "$HEAD" == feat/web-next* ]] || [[ "$BASE" == feat/web-next* ]] || \
-             [[ "$HEAD" == feat/niuu-web* ]] || [[ "$BASE" == feat/niuu-web* ]]; then
+             [[ "$HEAD" == feat/niuu-web* ]] || [[ "$BASE" == feat/niuu-web* ]] || \
+             [[ "$HEAD" == niu-* ]]; then
             echo "python=false" >> $GITHUB_OUTPUT
             echo "web=false" >> $GITHUB_OUTPUT
             echo "helm=false" >> $GITHUB_OUTPUT
@@ -1178,6 +1182,7 @@ jobs:
   # ---------------------------------------------------------------------------
   dependency-review:
     name: Dependency Review
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Harden runner
