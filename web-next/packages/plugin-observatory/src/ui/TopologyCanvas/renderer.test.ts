@@ -7,35 +7,65 @@ import { makeCtxMock } from './test-helpers';
 // ── Shared test data ──────────────────────────────────────────────────────────
 
 const NODES: TopologyNode[] = [
-  { id: 'mimir-0',        typeId: 'mimir',     label: 'mímir',    parentId: null,         status: 'healthy' },
-  { id: 'realm-asgard',   typeId: 'realm',     label: 'asgard',   parentId: null,         status: 'healthy' },
-  { id: 'cluster-vk',     typeId: 'cluster',   label: 'valaskjálf', parentId: 'realm-asgard', status: 'healthy' },
-  { id: 'host-mjolnir',   typeId: 'host',      label: 'mjölnir',  parentId: 'realm-asgard', status: 'healthy' },
-  { id: 'tyr-0',          typeId: 'tyr',       label: 'tyr-0',    parentId: 'cluster-vk', status: 'healthy' },
-  { id: 'bifrost-0',      typeId: 'bifrost',   label: 'bifröst',  parentId: 'cluster-vk', status: 'healthy' },
-  { id: 'volundr-0',      typeId: 'volundr',   label: 'völundr',  parentId: 'cluster-vk', status: 'healthy' },
-  { id: 'ravn-huginn',    typeId: 'ravn_long', label: 'huginn',   parentId: null,         status: 'healthy' },
-  { id: 'ravn-coord',     typeId: 'ravn_raid', label: 'coord',    parentId: null,         status: 'healthy' },
-  { id: 'skuld-0',        typeId: 'skuld',     label: 'skuld',    parentId: null,         status: 'healthy' },
-  { id: 'valk-0',         typeId: 'valkyrie',  label: 'brynhildr',parentId: null,         status: 'healthy' },
-  { id: 'printer-0',      typeId: 'printer',   label: 'gungnir',  parentId: null,         status: 'healthy' },
-  { id: 'vaettir-0',      typeId: 'vaettir',   label: 'chatterbox',parentId: null,        status: 'healthy' },
-  { id: 'beacon-0',       typeId: 'beacon',    label: 'espresense',parentId: null,        status: 'healthy' },
-  { id: 'svc-0',          typeId: 'service',   label: 'grafana',  parentId: null,         status: 'healthy' },
-  { id: 'model-0',        typeId: 'model',     label: 'claude',   parentId: null,         status: 'healthy' },
-  { id: 'raid-0',         typeId: 'raid',      label: 'raid-0',   parentId: null,         status: 'observing' },
-  { id: 'mimir-sub-0',    typeId: 'mimir_sub', label: 'mímir/code',parentId: 'mimir-0',   status: 'healthy' },
+  { id: 'mimir-0', typeId: 'mimir', label: 'mímir', parentId: null, status: 'healthy' },
+  { id: 'realm-asgard', typeId: 'realm', label: 'asgard', parentId: null, status: 'healthy' },
+  {
+    id: 'cluster-vk',
+    typeId: 'cluster',
+    label: 'valaskjálf',
+    parentId: 'realm-asgard',
+    status: 'healthy',
+  },
+  {
+    id: 'host-mjolnir',
+    typeId: 'host',
+    label: 'mjölnir',
+    parentId: 'realm-asgard',
+    status: 'healthy',
+  },
+  { id: 'tyr-0', typeId: 'tyr', label: 'tyr-0', parentId: 'cluster-vk', status: 'healthy' },
+  {
+    id: 'bifrost-0',
+    typeId: 'bifrost',
+    label: 'bifröst',
+    parentId: 'cluster-vk',
+    status: 'healthy',
+  },
+  {
+    id: 'volundr-0',
+    typeId: 'volundr',
+    label: 'völundr',
+    parentId: 'cluster-vk',
+    status: 'healthy',
+  },
+  { id: 'ravn-huginn', typeId: 'ravn_long', label: 'huginn', parentId: null, status: 'healthy' },
+  { id: 'ravn-coord', typeId: 'ravn_raid', label: 'coord', parentId: null, status: 'healthy' },
+  { id: 'skuld-0', typeId: 'skuld', label: 'skuld', parentId: null, status: 'healthy' },
+  { id: 'valk-0', typeId: 'valkyrie', label: 'brynhildr', parentId: null, status: 'healthy' },
+  { id: 'printer-0', typeId: 'printer', label: 'gungnir', parentId: null, status: 'healthy' },
+  { id: 'vaettir-0', typeId: 'vaettir', label: 'chatterbox', parentId: null, status: 'healthy' },
+  { id: 'beacon-0', typeId: 'beacon', label: 'espresense', parentId: null, status: 'healthy' },
+  { id: 'svc-0', typeId: 'service', label: 'grafana', parentId: null, status: 'healthy' },
+  { id: 'model-0', typeId: 'model', label: 'claude', parentId: null, status: 'healthy' },
+  { id: 'raid-0', typeId: 'raid', label: 'raid-0', parentId: null, status: 'observing' },
+  {
+    id: 'mimir-sub-0',
+    typeId: 'mimir_sub',
+    label: 'mímir/code',
+    parentId: 'mimir-0',
+    status: 'healthy',
+  },
 ];
 
 const TOPOLOGY: Topology = {
   timestamp: '2026-04-19T00:00:00Z',
   nodes: NODES,
   edges: [
-    { id: 'e-solid',       sourceId: 'tyr-0',     targetId: 'volundr-0',  kind: 'solid' },
-    { id: 'e-dashed-anim', sourceId: 'tyr-0',     targetId: 'raid-0',     kind: 'dashed-anim' },
-    { id: 'e-dashed-long', sourceId: 'ravn-huginn',targetId: 'mimir-0',   kind: 'dashed-long' },
-    { id: 'e-soft',        sourceId: 'bifrost-0', targetId: 'mimir-0',    kind: 'soft' },
-    { id: 'e-raid',        sourceId: 'raid-0',    targetId: 'ravn-coord', kind: 'raid' },
+    { id: 'e-solid', sourceId: 'tyr-0', targetId: 'volundr-0', kind: 'solid' },
+    { id: 'e-dashed-anim', sourceId: 'tyr-0', targetId: 'raid-0', kind: 'dashed-anim' },
+    { id: 'e-dashed-long', sourceId: 'ravn-huginn', targetId: 'mimir-0', kind: 'dashed-long' },
+    { id: 'e-soft', sourceId: 'bifrost-0', targetId: 'mimir-0', kind: 'soft' },
+    { id: 'e-raid', sourceId: 'raid-0', targetId: 'ravn-coord', kind: 'raid' },
   ],
 };
 
@@ -93,7 +123,13 @@ describe('drawZones', () => {
 
   it('skips nodes with no position entry', () => {
     const ctx = makeCtxMock() as unknown as CanvasRenderingContext2D;
-    const orphan: TopologyNode = { id: 'orphan', typeId: 'realm', label: 'orphan', parentId: null, status: 'healthy' };
+    const orphan: TopologyNode = {
+      id: 'orphan',
+      typeId: 'realm',
+      label: 'orphan',
+      parentId: null,
+      status: 'healthy',
+    };
     // orphan has no entry in POSITIONS — should not throw
     expect(() => drawZones(ctx, [orphan], POSITIONS, 0)).not.toThrow();
   });
@@ -139,9 +175,11 @@ describe('drawEdges', () => {
       edges: [{ id: 'e-da', sourceId: 'tyr-0', targetId: 'raid-0', kind: 'dashed-anim' }],
     };
     drawEdges(ctx, topo, POSITIONS, 1000);
-    expect((ctx.setLineDash as ReturnType<typeof vi.fn>).mock.calls.some(
-      (call: unknown[]) => Array.isArray(call[0]) && (call[0] as number[]).length > 0
-    )).toBe(true);
+    expect(
+      (ctx.setLineDash as ReturnType<typeof vi.fn>).mock.calls.some(
+        (call: unknown[]) => Array.isArray(call[0]) && (call[0] as number[]).length > 0,
+      ),
+    ).toBe(true);
   });
 
   it('uses setLineDash([]) for solid edges (no dash)', () => {
@@ -152,9 +190,11 @@ describe('drawEdges', () => {
     };
     drawEdges(ctx, topo, POSITIONS, 0);
     // Called at least with empty array to reset dashes
-    expect((ctx.setLineDash as ReturnType<typeof vi.fn>).mock.calls.some(
-      (call: unknown[]) => Array.isArray(call[0]) && (call[0] as number[]).length === 0
-    )).toBe(true);
+    expect(
+      (ctx.setLineDash as ReturnType<typeof vi.fn>).mock.calls.some(
+        (call: unknown[]) => Array.isArray(call[0]) && (call[0] as number[]).length === 0,
+      ),
+    ).toBe(true);
   });
 });
 
@@ -165,28 +205,58 @@ describe('drawNode', () => {
 
   // Each typeId should render without throwing
   const TYPES = [
-    'tyr', 'bifrost', 'volundr', 'ravn_long', 'ravn_raid', 'skuld',
-    'valkyrie', 'printer', 'vaettir', 'beacon', 'service', 'model',
-    'raid', 'mimir_sub', 'unknown-type',
+    'tyr',
+    'bifrost',
+    'volundr',
+    'ravn_long',
+    'ravn_raid',
+    'skuld',
+    'valkyrie',
+    'printer',
+    'vaettir',
+    'beacon',
+    'service',
+    'model',
+    'raid',
+    'mimir_sub',
+    'unknown-type',
   ];
 
   for (const typeId of TYPES) {
     it(`renders typeId="${typeId}" without throwing`, () => {
       const ctx = makeCtxMock() as unknown as CanvasRenderingContext2D;
-      const node: TopologyNode = { id: `n-${typeId}`, typeId, label: typeId, parentId: null, status: 'healthy' };
+      const node: TopologyNode = {
+        id: `n-${typeId}`,
+        typeId,
+        label: typeId,
+        parentId: null,
+        status: 'healthy',
+      };
       expect(() => drawNode(ctx, node, pos, false)).not.toThrow();
     });
 
     it(`renders typeId="${typeId}" hovered without throwing`, () => {
       const ctx = makeCtxMock() as unknown as CanvasRenderingContext2D;
-      const node: TopologyNode = { id: `n-${typeId}`, typeId, label: typeId, parentId: null, status: 'healthy' };
+      const node: TopologyNode = {
+        id: `n-${typeId}`,
+        typeId,
+        label: typeId,
+        parentId: null,
+        status: 'healthy',
+      };
       expect(() => drawNode(ctx, node, pos, true)).not.toThrow();
     });
   }
 
   it('skips drawing for typeId="mimir" (handled by drawMimir)', () => {
     const ctx = makeCtxMock() as unknown as CanvasRenderingContext2D;
-    const node: TopologyNode = { id: 'mimir-0', typeId: 'mimir', label: 'mímir', parentId: null, status: 'healthy' };
+    const node: TopologyNode = {
+      id: 'mimir-0',
+      typeId: 'mimir',
+      label: 'mímir',
+      parentId: null,
+      status: 'healthy',
+    };
     drawNode(ctx, node, pos, false);
     // No drawing calls should have been made
     expect((ctx.beginPath as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
@@ -195,14 +265,26 @@ describe('drawNode', () => {
 
   it('draws host as a rounded rect (uses quadraticCurveTo)', () => {
     const ctx = makeCtxMock() as unknown as CanvasRenderingContext2D;
-    const host: TopologyNode = { id: 'h', typeId: 'host', label: 'tanngrisnir', parentId: null, status: 'healthy' };
+    const host: TopologyNode = {
+      id: 'h',
+      typeId: 'host',
+      label: 'tanngrisnir',
+      parentId: null,
+      status: 'healthy',
+    };
     drawNode(ctx, host, pos, false);
     expect((ctx.quadraticCurveTo as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
   });
 
   it('draws hover ring for hovered non-mimir non-host node', () => {
     const ctx = makeCtxMock() as unknown as CanvasRenderingContext2D;
-    const node: TopologyNode = { id: 'tyr-0', typeId: 'tyr', label: 'tyr', parentId: null, status: 'healthy' };
+    const node: TopologyNode = {
+      id: 'tyr-0',
+      typeId: 'tyr',
+      label: 'tyr',
+      parentId: null,
+      status: 'healthy',
+    };
     drawNode(ctx, node, pos, true);
     // A hover ring arc should be drawn before the shape
     expect((ctx.arc as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
@@ -211,7 +293,13 @@ describe('drawNode', () => {
 
   it('draws identity rune as fillText for tyr', () => {
     const ctx = makeCtxMock() as unknown as CanvasRenderingContext2D;
-    const node: TopologyNode = { id: 'tyr-0', typeId: 'tyr', label: 'tyr', parentId: null, status: 'healthy' };
+    const node: TopologyNode = {
+      id: 'tyr-0',
+      typeId: 'tyr',
+      label: 'tyr',
+      parentId: null,
+      status: 'healthy',
+    };
     drawNode(ctx, node, pos, false);
     const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls as [string, ...unknown[]][];
     expect(calls.some(([text]) => text === 'ᛃ')).toBe(true);
@@ -219,7 +307,13 @@ describe('drawNode', () => {
 
   it('draws identity rune as fillText for bifrost', () => {
     const ctx = makeCtxMock() as unknown as CanvasRenderingContext2D;
-    const node: TopologyNode = { id: 'bf-0', typeId: 'bifrost', label: 'bifröst', parentId: null, status: 'healthy' };
+    const node: TopologyNode = {
+      id: 'bf-0',
+      typeId: 'bifrost',
+      label: 'bifröst',
+      parentId: null,
+      status: 'healthy',
+    };
     drawNode(ctx, node, pos, false);
     const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls as [string, ...unknown[]][];
     expect(calls.some(([text]) => text === 'ᚨ')).toBe(true);
@@ -263,7 +357,9 @@ describe('drawMimir', () => {
   it('creates radial gradients for the nebula effect', () => {
     const ctx = makeCtxMock() as unknown as CanvasRenderingContext2D;
     drawMimir(ctx, { x: 0, y: 0 }, 0, 1, 'MÍMIR');
-    expect((ctx.createRadialGradient as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+    expect(
+      (ctx.createRadialGradient as ReturnType<typeof vi.fn>).mock.calls.length,
+    ).toBeGreaterThan(0);
   });
 });
 
@@ -273,7 +369,7 @@ describe('drawMinimap', () => {
   it('does not throw with full topology and valid camera', () => {
     const ctx = makeCtxMock() as unknown as CanvasRenderingContext2D;
     expect(() =>
-      drawMinimap(ctx, 220, 165, TOPOLOGY, POSITIONS, 0, 0, 1, 800, 600, 4200, 3600)
+      drawMinimap(ctx, 220, 165, TOPOLOGY, POSITIONS, 0, 0, 1, 800, 600, 4200, 3600),
     ).not.toThrow();
   });
 

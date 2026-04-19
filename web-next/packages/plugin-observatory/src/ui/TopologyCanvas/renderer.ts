@@ -13,14 +13,14 @@ import { NODE_SIZE, MIMIR_RUNES, LAYOUT } from './config';
 // ── Colour palette ────────────────────────────────────────────────────────────
 // These map directly to the ice-theme brand ramp used in the prototype.
 const C = {
-  ice:    [186, 230, 253] as const,   // brand-300
-  frost:  [125, 211, 252] as const,   // active / raid
-  moon:   [224, 242, 254] as const,   // Mímir / long ravens
-  indigo: [147, 197, 253] as const,   // Bifröst / skuld
-  slate:  [148, 163, 184] as const,   // muted labels
-  dim:    [100, 115, 140] as const,
-  model:  [140, 170, 210] as const,
-  valk:   [170, 205, 245] as const,
+  ice: [186, 230, 253] as const, // brand-300
+  frost: [125, 211, 252] as const, // active / raid
+  moon: [224, 242, 254] as const, // Mímir / long ravens
+  indigo: [147, 197, 253] as const, // Bifröst / skuld
+  slate: [148, 163, 184] as const, // muted labels
+  dim: [100, 115, 140] as const,
+  model: [140, 170, 210] as const,
+  valk: [170, 205, 245] as const,
   device: [130, 155, 185] as const,
 };
 
@@ -31,40 +31,47 @@ function rgba([r, g, b]: readonly [number, number, number], a: number): string {
 function nodeColour(typeId: string): readonly [number, number, number] {
   switch (typeId) {
     case 'tyr':
-    case 'ravn_raid': return C.frost;
+    case 'ravn_raid':
+      return C.frost;
     case 'bifrost':
-    case 'skuld': return C.indigo;
+    case 'skuld':
+      return C.indigo;
     case 'volundr':
     case 'ravn_long':
     case 'mimir':
-    case 'mimir_sub': return C.moon;
-    case 'valkyrie': return C.valk;
-    case 'model': return C.model;
+    case 'mimir_sub':
+      return C.moon;
+    case 'valkyrie':
+      return C.valk;
+    case 'model':
+      return C.model;
     case 'service':
-    case 'raid': return C.ice;
+    case 'raid':
+      return C.ice;
     case 'printer':
     case 'vaettir':
     case 'host':
-    case 'beacon': return C.device;
-    default: return C.slate;
+    case 'beacon':
+      return C.device;
+    default:
+      return C.slate;
   }
 }
 
 function identityRune(typeId: string): string {
   const map: Record<string, string> = {
-    tyr: 'ᛃ', bifrost: 'ᚨ', volundr: 'ᚲ', mimir: 'ᛗ', mimir_sub: 'ᛗ',
+    tyr: 'ᛃ',
+    bifrost: 'ᚨ',
+    volundr: 'ᚲ',
+    mimir: 'ᛗ',
+    mimir_sub: 'ᛗ',
   };
   return map[typeId] ?? '';
 }
 
 // ── Stars ─────────────────────────────────────────────────────────────────────
 
-export function drawStars(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  now: number,
-): void {
+export function drawStars(ctx: CanvasRenderingContext2D, w: number, h: number, now: number): void {
   ctx.save();
   for (let i = 0; i < 26; i++) {
     for (let j = 0; j < 14; j++) {
@@ -72,7 +79,7 @@ export function drawStars(
       const tw = 0.45 + 0.55 * Math.sin(now / 1400 + seed);
       const x = (seed * 13) % w;
       const y = (seed * 31) % h;
-      ctx.fillStyle = `rgba(186,230,253,${0.10 + 0.22 * tw})`;
+      ctx.fillStyle = `rgba(186,230,253,${0.1 + 0.22 * tw})`;
       ctx.fillRect(x, y, 1, 1);
     }
   }
@@ -300,7 +307,7 @@ export function drawMimir(
   ctx.fill();
 
   // Border
-  ctx.strokeStyle = rgba([200, 225, 255], 0.60 * Math.min(1, scale + 0.2));
+  ctx.strokeStyle = rgba([200, 225, 255], 0.6 * Math.min(1, scale + 0.2));
   ctx.lineWidth = 1.3;
   ctx.beginPath();
   ctx.arc(x, y, R, 0, Math.PI * 2);
@@ -323,7 +330,7 @@ export function drawMimir(
 
   // Label
   ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = rgba([210, 230, 255], scale >= 0.9 ? 0.9 : 0.70);
+  ctx.fillStyle = rgba([210, 230, 255], scale >= 0.9 ? 0.9 : 0.7);
   ctx.font = `600 ${Math.round(11 * Math.max(0.85, scale))}px Inter, sans-serif`;
   ctx.fillText(label, x, y + R + (scale >= 0.9 ? 42 : 22));
 }
