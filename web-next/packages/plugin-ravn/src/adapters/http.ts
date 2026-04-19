@@ -417,12 +417,12 @@ function createHttpTriggerStore(client: ApiClient): ITriggerStore {
 function createHttpBudgetStream(client: ApiClient): IBudgetStream {
   return {
     async getFleetBudget() {
-      const raw = await client.get<RawBudget>('/budget');
+      const raw = await client.get<RawRavenBudget>('/budget');
       return toBudgetState(raw);
     },
 
     async getRavenBudget(ravnId: string) {
-      const raw = await client.get<RawBudget>(`/ravens/${encodeURIComponent(ravnId)}/budget`);
+      const raw = await client.get<RawRavenBudget>(`/ravens/${encodeURIComponent(ravnId)}/budget`);
       return toBudgetState(raw);
     },
   };
