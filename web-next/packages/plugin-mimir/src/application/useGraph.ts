@@ -24,13 +24,17 @@ export function useGraph(mountName?: string): UseGraphReturn {
   const [hops, setHops] = useState(DEFAULT_HOPS);
   const service = useService<IMimirService>('mimir');
 
-  const { data: graph, isLoading, isError, error } = useQuery({
+  const {
+    data: graph,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
     queryKey: ['mimir', 'graph', mountName ?? null],
     queryFn: () => service.pages.getGraph(mountName ? { mountName } : undefined),
   });
 
-  const focusedGraph =
-    graph && focusId ? nHopSubgraph(graph, focusId, hops) : graph;
+  const focusedGraph = graph && focusId ? nHopSubgraph(graph, focusId, hops) : graph;
 
   return {
     graph,

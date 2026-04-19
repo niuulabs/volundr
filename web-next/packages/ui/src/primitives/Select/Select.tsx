@@ -40,14 +40,24 @@ export function Select({
     >
       <RadixSelect.Trigger
         id={id}
-        className={cn('niuu-form-control niuu-select__trigger', hasError && 'niuu-form-control--error niuu-select__trigger--error', className)}
+        className={cn(
+          'niuu-form-control niuu-select__trigger',
+          hasError && 'niuu-form-control--error niuu-select__trigger--error',
+          className,
+        )}
         aria-invalid={hasError || undefined}
         aria-describedby={describedBy}
       >
         <RadixSelect.Value placeholder={placeholder} />
         <RadixSelect.Icon className="niuu-select__icon" aria-hidden="true">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M2 4l4 4 4-4"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </RadixSelect.Icon>
       </RadixSelect.Trigger>
@@ -63,7 +73,13 @@ export function Select({
               >
                 <RadixSelect.ItemIndicator className="niuu-select__item-indicator">
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                    <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path
+                      d="M2 6l3 3 5-5"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                 </RadixSelect.ItemIndicator>
                 <RadixSelect.ItemText>{option.label}</RadixSelect.ItemText>

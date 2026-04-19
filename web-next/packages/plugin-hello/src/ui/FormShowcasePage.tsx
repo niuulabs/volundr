@@ -119,7 +119,9 @@ export function FormShowcasePage() {
           >
             <Input
               value={values.name}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setValues((v) => ({ ...v, name: e.target.value }))}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setValues((v) => ({ ...v, name: e.target.value }))
+              }
               placeholder="Jane Doe"
             />
           </Field>
@@ -134,7 +136,9 @@ export function FormShowcasePage() {
             <Input
               type="email"
               value={values.email}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setValues((v) => ({ ...v, email: e.target.value }))}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setValues((v) => ({ ...v, email: e.target.value }))
+              }
               placeholder="jane@example.com"
             />
           </Field>
@@ -148,7 +152,9 @@ export function FormShowcasePage() {
           >
             <Textarea
               value={values.bio}
-              onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setValues((v) => ({ ...v, bio: e.target.value }))}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+                setValues((v) => ({ ...v, bio: e.target.value }))
+              }
               placeholder="I'm a software engineer who loves…"
               rows={3}
             />

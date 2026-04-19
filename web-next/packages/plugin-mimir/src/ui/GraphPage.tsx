@@ -41,12 +41,7 @@ function GraphSvg({ graph, focusId, onNodeClick }: GraphSvgProps) {
   const posMap = new Map(positions.map((p) => [p.node.id, p]));
 
   return (
-    <svg
-      className="graph-page__svg"
-      viewBox="0 0 600 440"
-      role="img"
-      aria-label="Knowledge graph"
-    >
+    <svg className="graph-page__svg" viewBox="0 0 600 440" role="img" aria-label="Knowledge graph">
       <g className="graph-page__edges">
         {graph.edges.map((edge) => {
           const src = posMap.get(edge.source);
@@ -72,10 +67,7 @@ function GraphSvg({ graph, focusId, onNodeClick }: GraphSvgProps) {
               key={node.id}
               transform={`translate(${x},${y})`}
               onClick={() => onNodeClick(node.id)}
-              className={[
-                'graph-page__node',
-                isFocus ? 'graph-page__node--focus' : '',
-              ]
+              className={['graph-page__node', isFocus ? 'graph-page__node--focus' : '']
                 .filter(Boolean)
                 .join(' ')}
               role="button"
@@ -142,10 +134,7 @@ export function GraphPage() {
             {Array.from({ length: MAX_HOPS - MIN_HOPS + 1 }, (_, i) => i + MIN_HOPS).map((h) => (
               <button
                 key={h}
-                className={[
-                  'graph-page__hop-btn',
-                  h === hops ? 'graph-page__hop-btn--active' : '',
-                ]
+                className={['graph-page__hop-btn', h === hops ? 'graph-page__hop-btn--active' : '']
                   .filter(Boolean)
                   .join(' ')}
                 onClick={() => setHops(h)}
