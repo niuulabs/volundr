@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test('navigate to /mimir renders the page header', async ({ page }) => {
   await page.goto('/mimir');
-  await expect(page.getByRole('heading', { name: /Mímir/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Mímir/i }).first()).toBeVisible();
   await expect(page.getByText('the well of knowledge').first()).toBeVisible();
 });
 
