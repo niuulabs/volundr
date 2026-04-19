@@ -37,4 +37,22 @@ test.describe('routing', () => {
     const stored = await page.evaluate(() => localStorage.getItem('niuu.active'));
     expect(stored).toBe('hello');
   });
+
+  test('deep link /ravn renders the ravn page', async ({ page }) => {
+    await page.goto('/ravn');
+    await expect(page.getByText('Ravn · the flock')).toBeVisible();
+    await expect(page.getByText('agent fleet console — coming soon')).toBeVisible();
+  });
+
+  test('/ravn renders persona list after loading', async ({ page }) => {
+    await page.goto('/ravn');
+    await expect(page.getByText('coding-agent')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('reviewer')).toBeVisible();
+  });
+
+  test('/ravn rail button is visible', async ({ page }) => {
+    await page.goto('/ravn');
+    const ravnButton = page.getByTitle('Ravn · the flock · agent fleet console');
+    await expect(ravnButton).toBeVisible();
+  });
 });

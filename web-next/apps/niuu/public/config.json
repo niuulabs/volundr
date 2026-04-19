@@ -2,10 +2,12 @@
   "theme": "ice",
   "plugins": {
     "hello": { "enabled": true, "order": 1 },
-    "observatory": { "enabled": true, "order": 2 }
+    "observatory": { "enabled": true, "order": 2 },
+    "ravn": { "enabled": true, "order": 3 }
   },
   "services": {
     "hello": { "mode": "mock" },
-    "observatory": { "mode": "mock" }
+    "observatory": { "mode": "mock" },
+    "ravn": { "mode": "mock" }
   }
 }
