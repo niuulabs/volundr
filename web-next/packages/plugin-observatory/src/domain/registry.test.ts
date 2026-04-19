@@ -107,6 +107,11 @@ describe('wouldCreateCycle', () => {
   it('returns false for unknown target type', () => {
     expect(wouldCreateCycle(BASE_REGISTRY, 'cluster', 'nonexistent')).toBe(false);
   });
+
+  it('returns true when draggedId === targetId (self-loop)', () => {
+    expect(wouldCreateCycle(BASE_REGISTRY, 'cluster', 'cluster')).toBe(true);
+    expect(wouldCreateCycle(BASE_REGISTRY, 'realm', 'realm')).toBe(true);
+  });
 });
 
 describe('reparentType', () => {
@@ -149,5 +154,32 @@ describe('reparentType', () => {
   it('preserves all other types unchanged', () => {
     const updated = reparentType(BASE_REGISTRY, 'service', 'host');
     expect(updated.types).toHaveLength(BASE_REGISTRY.types.length);
+  });
+
+  it('returns unchanged registry when childId === newParentId (self-reparent)', () => {
+    const result = reparentType(BASE_REGISTRY, 'cluster', 'cluster');
+    expect(result).toBe(BASE_REGISTRY);
+  });
+
+  it('updates parentTypes even when child has itself in canContain', () => {
+    // Build a registry where 'cluster' has itself in canContain (self-referential edge).
+    // The old map early-returned on the canContain-removal branch and never reached parentTypes.
+    const selfRefRegistry: TypeRegistry = {
+      ...BASE_REGISTRY,
+      types: BASE_REGISTRY.types.map((t) =>
+        t.id === 'cluster' ? { ...t, canContain: ['cluster', 'service'], parentTypes: [] } : t,
+      ),
+    };
+
+    // Move cluster under realm — cycle check passes (cluster.canContain doesn't reach realm).
+    const updated = reparentType(selfRefRegistry, 'cluster', 'realm');
+    const cluster = findType(updated, 'cluster');
+
+    // parentTypes must be updated
+    expect(cluster?.parentTypes).toEqual(['realm']);
+    // self-reference must be stripped from canContain
+    expect(cluster?.canContain).not.toContain('cluster');
+    // 'service' stays since it wasn't the childId
+    expect(cluster?.canContain).toContain('service');
   });
 });

@@ -28,6 +28,8 @@ export function wouldCreateCycle(
   draggedId: string,
   targetId: string,
 ): boolean {
+  if (draggedId === targetId) return true;
+
   const visited = new Set<string>();
 
   function isDescendant(currentId: string): boolean {
@@ -57,21 +59,23 @@ export function reparentType(
   childId: string,
   newParentId: string,
 ): TypeRegistry {
+  if (childId === newParentId) return registry;
   if (wouldCreateCycle(registry, childId, newParentId)) {
     return registry;
   }
 
   const updatedTypes = registry.types.map((type) => {
-    if (type.canContain.includes(childId) && type.id !== newParentId) {
-      return { ...type, canContain: type.canContain.filter((id) => id !== childId) };
+    let result = type;
+    if (result.canContain.includes(childId) && result.id !== newParentId) {
+      result = { ...result, canContain: result.canContain.filter((id) => id !== childId) };
     }
-    if (type.id === newParentId && !type.canContain.includes(childId)) {
-      return { ...type, canContain: [...type.canContain, childId] };
+    if (result.id === newParentId && !result.canContain.includes(childId)) {
+      result = { ...result, canContain: [...result.canContain, childId] };
     }
-    if (type.id === childId) {
-      return { ...type, parentTypes: [newParentId] };
+    if (result.id === childId) {
+      result = { ...result, parentTypes: [newParentId] };
     }
-    return type;
+    return result;
   });
 
   return {
