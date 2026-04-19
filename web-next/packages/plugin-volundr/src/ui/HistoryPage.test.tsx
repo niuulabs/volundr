@@ -1,0 +1,139 @@
+import { describe, it, expect } from 'vitest';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { HistoryPage } from './HistoryPage';
+import { renderWithVolundr } from '../testing/renderWithVolundr';
+import { createMockSessionStore } from '../adapters/mock';
+
+describe('HistoryPage', () => {
+  it('renders the heading', () => {
+    renderWithVolundr(<HistoryPage />);
+    expect(screen.getByRole('heading', { name: /session history/i })).toBeInTheDocument();
+  });
+
+  it('shows loading state before sessions resolve', () => {
+    const slowStore = {
+      ...createMockSessionStore(),
+      listSessions: () => new Promise<never>(() => {}),
+    };
+    renderWithVolundr(<HistoryPage />, { sessionStore: slowStore });
+    expect(screen.getByText(/loading history/)).toBeInTheDocument();
+  });
+
+  it('renders only terminated/failed sessions', async () => {
+    renderWithVolundr(<HistoryPage />);
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBeGreaterThan(0));
+    // Seed has ds-1 (running), ds-2 (terminated), ds-3 (failed), ds-4 (terminated)
+    expect(screen.getAllByTestId('history-row').length).toBe(3);
+  });
+
+  it('shows session IDs in rows', async () => {
+    renderWithVolundr(<HistoryPage />);
+    await waitFor(() => expect(screen.getByText('ds-2')).toBeInTheDocument());
+    expect(screen.getByText('ds-3')).toBeInTheDocument();
+    expect(screen.getByText('ds-4')).toBeInTheDocument();
+    expect(screen.queryByText('ds-1')).not.toBeInTheDocument(); // running session excluded
+  });
+
+  it('shows outcome chips', async () => {
+    renderWithVolundr(<HistoryPage />);
+    await waitFor(() => expect(screen.getAllByText('terminated').length).toBeGreaterThan(0));
+    expect(screen.getByText('failed')).toBeInTheDocument();
+  });
+
+  it('shows persona names', async () => {
+    renderWithVolundr(<HistoryPage />);
+    await waitFor(() => expect(screen.getAllByText('skald').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('bard').length).toBeGreaterThan(0);
+  });
+
+  it('shows detail links', async () => {
+    renderWithVolundr(<HistoryPage />);
+    await waitFor(() =>
+      expect(screen.getAllByRole('link', { name: /details/i }).length).toBeGreaterThan(0),
+    );
+  });
+
+  it('filters rows by raven ID', async () => {
+    renderWithVolundr(<HistoryPage />);
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+    const ravnFilter = screen.getByLabelText(/raven id/i);
+    fireEvent.change(ravnFilter, { target: { value: 'r2' } });
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(2));
+    expect(screen.queryByText('ds-2')).not.toBeInTheDocument();
+    // ds-3 and ds-4 belong to r2
+    expect(screen.getByText('ds-3')).toBeInTheDocument();
+    expect(screen.getByText('ds-4')).toBeInTheDocument();
+  });
+
+  it('filters rows by persona name', async () => {
+    renderWithVolundr(<HistoryPage />);
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+    const personaFilter = screen.getByLabelText(/persona/i);
+    fireEvent.change(personaFilter, { target: { value: 'skald' } });
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(1));
+    expect(screen.getByText('ds-2')).toBeInTheDocument();
+  });
+
+  it('filters by outcome button — failed', async () => {
+    renderWithVolundr(<HistoryPage />);
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+    fireEvent.click(screen.getByRole('button', { name: 'failed' }));
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(1));
+    expect(screen.getByText('ds-3')).toBeInTheDocument();
+  });
+
+  it('clicking All outcome button restores all rows', async () => {
+    renderWithVolundr(<HistoryPage />);
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+    fireEvent.click(screen.getByRole('button', { name: 'failed' }));
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(1));
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+  });
+
+  it('shows Clear filters button when a filter is active', async () => {
+    renderWithVolundr(<HistoryPage />);
+    expect(screen.queryByRole('button', { name: /clear filters/i })).not.toBeInTheDocument();
+    const ravnFilter = screen.getByLabelText(/raven id/i);
+    fireEvent.change(ravnFilter, { target: { value: 'r1' } });
+    expect(screen.getByRole('button', { name: /clear filters/i })).toBeInTheDocument();
+  });
+
+  it('Clear filters button resets all filters', async () => {
+    renderWithVolundr(<HistoryPage />);
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+    const ravnFilter = screen.getByLabelText(/raven id/i);
+    fireEvent.change(ravnFilter, { target: { value: 'r2' } });
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(2));
+    fireEvent.click(screen.getByRole('button', { name: /clear filters/i }));
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+  });
+
+  it('shows error state when session store throws', async () => {
+    const failStore = {
+      ...createMockSessionStore(),
+      listSessions: async () => {
+        throw new Error('session store down');
+      },
+    };
+    renderWithVolundr(<HistoryPage />, { sessionStore: failStore });
+    await waitFor(() => expect(screen.getByText('session store down')).toBeInTheDocument());
+  });
+
+  it('shows empty state when no terminal sessions match', async () => {
+    const emptyStore = {
+      ...createMockSessionStore(),
+      listSessions: async () => [],
+    };
+    renderWithVolundr(<HistoryPage />, { sessionStore: emptyStore });
+    await waitFor(() =>
+      expect(screen.getByText(/no terminated sessions match/i)).toBeInTheDocument(),
+    );
+  });
+
+  it('shows saga IDs where available', async () => {
+    renderWithVolundr(<HistoryPage />);
+    await waitFor(() => expect(screen.getByText('saga-auth')).toBeInTheDocument());
+    expect(screen.getByText('saga-api')).toBeInTheDocument();
+  });
+});

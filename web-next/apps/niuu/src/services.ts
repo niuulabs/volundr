@@ -15,6 +15,9 @@ import {
 } from '@niuulabs/plugin-observatory';
 import {
   createMockVolundrService,
+  createMockClusterAdapter,
+  createMockTemplateStore,
+  createMockSessionStore,
   buildVolundrHttpAdapter,
   createMockPtyStream,
   createMockFileSystemPort,
@@ -59,6 +62,9 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     volundr,
     ptyStream: createMockPtyStream(),
     filesystem: createMockFileSystemPort(),
+    'volundr.clusters': createMockClusterAdapter(),
+    'volundr.templates': createMockTemplateStore(),
+    'volundr.sessions': createMockSessionStore(),
     'observatory.registry': createMockRegistryRepository(),
     'observatory.topology': createMockTopologyStream(),
     'observatory.events': createMockEventStream(),

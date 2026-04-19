@@ -92,5 +92,5 @@ test('RequireAuth: no redirect when auth is disabled', async ({ page }) => {
   // does NOT contain /login (auth redirect would go there).
   await page.goto('/');
   await expect(page.getByText('hello from the mock adapter')).toBeVisible({ timeout: 5000 });
-  await expect(page).not.toHaveURL(/\/login/);
+  await expect(page).toHaveURL('http://localhost:5173/hello');
 });

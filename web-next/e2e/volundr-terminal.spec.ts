@@ -32,9 +32,9 @@ test('type a command in terminal and see echoed output', async ({ page }) => {
   await page.keyboard.type('ls');
   await page.keyboard.press('Enter');
 
-  // The mock stream echoes input back. We verify the interaction didn't crash
-  // by confirming the terminal container is still present and attached.
-  await expect(container).toBeVisible({ timeout: 5_000 });
+  // The mock stream echoes input back — xterm renders it to canvas.
+  // We verify by checking the canvas element is attached (xterm renders to canvas/WebGL).
+  await expect(container.locator('canvas').first()).toBeAttached({ timeout: 5_000 });
 });
 
 test('reconnect button triggers re-subscription', async ({ page }) => {

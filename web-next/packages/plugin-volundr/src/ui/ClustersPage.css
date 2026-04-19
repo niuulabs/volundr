@@ -1,0 +1,181 @@
+.clusters-page {
+  padding: var(--space-6);
+  max-width: 960px;
+}
+
+.clusters-page__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xl);
+  color: var(--color-text-primary);
+}
+
+.clusters-page__subtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-6);
+}
+
+.clusters-page__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.clusters-page__empty {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.clusters-page__list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--space-5);
+}
+
+/* Cluster card */
+.cluster-card {
+  padding: var(--space-5);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.cluster-card__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cluster-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cluster-card__name {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--color-text-primary);
+}
+
+.cluster-card__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.cluster-card__stat {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.cluster-card__stat--queued strong {
+  color: var(--color-accent-amber);
+}
+
+/* Capacity bars */
+.cluster-card__capacity {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.cluster-card__cap {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.cluster-card__cap-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.cluster-card__cap-label {
+  color: var(--color-text-muted);
+  min-width: 4rem;
+}
+
+.cluster-card__cap-value {
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  flex: 1;
+}
+
+.cluster-card__cap-pct {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  min-width: 3rem;
+  text-align: right;
+}
+
+.cluster-card__cap-track {
+  height: 6px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.cluster-card__cap-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 300ms ease;
+}
+
+.cluster-card__cap-fill[data-tone='ok'] {
+  background: var(--color-accent-emerald);
+}
+
+.cluster-card__cap-fill[data-tone='warning'] {
+  background: var(--color-accent-amber);
+}
+
+.cluster-card__cap-fill[data-tone='critical'] {
+  background: var(--color-accent-red);
+}
+
+/* Node list */
+.cluster-card__nodes {
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-3);
+}
+
+.cluster-card__nodes-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.cluster-card__node-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.cluster-card__node {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.cluster-card__node-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  flex: 1;
+}
+
+.cluster-card__node-status {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
