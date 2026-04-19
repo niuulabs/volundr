@@ -39,20 +39,21 @@ export function ObservatoryPage() {
         style={{ flex: 1, minHeight: 0 }}
       />
 
-      {/* Node list positioned off-screen — interim click target until canvas hit-testing
-          is available in JSDOM tests (NIU-664). Invisible to sighted users. */}
+      {/* Node list — 1px click targets stacked at top-left with z-index above the
+          canvas. Interim mechanism until canvas hit-testing is connected (NIU-664). */}
       {topology && topology.nodes.length > 0 && (
         <ul
-          style={{ position: 'absolute', left: '-9999px' }}
+          style={{ position: 'absolute', top: 0, left: 0, zIndex: 9999, listStyle: 'none', padding: 0, margin: 0 }}
           data-testid="topology-node-list"
-          aria-hidden="true"
         >
           {topology.nodes.map((node) => (
             <li key={node.id}>
               <button
+                style={{ width: 1, height: 1, padding: 0, overflow: 'hidden', border: 'none', background: 'none', cursor: 'default' }}
                 onClick={() => setSelectedNode(node)}
                 data-testid={`node-btn-${node.id}`}
                 data-node-type={node.typeId}
+                aria-label={node.label}
               >
                 {node.label}
               </button>
