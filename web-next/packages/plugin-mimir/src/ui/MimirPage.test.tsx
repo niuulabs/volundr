@@ -50,8 +50,6 @@ describe('MimirPage', () => {
       },
     };
     wrap(<MimirPage />, failing);
-    await waitFor(() =>
-      expect(screen.getByText('mount service unavailable')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('mount service unavailable')).toBeInTheDocument());
   });
 });

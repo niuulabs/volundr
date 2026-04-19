@@ -94,9 +94,12 @@ const SOURCES_COLUMNS: TableColumn<Source>[] = [
 export function SourcesView() {
   const [activeOrigin, setActiveOrigin] = useState<OriginType | 'all'>('all');
 
-  const { data: sources, isLoading, isError, error } = useMimirSources(
-    activeOrigin !== 'all' ? { originType: activeOrigin } : undefined,
-  );
+  const {
+    data: sources,
+    isLoading,
+    isError,
+    error,
+  } = useMimirSources(activeOrigin !== 'all' ? { originType: activeOrigin } : undefined);
 
   return (
     <div className="mm-sources">
@@ -137,11 +140,7 @@ export function SourcesView() {
             {sources.length} source{sources.length !== 1 ? 's' : ''}
             {activeOrigin !== 'all' ? ` · origin: ${activeOrigin}` : ''}
           </p>
-          <Table<Source>
-            columns={SOURCES_COLUMNS}
-            rows={sources}
-            aria-label="sources table"
-          />
+          <Table<Source> columns={SOURCES_COLUMNS} rows={sources} aria-label="sources table" />
         </>
       )}
     </div>

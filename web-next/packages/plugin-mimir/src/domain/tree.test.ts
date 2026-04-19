@@ -69,10 +69,7 @@ describe('mergeFileTrees', () => {
   });
 
   it('merges pages from different mounts into a single tree', () => {
-    const pages = [
-      makePage('/arch/overview', ['local']),
-      makePage('/api/auth', ['shared']),
-    ];
+    const pages = [makePage('/arch/overview', ['local']), makePage('/api/auth', ['shared'])];
     const tree = mergeFileTrees(pages);
     expect(Object.keys(tree.children)).toHaveLength(2);
   });

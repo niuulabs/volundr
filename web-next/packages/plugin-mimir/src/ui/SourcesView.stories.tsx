@@ -8,9 +8,7 @@ function withProviders(ui: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <QueryClientProvider client={client}>
-      <ServicesProvider services={{ mimir: createMimirMockAdapter() }}>
-        {ui}
-      </ServicesProvider>
+      <ServicesProvider services={{ mimir: createMimirMockAdapter() }}>{ui}</ServicesProvider>
     </QueryClientProvider>
   );
 }

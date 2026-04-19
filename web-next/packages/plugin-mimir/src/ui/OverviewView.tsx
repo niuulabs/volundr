@@ -67,11 +67,7 @@ export function OverviewView() {
       {/* ── KPI strip ─────────────────────────────────────────────── */}
       <KpiStrip>
         <KpiCard label="pages" value={totalPages.toLocaleString()} />
-        <KpiCard
-          label="sources"
-          value={totalSources.toLocaleString()}
-          deltaLabel="raw ingested"
-        />
+        <KpiCard label="sources" value={totalSources.toLocaleString()} deltaLabel="raw ingested" />
         <KpiCard
           label="lint issues"
           value={totalLint}

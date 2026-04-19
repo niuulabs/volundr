@@ -189,7 +189,8 @@ const MOCK_SOURCES: Source[] = [
     ingestedAt: '2026-04-12T14:00:00Z',
     ingestAgent: 'ravn-skald',
     compiledInto: ['/api/overview'],
-    content: 'RFC for standardising REST API conventions across Niuu services. Raw SQL with asyncpg.',
+    content:
+      'RFC for standardising REST API conventions across Niuu services. Raw SQL with asyncpg.',
   },
   {
     id: 'src-004',
@@ -556,12 +557,10 @@ export function createMimirMockAdapter(): IMimirService {
         }
         if (options?.mountName) {
           // Filter sources that are attributed to pages on this mount
-          const mountPages = MOCK_PAGES.filter((p) =>
-            p.mounts.includes(options.mountName!),
-          ).map((p) => p.path);
-          sources = sources.filter((s) =>
-            s.compiledInto.some((path) => mountPages.includes(path)),
+          const mountPages = MOCK_PAGES.filter((p) => p.mounts.includes(options.mountName!)).map(
+            (p) => p.path,
           );
+          sources = sources.filter((s) => s.compiledInto.some((path) => mountPages.includes(path)));
         }
         return sources;
       },
