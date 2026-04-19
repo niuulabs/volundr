@@ -40,7 +40,7 @@ test.describe('routing', () => {
 
   test('deep link /ravn renders the ravn page', async ({ page }) => {
     await page.goto('/ravn');
-    await expect(page.getByText('Ravn · the flock').first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ravn · the flock', level: 2 })).toBeVisible();
     await expect(page.getByText('agent fleet console — coming soon')).toBeVisible();
   });
 
