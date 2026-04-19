@@ -8,7 +8,7 @@ export const pluginConfigSchema = z.object({
 
 export const serviceConfigSchema = z
   .object({
-    baseUrl: z.string().url().optional(),
+    baseUrl: z.string().optional(),
     mode: z.enum(['http', 'mock', 'ws']).default('http'),
   })
   .catchall(z.unknown());
