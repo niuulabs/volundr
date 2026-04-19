@@ -17,11 +17,7 @@ import type {
  * Components use `useService<IMimirService>('mimir')` to get hold of Mimir
  * capabilities without depending on any concrete adapter.
  */
-export interface IMimirService
-  extends IMountAdapter,
-    IPageStore,
-    IEmbeddingStore,
-    ILintEngine {
+export interface IMimirService extends IMountAdapter, IPageStore, IEmbeddingStore, ILintEngine {
   /** Tail the Mimir service log. */
   getLog(n?: number): Promise<MimirLogEntry>;
   /** Submit a document for ingest. */
