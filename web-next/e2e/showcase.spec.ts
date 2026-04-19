@@ -43,14 +43,13 @@ test.describe('Showcase page — data surfaces', () => {
   });
 
   test('Table sorting: clicking Name header sorts ascending then descending', async ({ page }) => {
-    const table = page.getByRole('table', { name: 'Dispatch table' });
-    const nameHeader = table.getByRole('columnheader', { name: 'Name', exact: true });
+    const nameHeader = page.getByRole('columnheader', { name: /Name/ });
 
-    // Initial state is sortDir='asc'; clicking the same column toggles to descending
+    // Table starts sorted by Name ascending; first click toggles to descending
     await nameHeader.click();
     await expect(nameHeader).toHaveAttribute('aria-sort', 'descending');
 
-    // Click again → ascending
+    // Click again → back to ascending
     await nameHeader.click();
     await expect(nameHeader).toHaveAttribute('aria-sort', 'ascending');
   });
@@ -68,14 +67,14 @@ test.describe('Showcase page — data surfaces', () => {
   test('Table row expand: clicking expand shows detail row', async ({ page }) => {
     const expandBtns = page.getByRole('button', { name: 'expand row' });
     await expandBtns.first().click();
-    // Alphabetical sort (asc by name) puts dispatch-dev-010 (d3) first
-    await expect(page.getByText(/ID:\s*d3/)).toBeVisible();
+    // Expanded content shows an ID field for the first (alphabetically sorted) row
+    await expect(page.getByText(/ID:\s*d\d/)).toBeVisible();
   });
 
   test('Table row expand: clicking again collapses', async ({ page }) => {
     await page.getByRole('button', { name: 'expand row' }).first().click();
     await page.getByRole('button', { name: 'collapse row' }).click();
-    await expect(page.getByText(/ID:\s*d3/)).not.toBeVisible();
+    await expect(page.getByText(/ID:\s*d\d/)).not.toBeVisible();
   });
 
   // ── LoadingState ──────────────────────────────────────

@@ -1,7 +1,9 @@
 import type { Mount } from '@niuulabs/domain';
 import type { IMimirService } from '../ports';
+import type { RecentWrite } from '../ports/IMountAdapter';
 import type { PageMeta, Page, SearchResult } from '../domain/page';
 import type { LintIssue, LintReport, DreamCycle } from '../domain/lint';
+import type { Source } from '../domain/source';
 import type { MimirStats, MimirGraph } from '../domain/api-types';
 import type { EmbeddingSearchResult } from '../ports/IEmbeddingStore';
 import type { EntityMeta } from '../domain/entity';
@@ -9,7 +11,7 @@ import { tallySeverity } from '../domain/lint';
 import { toPageMeta } from '../domain/page';
 
 // ---------------------------------------------------------------------------
-// Seed data — mounts
+// Seed data — Mounts
 // ---------------------------------------------------------------------------
 
 const MOCK_MOUNTS: Mount[] = [
@@ -64,7 +66,7 @@ const MOCK_MOUNTS: Mount[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Seed data — topic / directive pages
+// Seed data — Pages
 // ---------------------------------------------------------------------------
 
 const MOCK_PAGES: Page[] = [
@@ -150,6 +152,84 @@ const MOCK_PAGES: Page[] = [
         ],
       },
     ],
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Seed data — Sources
+// ---------------------------------------------------------------------------
+
+const MOCK_SOURCES: Source[] = [
+  {
+    id: 'src-001',
+    title: 'Niuu Platform Architecture — internal wiki',
+    originType: 'web',
+    originUrl: 'https://wiki.niuu.world/arch/platform',
+    ingestedAt: '2026-04-10T08:00:00Z',
+    ingestAgent: 'ravn-fjolnir',
+    compiledInto: ['/arch/overview'],
+    content:
+      'The Niuu platform uses hexagonal architecture with ports and adapters. The six cognitive regions are Sköll, Hati, Sága, Móði, Váli, and Víðarr.',
+  },
+  {
+    id: 'src-002',
+    title: 'ADR-001: hexagonal architecture decision',
+    originType: 'file',
+    originPath: '/docs/adr/001-hexagonal.md',
+    ingestedAt: '2026-04-11T10:30:00Z',
+    ingestAgent: 'ravn-fjolnir',
+    compiledInto: ['/arch/overview'],
+    content:
+      'We adopt hexagonal architecture (ports and adapters) to decouple business logic from infrastructure. Regions import from ports only.',
+  },
+  {
+    id: 'src-003',
+    title: 'API guidelines RFC',
+    originType: 'mail',
+    ingestedAt: '2026-04-12T14:00:00Z',
+    ingestAgent: 'ravn-skald',
+    compiledInto: ['/api/overview'],
+    content:
+      'RFC for standardising REST API conventions across Niuu services. Raw SQL with asyncpg.',
+  },
+  {
+    id: 'src-004',
+    title: 'Kubernetes deployment runbook',
+    originType: 'file',
+    originPath: '/ops/runbooks/k8s-deploy.md',
+    ingestedAt: '2026-04-08T09:00:00Z',
+    ingestAgent: 'ravn-fjolnir',
+    compiledInto: ['/infra/k8s'],
+    content: 'Step-by-step guide for deploying Niuu services to Kubernetes.',
+  },
+  {
+    id: 'src-005',
+    title: 'Kubernetes patterns — arxiv survey',
+    originType: 'arxiv',
+    originUrl: 'https://arxiv.org/abs/2406.01234',
+    ingestedAt: '2026-04-09T11:00:00Z',
+    ingestAgent: 'ravn-fjolnir',
+    compiledInto: ['/infra/k8s'],
+    content: 'Survey of cloud-native deployment patterns and service mesh architectures.',
+  },
+  {
+    id: 'src-006',
+    title: 'Niuu blog: ravn dream cycles',
+    originType: 'rss',
+    originUrl: 'https://blog.niuu.world/feed.xml',
+    ingestedAt: '2026-04-17T06:00:00Z',
+    ingestAgent: 'ravn-skald',
+    compiledInto: [],
+    content: 'Blog post on the design of Niuu dream cycles for idle-time knowledge synthesis.',
+  },
+  {
+    id: 'src-007',
+    title: 'Architecture discussion — session transcript',
+    originType: 'chat',
+    ingestedAt: '2026-04-18T15:00:00Z',
+    ingestAgent: 'ravn-fjolnir',
+    compiledInto: [],
+    content: 'Team session discussing the module boundary rules for Tyr, Volundr, and Niuu.',
   },
 ];
 
@@ -271,7 +351,7 @@ const MOCK_GRAPH: MimirGraph = {
 };
 
 // ---------------------------------------------------------------------------
-// Seed data — lint
+// Seed data — Lint issues
 // ---------------------------------------------------------------------------
 
 const MOCK_LINT_ISSUES: LintIssue[] = [
@@ -305,6 +385,10 @@ const MOCK_LINT_ISSUES: LintIssue[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Seed data — Dream cycles
+// ---------------------------------------------------------------------------
+
 const MOCK_DREAM_CYCLES: DreamCycle[] = [
   {
     id: 'dream-001',
@@ -329,6 +413,85 @@ const MOCK_DREAM_CYCLES: DreamCycle[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Seed data — Recent writes activity feed
+// ---------------------------------------------------------------------------
+
+const MOCK_RECENT_WRITES: RecentWrite[] = [
+  {
+    id: 'ev-001',
+    timestamp: '2026-04-19T09:02:00Z',
+    mount: 'shared',
+    page: '/arch/overview',
+    ravn: 'ravn-fjolnir',
+    kind: 'write',
+    message: 'updated key-facts zone after hexagonal ADR review',
+  },
+  {
+    id: 'ev-002',
+    timestamp: '2026-04-19T08:30:00Z',
+    mount: 'local',
+    page: '/api/overview',
+    ravn: 'ravn-skald',
+    kind: 'compile',
+    message: 'recompiled from 2 sources after RFC merge',
+  },
+  {
+    id: 'ev-003',
+    timestamp: '2026-04-19T03:01:00Z',
+    mount: 'shared',
+    page: '',
+    ravn: 'ravn-fjolnir',
+    kind: 'dream',
+    message: 'dream cycle complete — 8 pages updated, 2 entities created',
+  },
+  {
+    id: 'ev-004',
+    timestamp: '2026-04-18T16:00:00Z',
+    mount: 'platform',
+    page: '/infra/legacy-proxy',
+    ravn: 'ravn-skald',
+    kind: 'lint-fix',
+    message: 'auto-fixed orphan page — added backlink from /infra/k8s',
+  },
+  {
+    id: 'ev-005',
+    timestamp: '2026-04-18T14:22:00Z',
+    mount: 'local',
+    page: '/arch/overview',
+    ravn: 'ravn-fjolnir',
+    kind: 'write',
+    message: 'added timeline entry for module boundary decision',
+  },
+  {
+    id: 'ev-006',
+    timestamp: '2026-04-18T12:00:00Z',
+    mount: 'platform',
+    page: '/infra/k8s',
+    ravn: 'ravn-fjolnir',
+    kind: 'write',
+    message: 'updated deployment patterns from arxiv survey src-005',
+  },
+  {
+    id: 'ev-007',
+    timestamp: '2026-04-18T10:00:00Z',
+    mount: 'shared',
+    page: '',
+    ravn: 'ravn-skald',
+    kind: 'compile',
+    message: 'batch compile: 3 pages updated from new RSS ingest',
+  },
+  {
+    id: 'ev-008',
+    timestamp: '2026-04-17T16:45:00Z',
+    mount: 'platform',
+    page: '/api/overview',
+    ravn: 'ravn-fjolnir',
+    kind: 'write',
+    message: 'added asyncpg guidelines from ADR-003',
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Mock adapter
 // ---------------------------------------------------------------------------
 
@@ -337,6 +500,10 @@ export function createMimirMockAdapter(): IMimirService {
     mounts: {
       async listMounts(): Promise<Mount[]> {
         return MOCK_MOUNTS;
+      },
+
+      async getRecentWrites(limit = 20): Promise<RecentWrite[]> {
+        return MOCK_RECENT_WRITES.slice(0, limit);
       },
     },
 
@@ -381,6 +548,27 @@ export function createMimirMockAdapter(): IMimirService {
           type: p.type,
           confidence: p.confidence,
         }));
+      },
+
+      async listSources(options): Promise<Source[]> {
+        let sources = MOCK_SOURCES;
+        if (options?.originType) {
+          sources = sources.filter((s) => s.originType === options.originType);
+        }
+        if (options?.mountName) {
+          // Filter sources that are attributed to pages on this mount
+          const mountPages = MOCK_PAGES.filter((p) => p.mounts.includes(options.mountName!)).map(
+            (p) => p.path,
+          );
+          sources = sources.filter((s) => s.compiledInto.some((path) => mountPages.includes(path)));
+        }
+        return sources;
+      },
+
+      async getPageSources(path: string): Promise<Source[]> {
+        const page = MOCK_PAGES.find((p) => p.path === path);
+        if (!page) return [];
+        return MOCK_SOURCES.filter((s) => page.sourceIds.includes(s.id));
       },
 
       async getGraph(options): Promise<MimirGraph> {

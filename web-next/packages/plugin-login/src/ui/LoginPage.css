@@ -16,29 +16,6 @@
   --_btn-contrast: color-mix(in srgb, var(--color-bg-primary) 85%, var(--brand-500));
 }
 
-/* ── Ambient pulse background ──────────────────────────────── */
-.login-page__ambient {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    ellipse 80% 60% at 50% 50%,
-    color-mix(in srgb, var(--brand-500) 6%, transparent) 0%,
-    transparent 70%
-  );
-  animation: login-ambient-pulse 8s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes login-ambient-pulse {
-  0%,
-  100% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
 /* ── Build info banner ─────────────────────────────────────── */
 .login-page__build {
   position: absolute;

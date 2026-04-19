@@ -39,7 +39,8 @@ test.describe('UI Composites showcase', () => {
     const section = page.getByTestId('section-deploy-badge');
     const kinds = ['k8s', 'systemd', 'pi', 'mobile', 'ephemeral'];
     for (const kind of kinds) {
-      await expect(section.getByLabel(kind)).toBeVisible();
+      // DeployBadge and its inner StateDot both carry aria-label; take the first (outer badge)
+      await expect(section.getByLabel(kind).first()).toBeVisible();
     }
   });
 
@@ -55,6 +56,7 @@ test.describe('UI Composites showcase', () => {
       'failed',
     ];
     for (const state of states) {
+      // LifecycleBadge and its inner StateDot both carry aria-label; take the first (outer badge)
       await expect(section.getByLabel(state).first()).toBeVisible();
     }
   });
@@ -74,8 +76,8 @@ test.describe('UI Composites showcase', () => {
 
   test('keyboard accessibility: tab reaches the showcase content', async ({ page }) => {
     await page.keyboard.press('Tab');
-    // The page should be keyboard-navigable — focus moves into the content area
-    const focused = page.locator(':focus').first();
-    await expect(focused).toBeVisible();
+    // The page should be keyboard-navigable — focus moves to some interactive element
+    const focused = page.locator('button:focus, a:focus, input:focus, [tabindex]:focus');
+    await expect(focused.first()).toBeVisible();
   });
 });

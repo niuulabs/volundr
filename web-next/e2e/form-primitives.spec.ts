@@ -20,9 +20,7 @@ test.describe('Form primitives — /hello/form-showcase', () => {
   test('submitting empty form shows ValidationSummary with all errors', async ({ page }) => {
     await page.getByRole('button', { name: /Submit/i }).click();
 
-    // ValidationSummary is the first role="alert" element in the DOM;
-    // individual Field error spans also use role="alert" so we use .first()
-    const summary = page.getByRole('alert').first();
+    const summary = page.locator('.niuu-validation-summary');
     await expect(summary).toBeVisible();
     await expect(summary).toContainText('Please fix the following issues');
     await expect(summary).toContainText('Full name is required');
@@ -44,7 +42,7 @@ test.describe('Form primitives — /hello/form-showcase', () => {
 
   test('clicking Full name error in summary focuses the name field', async ({ page }) => {
     await page.getByRole('button', { name: /Submit/i }).click();
-    await expect(page.getByRole('alert').first()).toBeVisible();
+    await expect(page.locator('.niuu-validation-summary')).toBeVisible();
 
     const summaryButton = page.getByRole('button', { name: /Full name.*required/i });
     await summaryButton.click();
@@ -55,7 +53,7 @@ test.describe('Form primitives — /hello/form-showcase', () => {
 
   test('clicking Email error in summary focuses the email field', async ({ page }) => {
     await page.getByRole('button', { name: /Submit/i }).click();
-    await expect(page.getByRole('alert').first()).toBeVisible();
+    await expect(page.locator('.niuu-validation-summary')).toBeVisible();
 
     const summaryButton = page.getByRole('button', { name: /Email.*required/i });
     await summaryButton.click();
@@ -69,7 +67,7 @@ test.describe('Form primitives — /hello/form-showcase', () => {
     await page.getByLabel(/Email/i).fill('not-valid-email');
     await page.getByRole('button', { name: /Submit/i }).click();
 
-    await expect(page.getByRole('alert').first()).toContainText('valid email');
+    await expect(page.locator('.niuu-validation-summary')).toContainText('valid email');
   });
 
   test('filling all required fields and submitting shows success', async ({ page }) => {

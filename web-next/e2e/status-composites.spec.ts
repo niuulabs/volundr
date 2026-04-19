@@ -36,6 +36,7 @@ test.describe('status composites showcase', () => {
   test('ConfidenceBadge — renders grid including null placeholder', async ({ page }) => {
     const grid = page.getByTestId('confidence-badge-grid');
     await expect(grid).toBeVisible();
+    // Both null and 0 render '—'; use first() to avoid strict-mode violation
     await expect(grid.getByText('—').first()).toBeVisible();
   });
 
@@ -59,10 +60,12 @@ test.describe('status composites showcase', () => {
   });
 
   test('keyboard accessibility — page is tabbable', async ({ page }) => {
-    await page.locator('body').click();
+    // Wait for page content before sending Tab
+    await expect(page.getByText(/status composites/i)).toBeVisible();
     await page.keyboard.press('Tab');
-    const focused = page.locator(':focus').first();
-    await expect(focused).toBeVisible();
+    // Some focusable element (e.g. a rail button) should receive focus
+    const focused = page.locator('button:focus, a:focus, input:focus, [tabindex]:focus');
+    await expect(focused.first()).toBeVisible();
   });
 
   test('Sparkline — renders grid with 3 rows', async ({ page }) => {

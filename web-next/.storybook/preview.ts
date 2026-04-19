@@ -3,6 +3,11 @@ import '@niuulabs/design-tokens/tokens.css';
 import '@niuulabs/ui/styles.css';
 import '@niuulabs/shell/styles.css';
 import '@niuulabs/plugin-hello/styles.css';
+import '@niuulabs/plugin-login/styles.css';
+import '@niuulabs/plugin-mimir/styles.css';
+import '@niuulabs/plugin-observatory/styles.css';
+import '@niuulabs/plugin-ravn/styles.css';
+import '@niuulabs/plugin-volundr/styles.css';
 
 const preview: Preview = {
   parameters: {

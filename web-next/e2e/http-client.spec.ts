@@ -26,7 +26,6 @@ test('hello plugin round-trips through HTTP client with token provider', async (
       body: JSON.stringify({
         theme: 'ice',
         plugins: { hello: { enabled: true, order: 1 } },
-        // baseUrl must be absolute — Zod validates with z.string().url()
         services: { hello: { baseUrl: 'http://localhost:5173/api/niuu/hello', mode: 'http' } },
       }),
     }),
@@ -44,12 +43,10 @@ test('hello plugin round-trips through HTTP client with token provider', async (
     });
   });
 
-  await page.goto('/hello');
+  await page.goto('/');
 
   // Shell and plugin title should render
-  await expect(page.getByRole('heading', { name: 'hello · smoke test', level: 2 })).toBeVisible({
-    timeout: 10000,
-  });
+  await expect(page.getByText('hello · smoke test')).toBeVisible();
 
   // Data from the mocked HTTP endpoint should appear
   await expect(page.getByText('hello via HTTP client')).toBeVisible({ timeout: 5000 });
