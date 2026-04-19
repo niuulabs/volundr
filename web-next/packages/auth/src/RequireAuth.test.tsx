@@ -5,9 +5,7 @@ import { RequireAuth } from './RequireAuth';
 
 // Mock TanStack Router's Navigate component
 vi.mock('@tanstack/react-router', () => ({
-  Navigate: ({ to }: { to: string }) => (
-    <div data-testid="navigate" data-to={to} />
-  ),
+  Navigate: ({ to }: { to: string }) => <div data-testid="navigate" data-to={to} />,
 }));
 
 const baseCtx: AuthContextValue = {
@@ -37,8 +35,8 @@ describe('RequireAuth', () => {
         baseCtx,
         <RequireAuth>
           <p data-testid="protected">Protected content</p>
-        </RequireAuth>
-      )
+        </RequireAuth>,
+      ),
     );
 
     expect(screen.getByTestId('protected')).toBeInTheDocument();
@@ -58,8 +56,8 @@ describe('RequireAuth', () => {
         unauthCtx,
         <RequireAuth>
           <p data-testid="protected">Protected content</p>
-        </RequireAuth>
-      )
+        </RequireAuth>,
+      ),
     );
 
     expect(screen.queryByTestId('protected')).not.toBeInTheDocument();
@@ -79,8 +77,8 @@ describe('RequireAuth', () => {
         unauthCtx,
         <RequireAuth redirectTo="/sign-in">
           <p data-testid="protected">Protected content</p>
-        </RequireAuth>
-      )
+        </RequireAuth>,
+      ),
     );
 
     expect(screen.getByTestId('navigate')).toHaveAttribute('data-to', '/sign-in');
@@ -100,8 +98,8 @@ describe('RequireAuth', () => {
         loadingCtx,
         <RequireAuth>
           <p data-testid="protected">Protected content</p>
-        </RequireAuth>
-      )
+        </RequireAuth>,
+      ),
     );
 
     expect(screen.queryByTestId('protected')).not.toBeInTheDocument();

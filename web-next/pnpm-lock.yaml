@@ -104,6 +104,9 @@ importers:
 
   apps/niuu:
     dependencies:
+      '@niuulabs/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@niuulabs/design-tokens':
         specifier: workspace:*
         version: link:../../packages/design-tokens

@@ -124,7 +124,7 @@ describe('AuthProvider', () => {
     render(
       <AuthProvider>
         <AuthStatus />
-      </AuthProvider>
+      </AuthProvider>,
     );
 
     // When auth is disabled, loading is immediately false
@@ -138,7 +138,7 @@ describe('AuthProvider', () => {
     render(
       <AuthProvider>
         <AuthStatus />
-      </AuthProvider>
+      </AuthProvider>,
     );
 
     await screen.findByTestId('enabled');
@@ -157,7 +157,7 @@ describe('AuthProvider', () => {
     render(
       <AuthProvider>
         <AuthStatus />
-      </AuthProvider>
+      </AuthProvider>,
     );
 
     expect(await screen.findByText('Sign in')).toBeInTheDocument();
@@ -173,7 +173,7 @@ describe('AuthProvider', () => {
     render(
       <AuthProvider>
         <AuthStatus />
-      </AuthProvider>
+      </AuthProvider>,
     );
 
     const user = userEvent.setup();
@@ -195,13 +195,13 @@ describe('AuthProvider', () => {
       profile: { sub: 'user-1', email: 'test@example.com' },
     };
     vi.mocked(createUserManager).mockReturnValue(
-      createMockManager({ getUser: vi.fn().mockResolvedValue(mockUser) }) as never
+      createMockManager({ getUser: vi.fn().mockResolvedValue(mockUser) }) as never,
     );
 
     render(
       <AuthProvider>
         <AuthStatus />
-      </AuthProvider>
+      </AuthProvider>,
     );
 
     expect(await screen.findByTestId('authenticated')).toHaveTextContent('true');
@@ -218,13 +218,13 @@ describe('AuthProvider', () => {
       profile: { sub: 'user-1' },
     };
     vi.mocked(createUserManager).mockReturnValue(
-      createMockManager({ getUser: vi.fn().mockResolvedValue(expiredUser) }) as never
+      createMockManager({ getUser: vi.fn().mockResolvedValue(expiredUser) }) as never,
     );
 
     render(
       <AuthProvider>
         <AuthStatus />
-      </AuthProvider>
+      </AuthProvider>,
     );
 
     expect(await screen.findByText('Sign in')).toBeInTheDocument();
@@ -256,13 +256,13 @@ describe('AuthProvider', () => {
     vi.mocked(createUserManager).mockReturnValue(
       createMockManager({
         signinRedirectCallback: vi.fn().mockResolvedValue(callbackUser),
-      }) as never
+      }) as never,
     );
 
     render(
       <AuthProvider>
         <AuthStatus />
-      </AuthProvider>
+      </AuthProvider>,
     );
 
     expect(await screen.findByTestId('token')).toHaveTextContent('callback-tok');
@@ -287,7 +287,7 @@ describe('AuthProvider', () => {
     render(
       <AuthProvider>
         <AuthStatus />
-      </AuthProvider>
+      </AuthProvider>,
     );
 
     const user = userEvent.setup();
@@ -322,7 +322,7 @@ describe('AuthProvider', () => {
     render(
       <AuthProvider>
         <AuthStatus />
-      </AuthProvider>
+      </AuthProvider>,
     );
 
     // Wait for initial unauthenticated state
@@ -370,7 +370,7 @@ describe('AuthProvider', () => {
     render(
       <AuthProvider>
         <AuthStatus />
-      </AuthProvider>
+      </AuthProvider>,
     );
 
     // Wait for authenticated state
@@ -412,7 +412,7 @@ describe('AuthProvider', () => {
     render(
       <AuthProvider>
         <AuthStatus />
-      </AuthProvider>
+      </AuthProvider>,
     );
 
     await screen.findByText('Sign in');
@@ -437,13 +437,13 @@ describe('AuthProvider', () => {
       profile: { sub: 'user-1' },
     };
     vi.mocked(createUserManager).mockReturnValue(
-      createMockManager({ getUser: vi.fn().mockResolvedValue(mockUser) }) as never
+      createMockManager({ getUser: vi.fn().mockResolvedValue(mockUser) }) as never,
     );
 
     render(
       <AuthProvider>
         <AuthStatus />
-      </AuthProvider>
+      </AuthProvider>,
     );
 
     await screen.findByTestId('authenticated');
@@ -460,7 +460,7 @@ describe('AuthProvider', () => {
     vi.mocked(createUserManager).mockReturnValue(
       createMockManager({
         getUser: vi.fn().mockRejectedValue(new Error('network error')),
-      }) as never
+      }) as never,
     );
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -468,7 +468,7 @@ describe('AuthProvider', () => {
     render(
       <AuthProvider>
         <AuthStatus />
-      </AuthProvider>
+      </AuthProvider>,
     );
 
     expect(await screen.findByText('Sign in')).toBeInTheDocument();

@@ -16,4 +16,9 @@ export { AuthContext, type AuthContextValue } from './AuthContext';
 export type { AuthUser, AuthState, IAuthService } from './ports/auth.port';
 
 // Adapter utilities (for testing / custom wiring)
-export { buildOidcConfig, createUserManager, type OidcConfig, type AuthConfig } from './adapters/oidc';
+export {
+  buildOidcConfig,
+  createUserManager,
+  type OidcConfig,
+  type AuthConfig,
+} from './adapters/oidc';

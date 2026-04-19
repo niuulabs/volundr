@@ -23,7 +23,7 @@ describe('useAccessToken', () => {
     render(
       <AuthContext.Provider value={baseCtx}>
         <TokenDisplay />
-      </AuthContext.Provider>
+      </AuthContext.Provider>,
     );
     expect(screen.getByTestId('token')).toHaveTextContent('none');
   });
@@ -45,7 +45,7 @@ describe('useAccessToken', () => {
     render(
       <AuthContext.Provider value={ctx}>
         <TokenDisplay />
-      </AuthContext.Provider>
+      </AuthContext.Provider>,
     );
 
     expect(screen.getByTestId('token')).toHaveTextContent('bearer-xyz');

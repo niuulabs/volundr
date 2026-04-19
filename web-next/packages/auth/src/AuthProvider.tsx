@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { User } from 'oidc-client-ts';
 import { useConfig } from '@niuulabs/plugin-sdk';
 import { setTokenProvider } from '@niuulabs/query';
@@ -102,8 +95,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     async function init() {
       try {
         const isCallback =
-          window.location.search.includes('code=') ||
-          window.location.search.includes('error=');
+          window.location.search.includes('code=') || window.location.search.includes('error=');
 
         if (isCallback) {
           const callbackUser = await mgr.signinRedirectCallback();
