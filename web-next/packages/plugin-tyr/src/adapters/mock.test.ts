@@ -5,6 +5,8 @@ import {
   createMockTyrSessionService,
   createMockTrackerService,
   createMockTyrIntegrationService,
+  createMockTyrSettingsService,
+  createMockAuditLogService,
 } from './mock';
 
 // ---------------------------------------------------------------------------
@@ -74,11 +76,12 @@ describe('createMockTyrService', () => {
     expect(session.chatEndpoint).toBeNull();
   });
 
-  it('extractStructure returns found: false by default', async () => {
+  it('extractStructure returns found: true with sample structure', async () => {
     const svc = createMockTyrService();
     const result = await svc.extractStructure('some text');
-    expect(result.found).toBe(false);
-    expect(result.structure).toBeNull();
+    expect(result.found).toBe(true);
+    expect(result.structure).not.toBeNull();
+    expect(result.structure?.phases.length).toBeGreaterThan(0);
   });
 });
 
@@ -264,5 +267,166 @@ describe('createMockTyrIntegrationService', () => {
     const setup = await svc.getTelegramSetup();
     expect(setup.deeplink).toBeTruthy();
     expect(setup.token).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createMockTyrSettingsService
+// ---------------------------------------------------------------------------
+
+describe('createMockTyrSettingsService', () => {
+  it('returns flock config', async () => {
+    const svc = createMockTyrSettingsService();
+    const config = await svc.getFlockConfig();
+    expect(config.flockName).toBe('Niuu Core');
+    expect(config.defaultBaseBranch).toBe('main');
+    expect(config.defaultTrackerType).toBe('linear');
+    expect(config.maxActiveSagas).toBe(5);
+    expect(config.autoCreateMilestones).toBe(true);
+  });
+
+  it('updateFlockConfig patches the config', async () => {
+    const svc = createMockTyrSettingsService();
+    const updated = await svc.updateFlockConfig({ flockName: 'Updated Flock', maxActiveSagas: 10 });
+    expect(updated.flockName).toBe('Updated Flock');
+    expect(updated.maxActiveSagas).toBe(10);
+    expect(updated.defaultBaseBranch).toBe('main');
+  });
+
+  it('updateFlockConfig persists changes', async () => {
+    const svc = createMockTyrSettingsService();
+    await svc.updateFlockConfig({ flockName: 'Persisted' });
+    const config = await svc.getFlockConfig();
+    expect(config.flockName).toBe('Persisted');
+  });
+
+  it('returns dispatch defaults', async () => {
+    const svc = createMockTyrSettingsService();
+    const defaults = await svc.getDispatchDefaults();
+    expect(defaults.confidenceThreshold).toBe(70);
+    expect(defaults.maxConcurrentRaids).toBe(3);
+    expect(defaults.batchSize).toBe(10);
+    expect(defaults.autoContinue).toBe(false);
+    expect(defaults.retryPolicy.maxRetries).toBe(2);
+    expect(defaults.retryPolicy.retryDelaySeconds).toBe(30);
+    expect(defaults.retryPolicy.escalateOnExhaustion).toBe(true);
+  });
+
+  it('updateDispatchDefaults patches threshold', async () => {
+    const svc = createMockTyrSettingsService();
+    const updated = await svc.updateDispatchDefaults({ confidenceThreshold: 85 });
+    expect(updated.confidenceThreshold).toBe(85);
+    expect(updated.batchSize).toBe(10);
+  });
+
+  it('updateDispatchDefaults patches retryPolicy', async () => {
+    const svc = createMockTyrSettingsService();
+    const updated = await svc.updateDispatchDefaults({
+      retryPolicy: { maxRetries: 5, retryDelaySeconds: 60, escalateOnExhaustion: false },
+    });
+    expect(updated.retryPolicy.maxRetries).toBe(5);
+    expect(updated.retryPolicy.retryDelaySeconds).toBe(60);
+    expect(updated.retryPolicy.escalateOnExhaustion).toBe(false);
+  });
+
+  it('updateDispatchDefaults persists changes', async () => {
+    const svc = createMockTyrSettingsService();
+    await svc.updateDispatchDefaults({ confidenceThreshold: 90 });
+    const defaults = await svc.getDispatchDefaults();
+    expect(defaults.confidenceThreshold).toBe(90);
+  });
+
+  it('returns notification settings', async () => {
+    const svc = createMockTyrSettingsService();
+    const settings = await svc.getNotificationSettings();
+    expect(settings.channel).toBe('telegram');
+    expect(settings.onRaidPendingApproval).toBe(true);
+    expect(settings.onRaidFailed).toBe(true);
+    expect(settings.onRaidMerged).toBe(false);
+    expect(settings.webhookUrl).toBeNull();
+  });
+
+  it('updateNotificationSettings patches channel', async () => {
+    const svc = createMockTyrSettingsService();
+    const updated = await svc.updateNotificationSettings({
+      channel: 'webhook',
+      webhookUrl: 'https://example.com/hook',
+    });
+    expect(updated.channel).toBe('webhook');
+    expect(updated.webhookUrl).toBe('https://example.com/hook');
+  });
+
+  it('updateNotificationSettings persists changes', async () => {
+    const svc = createMockTyrSettingsService();
+    await svc.updateNotificationSettings({ channel: 'none' });
+    const settings = await svc.getNotificationSettings();
+    expect(settings.channel).toBe('none');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createMockAuditLogService
+// ---------------------------------------------------------------------------
+
+describe('createMockAuditLogService', () => {
+  it('returns all seed entries when no filter', async () => {
+    const svc = createMockAuditLogService();
+    const entries = await svc.listAuditEntries();
+    expect(entries.length).toBe(6);
+  });
+
+  it('filters by kinds', async () => {
+    const svc = createMockAuditLogService();
+    const entries = await svc.listAuditEntries({
+      kinds: ['raid.dispatched', 'raid.merged'],
+    });
+    expect(entries.every((e) => ['raid.dispatched', 'raid.merged'].includes(e.kind))).toBe(true);
+    expect(entries).toHaveLength(2);
+  });
+
+  it('filters by actor', async () => {
+    const svc = createMockAuditLogService();
+    const entries = await svc.listAuditEntries({ actor: 'system' });
+    expect(entries.every((e) => e.actor === 'system')).toBe(true);
+    expect(entries).toHaveLength(1);
+  });
+
+  it('filters by since', async () => {
+    const svc = createMockAuditLogService();
+    const entries = await svc.listAuditEntries({ since: '2026-01-13T00:00:00Z' });
+    expect(entries.every((e) => e.createdAt >= '2026-01-13T00:00:00Z')).toBe(true);
+  });
+
+  it('filters by until', async () => {
+    const svc = createMockAuditLogService();
+    const entries = await svc.listAuditEntries({ until: '2026-01-10T09:00:00Z' });
+    expect(entries.every((e) => e.createdAt <= '2026-01-10T09:00:00Z')).toBe(true);
+  });
+
+  it('applies limit', async () => {
+    const svc = createMockAuditLogService();
+    const entries = await svc.listAuditEntries({ limit: 2 });
+    expect(entries).toHaveLength(2);
+  });
+
+  it('returns empty array when kind filter has no matches', async () => {
+    const svc = createMockAuditLogService();
+    const entries = await svc.listAuditEntries({ kinds: ['saga.completed'] });
+    expect(entries).toHaveLength(0);
+  });
+
+  it('handles combined filters', async () => {
+    const svc = createMockAuditLogService();
+    const entries = await svc.listAuditEntries({
+      kinds: [
+        'dispatcher.started',
+        'dispatcher.stopped',
+        'dispatcher.threshold_changed',
+        'dispatcher.batch_size_changed',
+      ],
+      actor: 'system',
+    });
+    expect(entries.every((e) => e.actor === 'system')).toBe(true);
+    expect(entries.every((e) => e.kind.startsWith('dispatcher.'))).toBe(true);
   });
 });

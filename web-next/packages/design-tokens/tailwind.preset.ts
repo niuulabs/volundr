@@ -46,6 +46,11 @@ const preset = {
           bg: 'var(--color-critical-bg)',
           bo: 'var(--color-critical-bo)',
         },
+        'state-ok': 'var(--state-ok)',
+        'state-ok-bg': 'var(--state-ok-bg)',
+        'state-warn': 'var(--state-warn)',
+        'state-warn-bg': 'var(--state-warn-bg)',
+        'delta-up': 'var(--color-delta-up)',
       },
       fontFamily: {
         sans: 'var(--font-sans)',

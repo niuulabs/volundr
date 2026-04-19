@@ -84,6 +84,7 @@ export function ShellLayout() {
               active?.id === p.id && 'niuu-shell__rail-item--active',
             )}
             title={`${p.title} · ${p.subtitle}`}
+            aria-label={p.title}
             onClick={() => handleSelect(p.id)}
           >
             {p.rune}

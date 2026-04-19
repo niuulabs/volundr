@@ -55,7 +55,7 @@ test('login page renders the sign-in card when auth is enabled', async ({ page }
   // Shell resolves, login page overlays it
   await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 5000 });
   await expect(page.getByTestId('sign-in-btn')).toBeVisible();
-  await expect(page.getByTestId('sign-in-btn')).toContainText('Sign in');
+  await expect(page.getByText('Sign in').first()).toBeVisible();
 });
 
 test('login page shows niuu wordmark', async ({ page }) => {

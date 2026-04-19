@@ -5,7 +5,7 @@
  * cost) or type aliases. Implementations live in src/adapters/.
  */
 
-import type { BudgetState } from '@niuulabs/domain';
+import type { BudgetState, PersonaRole, FieldType } from '@niuulabs/domain';
 import type { Ravn } from './domain/ravn';
 import type { Session } from './domain/session';
 import type { Trigger } from './domain/trigger';
@@ -20,25 +20,35 @@ export interface PersonaLLM {
   primaryAlias: string;
   thinkingEnabled: boolean;
   maxTokens: number;
+  temperature?: number;
 }
 
 export interface PersonaProduces {
   eventType: string;
-  schemaDef: Record<string, unknown>;
+  schemaDef: Record<string, FieldType>;
+}
+
+export interface PersonaConsumesEvent {
+  name: string;
+  injects?: string[];
+  trust?: number;
 }
 
 export interface PersonaConsumes {
-  eventTypes: string[];
-  injects: string[];
+  events: PersonaConsumesEvent[];
 }
 
 export interface PersonaFanIn {
   strategy: string;
-  contributesTo: string;
+  params: Record<string, unknown>;
 }
 
 export interface PersonaSummary {
   name: string;
+  role: PersonaRole;
+  letter: string;
+  color: string;
+  summary: string;
   permissionMode: string;
   allowedTools: string[];
   iterationBudget: number;
@@ -49,17 +59,24 @@ export interface PersonaSummary {
 }
 
 export interface PersonaDetail extends PersonaSummary {
+  description: string;
   systemPromptTemplate: string;
   forbiddenTools: string[];
   llm: PersonaLLM;
   produces: PersonaProduces;
   consumes: PersonaConsumes;
-  fanIn: PersonaFanIn;
+  fanIn?: PersonaFanIn;
+  mimirWriteRouting?: 'local' | 'shared' | 'domain';
   yamlSource: string;
 }
 
 export interface PersonaCreateRequest {
   name: string;
+  role: PersonaRole;
+  letter: string;
+  color: string;
+  summary: string;
+  description: string;
   systemPromptTemplate: string;
   allowedTools: string[];
   forbiddenTools: string[];
@@ -68,11 +85,13 @@ export interface PersonaCreateRequest {
   llmPrimaryAlias: string;
   llmThinkingEnabled: boolean;
   llmMaxTokens: number;
+  llmTemperature?: number;
   producesEventType: string;
-  consumesEventTypes: string[];
-  consumesInjects: string[];
-  fanInStrategy: string;
-  fanInContributesTo: string;
+  producesSchema: Record<string, FieldType>;
+  consumesEvents: PersonaConsumesEvent[];
+  fanInStrategy?: string;
+  fanInParams?: Record<string, unknown>;
+  mimirWriteRouting?: 'local' | 'shared' | 'domain';
 }
 
 export interface PersonaForkRequest {

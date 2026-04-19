@@ -12,6 +12,14 @@ import type { DispatcherState } from './domain/dispatcher';
 import type { SessionInfo } from './domain/session';
 import type { TrackerProject, TrackerMilestone, TrackerIssue } from './domain/tracker';
 import type { Workflow } from './domain/workflow';
+import type {
+  FlockConfig,
+  DispatchDefaults,
+  NotificationSettings,
+  AuditEntry,
+  AuditFilter,
+} from './domain/settings';
+import type { ClarifyingQuestion } from './domain/plan';
 
 // Re-export domain types so consumers can import from a single location.
 export type { Saga, Phase } from './domain/saga';
@@ -19,6 +27,17 @@ export type { DispatcherState, DispatchRule } from './domain/dispatcher';
 export type { SessionInfo, TyrSessionStatus } from './domain/session';
 export type { TrackerProject, TrackerMilestone, TrackerIssue, RepoInfo } from './domain/tracker';
 export type { Workflow } from './domain/workflow';
+export type {
+  FlockConfig,
+  DispatchDefaults,
+  RetryPolicy,
+  NotificationSettings,
+  NotificationChannel,
+  AuditEntry,
+  AuditEntryKind,
+  AuditFilter,
+} from './domain/settings';
+export type { ClarifyingQuestion } from './domain/plan';
 
 // ---------------------------------------------------------------------------
 // ITyrService — saga lifecycle and planning
@@ -46,6 +65,8 @@ export interface CommitSagaRequest {
 export interface PlanSession {
   sessionId: string;
   chatEndpoint: string | null;
+  /** Clarifying questions from the planning raven. Empty when the backend omits them. */
+  questions: ClarifyingQuestion[];
 }
 
 export interface RaidSpec {
@@ -194,4 +215,97 @@ export interface IWorkflowService {
   getWorkflow(id: string): Promise<Workflow | null>;
   saveWorkflow(workflow: Workflow): Promise<Workflow>;
   deleteWorkflow(id: string): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// IDispatchBus — Sleipnir emit adapter
+// ---------------------------------------------------------------------------
+
+export interface DispatchResult {
+  /** IDs of raids that were successfully queued for execution. */
+  dispatched: string[];
+  /** Raids that could not be dispatched and why. */
+  failed: { raidId: string; reason: string }[];
+}
+
+/**
+ * Sleipnir dispatch bus port.
+ *
+ * Emits raid dispatch events to the autonomous execution queue.
+ * Implementations: RabbitMQ (production), in-memory mock (dev/test).
+ */
+export interface IDispatchBus {
+  dispatch(raidId: string): Promise<void>;
+  dispatchBatch(raidIds: string[]): Promise<DispatchResult>;
+}
+
+// ---------------------------------------------------------------------------
+// ITyrPersonaViewService — minimal persona read port (mirrors IPersonaStore)
+// Tyr Settings uses this to browse Ravn personas without duplicating the port.
+// The 'ravn.personas' service key is wired at the app level with Ravn's adapter.
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal persona summary shape needed by the Tyr settings personas browser.
+ * Shape is intentionally compatible with plugin-ravn's PersonaSummary.
+ */
+export interface TyrPersonaSummary {
+  name: string;
+  permissionMode: string;
+  allowedTools: string[];
+  iterationBudget: number;
+  isBuiltin: boolean;
+  hasOverride: boolean;
+  producesEvent: string;
+  consumesEvents: string[];
+}
+
+/**
+ * Minimal persona detail shape used by the Tyr settings YAML editor.
+ */
+export interface TyrPersonaDetail extends TyrPersonaSummary {
+  systemPromptTemplate: string;
+  forbiddenTools: string[];
+  yamlSource: string;
+}
+
+/**
+ * Minimal read-only persona port used by Tyr Settings.
+ * The consumer must wire 'ravn.personas' (or compatible) in ServicesProvider.
+ */
+export interface ITyrPersonaViewService {
+  listPersonas(filter?: 'all' | 'builtin' | 'custom'): Promise<TyrPersonaSummary[]>;
+  getPersonaYaml(name: string): Promise<string>;
+}
+
+// ---------------------------------------------------------------------------
+// ITyrSettingsService — flock config, dispatch defaults, notification settings
+// ---------------------------------------------------------------------------
+
+/**
+ * Settings service for Tyr — manages flock config, dispatch defaults,
+ * and notification settings.
+ */
+export interface ITyrSettingsService {
+  getFlockConfig(): Promise<FlockConfig>;
+  updateFlockConfig(patch: Partial<Omit<FlockConfig, 'updatedAt'>>): Promise<FlockConfig>;
+  getDispatchDefaults(): Promise<DispatchDefaults>;
+  updateDispatchDefaults(
+    patch: Partial<Omit<DispatchDefaults, 'updatedAt'>>,
+  ): Promise<DispatchDefaults>;
+  getNotificationSettings(): Promise<NotificationSettings>;
+  updateNotificationSettings(
+    patch: Partial<Omit<NotificationSettings, 'updatedAt'>>,
+  ): Promise<NotificationSettings>;
+}
+
+// ---------------------------------------------------------------------------
+// IAuditLogService — immutable audit trail for settings changes + dispatch events
+// ---------------------------------------------------------------------------
+
+/**
+ * Read-only audit log service.
+ */
+export interface IAuditLogService {
+  listAuditEntries(filter?: AuditFilter): Promise<AuditEntry[]>;
 }

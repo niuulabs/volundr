@@ -17,10 +17,16 @@ import {
   createMockTyrSessionService,
   createMockTrackerService,
   createMockWorkflowService,
+  createMockDispatchBus,
+  createMockTyrSettingsService,
+  createMockAuditLogService,
   buildTyrHttpAdapter,
   buildDispatcherHttpAdapter,
   buildTyrSessionHttpAdapter,
   buildTrackerHttpAdapter,
+  buildDispatchBusHttpAdapter,
+  buildTyrSettingsHttpAdapter,
+  buildTyrAuditLogHttpAdapter,
 } from '@niuulabs/plugin-tyr';
 import { createMimirMockAdapter, buildMimirHttpAdapter } from '@niuulabs/plugin-mimir';
 import {
@@ -33,6 +39,9 @@ import {
 } from '@niuulabs/plugin-observatory';
 import {
   createMockVolundrService,
+  createMockClusterAdapter,
+  createMockTemplateStore,
+  createMockSessionStore,
   buildVolundrHttpAdapter,
   createMockPtyStream,
   createMockMetricsStream,
@@ -126,6 +135,13 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     ? buildTrackerHttpAdapter(tyrClient)
     : createMockTrackerService();
   const workflowService = createMockWorkflowService();
+  const dispatchBus = tyrClient ? buildDispatchBusHttpAdapter(tyrClient) : createMockDispatchBus();
+  const tyrSettingsService = tyrClient
+    ? buildTyrSettingsHttpAdapter(tyrClient)
+    : createMockTyrSettingsService();
+  const tyrAuditLogService = tyrClient
+    ? buildTyrAuditLogHttpAdapter(tyrClient)
+    : createMockAuditLogService();
 
   return {
     hello,
@@ -134,6 +150,9 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     'tyr.sessions': tyrSessionService,
     'tyr.tracker': trackerService,
     'tyr.workflows': workflowService,
+    'tyr.dispatch': dispatchBus,
+    'tyr.settings': tyrSettingsService,
+    'tyr.audit': tyrAuditLogService,
     'ravn.personas': ravnPersonas,
     'ravn.ravens': ravnRavens,
     'ravn.sessions': ravnSessions,
@@ -144,6 +163,13 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     ptyStream,
     metricsStream,
     filesystem: createMockFileSystemPort(),
+    // NIU-678 pages (ClustersPage, TemplatesPage, HistoryPage)
+    'volundr.clusters': createMockClusterAdapter(),
+    'volundr.templates': createMockTemplateStore(),
+    'volundr.sessions': createMockSessionStore(),
+    // VolundrPage overview hooks (useVolundrClusters, useSessionStore)
+    clusterAdapter: createMockClusterAdapter(),
+    sessionStore: createMockSessionStore(),
     'observatory.registry': observatoryRegistry,
     'observatory.topology': observatoryTopology,
     'observatory.events': observatoryEvents,

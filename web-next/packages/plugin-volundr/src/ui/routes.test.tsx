@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { VolundrSessionRoute, VolundrArchivedRoute } from './routes';
+import { createMockSessionStore, createMockMetricsStream } from '../adapters/mock';
 import type { IPtyStream } from '../ports/IPtyStream';
 import type { IFileSystemPort } from '../ports/IFileSystemPort';
 
@@ -67,7 +68,14 @@ function wrap(ui: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ServicesProvider services={{ ptyStream: buildPtyStream(), filesystem: buildFilesystem() }}>
+      <ServicesProvider
+        services={{
+          ptyStream: buildPtyStream(),
+          filesystem: buildFilesystem(),
+          sessionStore: createMockSessionStore(),
+          metricsStream: createMockMetricsStream(),
+        }}
+      >
         {ui}
       </ServicesProvider>
     </QueryClientProvider>,

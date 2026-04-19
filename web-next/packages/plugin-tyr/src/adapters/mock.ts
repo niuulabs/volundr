@@ -13,6 +13,10 @@ import type {
   ITrackerBrowserService,
   ITyrIntegrationService,
   IWorkflowService,
+  IDispatchBus,
+  DispatchResult,
+  ITyrSettingsService,
+  IAuditLogService,
   CommitSagaRequest,
   PlanSession,
   ExtractedStructure,
@@ -20,6 +24,11 @@ import type {
   CreateIntegrationParams,
   ConnectionTestResult,
   TelegramSetupResult,
+  FlockConfig,
+  DispatchDefaults,
+  NotificationSettings,
+  AuditEntry,
+  AuditFilter,
 } from '../ports';
 import type { Saga, Phase, Raid } from '../domain/saga';
 import type { DispatcherState } from '../domain/dispatcher';
@@ -114,6 +123,67 @@ const SEED_RAIDS: Raid[] = [
     createdAt: '2026-01-13T09:00:00Z',
     updatedAt: '2026-01-13T11:00:00Z',
   },
+  // Dispatch-queue seed data — raids in dispatchable states
+  {
+    id: '00000000-0000-0000-0000-000000000012',
+    phaseId: '00000000-0000-0000-0000-000000000102',
+    trackerId: 'NIU-503',
+    name: 'Harden JWT validation',
+    description: 'Add clock-skew tolerance and token audience checks.',
+    acceptanceCriteria: ['JWT rejects tampered tokens', 'Clock skew ≤ 60s tolerated'],
+    declaredFiles: ['src/auth/jwt.ts'],
+    estimateHours: 3,
+    status: 'pending',
+    confidence: 80,
+    sessionId: null,
+    reviewerSessionId: null,
+    reviewRound: 0,
+    branch: null,
+    chronicleSummary: null,
+    retryCount: 0,
+    createdAt: '2026-01-14T08:00:00Z',
+    updatedAt: '2026-01-14T08:00:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000013',
+    phaseId: '00000000-0000-0000-0000-000000000102',
+    trackerId: 'NIU-504',
+    name: 'Write auth integration tests',
+    description: 'End-to-end tests for the full auth flow.',
+    acceptanceCriteria: ['All auth happy paths covered', 'Token expiry tested'],
+    declaredFiles: ['tests/auth/integration.test.ts'],
+    estimateHours: 5,
+    status: 'pending',
+    confidence: 45,
+    sessionId: null,
+    reviewerSessionId: null,
+    reviewRound: 0,
+    branch: null,
+    chronicleSummary: null,
+    retryCount: 0,
+    createdAt: '2026-01-14T09:00:00Z',
+    updatedAt: '2026-01-14T09:00:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000014',
+    phaseId: '00000000-0000-0000-0000-000000000102',
+    trackerId: 'NIU-505',
+    name: 'Add refresh token rotation',
+    description: 'Rotate refresh tokens on every use.',
+    acceptanceCriteria: ['Old refresh tokens invalidated on use', 'New token issued atomically'],
+    declaredFiles: ['src/auth/refresh.ts'],
+    estimateHours: 4,
+    status: 'queued',
+    confidence: 75,
+    sessionId: null,
+    reviewerSessionId: null,
+    reviewRound: 0,
+    branch: null,
+    chronicleSummary: null,
+    retryCount: 0,
+    createdAt: '2026-01-15T10:00:00Z',
+    updatedAt: '2026-01-15T10:30:00Z',
+  },
 ];
 
 const SEED_PHASES: Phase[] = [
@@ -133,7 +203,7 @@ const SEED_PHASES: Phase[] = [
     trackerId: 'NIU-M2',
     number: 2,
     name: 'Phase 2: PAT Support',
-    status: 'active',
+    status: 'complete',
     confidence: 65,
     raids: [SEED_RAIDS[1]!],
   },
@@ -142,10 +212,10 @@ const SEED_PHASES: Phase[] = [
     sagaId: '00000000-0000-0000-0000-000000000001',
     trackerId: 'NIU-M3',
     number: 3,
-    name: 'Phase 3: Hardening',
+    name: 'Phase 3: Security',
     status: 'pending',
     confidence: 50,
-    raids: [],
+    raids: [SEED_RAIDS[2]!, SEED_RAIDS[3]!, SEED_RAIDS[4]!],
   },
 ];
 
@@ -360,6 +430,91 @@ const SEED_WORKFLOWS: Workflow[] = [
   },
 ];
 
+const SEED_FLOCK_CONFIG: FlockConfig = {
+  flockName: 'Niuu Core',
+  defaultBaseBranch: 'main',
+  defaultTrackerType: 'linear',
+  defaultRepos: ['niuulabs/volundr'],
+  maxActiveSagas: 5,
+  autoCreateMilestones: true,
+  updatedAt: '2026-01-01T00:00:00Z',
+};
+
+const SEED_DISPATCH_DEFAULTS: DispatchDefaults = {
+  confidenceThreshold: 70,
+  maxConcurrentRaids: 3,
+  autoContinue: false,
+  batchSize: 10,
+  retryPolicy: {
+    maxRetries: 2,
+    retryDelaySeconds: 30,
+    escalateOnExhaustion: true,
+  },
+  updatedAt: '2026-01-01T00:00:00Z',
+};
+
+const SEED_NOTIFICATION_SETTINGS: NotificationSettings = {
+  channel: 'telegram',
+  onRaidPendingApproval: true,
+  onRaidMerged: false,
+  onRaidFailed: true,
+  onSagaComplete: true,
+  onDispatcherError: true,
+  webhookUrl: null,
+  updatedAt: '2026-01-01T00:00:00Z',
+};
+
+const SEED_AUDIT_ENTRIES: AuditEntry[] = [
+  {
+    id: '00000000-0000-0000-0000-000000000a01',
+    kind: 'settings.flock_config.updated',
+    summary: 'Updated flock name to "Niuu Core"',
+    actor: 'user-1',
+    payload: { before: { flockName: 'Old Name' }, after: { flockName: 'Niuu Core' } },
+    createdAt: '2026-01-10T08:00:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000a02',
+    kind: 'dispatcher.started',
+    summary: 'Dispatcher started',
+    actor: 'system',
+    payload: null,
+    createdAt: '2026-01-10T09:00:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000a03',
+    kind: 'raid.dispatched',
+    summary: 'Raid "Implement OIDC flow" dispatched (confidence: 90)',
+    actor: 'dispatcher',
+    payload: { raidId: '00000000-0000-0000-0000-000000000010', confidence: 90 },
+    createdAt: '2026-01-10T09:05:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000a04',
+    kind: 'raid.merged',
+    summary: 'Raid "Implement OIDC flow" merged',
+    actor: 'dispatcher',
+    payload: { raidId: '00000000-0000-0000-0000-000000000010' },
+    createdAt: '2026-01-12T14:00:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000a05',
+    kind: 'settings.dispatch_defaults.updated',
+    summary: 'Confidence threshold changed from 65 to 70',
+    actor: 'user-1',
+    payload: { before: { confidenceThreshold: 65 }, after: { confidenceThreshold: 70 } },
+    createdAt: '2026-01-13T10:00:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000a06',
+    kind: 'dispatcher.threshold_changed',
+    summary: 'Dispatch threshold set to 70',
+    actor: 'user-1',
+    payload: { threshold: 70 },
+    createdAt: '2026-01-13T10:01:00Z',
+  },
+];
+
 const SEED_INTEGRATIONS: IntegrationConnection[] = [
   {
     id: 'int-linear',
@@ -444,15 +599,140 @@ export function createMockTyrService(): ITyrService {
     },
 
     async decompose(_spec: string, _repo: string) {
-      return [];
+      // Small delay so the raiding step is visible in E2E tests
+      await new Promise<void>((r) => setTimeout(r, 500));
+      return [
+        {
+          id: 'phase-mock-1',
+          sagaId: '',
+          trackerId: '',
+          number: 1,
+          name: 'Phase 1: Foundation',
+          status: 'pending' as const,
+          confidence: 82,
+          raids: [
+            {
+              id: 'raid-mock-1',
+              phaseId: 'phase-mock-1',
+              trackerId: '',
+              name: 'Scaffold core domain models',
+              description: 'Define shared domain types and port interfaces.',
+              acceptanceCriteria: ['All types exported from index.ts', 'No circular imports'],
+              declaredFiles: ['src/domain/models.ts', 'src/ports/index.ts'],
+              estimateHours: 4,
+              status: 'pending' as const,
+              confidence: 85,
+              sessionId: null,
+              reviewerSessionId: null,
+              reviewRound: 0,
+              branch: null,
+              chronicleSummary: null,
+              retryCount: 0,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ],
+        },
+        {
+          id: 'phase-mock-2',
+          sagaId: '',
+          trackerId: '',
+          number: 2,
+          name: 'Phase 2: API layer',
+          status: 'pending' as const,
+          confidence: 75,
+          raids: [
+            {
+              id: 'raid-mock-2',
+              phaseId: 'phase-mock-2',
+              trackerId: '',
+              name: 'Implement HTTP adapters',
+              description: 'Build the REST API adapters for all service ports.',
+              acceptanceCriteria: ['All endpoints covered', 'Snake_case ↔ camelCase transform'],
+              declaredFiles: ['src/adapters/http.ts'],
+              estimateHours: 8,
+              status: 'pending' as const,
+              confidence: 78,
+              sessionId: null,
+              reviewerSessionId: null,
+              reviewRound: 0,
+              branch: null,
+              chronicleSummary: null,
+              retryCount: 0,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      ];
     },
 
     async spawnPlanSession(_spec: string, _repo: string): Promise<PlanSession> {
-      return { sessionId: `plan-${Date.now()}`, chatEndpoint: null };
+      return {
+        sessionId: `plan-${Date.now()}`,
+        chatEndpoint: null,
+        questions: [
+          {
+            id: 'q1',
+            question: 'Which target repositories should this saga operate on?',
+            hint: 'e.g. niuulabs/volundr, niuulabs/tyr',
+          },
+          {
+            id: 'q2',
+            question: 'What is the base branch agents should branch off from?',
+            hint: 'e.g. main, dev, feat/...',
+          },
+          {
+            id: 'q3',
+            question:
+              'Are there any acceptance criteria or constraints you want enforced across all raids?',
+            hint: 'e.g. all endpoints must have OpenAPI docs, no breaking API changes',
+          },
+          {
+            id: 'q4',
+            question:
+              'What is the desired confidence threshold before the dispatcher auto-continues?',
+            hint: 'e.g. 80 — raids below this will pause for operator approval',
+          },
+        ],
+      };
     },
 
     async extractStructure(_text: string): Promise<ExtractedStructure> {
-      return { found: false, structure: null };
+      return {
+        found: true,
+        structure: {
+          name: 'New Saga',
+          phases: [
+            {
+              name: 'Phase 1: Foundation',
+              raids: [
+                {
+                  name: 'Scaffold core domain models',
+                  description: 'Define shared domain types and port interfaces.',
+                  acceptanceCriteria: ['All types exported from index.ts', 'No circular imports'],
+                  declaredFiles: ['src/domain/models.ts', 'src/ports/index.ts'],
+                  estimateHours: 4,
+                  confidence: 85,
+                },
+              ],
+            },
+            {
+              name: 'Phase 2: API layer',
+              raids: [
+                {
+                  name: 'Implement HTTP adapters',
+                  description: 'Build the REST API adapters for all service ports.',
+                  acceptanceCriteria: ['All endpoints covered', 'Snake_case ↔ camelCase transform'],
+                  declaredFiles: ['src/adapters/http.ts'],
+                  estimateHours: 8,
+                  confidence: 78,
+                },
+              ],
+            },
+          ],
+        },
+      };
     },
   };
 }
@@ -559,6 +839,108 @@ export function createMockTrackerService(): ITrackerBrowserService {
         phaseSummary: { total: 0, completed: 0 },
       };
       return saga;
+    },
+  };
+}
+
+/**
+ * Create an in-memory IDispatchBus (Sleipnir stub).
+ *
+ * Immediately resolves all dispatches — callers apply optimistic updates
+ * in the UI layer. Use in tests and local development.
+ */
+export function createMockDispatchBus(): IDispatchBus {
+  return {
+    async dispatch(_raidId: string): Promise<void> {
+      // No-op in mock; UI handles optimistic status update.
+    },
+
+    async dispatchBatch(raidIds: string[]): Promise<DispatchResult> {
+      return { dispatched: raidIds, failed: [] };
+    },
+  };
+}
+
+/**
+ * Create an in-memory ITyrSettingsService.
+ */
+export function createMockTyrSettingsService(): ITyrSettingsService {
+  let flockConfig: FlockConfig = { ...SEED_FLOCK_CONFIG };
+  let dispatchDefaults: DispatchDefaults = {
+    ...SEED_DISPATCH_DEFAULTS,
+    retryPolicy: { ...SEED_DISPATCH_DEFAULTS.retryPolicy },
+  };
+  let notificationSettings: NotificationSettings = { ...SEED_NOTIFICATION_SETTINGS };
+
+  return {
+    async getFlockConfig() {
+      return { ...flockConfig };
+    },
+
+    async updateFlockConfig(patch) {
+      flockConfig = { ...flockConfig, ...patch, updatedAt: new Date().toISOString() };
+      return { ...flockConfig };
+    },
+
+    async getDispatchDefaults() {
+      return { ...dispatchDefaults, retryPolicy: { ...dispatchDefaults.retryPolicy } };
+    },
+
+    async updateDispatchDefaults(patch) {
+      const retryPolicy = patch.retryPolicy
+        ? { ...dispatchDefaults.retryPolicy, ...patch.retryPolicy }
+        : dispatchDefaults.retryPolicy;
+      dispatchDefaults = {
+        ...dispatchDefaults,
+        ...patch,
+        retryPolicy,
+        updatedAt: new Date().toISOString(),
+      };
+      return { ...dispatchDefaults, retryPolicy: { ...dispatchDefaults.retryPolicy } };
+    },
+
+    async getNotificationSettings() {
+      return { ...notificationSettings };
+    },
+
+    async updateNotificationSettings(patch) {
+      notificationSettings = {
+        ...notificationSettings,
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      };
+      return { ...notificationSettings };
+    },
+  };
+}
+
+/**
+ * Create an in-memory IAuditLogService.
+ */
+export function createMockAuditLogService(): IAuditLogService {
+  const entries: AuditEntry[] = [...SEED_AUDIT_ENTRIES];
+
+  return {
+    async listAuditEntries(filter?: AuditFilter) {
+      let result = [...entries];
+
+      if (filter?.kinds && filter.kinds.length > 0) {
+        result = result.filter((e) => filter.kinds!.includes(e.kind));
+      }
+      if (filter?.actor) {
+        result = result.filter((e) => e.actor === filter.actor);
+      }
+      if (filter?.since) {
+        result = result.filter((e) => e.createdAt >= filter.since!);
+      }
+      if (filter?.until) {
+        result = result.filter((e) => e.createdAt <= filter.until!);
+      }
+      if (filter?.limit) {
+        result = result.slice(0, filter.limit);
+      }
+
+      return result;
     },
   };
 }

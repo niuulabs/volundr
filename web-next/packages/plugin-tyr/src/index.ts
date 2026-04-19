@@ -2,6 +2,13 @@ import { createRoute } from '@tanstack/react-router';
 import { definePlugin } from '@niuulabs/plugin-sdk';
 import { TyrPage } from './ui/TyrPage';
 import { WorkflowBuilderPage } from './ui/WorkflowBuilderPage';
+import { SagasPage } from './ui/SagasPage';
+import { SagaDetailRoute } from './ui/SagaDetailPage';
+import { DispatchView } from './ui/DispatchView';
+import { SettingsPage, SettingsIndexPage } from './ui/settings/SettingsPage';
+import { SettingsRail } from './ui/settings/SettingsRail';
+import { SettingsTopbar } from './ui/settings/SettingsTopbar';
+import { PlanWizard } from './ui/PlanWizard';
 
 export const tyrPlugin = definePlugin({
   id: 'tyr',
@@ -19,7 +26,59 @@ export const tyrPlugin = definePlugin({
       path: '/tyr/workflows',
       component: WorkflowBuilderPage,
     }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/sagas',
+      component: SagasPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/sagas/$sagaId',
+      component: SagaDetailRoute,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/dispatch',
+      component: DispatchView,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings',
+      component: SettingsIndexPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/personas',
+      component: () => SettingsPage({ section: 'personas' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/flock',
+      component: () => SettingsPage({ section: 'flock' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/dispatch',
+      component: () => SettingsPage({ section: 'dispatch' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/notifications',
+      component: () => SettingsPage({ section: 'notifications' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/audit',
+      component: () => SettingsPage({ section: 'audit' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/plan',
+      component: PlanWizard,
+    }),
   ],
+  subnav: () => SettingsRail(),
+  topbarRight: () => SettingsTopbar(),
 });
 
 // Mock adapters
@@ -30,6 +89,9 @@ export {
   createMockTrackerService,
   createMockTyrIntegrationService,
   createMockWorkflowService,
+  createMockDispatchBus,
+  createMockTyrSettingsService,
+  createMockAuditLogService,
 } from './adapters/mock';
 
 // HTTP adapters
@@ -39,6 +101,9 @@ export {
   buildTyrSessionHttpAdapter,
   buildTrackerHttpAdapter,
   buildTyrIntegrationHttpAdapter,
+  buildDispatchBusHttpAdapter,
+  buildTyrSettingsHttpAdapter,
+  buildTyrAuditLogHttpAdapter,
 } from './adapters/http';
 
 // Port interfaces + request/response types
@@ -49,6 +114,13 @@ export type {
   ITrackerBrowserService,
   ITyrIntegrationService,
   IWorkflowService,
+  IDispatchBus,
+  DispatchResult,
+  ITyrSettingsService,
+  IAuditLogService,
+  ITyrPersonaViewService,
+  TyrPersonaSummary,
+  TyrPersonaDetail,
   CommitSagaRequest,
   PlanSession,
   RaidSpec,
@@ -58,6 +130,14 @@ export type {
   CreateIntegrationParams,
   ConnectionTestResult,
   TelegramSetupResult,
+  FlockConfig,
+  DispatchDefaults,
+  RetryPolicy,
+  NotificationSettings,
+  NotificationChannel,
+  AuditEntry,
+  AuditEntryKind,
+  AuditFilter,
   // Re-exported domain types
   Saga,
   Phase,
@@ -70,6 +150,19 @@ export type {
   TrackerIssue,
   RepoInfo,
 } from './ports';
+
+// Application layer — feasibility engine
+export {
+  checkFeasibility,
+  checkRavenResolution,
+  checkConfidence,
+  checkUpstreamBlocked,
+  checkClusterHealth,
+  type FeasibilityGateName,
+  type FeasibilityGate,
+  type FeasibilityResult,
+  type FeasibilityContext,
+} from './application/dispatch-feasibility';
 
 // Domain types (schemas + value objects)
 export {
@@ -121,6 +214,17 @@ export type { WorkflowIssue, WorkflowIssueKind } from './domain/workflowValidati
 // WorkflowBuilder UI
 export { WorkflowBuilder } from './ui/WorkflowBuilder';
 
+export {
+  PLAN_STEPS,
+  PLAN_STEP_LABELS,
+  planTransition,
+  canTransition,
+  stepIndex,
+  PlanTransitionError,
+  type PlanStep,
+  type ClarifyingQuestion,
+} from './domain/plan';
+
 export { tyrSessionStatusSchema, sessionInfoSchema } from './domain/session';
 
 export {
@@ -130,3 +234,14 @@ export {
   repoInfoSchema,
   type RepoInfo as TrackerRepoInfo,
 } from './domain/tracker';
+
+export {
+  flockConfigSchema,
+  dispatchDefaultsSchema,
+  retryPolicySchema,
+  notificationSettingsSchema,
+  notificationChannelSchema,
+  auditEntrySchema,
+  auditEntryKindSchema,
+  auditFilterSchema,
+} from './domain/settings';

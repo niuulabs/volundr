@@ -22,7 +22,19 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,css,md,json,yaml,yml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,css,md,json,yaml,yml}\"",
     "typecheck": "pnpm -r typecheck",
+    "bootstrap": "bash scripts/bootstrap.sh",
     "clean": "pnpm -r exec rm -rf dist node_modules .turbo && rm -rf node_modules"
+  },
+  "dependencies": {
+    "@niuulabs/design-tokens": "workspace:*",
+    "@niuulabs/ui": "workspace:*",
+    "@niuulabs/shell": "workspace:*",
+    "@niuulabs/plugin-hello": "workspace:*",
+    "@niuulabs/plugin-login": "workspace:*",
+    "@niuulabs/plugin-mimir": "workspace:*",
+    "@niuulabs/plugin-observatory": "workspace:*",
+    "@niuulabs/plugin-ravn": "workspace:*",
+    "@niuulabs/plugin-volundr": "workspace:*"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
@@ -48,6 +60,9 @@
     "eslint-plugin-storybook": "^0.11.2",
     "globals": "^15.14.0",
     "jsdom": "^26.0.0",
+    "@tanstack/react-query": "^5.62.0",
+    "lucide-react": "^0.468.0",
+    "zod": "^3.24.1",
     "postcss": "^8",
     "postcss-cli": "^11",
     "postcss-import": "^16",

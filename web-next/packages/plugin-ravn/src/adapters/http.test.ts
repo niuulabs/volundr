@@ -17,23 +17,28 @@ import type { IPersonaStore, PersonaCreateRequest } from '../ports';
 
 const rawSummary = {
   name: 'coding-agent',
-  permission_mode: 'workspace-write',
-  allowed_tools: ['file', 'git'],
+  role: 'build',
+  letter: 'C',
+  color: 'var(--color-accent-indigo)',
+  summary: 'A coding agent',
+  permission_mode: 'default',
+  allowed_tools: ['read', 'write'],
   iteration_budget: 40,
   is_builtin: true,
   has_override: false,
-  produces_event: 'code.done',
-  consumes_events: ['task.assigned'],
+  produces_event: 'code.changed',
+  consumes_events: ['code.requested'],
 };
 
 const rawDetail = {
   ...rawSummary,
+  description: 'Full coding agent description',
   system_prompt_template: 'You are a coder.',
-  forbidden_tools: ['cascade'],
-  llm: { primary_alias: 'balanced', thinking_enabled: true, max_tokens: 0 },
-  produces: { event_type: 'code.done', schema_def: {} },
-  consumes: { event_types: ['task.assigned'], injects: ['repo'] },
-  fan_in: { strategy: 'merge', contributes_to: '' },
+  forbidden_tools: [],
+  llm: { primary_alias: 'claude-sonnet-4-6', thinking_enabled: true, max_tokens: 8192 },
+  produces: { event_type: 'code.changed', schema_def: { file: 'string' } },
+  consumes: { events: [{ name: 'code.requested' }] },
+  fan_in: { strategy: 'merge', params: {} },
   yaml_source: '[built-in]',
 };
 
@@ -64,13 +69,14 @@ describe('listPersonas', () => {
     const result = await buildRavnPersonaAdapter(client).listPersonas();
     expect(result[0]).toMatchObject({
       name: 'coding-agent',
-      permissionMode: 'workspace-write',
-      allowedTools: ['file', 'git'],
+      role: 'build',
+      permissionMode: 'default',
+      allowedTools: ['read', 'write'],
       iterationBudget: 40,
       isBuiltin: true,
       hasOverride: false,
-      producesEvent: 'code.done',
-      consumesEvents: ['task.assigned'],
+      producesEvent: 'code.changed',
+      consumesEvents: ['code.requested'],
     });
   });
 
@@ -121,11 +127,11 @@ describe('getPersona', () => {
     expect(result).toMatchObject({
       name: 'coding-agent',
       systemPromptTemplate: 'You are a coder.',
-      forbiddenTools: ['cascade'],
-      llm: { primaryAlias: 'balanced', thinkingEnabled: true, maxTokens: 0 },
-      produces: { eventType: 'code.done', schemaDef: {} },
-      consumes: { eventTypes: ['task.assigned'], injects: ['repo'] },
-      fanIn: { strategy: 'merge', contributesTo: '' },
+      forbiddenTools: [],
+      llm: { primaryAlias: 'claude-sonnet-4-6', thinkingEnabled: true, maxTokens: 8192 },
+      produces: { eventType: 'code.changed', schemaDef: { file: 'string' } },
+      consumes: { events: [{ name: 'code.requested' }] },
+      fanIn: { strategy: 'merge', params: {} },
       yamlSource: '[built-in]',
     });
   });
@@ -152,19 +158,22 @@ describe('getPersonaYaml', () => {
 describe('createPersona', () => {
   const req: PersonaCreateRequest = {
     name: 'new-agent',
+    role: 'build',
+    letter: 'N',
+    color: 'var(--color-accent-cyan)',
+    summary: 'New agent',
+    description: 'New agent description',
     systemPromptTemplate: 'You are helpful.',
-    allowedTools: ['file'],
+    allowedTools: ['read'],
     forbiddenTools: [],
-    permissionMode: 'read-only',
+    permissionMode: 'default',
     iterationBudget: 10,
-    llmPrimaryAlias: 'balanced',
+    llmPrimaryAlias: 'claude-sonnet-4-6',
     llmThinkingEnabled: false,
-    llmMaxTokens: 0,
+    llmMaxTokens: 8192,
     producesEventType: '',
-    consumesEventTypes: [],
-    consumesInjects: [],
-    fanInStrategy: 'merge',
-    fanInContributesTo: '',
+    producesSchema: {},
+    consumesEvents: [],
   };
 
   it('calls POST /personas', async () => {
@@ -181,13 +190,14 @@ describe('createPersona', () => {
     const body = client.post.mock.calls[0][1] as Record<string, unknown>;
     expect(body).toMatchObject({
       name: 'new-agent',
+      role: 'build',
       system_prompt_template: 'You are helpful.',
-      allowed_tools: ['file'],
-      permission_mode: 'read-only',
+      allowed_tools: ['read'],
+      permission_mode: 'default',
       iteration_budget: 10,
-      llm_primary_alias: 'balanced',
+      llm_primary_alias: 'claude-sonnet-4-6',
       llm_thinking_enabled: false,
-      llm_max_tokens: 0,
+      llm_max_tokens: 8192,
     });
   });
 
@@ -196,7 +206,7 @@ describe('createPersona', () => {
     client.post.mockResolvedValue(rawDetail);
     const result = await buildRavnPersonaAdapter(client).createPersona(req);
     expect(result.systemPromptTemplate).toBe('You are a coder.');
-    expect(result.llm.primaryAlias).toBe('balanced');
+    expect(result.llm.primaryAlias).toBe('claude-sonnet-4-6');
   });
 });
 
@@ -207,19 +217,22 @@ describe('createPersona', () => {
 describe('updatePersona', () => {
   const req: PersonaCreateRequest = {
     name: 'coding-agent',
+    role: 'build',
+    letter: 'C',
+    color: 'var(--color-accent-indigo)',
+    summary: 'Updated',
+    description: 'Updated description',
     systemPromptTemplate: 'Updated.',
     allowedTools: [],
     forbiddenTools: [],
-    permissionMode: '',
+    permissionMode: 'default',
     iterationBudget: 0,
-    llmPrimaryAlias: '',
+    llmPrimaryAlias: 'claude-sonnet-4-6',
     llmThinkingEnabled: false,
-    llmMaxTokens: 0,
+    llmMaxTokens: 8192,
     producesEventType: '',
-    consumesEventTypes: [],
-    consumesInjects: [],
-    fanInStrategy: 'merge',
-    fanInContributesTo: '',
+    producesSchema: {},
+    consumesEvents: [],
   };
 
   it('calls PUT /personas/:name', async () => {
