@@ -7,10 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  transitionJob,
-  isTerminal,
-} from './types';
+import { transitionJob, isTerminal } from './types';
 import type {
   IngestJob,
   Page,
