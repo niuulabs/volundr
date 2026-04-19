@@ -4,6 +4,16 @@ import type { BudgetState } from '@niuulabs/domain';
 /** The available grouping keys for the Ravens split view. */
 export type GroupKey = 'location' | 'persona' | 'state' | 'none';
 
+/** Map a ravn status string to the DotState union type. */
+export function ravnStatusToDotState(
+  status: string,
+): 'running' | 'attention' | 'failed' | 'unknown' {
+  if (status === 'active') return 'running';
+  if (status === 'suspended') return 'attention';
+  if (status === 'failed') return 'failed';
+  return 'unknown';
+}
+
 /**
  * Derive a location label from a model alias.
  * In the real system this would be a field on the Ravn; for now we map
@@ -34,7 +44,7 @@ export function groupRavens(ravens: Ravn[], by: GroupKey): Record<string, Ravn[]
     else if (by === 'state') key = r.status;
     else key = modelToLocation(r.model);
 
-    groups[key] = [...(groups[key] ?? []), r];
+    (groups[key] ??= []).push(r);
   }
 
   return groups;
