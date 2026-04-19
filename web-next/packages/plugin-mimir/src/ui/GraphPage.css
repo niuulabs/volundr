@@ -133,7 +133,7 @@
 .graph-page__node-label {
   text-anchor: middle;
   fill: var(--color-text-secondary);
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-family: var(--font-sans);
   pointer-events: none;
 }

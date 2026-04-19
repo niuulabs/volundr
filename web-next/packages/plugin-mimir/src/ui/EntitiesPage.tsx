@@ -1,17 +1,9 @@
 import { useState } from 'react';
 import { Chip, StateDot } from '@niuulabs/ui';
 import { useEntities } from '../application/useEntities';
+import { ENTITY_KINDS } from '../domain/entity';
 import type { EntityKind } from '../domain/entity';
 import './EntitiesPage.css';
-
-const ENTITY_KINDS: EntityKind[] = [
-  'person',
-  'org',
-  'concept',
-  'project',
-  'component',
-  'technology',
-];
 
 const KIND_ICONS: Record<EntityKind, string> = {
   person: '👤',

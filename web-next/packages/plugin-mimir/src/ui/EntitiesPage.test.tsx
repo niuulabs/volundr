@@ -1,20 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ServicesProvider } from '@niuulabs/plugin-sdk';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { EntitiesPage } from './EntitiesPage';
 import { createMimirMockAdapter } from '../adapters/mock';
 import type { IMimirService } from '../ports';
+import { renderWithMimir } from '../testing/renderWithMimir';
 
-function wrap(ui: React.ReactNode, service?: IMimirService) {
-  const svc = service ?? createMimirMockAdapter();
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <ServicesProvider services={{ mimir: svc }}>{ui}</ServicesProvider>
-    </QueryClientProvider>,
-  );
-}
+const wrap = renderWithMimir;
 
 describe('EntitiesPage', () => {
   it('renders the page title', () => {
