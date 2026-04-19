@@ -160,9 +160,7 @@ describe('auditEntrySchema', () => {
   });
 
   it('rejects unknown kind', () => {
-    expect(() =>
-      auditEntrySchema.parse({ ...VALID_AUDIT_ENTRY, kind: 'unknown.event' }),
-    ).toThrow();
+    expect(() => auditEntrySchema.parse({ ...VALID_AUDIT_ENTRY, kind: 'unknown.event' })).toThrow();
   });
 });
 

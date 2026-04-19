@@ -30,7 +30,9 @@ export const Loading: Story = {
       const Wrapper = buildWrapper({
         'tyr.settings': {
           getNotificationSettings() {
-            return new Promise(() => { /* never resolves */ });
+            return new Promise(() => {
+              /* never resolves */
+            });
           },
         },
       });

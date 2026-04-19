@@ -63,44 +63,34 @@ describe('SettingsPage', () => {
     render(<SettingsPage section="personas" />, {
       wrapper: wrap(defaultServices()),
     });
-    await waitFor(() =>
-      expect(screen.getByText('Personas')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Personas')).toBeInTheDocument());
   });
 
   it('renders FlockConfigSection for "flock" section', async () => {
     render(<SettingsPage section="flock" />, {
       wrapper: wrap(defaultServices()),
     });
-    await waitFor(() =>
-      expect(screen.getByText('Flock Config')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Flock Config')).toBeInTheDocument());
   });
 
   it('renders DispatchDefaultsSection for "dispatch" section', async () => {
     render(<SettingsPage section="dispatch" />, {
       wrapper: wrap(defaultServices()),
     });
-    await waitFor(() =>
-      expect(screen.getByText('Dispatch Defaults')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Dispatch Defaults')).toBeInTheDocument());
   });
 
   it('renders NotificationsSection for "notifications" section', async () => {
     render(<SettingsPage section="notifications" />, {
       wrapper: wrap(defaultServices()),
     });
-    await waitFor(() =>
-      expect(screen.getByText('Notifications')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Notifications')).toBeInTheDocument());
   });
 
   it('renders AuditLogSection for "audit" section', async () => {
     render(<SettingsPage section="audit" />, {
       wrapper: wrap(defaultServices()),
     });
-    await waitFor(() =>
-      expect(screen.getByText('Audit Log')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Audit Log')).toBeInTheDocument());
   });
 });

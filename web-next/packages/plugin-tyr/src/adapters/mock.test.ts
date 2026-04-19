@@ -418,7 +418,12 @@ describe('createMockAuditLogService', () => {
   it('handles combined filters', async () => {
     const svc = createMockAuditLogService();
     const entries = await svc.listAuditEntries({
-      kinds: ['dispatcher.started', 'dispatcher.stopped', 'dispatcher.threshold_changed', 'dispatcher.batch_size_changed'],
+      kinds: [
+        'dispatcher.started',
+        'dispatcher.stopped',
+        'dispatcher.threshold_changed',
+        'dispatcher.batch_size_changed',
+      ],
       actor: 'system',
     });
     expect(entries.every((e) => e.actor === 'system')).toBe(true);

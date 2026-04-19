@@ -33,27 +33,23 @@ describe('NotificationsSection', () => {
 
   it('shows section heading', async () => {
     render(<NotificationsSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByText('Notifications')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Notifications')).toBeInTheDocument());
   });
 
   it('shows error state when service throws', async () => {
     const failing = {
-      getNotificationSettings: async () => { throw new Error('notif error'); },
+      getNotificationSettings: async () => {
+        throw new Error('notif error');
+      },
     };
     render(<NotificationsSection />, { wrapper: wrap({ 'tyr.settings': failing }) });
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     expect(screen.getByText('notif error')).toBeInTheDocument();
   });
 
   it('shows event toggle rows', async () => {
     render(<NotificationsSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByText('Raid awaiting approval')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Raid awaiting approval')).toBeInTheDocument());
     expect(screen.getByText('Raid merged')).toBeInTheDocument();
     expect(screen.getByText('Raid failed')).toBeInTheDocument();
     expect(screen.getByText('Saga complete')).toBeInTheDocument();
@@ -67,15 +63,11 @@ describe('NotificationsSection', () => {
     );
 
     fireEvent.submit(screen.getByRole('form', { name: /notification settings form/i }));
-    await waitFor(() =>
-      expect(screen.getByText('Saved')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
   });
 
   it('shows channel selection label', async () => {
     render(<NotificationsSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByText('Notification channel')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Notification channel')).toBeInTheDocument());
   });
 });

@@ -30,7 +30,9 @@ export const Loading: Story = {
       const Wrapper = buildWrapper({
         'tyr.audit': {
           listAuditEntries() {
-            return new Promise(() => { /* never resolves */ });
+            return new Promise(() => {
+              /* never resolves */
+            });
           },
         },
       });

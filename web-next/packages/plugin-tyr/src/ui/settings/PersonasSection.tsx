@@ -97,11 +97,7 @@ export function PersonasSection() {
       </p>
 
       {/* Filter tabs */}
-      <div
-        className="niuu-flex niuu-gap-1 niuu-mb-3"
-        role="tablist"
-        aria-label="Persona filter"
-      >
+      <div className="niuu-flex niuu-gap-1 niuu-mb-3" role="tablist" aria-label="Persona filter">
         {FILTER_TABS.map((tab) => (
           <button
             key={tab.value}

@@ -1,5 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { Field, Input, Select, ValidationSummary, StateDot, type ValidationError } from '@niuulabs/ui';
+import {
+  Field,
+  Input,
+  Select,
+  ValidationSummary,
+  StateDot,
+  type ValidationError,
+} from '@niuulabs/ui';
 import type { NotificationChannel, NotificationSettings } from '../../ports';
 import { useNotificationSettings, useUpdateNotificationSettings } from './useSettings';
 
@@ -42,7 +49,10 @@ function ToggleRow({ id, name, label, defaultChecked }: ToggleRowProps) {
         defaultChecked={defaultChecked}
         className="niuu-accent-brand niuu-shrink-0"
       />
-      <label htmlFor={id} className="niuu-text-sm niuu-text-text-primary niuu-select-none niuu-flex-1">
+      <label
+        htmlFor={id}
+        className="niuu-text-sm niuu-text-text-primary niuu-select-none niuu-flex-1"
+      >
         {label}
       </label>
     </div>
@@ -88,7 +98,9 @@ export function NotificationsSection() {
     return (
       <div className="niuu-flex niuu-items-center niuu-gap-2" role="status">
         <StateDot state="processing" pulse />
-        <span className="niuu-text-sm niuu-text-text-secondary">loading notification settings…</span>
+        <span className="niuu-text-sm niuu-text-text-secondary">
+          loading notification settings…
+        </span>
       </div>
     );
   }

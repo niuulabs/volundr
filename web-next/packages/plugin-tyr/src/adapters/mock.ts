@@ -778,7 +778,12 @@ export function createMockTyrSettingsService(): ITyrSettingsService {
       const retryPolicy = patch.retryPolicy
         ? { ...dispatchDefaults.retryPolicy, ...patch.retryPolicy }
         : dispatchDefaults.retryPolicy;
-      dispatchDefaults = { ...dispatchDefaults, ...patch, retryPolicy, updatedAt: new Date().toISOString() };
+      dispatchDefaults = {
+        ...dispatchDefaults,
+        ...patch,
+        retryPolicy,
+        updatedAt: new Date().toISOString(),
+      };
       return { ...dispatchDefaults, retryPolicy: { ...dispatchDefaults.retryPolicy } };
     },
 
@@ -787,7 +792,11 @@ export function createMockTyrSettingsService(): ITyrSettingsService {
     },
 
     async updateNotificationSettings(patch) {
-      notificationSettings = { ...notificationSettings, ...patch, updatedAt: new Date().toISOString() };
+      notificationSettings = {
+        ...notificationSettings,
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      };
       return { ...notificationSettings };
     },
   };

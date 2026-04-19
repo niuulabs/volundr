@@ -36,7 +36,6 @@ const SEED_PERSONAS: TyrPersonaSummary[] = [
   },
 ];
 
-
 const meta: Meta<typeof PersonasSection> = {
   title: 'Plugins / Tyr / Settings / PersonasSection',
   component: PersonasSection,
@@ -50,7 +49,9 @@ export const Data: Story = {
     (Story) => {
       const Wrapper = buildWrapper({
         'ravn.personas': {
-          async listPersonas() { return SEED_PERSONAS; },
+          async listPersonas() {
+            return SEED_PERSONAS;
+          },
           async getPersonaYaml(name: string) {
             return `name: ${name}\nmodel: claude-sonnet-4-6\niterationBudget: 40\n`;
           },
@@ -71,7 +72,9 @@ export const Loading: Story = {
       const Wrapper = buildWrapper({
         'ravn.personas': {
           listPersonas() {
-            return new Promise(() => { /* never resolves */ });
+            return new Promise(() => {
+              /* never resolves */
+            });
           },
         },
       });
@@ -108,8 +111,12 @@ export const Empty: Story = {
     (Story) => {
       const Wrapper = buildWrapper({
         'ravn.personas': {
-          async listPersonas() { return []; },
-          async getPersonaYaml() { return ''; },
+          async listPersonas() {
+            return [];
+          },
+          async getPersonaYaml() {
+            return '';
+          },
         },
       });
       return (
