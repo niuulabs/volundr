@@ -90,7 +90,7 @@ export function VolundrPage() {
               <span style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
                 {s.name}
               </span>
-              <Chip tone="default">{s.status}</Chip>
+              <Chip tone="muted">{s.status}</Chip>
               <Chip tone="brand">{s.model}</Chip>
             </li>
           ))}

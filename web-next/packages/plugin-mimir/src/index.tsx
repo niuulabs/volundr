@@ -44,6 +44,7 @@ export type {
   ILintEngine,
   SearchMode,
   EmbeddingSearchResult,
+  RecentWrite,
 } from './ports';
 export type {
   PageType,
@@ -61,3 +62,26 @@ export type {
 export type { LintRule, IssueSeverity, LintIssue, LintReport, DreamCycle } from './domain/lint';
 export type { Source, OriginType } from './domain/source';
 export type { EntityKind, EntityMeta } from './domain/entity';
+export type {
+  FileTreeDir,
+  FileTreeLeaf,
+  FileTreeItem,
+  WikilinkTarget,
+  ZoneEditState,
+  ZoneEditAction,
+} from './domain';
+export {
+  buildFileTree,
+  mergeFileTrees,
+  resolveWikilink,
+  detectBrokenWikilinks,
+  zoneEditReducer,
+} from './domain';
+
+// UI components (plugin-local; promote to @niuulabs/ui when a second plugin needs them)
+export { WikilinkPill } from './ui/components/WikilinkPill';
+export { PageTypeGlyph } from './ui/components/PageTypeGlyph';
+export { MountChip } from './ui/components/MountChip';
+export { OverviewView } from './ui/OverviewView';
+export { PagesView } from './ui/PagesView';
+export { SourcesView } from './ui/SourcesView';

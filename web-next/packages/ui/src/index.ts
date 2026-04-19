@@ -16,6 +16,7 @@ export * from './primitives/ShapeSvg';
 export * from './primitives/Sparkline';
 export * from './primitives/BudgetBar';
 export * from './primitives/BudgetRunwayBar';
+export * from './primitives/CommandPalette';
 export * from './data/Table';
 export * from './data/FilterBar';
 export * from './data/KpiStrip';
@@ -33,3 +34,6 @@ export * from './primitives/Select';
 export * from './primitives/Combobox';
 export * from './primitives/ValidationSummary';
 export { cn } from './utils/cn';
+
+/* Chat */
+export * from './chat';

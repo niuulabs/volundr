@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react';
-import { ShapeSvg, Chip } from '@niuulabs/ui';
-import type { ShapeColor } from '@niuulabs/ui';
+import { useMemo, useRef, useState } from 'react';
+import { ShapeSvg, Chip, type ShapeColor } from '@niuulabs/ui';
 import type { Registry, EntityType } from '../domain';
 import { isDescendant } from '../domain/containment';
 import { useRegistryEditor } from '../application/useRegistryEditor';
@@ -219,6 +218,9 @@ interface ContainmentTabProps {
 function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: ContainmentTabProps) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  // dragIdRef mirrors dragId but updates synchronously — dragover fires immediately
+  // after dragstart in headless/CDP environments, before React can flush the state update.
+  const dragIdRef = useRef<string | null>(null);
 
   const byId = useMemo(() => new Map(registry.types.map((t) => [t.id, t])), [registry.types]);
 
@@ -253,6 +255,7 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
   };
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
+    dragIdRef.current = id;
     setDragId(id);
     try {
       if (e.dataTransfer) {
@@ -265,8 +268,10 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
   };
 
   const handleDragOver = (e: React.DragEvent, targetId: string) => {
-    if (!dragId) return;
-    const invalid = isDescendant(registry, dragId, targetId, byId) || dragId === targetId;
+    const currentDragId = dragIdRef.current;
+    if (!currentDragId) return;
+    const invalid =
+      isDescendant(registry, currentDragId, targetId, byId) || currentDragId === targetId;
     try {
       if (e.dataTransfer) e.dataTransfer.dropEffect = invalid ? 'none' : 'move';
     } catch {
@@ -285,14 +290,15 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
 
   const handleDrop = (e: React.DragEvent, targetId: string) => {
     e.preventDefault();
-    // Prefer state value; fall back to dataTransfer for fast-firing synthetic events.
-    const childId = dragId ?? e.dataTransfer?.getData('text/plain') ?? null;
-    if (childId) tryReparent(childId, targetId);
+    const sourceId = dragIdRef.current;
+    if (sourceId) tryReparent(sourceId, targetId);
+    dragIdRef.current = null;
     setDragId(null);
     setOverId(null);
   };
 
   const handleDragEnd = () => {
+    dragIdRef.current = null;
     setDragId(null);
     setOverId(null);
   };

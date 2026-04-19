@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+  workflow_dispatch:
 
 permissions: read-all
 
@@ -86,6 +87,7 @@ jobs:
         run: |
           HEAD="${{ github.head_ref }}"
           BASE="${{ github.base_ref }}"
+          BRANCH="${{ github.ref }}"
           # web-next scaffold branches: run only the web-next test suite.
           # Python backend + web/ frontend tests are disabled here to speed up
           # the new UI build. Revert when web-next reaches parity.
@@ -94,8 +96,10 @@ jobs:
           #   - feat/web-next-*                      (legacy scaffold branches)
           #   - feat/niuu-web-*                      (current scaffold: feat/niuu-web-composable-plugin-ui)
           #   - niu-<ticket> targeting either of the above (child PRs)
+          #   - refs/heads/niu-* pushed directly / dispatched (workflow_dispatch)
           if [[ "$HEAD" == feat/web-next* ]] || [[ "$BASE" == feat/web-next* ]] \
-             || [[ "$HEAD" == feat/niuu-web* ]] || [[ "$BASE" == feat/niuu-web* ]]; then
+             || [[ "$HEAD" == feat/niuu-web* ]] || [[ "$BASE" == feat/niuu-web* ]] \
+             || [[ "$BRANCH" == refs/heads/niu-* ]]; then
             echo "python=false" >> $GITHUB_OUTPUT
             echo "web=false" >> $GITHUB_OUTPUT
             echo "helm=false" >> $GITHUB_OUTPUT
@@ -116,10 +120,12 @@ jobs:
         run: |
           # PRs targeting feat/* branches run a light pipeline (lint + unit tests).
           # PRs targeting dev or main run the full pipeline.
+          # workflow_dispatch on niu-* branches is always light.
           BASE="${{ github.base_ref }}"
-          if [[ "$BASE" == feat/* ]]; then
+          BRANCH="${{ github.ref }}"
+          if [[ "$BASE" == feat/* ]] || [[ "$BRANCH" == refs/heads/niu-* ]]; then
             echo "level=light" >> $GITHUB_OUTPUT
-            echo "Pipeline tier: light (PR targets ${BASE})"
+            echo "Pipeline tier: light (PR targets ${BASE:-dispatch from ${BRANCH}})"
           else
             echo "level=full" >> $GITHUB_OUTPUT
             echo "Pipeline tier: full (PR targets ${BASE})"
