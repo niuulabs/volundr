@@ -77,6 +77,9 @@ importers:
       jsdom:
         specifier: ^26.0.0
         version: 26.1.0
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.5)
       postcss:
         specifier: ^8
         version: 8.5.10
