@@ -56,3 +56,17 @@ export {
 } from './domain/session';
 export { triggerKindSchema, triggerSchema, type TriggerKind, type Trigger } from './domain/trigger';
 export { messageKindSchema, messageSchema, type MessageKind, type Message } from './domain/message';
+
+// Application logic
+export {
+  classifyBudget,
+  budgetRunway,
+  budgetRatio,
+  type BudgetAttention,
+} from './application/budgetAttention';
+export {
+  applyLogFilter,
+  EMPTY_LOG_FILTER,
+  type LogEntry,
+  type LogFilter,
+} from './application/logFilter';

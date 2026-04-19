@@ -1,47 +1,73 @@
-import { Rune, StateDot } from '@niuulabs/ui';
-import { usePersonas } from './usePersonas';
+/**
+ * RavnPage — the main Ravn plugin page with five sub-views.
+ *
+ * Tabs: Sessions | Triggers | Events | Budget | Log
+ */
+
+import { useState } from 'react';
+import { Rune } from '@niuulabs/ui';
+import { SessionsView } from './SessionsView';
+import { TriggersView } from './TriggersView';
+import { EventsView } from './EventsView';
+import { BudgetView } from './BudgetView';
+import { LogView } from './LogView';
+import './ravn-views.css';
+
+type Tab = 'sessions' | 'triggers' | 'events' | 'budget' | 'log';
+
+const TABS: Array<{ id: Tab; label: string }> = [
+  { id: 'sessions', label: 'Sessions' },
+  { id: 'triggers', label: 'Triggers' },
+  { id: 'events', label: 'Events' },
+  { id: 'budget', label: 'Budget' },
+  { id: 'log', label: 'Log' },
+];
 
 export function RavnPage() {
-  const { data, isLoading, isError, error } = usePersonas();
+  const [activeTab, setActiveTab] = useState<Tab>('sessions');
 
   return (
-    <div style={{ padding: 'var(--space-6)', maxWidth: 720 }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-3)',
-          marginBottom: 'var(--space-4)',
-        }}
-      >
-        <Rune glyph="ᚱ" size={32} />
-        <h2 style={{ margin: 0 }}>ravn · personas · ravens · sessions</h2>
+    <div className="rv-page-shell">
+      {/* ── Page header ──────────────────────────────────────────────── */}
+      <div className="rv-page-header">
+        <Rune glyph="ᚱ" size={28} />
+        <div>
+          <h2>Ravn</h2>
+          <p className="rv-page-subtitle">personas · ravens · sessions · triggers · events · budget · log</p>
+        </div>
       </div>
 
-      <p style={{ color: 'var(--color-text-secondary)' }}>
-        Ravn is the canonical authority for Persona, ToolRegistry, EventCatalog, and BudgetState.
-        This placeholder will be replaced by the full Ravn UI.
-      </p>
+      {/* ── Tab bar ──────────────────────────────────────────────────── */}
+      <nav className="rv-tabs" aria-label="Ravn views" role="tablist">
+        {TABS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === id}
+            aria-controls={`ravn-panel-${id}`}
+            id={`ravn-tab-${id}`}
+            className={`rv-tab${activeTab === id ? ' rv-tab--active' : ''}`}
+            onClick={() => setActiveTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
 
-      {isLoading && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <StateDot state="processing" pulse />
-          <span>loading personas…</span>
-        </div>
-      )}
-
-      {isError && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <StateDot state="failed" />
-          <span>{error instanceof Error ? error.message : 'unknown error'}</span>
-        </div>
-      )}
-
-      {data && (
-        <p style={{ color: 'var(--color-text-secondary)' }}>
-          {data.length} persona{data.length !== 1 ? 's' : ''} loaded.
-        </p>
-      )}
+      {/* ── View panels ──────────────────────────────────────────────── */}
+      <div
+        id={`ravn-panel-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`ravn-tab-${activeTab}`}
+        className="rv-tabpanel"
+      >
+        {activeTab === 'sessions' && <SessionsView />}
+        {activeTab === 'triggers' && <TriggersView />}
+        {activeTab === 'events' && <EventsView />}
+        {activeTab === 'budget' && <BudgetView />}
+        {activeTab === 'log' && <LogView />}
+      </div>
     </div>
   );
 }
