@@ -1,6 +1,8 @@
 import { createRoute } from '@tanstack/react-router';
 import { definePlugin } from '@niuulabs/plugin-sdk';
 import { TyrPage } from './ui/TyrPage';
+import { SagasPage } from './ui/SagasPage';
+import { SagaDetailRoute } from './ui/SagaDetailPage';
 
 export const tyrPlugin = definePlugin({
   id: 'tyr',
@@ -12,6 +14,16 @@ export const tyrPlugin = definePlugin({
       getParentRoute: () => rootRoute,
       path: '/tyr',
       component: TyrPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/sagas',
+      component: SagasPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/sagas/$sagaId',
+      component: SagaDetailRoute,
     }),
   ],
 });
