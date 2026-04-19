@@ -151,7 +151,7 @@ function mockStoredCredential(req: CredentialCreateRequest): StoredCredential {
 }
 
 function mockIntegration(
-  connection: Omit<IntegrationConnection, 'id' | 'createdAt' | 'updatedAt'>
+  connection: Omit<IntegrationConnection, 'id' | 'createdAt' | 'updatedAt'>,
 ): IntegrationConnection {
   return { ...connection, id: 'mock-integration', createdAt: NOW, updatedAt: NOW };
 }
@@ -174,26 +174,60 @@ export function createMockVolundrService(): IVolundrService {
   };
 
   return {
-    async getFeatures() { return features; },
-    async getSessions() { return []; },
-    async getSession(_id) { return null; },
-    async getActiveSessions() { return []; },
-    async getStats() { return stats; },
-    async getModels() { return {}; },
-    async getRepos() { return []; },
-    subscribe(_cb) { return () => undefined; },
-    subscribeStats(_cb) { return () => undefined; },
-    async getTemplates() { return []; },
-    async getTemplate(_name) { return null; },
-    async saveTemplate(template) { return template; },
-    async getPresets() { return [mockPreset()]; },
-    async getPreset(_id) { return mockPreset(); },
+    async getFeatures() {
+      return features;
+    },
+    async getSessions() {
+      return [];
+    },
+    async getSession(_id) {
+      return null;
+    },
+    async getActiveSessions() {
+      return [];
+    },
+    async getStats() {
+      return stats;
+    },
+    async getModels() {
+      return {};
+    },
+    async getRepos() {
+      return [];
+    },
+    subscribe(_cb) {
+      return () => undefined;
+    },
+    subscribeStats(_cb) {
+      return () => undefined;
+    },
+    async getTemplates() {
+      return [];
+    },
+    async getTemplate(_name) {
+      return null;
+    },
+    async saveTemplate(template) {
+      return template;
+    },
+    async getPresets() {
+      return [mockPreset()];
+    },
+    async getPreset(_id) {
+      return mockPreset();
+    },
     async savePreset(preset) {
       return mockPreset(preset.id ?? 'mock-preset');
     },
-    async deletePreset(_id) { return; },
-    async getAvailableMcpServers() { return []; },
-    async getAvailableSecrets() { return []; },
+    async deletePreset(_id) {
+      return;
+    },
+    async getAvailableMcpServers() {
+      return [];
+    },
+    async getAvailableSecrets() {
+      return [];
+    },
     async createSecret(name, data) {
       return { name, keys: Object.keys(data) };
     },
@@ -209,13 +243,27 @@ export function createMockVolundrService(): IVolundrService {
     async updateSession(_id, updates) {
       return mockSession({ ...updates });
     },
-    async stopSession(_id) { return; },
-    async resumeSession(_id) { return; },
-    async deleteSession(_id, _cleanup) { return; },
-    async archiveSession(_id) { return; },
-    async restoreSession(_id) { return; },
-    async listArchivedSessions() { return []; },
-    async getMessages(_id) { return []; },
+    async stopSession(_id) {
+      return;
+    },
+    async resumeSession(_id) {
+      return;
+    },
+    async deleteSession(_id, _cleanup) {
+      return;
+    },
+    async archiveSession(_id) {
+      return;
+    },
+    async restoreSession(_id) {
+      return;
+    },
+    async listArchivedSessions() {
+      return [];
+    },
+    async getMessages(_id) {
+      return [];
+    },
     async sendMessage(sessionId, content) {
       return {
         id: 'mock-msg-1',
@@ -225,13 +273,27 @@ export function createMockVolundrService(): IVolundrService {
         timestamp: Date.now(),
       };
     },
-    subscribeMessages(_id, _cb) { return () => undefined; },
-    async getLogs(_id, _limit) { return []; },
-    subscribeLogs(_id, _cb) { return () => undefined; },
-    async getCodeServerUrl(_id) { return null; },
-    async getChronicle(_id) { return null; },
-    subscribeChronicle(_id, _cb) { return () => undefined; },
-    async getPullRequests(_repoUrl, _status) { return []; },
+    subscribeMessages(_id, _cb) {
+      return () => undefined;
+    },
+    async getLogs(_id, _limit) {
+      return [];
+    },
+    subscribeLogs(_id, _cb) {
+      return () => undefined;
+    },
+    async getCodeServerUrl(_id) {
+      return null;
+    },
+    async getChronicle(_id) {
+      return null;
+    },
+    subscribeChronicle(_id, _cb) {
+      return () => undefined;
+    },
+    async getPullRequests(_repoUrl, _status) {
+      return [];
+    },
     async createPullRequest(_id, _title, _branch) {
       return mockPullRequest();
     },
@@ -241,52 +303,114 @@ export function createMockVolundrService(): IVolundrService {
     async getCIStatus(_prNumber, _repoUrl, _branch) {
       return 'unknown';
     },
-    async getSessionMcpServers(_id) { return []; },
-    async searchTrackerIssues(_query, _projectId) { return []; },
-    async getProjectRepoMappings() { return []; },
+    async getSessionMcpServers(_id) {
+      return [];
+    },
+    async searchTrackerIssues(_query, _projectId) {
+      return [];
+    },
+    async getProjectRepoMappings() {
+      return [];
+    },
     async updateTrackerIssueStatus(issueId, _status) {
       return mockTrackerIssue(issueId);
     },
-    async getIdentity() { return mockIdentity(); },
-    async listUsers() { return []; },
-    async getTenants() { return [mockTenant()]; },
-    async getTenant(id) { return mockTenant(id); },
+    async getIdentity() {
+      return mockIdentity();
+    },
+    async listUsers() {
+      return [];
+    },
+    async getTenants() {
+      return [mockTenant()];
+    },
+    async getTenant(id) {
+      return mockTenant(id);
+    },
     async createTenant(data) {
       return { id: 'new-tenant', path: 'new-tenant', createdAt: NOW, ...data };
     },
-    async deleteTenant(_id) { return; },
+    async deleteTenant(_id) {
+      return;
+    },
     async updateTenant(id, data) {
       return { ...mockTenant(id), ...data };
     },
-    async getTenantMembers(_tenantId) { return []; },
+    async getTenantMembers(_tenantId) {
+      return [];
+    },
     async reprovisionUser(userId): Promise<VolundrProvisioningResult> {
       return { success: true, userId, errors: [] };
     },
-    async reprovisionTenant(_tenantId) { return []; },
-    async getUserCredentials() { return []; },
-    async storeUserCredential(_name, _data) { return; },
-    async deleteUserCredential(_name) { return; },
-    async getTenantCredentials() { return []; },
-    async storeTenantCredential(_name, _data) { return; },
-    async deleteTenantCredential(_name) { return; },
-    async getIntegrationCatalog() { return []; },
-    async getIntegrations() { return []; },
-    async createIntegration(connection) { return mockIntegration(connection); },
-    async deleteIntegration(_id) { return; },
-    async testIntegration(_id) { return { success: true, message: 'ok' }; },
-    async getCredentials(_type) { return []; },
-    async getCredential(_name) { return null; },
-    async createCredential(req) { return mockStoredCredential(req); },
-    async deleteCredential(_name) { return; },
-    async getCredentialTypes() { return []; },
-    async listWorkspaces(_status) { return []; },
-    async listAllWorkspaces(_status) { return []; },
-    async restoreWorkspace(_id) { return; },
-    async deleteWorkspace(_id) { return; },
+    async reprovisionTenant(_tenantId) {
+      return [];
+    },
+    async getUserCredentials() {
+      return [];
+    },
+    async storeUserCredential(_name, _data) {
+      return;
+    },
+    async deleteUserCredential(_name) {
+      return;
+    },
+    async getTenantCredentials() {
+      return [];
+    },
+    async storeTenantCredential(_name, _data) {
+      return;
+    },
+    async deleteTenantCredential(_name) {
+      return;
+    },
+    async getIntegrationCatalog() {
+      return [];
+    },
+    async getIntegrations() {
+      return [];
+    },
+    async createIntegration(connection) {
+      return mockIntegration(connection);
+    },
+    async deleteIntegration(_id) {
+      return;
+    },
+    async testIntegration(_id) {
+      return { success: true, message: 'ok' };
+    },
+    async getCredentials(_type) {
+      return [];
+    },
+    async getCredential(_name) {
+      return null;
+    },
+    async createCredential(req) {
+      return mockStoredCredential(req);
+    },
+    async deleteCredential(_name) {
+      return;
+    },
+    async getCredentialTypes() {
+      return [];
+    },
+    async listWorkspaces(_status) {
+      return [];
+    },
+    async listAllWorkspaces(_status) {
+      return [];
+    },
+    async restoreWorkspace(_id) {
+      return;
+    },
+    async deleteWorkspace(_id) {
+      return;
+    },
     async bulkDeleteWorkspaces(sessionIds) {
       return { deleted: sessionIds.length, failed: [] };
     },
-    async getAdminSettings() { return mockAdminSettings(); },
+    async getAdminSettings() {
+      return mockAdminSettings();
+    },
     async updateAdminSettings(data) {
       const base = mockAdminSettings();
       return { storage: { ...base.storage, ...data.storage } };
@@ -294,14 +418,24 @@ export function createMockVolundrService(): IVolundrService {
     async getFeatureModules(_scope) {
       return [mockFeatureModule('volundr')];
     },
-    async toggleFeature(key, enabled) { return mockFeatureModule(key, enabled); },
-    async getUserFeaturePreferences(): Promise<UserFeaturePreference[]> { return []; },
-    async updateUserFeaturePreferences(prefs) { return prefs; },
-    async listTokens() { return []; },
+    async toggleFeature(key, enabled) {
+      return mockFeatureModule(key, enabled);
+    },
+    async getUserFeaturePreferences(): Promise<UserFeaturePreference[]> {
+      return [];
+    },
+    async updateUserFeaturePreferences(prefs) {
+      return prefs;
+    },
+    async listTokens() {
+      return [];
+    },
     async createToken(name): Promise<CreatePATResult> {
       return { id: 'mock-pat', name, token: 'mock-token-value', createdAt: NOW };
     },
-    async revokeToken(_id) { return; },
+    async revokeToken(_id) {
+      return;
+    },
   };
 }
 
@@ -322,10 +456,18 @@ function mockCluster(id = 'mock-cluster'): Cluster {
 
 export function createMockClusterAdapter(): IClusterAdapter {
   return {
-    async getCluster(clusterId) { return mockCluster(clusterId); },
-    async listClusters() { return [mockCluster()]; },
-    async scheduleSession(_session, _podSpec) { return 'mock-pod-name'; },
-    async releaseSession(_session) { return; },
+    async getCluster(clusterId) {
+      return mockCluster(clusterId);
+    },
+    async listClusters() {
+      return [mockCluster()];
+    },
+    async scheduleSession(_session, _podSpec) {
+      return 'mock-pod-name';
+    },
+    async releaseSession(_session) {
+      return;
+    },
   };
 }
 
@@ -335,7 +477,9 @@ export function createMockSessionStore(): ISessionStore {
   const store = new Map<string, Session>();
 
   return {
-    async get(id) { return store.get(id) ?? null; },
+    async get(id) {
+      return store.get(id) ?? null;
+    },
     async list(filter) {
       const all = [...store.values()];
       if (!filter) return all;
@@ -361,8 +505,12 @@ export function createMockTemplateStore(): ITemplateStore {
   const store = new Map<string, Template>();
 
   return {
-    async get(id) { return store.get(id) ?? null; },
-    async list() { return [...store.values()]; },
+    async get(id) {
+      return store.get(id) ?? null;
+    },
+    async list() {
+      return [...store.values()];
+    },
     async save(template) {
       store.set(template.id, template);
       return template;
@@ -388,7 +536,9 @@ export function createMockPtyStream(): IPtyStream {
   }
 
   return {
-    async connect(_sessionId) { return; },
+    async connect(_sessionId) {
+      return;
+    },
     async write(sessionId, data) {
       const set = subs.get(sessionId);
       if (!set) return;
@@ -398,7 +548,9 @@ export function createMockPtyStream(): IPtyStream {
     subscribe(sessionId, callback) {
       const set = getOrCreate(sessionId);
       set.add(callback);
-      return () => { set.delete(callback); };
+      return () => {
+        set.delete(callback);
+      };
     },
     async disconnect(sessionId) {
       subs.delete(sessionId);
