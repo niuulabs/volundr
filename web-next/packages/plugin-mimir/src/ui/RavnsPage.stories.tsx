@@ -11,13 +11,16 @@ function makeClient() {
 
 function withMimir(service?: IMimirService) {
   const svc = service ?? createMimirMockAdapter();
-  return (Story: React.ComponentType) => (
-    <QueryClientProvider client={makeClient()}>
-      <ServicesProvider services={{ mimir: svc }}>
-        <Story />
-      </ServicesProvider>
-    </QueryClientProvider>
-  );
+  function MimirDecorator(Story: React.ComponentType) {
+    return (
+      <QueryClientProvider client={makeClient()}>
+        <ServicesProvider services={{ mimir: svc }}>
+          <Story />
+        </ServicesProvider>
+      </QueryClientProvider>
+    );
+  }
+  return MimirDecorator;
 }
 
 const meta: Meta<typeof RavnsPage> = {
