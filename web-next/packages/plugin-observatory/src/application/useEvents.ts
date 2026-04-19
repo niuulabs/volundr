@@ -12,6 +12,7 @@ export function useEvents(): ObservatoryEvent[] {
   useEffect(() => {
     return stream.subscribe((event) => {
       setEvents((prev) => {
+        if (prev.some((e) => e.id === event.id)) return prev;
         const next = [...prev, event];
         return next.length > MAX_EVENTS ? next.slice(next.length - MAX_EVENTS) : next;
       });

@@ -1,40 +1,79 @@
-import { Rune, StateDot } from '@niuulabs/ui';
-import { usePersonas } from './usePersonas';
+import { useState, useCallback } from 'react';
+import { Rune } from '@niuulabs/ui';
+import { OverviewPage } from './OverviewPage';
+import { RavensPage } from './RavensPage';
+import { SessionsView } from './SessionsView';
+import { TriggersView } from './TriggersView';
+import { EventsView } from './EventsView';
+import { BudgetView } from './BudgetView';
+import { LogView } from './LogView';
+import { loadStorage, saveStorage } from './storage';
+import './RavnPage.css';
+import './ravn-views.css';
+
+export type RavnTab = 'overview' | 'ravens' | 'sessions' | 'triggers' | 'events' | 'budget' | 'log';
+
+const TAB_STORAGE_KEY = 'ravn.tab';
+
+const TABS: { id: RavnTab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'ravens', label: 'Ravens' },
+  { id: 'sessions', label: 'Sessions' },
+  { id: 'triggers', label: 'Triggers' },
+  { id: 'events', label: 'Events' },
+  { id: 'budget', label: 'Budget' },
+  { id: 'log', label: 'Log' },
+];
 
 export function RavnPage() {
-  const { data, isLoading, isError, error } = usePersonas();
+  const [activeTab, setActiveTab] = useState<RavnTab>(() =>
+    loadStorage<RavnTab>(TAB_STORAGE_KEY, 'overview'),
+  );
+
+  const handleTabChange = useCallback((tab: RavnTab) => {
+    setActiveTab(tab);
+    saveStorage(TAB_STORAGE_KEY, tab);
+  }, []);
 
   return (
-    <div className="niuu-p-6 niuu-max-w-[720px]">
-      <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-mb-4">
-        <Rune glyph="ᚱ" size={32} />
-        <h2 className="niuu-m-0">ravn · personas · ravens · sessions</h2>
-      </div>
+    <div data-testid="ravn-page" className="rv-page">
+      <header className="rv-page__header">
+        <Rune glyph="ᚱ" size={24} />
+        <h2 className="rv-page__title">Ravn · the flock</h2>
 
-      <p className="niuu-text-text-secondary">
-        Ravn is the canonical authority for Persona, ToolRegistry, EventCatalog, and BudgetState.
-        This placeholder will be replaced by the full Ravn UI.
-      </p>
+        <nav role="tablist" aria-label="Ravn navigation" className="rv-page__tabs">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`ravn-panel-${tab.id}`}
+              id={`ravn-tab-${tab.id}`}
+              onClick={() => handleTabChange(tab.id)}
+              data-testid={`ravn-tab-${tab.id}`}
+              className="rv-page-tab"
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </header>
 
-      {isLoading && (
-        <div className="niuu-flex niuu-items-center niuu-gap-2" role="status">
-          <StateDot state="processing" pulse />
-          <span>loading personas…</span>
-        </div>
-      )}
-
-      {isError && (
-        <div className="niuu-flex niuu-items-center niuu-gap-2" role="alert">
-          <StateDot state="failed" />
-          <span>{error instanceof Error ? error.message : 'unknown error'}</span>
-        </div>
-      )}
-
-      {data && (
-        <p className="niuu-text-text-secondary">
-          {data.length} persona{data.length !== 1 ? 's' : ''} loaded.
-        </p>
-      )}
+      <main
+        id={`ravn-panel-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`ravn-tab-${activeTab}`}
+        className="rv-page__panel"
+      >
+        {activeTab === 'overview' && <OverviewPage />}
+        {activeTab === 'ravens' && <RavensPage />}
+        {activeTab === 'sessions' && <SessionsView />}
+        {activeTab === 'triggers' && <TriggersView />}
+        {activeTab === 'events' && <EventsView />}
+        {activeTab === 'budget' && <BudgetView />}
+        {activeTab === 'log' && <LogView />}
+      </main>
     </div>
   );
 }
