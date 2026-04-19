@@ -85,11 +85,21 @@ test('registry: drag a type, drop on valid target, verify parentTypes updated', 
   await page.waitForSelector('[data-testid="tab-containment"]', { timeout: 5000 });
   await page.click('[data-testid="tab-containment"]');
 
-  // host is currently a child of cluster; drag it to realm
-  const hostNode = page.getByTestId('tree-node-host');
-  const realmNode = page.getByTestId('tree-node-realm');
-
-  await hostNode.dragTo(realmNode);
+  // tree-node-host can be off-screen (below cluster's 7 children); use
+  // direct DnD event dispatch instead of dragTo() to avoid viewport timeouts.
+  await page.evaluate(() => {
+    const host = document.querySelector('[data-testid="tree-node-host"]') as HTMLElement;
+    if (!host) throw new Error('tree-node-host not found in DOM');
+    host.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true }));
+  });
+  // Give React time to flush the dragId state update before the drop fires
+  await page.waitForTimeout(100);
+  await page.evaluate(() => {
+    const realm = document.querySelector('[data-testid="tree-node-realm"]') as HTMLElement;
+    if (!realm) throw new Error('tree-node-realm not found in DOM');
+    realm.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true }));
+    realm.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true }));
+  });
 
   // After drop the JSON should show host.parentTypes = ['realm']
   await page.click('[data-testid="tab-json"]');
@@ -116,7 +126,19 @@ test('registry: cycle is rejected — dragging ancestor onto descendant does not
   const versionBefore = JSON.parse(before ?? '{}').version as number;
 
   await page.click('[data-testid="tab-containment"]');
-  await realmNode.dragTo(hostNode);
+  // Use direct DnD event dispatch for headless reliability
+  await page.evaluate(() => {
+    const realm = document.querySelector('[data-testid="tree-node-realm"]') as HTMLElement;
+    if (!realm) throw new Error('tree-node-realm not found');
+    realm.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true }));
+  });
+  await page.waitForTimeout(100);
+  await page.evaluate(() => {
+    const host = document.querySelector('[data-testid="tree-node-host"]') as HTMLElement;
+    if (!host) throw new Error('tree-node-host not found');
+    host.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true }));
+    host.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true }));
+  });
 
   // Version should not change
   await page.click('[data-testid="tab-json"]');
