@@ -33,6 +33,7 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       chart_version: ${{ steps.tag.outputs.chart_version }}
+      short_sha: ${{ steps.tag.outputs.short_sha }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -56,88 +57,29 @@ jobs:
           echo "chart_version=${CHART_VERSION}" >> $GITHUB_OUTPUT
           echo "Chart version: ${CHART_VERSION}"
 
+          echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
   # ---------------------------------------------------------------------------
-  # Containers — build per platform, then merge manifests
+  # Containers — build multi-arch, publish feature tag + feature-<short-sha>.
+  # Delegated to reusable workflow.
   # ---------------------------------------------------------------------------
-  build-container-image:
-    name: "Build ${{ matrix.container }} (${{ matrix.platform }})"
+  containers:
+    name: Containers
     needs: meta
-    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
-    permissions:
-      contents: read
-      packages: write
-    strategy:
-      matrix:
-        platform: [amd64, arm64]
-        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu, mimir, bifrost]
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
-        with:
-          context: .
-          file: ./containers/${{ matrix.container }}/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.meta.outputs.tag }}-${{ matrix.platform }}
-          build-args: |
-            APP_VERSION=${{ needs.meta.outputs.tag }}-${{ github.sha }}
-          labels: |
-            org.opencontainers.image.title=${{ matrix.container }}
-            org.opencontainers.image.licenses=Apache-2.0
-            org.opencontainers.image.vendor=Niuu Labs
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            dev.niuu.feature=${{ needs.meta.outputs.tag }}
-          cache-from: type=gha,scope=${{ matrix.container }}-${{ matrix.platform }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.container }}-${{ matrix.platform }}
-          platforms: linux/${{ matrix.platform }}
-          provenance: false
-
-  merge-container-manifests:
-    name: "Manifest ${{ matrix.container }}"
-    needs: [meta, build-container-image]
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-    strategy:
-      matrix:
-        container: [volundr, skuld, devrunner, volundr-web, vscode-reh, tyr, niuu, mimir, bifrost]
-    steps:
-      - name: Log in to Container Registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create and push manifests
-        run: |
-          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}"
-          TAG="${{ needs.meta.outputs.tag }}"
-          SHA="${{ github.sha }}"
-          SHORT_SHA="${SHA:0:7}"
-
-          # Feature tag (mutable, always points to latest push on this feature branch)
-          docker manifest create "${IMAGE}:${TAG}" \
-            "${IMAGE}:${TAG}-amd64" \
-            "${IMAGE}:${TAG}-arm64"
-          docker manifest push "${IMAGE}:${TAG}"
-
-          # Feature + short sha (immutable, for pinning a specific build)
-          docker manifest create "${IMAGE}:${TAG}-${SHORT_SHA}" \
-            "${IMAGE}:${TAG}-amd64" \
-            "${IMAGE}:${TAG}-arm64"
-          docker manifest push "${IMAGE}:${TAG}-${SHORT_SHA}"
+    uses: ./.github/workflows/reusable-container-build.yaml
+    with:
+      containers: '["volundr","skuld","devrunner","volundr-web","vscode-reh","tyr","niuu","mimir","bifrost"]'
+      platforms: '["amd64","arm64"]'
+      tag-prefix: ${{ needs.meta.outputs.tag }}
+      manifest-tags: "${{ needs.meta.outputs.tag }} ${{ needs.meta.outputs.tag }}-${{ needs.meta.outputs.short_sha }}"
+      build-args: |
+        APP_VERSION=${{ needs.meta.outputs.tag }}-${{ github.sha }}
+      labels: |
+        org.opencontainers.image.title=niuu
+        org.opencontainers.image.licenses=Apache-2.0
+        org.opencontainers.image.vendor=Niuu Labs
+        org.opencontainers.image.source=https://github.com/${{ github.repository }}
+        dev.niuu.feature=${{ needs.meta.outputs.tag }}
 
   # ---------------------------------------------------------------------------
   # Helm charts — feature prerelease versions (0.0.0-<feature>.<N>)

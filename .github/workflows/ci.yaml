@@ -108,132 +108,14 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # Python — lint + unit tests (all tiers)
+  # Python — lint + unit tests (all tiers). Delegated to reusable workflow.
   # ---------------------------------------------------------------------------
-  python-lint:
-    name: "Python: Lint"
+  python:
+    name: Python
     needs: changes
     if: needs.changes.outputs.python == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Python + uv
-        uses: ./.github/actions/setup-python-env
-
-      - name: Run ruff linting
-        run: uv run ruff check src/ tests/
-
-      - name: Check ruff formatting
-        run: uv run ruff format --check src/ tests/ || echo "::warning::Formatting issues found - consider running 'ruff format src/ tests/'"
-        continue-on-error: true
-
-  python-test-volundr:
-    name: "Python: Test Volundr"
-    needs: changes
-    if: needs.changes.outputs.python == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Python + uv
-        uses: ./.github/actions/setup-python-env
-
-      - name: Run tests with coverage
-        run: |
-          uv run pytest tests/ --ignore=tests/test_tyr --ignore=tests/integration -v --tb=short \
-            --override-ini="addopts=" \
-            --cov=src/volundr --cov=src/cli --cov=src/niuu --cov=src/skuld \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            --cov-fail-under=85
-
-      - name: Upload coverage to Codecov
-        if: always() && hashFiles('coverage.xml') != ''
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
-        with:
-          files: coverage.xml
-          flags: backend-volundr
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-  python-test-tyr:
-    name: "Python: Test Tyr"
-    needs: changes
-    if: needs.changes.outputs.python == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Python + uv
-        uses: ./.github/actions/setup-python-env
-
-      - name: Run tests with coverage
-        run: |
-          uv run pytest tests/test_tyr -v --tb=short \
-            --override-ini="addopts=" \
-            --cov=src/tyr \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            --cov-fail-under=85
-
-      - name: Upload coverage to Codecov
-        if: always() && hashFiles('coverage.xml') != ''
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
-        with:
-          files: coverage.xml
-          flags: backend-tyr
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-  python-test-ravn:
-    name: "Python: Test Ravn"
-    needs: changes
-    if: needs.changes.outputs.python == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Python + uv
-        uses: ./.github/actions/setup-python-env
-
-      - name: Run tests with coverage
-        run: |
-          # src/ravn/tui/ is excluded via [tool.coverage.run] omit in pyproject.toml —
-          # Textual widgets require a running terminal and cannot be tested with plain pytest.
-          uv run pytest tests/ravn tests/test_ravn tests/test_bifrost tests/test_sleipnir \
-            -v --tb=short \
-            --override-ini="addopts=" \
-            --cov=src/ravn --cov=src/bifrost --cov=src/sleipnir \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            --cov-fail-under=85
-
-      - name: Upload coverage to Codecov
-        if: always() && hashFiles('coverage.xml') != ''
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
-        with:
-          files: coverage.xml
-          flags: backend-ravn
-          token: ${{ secrets.CODECOV_TOKEN }}
+    uses: ./.github/workflows/reusable-python-lint-test.yaml
+    secrets: inherit
 
   # ---------------------------------------------------------------------------
   # Python integration tests — run at both tiers when python changed.
@@ -464,132 +346,30 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # Web — lint + unit tests (all tiers)
+  # Web — lint + unit tests (all tiers). Delegated to reusable workflow.
   # ---------------------------------------------------------------------------
-  web-lint:
-    name: "Web: Lint"
+  web:
+    name: Web
     needs: changes
     if: needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run ESLint
-        run: npm run lint
-
-      - name: Check formatting
-        run: npm run format:check
-
-      - name: TypeScript check
-        run: npm run typecheck
-
-  web-test:
-    name: "Web: Test"
-    needs: changes
-    if: needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests with coverage
-        run: npm run test:coverage
-
-      - name: Upload coverage to Codecov
-        if: always() && hashFiles('web/coverage/lcov.info') != ''
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
-        with:
-          files: web/coverage/lcov.info
-          flags: web
-          token: ${{ secrets.CODECOV_TOKEN }}
-          working-directory: web
+    uses: ./.github/workflows/reusable-web-lint-test.yaml
+    secrets: inherit
 
   # ---------------------------------------------------------------------------
-  # Helm — full tier only
+  # Helm lint — full tier only. Delegated to reusable workflow.
   # ---------------------------------------------------------------------------
   helm-lint:
-    name: "Helm: Lint"
+    name: Helm Lint
     needs: changes
     if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.helm == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Install Helm
-        run: |
-          HELM_VERSION="3.14.0"
-          curl -sSfL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz
-          echo "f43e1c3387de24547506ab05d24e5309c0ce0b228c23bd8aa64e9ec4b8206651  /tmp/helm.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/helm.tar.gz -C /tmp
-          mv /tmp/linux-amd64/helm /usr/local/bin/helm
-          helm version
-
-      - name: Lint skuld chart
-        run: helm lint charts/skuld/
-
-      - name: Lint volundr chart
-        run: helm lint charts/volundr/
-
-      - name: Lint tyr chart
-        run: helm lint charts/tyr/
-
-      - name: Lint skuld-planner chart
-        run: helm lint charts/skuld-planner/
-
-      - name: Lint niuu-shared chart
-        run: helm lint charts/niuu-shared/
-
-      - name: Lint niuu umbrella chart
-        run: |
-          helm dependency build charts/niuu
-          helm lint charts/niuu/
+    uses: ./.github/workflows/reusable-helm-lint.yaml
 
   # ---------------------------------------------------------------------------
   # Helm — smoke test (kind cluster) — full tier only
   # ---------------------------------------------------------------------------
   helm-smoke-test:
     name: "Helm: Smoke Test"
-    needs: [changes, merge-container-manifests]
+    needs: [changes, containers]
     if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.helm == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -718,91 +498,22 @@ jobs:
           kubectl get events --sort-by=.lastTimestamp | tail -30 || true
 
   # ---------------------------------------------------------------------------
-  # Containers — full tier only
+  # Containers — full tier only. PR builds are amd64-only to keep the
+  # critical path short; arm64 is built on push-to-dev/main (see dev.yaml).
   # ---------------------------------------------------------------------------
-  build-container-image:
-    name: "Container: ${{ matrix.container }} (${{ matrix.platform }})"
+  containers:
+    name: Containers
     needs: changes
     if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.has_containers == 'true'
-    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
-    permissions:
-      contents: read
-      packages: write
-    strategy:
-      matrix:
-        platform: [amd64, arm64]
-        container: ${{ fromJson(needs.changes.outputs.container-names) }}
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
-        with:
-          context: .
-          file: ./containers/${{ matrix.container }}/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.container }}:pr-${{ github.event.number }}-${{ matrix.platform }}
-          labels: |
-            dev.volundr.pr=${{ github.event.number }}
-            dev.volundr.ephemeral=true
-          cache-from: type=gha,scope=${{ matrix.container }}-${{ matrix.platform }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.container }}-${{ matrix.platform }}
-          platforms: linux/${{ matrix.platform }}
-          provenance: false
-
-  merge-container-manifests:
-    name: "Container: ${{ matrix.container }} (manifest)"
-    needs: [changes, build-container-image]
-    if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.has_containers == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-    strategy:
-      matrix:
-        container: ${{ fromJson(needs.changes.outputs.container-names) }}
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create and push manifest
-        run: |
-          IMAGE="ghcr.io/${{ github.repository_owner }}/${{ matrix.container }}"
-          SHA_TAG="pr-${{ github.event.number }}-${{ github.sha }}"
-          PR_TAG="pr-${{ github.event.number }}"
-
-          docker manifest create "${IMAGE}:${SHA_TAG}" \
-            "${IMAGE}:pr-${{ github.event.number }}-amd64" \
-            "${IMAGE}:pr-${{ github.event.number }}-arm64"
-          docker manifest push "${IMAGE}:${SHA_TAG}"
-
-          docker manifest create "${IMAGE}:${PR_TAG}" \
-            "${IMAGE}:pr-${{ github.event.number }}-amd64" \
-            "${IMAGE}:pr-${{ github.event.number }}-arm64"
-          docker manifest push "${IMAGE}:${PR_TAG}"
+    uses: ./.github/workflows/reusable-container-build.yaml
+    with:
+      containers: ${{ needs.changes.outputs.container-names }}
+      platforms: '["amd64"]'
+      tag-prefix: pr-${{ github.event.number }}
+      manifest-tags: "pr-${{ github.event.number }} pr-${{ github.event.number }}-${{ github.sha }}"
+      labels: |
+        dev.volundr.pr=${{ github.event.number }}
+        dev.volundr.ephemeral=true
 
   # ---------------------------------------------------------------------------
   # Helm charts — PR versions — full tier only
@@ -876,53 +587,17 @@ jobs:
           helm push .helm-packages/niuu-0*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
 
   # ---------------------------------------------------------------------------
-  # Security — container vulnerability scanning — full tier only
+  # Security — container vulnerability scanning — full tier only.
+  # Delegated to reusable workflow.
   # ---------------------------------------------------------------------------
-  scan-containers:
-    name: "Scan: ${{ matrix.container }}"
-    needs: [changes, merge-container-manifests]
+  scan:
+    name: Scan
+    needs: [changes, containers]
     if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.has_containers == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      packages: read
-    strategy:
-      matrix:
-        container: ${{ fromJson(needs.changes.outputs.container-names) }}
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install Grype
-        run: |
-          GRYPE_VERSION="0.87.0"
-          curl -sSfL https://raw.githubusercontent.com/anchore/grype/247f5d72abf2131aa37f3164a98495c121b29029/install.sh | sh -s -- -b /usr/local/bin "v${GRYPE_VERSION}"
-          grype version
-
-      - name: Scan container with Grype
-        run: |
-          grype "ghcr.io/${{ github.repository_owner }}/${{ matrix.container }}:pr-${{ github.event.number }}" \
-            --only-fixed \
-            --fail-on critical \
-            -o sarif > "grype-${{ matrix.container }}.sarif"
-
-      - name: Upload Grype results
-        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4
-        if: always()
-        with:
-          sarif_file: grype-${{ matrix.container }}.sarif
-          category: grype-${{ matrix.container }}
+    uses: ./.github/workflows/reusable-container-scan.yaml
+    with:
+      containers: ${{ needs.changes.outputs.container-names }}
+      tag: pr-${{ github.event.number }}
 
   # ---------------------------------------------------------------------------
   # Security (always runs)
