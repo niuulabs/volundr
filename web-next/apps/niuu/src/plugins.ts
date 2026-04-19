@@ -1,6 +1,7 @@
 import { helloPlugin } from '@niuulabs/plugin-hello';
 import { mimirPlugin } from '@niuulabs/plugin-mimir';
 import { observatoryPlugin } from '@niuulabs/plugin-observatory';
+import { volundrPlugin } from '@niuulabs/plugin-volundr';
 import type { PluginDescriptor } from '@niuulabs/plugin-sdk';
 
-export const plugins: PluginDescriptor[] = [helloPlugin, mimirPlugin, observatoryPlugin];
+export const plugins: PluginDescriptor[] = [helloPlugin, mimirPlugin, observatoryPlugin, volundrPlugin];

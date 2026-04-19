@@ -137,6 +137,9 @@ importers:
       '@niuulabs/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
+      '@niuulabs/plugin-volundr':
+        specifier: workspace:*
+        version: link:../../packages/plugin-volundr
       '@niuulabs/query':
         specifier: workspace:*
         version: link:../../packages/query
@@ -369,6 +372,34 @@ importers:
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(jiti@1.21.7)(postcss@8.5.10)(typescript@5.9.3)(yaml@2.8.3)
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
+  packages/plugin-volundr:
+    dependencies:
+      '@niuulabs/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+      '@niuulabs/ui':
+        specifier: workspace:*
+        version: link:../ui
+    devDependencies:
+      '@tanstack/react-query':
+        specifier: ^5.62.0
+        version: 5.99.1(react@19.2.5)
+      '@tanstack/react-router':
+        specifier: ^1.95.0
+        version: 1.168.23(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@types/react':
+        specifier: ^19.0.7
+        version: 19.2.14
+      react:
+        specifier: ^19.0.0
+        version: 19.2.5
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(postcss@8.5.10)(typescript@5.9.3)
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

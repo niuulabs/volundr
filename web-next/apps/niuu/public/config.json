@@ -3,13 +3,15 @@
   "plugins": {
     "hello": { "enabled": true, "order": 1 },
     "mimir": { "enabled": true, "order": 2 },
-    "observatory": { "enabled": true, "order": 3 }
+    "observatory": { "enabled": true, "order": 3 },
+    "volundr": { "enabled": true, "order": 4 }
   },
   "services": {
     "hello": { "mode": "mock" },
     "mimir": { "mode": "mock" },
     "observatory.registry": { "mode": "mock" },
     "observatory.topology": { "mode": "mock" },
-    "observatory.events": { "mode": "mock" }
+    "observatory.events": { "mode": "mock" },
+    "volundr": { "mode": "mock" }
   }
 }
