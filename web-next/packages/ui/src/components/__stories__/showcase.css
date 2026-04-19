@@ -40,3 +40,23 @@
   align-items: center;
   gap: var(--space-2);
 }
+
+/* Scrollable container — e.g. StickyHeader demo */
+.niuu-story-scroll-container {
+  height: 200px;
+  overflow: auto;
+}
+
+/* Secondary meta text — e.g. selection count */
+.niuu-story-meta-text {
+  margin-top: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* Expanded row content */
+.niuu-story-expanded-content {
+  padding: var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}

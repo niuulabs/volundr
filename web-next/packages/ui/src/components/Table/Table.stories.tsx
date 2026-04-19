@@ -69,7 +69,7 @@ export const Basic: Story = {
 
 export const StickyHeader: Story = {
   render: () => (
-    <div style={{ height: 200, overflow: 'auto' }}>
+    <div className="niuu-story-scroll-container">
       <Table
         columns={columns}
         rows={data}
@@ -118,9 +118,7 @@ export const Selectable: Story = {
           onSelectionChange={setSelected}
           aria-label="Selectable table"
         />
-        <p
-          style={{ marginTop: 8, color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}
-        >
+        <p className="niuu-story-meta-text">
           Selected: {selected.size > 0 ? [...selected].join(', ') : 'none'}
         </p>
       </div>
@@ -140,13 +138,7 @@ export const WithRowExpand: Story = {
         expandedKeys={expanded}
         onExpandChange={setExpanded}
         renderExpanded={(r) => (
-          <div
-            style={{
-              padding: 'var(--space-3)',
-              color: 'var(--color-text-secondary)',
-              fontSize: 'var(--text-sm)',
-            }}
-          >
+          <div className="niuu-story-expanded-content">
             Region ID: {r.id} · Location: {r.region} · Score: {r.score}
           </div>
         )}
