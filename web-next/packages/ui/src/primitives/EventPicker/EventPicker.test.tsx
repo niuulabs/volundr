@@ -11,20 +11,13 @@ const CATALOG: EventSpec[] = [
 
 describe('EventPicker', () => {
   it('renders the input with current value', () => {
-    render(
-      <EventPicker value="code.changed" onChange={vi.fn()} catalog={CATALOG} />,
-    );
+    render(<EventPicker value="code.changed" onChange={vi.fn()} catalog={CATALOG} />);
     expect(screen.getByRole('combobox')).toHaveValue('code.changed');
   });
 
   it('renders placeholder when value is empty', () => {
     render(
-      <EventPicker
-        value=""
-        onChange={vi.fn()}
-        catalog={CATALOG}
-        placeholder="Pick an event…"
-      />,
+      <EventPicker value="" onChange={vi.fn()} catalog={CATALOG} placeholder="Pick an event…" />,
     );
     expect(screen.getByPlaceholderText('Pick an event…')).toBeInTheDocument();
   });
@@ -63,14 +56,7 @@ describe('EventPicker', () => {
   });
 
   it('shows "Create" option when allowNew=true and query does not match', () => {
-    render(
-      <EventPicker
-        value=""
-        onChange={vi.fn()}
-        catalog={CATALOG}
-        allowNew
-      />,
-    );
+    render(<EventPicker value="" onChange={vi.fn()} catalog={CATALOG} allowNew />);
     const input = screen.getByRole('combobox');
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: 'new.event' } });
@@ -78,14 +64,7 @@ describe('EventPicker', () => {
   });
 
   it('does not show "Create" when allowNew=false', () => {
-    render(
-      <EventPicker
-        value=""
-        onChange={vi.fn()}
-        catalog={CATALOG}
-        allowNew={false}
-      />,
-    );
+    render(<EventPicker value="" onChange={vi.fn()} catalog={CATALOG} allowNew={false} />);
     const input = screen.getByRole('combobox');
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: 'new.event' } });
@@ -93,28 +72,14 @@ describe('EventPicker', () => {
   });
 
   it('shows "none" option when allowEmpty=true', () => {
-    render(
-      <EventPicker
-        value="code.changed"
-        onChange={vi.fn()}
-        catalog={CATALOG}
-        allowEmpty
-      />,
-    );
+    render(<EventPicker value="code.changed" onChange={vi.fn()} catalog={CATALOG} allowEmpty />);
     fireEvent.focus(screen.getByRole('combobox'));
     expect(screen.getByText('— none —')).toBeInTheDocument();
   });
 
   it('calls onChange with empty string when "none" is clicked', () => {
     const onChange = vi.fn();
-    render(
-      <EventPicker
-        value="code.changed"
-        onChange={onChange}
-        catalog={CATALOG}
-        allowEmpty
-      />,
-    );
+    render(<EventPicker value="code.changed" onChange={onChange} catalog={CATALOG} allowEmpty />);
     fireEvent.focus(screen.getByRole('combobox'));
     fireEvent.mouseDown(screen.getByText('— none —'));
     expect(onChange).toHaveBeenCalledWith('');
@@ -140,9 +105,7 @@ describe('EventPicker', () => {
   });
 
   it('is disabled when disabled prop is set', () => {
-    render(
-      <EventPicker value="" onChange={vi.fn()} catalog={CATALOG} disabled />,
-    );
+    render(<EventPicker value="" onChange={vi.fn()} catalog={CATALOG} disabled />);
     expect(screen.getByRole('combobox')).toBeDisabled();
   });
 });

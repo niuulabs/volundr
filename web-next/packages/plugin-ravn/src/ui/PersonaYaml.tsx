@@ -20,10 +20,7 @@ export function PersonaYaml({ name }: PersonaYamlProps) {
 
   if (isError) {
     return (
-      <div
-        data-testid="persona-yaml-error"
-        className="niuu-p-6 niuu-text-sm niuu-text-critical"
-      >
+      <div data-testid="persona-yaml-error" className="niuu-p-6 niuu-text-sm niuu-text-critical">
         {error instanceof Error ? error.message : 'Failed to load YAML'}
       </div>
     );

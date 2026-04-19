@@ -6,7 +6,15 @@ import { validatePersona } from './validatePersona';
 import { SEED_EVENT_CATALOG, SEED_TOOL_REGISTRY } from '../catalog';
 
 const ROLES: PersonaRole[] = [
-  'plan', 'build', 'verify', 'review', 'gate', 'audit', 'ship', 'index', 'report',
+  'plan',
+  'build',
+  'verify',
+  'review',
+  'gate',
+  'audit',
+  'ship',
+  'index',
+  'report',
 ];
 
 const PERMISSION_MODES = ['default', 'safe', 'loose'] as const;
@@ -63,7 +71,9 @@ function Section({ title, children }: SectionProps) {
           {title}
         </h3>
       </div>
-      <div className="niuu-p-4 niuu-flex niuu-flex-col niuu-gap-3 niuu-bg-bg-primary">{children}</div>
+      <div className="niuu-p-4 niuu-flex niuu-flex-col niuu-gap-3 niuu-bg-bg-primary">
+        {children}
+      </div>
     </section>
   );
 }
@@ -108,15 +118,18 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
   useEffect(() => {
     setForm(detailToRequest(persona));
     setDirty(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persona.name]);
 
   const validationErrors = validatePersona(form, SEED_EVENT_CATALOG);
 
-  const update = useCallback(<K extends keyof PersonaCreateRequest>(key: K, value: PersonaCreateRequest[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-    setDirty(true);
-  }, []);
+  const update = useCallback(
+    <K extends keyof PersonaCreateRequest>(key: K, value: PersonaCreateRequest[K]) => {
+      setForm((prev) => ({ ...prev, [key]: value }));
+      setDirty(true);
+    },
+    [],
+  );
 
   const handleReset = useCallback(() => {
     setForm(detailToRequest(persona));
@@ -134,14 +147,23 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
     update('consumesEvents', [...form.consumesEvents, { name: '' }]);
   }, [form.consumesEvents, update]);
 
-  const updateConsumedEvent = useCallback((i: number, patch: Partial<PersonaConsumesEvent>) => {
-    const next = form.consumesEvents.map((e, idx) => (idx === i ? { ...e, ...patch } : e));
-    update('consumesEvents', next);
-  }, [form.consumesEvents, update]);
+  const updateConsumedEvent = useCallback(
+    (i: number, patch: Partial<PersonaConsumesEvent>) => {
+      const next = form.consumesEvents.map((e, idx) => (idx === i ? { ...e, ...patch } : e));
+      update('consumesEvents', next);
+    },
+    [form.consumesEvents, update],
+  );
 
-  const removeConsumedEvent = useCallback((i: number) => {
-    update('consumesEvents', form.consumesEvents.filter((_, idx) => idx !== i));
-  }, [form.consumesEvents, update]);
+  const removeConsumedEvent = useCallback(
+    (i: number) => {
+      update(
+        'consumesEvents',
+        form.consumesEvents.filter((_, idx) => idx !== i),
+      );
+    },
+    [form.consumesEvents, update],
+  );
 
   return (
     <div className="niuu-flex niuu-flex-col niuu-h-full" data-testid="persona-form">
@@ -173,7 +195,11 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
       <div className="niuu-flex-1 niuu-overflow-y-auto niuu-p-4 niuu-flex niuu-flex-col niuu-gap-4">
         {validationErrors.length > 0 && (
           <ValidationSummary
-            errors={validationErrors.map((e) => ({ id: e.field, label: e.field, message: e.message }))}
+            errors={validationErrors.map((e) => ({
+              id: e.field,
+              label: e.field,
+              message: e.message,
+            }))}
           />
         )}
 
@@ -195,7 +221,9 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
               onChange={(e) => update('role', e.target.value as PersonaRole)}
             >
               {ROLES.map((r) => (
-                <option key={r} value={r}>{r}</option>
+                <option key={r} value={r}>
+                  {r}
+                </option>
               ))}
             </select>
           </FieldRow>
@@ -247,7 +275,9 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
                 onChange={(e) => update('llmThinkingEnabled', e.target.checked)}
                 className="niuu-w-4 niuu-h-4"
               />
-              <span className="niuu-text-sm niuu-text-text-secondary">Enable extended thinking</span>
+              <span className="niuu-text-sm niuu-text-text-secondary">
+                Enable extended thinking
+              </span>
             </label>
           </FieldRow>
           <FieldRow label="Max tokens" htmlFor="pf-llm-max-tokens">
@@ -289,7 +319,9 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
               onChange={(e) => update('permissionMode', e.target.value)}
             >
               {PERMISSION_MODES.map((m) => (
-                <option key={m} value={m}>{m}</option>
+                <option key={m} value={m}>
+                  {m}
+                </option>
               ))}
             </select>
           </FieldRow>
@@ -307,12 +339,19 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
                         : 'niuu-bg-bg-tertiary niuu-text-text-secondary niuu-border niuu-border-border',
                     ].join(' ')}
                   >
-                    {tool?.destructive && <span className="niuu-inline-block niuu-w-1.5 niuu-h-1.5 niuu-rounded-full niuu-bg-critical" />}
+                    {tool?.destructive && (
+                      <span className="niuu-inline-block niuu-w-1.5 niuu-h-1.5 niuu-rounded-full niuu-bg-critical" />
+                    )}
                     {toolId}
                     <button
                       type="button"
                       aria-label={`Remove ${toolId} from allow list`}
-                      onClick={() => update('allowedTools', form.allowedTools.filter((t) => t !== toolId))}
+                      onClick={() =>
+                        update(
+                          'allowedTools',
+                          form.allowedTools.filter((t) => t !== toolId),
+                        )
+                      }
                       className="niuu-ml-0.5 niuu-text-text-muted hover:niuu-text-text-primary niuu-border-0 niuu-bg-transparent niuu-cursor-pointer"
                     >
                       ×
@@ -340,7 +379,12 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
                   <button
                     type="button"
                     aria-label={`Remove ${toolId} from deny list`}
-                    onClick={() => update('forbiddenTools', form.forbiddenTools.filter((t) => t !== toolId))}
+                    onClick={() =>
+                      update(
+                        'forbiddenTools',
+                        form.forbiddenTools.filter((t) => t !== toolId),
+                      )
+                    }
                     className="niuu-ml-0.5 niuu-text-text-muted hover:niuu-text-text-primary niuu-border-0 niuu-bg-transparent niuu-cursor-pointer"
                   >
                     ×
@@ -398,7 +442,10 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
                     value={ev.injects?.join(', ') ?? ''}
                     onChange={(e) => {
                       const injects = e.target.value
-                        ? e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
+                        ? e.target.value
+                            .split(',')
+                            .map((s) => s.trim())
+                            .filter(Boolean)
                         : [];
                       updateConsumedEvent(i, { injects });
                     }}
@@ -451,7 +498,9 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
             >
               <option value="">— none —</option>
               {FAN_IN_STRATEGIES.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>
+                  {s}
+                </option>
               ))}
             </select>
           </FieldRow>
@@ -462,7 +511,10 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
           <FieldRow label="Route writes to">
             <div className="niuu-flex niuu-items-center niuu-gap-2">
               {MIMIR_ROUTINGS.map((r) => (
-                <label key={r} className="niuu-flex niuu-items-center niuu-gap-1.5 niuu-cursor-pointer niuu-select-none">
+                <label
+                  key={r}
+                  className="niuu-flex niuu-items-center niuu-gap-1.5 niuu-cursor-pointer niuu-select-none"
+                >
                   <input
                     type="radio"
                     name="mimir-routing"

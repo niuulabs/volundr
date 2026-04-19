@@ -38,9 +38,7 @@ describe('PersonaYaml', () => {
     render(<PersonaYaml name="reviewer" />, {
       wrapper: wrap({ 'ravn.personas': failing }),
     });
-    await waitFor(() =>
-      expect(screen.getByTestId('persona-yaml-error')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('persona-yaml-error')).toBeInTheDocument());
     expect(screen.getByText('yaml fetch failed')).toBeInTheDocument();
   });
 

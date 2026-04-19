@@ -59,14 +59,7 @@ export const AllowNew: Story = {
 export const AllowEmpty: Story = {
   render: function AllowEmptyStory(args) {
     const [value, setValue] = useState('code.changed');
-    return (
-      <EventPicker
-        {...args}
-        value={value}
-        onChange={setValue}
-        allowEmpty
-      />
-    );
+    return <EventPicker {...args} value={value} onChange={setValue} allowEmpty />;
   },
 };
 
@@ -88,14 +81,7 @@ export const AllowNewAndEmpty: Story = {
 
 export const Disabled: Story = {
   render: function DisabledStory(args) {
-    return (
-      <EventPicker
-        {...args}
-        value="code.changed"
-        onChange={() => undefined}
-        disabled
-      />
-    );
+    return <EventPicker {...args} value="code.changed" onChange={() => undefined} disabled />;
   },
 };
 
@@ -103,7 +89,13 @@ export const EmptyCatalog: Story = {
   render: function EmptyCatalogStory() {
     const [value, setValue] = useState('');
     return (
-      <EventPicker value={value} onChange={setValue} catalog={[]} allowNew placeholder="No events yet — type to create" />
+      <EventPicker
+        value={value}
+        onChange={setValue}
+        catalog={[]}
+        allowNew
+        placeholder="No events yet — type to create"
+      />
     );
   },
 };

@@ -57,19 +57,29 @@ describe('validatePersona', () => {
     });
 
     it('returns an error for an invalid role', () => {
-      const errors = validatePersona(
-        makeReq({ role: 'unknown-role' as never }),
-        CATALOG,
-      );
+      const errors = validatePersona(makeReq({ role: 'unknown-role' as never }), CATALOG);
       expect(errors.some((e) => e.field === 'role')).toBe(true);
       expect(errors.find((e) => e.field === 'role')?.message).toContain('unknown-role');
     });
 
     it('accepts all nine canonical roles', () => {
-      const roles = ['plan', 'build', 'verify', 'review', 'gate', 'audit', 'ship', 'index', 'report'] as const;
+      const roles = [
+        'plan',
+        'build',
+        'verify',
+        'review',
+        'gate',
+        'audit',
+        'ship',
+        'index',
+        'report',
+      ] as const;
       for (const role of roles) {
         const errors = validatePersona(makeReq({ role }), CATALOG);
-        expect(errors.some((e) => e.field === 'role'), `role ${role} should be valid`).toBe(false);
+        expect(
+          errors.some((e) => e.field === 'role'),
+          `role ${role} should be valid`,
+        ).toBe(false);
       }
     });
   });
@@ -109,28 +119,19 @@ describe('validatePersona', () => {
 
   describe('produces event validation', () => {
     it('returns no error when produces event exists in catalog', () => {
-      const errors = validatePersona(
-        makeReq({ producesEventType: 'code.changed' }),
-        CATALOG,
-      );
+      const errors = validatePersona(makeReq({ producesEventType: 'code.changed' }), CATALOG);
       expect(errors.some((e) => e.field === 'produces.eventType')).toBe(false);
     });
 
     it('returns an error when produces event is not in catalog', () => {
-      const errors = validatePersona(
-        makeReq({ producesEventType: 'nonexistent.event' }),
-        CATALOG,
-      );
+      const errors = validatePersona(makeReq({ producesEventType: 'nonexistent.event' }), CATALOG);
       const e = errors.find((e) => e.field === 'produces.eventType');
       expect(e).toBeDefined();
       expect(e?.message).toContain('nonexistent.event');
     });
 
     it('returns no error when produces event is empty string', () => {
-      const errors = validatePersona(
-        makeReq({ producesEventType: '' }),
-        CATALOG,
-      );
+      const errors = validatePersona(makeReq({ producesEventType: '' }), CATALOG);
       expect(errors.some((e) => e.field === 'produces.eventType')).toBe(false);
     });
   });
@@ -139,10 +140,7 @@ describe('validatePersona', () => {
     it('returns no error when all consumed events exist in catalog', () => {
       const errors = validatePersona(
         makeReq({
-          consumesEvents: [
-            { name: 'code.changed' },
-            { name: 'review.completed' },
-          ],
+          consumesEvents: [{ name: 'code.changed' }, { name: 'review.completed' }],
         }),
         CATALOG,
       );
@@ -158,10 +156,7 @@ describe('validatePersona', () => {
     });
 
     it('skips validation for empty consumed event names', () => {
-      const errors = validatePersona(
-        makeReq({ consumesEvents: [{ name: '' }] }),
-        CATALOG,
-      );
+      const errors = validatePersona(makeReq({ consumesEvents: [{ name: '' }] }), CATALOG);
       expect(errors.some((e) => e.field.startsWith('consumes.'))).toBe(false);
     });
   });

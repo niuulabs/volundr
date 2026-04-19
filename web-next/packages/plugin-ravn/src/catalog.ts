@@ -47,7 +47,12 @@ export const SEED_TOOL_REGISTRY: ToolRegistry = [
   { id: 'mimir.read', group: 'mimir', destructive: false, desc: 'Query Mímir knowledge store' },
   { id: 'mimir.write', group: 'mimir', destructive: false, desc: 'Write to Mímir knowledge store' },
   { id: 'mimir.delete', group: 'mimir', destructive: true, desc: 'Delete entries from Mímir' },
-  { id: 'observe.metrics', group: 'observe', destructive: false, desc: 'Read observability metrics' },
+  {
+    id: 'observe.metrics',
+    group: 'observe',
+    destructive: false,
+    desc: 'Read observability metrics',
+  },
   { id: 'observe.logs', group: 'observe', destructive: false, desc: 'Read log streams' },
   { id: 'security.scan', group: 'security', destructive: false, desc: 'Static security scanner' },
   { id: 'security.secrets', group: 'security', destructive: false, desc: 'Secret detection scan' },

@@ -32,17 +32,12 @@ export const AllowList: Story = {
     const [selected, setSelected] = useState<string[]>(['read', 'mimir.read']);
 
     function toggle(id: string) {
-      setSelected((prev) =>
-        prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
-      );
+      setSelected((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
     }
 
     return (
       <>
-        <button
-          onClick={() => setOpen(true)}
-          style={{ padding: '8px 16px', cursor: 'pointer' }}
-        >
+        <button onClick={() => setOpen(true)} style={{ padding: '8px 16px', cursor: 'pointer' }}>
           Open Allow List ({selected.length} selected)
         </button>
         <ToolPicker
@@ -65,17 +60,12 @@ export const DenyList: Story = {
     const allowed = ['read', 'mimir.read'];
 
     function toggle(id: string) {
-      setSelected((prev) =>
-        prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
-      );
+      setSelected((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
     }
 
     return (
       <>
-        <button
-          onClick={() => setOpen(true)}
-          style={{ padding: '8px 16px', cursor: 'pointer' }}
-        >
+        <button onClick={() => setOpen(true)} style={{ padding: '8px 16px', cursor: 'pointer' }}>
           Open Deny List ({selected.length} selected)
         </button>
         <ToolPicker
@@ -98,17 +88,12 @@ export const EmptySelection: Story = {
     const [selected, setSelected] = useState<string[]>([]);
 
     function toggle(id: string) {
-      setSelected((prev) =>
-        prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
-      );
+      setSelected((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
     }
 
     return (
       <>
-        <button
-          onClick={() => setOpen(true)}
-          style={{ padding: '8px 16px', cursor: 'pointer' }}
-        >
+        <button onClick={() => setOpen(true)} style={{ padding: '8px 16px', cursor: 'pointer' }}>
           Open (empty selection)
         </button>
         <ToolPicker
@@ -129,9 +114,7 @@ export const OpenByDefault: Story = {
     const [selected, setSelected] = useState<string[]>(['read', 'git.status']);
 
     function toggle(id: string) {
-      setSelected((prev) =>
-        prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
-      );
+      setSelected((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
     }
 
     return (

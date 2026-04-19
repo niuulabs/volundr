@@ -31,9 +31,7 @@ describe('SchemaEditor', () => {
     const onChange = vi.fn();
     render(<SchemaEditor value={{}} onChange={onChange} />);
     fireEvent.click(screen.getByText('+ Add field'));
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ field: 'string' }),
-    );
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ field: 'string' }));
   });
 
   it('auto-increments field names when field already exists', () => {
@@ -71,9 +69,7 @@ describe('SchemaEditor', () => {
 
   it('shows empty message when no fields', () => {
     render(<SchemaEditor value={{}} />);
-    expect(
-      screen.getByText('No fields — click Add field to start'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('No fields — click Add field to start')).toBeInTheDocument();
   });
 
   it('shows readonly empty message', () => {

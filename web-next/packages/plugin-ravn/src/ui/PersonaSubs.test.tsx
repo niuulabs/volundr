@@ -38,9 +38,7 @@ describe('PersonaSubs', () => {
     render(<PersonaSubs name="reviewer" />, {
       wrapper: wrap({ 'ravn.personas': failing }),
     });
-    await waitFor(() =>
-      expect(screen.getByTestId('persona-subs-error')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('persona-subs-error')).toBeInTheDocument());
     expect(screen.getByText('subs fetch failed')).toBeInTheDocument();
   });
 
@@ -73,10 +71,13 @@ describe('PersonaSubs', () => {
       wrapper: wrap({ 'ravn.personas': createMockPersonaStore() }),
     });
     // May show subs or empty depending on seed connections — just check it renders without crash
-    await waitFor(() => {
-      const subs = screen.queryByTestId('persona-subs');
-      const empty = screen.queryByTestId('persona-subs-empty');
-      expect(subs ?? empty).toBeInTheDocument();
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        const subs = screen.queryByTestId('persona-subs');
+        const empty = screen.queryByTestId('persona-subs-empty');
+        expect(subs ?? empty).toBeInTheDocument();
+      },
+      { timeout: 3000 },
+    );
   });
 });

@@ -86,7 +86,10 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
     });
 
     // Col 1: focus persona
-    const focusRow = Math.max(0, Math.floor((Math.max(producers.length, consumers.length) - 1) / 2));
+    const focusRow = Math.max(
+      0,
+      Math.floor((Math.max(producers.length, consumers.length) - 1) / 2),
+    );
     nodes.push({ id: name, label: name, col: 1, row: focusRow });
 
     // Col 2: consumers
@@ -100,7 +103,10 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
 
   if (isLoading) {
     return (
-      <div data-testid="persona-subs-loading" className="niuu-p-6 niuu-text-sm niuu-text-text-muted">
+      <div
+        data-testid="persona-subs-loading"
+        className="niuu-p-6 niuu-text-sm niuu-text-text-muted"
+      >
         Loading subscription graph…
       </div>
     );
@@ -125,7 +131,8 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
         data-testid="persona-subs-empty"
         className="niuu-flex niuu-items-center niuu-justify-center niuu-h-full niuu-p-6 niuu-text-sm niuu-text-text-muted"
       >
-        No event subscriptions — this persona neither consumes nor produces events connected to others.
+        No event subscriptions — this persona neither consumes nor produces events connected to
+        others.
       </div>
     );
   }
@@ -135,10 +142,7 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
   const svgH = nodeY(maxRow) + NODE_H + PAD_V;
 
   return (
-    <div
-      data-testid="persona-subs"
-      className="niuu-overflow-auto niuu-h-full niuu-p-4"
-    >
+    <div data-testid="persona-subs" className="niuu-overflow-auto niuu-h-full niuu-p-4">
       <svg
         width={svgW}
         height={svgH}
@@ -197,7 +201,11 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
                 width={COL_W}
                 height={NODE_H}
                 rx={4}
-                fill={isFocus ? 'color-mix(in srgb, var(--brand-500) 18%, transparent)' : 'var(--color-bg-secondary)'}
+                fill={
+                  isFocus
+                    ? 'color-mix(in srgb, var(--brand-500) 18%, transparent)'
+                    : 'var(--color-bg-secondary)'
+                }
                 stroke={isFocus ? 'var(--brand-400)' : 'var(--color-border)'}
                 strokeWidth={isFocus ? 1.5 : 1}
               />

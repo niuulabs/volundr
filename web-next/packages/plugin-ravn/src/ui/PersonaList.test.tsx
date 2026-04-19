@@ -36,9 +36,7 @@ describe('PersonaList', () => {
     render(<PersonaList selectedName={null} onSelect={() => {}} />, {
       wrapper: wrap({ 'ravn.personas': failing }),
     });
-    await waitFor(() =>
-      expect(screen.getByTestId('persona-list-error')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('persona-list-error')).toBeInTheDocument());
     expect(screen.getByText('service unavailable')).toBeInTheDocument();
   });
 

@@ -83,10 +83,7 @@ export function PersonasPage() {
   }, []);
 
   return (
-    <div
-      className="niuu-flex niuu-h-full niuu-overflow-hidden"
-      data-testid="personas-page"
-    >
+    <div className="niuu-flex niuu-h-full niuu-overflow-hidden" data-testid="personas-page">
       {/* Left panel — persona list */}
       <div className="niuu-w-56 niuu-shrink-0 niuu-border-r niuu-border-border niuu-overflow-hidden niuu-flex niuu-flex-col niuu-bg-bg-secondary">
         <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-px-3 niuu-py-3 niuu-border-b niuu-border-border-subtle niuu-shrink-0">
@@ -103,11 +100,7 @@ export function PersonasPage() {
       {/* Right panel — detail pane */}
       <div className="niuu-flex-1 niuu-overflow-hidden niuu-bg-bg-primary">
         {selectedName ? (
-          <PersonaDetailPane
-            name={selectedName}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-          />
+          <PersonaDetailPane name={selectedName} activeTab={activeTab} onTabChange={setActiveTab} />
         ) : (
           <EmptyState />
         )}

@@ -73,9 +73,7 @@ describe('PersonaForm', () => {
     });
     const nameInput = screen.getByDisplayValue('test-persona');
     fireEvent.change(nameInput, { target: { value: 'changed-name' } });
-    await waitFor(() =>
-      expect(screen.getByText('Unsaved changes')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeInTheDocument());
   });
 
   it('hides save bar after reset', async () => {
@@ -87,9 +85,7 @@ describe('PersonaForm', () => {
     await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('Reset'));
-    await waitFor(() =>
-      expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument());
   });
 
   it('calls onSave with updated LLM alias when saved', async () => {
@@ -112,27 +108,17 @@ describe('PersonaForm', () => {
   });
 
   it('shows validation errors for invalid state', async () => {
-    render(
-      <PersonaForm
-        persona={{ ...MOCK_PERSONA, name: '' }}
-        onSave={vi.fn()}
-      />,
-      { wrapper: wrap() },
-    );
+    render(<PersonaForm persona={{ ...MOCK_PERSONA, name: '' }} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
     // Name is empty — should show validation error immediately
-    await waitFor(() =>
-      expect(screen.getByText(/Name is required/)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/Name is required/)).toBeInTheDocument());
   });
 
   it('disables save button when there are validation errors', async () => {
-    render(
-      <PersonaForm
-        persona={{ ...MOCK_PERSONA, name: '' }}
-        onSave={vi.fn()}
-      />,
-      { wrapper: wrap() },
-    );
+    render(<PersonaForm persona={{ ...MOCK_PERSONA, name: '' }} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
     const nameInput = screen.getAllByDisplayValue('')[0]!;
     fireEvent.change(nameInput, { target: { value: 'x' } });
     fireEvent.change(nameInput, { target: { value: '' } });

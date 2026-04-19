@@ -47,19 +47,14 @@ export function PersonaList({ selectedName, onSelect }: PersonaListProps) {
 
   if (isError) {
     return (
-      <div
-        data-testid="persona-list-error"
-        className="niuu-p-3 niuu-text-sm niuu-text-critical"
-      >
+      <div data-testid="persona-list-error" className="niuu-p-3 niuu-text-sm niuu-text-critical">
         {error instanceof Error ? error.message : 'Failed to load personas'}
       </div>
     );
   }
 
   if (!data || data.length === 0) {
-    return (
-      <div className="niuu-p-3 niuu-text-sm niuu-text-text-muted">No personas found.</div>
-    );
+    return <div className="niuu-p-3 niuu-text-sm niuu-text-text-muted">No personas found.</div>;
   }
 
   // Group by role, following ROLE_ORDER
@@ -110,9 +105,7 @@ export function PersonaList({ selectedName, onSelect }: PersonaListProps) {
                 <PersonaAvatar role={p.role} letter={p.letter} size={20} />
                 <span className="niuu-truncate niuu-flex-1">{p.name}</span>
                 {p.isBuiltin && (
-                  <span className="niuu-text-xs niuu-text-text-muted niuu-shrink-0">
-                    builtin
-                  </span>
+                  <span className="niuu-text-xs niuu-text-text-muted niuu-shrink-0">builtin</span>
                 )}
               </button>
             ))}

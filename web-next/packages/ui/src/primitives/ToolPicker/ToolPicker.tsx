@@ -48,7 +48,9 @@ export function ToolPicker({
 
   const q = search.toLowerCase();
   const filtered = registry.filter(
-    (t) => !excluded.includes(t.id) && (t.id.toLowerCase().includes(q) || t.desc.toLowerCase().includes(q)),
+    (t) =>
+      !excluded.includes(t.id) &&
+      (t.id.toLowerCase().includes(q) || t.desc.toLowerCase().includes(q)),
   );
 
   const byGroup = filtered.reduce<Record<string, Tool[]>>((acc, tool) => {
@@ -98,7 +100,11 @@ export function ToolPicker({
                     )}
                     <span className="niuu-tool-picker__item-id">{tool.id}</span>
                     <span className="niuu-tool-picker__item-desc">{tool.desc}</span>
-                    {isSelected && <span className="niuu-tool-picker__check" aria-hidden>✓</span>}
+                    {isSelected && (
+                      <span className="niuu-tool-picker__check" aria-hidden>
+                        ✓
+                      </span>
+                    )}
                   </button>
                 );
               })}

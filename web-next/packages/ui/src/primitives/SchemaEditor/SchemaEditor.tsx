@@ -64,7 +64,9 @@ export function SchemaEditor({ value, onChange, readonly = false, className }: S
   );
 
   return (
-    <div className={cn('niuu-schema-editor', readonly && 'niuu-schema-editor--readonly', className)}>
+    <div
+      className={cn('niuu-schema-editor', readonly && 'niuu-schema-editor--readonly', className)}
+    >
       <table className="niuu-schema-editor__table" aria-label="Event payload schema">
         <thead>
           <tr>
@@ -122,10 +124,7 @@ export function SchemaEditor({ value, onChange, readonly = false, className }: S
           ))}
           {entries.length === 0 && (
             <tr>
-              <td
-                colSpan={readonly ? 2 : 3}
-                className="niuu-schema-editor__empty"
-              >
+              <td colSpan={readonly ? 2 : 3} className="niuu-schema-editor__empty">
                 {readonly ? 'No payload fields' : 'No fields — click Add field to start'}
               </td>
             </tr>

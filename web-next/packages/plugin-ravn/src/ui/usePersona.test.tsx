@@ -64,9 +64,7 @@ describe('useUpdatePersona', () => {
     function Wrapper({ children }: { children: React.ReactNode }) {
       return (
         <QueryClientProvider client={client}>
-          <ServicesProvider services={{ 'ravn.personas': store }}>
-            {children}
-          </ServicesProvider>
+          <ServicesProvider services={{ 'ravn.personas': store }}>{children}</ServicesProvider>
         </QueryClientProvider>
       );
     }
