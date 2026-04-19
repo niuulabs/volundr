@@ -1,0 +1,71 @@
+.niuu-tooltip__content {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-sm);
+  z-index: 60;
+  max-width: 240px;
+  line-height: 1.5;
+  animation: niuu-tooltip-in var(--transition-fast) ease;
+  user-select: none;
+}
+
+.niuu-tooltip__content[data-state='closed'] {
+  animation: niuu-tooltip-out var(--transition-fast) ease;
+}
+
+.niuu-tooltip__content[data-side='top'] {
+  animation: niuu-tooltip-in-top var(--transition-fast) ease;
+}
+
+.niuu-tooltip__content[data-side='bottom'] {
+  animation: niuu-tooltip-in-bottom var(--transition-fast) ease;
+}
+
+.niuu-tooltip__arrow {
+  fill: var(--color-border);
+}
+
+@keyframes niuu-tooltip-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes niuu-tooltip-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes niuu-tooltip-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes niuu-tooltip-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
