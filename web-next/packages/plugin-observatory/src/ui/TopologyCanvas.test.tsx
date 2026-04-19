@@ -3,13 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { TopologyCanvas } from './TopologyCanvas';
-import {
-  computeLayout,
-  clampZoom,
-  screenToWorld,
-  applyScrollZoom,
-  idFraction,
-} from './layout';
+import { computeLayout, clampZoom, screenToWorld, applyScrollZoom, idFraction } from './layout';
 import { CANVAS_CONFIG } from './canvasConfig';
 import type { TopologySnapshot } from '../domain/topology';
 
@@ -18,31 +12,175 @@ import type { TopologySnapshot } from '../domain/topology';
 /** Rich snapshot that exercises all layout branches. */
 const RICH_SNAPSHOT: TopologySnapshot = {
   entities: [
-    { id: 'mimir-01', typeId: 'mimir',     name: 'Yggdrasil', parentId: null, fields: { pages: 1000, writes: 200 }, status: 'running',   updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'mimir-sub-code', typeId: 'mimir_sub', name: 'Mímir/Code', parentId: 'mimir-01', fields: { purpose: 'code' }, status: 'running', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'mimir-sub-ops',  typeId: 'mimir_sub', name: 'Mímir/Ops',  parentId: 'mimir-01', fields: { purpose: 'ops'  }, status: 'running', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'realm-asgard',   typeId: 'realm',     name: 'Asgard',    parentId: null, fields: { vlan: 90, dns: 'asgard.local'  }, status: 'healthy', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'realm-vanaheim', typeId: 'realm',     name: 'Vanaheim',  parentId: null, fields: { vlan: 80, dns: 'vanaheim.local' }, status: 'healthy', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'cluster-valaskjalf', typeId: 'cluster', name: 'Valaskjálf', parentId: 'realm-asgard', fields: { purpose: 'AI', nodes: 8 }, status: 'running', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'host-dgx',   typeId: 'host', name: 'DGX Spark', parentId: 'realm-asgard',   fields: { hw: 'DGX Spark', os: 'Ubuntu' }, status: 'healthy', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'host-mini',  typeId: 'host', name: 'Mac mini',  parentId: 'realm-asgard',   fields: { hw: 'Mac mini',  os: 'macOS'  }, status: 'healthy', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'host-saga',  typeId: 'host', name: 'Saga',      parentId: 'realm-vanaheim', fields: { hw: 'TrueNAS',   os: 'TrueNAS' }, status: 'healthy', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'tyr-01',     typeId: 'tyr',      name: 'Tyr',      parentId: 'cluster-valaskjalf', fields: { activeSagas: 3, pendingRaids: 1, mode: 'active' }, status: 'running', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'bifrost-01', typeId: 'bifrost',  name: 'Bifrost',  parentId: 'cluster-valaskjalf', fields: { reqPerMin: 42, cacheHitRate: 0.68 }, status: 'running', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'svc-pg',     typeId: 'service',  name: 'PostgreSQL', parentId: 'cluster-valaskjalf', fields: { svcType: 'database' }, status: 'healthy', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'model-claude', typeId: 'model',  name: 'Claude',   parentId: 'bifrost-01', fields: { provider: 'Anthropic', location: 'external' }, status: 'idle', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'ravn-huginn',  typeId: 'ravn_long', name: 'Huginn', parentId: 'host-dgx', fields: { persona: 'thought', tokens: 14000 }, status: 'observing', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'raid-01',      typeId: 'raid',      name: 'ragnarok-01', parentId: 'cluster-valaskjalf', fields: { purpose: 'review', state: 'working' }, status: 'processing', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'ravn-raid-01', typeId: 'ravn_raid', name: 'Coord-01', parentId: 'raid-01', fields: { role: 'coord' }, status: 'running', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'skuld-01',     typeId: 'skuld',     name: 'Skuld-01', parentId: 'raid-01', fields: {}, status: 'running', updatedAt: '2026-04-19T00:00:00Z' },
-    { id: 'valk-bryn',    typeId: 'valkyrie',  name: 'Brynhildr', parentId: 'realm-vanaheim', fields: { specialty: 'guardian', autonomy: 'full' }, status: 'observing', updatedAt: '2026-04-19T00:00:00Z' },
+    {
+      id: 'mimir-01',
+      typeId: 'mimir',
+      name: 'Yggdrasil',
+      parentId: null,
+      fields: { pages: 1000, writes: 200 },
+      status: 'running',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'mimir-sub-code',
+      typeId: 'mimir_sub',
+      name: 'Mímir/Code',
+      parentId: 'mimir-01',
+      fields: { purpose: 'code' },
+      status: 'running',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'mimir-sub-ops',
+      typeId: 'mimir_sub',
+      name: 'Mímir/Ops',
+      parentId: 'mimir-01',
+      fields: { purpose: 'ops' },
+      status: 'running',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'realm-asgard',
+      typeId: 'realm',
+      name: 'Asgard',
+      parentId: null,
+      fields: { vlan: 90, dns: 'asgard.local' },
+      status: 'healthy',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'realm-vanaheim',
+      typeId: 'realm',
+      name: 'Vanaheim',
+      parentId: null,
+      fields: { vlan: 80, dns: 'vanaheim.local' },
+      status: 'healthy',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'cluster-valaskjalf',
+      typeId: 'cluster',
+      name: 'Valaskjálf',
+      parentId: 'realm-asgard',
+      fields: { purpose: 'AI', nodes: 8 },
+      status: 'running',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'host-dgx',
+      typeId: 'host',
+      name: 'DGX Spark',
+      parentId: 'realm-asgard',
+      fields: { hw: 'DGX Spark', os: 'Ubuntu' },
+      status: 'healthy',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'host-mini',
+      typeId: 'host',
+      name: 'Mac mini',
+      parentId: 'realm-asgard',
+      fields: { hw: 'Mac mini', os: 'macOS' },
+      status: 'healthy',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'host-saga',
+      typeId: 'host',
+      name: 'Saga',
+      parentId: 'realm-vanaheim',
+      fields: { hw: 'TrueNAS', os: 'TrueNAS' },
+      status: 'healthy',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'tyr-01',
+      typeId: 'tyr',
+      name: 'Tyr',
+      parentId: 'cluster-valaskjalf',
+      fields: { activeSagas: 3, pendingRaids: 1, mode: 'active' },
+      status: 'running',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'bifrost-01',
+      typeId: 'bifrost',
+      name: 'Bifrost',
+      parentId: 'cluster-valaskjalf',
+      fields: { reqPerMin: 42, cacheHitRate: 0.68 },
+      status: 'running',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'svc-pg',
+      typeId: 'service',
+      name: 'PostgreSQL',
+      parentId: 'cluster-valaskjalf',
+      fields: { svcType: 'database' },
+      status: 'healthy',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'model-claude',
+      typeId: 'model',
+      name: 'Claude',
+      parentId: 'bifrost-01',
+      fields: { provider: 'Anthropic', location: 'external' },
+      status: 'idle',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'ravn-huginn',
+      typeId: 'ravn_long',
+      name: 'Huginn',
+      parentId: 'host-dgx',
+      fields: { persona: 'thought', tokens: 14000 },
+      status: 'observing',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'raid-01',
+      typeId: 'raid',
+      name: 'ragnarok-01',
+      parentId: 'cluster-valaskjalf',
+      fields: { purpose: 'review', state: 'working' },
+      status: 'processing',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'ravn-raid-01',
+      typeId: 'ravn_raid',
+      name: 'Coord-01',
+      parentId: 'raid-01',
+      fields: { role: 'coord' },
+      status: 'running',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'skuld-01',
+      typeId: 'skuld',
+      name: 'Skuld-01',
+      parentId: 'raid-01',
+      fields: {},
+      status: 'running',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
+    {
+      id: 'valk-bryn',
+      typeId: 'valkyrie',
+      name: 'Brynhildr',
+      parentId: 'realm-vanaheim',
+      fields: { specialty: 'guardian', autonomy: 'full' },
+      status: 'observing',
+      updatedAt: '2026-04-19T00:00:00Z',
+    },
   ],
   connections: [
-    { id: 'c-solid',  sourceId: 'tyr-01',    targetId: 'bifrost-01',   kind: 'solid'      },
-    { id: 'c-danim',  sourceId: 'tyr-01',    targetId: 'raid-01',      kind: 'dashed-anim' },
-    { id: 'c-dlong',  sourceId: 'bifrost-01',targetId: 'model-claude', kind: 'dashed-long' },
-    { id: 'c-soft',   sourceId: 'ravn-huginn',targetId: 'mimir-01',   kind: 'soft'        },
-    { id: 'c-raid',   sourceId: 'ravn-huginn',targetId: 'ravn-raid-01',kind: 'raid'        },
+    { id: 'c-solid', sourceId: 'tyr-01', targetId: 'bifrost-01', kind: 'solid' },
+    { id: 'c-danim', sourceId: 'tyr-01', targetId: 'raid-01', kind: 'dashed-anim' },
+    { id: 'c-dlong', sourceId: 'bifrost-01', targetId: 'model-claude', kind: 'dashed-long' },
+    { id: 'c-soft', sourceId: 'ravn-huginn', targetId: 'mimir-01', kind: 'soft' },
+    { id: 'c-raid', sourceId: 'ravn-huginn', targetId: 'ravn-raid-01', kind: 'raid' },
   ],
 };
 
@@ -131,11 +269,11 @@ const MINIMAL_SNAPSHOT: TopologySnapshot = {
     },
   ],
   connections: [
-    { id: 'c-solid',     sourceId: 'tyr-01',    targetId: 'bifrost-01',  kind: 'solid'       },
-    { id: 'c-danim',     sourceId: 'tyr-01',    targetId: 'svc-pg',      kind: 'dashed-anim'  },
-    { id: 'c-dlong',     sourceId: 'bifrost-01', targetId: 'model-claude',kind: 'dashed-long' },
-    { id: 'c-soft',      sourceId: 'tyr-01',    targetId: 'mimir-01',    kind: 'soft'         },
-    { id: 'c-raid',      sourceId: 'tyr-01',    targetId: 'svc-pg',      kind: 'raid'         },
+    { id: 'c-solid', sourceId: 'tyr-01', targetId: 'bifrost-01', kind: 'solid' },
+    { id: 'c-danim', sourceId: 'tyr-01', targetId: 'svc-pg', kind: 'dashed-anim' },
+    { id: 'c-dlong', sourceId: 'bifrost-01', targetId: 'model-claude', kind: 'dashed-long' },
+    { id: 'c-soft', sourceId: 'tyr-01', targetId: 'mimir-01', kind: 'soft' },
+    { id: 'c-raid', sourceId: 'tyr-01', targetId: 'svc-pg', kind: 'raid' },
   ],
 };
 
@@ -176,7 +314,9 @@ beforeEach(() => {
 
   // Mock ResizeObserver.
   global.ResizeObserver = vi.fn().mockImplementation((cb) => ({
-    observe: vi.fn(() => cb([{ contentRect: { width: 800, height: 600 } }], null as unknown as ResizeObserver)),
+    observe: vi.fn(() =>
+      cb([{ contentRect: { width: 800, height: 600 } }], null as unknown as ResizeObserver),
+    ),
     disconnect: vi.fn(),
     unobserve: vi.fn(),
   }));
@@ -195,11 +335,7 @@ afterEach(() => {
 });
 
 function wrap(ui: ReactNode) {
-  return render(
-    <ServicesProvider services={{}}>
-      {ui}
-    </ServicesProvider>,
-  );
+  return render(<ServicesProvider services={{}}>{ui}</ServicesProvider>);
 }
 
 // ── Layout: pure function tests ──────────────────────────────────────────────

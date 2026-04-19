@@ -19,16 +19,16 @@ interface RGB {
 }
 
 const C = {
-  ice:    { r: 186, g: 230, b: 253 },
-  frost:  { r: 125, g: 211, b: 252 },
-  moon:   { r: 224, g: 242, b: 254 },
+  ice: { r: 186, g: 230, b: 253 },
+  frost: { r: 125, g: 211, b: 252 },
+  moon: { r: 224, g: 242, b: 254 },
   indigo: { r: 147, g: 197, b: 253 },
-  slate:  { r: 148, g: 163, b: 184 },
-  dim:    { r: 100, g: 115, b: 140 },
-  model:  { r: 140, g: 170, b: 210 },
-  valk:   { r: 170, g: 205, b: 245 },
+  slate: { r: 148, g: 163, b: 184 },
+  dim: { r: 100, g: 115, b: 140 },
+  model: { r: 140, g: 170, b: 210 },
+  valk: { r: 170, g: 205, b: 245 },
   device: { r: 130, g: 155, b: 185 },
-  crit:   { r: 239, g: 68,  b: 68  },
+  crit: { r: 239, g: 68, b: 68 },
 } as const satisfies Record<string, RGB>;
 
 export function rgba(c: RGB, a: number): string {
@@ -37,39 +37,48 @@ export function rgba(c: RGB, a: number): string {
 
 function typeColor(typeId: string): RGB {
   switch (typeId) {
-    case 'tyr':       return C.frost;
-    case 'bifrost':   return C.indigo;
-    case 'volundr':   return C.moon;
-    case 'valkyrie':  return C.valk;
-    case 'model':     return C.model;
-    case 'ravn_long': return C.moon;
-    case 'ravn_raid': return C.ice;
-    case 'skuld':     return C.indigo;
-    case 'printer':   return C.device;
-    case 'vaettir':   return C.device;
-    case 'beacon':    return C.dim;
-    case 'service':   return C.ice;
-    case 'mimir':     return C.moon;
-    case 'mimir_sub': return C.moon;
-    default:          return C.slate;
+    case 'tyr':
+      return C.frost;
+    case 'bifrost':
+      return C.indigo;
+    case 'volundr':
+      return C.moon;
+    case 'valkyrie':
+      return C.valk;
+    case 'model':
+      return C.model;
+    case 'ravn_long':
+      return C.moon;
+    case 'ravn_raid':
+      return C.ice;
+    case 'skuld':
+      return C.indigo;
+    case 'printer':
+      return C.device;
+    case 'vaettir':
+      return C.device;
+    case 'beacon':
+      return C.dim;
+    case 'service':
+      return C.ice;
+    case 'mimir':
+      return C.moon;
+    case 'mimir_sub':
+      return C.moon;
+    default:
+      return C.slate;
   }
 }
 
 export function nodeSize(typeId: string): number {
   return (
-    (CANVAS_CONFIG.nodeSizes as Record<string, number>)[typeId] ??
-    CANVAS_CONFIG.nodeSizes.default
+    (CANVAS_CONFIG.nodeSizes as Record<string, number>)[typeId] ?? CANVAS_CONFIG.nodeSizes.default
   );
 }
 
 // ── Star field ────────────────────────────────────────────────────────────
 
-export function drawStars(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  now: number,
-): void {
+export function drawStars(ctx: CanvasRenderingContext2D, w: number, h: number, now: number): void {
   ctx.save();
   const cols = CANVAS_CONFIG.starGridCols;
   const rows = CANVAS_CONFIG.starGridRows;
@@ -79,7 +88,7 @@ export function drawStars(
       const tw = 0.45 + 0.55 * Math.sin(now / 1400 + seed);
       const x = (seed * 13) % w;
       const y = (seed * 31) % h;
-      ctx.fillStyle = rgba(C.ice, 0.10 + 0.22 * tw);
+      ctx.fillStyle = rgba(C.ice, 0.1 + 0.22 * tw);
       ctx.fillRect(x, y, 1, 1);
     }
   }
@@ -242,7 +251,7 @@ export function drawMimir(
   // Nebula halo
   const neb = ctx.createRadialGradient(x, y, 0, x, y, R * 2.6);
   neb.addColorStop(0, rgba({ r: 210, g: 230, b: 255 }, 0.58 * Math.min(1, scale + 0.2)));
-  neb.addColorStop(0.35, rgba({ r: 180, g: 210, b: 245 }, 0.20 * Math.min(1, scale + 0.2)));
+  neb.addColorStop(0.35, rgba({ r: 180, g: 210, b: 245 }, 0.2 * Math.min(1, scale + 0.2)));
   neb.addColorStop(1, 'rgba(180,210,245,0)');
   ctx.fillStyle = neb;
   ctx.beginPath();
@@ -278,7 +287,7 @@ export function drawMimir(
   ctx.textBaseline = 'middle';
   for (let i = 0; i < outerCount; i++) {
     const a = (i / outerCount) * Math.PI * 2 + now / 6000;
-    ctx.fillStyle = rgba({ r: 210, g: 230, b: 255 }, 0.60 + 0.24 * Math.sin(now / 700 + i));
+    ctx.fillStyle = rgba({ r: 210, g: 230, b: 255 }, 0.6 + 0.24 * Math.sin(now / 700 + i));
     ctx.fillText(
       MIMIR_RUNES[i % MIMIR_RUNES.length] ?? 'ᚠ',
       x + Math.cos(a) * (R + 10 * scale),
@@ -292,7 +301,7 @@ export function drawMimir(
     ctx.font = '10px JetBrainsMono NF, monospace';
     for (let i = 0; i < innerCount; i++) {
       const a = -(i / innerCount) * Math.PI * 2 + now / 4200;
-      ctx.fillStyle = rgba({ r: 170, g: 200, b: 240 }, 0.30 + 0.18 * Math.cos(now / 500 + i));
+      ctx.fillStyle = rgba({ r: 170, g: 200, b: 240 }, 0.3 + 0.18 * Math.cos(now / 500 + i));
       ctx.fillText(
         MIMIR_RUNES[(i + 7) % MIMIR_RUNES.length] ?? 'ᚠ',
         x + Math.cos(a) * (R + 26),
@@ -303,7 +312,7 @@ export function drawMimir(
 
   // Label
   ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = rgba({ r: 210, g: 230, b: 255 }, scale >= 0.85 ? 0.90 : 0.70);
+  ctx.fillStyle = rgba({ r: 210, g: 230, b: 255 }, scale >= 0.85 ? 0.9 : 0.7);
   ctx.font = `600 ${Math.round(10 * Math.max(0.85, scale))}px Inter, sans-serif`;
   ctx.fillText(label, x, y + R + (scale >= 0.85 ? 40 : 20));
   ctx.textBaseline = 'alphabetic';
@@ -387,7 +396,7 @@ export function drawNode(
 ): void {
   if (entity.typeId === 'host') return drawHost(ctx, entity, pos, hovered);
   if (entity.typeId === 'mimir') return drawMimir(ctx, pos, now, 1.0, 'MÍMIR');
-  if (entity.typeId === 'mimir_sub') return drawMimir(ctx, pos, now, 0.40, entity.name);
+  if (entity.typeId === 'mimir_sub') return drawMimir(ctx, pos, now, 0.4, entity.name);
 
   const size = nodeSize(entity.typeId);
   const col = typeColor(entity.typeId);
@@ -407,7 +416,7 @@ export function drawNode(
 
   // Hover ring
   if (hovered) {
-    ctx.strokeStyle = rgba(C.moon, 0.80);
+    ctx.strokeStyle = rgba(C.moon, 0.8);
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, size + 5, 0, Math.PI * 2);
@@ -497,7 +506,7 @@ function drawShape(
 
     case 'ravn_raid':
       // Triangle (pointing up)
-      ctx.fillStyle = rgba(col, 0.90);
+      ctx.fillStyle = rgba(col, 0.9);
       ctx.beginPath();
       ctx.moveTo(x, y - size);
       ctx.lineTo(x + size, y + size * 0.7);
@@ -509,7 +518,7 @@ function drawShape(
     case 'skuld':
       // Hexagon (outlined)
       ctx.fillStyle = 'rgba(9,9,11,0.78)';
-      ctx.strokeStyle = rgba(col, 0.90);
+      ctx.strokeStyle = rgba(col, 0.9);
       ctx.lineWidth = 1.4;
       ctx.beginPath();
       for (let k = 0; k < 6; k++) {
@@ -555,7 +564,7 @@ function drawShape(
       ctx.arc(x, y, size, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = rgba(col, 0.60);
+      ctx.fillStyle = rgba(col, 0.6);
       ctx.beginPath();
       ctx.arc(x, y, 2, 0, Math.PI * 2);
       ctx.fill();
@@ -563,7 +572,7 @@ function drawShape(
 
     case 'raid':
       // Dashed halo
-      ctx.strokeStyle = rgba(C.frost, 0.30);
+      ctx.strokeStyle = rgba(C.frost, 0.3);
       ctx.lineWidth = 1.2;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
@@ -601,10 +610,7 @@ export interface MinimapOpts {
   canvasH: number;
 }
 
-export function drawMinimap(
-  ctx: CanvasRenderingContext2D,
-  opts: MinimapOpts,
-): void {
+export function drawMinimap(ctx: CanvasRenderingContext2D, opts: MinimapOpts): void {
   const MW = CANVAS_CONFIG.minimapWidth;
   const MH = CANVAS_CONFIG.minimapHeight;
   const WW = CANVAS_CONFIG.worldWidth;

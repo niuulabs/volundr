@@ -26,7 +26,7 @@ export const CANVAS_CONFIG = {
 
   /** Cluster layout within a realm. */
   clusterDefaultRadius: 160,
-  clusterRingFactor: 0.50,
+  clusterRingFactor: 0.5,
 
   /** Host placement on the outer ring of its realm. */
   hostRingFactor: 0.82,
@@ -36,11 +36,11 @@ export const CANVAS_CONFIG = {
 
   /** Placement fractions for remaining entity types (fraction of parent radius). */
   valkyrieRingFactor: 0.72,
-  raidRingFactor: 0.60,
+  raidRingFactor: 0.6,
   ravnLongRingFactor: 0.38,
-  ravnRaidRingFactor: 0.30,
+  ravnRaidRingFactor: 0.3,
   skuldRingFactor: 0.28,
-  defaultRingFactor: 0.40,
+  defaultRingFactor: 0.4,
 
   /** Sub-Mímir orbit radius around primary Mímir. */
   subMimirRingRadius: 170,
@@ -99,6 +99,22 @@ export const CANVAS_CONFIG = {
  * See: https://www.adl.org/resources/hate-symbol/odal-rune
  */
 export const MIMIR_RUNES = [
-  'ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ', 'ᚾ', 'ᛁ',
-  'ᛃ', 'ᛈ', 'ᛒ', 'ᛖ', 'ᛗ', 'ᛚ', 'ᛜ', 'ᛞ',
+  'ᚠ',
+  'ᚢ',
+  'ᚦ',
+  'ᚨ',
+  'ᚱ',
+  'ᚲ',
+  'ᚷ',
+  'ᚹ',
+  'ᚾ',
+  'ᛁ',
+  'ᛃ',
+  'ᛈ',
+  'ᛒ',
+  'ᛖ',
+  'ᛗ',
+  'ᛚ',
+  'ᛜ',
+  'ᛞ',
 ] as const;

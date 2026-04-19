@@ -232,7 +232,8 @@ export function TopologyCanvas({
         if (entity.typeId === 'realm') {
           const pos = lay.get(entity.id);
           if (!pos) continue;
-          const vlan = typeof entity.fields['vlan'] === 'number' ? entity.fields['vlan'] : undefined;
+          const vlan =
+            typeof entity.fields['vlan'] === 'number' ? entity.fields['vlan'] : undefined;
           const dns = typeof entity.fields['dns'] === 'string' ? entity.fields['dns'] : undefined;
           drawRealmRing(ctx, pos, CANVAS_CONFIG.realmDefaultRadius, entity.name, now, vlan, dns);
         }
@@ -254,7 +255,7 @@ export function TopologyCanvas({
         const pos = lay.get(entity.id);
         if (!pos) continue;
         const label = entity.typeId === 'mimir' ? 'MÍMIR' : entity.name;
-        const scale = entity.typeId === 'mimir' ? 1.0 : 0.40;
+        const scale = entity.typeId === 'mimir' ? 1.0 : 0.4;
         drawMimir(ctx, pos, now, scale, label);
       }
 
@@ -454,12 +455,7 @@ export function TopologyCanvas({
       />
 
       <div className={styles.controls}>
-        <button
-          className={styles.controlBtn}
-          onClick={zoomIn}
-          aria-label="Zoom in"
-          title="Zoom in"
-        >
+        <button className={styles.controlBtn} onClick={zoomIn} aria-label="Zoom in" title="Zoom in">
           +
         </button>
         <span className={styles.zoomLabel}>{zoomPct}%</span>

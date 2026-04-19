@@ -138,10 +138,7 @@ function placeSubMimirs(subMimirs: TopologyEntity[], out: Map<string, Point>): v
   });
 }
 
-function placeRealms(
-  realms: TopologyEntity[],
-  out: Map<string, Point>,
-): Map<string, Point> {
+function placeRealms(realms: TopologyEntity[], out: Map<string, Point>): Map<string, Point> {
   // Sort for stable ordering across re-renders.
   const sorted = [...realms].sort((a, b) => a.id.localeCompare(b.id));
   const realmPos = new Map<string, Point>();
@@ -171,7 +168,9 @@ function placeClusters(
   const clusterPos = new Map<string, Point>();
 
   for (const cluster of clusters) {
-    const parentPos = cluster.parentId ? (realmPos.get(cluster.parentId) ?? { x: 0, y: 0 }) : { x: 0, y: 0 };
+    const parentPos = cluster.parentId
+      ? (realmPos.get(cluster.parentId) ?? { x: 0, y: 0 })
+      : { x: 0, y: 0 };
     const parentR = CANVAS_CONFIG.realmDefaultRadius;
     const angle = idFraction(cluster.id) * Math.PI * 2;
     const dist = parentR * CANVAS_CONFIG.clusterRingFactor;
@@ -336,13 +335,21 @@ function resolveParentRadius(
 
 function typeRadiusFraction(typeId: string): number {
   switch (typeId) {
-    case 'service':   return CANVAS_CONFIG.serviceRingFactor;
-    case 'model':     return CANVAS_CONFIG.modelFanRadius / CANVAS_CONFIG.clusterDefaultRadius;
-    case 'valkyrie':  return CANVAS_CONFIG.valkyrieRingFactor;
-    case 'raid':      return CANVAS_CONFIG.raidRingFactor;
-    case 'ravn_long': return CANVAS_CONFIG.ravnLongRingFactor;
-    case 'ravn_raid': return CANVAS_CONFIG.ravnRaidRingFactor;
-    case 'skuld':     return CANVAS_CONFIG.skuldRingFactor;
-    default:          return CANVAS_CONFIG.defaultRingFactor;
+    case 'service':
+      return CANVAS_CONFIG.serviceRingFactor;
+    case 'model':
+      return CANVAS_CONFIG.modelFanRadius / CANVAS_CONFIG.clusterDefaultRadius;
+    case 'valkyrie':
+      return CANVAS_CONFIG.valkyrieRingFactor;
+    case 'raid':
+      return CANVAS_CONFIG.raidRingFactor;
+    case 'ravn_long':
+      return CANVAS_CONFIG.ravnLongRingFactor;
+    case 'ravn_raid':
+      return CANVAS_CONFIG.ravnRaidRingFactor;
+    case 'skuld':
+      return CANVAS_CONFIG.skuldRingFactor;
+    default:
+      return CANVAS_CONFIG.defaultRingFactor;
   }
 }

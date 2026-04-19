@@ -51,7 +51,9 @@
   font-size: var(--text-base, 1rem);
   line-height: 1;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .controlBtn:hover {

@@ -88,10 +88,9 @@ describe('ObservatoryPage', () => {
 
   it('shows registry version after registry loads', async () => {
     wrap(<ObservatoryPage />);
-    await waitFor(
-      () => expect(screen.getByText(/types · v\d+/)).toBeInTheDocument(),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(screen.getByText(/types · v\d+/)).toBeInTheDocument(), {
+      timeout: 3000,
+    });
   });
 
   it('shows entity count in minimap caption once topology loads', async () => {
