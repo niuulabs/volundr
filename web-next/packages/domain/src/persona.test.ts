@@ -107,6 +107,12 @@ describe('producedEventSchema', () => {
   it('rejects empty event name', () => {
     expect(() => producedEventSchema.parse({ event: '', schema: {} })).toThrow();
   });
+
+  it('rejects an invalid field type in schema', () => {
+    expect(() =>
+      producedEventSchema.parse({ event: 'build.artifact', schema: { url: 'URL' } }),
+    ).toThrow();
+  });
 });
 
 // ---------------------------------------------------------------------------

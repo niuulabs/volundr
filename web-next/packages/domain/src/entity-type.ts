@@ -72,7 +72,7 @@ export const entityTypeSchema = z.object({
    * Must not be one of the historically appropriated symbols:
    * ᛟ ᛊ ᛏ ᛉ ᚺ ᚻ.
    */
-  rune: z.string().min(1),
+  rune: z.string().length(1),
   /** SVG shape primitive used on the canvas and in registry rows. */
   shape: entityShapeSchema,
   /** CSS color token or hex for this entity type's accent color. */

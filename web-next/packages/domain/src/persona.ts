@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { fieldTypeSchema } from './event-catalog';
 
 /**
  * Canonical roles a Persona may fulfil in a workflow.
@@ -64,8 +65,8 @@ export type ConsumedEvent = z.infer<typeof consumedEventSchema>;
 export const producedEventSchema = z.object({
   /** Event name, must exist in EventCatalog or be created there. */
   event: z.string().min(1),
-  /** Payload field definitions: field-name → type-string. */
-  schema: z.record(z.string(), z.string()),
+  /** Payload field definitions: field-name → {@link FieldType} string. */
+  schema: z.record(z.string(), fieldTypeSchema),
 });
 
 export type ProducedEvent = z.infer<typeof producedEventSchema>;

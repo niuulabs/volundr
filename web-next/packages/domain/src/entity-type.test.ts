@@ -111,6 +111,10 @@ describe('entityTypeSchema', () => {
     expect(() => entityTypeSchema.parse({ ...ravenEntityType, rune: '' })).toThrow();
   });
 
+  it('rejects a multi-character rune', () => {
+    expect(() => entityTypeSchema.parse({ ...ravenEntityType, rune: 'AB' })).toThrow();
+  });
+
   it('rejects invalid shape', () => {
     expect(() => entityTypeSchema.parse({ ...ravenEntityType, shape: 'blob' })).toThrow();
   });
