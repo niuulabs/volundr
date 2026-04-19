@@ -29,6 +29,7 @@
     "@tanstack/react-router": "^1.95.0"
   },
   "dependencies": {
+    "@niuulabs/query": "workspace:*",
     "zod": "^3.24.1"
   },
   "devDependencies": {

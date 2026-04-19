@@ -1,7 +1,7 @@
 {
-  "name": "@niuulabs/plugin-hello",
+  "name": "@niuulabs/domain",
   "version": "0.0.1",
-  "description": "Smoke-test plugin proving the end-to-end composability loop",
+  "description": "Shared cross-plugin domain types and Zod schemas for the Niuu platform",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -24,21 +24,10 @@
     "typecheck": "tsc --noEmit",
     "dev": "tsup --watch"
   },
-  "peerDependencies": {
-    "@tanstack/react-query": "^5.62.0",
-    "@tanstack/react-router": "^1.95.0",
-    "react": "^19.0.0"
-  },
   "dependencies": {
-    "@niuulabs/plugin-sdk": "workspace:*",
-    "@niuulabs/query": "workspace:*",
-    "@niuulabs/ui": "workspace:*"
+    "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@tanstack/react-query": "^5.62.0",
-    "@tanstack/react-router": "^1.95.0",
-    "@types/react": "^19.0.7",
-    "react": "^19.0.0",
     "tsup": "^8.3.5",
     "typescript": "^5.7.3"
   }

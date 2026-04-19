@@ -11,6 +11,7 @@ export default defineConfig({
     '@tanstack/react-query',
     '@tanstack/react-router',
     '@niuulabs/plugin-sdk',
+    '@niuulabs/query',
     '@niuulabs/ui',
   ],
 });
