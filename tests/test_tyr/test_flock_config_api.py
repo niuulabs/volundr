@@ -13,8 +13,8 @@ from tyr.config import AuthConfig, FlockConfig, PersonaOverride, Settings
 def _make_app(flock: FlockConfig | None = None) -> FastAPI:
     """Build a minimal FastAPI app with the flock config router."""
     settings = Settings(auth=AuthConfig(allow_anonymous_dev=True, default_user_id="dev-user"))
-    if flock is not None:
-        settings.dispatch.flock = flock
+    # Always set flock explicitly so local tyr.yaml doesn't leak into tests
+    settings.dispatch.flock = flock if flock is not None else FlockConfig()
 
     app = FastAPI()
     app.state.settings = settings
