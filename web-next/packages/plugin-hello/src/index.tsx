@@ -2,6 +2,7 @@ import { createRoute } from '@tanstack/react-router';
 import { definePlugin } from '@niuulabs/plugin-sdk';
 import { HelloPage } from './ui/HelloPage';
 import { StatusShowcasePage } from './ui/StatusShowcasePage';
+import { OverlaysPage } from './ui/OverlaysPage';
 
 export const helloPlugin = definePlugin({
   id: 'hello',
@@ -18,6 +19,11 @@ export const helloPlugin = definePlugin({
       getParentRoute: () => rootRoute,
       path: '/hello/status-showcase',
       component: StatusShowcasePage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/overlays',
+      component: OverlaysPage,
     }),
   ],
 });

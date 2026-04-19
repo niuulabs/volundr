@@ -5,10 +5,19 @@
  */
 
 @import './primitives/Chip/Chip.css';
+@import './primitives/ConfidenceBar/ConfidenceBar.css';
+@import './primitives/ConfidenceBadge/ConfidenceBadge.css';
+@import './primitives/Dialog/Dialog.css';
+@import './primitives/Drawer/Drawer.css';
 @import './primitives/Kbd/Kbd.css';
 @import './primitives/LiveBadge/LiveBadge.css';
+@import './primitives/Pipe/Pipe.css';
+@import './primitives/Popover/Popover.css';
 @import './primitives/Rune/Rune.css';
 @import './primitives/StateDot/StateDot.css';
+@import './primitives/StatusBadge/StatusBadge.css';
+@import './primitives/Toast/Toast.css';
+@import './primitives/Tooltip/Tooltip.css';
 
 @tailwind components;
 @tailwind utilities;
