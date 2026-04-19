@@ -7,11 +7,7 @@
  */
 
 // Re-export feature-catalog types from plugin-sdk.
-export type {
-  FeatureScope,
-  FeatureModule,
-  UserFeaturePreference,
-} from '@niuulabs/plugin-sdk';
+export type { FeatureScope, FeatureModule, UserFeaturePreference } from '@niuulabs/plugin-sdk';
 
 /* ── Session status (legacy, matches backend API) ──────────────── */
 
@@ -55,12 +51,7 @@ export type SessionSource = GitSource | LocalMountSource;
 
 /* ── Tracker ────────────────────────────────────────────────────── */
 
-export type TrackerIssueStatus =
-  | 'backlog'
-  | 'todo'
-  | 'in_progress'
-  | 'done'
-  | 'cancelled';
+export type TrackerIssueStatus = 'backlog' | 'todo' | 'in_progress' | 'done' | 'cancelled';
 
 export interface TrackerIssue {
   readonly id: string;

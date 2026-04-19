@@ -19,7 +19,14 @@ export const volundrPlugin = definePlugin({
 
 // Domain
 export type { SessionState, Session } from './domain/session';
-export { canTransition, transition, isTerminalState, isActiveState, isProvisioningState, isReadyOrBeyond } from './domain/session';
+export {
+  canTransition,
+  transition,
+  isTerminalState,
+  isActiveState,
+  isProvisioningState,
+  isReadyOrBeyond,
+} from './domain/session';
 export type { MountSourceKind, PodMount, ResourceSpec, PodSpec } from './domain/pod';
 export type { Template } from './domain/template';
 export type { NodeStatus, ClusterNode, ResourceCapacity, Cluster } from './domain/cluster';

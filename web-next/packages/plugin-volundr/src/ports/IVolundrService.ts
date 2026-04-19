@@ -65,14 +65,14 @@ export interface IVolundrService {
   getPresets(): Promise<VolundrPreset[]>;
   getPreset(id: string): Promise<VolundrPreset | null>;
   savePreset(
-    preset: Omit<VolundrPreset, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+    preset: Omit<VolundrPreset, 'id' | 'createdAt' | 'updatedAt'> & { id?: string },
   ): Promise<VolundrPreset>;
   deletePreset(id: string): Promise<void>;
   getAvailableMcpServers(): Promise<McpServerConfig[]>;
   getAvailableSecrets(): Promise<string[]>;
   createSecret(
     name: string,
-    data: Record<string, string>
+    data: Record<string, string>,
   ): Promise<{ name: string; keys: string[] }>;
   getClusterResources(): Promise<ClusterResourceInfo>;
   startSession(config: {
@@ -93,7 +93,7 @@ export interface IVolundrService {
   connectSession(config: { name: string; hostname: string }): Promise<VolundrSession>;
   updateSession(
     sessionId: string,
-    updates: { name?: string; model?: string; branch?: string; tracker_issue_id?: string }
+    updates: { name?: string; model?: string; branch?: string; tracker_issue_id?: string },
   ): Promise<VolundrSession>;
   stopSession(sessionId: string): Promise<void>;
   resumeSession(sessionId: string): Promise<void>;
@@ -110,27 +110,16 @@ export interface IVolundrService {
   getChronicle(sessionId: string): Promise<SessionChronicle | null>;
   subscribeChronicle(
     sessionId: string,
-    callback: (chronicle: SessionChronicle) => void
+    callback: (chronicle: SessionChronicle) => void,
   ): () => void;
   getPullRequests(repoUrl: string, status?: string): Promise<PullRequest[]>;
-  createPullRequest(
-    sessionId: string,
-    title?: string,
-    targetBranch?: string
-  ): Promise<PullRequest>;
-  mergePullRequest(
-    prNumber: number,
-    repoUrl: string,
-    mergeMethod?: string
-  ): Promise<MergeResult>;
+  createPullRequest(sessionId: string, title?: string, targetBranch?: string): Promise<PullRequest>;
+  mergePullRequest(prNumber: number, repoUrl: string, mergeMethod?: string): Promise<MergeResult>;
   getCIStatus(prNumber: number, repoUrl: string, branch: string): Promise<CIStatusValue>;
   getSessionMcpServers(sessionId: string): Promise<McpServer[]>;
   searchTrackerIssues(query: string, projectId?: string): Promise<TrackerIssue[]>;
   getProjectRepoMappings(): Promise<ProjectRepoMapping[]>;
-  updateTrackerIssueStatus(
-    issueId: string,
-    status: TrackerIssue['status']
-  ): Promise<TrackerIssue>;
+  updateTrackerIssueStatus(issueId: string, status: TrackerIssue['status']): Promise<TrackerIssue>;
   getIdentity(): Promise<VolundrIdentity>;
   listUsers(): Promise<VolundrUser[]>;
   getTenants(): Promise<VolundrTenant[]>;
@@ -144,7 +133,7 @@ export interface IVolundrService {
   deleteTenant(id: string): Promise<void>;
   updateTenant(
     id: string,
-    data: { tier?: string; maxSessions?: number; maxStorageGb?: number }
+    data: { tier?: string; maxSessions?: number; maxStorageGb?: number },
   ): Promise<VolundrTenant>;
   getTenantMembers(tenantId: string): Promise<VolundrMember[]>;
   reprovisionUser(userId: string): Promise<VolundrProvisioningResult>;
@@ -158,7 +147,7 @@ export interface IVolundrService {
   getIntegrationCatalog(): Promise<CatalogEntry[]>;
   getIntegrations(): Promise<IntegrationConnection[]>;
   createIntegration(
-    connection: Omit<IntegrationConnection, 'id' | 'createdAt' | 'updatedAt'>
+    connection: Omit<IntegrationConnection, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<IntegrationConnection>;
   deleteIntegration(id: string): Promise<void>;
   testIntegration(id: string): Promise<IntegrationTestResult>;
@@ -172,7 +161,7 @@ export interface IVolundrService {
   restoreWorkspace(id: string): Promise<void>;
   deleteWorkspace(id: string): Promise<void>;
   bulkDeleteWorkspaces(
-    sessionIds: string[]
+    sessionIds: string[],
   ): Promise<{ deleted: number; failed: Array<{ session_id: string; error: string }> }>;
   getAdminSettings(): Promise<AdminSettings>;
   updateAdminSettings(data: { storage?: AdminStorageSettings }): Promise<AdminSettings>;
@@ -180,7 +169,7 @@ export interface IVolundrService {
   toggleFeature(key: string, enabled: boolean): Promise<FeatureModule>;
   getUserFeaturePreferences(): Promise<UserFeaturePreference[]>;
   updateUserFeaturePreferences(
-    preferences: UserFeaturePreference[]
+    preferences: UserFeaturePreference[],
   ): Promise<UserFeaturePreference[]>;
   listTokens(): Promise<PersonalAccessToken[]>;
   createToken(name: string): Promise<CreatePATResult>;
