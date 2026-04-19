@@ -85,17 +85,34 @@ test('validation pill shows error when cycle is created', async ({ page }) => {
   await page.goto('/tyr/workflows');
   await expect(page.getByTestId('workflow-builder')).toBeVisible({ timeout: 5000 });
 
-  // Add two nodes to create a cycle opportunity
+  // Add two fresh stage nodes
   await page.getByTestId('add-stage').click();
   await page.getByTestId('add-stage').click();
 
-  // Get the new node IDs from the DOM
-  const nodeLocators = page.locator('[data-testid^="workflow-node-"]');
-  const allNodes = await nodeLocators.all();
-  // Need at least 2 nodes to create a cycle; trigger connect flow
-  // Use keyboard shortcut — click first new node to select, then connect
-  // The exact interaction depends on node positions; just verify the pill exists
-  await expect(page.getByTestId('validation-pill')).toBeVisible();
+  const allNodes = page.locator('[data-testid^="workflow-node-"]');
+  const total = await allNodes.count();
+  const nodeA = allNodes.nth(total - 2);
+  const nodeB = allNodes.nth(total - 1);
+  const idA = ((await nodeA.getAttribute('data-testid')) ?? '').replace('workflow-node-', '');
+  const idB = ((await nodeB.getAttribute('data-testid')) ?? '').replace('workflow-node-', '');
+
+  // Create edge A→B
+  await nodeA.click({ force: true });
+  await page.getByTestId(`connect-btn-${idA}`).click({ force: true });
+  await nodeB.click({ force: true });
+
+  // Create edge B→A (completes cycle)
+  await nodeB.click({ force: true });
+  await page.getByTestId(`connect-btn-${idB}`).click({ force: true });
+  await nodeA.click({ force: true });
+
+  // Cycle should now be detected
+  const pill = page.getByTestId('validation-pill');
+  await expect(pill).toBeVisible();
+  const issueCount = parseInt((await pill.getAttribute('data-issue-count')) ?? '0');
+  expect(issueCount).toBeGreaterThan(0);
+  await pill.click();
+  await expect(page.locator('[data-testid^="validation-issue-"]').first()).toBeVisible();
 });
 
 test('clicking validation pill expands issue list when issues exist', async ({ page }) => {

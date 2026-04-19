@@ -9,17 +9,9 @@
  * Owner: plugin-tyr (WorkflowBuilder).
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { Workflow, WorkflowNode, WorkflowNodeKind } from '../../domain/workflow';
-import {
-  makeNodeId,
-  makeEdgeId,
-  defaultBezierCPs,
-  STAGE_WIDTH,
-  STAGE_HEIGHT,
-  GATE_SIZE,
-  COND_RADIUS,
-} from './graphUtils';
+import { makeNodeId, makeEdgeId, defaultBezierCPs } from './graphUtils';
 
 export type WorkflowView = 'graph' | 'pipeline' | 'yaml';
 
@@ -77,6 +69,7 @@ export function useWorkflowBuilder(
   const [view, setViewState] = useState<WorkflowView>('graph');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [connectingFromId, setConnectingFromId] = useState<string | null>(null);
+  const connectingFromRef = useRef<string | null>(null);
   const [inspectorNodeId, setInspectorNodeId] = useState<string | null>(null);
 
   const setView = useCallback((v: WorkflowView) => setViewState(v), []);
@@ -105,7 +98,10 @@ export function useWorkflowBuilder(
       edges: prev.edges.filter((e) => e.source !== id && e.target !== id),
     }));
     setSelectedNodeId((s) => (s === id ? null : s));
-    setConnectingFromId((s) => (s === id ? null : s));
+    if (connectingFromRef.current === id) {
+      connectingFromRef.current = null;
+      setConnectingFromId(null);
+    }
     setInspectorNodeId((s) => (s === id ? null : s));
   }, []);
 
@@ -117,26 +113,30 @@ export function useWorkflowBuilder(
   }, []);
 
   const startConnect = useCallback((sourceId: string) => {
+    connectingFromRef.current = sourceId;
     setConnectingFromId(sourceId);
     setSelectedNodeId(sourceId);
   }, []);
 
-  const cancelConnect = useCallback(() => setConnectingFromId(null), []);
+  const cancelConnect = useCallback(() => {
+    connectingFromRef.current = null;
+    setConnectingFromId(null);
+  }, []);
 
   const completeConnect = useCallback((targetId: string) => {
-    setConnectingFromId((fromId) => {
-      if (!fromId || fromId === targetId) return null;
-      setWorkflowState((prev) => {
-        const alreadyExists = prev.edges.some((e) => e.source === fromId && e.target === targetId);
-        if (alreadyExists) return prev;
-        const srcNode = prev.nodes.find((n) => n.id === fromId);
-        const tgtNode = prev.nodes.find((n) => n.id === targetId);
-        if (!srcNode || !tgtNode) return prev;
-        const { cp1, cp2 } = defaultBezierCPs(srcNode.position, tgtNode.position);
-        const newEdge = { id: makeEdgeId(), source: fromId, target: targetId, cp1, cp2 };
-        return { ...prev, edges: [...prev.edges, newEdge] };
-      });
-      return null;
+    const fromId = connectingFromRef.current;
+    connectingFromRef.current = null;
+    setConnectingFromId(null);
+    if (!fromId || fromId === targetId) return;
+    setWorkflowState((prev) => {
+      const alreadyExists = prev.edges.some((e) => e.source === fromId && e.target === targetId);
+      if (alreadyExists) return prev;
+      const srcNode = prev.nodes.find((n) => n.id === fromId);
+      const tgtNode = prev.nodes.find((n) => n.id === targetId);
+      if (!srcNode || !tgtNode) return prev;
+      const { cp1, cp2 } = defaultBezierCPs(srcNode.position, tgtNode.position);
+      const newEdge = { id: makeEdgeId(), source: fromId, target: targetId, cp1, cp2 };
+      return { ...prev, edges: [...prev.edges, newEdge] };
     });
   }, []);
 
@@ -167,12 +167,6 @@ export function useWorkflowBuilder(
       nodes: prev.nodes.map((n) => (n.id === id ? { ...n, label } : n)),
     }));
   }, []);
-
-  // Suppress unused-variable warnings for constants used in nextPosition.
-  void STAGE_WIDTH;
-  void STAGE_HEIGHT;
-  void GATE_SIZE;
-  void COND_RADIUS;
 
   return {
     workflow,

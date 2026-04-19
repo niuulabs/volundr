@@ -44,7 +44,7 @@ describe('useWorkflows', () => {
   it('returns workflows list from the service', async () => {
     const svc = { listWorkflows: vi.fn().mockResolvedValue([wf1, wf2]) };
     const { result } = renderHook(() => useWorkflows(), {
-      wrapper: makeWrapper({ workflows: svc }),
+      wrapper: makeWrapper({ 'tyr.workflows': svc }),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(2);
@@ -55,7 +55,7 @@ describe('useWorkflows', () => {
   it('enters error state when service rejects', async () => {
     const svc = { listWorkflows: vi.fn().mockRejectedValue(new Error('unavailable')) };
     const { result } = renderHook(() => useWorkflows(), {
-      wrapper: makeWrapper({ workflows: svc }),
+      wrapper: makeWrapper({ 'tyr.workflows': svc }),
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error).toBeInstanceOf(Error);
@@ -64,7 +64,7 @@ describe('useWorkflows', () => {
   it('starts in loading state', () => {
     const svc = { listWorkflows: vi.fn().mockReturnValue(new Promise(() => undefined)) };
     const { result } = renderHook(() => useWorkflows(), {
-      wrapper: makeWrapper({ workflows: svc }),
+      wrapper: makeWrapper({ 'tyr.workflows': svc }),
     });
     expect(result.current.isLoading).toBe(true);
   });
@@ -72,7 +72,7 @@ describe('useWorkflows', () => {
   it('returns empty array when service returns empty list', async () => {
     const svc = { listWorkflows: vi.fn().mockResolvedValue([]) };
     const { result } = renderHook(() => useWorkflows(), {
-      wrapper: makeWrapper({ workflows: svc }),
+      wrapper: makeWrapper({ 'tyr.workflows': svc }),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual([]);
@@ -89,7 +89,7 @@ describe('useWorkflow', () => {
       getWorkflow: vi.fn().mockResolvedValue(wf1),
     };
     const { result } = renderHook(() => useWorkflow(wf1.id), {
-      wrapper: makeWrapper({ workflows: svc }),
+      wrapper: makeWrapper({ 'tyr.workflows': svc }),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.name).toBe('Workflow 1');
@@ -99,7 +99,7 @@ describe('useWorkflow', () => {
   it('returns null when workflow not found', async () => {
     const svc = { getWorkflow: vi.fn().mockResolvedValue(null) };
     const { result } = renderHook(() => useWorkflow('missing'), {
-      wrapper: makeWrapper({ workflows: svc }),
+      wrapper: makeWrapper({ 'tyr.workflows': svc }),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toBeNull();
@@ -108,7 +108,7 @@ describe('useWorkflow', () => {
   it('enters error state when service rejects', async () => {
     const svc = { getWorkflow: vi.fn().mockRejectedValue(new Error('not found')) };
     const { result } = renderHook(() => useWorkflow('bad-id'), {
-      wrapper: makeWrapper({ workflows: svc }),
+      wrapper: makeWrapper({ 'tyr.workflows': svc }),
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
   });

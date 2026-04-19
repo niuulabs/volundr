@@ -9,7 +9,7 @@ import { useService } from '@niuulabs/plugin-sdk';
 import type { IWorkflowService } from '../ports';
 
 export function useWorkflows() {
-  const svc = useService<IWorkflowService>('workflows');
+  const svc = useService<IWorkflowService>('tyr.workflows');
   return useQuery({
     queryKey: ['tyr', 'workflows'],
     queryFn: () => svc.listWorkflows(),
@@ -17,7 +17,7 @@ export function useWorkflows() {
 }
 
 export function useWorkflow(id: string) {
-  const svc = useService<IWorkflowService>('workflows');
+  const svc = useService<IWorkflowService>('tyr.workflows');
   return useQuery({
     queryKey: ['tyr', 'workflows', id],
     queryFn: () => svc.getWorkflow(id),

@@ -59,26 +59,26 @@ function wrap(service: Record<string, unknown>) {
 describe('WorkflowBuilderPage', () => {
   it('renders the workflow-builder-page container', async () => {
     const svc = { listWorkflows: vi.fn().mockResolvedValue([wf1]) };
-    render(<WorkflowBuilderPage />, { wrapper: wrap({ workflows: svc }) });
+    render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
     expect(screen.getByTestId('workflow-builder-page')).toBeInTheDocument();
   });
 
   it('shows loading state initially', () => {
     const svc = { listWorkflows: vi.fn().mockReturnValue(new Promise(() => undefined)) };
-    render(<WorkflowBuilderPage />, { wrapper: wrap({ workflows: svc }) });
+    render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
     expect(screen.getByText(/loading workflows/i)).toBeInTheDocument();
   });
 
   it('renders workflow tabs after loading', async () => {
     const svc = { listWorkflows: vi.fn().mockResolvedValue([wf1, wf2]) };
-    render(<WorkflowBuilderPage />, { wrapper: wrap({ workflows: svc }) });
+    render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
     await waitFor(() => expect(screen.getByTestId(`workflow-tab-${wf1.id}`)).toBeInTheDocument());
     expect(screen.getByTestId(`workflow-tab-${wf2.id}`)).toBeInTheDocument();
   });
 
   it('shows the first workflow by default', async () => {
     const svc = { listWorkflows: vi.fn().mockResolvedValue([wf1, wf2]) };
-    render(<WorkflowBuilderPage />, { wrapper: wrap({ workflows: svc }) });
+    render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
     await waitFor(() => expect(screen.getByTestId('workflow-builder')).toBeInTheDocument());
     // The workflow name appears in both the tab and the builder header
     const nameEls = screen.getAllByText('Auth Rewrite');
@@ -87,7 +87,7 @@ describe('WorkflowBuilderPage', () => {
 
   it('switches workflow when tab is clicked', async () => {
     const svc = { listWorkflows: vi.fn().mockResolvedValue([wf1, wf2]) };
-    render(<WorkflowBuilderPage />, { wrapper: wrap({ workflows: svc }) });
+    render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
     await waitFor(() => expect(screen.getByTestId(`workflow-tab-${wf2.id}`)).toBeInTheDocument());
     fireEvent.click(screen.getByTestId(`workflow-tab-${wf2.id}`));
     // The workflow name appears in both the tab and the builder header
@@ -97,19 +97,19 @@ describe('WorkflowBuilderPage', () => {
 
   it('shows error state when service fails', async () => {
     const svc = { listWorkflows: vi.fn().mockRejectedValue(new Error('service down')) };
-    render(<WorkflowBuilderPage />, { wrapper: wrap({ workflows: svc }) });
+    render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
     await waitFor(() => expect(screen.getByText('service down')).toBeInTheDocument());
   });
 
   it('shows no-workflows message when list is empty', async () => {
     const svc = { listWorkflows: vi.fn().mockResolvedValue([]) };
-    render(<WorkflowBuilderPage />, { wrapper: wrap({ workflows: svc }) });
+    render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
     await waitFor(() => expect(screen.getByText(/no workflows found/i)).toBeInTheDocument());
   });
 
   it('renders WorkflowBuilder when workflow is selected', async () => {
     const svc = { listWorkflows: vi.fn().mockResolvedValue([wf1]) };
-    render(<WorkflowBuilderPage />, { wrapper: wrap({ workflows: svc }) });
+    render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
     await waitFor(() => expect(screen.getByTestId('workflow-builder')).toBeInTheDocument());
   });
 });

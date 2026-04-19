@@ -133,7 +133,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     'tyr.dispatcher': dispatcherService,
     'tyr.sessions': tyrSessionService,
     'tyr.tracker': trackerService,
-    workflows: workflowService,
+    'tyr.workflows': workflowService,
     'ravn.personas': ravnPersonas,
     'ravn.ravens': ravnRavens,
     'ravn.sessions': ravnSessions,

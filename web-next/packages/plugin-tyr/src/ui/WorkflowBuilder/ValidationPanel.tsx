@@ -8,7 +8,7 @@
  * Owner: plugin-tyr (WorkflowBuilder).
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { Workflow } from '../../domain/workflow';
 import type { WorkflowIssue } from '../../domain/workflowValidation';
 import { validateWorkflowFull } from '../../domain/workflowValidation';
@@ -35,7 +35,7 @@ const KIND_ICON: Record<WorkflowIssue['kind'], string> = {
 
 export function ValidationPanel({ workflow, onSelectNode }: ValidationPanelProps) {
   const [expanded, setExpanded] = useState(false);
-  const issues = validateWorkflowFull(workflow);
+  const issues = useMemo(() => validateWorkflowFull(workflow), [workflow]);
   const errorCount = issues.filter((i) => i.severity === 'error').length;
   const warnCount = issues.filter((i) => i.severity === 'warning').length;
 

@@ -15,7 +15,6 @@ export interface NodeInspectorProps {
   node: WorkflowNode;
   onClose: () => void;
   onUpdateLabel: WorkflowBuilderActions['updateNodeLabel'];
-  onAddPersona: WorkflowBuilderActions['addPersonaToStage'];
   onRemovePersona: WorkflowBuilderActions['removePersonaFromStage'];
 }
 
@@ -23,7 +22,6 @@ export function NodeInspector({
   node,
   onClose,
   onUpdateLabel,
-  onAddPersona: _onAddPersona,
   onRemovePersona,
 }: NodeInspectorProps) {
   const kindLabel = node.kind === 'stage' ? 'Stage' : node.kind === 'gate' ? 'Gate' : 'Condition';

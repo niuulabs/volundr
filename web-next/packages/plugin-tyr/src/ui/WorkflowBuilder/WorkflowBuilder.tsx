@@ -55,7 +55,6 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
     startConnect,
     cancelConnect,
     completeConnect,
-    addPersonaToStage,
     removePersonaFromStage,
     updateNodeLabel,
     setWorkflow: _setWorkflow,
@@ -191,7 +190,6 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
           node={inspectorNode}
           onClose={() => inspectNode(null)}
           onUpdateLabel={updateNodeLabel}
-          onAddPersona={addPersonaToStage}
           onRemovePersona={removePersonaFromStage}
         />
       )}
