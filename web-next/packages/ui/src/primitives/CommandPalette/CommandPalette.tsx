@@ -97,7 +97,7 @@ export function useCommandPaletteRegistry(): Pick<
 }
 
 // ---------------------------------------------------------------------------
-// Fuzzy search — all query chars must appear in sequence within the target
+// Fuzzy search — all query chars must appear in order within the target
 // ---------------------------------------------------------------------------
 
 function fuzzyMatch(query: string, command: Command): boolean {
