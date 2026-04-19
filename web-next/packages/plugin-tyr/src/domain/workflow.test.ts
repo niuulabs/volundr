@@ -155,9 +155,9 @@ describe('validateWorkflow', () => {
 
   it('throws on duplicate node ids', () => {
     const nodes = [nodeA, { ...nodeA, kind: 'gate' as const, condition: 'x', label: 'dup' }];
-    expect(() =>
-      validateWorkflow(makeWorkflow({ nodes, edges: [] })),
-    ).toThrow(WorkflowValidationError);
+    expect(() => validateWorkflow(makeWorkflow({ nodes, edges: [] }))).toThrow(
+      WorkflowValidationError,
+    );
   });
 
   it('throws when edge source references unknown node', () => {
@@ -182,9 +182,9 @@ describe('validateWorkflow', () => {
   });
 
   it('throws on duplicate edges', () => {
-    expect(() =>
-      validateWorkflow(makeWorkflow({ edges: [edgeAB, edgeAB] })),
-    ).toThrow(WorkflowValidationError);
+    expect(() => validateWorkflow(makeWorkflow({ edges: [edgeAB, edgeAB] }))).toThrow(
+      WorkflowValidationError,
+    );
   });
 
   it('passes for empty workflow (no nodes, no edges)', () => {

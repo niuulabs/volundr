@@ -421,7 +421,10 @@ describe('buildMimirHttpAdapter', () => {
 
     it('appends origin_type and mount params when provided', async () => {
       const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
-      await buildMimirHttpAdapter(client).pages.listSources({ originType: 'web', mountName: 'local' });
+      await buildMimirHttpAdapter(client).pages.listSources({
+        originType: 'web',
+        mountName: 'local',
+      });
       const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
       expect(call).toContain('origin_type=web');
       expect(call).toContain('mount=local');

@@ -501,10 +501,7 @@ export function buildTyrIntegrationHttpAdapter(client: ApiClient): ITyrIntegrati
     },
 
     async testConnection(id: string) {
-      return client.post<ConnectionTestResult>(
-        `/integrations/${encodeURIComponent(id)}/test`,
-        {},
-      );
+      return client.post<ConnectionTestResult>(`/integrations/${encodeURIComponent(id)}/test`, {});
     },
 
     async getTelegramSetup() {

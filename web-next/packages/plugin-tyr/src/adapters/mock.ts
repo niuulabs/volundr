@@ -173,10 +173,7 @@ const SEED_SESSIONS: SessionInfo[] = [
   {
     sessionId: 'sess-002',
     status: 'running',
-    chronicleLines: [
-      '[09:00] Starting PAT generation',
-      '[09:30] JWT signing implemented',
-    ],
+    chronicleLines: ['[09:00] Starting PAT generation', '[09:30] JWT signing implemented'],
     branch: 'feat/auth-rewrite',
     confidence: 65,
     raidName: 'Add PAT generation',
@@ -383,9 +380,7 @@ export function createMockDispatcherService(): IDispatcherService {
  * Create an in-memory ITyrSessionService.
  */
 export function createMockTyrSessionService(): ITyrSessionService {
-  const sessions = new Map<string, SessionInfo>(
-    SEED_SESSIONS.map((s) => [s.sessionId, { ...s }]),
-  );
+  const sessions = new Map<string, SessionInfo>(SEED_SESSIONS.map((s) => [s.sessionId, { ...s }]));
 
   return {
     async getSessions() {

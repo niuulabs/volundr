@@ -189,9 +189,7 @@ describe('buildTyrHttpAdapter', () => {
       const client = makeClient();
       client.get.mockResolvedValue(rawSaga);
       await buildTyrHttpAdapter(client).getSaga('00000000-0000-0000-0000-000000000001');
-      expect(client.get).toHaveBeenCalledWith(
-        '/sagas/00000000-0000-0000-0000-000000000001',
-      );
+      expect(client.get).toHaveBeenCalledWith('/sagas/00000000-0000-0000-0000-000000000001');
     });
 
     it('URL-encodes id', async () => {
@@ -273,7 +271,10 @@ describe('buildTyrHttpAdapter', () => {
       const client = makeClient();
       client.post.mockResolvedValue({ session_id: 'sess-1', chat_endpoint: null });
       const result = await buildTyrHttpAdapter(client).spawnPlanSession('spec text', 'my/repo');
-      expect(client.post).toHaveBeenCalledWith('/sagas/plan', { spec: 'spec text', repo: 'my/repo' });
+      expect(client.post).toHaveBeenCalledWith('/sagas/plan', {
+        spec: 'spec text',
+        repo: 'my/repo',
+      });
       expect(result.sessionId).toBe('sess-1');
       expect(result.chatEndpoint).toBeNull();
     });

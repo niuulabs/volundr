@@ -19,9 +19,9 @@ export function TyrPage() {
       </div>
 
       <p style={{ color: 'var(--color-text-secondary)' }}>
-        Tyr is the autonomous execution engine. It decomposes product goals into Sagas, breaks
-        Sagas into phased Raids, and dispatches Raids to autonomous agents. This placeholder will
-        be replaced by the full Tyr UI.
+        Tyr is the autonomous execution engine. It decomposes product goals into Sagas, breaks Sagas
+        into phased Raids, and dispatches Raids to autonomous agents. This placeholder will be
+        replaced by the full Tyr UI.
       </p>
 
       {isLoading && (
