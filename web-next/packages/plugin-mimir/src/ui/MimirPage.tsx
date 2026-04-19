@@ -18,13 +18,13 @@ export function MimirPage() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="mm-page-shell">
       {/* ── Page header ───────────────────────────────────────────── */}
-      <div className="mimir-page__header" style={{ borderBottom: '1px solid var(--color-border-subtle)', padding: 'var(--space-4) var(--space-6)' }}>
+      <div className="mimir-page__header">
         <Rune glyph="ᛗ" size={28} />
         <div>
-          <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Mímir</h2>
-          <p className="mimir-page__subtitle" style={{ margin: 0 }}>the well of knowledge</p>
+          <h2>Mímir</h2>
+          <p className="mimir-page__subtitle">the well of knowledge</p>
         </div>
       </div>
 
@@ -51,7 +51,7 @@ export function MimirPage() {
         id={`mimir-panel-${activeTab}`}
         role="tabpanel"
         aria-labelledby={`mimir-tab-${activeTab}`}
-        style={{ flex: 1, overflow: 'auto' }}
+        className="mm-tabpanel"
       >
         {activeTab === 'overview' && <OverviewView />}
         {activeTab === 'pages' && <PagesView />}

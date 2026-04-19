@@ -13,8 +13,12 @@ import { useMimirRecentWrites } from './useMimirSources';
 import { MountChip } from './components/MountChip';
 import './mimir-views.css';
 
+const FEED_LIMIT = 12;
+const TIMESTAMP_HOUR_START = 11;
+const TIMESTAMP_HOUR_END = 16;
+
 function formatTimestamp(iso: string): string {
-  return iso.slice(11, 16);
+  return iso.slice(TIMESTAMP_HOUR_START, TIMESTAMP_HOUR_END);
 }
 
 function formatLastWrite(iso: string): string {
@@ -28,7 +32,7 @@ function formatLastWrite(iso: string): string {
 
 export function OverviewView() {
   const { data: mounts, isLoading: mountsLoading, error: mountsError } = useMimirMounts();
-  const { data: feed } = useMimirRecentWrites(12);
+  const { data: feed } = useMimirRecentWrites(FEED_LIMIT);
 
   const totalPages = mounts?.reduce((a, m) => a + m.pages, 0) ?? 0;
   const totalSources = mounts?.reduce((a, m) => a + m.sources, 0) ?? 0;
@@ -40,11 +44,9 @@ export function OverviewView() {
   if (mountsLoading) {
     return (
       <div className="mm-overview">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <div className="mm-status-row">
           <StateDot state="processing" pulse />
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-            loading…
-          </span>
+          <span className="mm-status-text">loading…</span>
         </div>
       </div>
     );
@@ -124,15 +126,9 @@ export function OverviewView() {
                 </span>
               </div>
               {mount.categories && (
-                <div
-                  style={{
-                    marginTop: 'var(--space-2)',
-                    fontSize: 'var(--text-xs)',
-                    color: 'var(--color-text-muted)',
-                  }}
-                >
+                <div className="mm-mount-card__categories">
                   scope:{' '}
-                  <span style={{ color: 'var(--color-accent-cyan)' }}>
+                  <span className="mm-mount-card__categories-val">
                     {mount.categories.join(', ')}
                   </span>
                 </div>
@@ -158,8 +154,8 @@ export function OverviewView() {
                   <MountChip name={entry.mount} />
                 </span>
                 <span className="mm-feed__msg">
-                  <span style={{ color: 'var(--color-text-primary)' }}>{entry.ravn}</span>
-                  <span style={{ color: 'var(--color-text-muted)' }}>{' · '}</span>
+                  <span className="mm-feed__ravn">{entry.ravn}</span>
+                  <span className="mm-feed__sep">{' · '}</span>
                   {entry.message}
                 </span>
               </div>

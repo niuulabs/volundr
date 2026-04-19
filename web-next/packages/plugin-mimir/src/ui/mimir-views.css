@@ -51,6 +51,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  font-size: var(--mm-glyph-size, 16px);
 }
 .mm-page-type-glyph__label {
   font-size: var(--text-xs);
@@ -235,7 +236,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  padding: 3px var(--space-3);
+  padding: 3px var(--space-3) 3px calc(4px + calc(var(--mm-tree-depth, 0) * var(--mm-tree-indent-step, 12px)));
   font-size: var(--text-xs);
   color: var(--color-text-muted);
   cursor: pointer;
@@ -252,7 +253,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 3px var(--space-3);
+  padding: 3px var(--space-3) 3px calc(var(--space-3) + calc(var(--mm-tree-depth, 0) * var(--mm-tree-indent-step, 12px)));
   font-size: var(--text-xs);
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -408,7 +409,7 @@
 }
 .mm-zone-edit-footer {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-2) 0 0;
 }
@@ -562,3 +563,54 @@
 .mm-origin-badge--file   { color: var(--color-accent-emerald); }
 .mm-origin-badge--mail   { color: var(--color-accent-amber); }
 .mm-origin-badge--chat   { color: var(--color-accent-purple); }
+
+/* ── MimirPage shell ──────────────────────────────────────────────────────── */
+.mm-page-shell { display: flex; flex-direction: column; height: 100%; }
+.mm-tabpanel { flex: 1; overflow: auto; }
+
+/* ── Status row (loading) ─────────────────────────────────────────────────── */
+.mm-status-row { display: flex; align-items: center; gap: var(--space-2); }
+.mm-status-text { color: var(--color-text-secondary); font-size: var(--text-sm); }
+
+/* ── Mount card categories ────────────────────────────────────────────────── */
+.mm-mount-card__categories { margin-top: var(--space-2); font-size: var(--text-xs); color: var(--color-text-muted); }
+.mm-mount-card__categories-val { color: var(--color-accent-cyan); }
+
+/* ── Activity feed text ───────────────────────────────────────────────────── */
+.mm-feed__ravn { color: var(--color-text-primary); }
+.mm-feed__sep { color: var(--color-text-muted); }
+
+/* ── Tree indent via CSS variable ─────────────────────────────────────────── */
+:root { --mm-tree-indent-step: 12px; }
+
+/* ── Relationship note ────────────────────────────────────────────────────── */
+.mm-rel-note { color: var(--color-text-secondary); margin-left: var(--space-2); }
+
+/* ── Timeline empty state ─────────────────────────────────────────────────── */
+.mm-timeline-empty { color: var(--color-text-muted); font-size: var(--text-xs); font-style: italic; margin: 0; }
+
+/* ── Zone edit helpers ────────────────────────────────────────────────────── */
+.mm-zone-saving-row { display: flex; align-items: center; gap: var(--space-2); }
+.mm-zone-edit-note { font-size: var(--text-xs); color: var(--color-text-muted); margin: 0; }
+
+/* ── Meta panel helpers ───────────────────────────────────────────────────── */
+.mm-mount-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.mm-btn--block { display: block; margin-bottom: var(--space-1); width: 100%; text-align: left; }
+
+/* ── Page empty states ────────────────────────────────────────────────────── */
+.mm-no-zones { color: var(--color-text-muted); font-size: var(--text-sm); font-style: italic; }
+.mm-no-selection { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--color-text-muted); font-size: var(--text-sm); }
+
+/* ── Source path chip ─────────────────────────────────────────────────────── */
+.mm-source-path-chip {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-accent-cyan);
+  background: color-mix(in srgb, var(--color-accent-cyan) 10%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 1px var(--space-1);
+}
+.mm-source-null { color: var(--color-text-muted); font-style: italic; font-size: var(--text-xs); }
+.mm-source-count { margin: 0; font-size: var(--text-xs); color: var(--color-text-muted); }
+.mm-sources-error { color: var(--color-accent-red); font-size: var(--text-sm); }
+.mm-source-meta { color: var(--color-text-muted); font-size: var(--text-xs); margin: 0; padding-top: 2px; }

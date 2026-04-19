@@ -9,8 +9,10 @@
  */
 
 import { useState } from 'react';
-import { StateDot } from '@niuulabs/ui';
+import { StateDot, Table } from '@niuulabs/ui';
+import type { TableColumn } from '@niuulabs/ui';
 import { useMimirSources } from './useMimirSources';
+import type { Source } from '../domain/source';
 import type { OriginType } from '../domain/source';
 import './mimir-views.css';
 
@@ -27,6 +29,67 @@ const ORIGINS: Array<{ id: OriginType | 'all'; label: string }> = [
 function formatDate(iso: string): string {
   return iso.slice(0, 10);
 }
+
+const SOURCES_COLUMNS: TableColumn<Source>[] = [
+  {
+    key: 'id',
+    header: 'ID / Origin',
+    width: '140px',
+    render: (row) => (
+      <div>
+        <div className="mm-source-id">{row.id.slice(0, 10)}</div>
+        <span
+          className={`mm-origin-badge mm-origin-badge--${row.originType}`}
+          aria-label={`origin: ${row.originType}`}
+        >
+          {row.originType}
+        </span>
+      </div>
+    ),
+  },
+  {
+    key: 'title',
+    header: 'Title',
+    render: (row) => (
+      <div>
+        <div className="mm-source-title">{row.title}</div>
+        <p className="mm-source-meta">
+          ingested {formatDate(row.ingestedAt)} · {row.ingestAgent}
+        </p>
+      </div>
+    ),
+  },
+  {
+    key: 'origin',
+    header: 'Origin / Path',
+    render: (row) =>
+      row.originUrl ? (
+        <span className="mm-source-url" title={row.originUrl}>
+          {row.originUrl}
+        </span>
+      ) : row.originPath ? (
+        <span className="mm-source-url mm-source-url--path">{row.originPath}</span>
+      ) : (
+        <span className="mm-source-null">—</span>
+      ),
+  },
+  {
+    key: 'compiledInto',
+    header: 'Compiled into',
+    render: (row) =>
+      row.compiledInto.length > 0 ? (
+        <div className="mm-source-compiled">
+          {row.compiledInto.map((path) => (
+            <span key={path} className="mm-source-path-chip">
+              {path}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <span className="mm-source-null">not compiled yet</span>
+      ),
+  },
+];
 
 export function SourcesView() {
   const [activeOrigin, setActiveOrigin] = useState<OriginType | 'all'>('all');
@@ -55,137 +118,30 @@ export function SourcesView() {
 
       {/* ── Status ─────────────────────────────────────────────── */}
       {isLoading && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <div className="mm-status-row">
           <StateDot state="processing" pulse />
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-            loading sources…
-          </span>
+          <span className="mm-status-text">loading sources…</span>
         </div>
       )}
 
       {isError && (
-        <div style={{ color: 'var(--color-accent-red)', fontSize: 'var(--text-sm)' }}>
+        <p className="mm-sources-error">
           {error instanceof Error ? error.message : 'failed to load sources'}
-        </div>
+        </p>
       )}
 
       {/* ── Source table ───────────────────────────────────────── */}
       {sources && (
         <>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 'var(--text-xs)',
-              color: 'var(--color-text-muted)',
-            }}
-          >
+          <p className="mm-source-count">
             {sources.length} source{sources.length !== 1 ? 's' : ''}
             {activeOrigin !== 'all' ? ` · origin: ${activeOrigin}` : ''}
           </p>
-
-          <div
-            style={{
-              background: 'var(--color-bg-secondary)',
-              border: '1px solid var(--color-border-subtle)',
-              borderRadius: 'var(--radius-lg)',
-              overflow: 'hidden',
-            }}
+          <Table<Source>
+            columns={SOURCES_COLUMNS}
+            rows={sources}
             aria-label="sources table"
-            role="table"
-          >
-            {/* header */}
-            <div
-              className="mm-source-row"
-              style={{ background: 'var(--color-bg-tertiary)', borderBottom: '1px solid var(--color-border)' }}
-              role="row"
-            >
-              <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }} role="columnheader">ID</span>
-              <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }} role="columnheader">Title</span>
-              <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }} role="columnheader">Origin / content</span>
-              <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }} role="columnheader">Compiled into</span>
-            </div>
-
-            {sources.length === 0 && (
-              <div
-                style={{
-                  padding: 'var(--space-8)',
-                  textAlign: 'center',
-                  color: 'var(--color-text-muted)',
-                  fontSize: 'var(--text-sm)',
-                  fontStyle: 'italic',
-                }}
-              >
-                No sources for this origin filter.
-              </div>
-            )}
-
-            {sources.map((source) => (
-              <div key={source.id} className="mm-source-row" role="row">
-                {/* ID + origin badge */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-                  <span className="mm-source-id">{source.id.slice(0, 10)}</span>
-                  <span
-                    className={`mm-origin-badge mm-origin-badge--${source.originType}`}
-                    aria-label={`origin: ${source.originType}`}
-                  >
-                    {source.originType}
-                  </span>
-                </div>
-
-                {/* Title */}
-                <div>
-                  <span className="mm-source-title">{source.title}</span>
-                  <div
-                    style={{
-                      fontSize: 'var(--text-xs)',
-                      color: 'var(--color-text-muted)',
-                      marginTop: 2,
-                    }}
-                  >
-                    ingested {formatDate(source.ingestedAt)} · {source.ingestAgent}
-                  </div>
-                </div>
-
-                {/* URL or path */}
-                <div>
-                  {source.originUrl ? (
-                    <span className="mm-source-url" title={source.originUrl}>
-                      {source.originUrl}
-                    </span>
-                  ) : source.originPath ? (
-                    <span className="mm-source-url mm-source-url--path">{source.originPath}</span>
-                  ) : (
-                    <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic', fontSize: 'var(--text-xs)' }}>—</span>
-                  )}
-                </div>
-
-                {/* Compiled into */}
-                <div className="mm-source-compiled">
-                  {source.compiledInto.length > 0 ? (
-                    source.compiledInto.map((path) => (
-                      <span
-                        key={path}
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 10,
-                          color: 'var(--color-accent-cyan)',
-                          background: 'color-mix(in srgb, var(--color-accent-cyan) 10%, transparent)',
-                          borderRadius: 'var(--radius-sm)',
-                          padding: '1px 4px',
-                        }}
-                      >
-                        {path}
-                      </span>
-                    ))
-                  ) : (
-                    <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic', fontSize: 'var(--text-xs)' }}>
-                      not compiled yet
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          />
         </>
       )}
     </div>

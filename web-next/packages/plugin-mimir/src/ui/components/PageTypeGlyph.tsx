@@ -36,7 +36,7 @@ export function PageTypeGlyph({ type, size = 16, showLabel = false }: PageTypeGl
       data-type={type}
       aria-label={type}
       title={type}
-      style={{ fontSize: size }}
+      style={{ '--mm-glyph-size': `${size}px` } as React.CSSProperties}
     >
       <span aria-hidden="true">{glyph}</span>
       {showLabel && <span className="mm-page-type-glyph__label">{type}</span>}
