@@ -6,6 +6,7 @@ import {
   createMockTemplateStore,
   createMockPtyStream,
   createMockMetricsStream,
+  createMockFileSystemPort,
 } from './mock';
 
 // ---------------------------------------------------------------------------
@@ -156,7 +157,12 @@ describe('createMockVolundrService', () => {
 
   it('createTenant returns a tenant with the given name', async () => {
     const svc = createMockVolundrService();
-    const tenant = await svc.createTenant({ name: 'acme', tier: 'pro', maxSessions: 10, maxStorageGb: 50 });
+    const tenant = await svc.createTenant({
+      name: 'acme',
+      tier: 'pro',
+      maxSessions: 10,
+      maxStorageGb: 50,
+    });
     expect(tenant.name).toBe('acme');
   });
 
@@ -262,7 +268,15 @@ describe('createMockSessionStore', () => {
       clusterId: 'cl-eitri',
       state: 'requested',
       startedAt: new Date().toISOString(),
-      resources: { cpuRequest: 1, cpuLimit: 2, cpuUsed: 0, memRequestMi: 512, memLimitMi: 1024, memUsedMi: 0, gpuCount: 0 },
+      resources: {
+        cpuRequest: 1,
+        cpuLimit: 2,
+        cpuUsed: 0,
+        memRequestMi: 512,
+        memLimitMi: 1024,
+        memUsedMi: 0,
+        gpuCount: 0,
+      },
       env: {},
     });
 
@@ -284,7 +298,9 @@ describe('createMockSessionStore', () => {
 
   it('updateSession throws for unknown id', async () => {
     const store = createMockSessionStore();
-    await expect(store.updateSession('nope', { state: 'idle' })).rejects.toThrow('Session not found');
+    await expect(store.updateSession('nope', { state: 'idle' })).rejects.toThrow(
+      'Session not found',
+    );
   });
 
   it('deleteSession removes the session and notifies', async () => {
@@ -341,7 +357,13 @@ describe('createMockTemplateStore', () => {
       env: {},
       envSecretRefs: [],
       tools: [],
-      resources: { cpuRequest: '0.5', cpuLimit: '1', memRequestMi: 256, memLimitMi: 512, gpuCount: 0 },
+      resources: {
+        cpuRequest: '0.5',
+        cpuLimit: '1',
+        memRequestMi: 256,
+        memLimitMi: 512,
+        gpuCount: 0,
+      },
       ttlSec: 1_800,
       idleTimeoutSec: 300,
     } as const;
@@ -362,9 +384,7 @@ describe('createMockTemplateStore', () => {
 
   it('updateTemplate throws for unknown id', async () => {
     const store = createMockTemplateStore();
-    await expect(
-      store.updateTemplate('nope', {} as never),
-    ).rejects.toThrow('Template not found');
+    await expect(store.updateTemplate('nope', {} as never)).rejects.toThrow('Template not found');
   });
 
   it('deleteTemplate resolves without throwing', async () => {
@@ -378,17 +398,116 @@ describe('createMockTemplateStore', () => {
 // ---------------------------------------------------------------------------
 
 describe('createMockPtyStream', () => {
-  it('subscribe calls onData with the prompt immediately', () => {
+  it('subscribe returns an unsubscribe function', () => {
+    vi.useFakeTimers();
     const pty = createMockPtyStream();
     const cb = vi.fn();
     const unsub = pty.subscribe('sess-1', cb);
-    expect(cb).toHaveBeenCalledWith('$ ');
+    expect(typeof unsub).toBe('function');
     unsub();
+    vi.useRealTimers();
   });
 
-  it('send is a no-op that does not throw', () => {
+  it('subscribe calls onData with a prompt after a short delay', () => {
+    vi.useFakeTimers();
     const pty = createMockPtyStream();
-    expect(() => pty.send('sess-1', 'ls\n')).not.toThrow();
+    const cb = vi.fn();
+    const unsub = pty.subscribe('sess-1', cb);
+    expect(cb).not.toHaveBeenCalled(); // not yet
+    vi.advanceTimersByTime(100);
+    expect(cb).toHaveBeenCalled();
+    unsub();
+    vi.useRealTimers();
+  });
+
+  it('unsubscribe prevents further notifications', () => {
+    vi.useFakeTimers();
+    const pty = createMockPtyStream();
+    const cb = vi.fn();
+    const unsub = pty.subscribe('sess-1', cb);
+    unsub();
+    vi.advanceTimersByTime(200);
+    // cb may or may not have been called once already; key is no further calls after unsub
+    const callsAfterUnsub = cb.mock.calls.length;
+    pty.send('sess-1', 'data');
+    expect(cb.mock.calls.length).toBe(callsAfterUnsub);
+    vi.useRealTimers();
+  });
+
+  it('send echoes data back to subscribers', () => {
+    vi.useFakeTimers();
+    const pty = createMockPtyStream();
+    const cb = vi.fn();
+    const unsub = pty.subscribe('sess-1', cb);
+    cb.mockClear();
+    pty.send('sess-1', 'a');
+    expect(cb).toHaveBeenCalledWith('a');
+    unsub();
+    vi.useRealTimers();
+  });
+
+  it('send emits newline prompt on carriage return', () => {
+    vi.useFakeTimers();
+    const pty = createMockPtyStream();
+    const cb = vi.fn();
+    const unsub = pty.subscribe('sess-1', cb);
+    cb.mockClear();
+    pty.send('sess-1', '\r');
+    expect(cb).toHaveBeenCalledWith('\r\nmock-output\r\n$ ');
+    unsub();
+    vi.useRealTimers();
+  });
+
+  it('send does not throw when no subscriber is present', () => {
+    const pty = createMockPtyStream();
+    expect(() => pty.send('sess-nobody', 'ls\n')).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// IFileSystemPort
+// ---------------------------------------------------------------------------
+
+describe('createMockFileSystemPort', () => {
+  it('listTree returns a non-empty tree', async () => {
+    const fs = createMockFileSystemPort();
+    const tree = await fs.listTree('sess-1');
+    expect(tree.length).toBeGreaterThan(0);
+  });
+
+  it('listTree includes workspace directories', async () => {
+    const fs = createMockFileSystemPort();
+    const tree = await fs.listTree('sess-1');
+    expect(tree.some((n) => n.kind === 'directory')).toBe(true);
+  });
+
+  it('listTree includes a secret mount node', async () => {
+    const fs = createMockFileSystemPort();
+    const tree = await fs.listTree('sess-1');
+    expect(tree.some((n) => n.isSecret === true)).toBe(true);
+  });
+
+  it('expandDirectory returns children for a known path', async () => {
+    const fs = createMockFileSystemPort();
+    const children = await fs.expandDirectory('sess-1', '/workspace/src');
+    expect(children.length).toBeGreaterThan(0);
+  });
+
+  it('expandDirectory returns [] for unknown path', async () => {
+    const fs = createMockFileSystemPort();
+    const children = await fs.expandDirectory('sess-1', '/does-not-exist');
+    expect(children).toEqual([]);
+  });
+
+  it('readFile returns content for a known file', async () => {
+    const fs = createMockFileSystemPort();
+    const content = await fs.readFile('sess-1', '/workspace/package.json');
+    expect(content).toContain('"name"');
+  });
+
+  it('readFile throws for an unknown file', async () => {
+    const fs = createMockFileSystemPort();
+    await expect(fs.readFile('sess-1', '/not/a/real/file')).rejects.toThrow('File not found');
   });
 });
 

@@ -5,7 +5,12 @@ import {
   createMockTopologyStream,
   createMockEventStream,
 } from '@niuulabs/plugin-observatory';
-import { createMockVolundrService, buildVolundrHttpAdapter } from '@niuulabs/plugin-volundr';
+import {
+  createMockVolundrService,
+  buildVolundrHttpAdapter,
+  createMockPtyStream,
+  createMockFileSystemPort,
+} from '@niuulabs/plugin-volundr';
 import { createApiClient } from '@niuulabs/query';
 import type { NiuuConfig, ServicesMap } from '@niuulabs/plugin-sdk';
 
@@ -33,6 +38,8 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     hello,
     mimir,
     volundr,
+    ptyStream: createMockPtyStream(),
+    filesystem: createMockFileSystemPort(),
     'observatory.registry': createMockRegistryRepository(),
     'observatory.topology': createMockTopologyStream(),
     'observatory.events': createMockEventStream(),
