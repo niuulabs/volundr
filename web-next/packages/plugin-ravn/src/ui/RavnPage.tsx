@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react';
 import { Rune } from '@niuulabs/ui';
 import { OverviewPage } from './OverviewPage';
 import { RavensPage } from './RavensPage';
+import { loadStorage, saveStorage } from './storage';
+import './RavnPage.css';
 
 export type RavnTab = 'overview' | 'ravens';
 
@@ -12,69 +14,23 @@ const TABS: { id: RavnTab; label: string }[] = [
   { id: 'ravens', label: 'Ravens' },
 ];
 
-function loadTab(): RavnTab {
-  try {
-    const raw = localStorage.getItem(TAB_STORAGE_KEY);
-    if (!raw) return 'overview';
-    const parsed = JSON.parse(raw) as string;
-    if (parsed === 'overview' || parsed === 'ravens') return parsed;
-    return 'overview';
-  } catch {
-    return 'overview';
-  }
-}
-
 export function RavnPage() {
-  const [activeTab, setActiveTab] = useState<RavnTab>(loadTab);
+  const [activeTab, setActiveTab] = useState<RavnTab>(() =>
+    loadStorage<RavnTab>(TAB_STORAGE_KEY, 'overview'),
+  );
 
   const handleTabChange = useCallback((tab: RavnTab) => {
     setActiveTab(tab);
-    try {
-      localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(tab));
-    } catch {
-      // ignore
-    }
+    saveStorage(TAB_STORAGE_KEY, tab);
   }, []);
 
   return (
-    <div
-      data-testid="ravn-page"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        background: 'var(--color-bg-primary)',
-      }}
-    >
-      {/* Header */}
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-3)',
-          padding: 'var(--space-3) var(--space-6)',
-          borderBottom: '1px solid var(--color-border)',
-          background: 'var(--color-bg-primary)',
-          flexShrink: 0,
-        }}
-      >
+    <div data-testid="ravn-page" className="rv-page">
+      <header className="rv-page__header">
         <Rune glyph="ᚱ" size={24} />
-        <h2
-          style={{
-            margin: 0,
-            fontSize: 'var(--text-base)',
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-          }}
-        >
-          Ravn · the flock
-        </h2>
+        <h2 className="rv-page__title">Ravn · the flock</h2>
 
-        <nav
-          role="tablist"
-          aria-label="Ravn navigation"
-          style={{ display: 'flex', gap: 'var(--space-1)', marginLeft: 'var(--space-4)' }}
-        >
+        <nav role="tablist" aria-label="Ravn navigation" className="rv-page__tabs">
           {TABS.map((tab) => (
             <button
               key={tab.id}
@@ -85,17 +41,7 @@ export function RavnPage() {
               id={`ravn-tab-${tab.id}`}
               onClick={() => handleTabChange(tab.id)}
               data-testid={`ravn-tab-${tab.id}`}
-              style={{
-                padding: 'var(--space-1) var(--space-3)',
-                borderRadius: 'var(--radius-sm)',
-                border: 'none',
-                background: activeTab === tab.id ? 'var(--color-bg-tertiary)' : 'transparent',
-                color:
-                  activeTab === tab.id ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                cursor: 'pointer',
-                fontSize: 'var(--text-sm)',
-                fontWeight: activeTab === tab.id ? 600 : 400,
-              }}
+              className="rv-page-tab"
             >
               {tab.label}
             </button>
@@ -103,12 +49,11 @@ export function RavnPage() {
         </nav>
       </header>
 
-      {/* Tab panels */}
       <main
         id={`ravn-panel-${activeTab}`}
         role="tabpanel"
         aria-labelledby={`ravn-tab-${activeTab}`}
-        style={{ flex: 1, overflow: 'hidden' }}
+        className="rv-page__panel"
       >
         {activeTab === 'overview' && <OverviewPage />}
         {activeTab === 'ravens' && <RavensPage />}
