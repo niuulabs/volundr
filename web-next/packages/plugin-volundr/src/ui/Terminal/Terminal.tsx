@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { cn } from '@niuulabs/ui';
 import type { IPtyStream } from '../../ports/IPtyStream';
 
 const DEFAULT_RECONNECT_DELAY_MS = 3_000;
@@ -180,12 +181,10 @@ export function Terminal({
 
   return (
     <div
-      className={[
-        'niuu-relative niuu-h-full niuu-w-full niuu-overflow-hidden niuu-rounded-md niuu-bg-[#09090b]',
+      className={cn(
+        'niuu-relative niuu-h-full niuu-w-full niuu-overflow-hidden niuu-rounded-md niuu-bg-bg-primary',
         className,
-      ]
-        .filter(Boolean)
-        .join(' ')}
+      )}
     >
       {connectionState !== 'connected' && (
         <div
@@ -194,12 +193,10 @@ export function Terminal({
           data-testid="terminal-connection-status"
         >
           <span
-            className={[
-              'niuu-inline-block niuu-h-1.5 niuu-w-1.5 niuu-rounded-full',
-              connectionState === 'reconnecting'
-                ? 'niuu-animate-pulse niuu-bg-amber-400'
-                : 'niuu-animate-pulse niuu-bg-zinc-500',
-            ].join(' ')}
+            className={cn(
+              'niuu-inline-block niuu-h-1.5 niuu-w-1.5 niuu-rounded-full niuu-animate-pulse',
+              connectionState === 'reconnecting' ? 'niuu-bg-accent-amber' : 'niuu-bg-text-muted',
+            )}
           />
           {connectionState === 'reconnecting' ? 'reconnecting…' : 'connecting…'}
         </div>

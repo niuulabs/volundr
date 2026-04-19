@@ -24,6 +24,9 @@ export function FileViewer({ path, content, onClose, isLoading, error }: FileVie
   const language = detectLanguage(path);
 
   useEffect(() => {
+    setHtml(null);
+    setHighlightError(null);
+
     if (isLoading || error || !content) return;
 
     let cancelled = false;

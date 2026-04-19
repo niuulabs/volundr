@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { cn } from '@niuulabs/ui';
 import type { FileTreeNode } from '../../ports/IFileSystemPort';
 
 export interface FileTreeProps {
@@ -81,7 +82,7 @@ function FileTreeItem({ node, depth, onOpenFile, activePath }: FileTreeItemProps
 
   return (
     <li
-      role={isDirectory ? 'treeitem' : 'treeitem'}
+      role="treeitem"
       aria-expanded={isDirectory ? expanded : undefined}
       aria-selected={isActive}
       data-testid={`filetree-node-${node.path}`}
@@ -97,15 +98,13 @@ function FileTreeItem({ node, depth, onOpenFile, activePath }: FileTreeItemProps
       )}
 
       <div
-        className={[
+        className={cn(
           'niuu-flex niuu-cursor-pointer niuu-items-center niuu-gap-1.5 niuu-rounded niuu-px-2 niuu-py-0.5 niuu-transition-colors',
           isActive
             ? 'niuu-bg-brand/20 niuu-text-text-primary'
             : 'niuu-text-text-secondary hover:niuu-bg-bg-tertiary hover:niuu-text-text-primary',
-          node.isSecret ? 'niuu-opacity-60' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
+          node.isSecret && 'niuu-opacity-60',
+        )}
         style={{ paddingLeft: `${indentPx + 8}px` }}
         onClick={handleClick}
         onKeyDown={handleKeyDown}

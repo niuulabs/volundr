@@ -104,7 +104,7 @@ export function VolundrSessionPage({ sessionId, readOnly = false }: VolundrSessi
         </div>
 
         {/* Terminal panel */}
-        <div className="niuu-overflow-hidden niuu-rounded-md" style={{ minHeight: 300 }}>
+        <div className="niuu-overflow-hidden niuu-rounded-md niuu-min-h-[300px]">
           <Terminal sessionId={sessionId} stream={ptyStream} readOnly={readOnly} />
         </div>
       </div>
