@@ -50,18 +50,7 @@ export function App() {
 
 function BootScreen({ label }: { label: string }) {
   return (
-    <div
-      style={{
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--color-bg-primary, #09090b)',
-        color: 'var(--color-text-secondary, #a1a1aa)',
-        fontFamily: 'var(--font-mono, ui-monospace)',
-        fontSize: 12,
-      }}
-    >
+    <div className="niuu-h-screen niuu-flex niuu-items-center niuu-justify-center niuu-bg-bg-primary niuu-text-text-secondary niuu-font-mono niuu-text-xs">
       {label}
     </div>
   );

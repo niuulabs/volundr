@@ -1,5 +1,8 @@
 import type { Preview } from '@storybook/react';
 import '@niuulabs/design-tokens/tokens.css';
+import '@niuulabs/ui/styles.css';
+import '@niuulabs/shell/styles.css';
+import '@niuulabs/plugin-hello/styles.css';
 
 const preview: Preview = {
   parameters: {
