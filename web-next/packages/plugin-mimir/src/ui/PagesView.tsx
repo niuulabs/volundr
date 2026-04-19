@@ -29,7 +29,7 @@ export function PagesView() {
   // Auto-select the first page once data loads.
   useEffect(() => {
     if (selectedPath === null && allPages.length > 0) {
-      setSelectedPath(allPages[0].path);
+      setSelectedPath(allPages[0]?.path ?? null);
     }
   }, [allPages, selectedPath]);
 

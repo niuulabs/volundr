@@ -13,6 +13,8 @@ import type { LintReport, DreamCycle, LintIssue, IssueSeverity, LintRule } from 
 import type { MimirStats, MimirGraph, GraphNode, GraphEdge } from '../domain/api-types';
 import type { EmbeddingSearchResult } from '../ports/IEmbeddingStore';
 import type { EntityKind, EntityMeta } from '../domain/entity';
+import type { Source, OriginType } from '../domain/source';
+import type { RecentWrite } from '../ports/IMountAdapter';
 import { tallySeverity } from '../domain/lint';
 
 // ---------------------------------------------------------------------------
@@ -268,6 +270,10 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
         const raw = await client.get<RawMount[]>('/mounts');
         return raw.map(toMount);
       },
+
+      async getRecentWrites(limit = 20): Promise<RecentWrite[]> {
+        return client.get<RecentWrite[]>(`/mounts/writes?limit=${limit}`);
+      },
     },
 
     pages: {
@@ -327,6 +333,21 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
         const qs = options?.kind ? `?kind=${encodeURIComponent(options.kind)}` : '';
         const raw = await client.get<RawEntityMeta[]>(`/entities${qs}`);
         return raw.map(toEntityMeta);
+      },
+
+      async listSources(options?: {
+        originType?: OriginType;
+        mountName?: string;
+      }): Promise<Source[]> {
+        const params = new URLSearchParams();
+        if (options?.originType) params.set('origin_type', options.originType);
+        if (options?.mountName) params.set('mount', options.mountName);
+        const qs = params.toString() ? `?${params.toString()}` : '';
+        return client.get<Source[]>(`/sources${qs}`);
+      },
+
+      async getPageSources(path: string): Promise<Source[]> {
+        return client.get<Source[]>(`/sources/page?path=${encodeURIComponent(path)}`);
       },
     },
 
