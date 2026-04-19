@@ -11,9 +11,7 @@ interface MetaPanelProps {
 }
 
 export function MetaPanel({ page, sources, allPages, onNavigate }: MetaPanelProps) {
-  const backlinks = allPages.filter(
-    (p) => p.related?.some((slug) => page.path.includes(slug)),
-  );
+  const backlinks = allPages.filter((p) => p.related?.some((slug) => page.path.includes(slug)));
 
   return (
     <div className="mm-rightpanel">
@@ -58,7 +56,9 @@ export function MetaPanel({ page, sources, allPages, onNavigate }: MetaPanelProp
           {sources.map((s) => (
             <div key={s.id} className="mm-source-pill">
               <span className="mm-source-pill__id">{s.id.slice(0, 8)}</span>
-              <span className="mm-source-pill__title" title={s.title}>{s.title}</span>
+              <span className="mm-source-pill__title" title={s.title}>
+                {s.title}
+              </span>
             </div>
           ))}
         </div>

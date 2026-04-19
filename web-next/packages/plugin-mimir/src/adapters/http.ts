@@ -384,7 +384,10 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
         return raw.map(toEntityMeta);
       },
 
-      async listSources(options?: { originType?: OriginType; mountName?: string }): Promise<Source[]> {
+      async listSources(options?: {
+        originType?: OriginType;
+        mountName?: string;
+      }): Promise<Source[]> {
         const params = new URLSearchParams();
         if (options?.originType) params.set('origin_type', options.originType);
         if (options?.mountName) params.set('mount', options.mountName);
@@ -394,9 +397,7 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
       },
 
       async getPageSources(path: string): Promise<Source[]> {
-        const raw = await client.get<RawSource[]>(
-          `/page/sources?path=${encodeURIComponent(path)}`,
-        );
+        const raw = await client.get<RawSource[]>(`/page/sources?path=${encodeURIComponent(path)}`);
         return raw.map(toSource);
       },
     },

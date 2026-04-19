@@ -33,9 +33,7 @@ describe('SourcesView', () => {
 
   it('renders origin badges for each source', async () => {
     wrap(<SourcesView />);
-    await waitFor(() =>
-      expect(screen.getAllByLabelText(/origin:/i).length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByLabelText(/origin:/i).length).toBeGreaterThan(0));
   });
 
   it('"all" tab is selected by default', () => {

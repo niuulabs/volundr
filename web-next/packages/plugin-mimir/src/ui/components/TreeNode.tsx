@@ -26,10 +26,7 @@ export function TreeNode({ node, depth, selectedPath, onSelect }: TreeNodeProps)
         onClick={() => onSelect(node.path)}
         aria-current={selectedPath === node.path ? 'page' : undefined}
       >
-        <span
-          className={`mm-conf-dot mm-conf-dot--${conf}`}
-          aria-label={`confidence: ${conf}`}
-        />
+        <span className={`mm-conf-dot mm-conf-dot--${conf}`} aria-label={`confidence: ${conf}`} />
         <span className="mm-tree-leaf__name">{node.name}</span>
         <PageTypeGlyph type={node.page.type} size={TREE_INDENT_STEP - 1} />
       </button>
