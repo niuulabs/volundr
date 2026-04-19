@@ -75,6 +75,18 @@ def test_depends_on_returns_empty():
     assert list(plugin.depends_on()) == []
 
 
+def test_register_service_depends_on_postgres():
+    plugin = RavnPlugin()
+    defn = plugin.register_service()
+    assert "postgres" in defn.depends_on
+
+
+def test_register_service_description_mentions_persona():
+    plugin = RavnPlugin()
+    defn = plugin.register_service()
+    assert "persona" in defn.description.lower()
+
+
 # ---------------------------------------------------------------------------
 # TUI pages
 # ---------------------------------------------------------------------------
@@ -286,8 +298,31 @@ def test_create_api_client_returns_instance():
 
 
 def test_create_api_app_returns_fastapi():
+    from pathlib import Path
+
     from fastapi import FastAPI
 
     plugin = RavnPlugin()
-    app = plugin.create_api_app()
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(Path, "home", staticmethod(lambda: Path("/tmp/ravn-plugin-test")))
+        app = plugin.create_api_app()
+
     assert isinstance(app, FastAPI)
+
+
+def test_create_api_app_includes_personas_endpoint():
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+
+    plugin = RavnPlugin()
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(Path, "home", staticmethod(lambda: Path("/tmp/ravn-plugin-test")))
+        app = plugin.create_api_app()
+
+    client = TestClient(app)
+    resp = client.get("/api/v1/ravn/personas")
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)

@@ -962,6 +962,8 @@ class PodSpecAdditions:
     annotations: dict[str, str] = ()  # type: ignore[assignment]
     env: tuple[dict, ...] = ()
     service_account: str | None = None
+    extra_containers: tuple[dict, ...] = ()
+    init_containers: tuple[dict, ...] = ()
 
     def __post_init__(self) -> None:
         # Ensure dict fields default to empty dicts, not empty tuples
@@ -969,6 +971,31 @@ class PodSpecAdditions:
             object.__setattr__(self, "labels", {})
         if not isinstance(self.annotations, dict):
             object.__setattr__(self, "annotations", {})
+
+
+@dataclass(frozen=True)
+class WorkloadPersonaOverride:
+    """Typed helper for per-persona overrides in workload_config.
+
+    Callers can build these instead of raw dicts.  The ``llm`` dict is
+    merged with global/default LLM config via ``niuu.domain.llm_merge.merge_llm``.
+    """
+
+    name: str
+    llm: dict[str, Any] = field(default_factory=dict)
+    system_prompt_extra: str | None = None
+    iteration_budget: int | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to the wire dict format consumed by workload_config."""
+        d: dict[str, Any] = {"name": self.name}
+        if self.llm:
+            d["llm"] = dict(self.llm)
+        if self.system_prompt_extra:
+            d["system_prompt_extra"] = self.system_prompt_extra
+        if self.iteration_budget is not None:
+            d["iteration_budget"] = self.iteration_budget
+        return d
 
 
 class MountType(StrEnum):
@@ -1414,4 +1441,6 @@ def _merge_pod_specs(a: PodSpecAdditions, b: PodSpecAdditions) -> PodSpecAdditio
         annotations={**a.annotations, **b.annotations},
         env=a.env + b.env,
         service_account=b.service_account or a.service_account,
+        extra_containers=a.extra_containers + b.extra_containers,
+        init_containers=a.init_containers + b.init_containers,
     )

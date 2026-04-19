@@ -31,6 +31,7 @@ from niuu.config import (
     GitLabConfig,  # noqa: F401
     GitLabInstance,  # noqa: F401
 )
+from ravn.config import PersonaSourceConfig
 
 
 # Config file search paths (in order of priority).
@@ -967,6 +968,39 @@ class AuthDiscoveryConfig(BaseModel):
     scopes: str = Field(default="openid profile email", description="OIDC scopes")
 
 
+class GitHubWebhookConfig(BaseModel):
+    """GitHub webhook receiver configuration."""
+
+    secret: str | None = Field(
+        default=None,
+        description="HMAC-SHA256 secret for validating X-Hub-Signature-256 header.",
+    )
+    enabled: bool = Field(
+        default=False,
+        description="Enable GitHub webhook ingestion endpoint.",
+    )
+    rate_limit_per_minute: int = Field(
+        default=100,
+        ge=1,
+        description="Maximum number of webhook events accepted per minute.",
+    )
+
+
+class WebhooksConfig(BaseModel):
+    """Webhook ingestion configuration."""
+
+    github: GitHubWebhookConfig = Field(default_factory=GitHubWebhookConfig)
+
+
+class RavnConfig(BaseModel):
+    """Ravn agent runtime configuration."""
+
+    persona_source: PersonaSourceConfig = Field(
+        default_factory=PersonaSourceConfig,
+        description="Persona configuration source adapter.",
+    )
+
+
 class LinearConfig(BaseModel):
     """Linear issue tracker configuration."""
 
@@ -1030,6 +1064,7 @@ class Settings(BaseSettings):
     secret_injection: SecretInjectionConfig = Field(default_factory=SecretInjectionConfig)
     resource_provider: ResourceProviderConfig = Field(default_factory=ResourceProviderConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
+    webhooks: WebhooksConfig = Field(default_factory=WebhooksConfig)
     linear: LinearConfig = Field(default_factory=LinearConfig)
     pat: PATConfig = Field(default_factory=PATConfig)
     auth_discovery: AuthDiscoveryConfig = Field(default_factory=AuthDiscoveryConfig)
@@ -1047,6 +1082,7 @@ class Settings(BaseSettings):
         default_factory=_default_feature_modules,
         description="Feature module catalog — defines available UI modules.",
     )
+    ravn: RavnConfig = Field(default_factory=RavnConfig)
 
     @classmethod
     def settings_customise_sources(

@@ -38,6 +38,10 @@ data:
       {{- if .Values.dispatch.dispatchPromptTemplate }}
       dispatch_prompt_template: {{ .Values.dispatch.dispatchPromptTemplate | quote }}
       {{- end }}
+      {{- if and .Values.dispatch.inProcess .Values.dispatch.inProcess.llmConfig }}
+      in_process:
+        llm_config: {{ .Values.dispatch.inProcess.llmConfig | toJson }}
+      {{- end }}
 
     {{- if and .Values.planner (or .Values.planner.plannerSystemPrompt .Values.planner.finalizePrompt) }}
     planner:

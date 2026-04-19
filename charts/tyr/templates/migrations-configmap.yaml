@@ -397,4 +397,12 @@ data:
 
   000021_dispatcher_auto_continue.down.sql: |
     ALTER TABLE dispatcher_state DROP COLUMN IF EXISTS auto_continue;
+
+  000022_raid_structured_outcome.up.sql: |
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS structured_outcome JSONB;
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS outcome_event_type TEXT;
+
+  000022_raid_structured_outcome.down.sql: |
+    ALTER TABLE raids DROP COLUMN IF EXISTS structured_outcome;
+    ALTER TABLE raids DROP COLUMN IF EXISTS outcome_event_type;
 {{- end }}

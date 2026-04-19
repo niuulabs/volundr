@@ -8,6 +8,7 @@ import logging
 import os
 import signal
 import sys
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -22,8 +23,11 @@ from ravn.config import (
     resolve_trust_tools,
 )
 from ravn.domain.checkpoint import InterruptReason
+from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.models import (
+    AgentTask,
     Message,
+    OutputMode,
     Session,
     TodoItem,
     TodoStatus,
@@ -97,6 +101,23 @@ def _configure_logging(settings: Settings) -> None:
     logging.basicConfig(level=level, format=fmt, force=True)
 
 
+def _log_effective_config(settings: Settings) -> None:
+    """Emit an INFO log with the effective config for drift detection."""
+    source = os.environ.get("RAVN_CONFIG", "defaults")
+    persona = os.environ.get("RAVN_PERSONA", "default")
+    llm_alias = settings.effective_model()
+    thinking = settings.llm.extended_thinking.enabled
+    budget = settings.llm.extended_thinking.budget_tokens
+    logger.info(
+        "ravn effective config: persona=%s llm_alias=%s thinking=%s budget=%d source=%s",
+        persona,
+        llm_alias,
+        thinking,
+        budget,
+        source,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Builder: LLM
 # ---------------------------------------------------------------------------
@@ -115,11 +136,6 @@ def _build_llm(settings: Settings) -> Any:
     prov = settings.llm.provider
     cls = _import_class(prov.adapter)
     kwargs = _inject_secrets(dict(prov.kwargs), prov.secret_kwargs_env)
-
-    # For the default Anthropic adapter inject well-known top-level settings.
-    if prov.adapter == "ravn.adapters.llm.anthropic.AnthropicAdapter":
-        kwargs.setdefault("api_key", settings.effective_api_key())
-        kwargs.setdefault("base_url", settings.anthropic.base_url)
 
     kwargs.setdefault("model", settings.effective_model())
     kwargs.setdefault("max_tokens", settings.effective_max_tokens())
@@ -164,10 +180,12 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
         except Exception as exc:
             logger.warning("Failed to load embedding adapter: %s — falling back to FTS-only", exc)
 
+    adapter = None
+
     if backend == "sqlite":
         from ravn.adapters.memory.sqlite import SqliteMemoryAdapter
 
-        return SqliteMemoryAdapter(
+        adapter = SqliteMemoryAdapter(
             path=settings.memory.path,
             max_retries=settings.memory.max_retries,
             min_jitter_ms=settings.memory.min_retry_jitter_ms,
@@ -183,7 +201,7 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
             semantic_candidate_limit=settings.embedding.semantic_candidate_limit,
         )
 
-    if backend == "postgres":
+    elif backend == "postgres":
         from ravn.adapters.memory.postgres import PostgresMemoryAdapter
 
         dsn = os.environ.get(settings.memory.dsn_env, "") if settings.memory.dsn_env else ""
@@ -193,43 +211,18 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
                 "Postgres memory backend configured but no DSN provided — memory disabled",
             )
             return None
-        return PostgresMemoryAdapter(dsn=dsn)
+        adapter = PostgresMemoryAdapter(dsn=dsn)
 
-    if backend == "buri":
-        from ravn.adapters.memory.buri import BuriMemoryAdapter
-
-        dsn = os.environ.get(settings.memory.dsn_env, "") if settings.memory.dsn_env else ""
-        dsn = dsn or settings.memory.dsn
-        if not dsn:
-            logger.warning(
-                "Buri memory backend configured but no DSN provided — memory disabled",
-            )
+    else:
+        # Custom backend via fully-qualified class path
+        try:
+            cls = _import_class(backend)
+            adapter = cls(path=settings.memory.path)
+        except Exception as exc:
+            logger.warning("Failed to load custom memory backend %r: %s", backend, exc)
             return None
-        bc = settings.buri
-        reflection_model = settings.memory.reflection_model
-        return BuriMemoryAdapter(
-            dsn=dsn,
-            prefetch_budget=settings.memory.prefetch_budget,
-            prefetch_limit=settings.memory.prefetch_limit,
-            prefetch_min_relevance=settings.memory.prefetch_min_relevance,
-            recency_half_life_days=settings.memory.recency_half_life_days,
-            session_search_truncate_chars=settings.memory.session_search_truncate_chars,
-            cluster_merge_threshold=bc.cluster_merge_threshold,
-            extraction_model=bc.extraction_model,
-            reflection_model=reflection_model,
-            min_confidence=bc.min_confidence,
-            session_summary_max_tokens=bc.session_summary_max_tokens,
-            supersession_cosine_threshold=bc.supersession_cosine_threshold,
-            llm=llm,
-        )
 
-    # Custom backend via fully-qualified class path
-    try:
-        cls = _import_class(backend)
-        return cls(path=settings.memory.path)
-    except Exception as exc:
-        logger.warning("Failed to load custom memory backend %r: %s", backend, exc)
-        return None
+    return adapter
 
 
 # ---------------------------------------------------------------------------
@@ -250,10 +243,10 @@ def _build_permission(
     if no_tools:
         return DenyAllPermission()
 
-    if persona_config is not None and persona_config.permission_mode == "read-only":
-        return DenyAllPermission()
-
+    # Determine effective permission mode: persona override takes precedence
     mode = settings.permission.mode
+    if persona_config is not None and persona_config.permission_mode:
+        mode = persona_config.permission_mode
 
     if mode in ("allow_all", "full_access"):
         return AllowAllPermission()
@@ -265,8 +258,10 @@ def _build_permission(
     from ravn.adapters.memory.approval import ApprovalMemory
     from ravn.adapters.permission.enforcer import PermissionEnforcer
 
+    # Override config mode with the effective mode (persona takes precedence)
+    effective_config = settings.permission.model_copy(update={"mode": mode})
     return PermissionEnforcer(
-        config=settings.permission,
+        config=effective_config,
         workspace_root=workspace,
         approval_memory=ApprovalMemory(project_root=workspace),
     )
@@ -447,9 +442,13 @@ def _build_tools(
 
     # -- Mímir tools (injected when adapter is wired and "mimir" group is active) --
     if mimir is not None and "mimir" in include_groups:
+        from ravn.adapters.tools.entity_extractor import EntityExtractor
         from ravn.adapters.tools.mimir_tools import build_mimir_tools
 
-        tools.extend(build_mimir_tools(mimir))
+        entity_extractor = None
+        if settings.mimir.ingest.entity_detection and llm is not None:
+            entity_extractor = EntityExtractor(mimir=mimir, llm=llm, config=settings.mimir.ingest)
+        tools.extend(build_mimir_tools(mimir, entity_extractor=entity_extractor))
 
     # -- Custom tools from config --
     for ct in settings.tools.custom:
@@ -502,7 +501,8 @@ def _filter_tools(
     """Apply enabled/disabled and persona tool filters.
 
     ``persona_config.allowed_tools`` and ``forbidden_tools`` entries are treated
-    as group prefixes (e.g. ``"mimir"`` matches ``mimir_query``, ``mimir_write``).
+    as group aliases or prefixes (e.g. ``"file"`` expands to read_file, write_file,
+    etc; ``"git"`` matches git_status, git_diff via prefix).
     ``settings.tools.enabled`` / ``disabled`` are exact tool names.
     """
     enabled_names = set(settings.tools.enabled)
@@ -512,7 +512,7 @@ def _filter_tools(
     forbidden_groups: set[str] = set()
     if persona_config is not None:
         if persona_config.allowed_tools:
-            allowed_groups = set(persona_config.allowed_tools)
+            allowed_groups = _expand_allowed_tools(set(persona_config.allowed_tools))
         if persona_config.forbidden_tools:
             forbidden_groups = set(persona_config.forbidden_tools)
 
@@ -532,6 +532,30 @@ def _filter_tools(
     return tools
 
 
+# Maps documented group aliases to actual tool name prefixes.
+# Needed because some groups don't use prefix_ naming (e.g. "file" → "read_file", not "file_read").
+_TOOL_GROUP_ALIASES: dict[str, list[str]] = {
+    "file": ["read_file", "write_file", "edit_file", "glob_search", "grep_search"],
+    "web": ["web_fetch", "web_search"],
+    "terminal": ["terminal", "bash"],
+    "mimir": ["mimir_read", "mimir_write", "mimir_search", "mimir_list", "mimir_ingest"],
+    "cascade": ["cascade_delegate", "cascade_broadcast"],
+    "volundr": ["volundr_session", "volundr_git"],
+    "ravn": ["persona_validate", "persona_save", "skill_list", "skill_run"],
+}
+
+
+def _expand_allowed_tools(allowed: set[str]) -> set[str]:
+    """Expand group aliases in allowed_tools to their constituent tool names."""
+    expanded: set[str] = set()
+    for item in allowed:
+        if item in _TOOL_GROUP_ALIASES:
+            expanded.update(_TOOL_GROUP_ALIASES[item])
+        else:
+            expanded.add(item)
+    return expanded
+
+
 def _groups_for_persona(persona_config: Any) -> list[str]:
     """Derive include_groups from a persona's allowed_tools.
 
@@ -541,8 +565,8 @@ def _groups_for_persona(persona_config: Any) -> list[str]:
     """
     from ravn.adapters.tools.builtin_registry import BUILTIN_TOOLS  # noqa: PLC0415
 
-    allowed: set[str] = set(persona_config.allowed_tools or [])
-    forbidden: set[str] = set(persona_config.forbidden_tools or [])
+    allowed: set[str] = _expand_allowed_tools(set(persona_config.allowed_tools or []))
+    forbidden: set[str] = _expand_allowed_tools(set(persona_config.forbidden_tools or []))
 
     groups: set[str] = {"core"}
     for key, tool_def in BUILTIN_TOOLS.items():
@@ -766,18 +790,27 @@ async def _cli_user_input(question: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Persona resolution (unchanged)
+# Persona resolution
 # ---------------------------------------------------------------------------
 
 
 def _resolve_persona(
     persona_name: str,
     project_config: ProjectConfig | None,
+    settings: Settings | None = None,
+    cwd: Path | None = None,
 ) -> Any:
     """Load and merge a persona with optional ProjectConfig overrides."""
-    from ravn.adapters.personas.loader import PersonaLoader
+    from niuu.utils import import_class, resolve_secret_kwargs  # noqa: PLC0415
+    from ravn.adapters.personas.loader import FilesystemPersonaAdapter  # noqa: PLC0415
 
-    loader = PersonaLoader()
+    if settings is not None:
+        cfg = settings.persona_source
+        cls = import_class(cfg.adapter)
+        kwargs = resolve_secret_kwargs(cfg.kwargs, cfg.secret_kwargs_env)
+        loader = cls(**kwargs)
+    else:
+        loader = FilesystemPersonaAdapter(cwd=cwd)
 
     name = persona_name.strip() or (
         project_config.persona.strip() if project_config is not None else ""
@@ -790,8 +823,21 @@ def _resolve_persona(
         typer.echo(f"Warning: persona '{name}' not found — using defaults.", err=True)
         return None
 
+    # Apply per-sidecar overrides injected by Volundr at flock dispatch time.
+    # These live in settings.persona_overrides and are only present when the
+    # sidecar YAML was generated with per-persona system_prompt_extra /
+    # iteration_budget overrides (NIU-638).
+    if settings is not None:
+        from ravn.adapters.personas.overrides import apply_config_overrides  # noqa: PLC0415
+
+        overrides = settings.persona_overrides.model_dump(exclude_defaults=True)
+        if overrides:
+            persona = apply_config_overrides(persona, overrides)
+
     if project_config is not None:
-        persona = PersonaLoader.merge(persona, project_config)
+        # merge() is a pure data transform on PersonaConfig + ProjectConfig,
+        # not adapter-specific — safe to call on the concrete class directly.
+        persona = FilesystemPersonaAdapter.merge(persona, project_config)
 
     return persona
 
@@ -907,15 +953,8 @@ def _build_agent(
     profile: RavnProfile | None = None,
     session: Session | None = None,
     task_id: str | None = None,
+    sleipnir_publisher: object | None = None,
 ) -> tuple[RavnAgent, Any]:
-    api_key = settings.effective_api_key()
-    if not api_key:
-        typer.echo(
-            "Error: No API key found. Set ANTHROPIC_API_KEY or configure ravn.yaml.",
-            err=True,
-        )
-        raise typer.Exit(1)
-
     from ravn.adapters.channels.composite import CompositeChannel
     from ravn.adapters.cli_channel import CliChannel
     from ravn.budget import IterationBudget
@@ -999,6 +1038,7 @@ def _build_agent(
         post_tool_hooks=post_hooks or None,
         user_input_fn=_cli_user_input,
         memory=memory,
+        mimir=mimir,
         episode_summary_max_chars=settings.agent.episode_summary_max_chars,
         episode_task_max_chars=settings.agent.episode_task_max_chars,
         iteration_budget=iteration_budget,
@@ -1015,6 +1055,10 @@ def _build_agent(
         checkpoint_every_n_tools=cp_cfg.checkpoint_every_n_tools,
         auto_checkpoint_before_destructive=cp_cfg.auto_before_destructive,
         budget_milestone_fractions=cp_cfg.budget_milestone_fractions,
+        # NIU-598: session lifecycle events + learnings injection
+        sleipnir_publisher=sleipnir_publisher,
+        reflection_config=settings.reflection,
+        persona=persona_config.name if persona_config else "",
     )
 
     return agent, channel
@@ -1070,7 +1114,7 @@ def run(
     # --persona overrides the profile's persona reference; if neither is given
     # the persona is taken from the profile (or ProjectConfig as fallback).
     effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
-    persona_config = _resolve_persona(effective_persona, project_config)
+    persona_config = _resolve_persona(effective_persona, project_config, settings=settings)
 
     asyncio.run(
         _run_with_signals(
@@ -1109,6 +1153,13 @@ async def _run_with_signals(
             checkpoint_id=resume_checkpoint_id,
         )
 
+    # NIU-598: create in-process bus for post-session reflection (standalone CLI mode).
+    in_process_bus: Any | None = None
+    if settings.reflection.enabled:
+        from sleipnir.adapters.in_process import InProcessBus
+
+        in_process_bus = InProcessBus()
+
     agent, channel = _build_agent(
         settings,
         no_tools=no_tools,
@@ -1116,7 +1167,23 @@ async def _run_with_signals(
         profile=profile,
         session=restored_session,
         task_id=resume_task_id,
+        sleipnir_publisher=in_process_bus,
     )
+
+    # NIU-598: start post-session reflection service after agent is built.
+    reflection_svc: Any | None = None
+    if in_process_bus is not None:
+        _refl_mimir = _build_mimir(settings)
+        if _refl_mimir is not None:
+            from ravn.adapters.reflection.post_session import PostSessionReflectionService
+
+            reflection_svc = PostSessionReflectionService(
+                subscriber=in_process_bus,
+                mimir=_refl_mimir,
+                llm=_build_llm(settings),
+                config=settings.reflection,
+            )
+            await reflection_svc.start()
 
     # Register signal handlers after agent is built so they can call agent.interrupt().
     def _on_signal(reason: InterruptReason) -> None:
@@ -1147,6 +1214,14 @@ async def _run_with_signals(
                 f"\n[ravn] State saved. Resume with: ravn --resume {agent.task_id}",
                 err=True,
             )
+        # NIU-598: flush pending events then tear down the reflection service.
+        if in_process_bus is not None:
+            try:
+                await in_process_bus.flush()
+            except Exception:
+                pass
+        if reflection_svc is not None:
+            await reflection_svc.stop()
 
 
 async def _load_checkpoint_session(
@@ -1348,7 +1423,7 @@ def resume(
     settings = Settings()
     _configure_logging(settings)
     project_config = ProjectConfig.discover()
-    persona_config = _resolve_persona("", project_config)
+    persona_config = _resolve_persona("", project_config, settings=settings)
 
     asyncio.run(
         _run_with_signals(
@@ -1509,7 +1584,7 @@ def gateway(
     project_config = ProjectConfig.discover()
     ravn_profile = _resolve_profile(profile)
     effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
-    persona_config = _resolve_persona(effective_persona, project_config)
+    persona_config = _resolve_persona(effective_persona, project_config, settings=settings)
 
     # CLI flags override config file.
     if telegram:
@@ -1574,14 +1649,6 @@ async def _run_gateway(
     from ravn.adapters.channels.gateway_telegram import TelegramGateway
     from ravn.budget import IterationBudget
     from ravn.ports.channel import ChannelPort
-
-    api_key = settings.effective_api_key()
-    if not api_key:
-        typer.echo(
-            "Error: No API key found. Set ANTHROPIC_API_KEY or configure ravn.yaml.",
-            err=True,
-        )
-        raise typer.Exit(1)
 
     if profile is not None:
         system_prompt, max_iterations, max_tokens_gw = _apply_profile(
@@ -1731,10 +1798,11 @@ def daemon(
 
     settings = Settings()
     _configure_logging(settings)
+    _log_effective_config(settings)
     project_config = ProjectConfig.discover()
     ravn_profile = _resolve_profile(profile)
     effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
-    persona_config = _resolve_persona(effective_persona, project_config)
+    persona_config = _resolve_persona(effective_persona, project_config, settings=settings)
 
     asyncio.run(
         _run_daemon(settings, persona_config=persona_config, profile=ravn_profile, resume=resume)
@@ -1767,10 +1835,11 @@ def listen(
 
     settings = Settings()
     _configure_logging(settings)
+    _log_effective_config(settings)
     project_config = ProjectConfig.discover()
     ravn_profile = _resolve_profile(profile)
     effective_persona = persona or (ravn_profile.persona if ravn_profile else "")
-    persona_config = _resolve_persona(effective_persona, project_config)
+    persona_config = _resolve_persona(effective_persona, project_config, settings=settings)
 
     asyncio.run(
         _run_daemon(
@@ -1830,6 +1899,14 @@ async def _run_daemon(
     # Populated by _wire_cron after drive_loop is created; captured by _agent_factory.
     cron_tools: list[Any] = []
 
+    # NIU-598: shared in-process bus for post-session reflection (daemon mode).
+    # Captured by _agent_factory so each agent created by the daemon publishes to it.
+    daemon_bus: Any | None = None
+    if settings.reflection.enabled:
+        from sleipnir.adapters.in_process import InProcessBus
+
+        daemon_bus = InProcessBus()
+
     def _agent_factory(
         channel: ChannelPort,
         task_id: str | None = None,
@@ -1842,9 +1919,7 @@ async def _run_daemon(
         resolved_max_iterations = max_iterations
         resolved_max_tokens = settings.effective_max_tokens()
         if task_persona and task_persona != (persona_config.name if persona_config else None):
-            from ravn.adapters.personas.loader import PersonaLoader
-
-            task_persona_cfg = PersonaLoader().load(task_persona)
+            task_persona_cfg = _resolve_persona(task_persona, None, settings=settings)
             if task_persona_cfg is not None:
                 resolved_persona = task_persona_cfg
                 if task_persona_cfg.system_prompt_template:
@@ -1886,7 +1961,7 @@ async def _run_daemon(
             mimir=daemon_mimir,
             persona_config=resolved_persona,
             profile=profile,
-            discovery=_cascade_discovery,
+            discovery=_cascade_participant.discovery if _cascade_participant is not None else None,
         )
         if profile_cfg.include_mcp:
             tools.extend(_filter_tools(mcp_tools, settings, resolved_persona))
@@ -1894,12 +1969,16 @@ async def _run_daemon(
             # Add cascade tools (parallel task execution) if wired
             # NOTE: cascade_tools uses the same monkey-patch pattern as before —
             # tracked as tech debt to align with the cron pattern.
+            # NIU-612: Apply persona's allowed_tools filter to cascade/cron tools.
             cascade_tools = getattr(drive_loop, "_cascade_tools", [])
-            tools.extend(cascade_tools)
+            tools.extend(_filter_tools(cascade_tools, settings, resolved_persona))
 
-            # Add cron scheduling tools
+            # Add cron scheduling tools (also filtered by persona)
             if cron_tools:
-                tools.extend(cron_tools)
+                tools.extend(_filter_tools(cron_tools, settings, resolved_persona))
+
+        # NIU-571: Apply trust gradient constraints for thread-triggered tasks
+        tools = _apply_trust_filter(tools, settings, triggered_by)
 
         # NIU-571: Apply trust gradient constraints for thread-triggered tasks
         tools = _apply_trust_filter(tools, settings, triggered_by)
@@ -1918,6 +1997,7 @@ async def _run_daemon(
             post_tool_hooks=post_hooks or None,
             user_input_fn=None,
             memory=memory,
+            mimir=daemon_mimir,
             episode_summary_max_chars=settings.agent.episode_summary_max_chars,
             episode_task_max_chars=settings.agent.episode_task_max_chars,
             iteration_budget=budget,
@@ -1929,6 +2009,13 @@ async def _run_daemon(
             input_token_cost_per_million=settings.memory.input_token_cost_per_million,
             output_token_cost_per_million=settings.memory.output_token_cost_per_million,
             extended_thinking=extended_thinking,
+            # NIU-598: session lifecycle events + learnings injection
+            sleipnir_publisher=daemon_bus,
+            reflection_config=settings.reflection,
+            persona=resolved_persona.name if resolved_persona else "",
+            # NIU-612: persona config for outcome parsing + early termination
+            persona_config=resolved_persona,
+            stop_on_outcome=resolved_persona.stop_on_outcome if resolved_persona else False,
         )
 
     tasks: list[asyncio.Task] = []
@@ -1980,8 +2067,7 @@ async def _run_daemon(
     event_publisher: EventPublisherPort = NoOpEventPublisher()
     trigger_names: list[str] = []
     drive_loop: Any = None
-    _cascade_mesh: Any = None
-    _cascade_discovery: Any = None
+    _cascade_participant: Any = None
     if settings.initiative.enabled or task_dispatch:
         if settings.sleipnir.enabled:
             event_publisher = RabbitMQEventPublisher(settings.sleipnir)
@@ -2020,16 +2106,32 @@ async def _run_daemon(
         # Wire cascade tools when enabled (Mode 1 local + optional mesh/spawn)
         if settings.cascade.enabled:
             _active_profile_name = profile.name if profile else "default"
-            _cascade_mesh, _cascade_discovery = _wire_cascade(
+            _cascade_participant = _wire_cascade(
                 drive_loop, settings, persona_config, _active_profile_name
             )
-            if _cascade_discovery is not None:
-                await _cascade_discovery.start()
-            if _cascade_mesh is not None:
-                await _cascade_mesh.start()
+            if _cascade_participant is not None:
+                await _cascade_participant.start()
+                _cascade_mesh = _cascade_participant.mesh
+                pending = getattr(_cascade_mesh, "_pending_outcome_subscriptions", [])
+                for event_type, handler in pending:
+                    logger.info("mesh: subscribing to event_type=%s", event_type)
+                    await _cascade_mesh.subscribe(event_type, handler)
 
         trigger_names = [t.name for t in drive_loop._triggers]
         tasks.append(asyncio.create_task(drive_loop.run(), name="drive_loop"))
+
+    # NIU-598: start post-session reflection service for daemon mode.
+    daemon_reflection_svc: Any | None = None
+    if daemon_bus is not None and daemon_mimir is not None:
+        from ravn.adapters.reflection.post_session import PostSessionReflectionService
+
+        daemon_reflection_svc = PostSessionReflectionService(
+            subscriber=daemon_bus,
+            mimir=daemon_mimir,
+            llm=llm,
+            config=settings.reflection,
+        )
+        await daemon_reflection_svc.start()
 
     channels_str = ", ".join(gw_tasks) if gw_tasks else "none"
     triggers_str = ", ".join(trigger_names) if trigger_names else "none"
@@ -2046,6 +2148,13 @@ async def _run_daemon(
 
     if not tasks:
         typer.echo("No channels or triggers enabled — daemon has nothing to do.", err=True)
+        if daemon_bus is not None:
+            try:
+                await daemon_bus.flush()
+            except Exception:
+                pass
+        if daemon_reflection_svc is not None:
+            await daemon_reflection_svc.stop()
         return
 
     try:
@@ -2058,12 +2167,18 @@ async def _run_daemon(
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        if _cascade_mesh is not None:
-            await _cascade_mesh.stop()
-        if _cascade_discovery is not None:
-            await _cascade_discovery.stop()
+        if _cascade_participant is not None:
+            await _cascade_participant.stop()
         await event_publisher.close()
         await _shutdown_mcp(mcp_manager)
+        # NIU-598: flush pending events before tearing down daemon reflection service.
+        if daemon_bus is not None:
+            try:
+                await daemon_bus.flush()
+            except Exception:
+                pass
+        if daemon_reflection_svc is not None:
+            await daemon_reflection_svc.stop()
 
 
 def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> list[Any]:
@@ -2197,6 +2312,18 @@ def _wire_mimir_triggers(
                 settings.recap.poll_interval_seconds,
             )
 
+    # Dream cycle trigger (NIU-587) — nightly Mímir enrichment, lint, cross-reference.
+    if settings.dream_cycle.enabled:
+        from ravn.adapters.triggers.dream_cycle import DreamCycleTrigger
+
+        drive_loop.register_trigger(DreamCycleTrigger(config=settings.dream_cycle))
+        logger.info(
+            "dream_cycle: trigger registered (cron=%r, persona=%r, budget=$%.2f, poll=%ds)",
+            settings.dream_cycle.cron_expression,
+            settings.dream_cycle.persona,
+            settings.dream_cycle.token_budget_usd,
+            settings.dream_cycle.poll_interval_seconds,
+        )
 
 def _wire_cron(
     drive_loop: Any,
@@ -2265,7 +2392,7 @@ def _wire_cascade(
     settings: Settings,
     persona_config: Any | None = None,
     profile_name: str = "default",
-) -> None:
+) -> Any:
     """Wire cascade tools and mesh RPC handler onto the drive loop.
 
     This wires up:
@@ -2307,8 +2434,15 @@ def _wire_cascade(
         discovery is not None,
     )
 
-    # Store cascade tools on drive_loop for agent_factory to pick up
-    drive_loop._cascade_tools = cascade_tools
+    # Build mesh routing tools (event-type based routing)
+    from ravn.adapters.tools.mesh_routing_tools import build_mesh_routing_tools  # noqa: PLC0415
+
+    mesh_routing_tools = build_mesh_routing_tools(mesh=mesh, discovery=discovery)
+    if mesh_routing_tools:
+        logger.info("mesh_routing: registered %d tools", len(mesh_routing_tools))
+
+    # Store all tools on drive_loop for agent_factory to pick up
+    drive_loop._cascade_tools = cascade_tools + mesh_routing_tools
 
     # Wire the mesh RPC handler
     async def _handle_mesh_rpc(message: dict) -> dict:
@@ -2317,8 +2451,6 @@ def _wire_cascade(
         if msg_type == "task_dispatch":
             task_dict = message.get("task", {})
             try:
-                from ravn.domain.models import AgentTask, OutputMode  # noqa: PLC0415
-
                 task = AgentTask(
                     task_id=task_dict["task_id"],
                     title=task_dict.get("title", "remote task"),
@@ -2365,6 +2497,57 @@ def _wire_cascade(
                 "event_count": len(result.events),
             }
 
+        if msg_type == "work_request":
+            # Synchronous work request - enqueue, wait for completion, return result
+            # Used for event-type based routing (persona-to-persona work delegation)
+            prompt = message.get("prompt", "")
+            event_type = message.get("event_type", "")
+            request_id = message.get("request_id", str(uuid.uuid4()))
+            timeout_s = float(message.get("timeout_s", 120.0))
+
+            task = AgentTask(
+                task_id=f"work_{request_id}",
+                title=f"Work request: {event_type}" if event_type else "Work request",
+                initiative_context=prompt,
+                triggered_by=f"mesh:work_request:{event_type}",
+                output_mode=OutputMode.SILENT,
+                priority=5,
+            )
+
+            try:
+                await drive_loop.enqueue(task)
+                # Wait for completion with timeout
+                result = await asyncio.wait_for(
+                    drive_loop.wait_for_result(task.task_id),
+                    timeout=timeout_s,
+                )
+                output = result.output if result else ""
+
+                # Parse outcome block if present
+                from niuu.domain.outcome import parse_outcome_block  # noqa: PLC0415
+
+                response: dict[str, Any] = {
+                    "status": "complete",
+                    "request_id": request_id,
+                    "output": output,
+                    "event_type": event_type,
+                }
+
+                parsed = parse_outcome_block(output)
+                if parsed is not None:
+                    response["outcome"] = {
+                        "fields": parsed.fields,
+                        "valid": parsed.valid,
+                        "errors": parsed.errors,
+                    }
+
+                return response
+            except TimeoutError:
+                return {"status": "timeout", "request_id": request_id, "event_type": event_type}
+            except Exception as exc:
+                logger.error("work_request failed: %s", exc)
+                return {"status": "error", "request_id": request_id, "error": str(exc)}
+
         return {"error": "unknown_message_type", "type": msg_type}
 
     drive_loop.set_rpc_handler(_handle_mesh_rpc)
@@ -2372,51 +2555,246 @@ def _wire_cascade(
     if mesh is not None and hasattr(mesh, "set_rpc_handler"):
         mesh.set_rpc_handler(drive_loop.handle_rpc)
 
-    return mesh, discovery
+    # Wire mesh and persona_config for outcome event publishing
+    drive_loop.set_mesh(mesh)
+    drive_loop.set_persona_config(persona_config)
+
+    # Subscribe to event types this persona consumes
+    if mesh is not None and persona_config is not None:
+        consumes = getattr(persona_config, "consumes", None)
+        event_types = getattr(consumes, "event_types", []) if consumes else []
+
+        # Register fan-in contributors from the persona catalog so the
+        # buffer knows how many producer outcomes to collect.
+        # When discovery is active, only include personas that are actual
+        # peers in the flock — not all installed personas.
+        if persona_config and persona_config.fan_in.contributes_to:
+            from ravn.adapters.personas.loader import FilesystemPersonaAdapter  # noqa: PLC0415
+
+            loader = FilesystemPersonaAdapter()
+            target = persona_config.fan_in.contributes_to
+            contributors = loader.find_contributors(target)
+
+            # Filter to only peers present in the flock (via discovery)
+            if discovery is not None and hasattr(discovery, "peers"):
+                flock_personas = {p.persona for p in discovery.peers().values()}
+                # Include self — discovery.peers() only returns others
+                if persona_config:
+                    flock_personas.add(persona_config.name)
+                contributors = [c for c in contributors if c.name in flock_personas]
+
+            # Only enable fan-in when there are multiple contributors to wait for.
+            # Solo contributor (e.g. reviewer without security in the flock)
+            # acts independently — no fan-in accumulation needed.
+            if len(contributors) > 1:
+                drive_loop.fan_in.set_contributors(target, [c.name for c in contributors])
+                logger.info(
+                    "mesh: fan-in contributors for %s: %s",
+                    target,
+                    [c.name for c in contributors],
+                )
+            else:
+                logger.info(
+                    "mesh: solo contributor for %s — fan-in disabled",
+                    target,
+                )
+
+        fan_in_strategy = persona_config.fan_in.strategy if persona_config else "merge"
+        fan_in_contributes_to = persona_config.fan_in.contributes_to if persona_config else ""
+
+        async def _handle_outcome_event(event: RavnEvent) -> None:
+            """Handle incoming outcome events, respecting fan-in accumulation."""
+            if event.type != RavnEventType.OUTCOME:
+                return
+
+            payload = event.payload
+            event_type = payload.get("event_type", "")
+            source_persona = payload.get("persona", "")
+            source_task_id = event.task_id or event.correlation_id
+            root_corr = event.root_correlation_id or event.correlation_id
+
+            logger.info(
+                "mesh: received outcome event_type=%s from=%s task_id=%s root=%s",
+                event_type,
+                source_persona,
+                source_task_id,
+                root_corr,
+            )
+
+            # --- Producer aggregation ---
+            # If the source persona contributes_to a target, check if all
+            # contributors have reported before proceeding.
+            if fan_in_contributes_to:
+                agg_result = drive_loop.fan_in.try_accept_producer(
+                    contributes_to=fan_in_contributes_to,
+                    producer_persona=source_persona,
+                    event_type=event_type,
+                    event_payload=payload,
+                    root_correlation_id=root_corr,
+                )
+                if agg_result is not None:
+                    logger.info(
+                        "mesh: producer fan-in complete for %s",
+                        fan_in_contributes_to,
+                    )
+                    # Producer aggregation result is informational — the actual
+                    # task dispatch happens via consumer accumulation below.
+
+            # --- Consumer accumulation ---
+            result = drive_loop.fan_in.try_accept_consumer(
+                event_type=event_type,
+                event_payload=payload,
+                root_correlation_id=root_corr,
+                persona_name=persona_config.name if persona_config else "unknown",
+                consumes_event_types=list(event_types),
+                strategy=fan_in_strategy,
+            )
+
+            if result is None:
+                logger.info(
+                    "mesh: fan-in pending for %s — waiting for more events",
+                    persona_config.name if persona_config else "unknown",
+                )
+                return
+
+            task_id_suffix = (root_corr or "unknown")[:8]
+            task = AgentTask(
+                task_id=f"event_{event_type.replace('.', '_')}_{task_id_suffix}",
+                title=f"Handle {result.triggered_by}",
+                initiative_context=result.merged_context,
+                triggered_by=result.triggered_by,
+                output_mode=OutputMode.SILENT,
+                persona=result.persona_name if result.persona_name != persona_config.name else None,
+                priority=5,
+                root_correlation_id=result.root_correlation_id,
+            )
+
+            try:
+                await drive_loop.enqueue(task)
+                logger.info(
+                    "mesh: enqueued task %s for %s (fan-in: %s)",
+                    task.task_id,
+                    result.triggered_by,
+                    fan_in_strategy,
+                )
+            except Exception as exc:
+                logger.error("mesh: failed to enqueue task for event: %s", exc)
+
+        # Store pending subscriptions - will be activated after mesh.start()
+        mesh._pending_outcome_subscriptions = [(et, _handle_outcome_event) for et in event_types]
+        for event_type in event_types:
+            logger.info("mesh: will subscribe to event_type=%s after start", event_type)
+
+    if mesh is None and discovery is None:
+        return None
+
+    from niuu.mesh import resolve_peer_id  # noqa: PLC0415
+    from niuu.mesh.participant import MeshParticipant  # noqa: PLC0415
+
+    return MeshParticipant(
+        mesh=mesh,
+        discovery=discovery,
+        peer_id=resolve_peer_id(settings.mesh.own_peer_id),
+    )
 
 
 def _build_mesh(settings: Settings, discovery: Any = None) -> Any:
-    """Build the mesh adapter from config."""
-    import socket
+    """Build mesh adapters using dynamic import from config.
 
-    from ravn.adapters.mesh.nng_mesh import NngMeshAdapter
-    from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter
+    If settings.mesh.adapters is non-empty, uses the new list-based config.
+    Otherwise falls back to legacy single-adapter mode for backward compatibility.
+
+    All adapters run simultaneously via CompositeMeshAdapter:
+    - publish() fans out to ALL transports
+    - subscribe() registers on ALL transports
+    - send() tries transports in order until success
+    """
+    import socket
 
     mesh_cfg = settings.mesh
     own_peer_id = mesh_cfg.own_peer_id or socket.gethostname()
 
-    if mesh_cfg.adapter == "nng":
-        return NngMeshAdapter(
-            config=mesh_cfg.nng,
-            discovery=discovery,
+    # New list-based config: delegate to shared niuu.mesh helper
+    if mesh_cfg.adapters:
+        from niuu.mesh import build_mesh_from_adapters_list  # noqa: PLC0415
+        from niuu.mesh.transport_builder import build_transport  # noqa: PLC0415
+
+        def _sleipnir_tb(entry: dict[str, Any]) -> Any:
+            adapter = entry.get("transport", mesh_cfg.adapter or "nng")
+            kwargs = _resolve_transport_kwargs(settings, adapter)
+            if adapter in ("sleipnir", "rabbitmq") and not kwargs:
+                return None
+            return build_transport(adapter, **kwargs)
+
+        return build_mesh_from_adapters_list(
+            adapters=mesh_cfg.adapters,
             own_peer_id=own_peer_id,
+            rpc_timeout_s=mesh_cfg.rpc_timeout_s,
+            discovery=discovery,
+            sleipnir_transport_builder=_sleipnir_tb,
         )
 
-    if mesh_cfg.adapter == "sleipnir":
-        return SleipnirMeshAdapter(
-            sleipnir_config=settings.sleipnir,
-            mesh_sleipnir_config=mesh_cfg.sleipnir,
-            own_peer_id=own_peer_id,
-            discovery=discovery,
-        )
+    # Legacy single-adapter mode for backward compatibility
+    legacy_adapter = mesh_cfg.adapter or "nng"
 
-    if mesh_cfg.adapter == "composite":
-        from ravn.adapters.mesh.composite import CompositeMeshAdapter
+    from niuu.mesh.transport_builder import build_transport  # noqa: PLC0415
+    from ravn.adapters.mesh.sleipnir_mesh import SleipnirMeshAdapter  # noqa: PLC0415
 
-        preferred = SleipnirMeshAdapter(
-            sleipnir_config=settings.sleipnir,
-            mesh_sleipnir_config=mesh_cfg.sleipnir,
-            own_peer_id=own_peer_id,
-            discovery=discovery,
-        )
-        fallback = NngMeshAdapter(
-            config=mesh_cfg.nng,
-            discovery=discovery,
-            own_peer_id=own_peer_id,
-        )
-        return CompositeMeshAdapter(preferred=preferred, fallback=fallback)
+    kwargs = _resolve_transport_kwargs(settings, legacy_adapter)
+    if legacy_adapter in ("sleipnir", "rabbitmq") and not kwargs:
+        logger.warning("mesh: failed to build transport, mesh disabled")
+        return None
 
-    raise ValueError(f"Unknown mesh adapter: {mesh_cfg.adapter!r}")
+    transport = build_transport(legacy_adapter, **kwargs)
+    if transport is None:
+        logger.warning("mesh: failed to build transport, mesh disabled")
+        return None
+
+    return SleipnirMeshAdapter(
+        publisher=transport,
+        subscriber=transport,
+        own_peer_id=own_peer_id,
+        discovery=discovery,
+        rpc_timeout_s=mesh_cfg.rpc_timeout_s,
+    )
+
+
+def _resolve_transport_kwargs(
+    settings: Settings,
+    adapter: str,
+) -> dict[str, Any]:
+    """Build constructor kwargs for a Sleipnir transport from settings."""
+    if adapter == "nng":
+        from niuu.mesh.cluster import read_cluster_pub_addresses  # noqa: PLC0415
+
+        nng_cfg = settings.mesh.nng
+        adapters_config = list(getattr(getattr(settings, "discovery", None), "adapters", []))
+        peer_addresses = read_cluster_pub_addresses(adapters_config)
+        return {
+            "address": nng_cfg.pub_sub_address,
+            "service_id": f"ravn:{settings.mesh.own_peer_id}",
+            "peer_addresses": peer_addresses or None,
+        }
+
+    if adapter in ("sleipnir", "rabbitmq"):
+        amqp_url = os.environ.get(settings.sleipnir.amqp_url_env, "")
+        if not amqp_url:
+            logger.warning(
+                "mesh: %s not set, rabbitmq transport unavailable",
+                settings.sleipnir.amqp_url_env,
+            )
+            return {}
+        return {"amqp_url": amqp_url}
+
+    if adapter == "nats":
+        nats_url = os.environ.get("NATS_URL", "nats://localhost:4222")
+        return {"servers": [nats_url]}
+
+    if adapter == "redis":
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+        return {"redis_url": redis_url}
+
+    return {}
 
 
 def _build_discovery(
@@ -2453,6 +2831,11 @@ def _build_discovery(
     )
     capabilities = _derive_capabilities(settings, persona_config, profile_name)
 
+    # Extract event types this persona consumes (for mesh routing)
+    consumes_event_types: list[str] = []
+    if persona_config is not None and hasattr(persona_config, "consumes"):
+        consumes_event_types = list(persona_config.consumes.event_types or [])
+
     identity = RavnIdentity(
         peer_id=peer_id,
         realm_id=realm_id,
@@ -2460,16 +2843,18 @@ def _build_discovery(
         capabilities=capabilities,
         permission_mode=settings.permission.mode,
         version=version,
+        consumes_event_types=consumes_event_types,
         rep_address=rep_address,
         pub_address=pub_address,
     )
 
-    handshake_port = settings.discovery.mdns.handshake_port
-    return _build_discovery_adapter(
-        settings.discovery.adapter,
-        settings,
-        identity,
-        handshake_port=handshake_port,
+    from niuu.mesh.discovery_builder import build_discovery_adapters  # noqa: PLC0415
+
+    return build_discovery_adapters(
+        adapters_config=list(getattr(settings.discovery, "adapters", [])),
+        own_identity=identity,
+        heartbeat_interval_s=settings.discovery.heartbeat_interval_s,
+        peer_ttl_s=settings.discovery.peer_ttl_s,
     )
 
 
@@ -2530,8 +2915,14 @@ async def _run_peers(settings: Settings, *, verbose: bool, force_scan: bool) -> 
         version=version,
     )
 
-    adapter_name = settings.discovery.adapter
-    discovery = _build_discovery_adapter(adapter_name, settings, identity)
+    from niuu.mesh.discovery_builder import build_discovery_adapters  # noqa: PLC0415
+
+    discovery = build_discovery_adapters(
+        adapters_config=list(getattr(settings.discovery, "adapters", [])),
+        own_identity=identity,
+        heartbeat_interval_s=settings.discovery.heartbeat_interval_s,
+        peer_ttl_s=settings.discovery.peer_ttl_s,
+    )
     if discovery is None:
         typer.echo("No discovery adapter configured.", err=True)
         return
@@ -2570,55 +2961,6 @@ async def _run_peers(settings: Settings, *, verbose: bool, force_scan: bool) -> 
         typer.echo(line)
 
     await discovery.stop()
-
-
-_DISCOVERY_ALIASES: dict[str, str] = {
-    "mdns": "ravn.adapters.discovery.mdns.MdnsDiscoveryAdapter",
-    "sleipnir": "ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter",
-    "k8s": "ravn.adapters.discovery.k8s.K8sDiscoveryAdapter",
-    "composite": "ravn.adapters.discovery.composite.CompositeDiscoveryAdapter",
-}
-
-# Adapters that need sleipnir_config injected in addition to config + own_identity.
-_SLEIPNIR_KWARGS_ADAPTERS = {"ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter"}
-
-
-def _build_discovery_adapter(
-    name: str, settings: Settings, identity: Any, *, handshake_port: int = 7482
-) -> Any:
-    """Instantiate a discovery adapter by short name or fully-qualified class path.
-
-    Single-backend adapters are resolved via dynamic import (dynamic-adapters pattern).
-    The composite case is special: its sub-backends are wired explicitly.
-    """
-    fq_class = _DISCOVERY_ALIASES.get(name, name)
-
-    if fq_class == _DISCOVERY_ALIASES["composite"]:
-        from ravn.adapters.discovery.composite import CompositeDiscoveryAdapter
-
-        mdns_cls = _import_class(_DISCOVERY_ALIASES["mdns"])
-        sleipnir_cls = _import_class(_DISCOVERY_ALIASES["sleipnir"])
-        backends: list[Any] = [
-            mdns_cls(
-                config=settings.discovery,
-                own_identity=identity,
-                handshake_port=handshake_port,
-            ),
-            sleipnir_cls(
-                config=settings.discovery,
-                sleipnir_config=settings.sleipnir,
-                own_identity=identity,
-            ),
-        ]
-        return CompositeDiscoveryAdapter(backends=backends)
-
-    cls = _import_class(fq_class)
-    kwargs: dict[str, Any] = {"config": settings.discovery, "own_identity": identity}
-    if fq_class in _SLEIPNIR_KWARGS_ADAPTERS:
-        kwargs["sleipnir_config"] = settings.sleipnir
-    if fq_class == _DISCOVERY_ALIASES["mdns"]:
-        kwargs["handshake_port"] = handshake_port
-    return cls(**kwargs)
 
 
 @app.command()
@@ -2700,6 +3042,38 @@ def tui(
         mimir_urls=mimir_urls,
     )
     ravn_tui.run()
+
+
+@app.command()
+def web(
+    port: int = typer.Option(7477, "--port", "-p", help="Port to listen on (default: 7477)."),
+    host: str = typer.Option("0.0.0.0", "--host", help="Bind address (default: 0.0.0.0)."),
+    persona_dirs: list[str] = typer.Option(
+        [],
+        "--persona-dir",
+        help="Extra directory to search for persona YAML files. May be repeated.",
+    ),
+    reload: bool = typer.Option(False, "--reload", help="Enable auto-reload (development only)."),
+) -> None:
+    """Start the standalone Ravn web UI with persona management.
+
+    Spins up a lightweight FastAPI + web UI server — no Volundr, Tyr, or
+    PostgreSQL required.  Personas are loaded from the filesystem.
+
+    \b
+    Examples:
+      ravn web                      — start on http://0.0.0.0:7477
+      ravn web --port 8080          — use a custom port
+      ravn web --persona-dir ./my-personas
+    """
+    from ravn.web import serve
+
+    serve(
+        host=host,
+        port=port,
+        persona_dirs=persona_dirs if persona_dirs else None,
+        reload=reload,
+    )
 
 
 def main() -> None:

@@ -106,9 +106,7 @@ class StubVolundr(VolundrPort):
     ) -> None:
         pass
 
-    async def stop_session(
-        self, session_id: str, *, auth_token: str | None = None
-    ) -> None:
+    async def stop_session(self, session_id: str, *, auth_token: str | None = None) -> None:
         pass
 
     async def list_integration_ids(self, *, auth_token: str | None = None) -> list[str]:

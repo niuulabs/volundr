@@ -266,6 +266,13 @@ def _create_contributors(
 
     contributors.append(PromptContributor())
 
+    # Auto-wire RavnFlockContributor so ravn_flock workloads spawn
+    # multi-sidecar sessions (locally via ravn flock init/start).
+    from volundr.adapters.outbound.contributors.ravn_flock import RavnFlockContributor
+
+    contributors.append(RavnFlockContributor(**ports))
+    logger.info("Session contributor: ravn_flock (auto-wired)")
+
     return contributors
 
 
@@ -902,6 +909,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.include_router(events_router)
 
+            # GitHub webhook ingestion
+            from volundr.adapters.inbound.rest_webhooks import create_webhooks_router
+
+            webhooks_router = create_webhooks_router(
+                publisher=sleipnir_bus,
+                config=settings.webhooks.github,
+            )
+            app.include_router(webhooks_router)
+
             # Store for access in routes if needed
             app.state.session_service = session_service
             app.state.stats_service = stats_service
@@ -942,7 +958,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 if audit_subscriber is not None:
                     await audit_subscriber.stop()
                 await event_ingestion.close_all()
-                await pod_manager.close()
+                if hasattr(pod_manager, "close"):
+                    await pod_manager.close()
                 if hasattr(gateway_adapter, "close"):
                     await gateway_adapter.close()
                 await git_registry.close()

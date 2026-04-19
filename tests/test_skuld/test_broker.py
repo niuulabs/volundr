@@ -1,5 +1,6 @@
 """Tests for Skuld broker service."""
 
+import asyncio
 import logging
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -915,6 +916,79 @@ class TestSessionArtifacts:
         # duration should be >= 0
         assert artifacts.duration_seconds >= 0
 
+    def test_record_tool_use_sdk_message_format(self):
+        """SDK WebSocket transport nests content under message.content."""
+        from skuld.broker import SessionArtifacts
+
+        artifacts = SessionArtifacts()
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Edit",
+                        "input": {"file_path": "/src/main.py"},
+                        "id": "tu_1",
+                    },
+                    {
+                        "type": "tool_use",
+                        "name": "Write",
+                        "input": {"file_path": "/src/new_file.py"},
+                        "id": "tu_2",
+                    },
+                ]
+            },
+        }
+        events = artifacts.record_tool_use(data)
+        assert artifacts.files_changed == ["/src/main.py", "/src/new_file.py"]
+        assert len(events) == 2
+
+    def test_record_tool_use_sdk_format_no_top_level_content(self):
+        """When top-level content is absent, falls back to message.content."""
+        from skuld.broker import SessionArtifacts
+
+        artifacts = SessionArtifacts()
+        data = {
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Edit",
+                        "input": {"file_path": "/src/fix.py"},
+                        "id": "tu_3",
+                    },
+                ]
+            },
+        }
+        artifacts.record_tool_use(data)
+        assert artifacts.files_changed == ["/src/fix.py"]
+
+    def test_record_tool_use_prefers_top_level_content(self):
+        """When both top-level and message.content exist, uses top-level."""
+        from skuld.broker import SessionArtifacts
+
+        artifacts = SessionArtifacts()
+        data = {
+            "content": [
+                {
+                    "type": "tool_use",
+                    "input": {"file_path": "/src/top.py"},
+                },
+            ],
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "input": {"file_path": "/src/nested.py"},
+                    },
+                ]
+            },
+        }
+        artifacts.record_tool_use(data)
+        assert artifacts.files_changed == ["/src/top.py"]
+        assert "/src/nested.py" not in artifacts.files_changed
+
 
 class TestHandleCliEventArtifacts:
     """Tests for artifact accumulation in _handle_cli_event."""
@@ -944,6 +1018,183 @@ class TestHandleCliEventArtifacts:
         data = {"type": "result", "modelUsage": {}}
         await test_broker._handle_cli_event(data)
         assert test_broker._artifacts.turn_count == 1
+
+
+class TestHandleCliEventSdkFormat:
+    """Tests for artifact accumulation from SDK WebSocket message format."""
+
+    @pytest.fixture
+    def test_broker(self, tmp_path):
+        settings = SkuldSettings(
+            session={"id": "test-session-sdk", "workspace_dir": str(tmp_path)},
+            transport="subprocess",
+        )
+        return Broker(settings=settings)
+
+    @pytest.mark.asyncio
+    async def test_assistant_event_sdk_format_records_tool_use(self, test_broker):
+        """SDK format: content nested under message.content."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Edit",
+                        "input": {"file_path": "/src/module.py"},
+                        "id": "tu_sdk_1",
+                    },
+                ]
+            },
+        }
+        await test_broker._handle_cli_event(data)
+        assert "/src/module.py" in test_broker._artifacts.files_changed
+
+
+class TestGitDiffSummary:
+    """Tests for Broker._git_diff_summary."""
+
+    @pytest.fixture
+    def test_broker(self, tmp_path):
+        settings = SkuldSettings(
+            session={"id": "test-diff", "workspace_dir": str(tmp_path)},
+        )
+        return Broker(settings=settings)
+
+    @pytest.mark.asyncio
+    async def test_returns_committed_diff(self, test_broker):
+        """HEAD~1..HEAD is tried first and returned when non-empty."""
+        diff_text = "diff --git a/main.py b/main.py\n+hello"
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(diff_text.encode(), b""))
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await test_broker._git_diff_summary()
+        assert "diff --git" in result
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_uncommitted_diff(self, test_broker):
+        """When HEAD~1..HEAD is empty, falls back to diff HEAD."""
+        call_count = 0
+
+        async def mock_exec(*args, **kwargs):
+            nonlocal call_count
+            proc = AsyncMock()
+            if call_count == 0:
+                # HEAD~1..HEAD returns empty
+                proc.communicate = AsyncMock(return_value=(b"", b""))
+            else:
+                # diff HEAD returns content
+                proc.communicate = AsyncMock(return_value=(b"diff --git uncommitted\n+new", b""))
+            call_count += 1
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_exec):
+            result = await test_broker._git_diff_summary()
+        assert "uncommitted" in result
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_truncates_large_diff(self, test_broker):
+        test_broker._settings.mesh.diff_max_bytes = 100
+        diff_text = "x" * 10000
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(diff_text.encode(), b""))
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await test_broker._git_diff_summary()
+        assert len(result) < 200
+        assert "truncated" in result
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_error(self, test_broker):
+        with patch("asyncio.create_subprocess_exec", side_effect=OSError("no git")):
+            result = await test_broker._git_diff_summary()
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_uses_config_timeout(self, test_broker):
+        """Timeout value comes from settings.mesh.diff_timeout_s."""
+        test_broker._settings.mesh.diff_timeout_s = 5.0
+        diff_text = "diff content"
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(diff_text.encode(), b""))
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            with patch("asyncio.wait_for", wraps=asyncio.wait_for) as mock_wait:
+                result = await test_broker._git_diff_summary()
+                assert mock_wait.call_args[1]["timeout"] == 5.0
+        assert result == "diff content"
+
+
+class TestPublishMeshOutcome:
+    """Tests for Broker._publish_mesh_outcome with enriched payload."""
+
+    @pytest.fixture
+    def test_broker(self, tmp_path):
+        settings = SkuldSettings(
+            session={
+                "id": "test-mesh-pub",
+                "workspace_dir": str(tmp_path),
+                "initial_prompt": "Fix the login bug",
+            },
+        )
+        b = Broker(settings=settings)
+        b._artifacts.files_changed = ["/src/auth.py", "/src/login.py"]
+        b._artifacts.turn_count = 5
+        return b
+
+    @pytest.mark.asyncio
+    async def test_payload_includes_workspace_and_task(self, test_broker):
+        mock_mesh = AsyncMock()
+        mock_adapter = MagicMock()
+        mock_adapter.peer_id = "peer-1"
+        mock_adapter._mesh = mock_mesh
+        test_broker._mesh_adapter = mock_adapter
+
+        with patch.object(test_broker, "_git_diff_summary", return_value="diff content"):
+            await test_broker._publish_mesh_outcome()
+
+        call_args = mock_mesh.publish.call_args
+        event = call_args[0][0]
+        payload = event.payload
+
+        assert payload["workspace_path"] == test_broker.workspace_dir
+        assert payload["task_description"] == "Fix the login bug"
+        assert payload["diff_summary"] == "diff content"
+        assert payload["files_changed"] == ["/src/auth.py", "/src/login.py"]
+        assert "5 turns" in payload["summary"]
+        assert "2 files" in payload["summary"]
+
+    @pytest.mark.asyncio
+    async def test_no_mesh_adapter_returns_early(self, test_broker):
+        test_broker._mesh_adapter = None
+        # Should not raise
+        await test_broker._publish_mesh_outcome()
+
+    @pytest.mark.asyncio
+    async def test_payload_omits_empty_fields(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("SESSION_INITIAL_PROMPT", raising=False)
+        settings = SkuldSettings(
+            session={
+                "id": "test-mesh-empty",
+                "workspace_dir": str(tmp_path),
+                "initial_prompt": "",
+            },
+        )
+        b = Broker(settings=settings)
+        mock_mesh = AsyncMock()
+        mock_adapter = MagicMock()
+        mock_adapter.peer_id = "peer-2"
+        mock_adapter._mesh = mock_mesh
+        b._mesh_adapter = mock_adapter
+        b._room_bridge = None
+
+        with patch.object(b, "_git_diff_summary", return_value=""):
+            await b._publish_mesh_outcome()
+
+        event = mock_mesh.publish.call_args[0][0]
+        payload = event.payload
+        assert "task_description" not in payload
+        assert "diff_summary" not in payload
+        assert "files_changed" not in payload
 
 
 class TestReportChronicle:
@@ -2106,3 +2357,210 @@ class TestTokenRedactFilter:
                             assert has_redact, f"{name} missing _TokenRedactFilter"
 
         asyncio.run(check())
+
+
+# ---------------------------------------------------------------------------
+# Room bridge integration in Broker (NIU-602)
+# ---------------------------------------------------------------------------
+
+
+class TestBrokerRoomBridge:
+    """Tests for RoomBridge wiring inside Broker."""
+
+    @pytest.fixture
+    def room_settings(self, tmp_path):
+        return SkuldSettings(
+            session={"id": "room-session", "workspace_dir": str(tmp_path)},
+            transport="sdk",
+            room={"enabled": True},
+        )
+
+    @pytest.fixture
+    def no_room_settings(self, tmp_path):
+        return SkuldSettings(
+            session={"id": "noroom-session", "workspace_dir": str(tmp_path)},
+            transport="sdk",
+            room={"enabled": False},
+        )
+
+    def test_room_bridge_created_when_enabled(self, room_settings):
+        from skuld.room_bridge import RoomBridge
+
+        b = Broker(settings=room_settings)
+        assert b._room_bridge is not None
+        assert isinstance(b._room_bridge, RoomBridge)
+
+    def test_room_bridge_none_when_disabled(self, no_room_settings):
+        b = Broker(settings=no_room_settings)
+        assert b._room_bridge is None
+
+    # -----------------------------------------------------------------------
+    # directed_message dispatch
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_dispatch_directed_message_with_room_bridge(self, room_settings):
+        b = Broker(settings=room_settings)
+        b._transport = AsyncMock()
+        mock_bridge = AsyncMock()
+        b._room_bridge = mock_bridge
+
+        await b._dispatch_browser_message(
+            {"type": "directed_message", "targetPeerId": "agent-1", "content": "Hi!"}
+        )
+
+        mock_bridge.route_directed_message.assert_awaited_once_with("agent-1", "Hi!")
+
+    @pytest.mark.asyncio
+    async def test_dispatch_directed_message_empty_target_ignored(self, room_settings):
+        b = Broker(settings=room_settings)
+        b._transport = AsyncMock()
+        mock_bridge = AsyncMock()
+        b._room_bridge = mock_bridge
+
+        await b._dispatch_browser_message(
+            {"type": "directed_message", "targetPeerId": "", "content": "Hi!"}
+        )
+
+        mock_bridge.route_directed_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_directed_message_room_disabled_sends_error(self, no_room_settings):
+        b = Broker(settings=no_room_settings)
+        b._transport = AsyncMock()
+        mock_ws = AsyncMock()
+
+        await b._dispatch_browser_message(
+            {"type": "directed_message", "targetPeerId": "p1", "content": "Hi!"},
+            sender_ws=mock_ws,
+        )
+
+        mock_ws.send_json.assert_awaited_once()
+        sent = mock_ws.send_json.call_args[0][0]
+        assert sent["type"] == "error"
+
+    # -----------------------------------------------------------------------
+    # room_state on browser connect
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_handle_websocket_sends_room_state_when_room_enabled(self, room_settings):
+        b = Broker(settings=room_settings)
+        mock_transport = AsyncMock()
+        mock_transport.is_alive = True
+        mock_transport.capabilities = TransportCapabilities()
+        b._transport = mock_transport
+
+        mock_ws = AsyncMock()
+        mock_ws.receive_json = AsyncMock(side_effect=WebSocketDisconnect())
+
+        await b.handle_websocket(mock_ws)
+
+        calls = [c[0][0] for c in mock_ws.send_json.call_args_list]
+        room_state_calls = [c for c in calls if c.get("type") == "room_state"]
+        assert len(room_state_calls) == 1
+        assert "participants" in room_state_calls[0]
+
+    @pytest.mark.asyncio
+    async def test_handle_websocket_no_room_state_when_room_disabled(self, no_room_settings):
+        b = Broker(settings=no_room_settings)
+        mock_transport = AsyncMock()
+        mock_transport.is_alive = True
+        mock_transport.capabilities = TransportCapabilities()
+        b._transport = mock_transport
+
+        mock_ws = AsyncMock()
+        mock_ws.receive_json = AsyncMock(side_effect=WebSocketDisconnect())
+
+        await b.handle_websocket(mock_ws)
+
+        calls = [c[0][0] for c in mock_ws.send_json.call_args_list]
+        room_state_calls = [c for c in calls if c.get("type") == "room_state"]
+        assert len(room_state_calls) == 0
+
+    # -----------------------------------------------------------------------
+    # handle_ravn_websocket
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_handle_ravn_websocket_rejects_when_room_disabled(self, no_room_settings):
+        b = Broker(settings=no_room_settings)
+        mock_ws = AsyncMock()
+
+        await b.handle_ravn_websocket(mock_ws, "agent-1")
+
+        mock_ws.close.assert_awaited_once()
+        assert mock_ws.close.call_args[1]["code"] == 1008
+
+    @pytest.mark.asyncio
+    async def test_handle_ravn_websocket_registers_on_connect(self, room_settings):
+        b = Broker(settings=room_settings)
+        mock_bridge = AsyncMock()
+        mock_bridge.register = AsyncMock(
+            return_value=MagicMock(peer_id="agent-1", persona="agent-1")
+        )
+        b._room_bridge = mock_bridge
+
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(side_effect=WebSocketDisconnect())
+
+        await b.handle_ravn_websocket(mock_ws, "agent-1")
+
+        mock_ws.accept.assert_awaited_once()
+        mock_bridge.register.assert_awaited()
+        mock_bridge.unregister.assert_awaited_once_with("agent-1")
+
+    @pytest.mark.asyncio
+    async def test_handle_ravn_websocket_forwards_frames(self, room_settings):
+        import json as _json
+
+        b = Broker(settings=room_settings)
+        mock_bridge = AsyncMock()
+        mock_bridge.register = AsyncMock(
+            return_value=MagicMock(peer_id="agent-1", persona="agent-1")
+        )
+        b._room_bridge = mock_bridge
+
+        frame = _json.dumps({"type": "response", "data": "Hello", "metadata": {}}) + "\n"
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(side_effect=[frame, WebSocketDisconnect()])
+
+        await b.handle_ravn_websocket(mock_ws, "agent-1")
+
+        mock_bridge.handle_ravn_frame.assert_awaited_once()
+        call_args = mock_bridge.handle_ravn_frame.call_args[0]
+        assert call_args[0] == "agent-1"
+        assert call_args[1]["type"] == "response"
+
+    @pytest.mark.asyncio
+    async def test_handle_ravn_websocket_skips_invalid_json(self, room_settings):
+        b = Broker(settings=room_settings)
+        mock_bridge = AsyncMock()
+        mock_bridge.register = AsyncMock(
+            return_value=MagicMock(peer_id="agent-1", persona="agent-1")
+        )
+        b._room_bridge = mock_bridge
+
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(side_effect=["not valid json\n", WebSocketDisconnect()])
+
+        await b.handle_ravn_websocket(mock_ws, "agent-1")
+
+        mock_bridge.handle_ravn_frame.assert_not_awaited()
+        mock_bridge.unregister.assert_awaited_once_with("agent-1")
+
+    @pytest.mark.asyncio
+    async def test_handle_ravn_websocket_unregisters_on_exception(self, room_settings):
+        b = Broker(settings=room_settings)
+        mock_bridge = AsyncMock()
+        mock_bridge.register = AsyncMock(
+            return_value=MagicMock(peer_id="agent-1", persona="agent-1")
+        )
+        b._room_bridge = mock_bridge
+
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(side_effect=RuntimeError("unexpected"))
+
+        await b.handle_ravn_websocket(mock_ws, "agent-1")
+
+        mock_bridge.unregister.assert_awaited_once_with("agent-1")

@@ -92,6 +92,8 @@ class SyncSessionService(SessionService):
         resource_config: dict | None = None,
         system_prompt: str = "",
         initial_prompt: str = "",
+        workload_type: str = "session",
+        workload_config: dict | None = None,
     ) -> Session:
         """Start a session synchronously — no background tasks."""
         session = await self._repository.get(session_id)

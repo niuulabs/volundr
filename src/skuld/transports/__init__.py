@@ -47,9 +47,14 @@ class CLITransport(ABC):
     def __init__(self) -> None:
         self._event_callback: EventCallback | None = None
 
-    def on_event(self, callback: EventCallback) -> None:
+    def on_event(self, callback: EventCallback | None) -> None:
         """Register a callback for CLI events (assistant, result, etc)."""
         self._event_callback = callback
+
+    @property
+    def event_callback(self) -> EventCallback | None:
+        """Return the currently registered event callback (or None)."""
+        return self._event_callback
 
     async def _emit(self, data: dict) -> None:
         """Fire the event callback if registered."""

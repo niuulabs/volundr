@@ -1096,6 +1096,8 @@ class SessionContext:
     resource_config: dict = field(default_factory=dict)
     system_prompt: str = ""
     initial_prompt: str = ""
+    workload_type: str = "session"
+    workload_config: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

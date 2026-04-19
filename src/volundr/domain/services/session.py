@@ -8,6 +8,15 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+try:
+    from sleipnir.domain.catalog import volundr_session_failed as _catalog_failed
+    from sleipnir.domain.catalog import volundr_session_started as _catalog_started
+    from sleipnir.ports.events import SleipnirPublisher as _SleipnirPublisher
+except ImportError:
+    _SleipnirPublisher = None  # type: ignore[assignment,misc]
+    _catalog_started = None  # type: ignore[assignment]
+    _catalog_failed = None  # type: ignore[assignment]
+
 from volundr.domain.models import (
     CleanupTarget,
     EventType,
@@ -104,6 +113,7 @@ class SessionService:
         integration_repo: IntegrationRepository | None = None,
         storage: StoragePort | None = None,
         chronicle_repository: ChronicleRepository | None = None,
+        sleipnir_publisher: object | None = None,
     ):
         self._repository = repository
         self._pod_manager = pod_manager
@@ -119,6 +129,7 @@ class SessionService:
         self._integration_repo = integration_repo
         self._storage = storage
         self._chronicle_repository = chronicle_repository
+        self._sleipnir_publisher = sleipnir_publisher
 
     async def create_session(
         self,
@@ -533,6 +544,8 @@ class SessionService:
         resource_config: dict | None = None,
         system_prompt: str = "",
         initial_prompt: str = "",
+        workload_type: str = "session",
+        workload_config: dict | None = None,
     ) -> Session:
         """Start a session — returns immediately, provisions in background.
 
@@ -575,6 +588,8 @@ class SessionService:
                 resource_config=resource_config,
                 system_prompt=system_prompt,
                 initial_prompt=initial_prompt,
+                workload_type=workload_type,
+                workload_config=workload_config,
             ),
             name=f"provision-{session_id}",
         )
@@ -595,6 +610,8 @@ class SessionService:
         resource_config: dict | None = None,
         system_prompt: str = "",
         initial_prompt: str = "",
+        workload_type: str = "session",
+        workload_config: dict | None = None,
     ) -> None:
         """Background task: run contributor pipeline, start pods, update status."""
         try:
@@ -609,6 +626,8 @@ class SessionService:
                 resource_config=resource_config,
                 system_prompt=system_prompt,
                 initial_prompt=initial_prompt,
+                workload_type=workload_type,
+                workload_config=workload_config,
             )
 
             provisioning = (
@@ -649,6 +668,8 @@ class SessionService:
         resource_config: dict | None = None,
         system_prompt: str = "",
         initial_prompt: str = "",
+        workload_type: str = "session",
+        workload_config: dict | None = None,
     ):
         """Run the contributor pipeline and start pods with merged spec."""
         # Auto-include all enabled integrations when none are specified.
@@ -678,6 +699,8 @@ class SessionService:
             resource_config=resource_config or {},
             system_prompt=system_prompt,
             initial_prompt=initial_prompt,
+            workload_type=workload_type,
+            workload_config=workload_config or {},
         )
 
         contributions: list[SessionContribution] = []
@@ -743,6 +766,7 @@ class SessionService:
             await self._repository.update(running)
             if self._broadcaster is not None:
                 await self._broadcaster.publish_session_updated(running)
+            await self._emit_session_started(running)
             return
 
         if error_detail:
@@ -753,12 +777,50 @@ class SessionService:
         await self._repository.update(failed)
         if self._broadcaster is not None:
             await self._broadcaster.publish_session_updated(failed)
+        await self._emit_session_failed(failed, msg)
 
     def _cancel_provisioning_task(self, session_id: UUID) -> None:
         """Cancel an active provisioning task if one exists."""
         task = self._provisioning_tasks.pop(session_id, None)
         if task is not None and not task.done():
             task.cancel()
+
+    async def _emit_session_started(self, session: Session) -> None:
+        """Publish volundr.session.started to Sleipnir (no-op when absent)."""
+        if self._sleipnir_publisher is None or _catalog_started is None:
+            return
+        try:
+            from volundr.domain.models import GitSource  # noqa: PLC0415
+
+            repo = session.source.repo if isinstance(session.source, GitSource) else ""
+            branch = session.source.branch if isinstance(session.source, GitSource) else ""
+            event = _catalog_started(
+                session_id=str(session.id),
+                user_id=session.owner_id or "",
+                repo=repo,
+                branch=branch or "",
+                source="volundr",
+                correlation_id=str(session.id),
+            )
+            await self._sleipnir_publisher.publish(event)
+        except Exception:
+            logger.warning("Failed to emit volundr.session.started; continuing.", exc_info=True)
+
+    async def _emit_session_failed(self, session: Session, error: str) -> None:
+        """Publish volundr.session.failed to Sleipnir (no-op when absent)."""
+        if self._sleipnir_publisher is None or _catalog_failed is None:
+            return
+        try:
+            event = _catalog_failed(
+                session_id=str(session.id),
+                error=error,
+                user_id=session.owner_id or "",
+                source="volundr",
+                correlation_id=str(session.id),
+            )
+            await self._sleipnir_publisher.publish(event)
+        except Exception:
+            logger.warning("Failed to emit volundr.session.failed; continuing.", exc_info=True)
 
     async def stop_session(
         self,

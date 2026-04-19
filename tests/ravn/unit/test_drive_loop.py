@@ -214,7 +214,9 @@ async def test_drive_loop_journal_round_trip(tmp_path: Path) -> None:
     await loop1.enqueue(task)
 
     assert journal.exists()
-    records = json.loads(journal.read_text())
+    raw = json.loads(journal.read_text())
+    # journal format is {"queue": [...]} (new) or bare list (old)
+    records = raw["queue"] if isinstance(raw, dict) else raw
     assert len(records) == 1
     assert records[0]["task_id"] == task.task_id
 
@@ -780,6 +782,101 @@ def test_condition_poll_in_cooldown_after_fire() -> None:
     )
     trigger._last_trigger_at = datetime.now(UTC)
     assert trigger._in_cooldown()
+
+
+def test_condition_poll_name_property() -> None:
+    trigger = ConditionPollTrigger(
+        name="disk_check",
+        sensor_prompt="y",
+        task_context="z",
+        sensor_agent_factory=lambda: None,
+    )
+    assert trigger.name == "condition_poll:disk_check"
+
+
+@pytest.mark.asyncio
+async def test_condition_poll_run_sensor_exception_returns_clear() -> None:
+    """_run_sensor() returns CLEAR when agent.run_turn() raises."""
+    mock_agent = AsyncMock()
+    mock_agent.run_turn.side_effect = RuntimeError("sensor boom")
+
+    trigger = ConditionPollTrigger(
+        name="err_check",
+        sensor_prompt="status?",
+        task_context="investigate",
+        sensor_agent_factory=lambda: mock_agent,
+    )
+    result = await trigger._run_sensor()
+    assert result == "CLEAR"
+
+
+@pytest.mark.asyncio
+async def test_condition_poll_run_cancelled_error_exits() -> None:
+    """CancelledError inside run() causes the loop to return."""
+    mock_agent = AsyncMock()
+
+    call_count = 0
+
+    async def fake_run_sensor() -> str:
+        nonlocal call_count
+        call_count += 1
+        raise asyncio.CancelledError
+
+    trigger = ConditionPollTrigger(
+        name="cancel_check",
+        sensor_prompt="y",
+        task_context="z",
+        sensor_agent_factory=lambda: mock_agent,
+        check_interval_seconds=0.01,
+    )
+    trigger._run_sensor = fake_run_sensor  # type: ignore[method-assign]
+
+    enqueued: list = []
+
+    async def collect(task) -> None:
+        enqueued.append(task)
+
+    # Should return without raising, because CancelledError is caught
+    await asyncio.wait_for(trigger.run(collect), timeout=0.5)
+    assert len(enqueued) == 0
+
+
+@pytest.mark.asyncio
+async def test_condition_poll_run_sensor_exception_continues_loop() -> None:
+    """Generic exception from _run_sensor() logs a warning and continues."""
+    mock_agent = AsyncMock()
+
+    call_count = 0
+
+    async def fake_run_sensor() -> str:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise RuntimeError("transient failure")
+        return "CLEAR"
+
+    trigger = ConditionPollTrigger(
+        name="retry_check",
+        sensor_prompt="y",
+        task_context="z",
+        sensor_agent_factory=lambda: mock_agent,
+        check_interval_seconds=0.01,
+    )
+    trigger._run_sensor = fake_run_sensor  # type: ignore[method-assign]
+
+    enqueued: list = []
+
+    async def collect(task) -> None:
+        enqueued.append(task)
+
+    try:
+        await asyncio.wait_for(trigger.run(collect), timeout=0.2)
+    except TimeoutError:
+        pass
+
+    # loop continued after exception — no tasks (CLEAR verdict)
+    assert len(enqueued) == 0
+    assert call_count >= 2
 
 
 # ---------------------------------------------------------------------------

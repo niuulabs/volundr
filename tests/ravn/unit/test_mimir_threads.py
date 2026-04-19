@@ -89,6 +89,7 @@ def test_slugify_unicode_to_ascii() -> None:
 def test_thread_state_values() -> None:
     assert ThreadState.open == "open"
     assert ThreadState.pulling == "pulling"
+    assert ThreadState.blocked == "blocked"
     assert ThreadState.closed == "closed"
     assert ThreadState.dissolved == "dissolved"
 
@@ -564,6 +565,19 @@ async def test_list_threads_filtered_by_state(tmp_path: Path) -> None:
     titles = [p.meta.title for p in open_pages]
     assert "Open Thread" in titles
     assert "Closed Thread" not in titles
+
+
+@pytest.mark.asyncio
+async def test_list_threads_filtered_by_blocked_state(tmp_path: Path) -> None:
+    """ThreadState.blocked must work as a filter value."""
+    adapter = _make_adapter(tmp_path)
+    await adapter.create_thread(title="Open Thread 2")
+    await adapter.create_thread(title="Blocked Thread")
+    await adapter.update_thread_state("threads/blocked-thread", ThreadState.blocked)
+    pages = await adapter.list_threads(state=ThreadState.blocked)
+    titles = [p.meta.title for p in pages]
+    assert "Blocked Thread" in titles
+    assert "Open Thread 2" not in titles
 
 
 @pytest.mark.asyncio

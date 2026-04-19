@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createApiClient } from '@/modules/shared/api/client';
+import type { PersonaConfig } from './useFlockConfig';
+
+export type { PersonaConfig };
 
 const api = createApiClient('/api/v1/tyr/dispatch');
 
@@ -30,6 +33,10 @@ export interface DispatchDefaults {
   default_system_prompt: string;
   default_model: string;
   models: ModelOption[];
+  flock_enabled: boolean;
+  flock_default_personas: PersonaConfig[];
+  flock_llm_config: Record<string, unknown>;
+  flock_sleipnir_publish_urls: string[];
 }
 
 export interface ClusterInfo {
@@ -66,7 +73,9 @@ interface UseDispatchQueueResult {
     items: DispatchItem[],
     model: string,
     systemPrompt: string,
-    connectionId?: string
+    connectionId?: string,
+    workloadType?: string,
+    workloadConfig?: Record<string, unknown>
   ) => Promise<DispatchResult[]>;
 }
 
@@ -76,6 +85,10 @@ export function useDispatchQueue(): UseDispatchQueueResult {
     default_system_prompt: '',
     default_model: 'claude-sonnet-4-6',
     models: [],
+    flock_enabled: false,
+    flock_default_personas: [],
+    flock_llm_config: {},
+    flock_sleipnir_publish_urls: [],
   });
   const [clusters, setClusters] = useState<ClusterInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,7 +123,9 @@ export function useDispatchQueue(): UseDispatchQueueResult {
       items: DispatchItem[],
       model: string,
       systemPrompt: string,
-      connectionId?: string
+      connectionId?: string,
+      workloadType?: string,
+      workloadConfig?: Record<string, unknown>
     ): Promise<DispatchResult[]> => {
       setDispatching(true);
       try {
@@ -119,6 +134,8 @@ export function useDispatchQueue(): UseDispatchQueueResult {
           model,
           system_prompt: systemPrompt,
           ...(connectionId ? { connection_id: connectionId } : {}),
+          ...(workloadType ? { workload_type: workloadType } : {}),
+          ...(workloadConfig ? { workload_config: workloadConfig } : {}),
         });
         // Remove dispatched items from queue locally
         const dispatched = new Set(

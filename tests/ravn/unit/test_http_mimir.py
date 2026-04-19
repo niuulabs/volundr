@@ -281,19 +281,32 @@ async def test_lint_returns_report(adapter: HttpMimirAdapter) -> None:
         return_value=Response(
             200,
             json={
-                "orphans": ["a.md"],
-                "contradictions": [],
-                "stale": [],
-                "gaps": ["concept-x"],
+                "issues": [
+                    {
+                        "id": "L01",
+                        "severity": "warning",
+                        "message": "orphan page",
+                        "page_path": "a.md",
+                        "auto_fixable": False,
+                    },
+                    {
+                        "id": "L04",
+                        "severity": "info",
+                        "message": "concept gap: concept-x",
+                        "page_path": "",
+                        "auto_fixable": False,
+                    },
+                ],
                 "pages_checked": 5,
                 "issues_found": True,
+                "summary": {"error": 0, "warning": 1, "info": 1},
             },
         )
     )
     report = await adapter.lint()
     assert isinstance(report, MimirLintReport)
-    assert report.orphans == ["a.md"]
-    assert report.gaps == ["concept-x"]
+    assert any(i.id == "L01" and i.page_path == "a.md" for i in report.issues)
+    assert any(i.id == "L04" and "concept-x" in i.message for i in report.issues)
     assert report.pages_checked == 5
 
 

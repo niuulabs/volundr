@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { LoadingIndicator } from '@/modules/shared';
 import { useDispatchQueue } from '../../hooks/useDispatchQueue';
 import type { QueueItem } from '../../hooks/useDispatchQueue';
+import { FlockToggle } from '../../components/FlockToggle';
 import styles from './DispatcherView.module.css';
 
 export function DispatcherView() {
@@ -10,6 +11,8 @@ export function DispatcherView() {
   const [modelOverride, setModelOverride] = useState<string | null>(null);
   const [promptOverride, setPromptOverride] = useState<string | null>(null);
   const [selectedCluster, setSelectedCluster] = useState<string>('');
+  const [flockEnabled, setFlockEnabled] = useState(false);
+  const [selectedPersonas, setSelectedPersonas] = useState<string[]>([]);
   const [lastResults, setLastResults] = useState<
     { issue_id: string; session_name: string; status: string; cluster_name: string }[] | null
   >(null);
@@ -47,11 +50,16 @@ export function DispatcherView() {
       return;
     }
 
+    const workloadType = flockEnabled ? 'ravn_flock' : undefined;
+    const workloadConfig = flockEnabled ? { personas: selectedPersonas } : undefined;
+
     const results = await dispatch(
       items,
       modelOverride ?? defaults.default_model,
       promptOverride ?? defaults.default_system_prompt,
-      selectedCluster || undefined
+      selectedCluster || undefined,
+      workloadType,
+      workloadConfig
     );
     setLastResults(results);
     setSelected(new Set());
@@ -152,6 +160,15 @@ export function DispatcherView() {
             </button>
           </div>
         </div>
+      )}
+      {queue.length > 0 && defaults.flock_enabled && (
+        <FlockToggle
+          enabled={flockEnabled}
+          onToggle={setFlockEnabled}
+          personas={defaults.flock_default_personas}
+          selectedPersonas={selectedPersonas}
+          onPersonasChange={setSelectedPersonas}
+        />
       )}
 
       {Object.entries(bySaga).map(([sagaId, { sagaName, items }]) => (

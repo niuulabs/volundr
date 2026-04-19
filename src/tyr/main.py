@@ -41,7 +41,13 @@ from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.dispatcher import resolve_event_bus as dispatcher_resolve_event_bus
 from tyr.api.events import create_events_router, resolve_event_bus
+from tyr.api.flock_config import create_flock_config_router
+from tyr.api.flock_flows import (
+    create_flock_flows_router,
+    resolve_flow_provider,
+)
 from tyr.api.health import create_health_router
+from tyr.api.pipelines import create_pipelines_router, resolve_pipeline_executor
 from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
 from tyr.api.raids import resolve_tracker as resolve_raids_tracker
 from tyr.api.raids import resolve_volundr as resolve_raids_volundr
@@ -63,6 +69,7 @@ from tyr.domain.services.reviewer_session import ReviewerSessionService
 from tyr.infrastructure.database import database_pool
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort
+from tyr.ports.flock_flow import FlockFlowProvider
 from tyr.ports.git import GitPort
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
@@ -173,6 +180,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_dispatch_router())
     app.include_router(create_dispatcher_router())
     app.include_router(create_events_router(settings.events.keepalive_interval))
+    app.include_router(create_pipelines_router())
+    app.include_router(create_flock_flows_router())
+    app.include_router(create_flock_config_router())
     from tyr.adapters.inbound.auth import extract_principal as _extract_principal
 
     app.include_router(create_pats_router(_extract_principal))
@@ -269,6 +279,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.dependency_overrides[resolve_dispatcher_repo] = _resolve_dispatcher_repo
             app.dependency_overrides[dispatch_resolve_dispatcher_repo] = _resolve_dispatcher_repo
 
+            # Wire Sleipnir publisher early (bus only — bridge wired after event_bus is ready)
+            sleipnir_bus = None
+            if settings.sleipnir.enabled:
+                sl_cls = import_class(settings.sleipnir.adapter)
+                sleipnir_bus = sl_cls(**settings.sleipnir.kwargs)
+
+            # Wire flock flow provider (dynamic adapter pattern)
+            ff_cfg = settings.flock_flows
+            ff_cls = import_class(ff_cfg.adapter)
+            flow_provider: FlockFlowProvider = ff_cls(**ff_cfg.kwargs)
+            app.state.flow_provider = flow_provider
+            logger.info("Flock flow provider: %s", ff_cfg.adapter.rsplit(".", 1)[-1])
+
+            async def _resolve_flow_provider() -> FlockFlowProvider:
+                return flow_provider
+
+            app.dependency_overrides[resolve_flow_provider] = _resolve_flow_provider
+
             # Wire DispatchService
             dispatch_svc = DispatchService(
                 tracker_factory=app.state.tracker_factory,
@@ -279,7 +307,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     default_system_prompt=settings.dispatch.default_system_prompt,
                     default_model=settings.dispatch.default_model,
                     dispatch_prompt_template=settings.dispatch.dispatch_prompt_template,
+                    live_flock=settings.dispatch.flock,
                 ),
+                sleipnir_publisher=sleipnir_bus,
+                flow_provider=flow_provider,
             )
             app.state.dispatch_service = dispatch_svc
 
@@ -380,14 +411,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
             app.dependency_overrides[dispatcher_resolve_event_bus] = _resolve_event_bus
 
-            # Wire Sleipnir bridge (optional — enabled via sleipnir.enabled config)
+            # Wire Sleipnir bridge (sleipnir_bus already created above; bridge needs event_bus)
             tyr_sleipnir_bridge = None
-            sleipnir_bus = None
-            if settings.sleipnir.enabled:
+            if sleipnir_bus is not None:
                 from tyr.adapters.sleipnir_event_bridge import TyrSleipnirBridge  # noqa: PLC0415
 
-                sl_cls = import_class(settings.sleipnir.adapter)
-                sleipnir_bus = sl_cls(**settings.sleipnir.kwargs)
                 tyr_sleipnir_bridge = TyrSleipnirBridge(
                     event_bus=event_bus,
                     publisher=sleipnir_bus,
@@ -397,6 +425,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "Tyr Sleipnir bridge started: adapter=%s",
                     settings.sleipnir.adapter.rsplit(".", 1)[-1],
                 )
+            # Store publisher on app.state for route handlers
+            app.state.sleipnir_publisher = sleipnir_bus
 
             # Wire Telegram reply client (shared httpx.AsyncClient)
             from tyr.adapters.inbound.rest_telegram_webhook import (
@@ -424,6 +454,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             llm_adapter = llm_cls(**llm_kwargs)
             logger.info("LLM adapter: %s", llm_cfg.adapter.rsplit(".", 1)[-1])
 
+            # Determine effective LLM config for in-process RavnDispatcher.
+            # Prefers dispatch.in_process.llm_config; falls back to
+            # dispatch.flock.llm_config so both paths share the same model by default.
+            in_process_llm_config: dict = dict(settings.dispatch.in_process.llm_config) or dict(
+                settings.dispatch.flock.llm_config
+            )
+
             # Wire Sleipnir publisher into the LLM adapter when both are enabled.
             if sleipnir_bus is not None and hasattr(llm_adapter, "set_publisher"):
                 from tyr.adapters.bifrost_publisher import BifrostPublisher  # noqa: PLC0415
@@ -434,6 +471,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
                 llm_adapter.set_publisher(bifrost_pub)
                 logger.info("Bifrost publisher wired to Sleipnir")
+
+            # Wire default LLM config into the LLM adapter (BifrostAdapter decomposer path).
+            if in_process_llm_config and hasattr(llm_adapter, "set_default_llm_config"):
+                llm_adapter.set_default_llm_config(in_process_llm_config)
+                logger.info(
+                    "BifrostAdapter: default_llm_config injected keys=%s",
+                    list(in_process_llm_config.keys()),
+                )
 
             async def _resolve_llm() -> _LLMPort:
                 return llm_adapter
@@ -453,6 +498,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if settings.notification.enabled:
                 await notification_service.start()
 
+            # Wire RavnDispatcher (shared instance for in-process single-turn calls)
+            from tyr.adapters.ravn_dispatcher import RavnDispatcher  # noqa: PLC0415
+
+            ravn_dispatcher: RavnDispatcher | None = None
+            if settings.review.ravn_arbiter_enabled:
+                llm_kwargs_for_ravn = resolve_secret_kwargs(
+                    settings.llm.kwargs, settings.llm.secret_kwargs_env
+                )
+                ravn_dispatcher = RavnDispatcher(
+                    base_url=llm_kwargs_for_ravn.get("base_url", "https://api.anthropic.com"),
+                    api_key=llm_kwargs_for_ravn.get("api_key", ""),
+                    model=settings.review.ravn_arbiter_model,
+                    timeout=settings.review.ravn_arbiter_timeout,
+                    default_llm_config=in_process_llm_config or None,
+                )
+                logger.info(
+                    "RavnDispatcher wired: model=%s llm_config_keys=%s",
+                    settings.review.ravn_arbiter_model,
+                    list(in_process_llm_config.keys()) if in_process_llm_config else [],
+                )
+
             # Wire automated review engine (subscribes to raid.state_changed events)
             reviewer_service = ReviewerSessionService(
                 volundr_factory=app.state.volundr_factory,
@@ -467,6 +533,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 reviewer_service=reviewer_service,
                 dispatcher_repo=dispatcher_repo,
                 dispatch_service=dispatch_svc,
+                ravn_dispatcher=ravn_dispatcher,
             )
             app.state.review_engine = review_engine
             await review_engine.start()
@@ -480,17 +547,91 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 event_bus=event_bus,
                 config=settings.watcher,
                 review_engine=review_engine,
+                sleipnir_publisher=sleipnir_bus,
             )
             app.state.subscriber = subscriber
             await subscriber.start()
+
+            # Wire EventTriggerAdapter (requires Sleipnir subscriber)
+            event_trigger_adapter = None
+            if settings.event_triggers.enabled and sleipnir_bus is not None:
+                from tyr.adapters.event_trigger import build_event_trigger_adapter  # noqa: PLC0415
+
+                if not hasattr(sleipnir_bus, "subscribe"):
+                    logger.warning(
+                        "EventTriggerAdapter: sleipnir adapter does not support subscribe(), "
+                        "skipping event trigger setup"
+                    )
+                else:
+                    et_cfg = settings.event_triggers
+                    event_trigger_adapter = build_event_trigger_adapter(
+                        subscriber=sleipnir_bus,
+                        saga_repo=saga_repo,
+                        volundr_factory=app.state.volundr_factory,
+                        event_bus=event_bus,
+                        config=et_cfg,
+                        initial_confidence=settings.review.initial_confidence,
+                    )
+                    await event_trigger_adapter.start()
+                    app.state.event_trigger_adapter = event_trigger_adapter
+                    logger.info(
+                        "EventTriggerAdapter started: %d rule(s)",
+                        len(et_cfg.rules),
+                    )
+
+            # Wire RavnOutcomeHandler (Sleipnir subscriber for ravn.task.completed)
+            ravn_outcome_handler = None
+            if (
+                settings.ravn_outcome.enabled
+                and sleipnir_bus is not None
+                and hasattr(sleipnir_bus, "subscribe")
+            ):
+                from tyr.adapters.ravn_outcome_handler import RavnOutcomeHandler  # noqa: PLC0415
+
+                ravn_outcome_handler = RavnOutcomeHandler(
+                    subscriber=sleipnir_bus,
+                    tracker_factory=app.state.tracker_factory,
+                    review_engine=review_engine,
+                    owner_id=settings.ravn_outcome.owner_id,
+                    scope_adherence_threshold=settings.ravn_outcome.scope_adherence_threshold,
+                )
+                await ravn_outcome_handler.start()
+                app.state.ravn_outcome_handler = ravn_outcome_handler
+                logger.info("RavnOutcomeHandler started")
+
+            # Wire PipelineExecutor (dynamic pipeline creation via API)
+            from tyr.domain.pipeline_executor import TemplateAwarePipelineExecutor  # noqa: PLC0415
+
+            pipeline_executor = TemplateAwarePipelineExecutor(
+                saga_repo=saga_repo,
+                volundr_factory=app.state.volundr_factory,
+                event_bus=event_bus,
+                owner_id=settings.event_triggers.owner_id
+                if settings.event_triggers.enabled
+                else "api",
+                default_model=settings.dispatch.default_model,
+                initial_confidence=settings.review.initial_confidence,
+            )
+            app.state.pipeline_executor = pipeline_executor
+
+            async def _resolve_pipeline_executor() -> TemplateAwarePipelineExecutor:
+                return pipeline_executor
+
+            app.dependency_overrides[resolve_pipeline_executor] = _resolve_pipeline_executor
 
             logger.info("Tyr started — database pool ready")
             yield
 
             # Lifecycle cleanup
+            if ravn_outcome_handler is not None:
+                await ravn_outcome_handler.stop()
+            if event_trigger_adapter is not None:
+                await event_trigger_adapter.stop()
             if tyr_sleipnir_bridge is not None:
                 await tyr_sleipnir_bridge.stop()
             await review_engine.stop()
+            if ravn_dispatcher is not None:
+                await ravn_dispatcher.close()
             await notification_service.stop()
             await telegram_reply_client.close()
             if hasattr(llm_adapter, "close"):

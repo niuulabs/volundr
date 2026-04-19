@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
 from tyr.domain.exceptions import InvalidStateTransitionError
@@ -137,6 +138,8 @@ class Raid:
     url: str = ""
     reviewer_session_id: str | None = None
     review_round: int = 0
+    structured_outcome: dict[str, Any] | None = None
+    outcome_event_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -159,6 +162,34 @@ class SessionMessage:
     content: str
     sender: str
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class RavnOutcome:
+    """Structured outcome from a ``ravn.task.completed`` event payload.
+
+    Published by the ravn flock coordinator at the end of a task session.
+    Fields map directly to the ``produces.schema`` declared by the coordinator
+    persona.
+    """
+
+    verdict: str
+    """Final verdict from the coordinator: ``"approve"`` | ``"retry"`` | ``"escalate"``."""
+
+    tests_passing: bool | None
+    """Whether all CI / test suite checks pass. ``None`` means unknown."""
+
+    scope_adherence: float | None
+    """Fraction (0.0–1.0) of work that stayed within declared scope. ``None`` means unknown."""
+
+    pr_url: str | None
+    """URL of the pull request created by the session, if any."""
+
+    files_changed: list[str]
+    """List of file paths changed in the session."""
+
+    summary: str
+    """Human-readable one-line summary from the coordinator."""
 
 
 @dataclass(frozen=True)
@@ -266,6 +297,45 @@ class PhaseSpec:
 class SagaStructure:
     name: str
     phases: list[PhaseSpec]
+
+
+# ---------------------------------------------------------------------------
+# Pipeline definition models (used by PipelineExecutor)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PipelineParticipant:
+    """A single participant (persona + prompt) within a pipeline stage."""
+
+    persona: str
+    prompt: str
+    declared_files: list[str] = field(default_factory=list)
+    estimate_hours: float = 1.0
+
+
+@dataclass
+class PipelineStage:
+    """A stage within a pipeline definition."""
+
+    name: str
+    participants: list[PipelineParticipant]
+    parallel: bool = False
+    fan_in: str = "merge"  # all_must_pass | any_pass | majority | merge
+    condition: str | None = None
+    gate: str | None = None  # "human" for human approval gate
+    notify: list[str] = field(default_factory=list)
+
+
+@dataclass
+class Pipeline:
+    """A complete pipeline definition (parsed from YAML)."""
+
+    name: str
+    repos: list[str]
+    feature_branch: str
+    base_branch: str
+    stages: list[PipelineStage]
 
 
 # ---------------------------------------------------------------------------

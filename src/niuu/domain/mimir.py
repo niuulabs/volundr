@@ -160,7 +160,7 @@ class MimirPageMeta:
     # Set by action shapes when they write artifacts derived from a thread.
     # The enricher skips pages with this flag to prevent feedback loops.
     produced_by_thread: bool = False
-    # Thread fields — all None / empty for non-thread pages
+    # Thread-specific fields (None / empty for wiki pages)
     thread_state: ThreadState | None = None
     thread_weight: float | None = None
     thread_owner_id: str | None = None
@@ -199,22 +199,46 @@ class MimirSourceMeta:
 
 
 @dataclass
+class LintIssue:
+    """A single issue found during a Mímir wiki health check.
+
+    Each issue has a machine-readable ``id`` (L01–L12), a ``severity``
+    (``"error"``, ``"warning"``, or ``"info"``), a human-readable ``message``,
+    the ``page_path`` of the affected page (relative to the wiki root), and an
+    ``auto_fixable`` flag indicating whether the adapter can correct the issue
+    automatically when ``lint(fix=True)`` is called.
+    """
+
+    id: str  # L01–L12
+    severity: str  # "error", "warning", "info"
+    message: str
+    page_path: str
+    auto_fixable: bool = False
+
+
+@dataclass
 class MimirLintReport:
     """Health-check report produced by MimirPort.lint().
 
-    Each list contains paths (relative to wiki root) of affected pages.
-    ``issues_found`` is True when any list is non-empty.
+    ``issues`` contains all findings across the 12 check types.
+    ``summary`` provides per-severity counts for quick filtering.
+    ``issues_found`` is True when any issue is present.
     """
 
-    orphans: list[str]  # pages not linked from index.md
-    contradictions: list[str]  # pages with flagged contradictions
-    stale: list[str]  # pages whose source content_hash has changed
-    gaps: list[str]  # concepts mentioned often but without a dedicated page
+    issues: list[LintIssue]
     pages_checked: int
 
     @property
     def issues_found(self) -> bool:
-        return bool(self.orphans or self.contradictions or self.stale or self.gaps)
+        return bool(self.issues)
+
+    @property
+    def summary(self) -> dict[str, int]:
+        """Count of issues per severity: error, warning, info."""
+        counts: dict[str, int] = {"error": 0, "warning": 0, "info": 0}
+        for issue in self.issues:
+            counts[issue.severity] = counts.get(issue.severity, 0) + 1
+        return counts
 
 
 # ---------------------------------------------------------------------------

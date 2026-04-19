@@ -100,7 +100,7 @@ query GetProject($id: String!) {
 )
 
 _LIST_MILESTONES_QUERY = """
-query ListMilestones($projectId: ID!) {
+query ListMilestones($projectId: String!) {
   project(id: $projectId) {
     projectMilestones {
       nodes {

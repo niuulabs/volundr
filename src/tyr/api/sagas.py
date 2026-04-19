@@ -12,6 +12,11 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+try:
+    from sleipnir.domain.catalog import tyr_saga_created as _catalog_saga_created
+except ImportError:
+    _catalog_saga_created = None  # type: ignore[assignment]
 from pydantic import BaseModel, Field
 
 from niuu.domain.models import Principal
@@ -838,6 +843,21 @@ def create_sagas_router() -> APIRouter:
                 )
             except Exception:
                 logger.warning("Failed to attach transcript for saga %s", saga.slug, exc_info=True)
+
+        # NIU-582: emit tyr.saga.created (best-effort, non-blocking)
+        publisher = getattr(request.app.state, "sleipnir_publisher", None)
+        if publisher is not None and _catalog_saga_created is not None:
+            try:
+                event = _catalog_saga_created(
+                    saga_id=str(saga.id),
+                    template=body.slug,
+                    trigger_event="api.commit_saga",
+                    source="tyr",
+                    correlation_id=str(saga.id),
+                )
+                await publisher.publish(event)
+            except Exception:
+                logger.warning("Failed to emit tyr.saga.created; continuing.", exc_info=True)
 
         return CommittedSagaResponse(
             id=str(saga.id),

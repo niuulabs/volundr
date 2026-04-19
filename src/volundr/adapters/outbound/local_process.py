@@ -25,6 +25,7 @@ import re
 import shutil
 import signal
 import socket
+import sys
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -73,6 +74,7 @@ class ProcessInfo:
     workspace: str = ""
     state: ProcessState = ProcessState.STARTING
     error: str | None = None
+    flock_dir: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to JSON-safe dict."""
@@ -90,6 +92,7 @@ class ProcessInfo:
             workspace=data.get("workspace", data.get("workspace_dir", "")),
             state=ProcessState(data.get("state", data.get("status", "stopped"))),
             error=data.get("error"),
+            flock_dir=data.get("flock_dir", ""),
         )
 
 
@@ -243,6 +246,12 @@ class LocalProcessPodManager(PodManager):
             info.state = ProcessState.RUNNING
             self._persist_state()
 
+            # Spawn ravn flock sidecars if the contributor produced extra containers
+            if spec.pod_spec and spec.pod_spec.extra_containers:
+                flock_dir = await self._start_flock(spec, workspace)
+                info.flock_dir = str(flock_dir)
+                self._persist_state()
+
             # Register with Skuld port registry for proxy routing
             if self._skuld_registry is not None:
                 self._skuld_registry.register(session_id, port)
@@ -286,6 +295,10 @@ class LocalProcessPodManager(PodManager):
         monitor = self._monitors.pop(session_id, None)
         if monitor and not monitor.done():
             monitor.cancel()
+
+        # Stop flock sidecars first (they depend on the mesh)
+        if info.flock_dir:
+            self._stop_flock(info.flock_dir)
 
         if info.pid is not None:
             await self._terminate_process(info.pid)
@@ -499,6 +512,40 @@ class LocalProcessPodManager(PodManager):
 
         # Configure Skuld via env vars
         env = self._build_env(spec, workspace)
+
+        # Inject pod_spec env vars from RavnFlockContributor.
+        # Map K8s-style names (MESH_ENABLED) to Skuld pydantic env (SKULD__MESH__ENABLED).
+        skuld_env_map = {
+            "MESH_ENABLED": "SKULD__MESH__ENABLED",
+            "MESH_TRANSPORT": "SKULD__MESH__TRANSPORT",
+            "MESH_PEER_ID": "SKULD__MESH__PEER_ID",
+            "MESH_PUB_ADDRESS": "SKULD__MESH__NNG__PUB_SUB_ADDRESS",
+            "MESH_REP_ADDRESS": "SKULD__MESH__NNG__REQ_REP_ADDRESS",
+            "MESH_HANDSHAKE_PORT": "SKULD__MESH__HANDSHAKE_PORT",
+        }
+        flock_dir = workspace / ".flock"
+        if spec.pod_spec and spec.pod_spec.env:
+            for entry in spec.pod_spec.env:
+                if name := entry.get("name"):
+                    skuld_name = skuld_env_map.get(name, name)
+                    env[skuld_name] = entry.get("value", "")
+
+            # Enable room mode so the web UI shows multi-participant view
+            env["SKULD__ROOM__ENABLED"] = "true"
+
+            # Configure Skuld's static discovery to find ravn flock peers.
+            # The cluster.yaml is written by _start_flock after init.
+            cluster_file = str(flock_dir / "cluster.yaml")
+            env["SKULD__MESH__ADAPTERS"] = json.dumps(
+                [
+                    {
+                        "adapter": "ravn.adapters.discovery.static.StaticDiscoveryAdapter",
+                        "cluster_file": cluster_file,
+                        "poll_interval_s": 5,
+                    }
+                ]
+            )
+
         env["SKULD__SESSION__ID"] = session_id
         env["SKULD__SESSION__NAME"] = session.name
         model = session.model or spec.values.get("model", "claude-sonnet-4-6")
@@ -546,6 +593,128 @@ class LocalProcessPodManager(PodManager):
             session_id,
         )
         return process.pid
+
+    async def _start_flock(
+        self,
+        spec: SessionSpec,
+        workspace: Path,
+    ) -> Path:
+        """Init and start a ravn flock alongside the Skuld session.
+
+        Extracts persona names from ``spec.pod_spec.extra_containers`` and
+        uses ``ravn flock init/start`` to spawn daemon processes with static
+        discovery.  Skuld is added to the cluster.yaml so ravn peers
+        discover it on the mesh.
+        """
+        import subprocess as sp
+
+        import yaml
+
+        flock_dir = workspace / ".flock"
+        personas = [
+            c["name"].removeprefix("ravn-")
+            for c in spec.pod_spec.extra_containers
+            if c.get("name", "").startswith("ravn-")
+        ]
+
+        if not personas:
+            return flock_dir
+
+        # ravn flock init with static discovery (no mDNS).
+        # Use base-port 7490 to avoid collision with Skuld's ports (7480-7489).
+        sp.run(
+            [
+                sys.executable,
+                "-m",
+                "ravn",
+                "flock",
+                "init",
+                *personas,
+                "--flock-dir",
+                str(flock_dir),
+                "--discovery",
+                "static",
+                "--base-port",
+                "7490",
+                "--force",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        logger.info("Flock init: personas=%s dir=%s", personas, flock_dir)
+
+        # Append Skuld as a peer in cluster.yaml so ravn nodes discover it
+        cluster_path = flock_dir / "cluster.yaml"
+        if cluster_path.exists():
+            cluster = yaml.safe_load(cluster_path.read_text())
+            skuld_pub = ""
+            skuld_rep = ""
+            skuld_peer_id = ""
+            if spec.pod_spec and spec.pod_spec.env:
+                for entry in spec.pod_spec.env:
+                    name = entry.get("name", "")
+                    value = entry.get("value", "")
+                    if name == "MESH_PUB_ADDRESS":
+                        skuld_pub = value
+                    elif name == "MESH_REP_ADDRESS":
+                        skuld_rep = value
+                    elif name == "MESH_PEER_ID":
+                        skuld_peer_id = value
+
+            if skuld_peer_id and skuld_pub:
+                cluster.setdefault("peers", []).append(
+                    {
+                        "peer_id": skuld_peer_id,
+                        "persona": "coder",
+                        "display_name": "skuld",
+                        "pub_address": skuld_pub,
+                        "rep_address": skuld_rep,
+                    }
+                )
+                cluster_path.write_text(yaml.safe_dump(cluster, default_flow_style=False))
+                logger.info("Added Skuld peer to cluster.yaml: %s", skuld_peer_id)
+
+        # ravn flock start
+        sp.run(
+            [
+                sys.executable,
+                "-m",
+                "ravn",
+                "flock",
+                "start",
+                "--flock-dir",
+                str(flock_dir),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        logger.info("Flock started: %s", flock_dir)
+
+        return flock_dir
+
+    def _stop_flock(self, flock_dir: str) -> None:
+        """Stop a ravn flock via the CLI."""
+        if not flock_dir:
+            return
+        import subprocess as sp
+
+        try:
+            sp.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "ravn",
+                    "flock",
+                    "stop",
+                    "--flock-dir",
+                    flock_dir,
+                ],
+                capture_output=True,
+                timeout=15,
+            )
+            logger.info("Flock stopped: %s", flock_dir)
+        except Exception:
+            logger.warning("Failed to stop flock at %s", flock_dir, exc_info=True)
 
     def _resolve_skuld_command(self) -> list[str]:
         """Resolve the command to run a Skuld subprocess.
@@ -608,6 +777,9 @@ class LocalProcessPodManager(PodManager):
 
             info = self._processes.get(session_id)
             if info and info.state == ProcessState.RUNNING:
+                # Stop flock sidecars when Skuld exits
+                if info.flock_dir:
+                    self._stop_flock(info.flock_dir)
                 info.state = ProcessState.STOPPED
                 if info.port is not None:
                     self._port_allocator.release(info.port)
