@@ -8,10 +8,13 @@ test('navigate to /volundr shows the session forge page', async ({ page }) => {
 test('volundr overview shows KPI strip after data loads', async ({ page }) => {
   await page.goto('/volundr');
   await expect(page.getByText('Völundr · session forge')).toBeVisible();
-  // Wait for KPI cards to appear.
-  await expect(page.getByText('active')).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByText('idle')).toBeVisible();
-  await expect(page.getByText('total CPU')).toBeVisible();
+  // Wait for KPI cards to appear — scope to the KPI region to avoid matching
+  // other elements that contain these words (e.g. "Active sessions" heading,
+  // LifecycleBadge "idle" pill in the sessions table).
+  const kpiSection = page.getByRole('region', { name: 'Session KPIs' });
+  await expect(kpiSection.getByText('active', { exact: true })).toBeVisible({ timeout: 5_000 });
+  await expect(kpiSection.getByText('idle', { exact: true })).toBeVisible();
+  await expect(kpiSection.getByText('total CPU', { exact: true })).toBeVisible();
 });
 
 test('volundr overview shows cluster health section', async ({ page }) => {
@@ -138,7 +141,9 @@ test('exec tab — run a command and see it in history', async ({ page }) => {
 
   // An exec entry should appear in the history.
   await expect(page.getByTestId('exec-entry').first()).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByText(/echo hello/)).toBeVisible();
+  // Scope to the entry to avoid strict-mode violations — the mock echoes
+  // input back into the output <pre> as well as the command header span.
+  await expect(page.getByTestId('exec-entry').first()).toContainText('echo hello');
 });
 
 test('archived session shows archived badge', async ({ page }) => {
