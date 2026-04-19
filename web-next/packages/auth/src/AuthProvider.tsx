@@ -1,8 +1,16 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { User } from 'oidc-client-ts';
 import { useConfig } from '@niuulabs/plugin-sdk';
 import { setTokenProvider } from '@niuulabs/query';
-import { buildOidcConfig, createUserManager, type OidcConfig } from './adapters/oidc';
+import { buildOidcConfig, createUserManager } from './adapters/oidc';
 import { AuthContext, type AuthContextValue } from './AuthContext';
 import type { AuthUser } from './ports/auth.port';
 import styles from './AuthProvider.module.css';
@@ -52,11 +60,16 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const config = useConfig();
-  const oidcConfig: OidcConfig | null = buildOidcConfig(config.auth);
+  const oidcConfig = useMemo(
+    () => buildOidcConfig(config.auth),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [config.auth?.issuer, config.auth?.clientId],
+  );
 
   const [oidcUser, setOidcUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(oidcConfig !== null);
   const oidcUserRef = useRef<User | null>(null);
+  const mgrRef = useRef<ReturnType<typeof createUserManager> | null>(null);
 
   const enabled = oidcConfig !== null;
 
@@ -75,27 +88,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [enabled]);
 
   const login = useCallback(() => {
-    if (!oidcConfig) return;
-    const mgr = createUserManager(oidcConfig);
-    mgr.signinRedirect();
-  }, [oidcConfig]);
+    mgrRef.current?.signinRedirect();
+  }, []);
 
   const logout = useCallback(() => {
-    if (!oidcConfig) return;
-    const mgr = createUserManager(oidcConfig);
-    mgr.signoutRedirect();
-  }, [oidcConfig]);
+    mgrRef.current?.signoutRedirect();
+  }, []);
 
   useEffect(() => {
     if (!oidcConfig) return;
 
     const mgr = createUserManager(oidcConfig);
+    mgrRef.current = mgr;
     let cancelled = false;
 
     async function init() {
       try {
-        const isCallback =
-          window.location.search.includes('code=') || window.location.search.includes('error=');
+        const params = new URLSearchParams(window.location.search);
+        const isCallback = params.has('code') || params.has('error');
 
         if (isCallback) {
           const callbackUser = await mgr.signinRedirectCallback();
@@ -129,6 +139,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     return () => {
       cancelled = true;
+      mgrRef.current = null;
       mgr.events.removeUserLoaded(onUserLoaded);
       mgr.events.removeUserUnloaded(onUserUnloaded);
       mgr.events.removeAccessTokenExpired(onTokenExpired);
