@@ -53,7 +53,8 @@ test('registry: search filters type list', async ({ page }) => {
   await page.goto('/registry');
   await page.waitForSelector('[data-testid="tab-types"]', { timeout: 5000 });
 
-  await page.fill('[aria-label="Filter types"]', 'realm');
+  // Filter by 'vlan' — only appears in realm's description and fields, not in cluster's.
+  await page.fill('[aria-label="Filter types"]', 'vlan');
   await expect(page.getByTestId('type-row-realm')).toBeVisible();
   await expect(page.getByTestId('type-row-cluster')).not.toBeVisible();
 });
@@ -84,11 +85,14 @@ test('registry: drag a type, drop on valid target, verify parentTypes updated', 
   await page.waitForSelector('[data-testid="tab-containment"]', { timeout: 5000 });
   await page.click('[data-testid="tab-containment"]');
 
-  // host is currently a child of cluster; drag it to realm
+  // Wait for the containment tree to render before dragging.
   const hostNode = page.getByTestId('tree-node-host');
   const realmNode = page.getByTestId('tree-node-realm');
+  await expect(hostNode).toBeVisible({ timeout: 5000 });
+  await expect(realmNode).toBeVisible({ timeout: 5000 });
 
-  await hostNode.dragTo(realmNode);
+  // Drag host onto realm. force:true bypasses actionability jitter in headless CI.
+  await hostNode.dragTo(realmNode, { force: true });
 
   // After drop the JSON should show host.parentTypes = ['realm']
   await page.click('[data-testid="tab-json"]');
