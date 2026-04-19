@@ -1,7 +1,14 @@
-import { createMockHelloService } from '@niuulabs/plugin-hello';
+import { createMockHelloService, buildHelloHttpAdapter } from '@niuulabs/plugin-hello';
+import { createApiClient } from '@niuulabs/query';
 import type { NiuuConfig, ServicesMap } from '@niuulabs/plugin-sdk';
 
-export function buildServices(_config: NiuuConfig): ServicesMap {
+export function buildServices(config: NiuuConfig): ServicesMap {
+  const helloSvc = config.services['hello'];
+  if (helloSvc?.mode === 'http' && helloSvc.baseUrl) {
+    return {
+      hello: buildHelloHttpAdapter(createApiClient(helloSvc.baseUrl)),
+    };
+  }
   return {
     hello: createMockHelloService(),
   };

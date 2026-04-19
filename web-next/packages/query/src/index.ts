@@ -1,3 +1,12 @@
+export {
+  createApiClient,
+  setTokenProvider,
+  getAccessToken,
+  ApiClientError,
+  type ApiClient,
+  type ApiError,
+} from './http-client';
+
 import { QueryClient, type QueryClientConfig } from '@tanstack/react-query';
 
 export function createQueryClient(overrides: QueryClientConfig = {}): QueryClient {

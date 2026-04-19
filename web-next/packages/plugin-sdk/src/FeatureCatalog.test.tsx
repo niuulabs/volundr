@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import { ConfigProvider } from './ConfigProvider';
 import { FeatureCatalogProvider, useFeatureCatalog } from './FeatureCatalog';
+import type { IFeatureCatalogService, FeatureModule } from './ports/feature-catalog.port';
 
 function Reader({ id }: { id: string }) {
   const { isEnabled, order } = useFeatureCatalog();
@@ -12,7 +13,7 @@ function Reader({ id }: { id: string }) {
   );
 }
 
-describe('FeatureCatalog', () => {
+describe('FeatureCatalog — config-only (no service)', () => {
   it('reads enabled + order from config', () => {
     render(
       <ConfigProvider
@@ -66,5 +67,94 @@ describe('FeatureCatalog', () => {
       ),
     ).toThrow(/FeatureCatalogProvider/);
     console.error = error;
+  });
+});
+
+describe('FeatureCatalog — service-driven', () => {
+  function makeService(modules: FeatureModule[]): IFeatureCatalogService {
+    return {
+      getFeatureModules: vi.fn().mockResolvedValue(modules),
+      getUserFeaturePreferences: vi.fn().mockResolvedValue([]),
+      updateUserFeaturePreferences: vi.fn().mockResolvedValue([]),
+      toggleFeature: vi.fn(),
+    };
+  }
+
+  it('uses service module data when service resolves', async () => {
+    const service = makeService([
+      {
+        key: 'users',
+        label: 'Users',
+        icon: 'Users',
+        scope: 'admin',
+        enabled: false,
+        defaultEnabled: true,
+        adminOnly: true,
+        order: 99,
+      },
+    ]);
+
+    render(
+      <ConfigProvider value={{ theme: 'ice', plugins: {}, services: {} }}>
+        <FeatureCatalogProvider service={service}>
+          <Reader id="users" />
+        </FeatureCatalogProvider>
+      </ConfigProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('out').textContent).toBe('false-99'));
+  });
+
+  it('falls back to config when service key is not in modules', async () => {
+    const service = makeService([]);
+
+    render(
+      <ConfigProvider
+        value={{ theme: 'ice', plugins: { tyr: { enabled: true, order: 4 } }, services: {} }}
+      >
+        <FeatureCatalogProvider service={service}>
+          <Reader id="tyr" />
+        </FeatureCatalogProvider>
+      </ConfigProvider>,
+    );
+
+    // Service resolves with empty list; tyr falls back to config
+    await waitFor(() => expect(screen.getByTestId('out').textContent).toBe('true-4'));
+  });
+
+  it('falls back gracefully when service rejects', async () => {
+    const service: IFeatureCatalogService = {
+      getFeatureModules: vi.fn().mockRejectedValue(new Error('unavailable')),
+      getUserFeaturePreferences: vi.fn(),
+      updateUserFeaturePreferences: vi.fn(),
+      toggleFeature: vi.fn(),
+    };
+
+    render(
+      <ConfigProvider
+        value={{ theme: 'ice', plugins: { hello: { enabled: true, order: 1 } }, services: {} }}
+      >
+        <FeatureCatalogProvider service={service}>
+          <Reader id="hello" />
+        </FeatureCatalogProvider>
+      </ConfigProvider>,
+    );
+
+    // Config fallback is immediate; service error is swallowed
+    expect(screen.getByTestId('out').textContent).toBe('true-1');
+  });
+
+  it('calls getFeatureModules on mount', async () => {
+    const service = makeService([]);
+
+    render(
+      <ConfigProvider value={{ theme: 'ice', plugins: {}, services: {} }}>
+        <FeatureCatalogProvider service={service}>
+          <Reader id="x" />
+        </FeatureCatalogProvider>
+      </ConfigProvider>,
+    );
+
+    await waitFor(() => expect(service.getFeatureModules).toHaveBeenCalledOnce());
   });
 });
