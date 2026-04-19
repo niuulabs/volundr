@@ -1,6 +1,12 @@
 import { useState } from 'react';
-import { ConfidenceBar } from '@niuulabs/ui';
+import { ConfidenceBar, type ConfidenceLevel } from '@niuulabs/ui';
 import type { ExtractedStructure, PhaseSpec } from '../ports';
+
+function toLevel(value: number): ConfidenceLevel {
+  if (value >= 80) return 'high';
+  if (value >= 50) return 'medium';
+  return 'low';
+}
 
 interface PlanDraftProps {
   structure: ExtractedStructure;
@@ -75,7 +81,7 @@ function PhaseEditor({ phase, phaseIndex, onSave }: PhaseEditorProps) {
               </h3>
               {phase.raids.length > 0 && (
                 <div className="niuu-flex niuu-items-center niuu-gap-2">
-                  <ConfidenceBar value={avgConfidence} mini />
+                  <ConfidenceBar level={toLevel(avgConfidence)} />
                   <span className="niuu-text-xs niuu-text-text-muted">
                     {phase.raids.length} raid{phase.raids.length !== 1 ? 's' : ''}
                   </span>
@@ -160,7 +166,7 @@ export function PlanDraft({
         </div>
         {totalRaids > 0 && (
           <div className="niuu-flex niuu-items-center niuu-gap-2">
-            <ConfidenceBar value={avgConfidence} />
+            <ConfidenceBar level={toLevel(avgConfidence)} />
             <span className="niuu-text-xs niuu-text-text-secondary">{avgConfidence}%</span>
           </div>
         )}
@@ -168,8 +174,8 @@ export function PlanDraft({
 
       {phases.length === 0 && (
         <p className="niuu-text-sm niuu-text-text-muted niuu-italic">
-          No phases extracted — the raven couldn&apos;t decompose this goal. Try going back and adding
-          more context.
+          No phases extracted — the raven couldn&apos;t decompose this goal. Try going back and
+          adding more context.
         </p>
       )}
 

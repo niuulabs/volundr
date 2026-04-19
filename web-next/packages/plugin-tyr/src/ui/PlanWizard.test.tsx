@@ -113,8 +113,14 @@ describe('PlanPrompt', () => {
     const onSubmit = vi.fn();
     render(<PlanPrompt onSubmit={onSubmit} loading={false} error={null} />);
 
-    await userEvent.type(screen.getByRole('textbox', { name: /goal description/i }), '  Build auth  ');
-    await userEvent.type(screen.getByRole('textbox', { name: /target repository/i }), 'niuulabs/volundr');
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /goal description/i }),
+      '  Build auth  ',
+    );
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /target repository/i }),
+      'niuulabs/volundr',
+    );
     fireEvent.submit(screen.getByRole('form', { name: /plan prompt form/i }));
 
     expect(onSubmit).toHaveBeenCalledWith('Build auth', 'niuulabs/volundr');
@@ -166,9 +172,7 @@ describe('PlanQuestions', () => {
     await userEvent.type(screen.getByLabelText(/1\./), 'niuulabs/volundr');
     fireEvent.submit(screen.getByRole('form'));
 
-    expect(onSubmit).toHaveBeenCalledWith(
-      expect.objectContaining({ q1: 'niuulabs/volundr' }),
-    );
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ q1: 'niuulabs/volundr' }));
   });
 
   it('calls onBack when back button clicked', () => {
@@ -496,10 +500,7 @@ describe('PlanWizard integration', () => {
     render(<PlanWizard />, { wrapper: wrap(svc) });
 
     // Prompt
-    await userEvent.type(
-      screen.getByRole('textbox', { name: /goal description/i }),
-      'Build auth',
-    );
+    await userEvent.type(screen.getByRole('textbox', { name: /goal description/i }), 'Build auth');
     fireEvent.submit(screen.getByRole('form', { name: /plan prompt form/i }));
     await waitFor(() => expect(screen.getByText('Clarify your plan')).toBeInTheDocument());
 
@@ -522,10 +523,7 @@ describe('PlanWizard integration', () => {
     const svc = makeSvc();
     render(<PlanWizard />, { wrapper: wrap(svc) });
 
-    await userEvent.type(
-      screen.getByRole('textbox', { name: /goal description/i }),
-      'Build auth',
-    );
+    await userEvent.type(screen.getByRole('textbox', { name: /goal description/i }), 'Build auth');
     fireEvent.submit(screen.getByRole('form', { name: /plan prompt form/i }));
     await waitFor(() => expect(screen.getByText('Clarify your plan')).toBeInTheDocument());
 
@@ -539,10 +537,7 @@ describe('PlanWizard integration', () => {
     });
     render(<PlanWizard />, { wrapper: wrap(svc) });
 
-    await userEvent.type(
-      screen.getByRole('textbox', { name: /goal description/i }),
-      'Build auth',
-    );
+    await userEvent.type(screen.getByRole('textbox', { name: /goal description/i }), 'Build auth');
     fireEvent.submit(screen.getByRole('form', { name: /plan prompt form/i }));
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());

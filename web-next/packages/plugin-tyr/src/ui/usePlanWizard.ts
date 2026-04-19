@@ -170,7 +170,10 @@ function buildFullSpec(prompt: string, answers: Record<string, string>): string 
 function buildCommitRequest(state: PlanWizardState): CommitSagaRequest {
   const structure = state.structure?.structure;
   const name = structure?.name ?? 'New Saga';
-  const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  const slug = name
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
 
   return {
     name,

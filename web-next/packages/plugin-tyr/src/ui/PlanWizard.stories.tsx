@@ -78,9 +78,7 @@ function withServices(story: () => React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <QueryClientProvider client={client}>
-      <ServicesProvider services={{ tyr: createMockTyrService() }}>
-        {story()}
-      </ServicesProvider>
+      <ServicesProvider services={{ tyr: createMockTyrService() }}>{story()}</ServicesProvider>
     </QueryClientProvider>
   );
 }
@@ -128,7 +126,11 @@ export const PromptLoading: PromptStory = {
 export const PromptError: PromptStory = {
   render: () => (
     <div style={{ maxWidth: 640, padding: 24 }}>
-      <PlanPrompt onSubmit={() => undefined} loading={false} error="Service temporarily unavailable" />
+      <PlanPrompt
+        onSubmit={() => undefined}
+        loading={false}
+        error="Service temporarily unavailable"
+      />
     </div>
   ),
 };
@@ -160,7 +162,10 @@ export const Raiding = {
 export const RaidingError = {
   render: () => (
     <div style={{ maxWidth: 640, padding: 24 }}>
-      <PlanRaiding error="Ravens lost the signal — decomposition timed out." onBack={() => undefined} />
+      <PlanRaiding
+        error="Ravens lost the signal — decomposition timed out."
+        onBack={() => undefined}
+      />
     </div>
   ),
 };

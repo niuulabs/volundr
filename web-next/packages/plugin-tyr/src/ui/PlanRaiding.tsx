@@ -53,10 +53,7 @@ export function PlanRaiding({ error, onBack }: PlanRaidingProps) {
         </p>
       </div>
 
-      <div
-        className="niuu-flex niuu-gap-2"
-        aria-hidden="true"
-      >
+      <div className="niuu-flex niuu-gap-2" aria-hidden="true">
         {[0, 1, 2].map((i) => (
           <span
             key={i}

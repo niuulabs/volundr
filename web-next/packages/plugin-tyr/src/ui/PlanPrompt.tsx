@@ -61,7 +61,10 @@ export function PlanPrompt({ onSubmit, loading, error }: PlanPromptProps) {
       </div>
 
       <div className="niuu-flex niuu-flex-col niuu-gap-1">
-        <label htmlFor="plan-repo" className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">
+        <label
+          htmlFor="plan-repo"
+          className="niuu-text-sm niuu-font-medium niuu-text-text-secondary"
+        >
           Target repository
         </label>
         <input
@@ -75,11 +78,7 @@ export function PlanPrompt({ onSubmit, loading, error }: PlanPromptProps) {
       </div>
 
       {error && (
-        <p
-          id="plan-prompt-error"
-          role="alert"
-          className="niuu-text-sm niuu-text-critical"
-        >
+        <p id="plan-prompt-error" role="alert" className="niuu-text-sm niuu-text-critical">
           {error}
         </p>
       )}

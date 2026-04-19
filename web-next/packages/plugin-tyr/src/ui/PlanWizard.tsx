@@ -34,11 +34,7 @@ export function PlanWizard() {
       <StepDots steps={PLAN_STEPS} current={state.step} />
 
       {state.step === 'prompt' && (
-        <PlanPrompt
-          onSubmit={submitPrompt}
-          loading={state.loading}
-          error={state.error}
-        />
+        <PlanPrompt onSubmit={submitPrompt} loading={state.loading} error={state.error} />
       )}
 
       {state.step === 'questions' && (
