@@ -1,9 +1,12 @@
-# Runs on every push to feat/* branches:
-# 1. Lints and unit-tests Python + web code
-# 2. Builds all container images tagged with the feature name
+# Runs on every push to feat/* branches. Publish-only:
+# 1. Builds all container images tagged with the feature name
 #    (e.g. feat/tyr-ui -> tag "tyr-ui")
-# 3. Packages Helm charts as 0.0.0-<feature>.<N> prerelease versions
+# 2. Packages Helm charts as 0.0.0-<feature>.<N> prerelease versions
 #    (e.g. 0.0.0-tyr-ui.3)
+#
+# Test/lint for feature branches lives in ci.yaml on pull_request events —
+# every niu-*/feat PR runs them there. Pushing directly to feat/* without a
+# PR skips tests by design; branch protection should require PR review.
 name: Feature Build
 
 on:
@@ -52,163 +55,6 @@ jobs:
           CHART_VERSION="0.0.0-${TAG}.${N}"
           echo "chart_version=${CHART_VERSION}" >> $GITHUB_OUTPUT
           echo "Chart version: ${CHART_VERSION}"
-
-  # ---------------------------------------------------------------------------
-  # Python — lint + unit tests
-  # ---------------------------------------------------------------------------
-  python-lint:
-    name: "Python: Lint"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
-        with:
-          version: "0.11.2"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
-
-      - name: Run ruff linting
-        run: uv run ruff check src/ tests/
-
-      - name: Check ruff formatting
-        run: uv run ruff format --check src/ tests/ || echo "::warning::Formatting issues found - consider running 'ruff format src/ tests/'"
-        continue-on-error: true
-
-  python-test-volundr:
-    name: "Python: Test Volundr"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
-        with:
-          version: "0.11.2"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
-
-      - name: Run tests with coverage
-        run: |
-          uv run pytest tests/ --ignore=tests/test_tyr --ignore=tests/integration -v --tb=short \
-            --override-ini="addopts=" \
-            --cov=src/volundr --cov=src/cli --cov=src/niuu --cov=src/skuld \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            --cov-fail-under=85
-
-      - name: Upload coverage to Codecov
-        if: always() && hashFiles('coverage.xml') != ''
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
-        with:
-          files: coverage.xml
-          flags: backend-volundr
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-  python-test-tyr:
-    name: "Python: Test Tyr"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
-        with:
-          version: "0.11.2"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
-
-      - name: Run tests with coverage
-        run: |
-          uv run pytest tests/test_tyr -v --tb=short \
-            --override-ini="addopts=" \
-            --cov=src/tyr \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            --cov-fail-under=85
-
-      - name: Upload coverage to Codecov
-        if: always() && hashFiles('coverage.xml') != ''
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
-        with:
-          files: coverage.xml
-          flags: backend-tyr
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-  # ---------------------------------------------------------------------------
-  # Web — lint + unit tests
-  # ---------------------------------------------------------------------------
-  web-lint:
-    name: "Web: Lint"
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run ESLint
-        run: npm run lint
-
-      - name: Check formatting
-        run: npm run format:check
-
-      - name: TypeScript check
-        run: npm run typecheck
-
-  web-test:
-    name: "Web: Test"
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests with coverage
-        run: npm run test:coverage
-
-      - name: Upload coverage to Codecov
-        if: always() && hashFiles('web/coverage/lcov.info') != ''
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
-        with:
-          files: web/coverage/lcov.info
-          flags: web
-          token: ${{ secrets.CODECOV_TOKEN }}
-          working-directory: web
 
   # ---------------------------------------------------------------------------
   # Containers — build per platform, then merge manifests

@@ -12,18 +12,23 @@ concurrency:
 jobs:
   # ---------------------------------------------------------------------------
   # Change detection + pipeline tier
+  #
+  # Self-rolled path filter: we diff the PR head against its base and derive
+  # per-area flags. No third-party action — we avoid the supply-chain surface
+  # of marketplace filters and the logic is auditable in this file.
+  #
+  # Container list is derived from the same diff: a container is rebuilt only
+  # when its Dockerfile or a source path it bakes in has changed.
   # ---------------------------------------------------------------------------
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
     outputs:
-      python: ${{ steps.override.outputs.python }}
-      web: ${{ steps.override.outputs.web }}
-      helm: ${{ steps.override.outputs.helm }}
-      container-names: ${{ steps.override.outputs.names }}
-      has_containers: ${{ steps.override.outputs.any }}
+      python: ${{ steps.filter.outputs.python }}
+      web: ${{ steps.filter.outputs.web }}
+      helm: ${{ steps.filter.outputs.helm }}
+      container-names: ${{ steps.filter.outputs.names }}
+      has_containers: ${{ steps.filter.outputs.any }}
       tier: ${{ steps.tier.outputs.level }}
     steps:
       - name: Harden runner
@@ -32,62 +37,61 @@ jobs:
           egress-policy: audit
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
 
-      # TODO: restore path-based filtering after pipelines are validated
-      # - name: Detect path changes
-      #   uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
-      #   id: filter
-      #   with:
-      #     filters: |
-      #       python:
-      #         - 'src/**'
-      #         - 'tests/**'
-      #         - 'pyproject.toml'
-      #         - 'uv.lock'
-      #       web:
-      #         - 'web/**'
-      #       helm:
-      #         - 'charts/**'
-      #       container-python:
-      #         - 'src/**'
-      #         - 'pyproject.toml'
-      #         - 'containers/volundr/**'
-      #         - 'containers/skuld/**'
-      #       container-web:
-      #         - 'web/**'
-      #         - 'containers/volundr-web/**'
-      #       container-devrunner:
-      #         - 'containers/devrunner/**'
-
-      # TODO: restore dynamic container list after pipelines are validated
-      # - name: Build container list
-      #   id: containers
-      #   run: |
-      #     NAMES="[]"
-      #     if [ "${{ steps.filter.outputs.container-python }}" = "true" ]; then
-      #       NAMES=$(echo "$NAMES" | jq -c '. + ["volundr","skuld"]')
-      #     fi
-      #     if [ "${{ steps.filter.outputs.container-web }}" = "true" ]; then
-      #       NAMES=$(echo "$NAMES" | jq -c '. + ["volundr-web"]')
-      #     fi
-      #     if [ "${{ steps.filter.outputs.container-devrunner }}" = "true" ]; then
-      #       NAMES=$(echo "$NAMES" | jq -c '. + ["devrunner"]')
-      #     fi
-      #     echo "names=$NAMES" >> $GITHUB_OUTPUT
-      #     if [ "$NAMES" = "[]" ]; then
-      #       echo "any=false" >> $GITHUB_OUTPUT
-      #     else
-      #       echo "any=true" >> $GITHUB_OUTPUT
-      #     fi
-
-      - name: Hardcode all changes to true for testing
-        id: override
+      - name: Detect path changes
+        id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          echo "python=true" >> $GITHUB_OUTPUT
-          echo "web=true" >> $GITHUB_OUTPUT
-          echo "helm=true" >> $GITHUB_OUTPUT
-          echo 'names=["volundr","skuld","devrunner","volundr-web","vscode-reh","tyr","niuu","mimir","bifrost"]' >> $GITHUB_OUTPUT
-          echo "any=true" >> $GITHUB_OUTPUT
+          set -euo pipefail
+
+          CHANGED=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")
+          echo "Changed files:"
+          echo "${CHANGED}" | sed 's/^/  /'
+
+          match() { echo "${CHANGED}" | grep -qE "$1"; }
+          flag()  { if match "$2"; then echo "$1=true"; else echo "$1=false"; fi; }
+
+          # Areas
+          flag python '^(src|tests)/|^pyproject\.toml$|^uv\.lock$' >> "$GITHUB_OUTPUT"
+          flag web    '^web/'                                      >> "$GITHUB_OUTPUT"
+          flag helm   '^charts/'                                   >> "$GITHUB_OUTPUT"
+
+          # Per-container triggers: dockerfile in containers/<name>/ OR the
+          # source tree the image bakes in. Python containers depend on src/
+          # and the lockfiles; volundr-web depends on web/.
+          PY_SRC='^(src/|pyproject\.toml$|uv\.lock$)'
+          declare -A TRIGGER=(
+            [volundr]="^containers/volundr/|${PY_SRC}"
+            [skuld]="^containers/skuld/|${PY_SRC}"
+            [tyr]="^containers/tyr/|${PY_SRC}"
+            [niuu]="^containers/niuu/|${PY_SRC}"
+            [bifrost]="^containers/bifrost/|${PY_SRC}"
+            [mimir]="^containers/mimir/|${PY_SRC}"
+            [volundr-web]='^containers/volundr-web/|^web/'
+            [devrunner]='^containers/devrunner/'
+            [vscode-reh]='^containers/vscode-reh/'
+          )
+
+          NAMES=()
+          for NAME in volundr skuld devrunner volundr-web vscode-reh tyr niuu mimir bifrost; do
+            if match "${TRIGGER[$NAME]}"; then
+              NAMES+=("\"${NAME}\"")
+            fi
+          done
+
+          if [ ${#NAMES[@]} -eq 0 ]; then
+            echo "names=[]" >> "$GITHUB_OUTPUT"
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          else
+            # Join with commas
+            IFS=,
+            echo "names=[${NAMES[*]}]" >> "$GITHUB_OUTPUT"
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Determine pipeline tier
         id: tier
@@ -119,16 +123,8 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
-        with:
-          version: "0.11.2"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
+      - name: Set up Python + uv
+        uses: ./.github/actions/setup-python-env
 
       - name: Run ruff linting
         run: uv run ruff check src/ tests/
@@ -150,16 +146,8 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
-        with:
-          version: "0.11.2"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
+      - name: Set up Python + uv
+        uses: ./.github/actions/setup-python-env
 
       - name: Run tests with coverage
         run: |
@@ -191,16 +179,8 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
-        with:
-          version: "0.11.2"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
+      - name: Set up Python + uv
+        uses: ./.github/actions/setup-python-env
 
       - name: Run tests with coverage
         run: |
@@ -232,16 +212,8 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
-        with:
-          version: "0.11.2"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
+      - name: Set up Python + uv
+        uses: ./.github/actions/setup-python-env
 
       - name: Run tests with coverage
         run: |
@@ -263,28 +235,16 @@ jobs:
           flags: backend-ravn
           token: ${{ secrets.CODECOV_TOKEN }}
 
-  # Rollup gate — branch ruleset requires "Python: Test"
-  python-test:
-    name: "Python: Test"
-    needs: [python-test-volundr, python-test-tyr, python-test-ravn]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check results
-        run: |
-          if [[ "${{ needs.python-test-volundr.result }}" == "failure" ]] || \
-             [[ "${{ needs.python-test-tyr.result }}" == "failure" ]] || \
-             [[ "${{ needs.python-test-ravn.result }}" == "failure" ]]; then
-            exit 1
-          fi
-
   # ---------------------------------------------------------------------------
-  # Python integration tests — full tier only
+  # Python integration tests — run at both tiers when python changed.
+  # These are fast (~6 min, real services via GHA service containers) and
+  # catch integration bugs before they reach dev. E2E + container-heavy jobs
+  # remain full-tier only.
   # ---------------------------------------------------------------------------
   python-integration-test-volundr:
     name: "Python: Integration Test Volundr"
     needs: changes
-    if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.python == 'true'
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -307,16 +267,8 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
-        with:
-          version: "0.11.2"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
+      - name: Set up Python + uv
+        uses: ./.github/actions/setup-python-env
 
       - name: Run integration tests
         env:
@@ -332,7 +284,7 @@ jobs:
   python-integration-test-tyr:
     name: "Python: Integration Test Tyr"
     needs: changes
-    if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.python == 'true'
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -355,16 +307,8 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
-        with:
-          version: "0.11.2"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
+      - name: Set up Python + uv
+        uses: ./.github/actions/setup-python-env
 
       - name: Run integration tests
         env:
@@ -380,7 +324,7 @@ jobs:
   python-integration-test-sleipnir:
     name: "Python: Integration Test Sleipnir"
     needs: changes
-    if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.python == 'true'
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     services:
       rabbitmq:
@@ -416,16 +360,10 @@ jobs:
             curl -sf http://localhost:8222/healthz > /dev/null 2>&1 && break || sleep 1
           done
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+      - name: Set up Python + uv
+        uses: ./.github/actions/setup-python-env
         with:
-          version: "0.11.2"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --extra test --extra nats --extra rabbitmq --extra redis --dev
+          extras: "--extra test --extra nats --extra rabbitmq --extra redis --dev"
 
       - name: Run Sleipnir broker integration tests
         env:
@@ -435,26 +373,6 @@ jobs:
         run: |
           uv run pytest tests/integration/sleipnir/ -v --tb=short -m broker \
             --override-ini="addopts="
-
-  # Rollup gate — branch ruleset requires "Python: Integration Test"
-  python-integration-test:
-    name: "Python: Integration Test"
-    needs: [changes, python-integration-test-volundr, python-integration-test-tyr, python-integration-test-sleipnir]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check results
-        run: |
-          # Skip check if tier is light (integration tests were not required)
-          if [[ "${{ needs.changes.outputs.tier }}" == "light" ]]; then
-            echo "Skipped — light tier pipeline"
-            exit 0
-          fi
-          if [[ "${{ needs.python-integration-test-volundr.result }}" == "failure" ]] || \
-             [[ "${{ needs.python-integration-test-tyr.result }}" == "failure" ]] || \
-             [[ "${{ needs.python-integration-test-sleipnir.result }}" == "failure" ]]; then
-            exit 1
-          fi
 
   # ---------------------------------------------------------------------------
   # End-to-end tests — full tier only
@@ -486,16 +404,8 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
-        with:
-          version: "0.11.2"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install Python dependencies
-        run: uv sync --all-extras --dev
+      - name: Set up Python + uv
+        uses: ./.github/actions/setup-python-env
 
       - name: Set up Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
