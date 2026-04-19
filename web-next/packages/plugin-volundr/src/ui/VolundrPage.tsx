@@ -6,33 +6,19 @@ export function VolundrPage() {
   const stats = useVolundrStats();
 
   return (
-    <div style={{ padding: 'var(--space-6)', maxWidth: 800 }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-3)',
-          marginBottom: 'var(--space-4)',
-        }}
-      >
+    <div className="niuu-p-6 niuu-max-w-[800px]">
+      <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-mb-4">
         <Rune glyph="ᚲ" size={32} />
-        <h2 style={{ margin: 0 }}>Völundr · session forge</h2>
+        <h2 className="niuu-m-0">Völundr · session forge</h2>
       </div>
 
-      <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)' }}>
+      <p className="niuu-text-text-secondary niuu-mb-6">
         Provisions and manages remote dev pods. Sessions move through a lifecycle: requested →
         provisioning → ready → running → idle → terminating → terminated.
       </p>
 
       {stats.data && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 'var(--space-3)',
-            marginBottom: 'var(--space-6)',
-          }}
-        >
+        <div className="niuu-grid niuu-grid-cols-3 niuu-gap-3 niuu-mb-6">
           <KpiTile label="active" value={stats.data.activeSessions} />
           <KpiTile label="total" value={stats.data.totalSessions} />
           <KpiTile label="tokens today" value={stats.data.tokensToday.toLocaleString()} />
@@ -40,14 +26,14 @@ export function VolundrPage() {
       )}
 
       {sessions.isLoading && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <div className="niuu-flex niuu-items-center niuu-gap-2" role="status">
           <StateDot state="processing" pulse />
           <span>loading sessions…</span>
         </div>
       )}
 
       {sessions.isError && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <div className="niuu-flex niuu-items-center niuu-gap-2" role="alert">
           <StateDot state="failed" />
           <span>
             {sessions.error instanceof Error ? sessions.error.message : 'failed to load sessions'}
@@ -56,25 +42,15 @@ export function VolundrPage() {
       )}
 
       {sessions.data && sessions.data.length === 0 && (
-        <p style={{ color: 'var(--color-text-muted)' }}>
-          No sessions yet — start one to get going.
-        </p>
+        <p className="niuu-text-text-muted">No sessions yet — start one to get going.</p>
       )}
 
       {sessions.data && sessions.data.length > 0 && (
-        <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 'var(--space-3)' }}>
+        <ul className="niuu-list-none niuu-p-0 niuu-grid niuu-gap-3">
           {sessions.data.map((s) => (
             <li
               key={s.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-3)',
-                padding: 'var(--space-3)',
-                border: '1px solid var(--color-border-subtle)',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--color-bg-secondary)',
-              }}
+              className="niuu-flex niuu-items-center niuu-gap-3 niuu-p-3 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary"
             >
               <StateDot
                 state={
@@ -87,9 +63,7 @@ export function VolundrPage() {
                         : 'processing'
                 }
               />
-              <span style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
-                {s.name}
-              </span>
+              <span className="niuu-flex-1 niuu-font-mono niuu-text-sm">{s.name}</span>
               <Chip tone="muted">{s.status}</Chip>
               <Chip tone="brand">{s.model}</Chip>
             </li>
@@ -102,33 +76,11 @@ export function VolundrPage() {
 
 function KpiTile({ label, value }: { label: string; value: number | string }) {
   return (
-    <div
-      style={{
-        padding: 'var(--space-4)',
-        border: '1px solid var(--color-border-subtle)',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--color-bg-secondary)',
-      }}
-    >
-      <div
-        style={{
-          fontSize: 'var(--text-2xl)',
-          fontWeight: 700,
-          fontFamily: 'var(--font-mono)',
-          color: 'var(--color-text-primary)',
-        }}
-      >
+    <div className="niuu-p-4 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary">
+      <div className="niuu-text-2xl niuu-font-bold niuu-font-mono niuu-text-text-primary">
         {value}
       </div>
-      <div
-        style={{
-          fontSize: 'var(--text-xs)',
-          color: 'var(--color-text-muted)',
-          marginTop: 'var(--space-1)',
-        }}
-      >
-        {label}
-      </div>
+      <div className="niuu-text-xs niuu-text-text-muted niuu-mt-1">{label}</div>
     </div>
   );
 }
