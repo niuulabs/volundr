@@ -6,9 +6,9 @@ import { useUser } from './useUser';
 import type { User } from 'oidc-client-ts';
 
 function wrapper(value: AuthContextValue) {
-  const Wrapper = ({ children }: { children: React.ReactNode }) =>
-    createElement(AuthContext.Provider, { value }, children);
-  Wrapper.displayName = 'AuthContextWrapper';
+  function Wrapper({ children }: { children: React.ReactNode }) {
+    return createElement(AuthContext.Provider, { value }, children);
+  }
   return Wrapper;
 }
 

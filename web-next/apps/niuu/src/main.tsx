@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import '@niuulabs/design-tokens/tokens.css';
 import '@niuulabs/ui/styles.css';
 import '@niuulabs/shell/styles.css';
+import '@niuulabs/plugin-hello/styles.css';
+import './styles.css';
 import { setTokenProvider } from '@niuulabs/query';
 import { App } from './App';
 

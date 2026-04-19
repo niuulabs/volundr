@@ -1,0 +1,14 @@
+/*
+ * @niuulabs/ui entrypoint stylesheet.
+ * Primitive CSS first (co-located with components), then Tailwind utilities layered on top.
+ * Build: tsup onSuccess → postcss-cli reads postcss.config.cjs → dist/styles.css.
+ */
+
+@import './primitives/Chip/Chip.css';
+@import './primitives/Kbd/Kbd.css';
+@import './primitives/LiveBadge/LiveBadge.css';
+@import './primitives/Rune/Rune.css';
+@import './primitives/StateDot/StateDot.css';
+
+@tailwind components;
+@tailwind utilities;

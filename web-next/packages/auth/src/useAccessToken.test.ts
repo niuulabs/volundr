@@ -5,9 +5,9 @@ import { AuthContext, type AuthContextValue } from './AuthContext';
 import { useAccessToken } from './useAccessToken';
 
 function wrapper(value: AuthContextValue) {
-  const Wrapper = ({ children }: { children: React.ReactNode }) =>
-    createElement(AuthContext.Provider, { value }, children);
-  Wrapper.displayName = 'AuthContextWrapper';
+  function Wrapper({ children }: { children: React.ReactNode }) {
+    return createElement(AuthContext.Provider, { value }, children);
+  }
   return Wrapper;
 }
 
