@@ -39,8 +39,8 @@
 .niuu-budget-runway__proj--over {
   background-image: repeating-linear-gradient(
     45deg,
-    color-mix(in srgb, var(--color-critical, #ef4444) 55%, transparent) 0,
-    color-mix(in srgb, var(--color-critical, #ef4444) 55%, transparent) 2px,
+    color-mix(in srgb, var(--color-critical) 55%, transparent) 0,
+    color-mix(in srgb, var(--color-critical) 55%, transparent) 2px,
     transparent 2px,
     transparent 6px
   );
@@ -54,7 +54,7 @@
   bottom: -2px;
   width: 2px;
   border-radius: 1px;
-  background: var(--color-text-primary, #fafafa);
+  background: var(--color-text-primary);
   transform: translateX(-50%);
   pointer-events: none;
 }

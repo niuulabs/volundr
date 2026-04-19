@@ -32,15 +32,15 @@
 }
 
 .niuu-budget-bar--ok .niuu-budget-bar__fill {
-  background: var(--state-ok, #10b981);
+  background: var(--state-ok);
 }
 
 .niuu-budget-bar--warn .niuu-budget-bar__fill {
-  background: var(--state-warn, #f59e0b);
+  background: var(--state-warn);
 }
 
 .niuu-budget-bar--crit .niuu-budget-bar__fill {
-  background: var(--color-critical, #ef4444);
+  background: var(--color-critical);
 }
 
 /* ── Warn threshold marker ──────────────────────────────── */
@@ -50,7 +50,7 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: color-mix(in srgb, var(--state-warn, #f59e0b) 60%, transparent);
+  background: color-mix(in srgb, var(--state-warn) 60%, transparent);
   pointer-events: none;
 }
 
@@ -79,9 +79,9 @@
 }
 
 .niuu-budget-bar--warn .niuu-budget-bar__spent {
-  color: var(--state-warn, #f59e0b);
+  color: var(--state-warn);
 }
 
 .niuu-budget-bar--crit .niuu-budget-bar__spent {
-  color: var(--color-critical, #ef4444);
+  color: var(--color-critical);
 }
