@@ -39,7 +39,7 @@ export function PlanQuestions({
           Clarify your plan
         </h2>
         <p className="niuu-text-sm niuu-text-text-secondary">
-          Answer as many questions as you can. Answers are optional — skip any that don't apply.
+          Answer as many questions as you can. Answers are optional — skip any that don&apos;t apply.
         </p>
       </div>
 

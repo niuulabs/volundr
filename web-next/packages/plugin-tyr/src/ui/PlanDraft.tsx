@@ -168,7 +168,7 @@ export function PlanDraft({
 
       {phases.length === 0 && (
         <p className="niuu-text-sm niuu-text-text-muted niuu-italic">
-          No phases extracted — the raven couldn't decompose this goal. Try going back and adding
+          No phases extracted — the raven couldn&apos;t decompose this goal. Try going back and adding
           more context.
         </p>
       )}
