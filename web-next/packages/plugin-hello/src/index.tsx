@@ -3,6 +3,7 @@ import { definePlugin } from '@niuulabs/plugin-sdk';
 import { HelloPage } from './ui/HelloPage';
 import { StatusShowcasePage } from './ui/StatusShowcasePage';
 import { OverlaysPage } from './ui/OverlaysPage';
+import { FormShowcasePage } from './ui/FormShowcasePage';
 
 export const helloPlugin = definePlugin({
   id: 'hello',
@@ -24,6 +25,11 @@ export const helloPlugin = definePlugin({
       getParentRoute: () => rootRoute,
       path: '/overlays',
       component: OverlaysPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/hello/form-showcase',
+      component: FormShowcasePage,
     }),
   ],
 });
