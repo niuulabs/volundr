@@ -117,14 +117,7 @@ describe('TemplateCard', () => {
   });
 
   it('disables Clone button and shows Cloning… when isCloning=true', () => {
-    render(
-      <TemplateCard
-        template={TEMPLATE}
-        onEdit={vi.fn()}
-        onClone={vi.fn()}
-        isCloning
-      />,
-    );
+    render(<TemplateCard template={TEMPLATE} onEdit={vi.fn()} onClone={vi.fn()} isCloning />);
     const cloneBtn = screen.getByRole('button', { name: /clone template default/i });
     expect(cloneBtn).toBeDisabled();
     expect(cloneBtn).toHaveTextContent('Cloning…');

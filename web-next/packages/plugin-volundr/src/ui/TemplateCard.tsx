@@ -10,12 +10,7 @@ export interface TemplateCardProps {
   isCloning?: boolean;
 }
 
-export function TemplateCard({
-  template,
-  onEdit,
-  onClone,
-  isCloning = false,
-}: TemplateCardProps) {
+export function TemplateCard({ template, onEdit, onClone, isCloning = false }: TemplateCardProps) {
   const { spec } = template;
   const maskedEnv = maskSecretRefs(spec.env, spec.envSecretRefs);
   const secretOnlyEntries = spec.envSecretRefs
@@ -40,18 +35,22 @@ export function TemplateCard({
       </div>
 
       <div className="tpl-card__resources">
-        <Chip tone="default">CPU {spec.resources.cpuRequest}–{spec.resources.cpuLimit}</Chip>
-        <Chip tone="default">Mem {spec.resources.memRequestMi}–{spec.resources.memLimitMi} Mi</Chip>
-        {spec.resources.gpuCount > 0 && (
-          <Chip tone="brand">GPU ×{spec.resources.gpuCount}</Chip>
-        )}
+        <Chip tone="default">
+          CPU {spec.resources.cpuRequest}–{spec.resources.cpuLimit}
+        </Chip>
+        <Chip tone="default">
+          Mem {spec.resources.memRequestMi}–{spec.resources.memLimitMi} Mi
+        </Chip>
+        {spec.resources.gpuCount > 0 && <Chip tone="brand">GPU ×{spec.resources.gpuCount}</Chip>}
       </div>
 
       <div className="tpl-card__timing">
         <span className="tpl-card__timing-item">
           TTL <strong>{Math.round(spec.ttlSec / 60)}m</strong>
         </span>
-        <span className="tpl-card__timing-sep" aria-hidden="true">·</span>
+        <span className="tpl-card__timing-sep" aria-hidden="true">
+          ·
+        </span>
         <span className="tpl-card__timing-item">
           Idle <strong>{Math.round(spec.idleTimeoutSec / 60)}m</strong>
         </span>
@@ -60,7 +59,9 @@ export function TemplateCard({
       {spec.tools.length > 0 && (
         <div className="tpl-card__tools">
           {spec.tools.map((tool) => (
-            <Chip key={tool} tone="muted">{tool}</Chip>
+            <Chip key={tool} tone="muted">
+              {tool}
+            </Chip>
           ))}
         </div>
       )}
@@ -80,7 +81,9 @@ export function TemplateCard({
         <div className="tpl-card__affinity">
           <span className="tpl-card__affinity-label">Affinity:</span>
           {spec.clusterAffinity.map((c) => (
-            <Chip key={c} tone="muted">{c}</Chip>
+            <Chip key={c} tone="muted">
+              {c}
+            </Chip>
           ))}
         </div>
       )}

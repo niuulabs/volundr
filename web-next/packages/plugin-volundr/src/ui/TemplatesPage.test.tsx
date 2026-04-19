@@ -21,9 +21,7 @@ describe('TemplatesPage', () => {
 
   it('renders template cards after data loads', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
   });
 
   it('renders both seed templates', async () => {
@@ -38,9 +36,7 @@ describe('TemplatesPage', () => {
       listTemplates: async () => [],
     };
     renderWithVolundr(<TemplatesPage />, { templateStore: emptyStore });
-    await waitFor(() =>
-      expect(screen.getByText(/no templates yet/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/no templates yet/i)).toBeInTheDocument());
   });
 
   it('shows error state when service throws', async () => {
@@ -51,9 +47,7 @@ describe('TemplatesPage', () => {
       },
     };
     renderWithVolundr(<TemplatesPage />, { templateStore: failStore });
-    await waitFor(() =>
-      expect(screen.getByText('template service down')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('template service down')).toBeInTheDocument());
   });
 
   it('has a "New Template" button', () => {
@@ -71,9 +65,7 @@ describe('TemplatesPage', () => {
 
   it('opens the editor drawer with Edit button', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const editBtns = screen.getAllByRole('button', { name: /edit template/i });
     fireEvent.click(editBtns[0]!);
     await waitFor(() =>
@@ -85,9 +77,7 @@ describe('TemplatesPage', () => {
     const store = createMockTemplateStore();
     const createSpy = vi.spyOn(store, 'createTemplate');
     renderWithVolundr(<TemplatesPage />, { templateStore: store });
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const cloneBtns = screen.getAllByRole('button', { name: /clone template/i });
     fireEvent.click(cloneBtns[0]!);
     await waitFor(() => expect(createSpy).toHaveBeenCalled());
@@ -105,9 +95,7 @@ describe('TemplatesPage', () => {
     const nameInput = screen.getByPlaceholderText('e.g. default');
     fireEvent.change(nameInput, { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: /save template/i }));
-    await waitFor(() =>
-      expect(screen.getAllByText(/name is required/i).length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByText(/name is required/i).length).toBeGreaterThan(0));
   });
 
   it('shows secret ref keys but masks their values in cards', async () => {

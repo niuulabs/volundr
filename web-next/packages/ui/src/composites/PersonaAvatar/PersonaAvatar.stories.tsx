@@ -22,16 +22,33 @@ export const Index: Story = { args: { role: 'index', letter: 'I' } };
 export const Report: Story = { args: { role: 'report', letter: 'R' } };
 
 const ALL_ROLES: PersonaRole[] = [
-  'plan', 'build', 'verify', 'review', 'gate', 'audit', 'ship', 'index', 'report',
+  'plan',
+  'build',
+  'verify',
+  'review',
+  'gate',
+  'audit',
+  'ship',
+  'index',
+  'report',
 ];
 
 export const AllRoles: Story = {
   render: () => (
     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
       {ALL_ROLES.map((role) => (
-        <div key={role} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+        <div
+          key={role}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}
+        >
           <PersonaAvatar role={role} letter={role[0].toUpperCase()} size={32} />
-          <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
+          <span
+            style={{
+              fontSize: 10,
+              color: 'var(--color-text-muted)',
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
             {role}
           </span>
         </div>

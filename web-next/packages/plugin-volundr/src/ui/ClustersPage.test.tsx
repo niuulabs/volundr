@@ -21,9 +21,7 @@ describe('ClustersPage', () => {
 
   it('renders a card for each seed cluster', async () => {
     renderWithVolundr(<ClustersPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('cluster-card').length).toBe(2),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('cluster-card').length).toBe(2));
   });
 
   it('shows cluster names', async () => {
@@ -50,9 +48,7 @@ describe('ClustersPage', () => {
 
   it('renders node list with StateDots', async () => {
     renderWithVolundr(<ClustersPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('cluster-node').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('cluster-node').length).toBeGreaterThan(0));
   });
 
   it('renders node IDs', async () => {
@@ -63,9 +59,7 @@ describe('ClustersPage', () => {
 
   it('renders capacity progress bars for CPU and Memory', async () => {
     renderWithVolundr(<ClustersPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('cap-cpu').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('cap-cpu').length).toBeGreaterThan(0));
     expect(screen.getAllByTestId('cap-memory').length).toBeGreaterThan(0);
   });
 
@@ -77,9 +71,7 @@ describe('ClustersPage', () => {
       },
     };
     renderWithVolundr(<ClustersPage />, { clusterAdapter: failAdapter });
-    await waitFor(() =>
-      expect(screen.getByText('cluster adapter down')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('cluster adapter down')).toBeInTheDocument());
   });
 
   it('shows empty state when no clusters', async () => {
@@ -88,9 +80,7 @@ describe('ClustersPage', () => {
       getClusters: async () => [],
     };
     renderWithVolundr(<ClustersPage />, { clusterAdapter: emptyAdapter });
-    await waitFor(() =>
-      expect(screen.getByText(/no clusters registered/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/no clusters registered/i)).toBeInTheDocument());
   });
 
   it('shows node ready/not-ready/cordoned labels', async () => {

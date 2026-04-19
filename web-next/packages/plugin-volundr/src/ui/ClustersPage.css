@@ -127,15 +127,15 @@
   transition: width 300ms ease;
 }
 
-.cluster-card__cap-fill[data-tone="ok"] {
+.cluster-card__cap-fill[data-tone='ok'] {
   background: var(--color-accent-emerald);
 }
 
-.cluster-card__cap-fill[data-tone="warning"] {
+.cluster-card__cap-fill[data-tone='warning'] {
   background: var(--color-accent-amber);
 }
 
-.cluster-card__cap-fill[data-tone="critical"] {
+.cluster-card__cap-fill[data-tone='critical'] {
   background: var(--color-accent-red);
 }
 

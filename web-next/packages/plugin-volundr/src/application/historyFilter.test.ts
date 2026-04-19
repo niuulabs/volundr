@@ -119,8 +119,18 @@ describe('applyHistoryFilters', () => {
 
   it('combines multiple filters', () => {
     const match = makeSession({ id: 'match', ravnId: 'r1', personaName: 'skald', state: 'failed' });
-    const wrongRavn = makeSession({ id: 'wrong-ravn', ravnId: 'r2', personaName: 'skald', state: 'failed' });
-    const wrongOutcome = makeSession({ id: 'wrong-state', ravnId: 'r1', personaName: 'skald', state: 'terminated' });
+    const wrongRavn = makeSession({
+      id: 'wrong-ravn',
+      ravnId: 'r2',
+      personaName: 'skald',
+      state: 'failed',
+    });
+    const wrongOutcome = makeSession({
+      id: 'wrong-state',
+      ravnId: 'r1',
+      personaName: 'skald',
+      state: 'terminated',
+    });
     const result = applyHistoryFilters([match, wrongRavn, wrongOutcome], {
       ravnId: 'r1',
       outcome: 'failed',

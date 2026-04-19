@@ -36,7 +36,10 @@ test('/volundr/templates — Clone button creates a cloned template', async ({ p
   const initialCount = await page.getByTestId('template-card').count();
 
   // Click the first Clone button
-  await page.getByRole('button', { name: /clone template/i }).first().click();
+  await page
+    .getByRole('button', { name: /clone template/i })
+    .first()
+    .click();
 
   // Wait for the new cloned card to appear
   await expect(page.getByTestId('template-card')).toHaveCount(initialCount + 1, {
@@ -49,7 +52,10 @@ test('/volundr/templates — Edit button opens the editor drawer', async ({ page
   await page.goto('/volundr/templates');
   await expect(page.getByTestId('template-card').first()).toBeVisible({ timeout: 5_000 });
 
-  await page.getByRole('button', { name: /edit template/i }).first().click();
+  await page
+    .getByRole('button', { name: /edit template/i })
+    .first()
+    .click();
 
   await expect(page.getByRole('dialog', { name: /edit template/i })).toBeVisible({
     timeout: 5_000,
@@ -89,7 +95,10 @@ test('/volundr/templates — edit, change image, save updates the template', asy
   await page.goto('/volundr/templates');
   await expect(page.getByTestId('template-card').first()).toBeVisible({ timeout: 5_000 });
 
-  await page.getByRole('button', { name: /edit template/i }).first().click();
+  await page
+    .getByRole('button', { name: /edit template/i })
+    .first()
+    .click();
   await expect(page.getByRole('dialog', { name: /edit template/i })).toBeVisible({
     timeout: 5_000,
   });

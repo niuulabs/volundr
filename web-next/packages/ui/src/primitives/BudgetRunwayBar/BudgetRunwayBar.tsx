@@ -24,8 +24,7 @@ export function BudgetRunwayBar({
   className,
 }: BudgetRunwayBarProps) {
   const spentPct = cap > 0 ? Math.min(100, Math.max(0, (spent / cap) * 100)) : 0;
-  const projPct =
-    cap > 0 ? Math.min(100, Math.max(0, ((projected - spent) / cap) * 100)) : 0;
+  const projPct = cap > 0 ? Math.min(100, Math.max(0, ((projected - spent) / cap) * 100)) : 0;
   const over = projected > cap;
   const elapsedPct = Math.min(100, Math.max(0, elapsedFrac * 100));
 
@@ -41,10 +40,7 @@ export function BudgetRunwayBar({
       <div className="niuu-budget-runway__track">
         <div className="niuu-budget-runway__spent" style={{ width: `${spentPct}%` }} />
         <div
-          className={cn(
-            'niuu-budget-runway__proj',
-            over && 'niuu-budget-runway__proj--over',
-          )}
+          className={cn('niuu-budget-runway__proj', over && 'niuu-budget-runway__proj--over')}
           style={{ left: `${spentPct}%`, width: `${projPct}%` }}
         />
         <div

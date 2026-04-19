@@ -157,9 +157,7 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
       gpuCount: 1,
     },
     env: {},
-    events: [
-      { ts: '2026-03-10T08:05:00Z', kind: 'failed', body: 'OOMKilled' },
-    ],
+    events: [{ ts: '2026-03-10T08:05:00Z', kind: 'failed', body: 'OOMKilled' }],
   },
   {
     id: 'ds-4',
@@ -274,30 +272,31 @@ export function createMockVolundrService(): IVolundrService {
 
     subscribeStats: (_callback) => () => {},
 
-    getTemplates: async () => SEED_TEMPLATES.map((t) => ({
-      name: t.name,
-      description: '',
-      isDefault: t.id === 'tpl-default',
-      repos: [],
-      setupScripts: [],
-      workspaceLayout: {},
-      cliTool: 'claude',
-      workloadType: 'skuld-claude',
-      model: null,
-      systemPrompt: null,
-      resourceConfig: {
-        cpu: t.spec.resources.cpuRequest,
-        memory: String(t.spec.resources.memRequestMi),
-        gpu: String(t.spec.resources.gpuCount),
-      },
-      mcpServers: [],
-      envVars: t.spec.env,
-      envSecretRefs: t.spec.envSecretRefs,
-      workloadConfig: {},
-      terminalSidecar: { enabled: false, allowedCommands: [] },
-      skills: [],
-      rules: [],
-    })),
+    getTemplates: async () =>
+      SEED_TEMPLATES.map((t) => ({
+        name: t.name,
+        description: '',
+        isDefault: t.id === 'tpl-default',
+        repos: [],
+        setupScripts: [],
+        workspaceLayout: {},
+        cliTool: 'claude',
+        workloadType: 'skuld-claude',
+        model: null,
+        systemPrompt: null,
+        resourceConfig: {
+          cpu: t.spec.resources.cpuRequest,
+          memory: String(t.spec.resources.memRequestMi),
+          gpu: String(t.spec.resources.gpuCount),
+        },
+        mcpServers: [],
+        envVars: t.spec.env,
+        envSecretRefs: t.spec.envSecretRefs,
+        workloadConfig: {},
+        terminalSidecar: { enabled: false, allowedCommands: [] },
+        skills: [],
+        rules: [],
+      })),
     getTemplate: async (name) => {
       const t = SEED_TEMPLATES.find((tpl) => tpl.name === name);
       if (!t) return null;
@@ -616,7 +615,12 @@ export function createMockTemplateStore(): ITemplateStore {
     updateTemplate: async (id, spec) => {
       const existing = templates.find((t) => t.id === id);
       if (!existing) throw new Error(`Template not found: ${id}`);
-      const updated = { ...existing, spec, version: existing.version + 1, updatedAt: new Date().toISOString() };
+      const updated = {
+        ...existing,
+        spec,
+        version: existing.version + 1,
+        updatedAt: new Date().toISOString(),
+      };
       templates = templates.map((t) => (t.id === id ? updated : t));
       return updated;
     },

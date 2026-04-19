@@ -21,9 +21,7 @@ describe('HistoryPage', () => {
 
   it('renders only terminated/failed sessions', async () => {
     renderWithVolundr(<HistoryPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('history-row').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBeGreaterThan(0));
     // Seed has ds-1 (running), ds-2 (terminated), ds-3 (failed), ds-4 (terminated)
     expect(screen.getAllByTestId('history-row').length).toBe(3);
   });
@@ -38,9 +36,7 @@ describe('HistoryPage', () => {
 
   it('shows outcome chips', async () => {
     renderWithVolundr(<HistoryPage />);
-    await waitFor(() =>
-      expect(screen.getAllByText('terminated').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByText('terminated').length).toBeGreaterThan(0));
     expect(screen.getByText('failed')).toBeInTheDocument();
   });
 
@@ -59,9 +55,7 @@ describe('HistoryPage', () => {
 
   it('filters rows by raven ID', async () => {
     renderWithVolundr(<HistoryPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('history-row').length).toBe(3),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
     const ravnFilter = screen.getByLabelText(/raven id/i);
     fireEvent.change(ravnFilter, { target: { value: 'r2' } });
     await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(2));
@@ -73,9 +67,7 @@ describe('HistoryPage', () => {
 
   it('filters rows by persona name', async () => {
     renderWithVolundr(<HistoryPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('history-row').length).toBe(3),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
     const personaFilter = screen.getByLabelText(/persona/i);
     fireEvent.change(personaFilter, { target: { value: 'skald' } });
     await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(1));
@@ -84,9 +76,7 @@ describe('HistoryPage', () => {
 
   it('filters by outcome button — failed', async () => {
     renderWithVolundr(<HistoryPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('history-row').length).toBe(3),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
     fireEvent.click(screen.getByRole('button', { name: 'failed' }));
     await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(1));
     expect(screen.getByText('ds-3')).toBeInTheDocument();
@@ -94,9 +84,7 @@ describe('HistoryPage', () => {
 
   it('clicking All outcome button restores all rows', async () => {
     renderWithVolundr(<HistoryPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('history-row').length).toBe(3),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
     fireEvent.click(screen.getByRole('button', { name: 'failed' }));
     await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(1));
     fireEvent.click(screen.getByRole('button', { name: 'All' }));
@@ -113,9 +101,7 @@ describe('HistoryPage', () => {
 
   it('Clear filters button resets all filters', async () => {
     renderWithVolundr(<HistoryPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('history-row').length).toBe(3),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
     const ravnFilter = screen.getByLabelText(/raven id/i);
     fireEvent.change(ravnFilter, { target: { value: 'r2' } });
     await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(2));
@@ -131,9 +117,7 @@ describe('HistoryPage', () => {
       },
     };
     renderWithVolundr(<HistoryPage />, { sessionStore: failStore });
-    await waitFor(() =>
-      expect(screen.getByText('session store down')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('session store down')).toBeInTheDocument());
   });
 
   it('shows empty state when no terminal sessions match', async () => {

@@ -12,7 +12,12 @@ import type { ValidationError } from '@niuulabs/ui';
 import type { Template } from '../domain/template';
 import type { PodSpec } from '../domain/pod';
 import { cloneName, buildCloneSpec } from '../application/templateUtils';
-import { useTemplates, useCloneTemplate, useCreateTemplate, useUpdateTemplate } from './useTemplates';
+import {
+  useTemplates,
+  useCloneTemplate,
+  useCreateTemplate,
+  useUpdateTemplate,
+} from './useTemplates';
 import { TemplateCard } from './TemplateCard';
 import './TemplatesPage.css';
 
@@ -118,12 +123,10 @@ function formToSpec(values: FormValues): PodSpec {
 
 function validate(values: FormValues): ValidationError[] {
   const errors: ValidationError[] = [];
-  if (!values.name.trim())
-    errors.push({ id: 'name', label: 'Name', message: 'Name is required' });
+  if (!values.name.trim()) errors.push({ id: 'name', label: 'Name', message: 'Name is required' });
   if (!values.image.trim())
     errors.push({ id: 'image', label: 'Image', message: 'Image is required' });
-  if (!values.tag.trim())
-    errors.push({ id: 'tag', label: 'Tag', message: 'Tag is required' });
+  if (!values.tag.trim()) errors.push({ id: 'tag', label: 'Tag', message: 'Tag is required' });
   if (Number.isNaN(Number(values.memRequestMi)) || Number(values.memRequestMi) <= 0)
     errors.push({
       id: 'memRequestMi',
@@ -197,15 +200,9 @@ export function TemplatesPage() {
     const spec = formToSpec(form);
 
     if (editingId !== null) {
-      updateMutation.mutate(
-        { id: editingId, spec },
-        { onSuccess: () => setDrawerOpen(false) },
-      );
+      updateMutation.mutate({ id: editingId, spec }, { onSuccess: () => setDrawerOpen(false) });
     } else {
-      createMutation.mutate(
-        { name: form.name, spec },
-        { onSuccess: () => setDrawerOpen(false) },
-      );
+      createMutation.mutate({ name: form.name, spec }, { onSuccess: () => setDrawerOpen(false) });
     }
   }, [form, editingId, updateMutation, createMutation]);
 
@@ -277,11 +274,7 @@ export function TemplatesPage() {
 
             <section className="tpl-editor__section">
               <h3 className="tpl-editor__section-title">Identity</h3>
-              <Field
-                label="Name"
-                required
-                error={errors.find((e) => e.id === 'name')?.message}
-              >
+              <Field label="Name" required error={errors.find((e) => e.id === 'name')?.message}>
                 <Input
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -293,22 +286,14 @@ export function TemplatesPage() {
 
             <section className="tpl-editor__section">
               <h3 className="tpl-editor__section-title">Container</h3>
-              <Field
-                label="Image"
-                required
-                error={errors.find((e) => e.id === 'image')?.message}
-              >
+              <Field label="Image" required error={errors.find((e) => e.id === 'image')?.message}>
                 <Input
                   value={form.image}
                   onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
                   placeholder="ghcr.io/niuulabs/skuld"
                 />
               </Field>
-              <Field
-                label="Tag"
-                required
-                error={errors.find((e) => e.id === 'tag')?.message}
-              >
+              <Field label="Tag" required error={errors.find((e) => e.id === 'tag')?.message}>
                 <Input
                   value={form.tag}
                   onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))}
@@ -369,10 +354,7 @@ export function TemplatesPage() {
             <section className="tpl-editor__section">
               <h3 className="tpl-editor__section-title">Timing</h3>
               <div className="tpl-editor__row">
-                <Field
-                  label="TTL (seconds)"
-                  error={errors.find((e) => e.id === 'ttlSec')?.message}
-                >
+                <Field label="TTL (seconds)" error={errors.find((e) => e.id === 'ttlSec')?.message}>
                   <Input
                     type="number"
                     value={form.ttlSec}
@@ -394,7 +376,7 @@ export function TemplatesPage() {
             <section className="tpl-editor__section">
               <h3 className="tpl-editor__section-title">Environment</h3>
               <Field
-                label='Env vars (JSON)'
+                label="Env vars (JSON)"
                 hint='e.g. {"API_URL": "https://api.niuu.world"}'
                 error={errors.find((e) => e.id === 'envJson')?.message}
               >
@@ -419,10 +401,7 @@ export function TemplatesPage() {
 
             <section className="tpl-editor__section">
               <h3 className="tpl-editor__section-title">Tools</h3>
-              <Field
-                label="Tool allowlist"
-                hint="Comma-separated tool IDs from Ravn's registry"
-              >
+              <Field label="Tool allowlist" hint="Comma-separated tool IDs from Ravn's registry">
                 <Input
                   value={form.tools}
                   onChange={(e) => setForm((f) => ({ ...f, tools: e.target.value }))}
@@ -443,10 +422,7 @@ export function TemplatesPage() {
                   placeholder="cl-eitri, cl-brokkr"
                 />
               </Field>
-              <Field
-                label="Taint tolerations"
-                hint="Comma-separated taint keys to tolerate"
-              >
+              <Field label="Taint tolerations" hint="Comma-separated taint keys to tolerate">
                 <Input
                   value={form.tolerations}
                   onChange={(e) => setForm((f) => ({ ...f, tolerations: e.target.value }))}

@@ -82,7 +82,10 @@ export interface IVolundrService {
   // Cluster resources
   getAvailableMcpServers(): Promise<McpServerConfig[]>;
   getAvailableSecrets(): Promise<string[]>;
-  createSecret(name: string, data: Record<string, string>): Promise<{ name: string; keys: string[] }>;
+  createSecret(
+    name: string,
+    data: Record<string, string>,
+  ): Promise<{ name: string; keys: string[] }>;
   getClusterResources(): Promise<ClusterResourceInfo>;
 
   // Session lifecycle
@@ -144,10 +147,7 @@ export interface IVolundrService {
   // Tracker
   searchTrackerIssues(query: string, projectId?: string): Promise<TrackerIssue[]>;
   getProjectRepoMappings(): Promise<ProjectRepoMapping[]>;
-  updateTrackerIssueStatus(
-    issueId: string,
-    status: TrackerIssue['status'],
-  ): Promise<TrackerIssue>;
+  updateTrackerIssueStatus(issueId: string, status: TrackerIssue['status']): Promise<TrackerIssue>;
 
   // Identity / users
   getIdentity(): Promise<VolundrIdentity>;
@@ -212,7 +212,9 @@ export interface IVolundrService {
   getFeatureModules(scope?: FeatureScope): Promise<FeatureModule[]>;
   toggleFeature(key: string, enabled: boolean): Promise<FeatureModule>;
   getUserFeaturePreferences(): Promise<UserFeaturePreference[]>;
-  updateUserFeaturePreferences(preferences: UserFeaturePreference[]): Promise<UserFeaturePreference[]>;
+  updateUserFeaturePreferences(
+    preferences: UserFeaturePreference[],
+  ): Promise<UserFeaturePreference[]>;
 
   // Personal Access Tokens
   listTokens(): Promise<PersonalAccessToken[]>;

@@ -180,13 +180,7 @@ export interface PersonaAvatarProps {
  * Persona avatar: role-derived SVG shape outline with a single letter inside.
  * Same role always maps to the same shape (deterministic, tested).
  */
-export function PersonaAvatar({
-  role,
-  letter,
-  size = 28,
-  title,
-  className,
-}: PersonaAvatarProps) {
+export function PersonaAvatar({ role, letter, size = 28, title, className }: PersonaAvatarProps) {
   const shape = PERSONA_ROLE_SHAPE[role];
   const displayLetter = letter.charAt(0).toUpperCase();
 

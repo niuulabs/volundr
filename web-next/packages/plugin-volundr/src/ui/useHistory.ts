@@ -30,7 +30,14 @@ export function useHistory({
   const filtered = useMemo(
     () =>
       query.data
-        ? applyHistoryFilters(query.data, { ravnId, personaName, sagaId, outcome, dateFrom, dateTo })
+        ? applyHistoryFilters(query.data, {
+            ravnId,
+            personaName,
+            sagaId,
+            outcome,
+            dateFrom,
+            dateTo,
+          })
         : [],
     [query.data, ravnId, personaName, sagaId, outcome, dateFrom, dateTo],
   );

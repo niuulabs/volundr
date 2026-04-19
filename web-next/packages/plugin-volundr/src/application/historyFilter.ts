@@ -17,10 +17,7 @@ const TERMINAL_STATES: ReadonlySet<SessionState> = new Set(['terminated', 'faile
  * Filters sessions to only include terminated/failed sessions that match
  * all the provided filter criteria.
  */
-export function applyHistoryFilters(
-  sessions: Session[],
-  filters: HistoryFilters,
-): Session[] {
+export function applyHistoryFilters(sessions: Session[], filters: HistoryFilters): Session[] {
   return sessions.filter((s) => {
     if (!TERMINAL_STATES.has(s.state)) return false;
     if (filters.ravnId && s.ravnId !== filters.ravnId) return false;

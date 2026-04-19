@@ -180,17 +180,11 @@ export function HistoryPage() {
           </thead>
           <tbody>
             {data.map((session) => (
-              <tr
-                key={session.id}
-                className="history-page__row"
-                data-testid="history-row"
-              >
+              <tr key={session.id} className="history-page__row" data-testid="history-row">
                 <td>
                   <div className="history-page__outcome">
                     <StateDot state={outcomeState(session.state)} />
-                    <Chip
-                      tone={session.state === 'terminated' ? 'default' : 'critical'}
-                    >
+                    <Chip tone={session.state === 'terminated' ? 'default' : 'critical'}>
                       {outcomeLabel(session.state)}
                     </Chip>
                   </div>
@@ -201,9 +195,7 @@ export function HistoryPage() {
                 <td className="history-page__ravn">{session.ravnId}</td>
                 <td>{session.personaName}</td>
                 <td>{session.sagaId ?? '—'}</td>
-                <td className="history-page__date">
-                  {formatDate(session.terminatedAt)}
-                </td>
+                <td className="history-page__date">{formatDate(session.terminatedAt)}</td>
                 <td className="history-page__duration">
                   {durationMs(session.startedAt, session.terminatedAt)}
                 </td>

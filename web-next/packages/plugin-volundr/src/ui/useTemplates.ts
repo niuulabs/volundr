@@ -30,8 +30,7 @@ export function useUpdateTemplate() {
   const store = useService<ITemplateStore>('volundr.templates');
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, spec }: { id: string; spec: PodSpec }) =>
-      store.updateTemplate(id, spec),
+    mutationFn: ({ id, spec }: { id: string; spec: PodSpec }) => store.updateTemplate(id, spec),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['volundr', 'templates'] });
     },

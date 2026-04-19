@@ -186,7 +186,8 @@ const MOCK_ENTITY_PAGES: Page[] = [
   {
     path: '/entities/hexagonal-arch',
     title: 'Hexagonal Architecture',
-    summary: 'Software architecture pattern separating business logic from infrastructure via ports and adapters.',
+    summary:
+      'Software architecture pattern separating business logic from infrastructure via ports and adapters.',
     category: 'concept',
     type: 'entity',
     entityType: 'concept',
@@ -410,8 +411,7 @@ export function createMimirMockAdapter(): IMimirService {
           relationshipCount:
             p.zones
               ?.filter((z) => z.kind === 'relationships')
-              .flatMap((z) => (z.kind === 'relationships' ? z.items : []))
-              .length ?? 0,
+              .flatMap((z) => (z.kind === 'relationships' ? z.items : [])).length ?? 0,
         }));
       },
     },

@@ -59,10 +59,7 @@ describe('maskSecretRefs', () => {
   });
 
   it('masks the secret key from the base template', () => {
-    const masked = maskSecretRefs(
-      BASE_TEMPLATE.spec.env,
-      BASE_TEMPLATE.spec.envSecretRefs,
-    );
+    const masked = maskSecretRefs(BASE_TEMPLATE.spec.env, BASE_TEMPLATE.spec.envSecretRefs);
     expect(masked['SECRET']).toBe('***');
     expect(masked['KEY']).toBe('val');
   });

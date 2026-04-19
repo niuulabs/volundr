@@ -40,7 +40,9 @@ function CapacityBar({ label, used, capacity, unit = '' }: CapacityBarProps) {
       <div className="cluster-card__cap-header">
         <span className="cluster-card__cap-label">{label}</span>
         <span className="cluster-card__cap-value">
-          {used}{unit} / {capacity}{unit}
+          {used}
+          {unit} / {capacity}
+          {unit}
         </span>
         <span className="cluster-card__cap-pct">{percentage}%</span>
       </div>
@@ -89,17 +91,16 @@ function ClusterCard({ cluster }: ClusterCardProps) {
             </span>
           )}
           <span className="cluster-card__stat">
-            <strong>{readyCount}/{totalNodes}</strong> nodes ready
+            <strong>
+              {readyCount}/{totalNodes}
+            </strong>{' '}
+            nodes ready
           </span>
         </div>
       </div>
 
       <div className="cluster-card__capacity">
-        <CapacityBar
-          label="CPU"
-          used={cluster.used.cpu}
-          capacity={cluster.capacity.cpu}
-        />
+        <CapacityBar label="CPU" used={cluster.used.cpu} capacity={cluster.capacity.cpu} />
         <CapacityBar
           label="Memory"
           used={cluster.used.memMi}
@@ -107,11 +108,7 @@ function ClusterCard({ cluster }: ClusterCardProps) {
           unit=" Mi"
         />
         {cluster.capacity.gpu > 0 && (
-          <CapacityBar
-            label="GPU"
-            used={cluster.used.gpu}
-            capacity={cluster.capacity.gpu}
-          />
+          <CapacityBar label="GPU" used={cluster.used.gpu} capacity={cluster.capacity.gpu} />
         )}
       </div>
 
@@ -144,8 +141,8 @@ export function ClustersPage() {
       <h2 className="clusters-page__title">Clusters</h2>
 
       <p className="clusters-page__subtitle">
-        Infrastructure clusters available for session scheduling — capacity, utilisation, and
-        node health.
+        Infrastructure clusters available for session scheduling — capacity, utilisation, and node
+        health.
       </p>
 
       {clusters.isLoading && (
@@ -159,9 +156,7 @@ export function ClustersPage() {
         <div className="clusters-page__status">
           <StateDot state="failed" />
           <span>
-            {clusters.error instanceof Error
-              ? clusters.error.message
-              : 'failed to load clusters'}
+            {clusters.error instanceof Error ? clusters.error.message : 'failed to load clusters'}
           </span>
         </div>
       )}
