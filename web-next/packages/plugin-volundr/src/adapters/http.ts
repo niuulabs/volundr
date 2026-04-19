@@ -84,7 +84,8 @@ export function buildVolundrHttpAdapter(client: HttpClient): IVolundrService {
 
     getAvailableMcpServers: () => client.get<McpServerConfig[]>('/mcp-servers'),
     getAvailableSecrets: () => client.get<string[]>('/secrets'),
-    createSecret: (name, data) => client.post<{ name: string; keys: string[] }>('/secrets', { name, data }),
+    createSecret: (name, data) =>
+      client.post<{ name: string; keys: string[] }>('/secrets', { name, data }),
     getClusterResources: () => client.get<ClusterResourceInfo>('/cluster/resources'),
 
     startSession: (config) => client.post<VolundrSession>('/sessions', config),
@@ -94,7 +95,9 @@ export function buildVolundrHttpAdapter(client: HttpClient): IVolundrService {
     stopSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/stop`),
     resumeSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/resume`),
     deleteSession: (sessionId, cleanup) =>
-      client.delete<void>(`/sessions/${sessionId}${cleanup ? `?cleanup=${cleanup.join(',')}` : ''}`),
+      client.delete<void>(
+        `/sessions/${sessionId}${cleanup ? `?cleanup=${cleanup.join(',')}` : ''}`,
+      ),
     archiveSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/archive`),
     restoreSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/restore`),
     listArchivedSessions: () => client.get<VolundrSession[]>('/sessions/archived'),
@@ -116,7 +119,9 @@ export function buildVolundrHttpAdapter(client: HttpClient): IVolundrService {
     subscribeChronicle: (_sessionId, _callback) => () => {},
 
     getPullRequests: (repoUrl, status) =>
-      client.get<PullRequest[]>(`/repos/prs?url=${encodeURIComponent(repoUrl)}${status ? `&status=${status}` : ''}`),
+      client.get<PullRequest[]>(
+        `/repos/prs?url=${encodeURIComponent(repoUrl)}${status ? `&status=${status}` : ''}`,
+      ),
     createPullRequest: (sessionId, title, targetBranch) =>
       client.post<PullRequest>(`/sessions/${sessionId}/pr`, { title, targetBranch }),
     mergePullRequest: (prNumber, repoUrl, mergeMethod) =>
@@ -152,17 +157,16 @@ export function buildVolundrHttpAdapter(client: HttpClient): IVolundrService {
       client.post<VolundrProvisioningResult[]>(`/tenants/${tenantId}/reprovision`),
 
     getUserCredentials: () => client.get<VolundrCredential[]>('/credentials/user'),
-    storeUserCredential: (name, data) =>
-      client.post<void>('/credentials/user', { name, data }),
+    storeUserCredential: (name, data) => client.post<void>('/credentials/user', { name, data }),
     deleteUserCredential: (name) => client.delete<void>(`/credentials/user/${name}`),
     getTenantCredentials: () => client.get<VolundrCredential[]>('/credentials/tenant'),
-    storeTenantCredential: (name, data) =>
-      client.post<void>('/credentials/tenant', { name, data }),
+    storeTenantCredential: (name, data) => client.post<void>('/credentials/tenant', { name, data }),
     deleteTenantCredential: (name) => client.delete<void>(`/credentials/tenant/${name}`),
 
     getIntegrationCatalog: () => client.get<CatalogEntry[]>('/integrations/catalog'),
     getIntegrations: () => client.get<IntegrationConnection[]>('/integrations'),
-    createIntegration: (connection) => client.post<IntegrationConnection>('/integrations', connection),
+    createIntegration: (connection) =>
+      client.post<IntegrationConnection>('/integrations', connection),
     deleteIntegration: (id) => client.delete<void>(`/integrations/${id}`),
     testIntegration: (id) => client.post<IntegrationTestResult>(`/integrations/${id}/test`),
 
@@ -194,8 +198,7 @@ export function buildVolundrHttpAdapter(client: HttpClient): IVolundrService {
       client.get<FeatureModule[]>(`/features/modules${scope ? `?scope=${scope}` : ''}`),
     toggleFeature: (key, enabled) =>
       client.post<FeatureModule>(`/features/modules/${key}/toggle`, { enabled }),
-    getUserFeaturePreferences: () =>
-      client.get<UserFeaturePreference[]>('/features/preferences'),
+    getUserFeaturePreferences: () => client.get<UserFeaturePreference[]>('/features/preferences'),
     updateUserFeaturePreferences: (preferences) =>
       client.put<UserFeaturePreference[]>('/features/preferences', preferences),
 

@@ -12,9 +12,27 @@ export * from './primitives/Drawer';
 export * from './primitives/Popover';
 export * from './primitives/Tooltip';
 export * from './primitives/Toast';
+export * from './primitives/ShapeSvg';
+export * from './primitives/Sparkline';
+export * from './primitives/BudgetBar';
+export * from './primitives/BudgetRunwayBar';
 export * from './data/Table';
 export * from './data/FilterBar';
 export * from './data/KpiStrip';
 export * from './data/states';
-export * from './primitives/ShapeSvg';
+export * from './composites/PersonaAvatar';
+export * from './composites/RavnAvatar';
+export * from './composites/MountChip';
+export * from './composites/DeployBadge';
+export * from './composites/LifecycleBadge';
+export type { Option } from './primitives/option';
+export * from './primitives/Field';
+export * from './primitives/Input';
+export * from './primitives/Textarea';
+export * from './primitives/Select';
+export * from './primitives/Combobox';
+export * from './primitives/ValidationSummary';
 export { cn } from './utils/cn';
+
+/* Chat */
+export * from './chat';

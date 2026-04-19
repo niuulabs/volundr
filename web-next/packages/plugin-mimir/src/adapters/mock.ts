@@ -4,8 +4,9 @@ import type { RecentWrite } from '../ports/IMountAdapter';
 import type { PageMeta, Page, SearchResult } from '../domain/page';
 import type { LintIssue, LintReport, DreamCycle } from '../domain/lint';
 import type { Source } from '../domain/source';
-import type { MimirStats } from '../domain/api-types';
+import type { MimirStats, MimirGraph } from '../domain/api-types';
 import type { EmbeddingSearchResult } from '../ports/IEmbeddingStore';
+import type { EntityMeta } from '../domain/entity';
 import { tallySeverity } from '../domain/lint';
 import { toPageMeta } from '../domain/page';
 
@@ -232,6 +233,123 @@ const MOCK_SOURCES: Source[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Seed data — entity pages
+// ---------------------------------------------------------------------------
+
+const MOCK_ENTITY_PAGES: Page[] = [
+  {
+    path: '/entities/niuulabs',
+    title: 'Niuu Labs',
+    summary: 'The organisation behind the Niuu platform.',
+    category: 'org',
+    type: 'entity',
+    entityType: 'org',
+    confidence: 'high',
+    mounts: ['shared'],
+    updatedAt: '2026-04-18T08:00:00Z',
+    updatedBy: 'ravn-fjolnir',
+    sourceIds: ['src-001'],
+    related: ['/entities/tyr', '/entities/volundr', '/entities/mimir'],
+    size: 800,
+    zones: [
+      {
+        kind: 'relationships',
+        items: [
+          { slug: '/entities/tyr', note: 'builds' },
+          { slug: '/entities/volundr', note: 'builds' },
+          { slug: '/entities/mimir', note: 'builds' },
+        ],
+      },
+    ],
+  },
+  {
+    path: '/entities/hexagonal-arch',
+    title: 'Hexagonal Architecture',
+    summary:
+      'Software architecture pattern separating business logic from infrastructure via ports and adapters.',
+    category: 'concept',
+    type: 'entity',
+    entityType: 'concept',
+    confidence: 'high',
+    mounts: ['shared', 'local'],
+    updatedAt: '2026-04-17T12:00:00Z',
+    updatedBy: 'ravn-skald',
+    sourceIds: ['src-002'],
+    related: ['/arch/overview', '/entities/asyncpg'],
+    size: 600,
+    zones: [
+      {
+        kind: 'key-facts',
+        items: [
+          'Business logic depends on ports (interfaces), never on adapters',
+          'Adapters implement ports and can be swapped without changing business logic',
+        ],
+      },
+    ],
+  },
+  {
+    path: '/entities/tyr',
+    title: 'Tyr',
+    summary: 'The autonomous dispatcher module of the Niuu platform.',
+    category: 'component',
+    type: 'entity',
+    entityType: 'component',
+    confidence: 'high',
+    mounts: ['local', 'shared'],
+    updatedAt: '2026-04-16T10:00:00Z',
+    updatedBy: 'ravn-fjolnir',
+    sourceIds: ['src-006'],
+    related: ['/entities/niuulabs', '/arch/overview'],
+    size: 900,
+    zones: [
+      {
+        kind: 'relationships',
+        items: [{ slug: '/entities/niuulabs', note: 'maintained by' }],
+      },
+    ],
+  },
+  {
+    path: '/entities/asyncpg',
+    title: 'asyncpg',
+    summary: 'High-performance async PostgreSQL driver for Python.',
+    category: 'technology',
+    type: 'entity',
+    entityType: 'technology',
+    confidence: 'medium',
+    mounts: ['shared'],
+    updatedAt: '2026-04-15T09:00:00Z',
+    updatedBy: 'ravn-skald',
+    sourceIds: ['src-003'],
+    related: ['/api/overview', '/entities/hexagonal-arch'],
+    size: 450,
+    zones: [],
+  },
+];
+
+const ALL_PAGES = [...MOCK_PAGES, ...MOCK_ENTITY_PAGES];
+
+// ---------------------------------------------------------------------------
+// Seed data — graph
+// ---------------------------------------------------------------------------
+
+const MOCK_GRAPH: MimirGraph = {
+  nodes: ALL_PAGES.map((p) => ({
+    id: p.path,
+    title: p.title,
+    category: p.category,
+  })),
+  edges: [
+    { source: '/arch/overview', target: '/api/overview' },
+    { source: '/infra/k8s', target: '/arch/overview' },
+    { source: '/arch/overview', target: '/entities/hexagonal-arch' },
+    { source: '/entities/niuulabs', target: '/entities/tyr' },
+    { source: '/entities/tyr', target: '/arch/overview' },
+    { source: '/api/overview', target: '/entities/asyncpg' },
+    { source: '/entities/hexagonal-arch', target: '/entities/asyncpg' },
+  ],
+};
+
+// ---------------------------------------------------------------------------
 // Seed data — Lint issues
 // ---------------------------------------------------------------------------
 
@@ -410,7 +528,7 @@ export function createMimirMockAdapter(): IMimirService {
       },
 
       async getPage(path: string): Promise<Page | null> {
-        return MOCK_PAGES.find((p) => p.path === path) ?? null;
+        return ALL_PAGES.find((p) => p.path === path) ?? null;
       },
 
       async upsertPage(): Promise<void> {
@@ -452,6 +570,38 @@ export function createMimirMockAdapter(): IMimirService {
         const page = MOCK_PAGES.find((p) => p.path === path);
         if (!page) return [];
         return MOCK_SOURCES.filter((s) => page.sourceIds.includes(s.id));
+      },
+
+      async getGraph(options): Promise<MimirGraph> {
+        if (!options?.mountName) {
+          return MOCK_GRAPH;
+        }
+        const mountPages = new Set(
+          ALL_PAGES.filter((p) => p.mounts.includes(options.mountName!)).map((p) => p.path),
+        );
+        return {
+          nodes: MOCK_GRAPH.nodes.filter((n) => mountPages.has(n.id)),
+          edges: MOCK_GRAPH.edges.filter(
+            (e) => mountPages.has(e.source) && mountPages.has(e.target),
+          ),
+        };
+      },
+
+      async listEntities(options): Promise<EntityMeta[]> {
+        let entities = MOCK_ENTITY_PAGES;
+        if (options?.kind) {
+          entities = entities.filter((p) => p.entityType === options.kind);
+        }
+        return entities.map((p) => ({
+          path: p.path,
+          title: p.title,
+          entityKind: (p.entityType ?? 'concept') as EntityMeta['entityKind'],
+          summary: p.summary,
+          relationshipCount:
+            p.zones
+              ?.filter((z) => z.kind === 'relationships')
+              .flatMap((z) => (z.kind === 'relationships' ? z.items : [])).length ?? 0,
+        }));
       },
     },
 

@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
-import { renderWithProviders as wrap } from '../__test-utils__/render';
 import { MimirPage } from './MimirPage';
 import { createMimirMockAdapter } from '../adapters/mock';
 import type { IMimirService } from '../ports';
+import { renderWithMimir } from '../testing/renderWithMimir';
+
+const wrap = renderWithMimir;
 
 describe('MimirPage', () => {
   it('renders the rune and title', () => {

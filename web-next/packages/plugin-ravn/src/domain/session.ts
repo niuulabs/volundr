@@ -1,0 +1,31 @@
+import { z } from 'zod';
+
+/**
+ * Live status of a Session.
+ */
+export const sessionStatusSchema = z.enum(['running', 'idle', 'stopped', 'failed']);
+
+export type SessionStatus = z.infer<typeof sessionStatusSchema>;
+
+/**
+ * A Session is a live interaction thread between a user and a Ravn.
+ * It holds state for an ongoing or completed conversation.
+ *
+ * Owner: plugin-ravn.
+ */
+export const sessionSchema = z.object({
+  /** Unique identifier (UUID). */
+  id: z.string().uuid(),
+  /** ID of the Ravn that owns this session. */
+  ravnId: z.string().min(1),
+  /** Persona bound to the ravn at session start. */
+  personaName: z.string().min(1),
+  /** Current session status. */
+  status: sessionStatusSchema,
+  /** LLM alias used for this session. */
+  model: z.string().min(1),
+  /** ISO-8601 UTC creation timestamp. */
+  createdAt: z.string().datetime(),
+});
+
+export type Session = z.infer<typeof sessionSchema>;

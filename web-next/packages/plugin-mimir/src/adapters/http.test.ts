@@ -227,4 +227,82 @@ describe('buildMimirHttpAdapter', () => {
       });
     });
   });
+
+  describe('pages.getGraph', () => {
+    it('calls GET /graph without query string when no options', async () => {
+      const rawGraph = { nodes: [], edges: [] };
+      const client = makeClient({ get: vi.fn().mockResolvedValue(rawGraph) });
+      await buildMimirHttpAdapter(client).pages.getGraph();
+      expect(client.get).toHaveBeenCalledWith('/graph');
+    });
+
+    it('appends mount query param when mountName is provided', async () => {
+      const rawGraph = { nodes: [], edges: [] };
+      const client = makeClient({ get: vi.fn().mockResolvedValue(rawGraph) });
+      await buildMimirHttpAdapter(client).pages.getGraph({ mountName: 'local' });
+      const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(call).toContain('/graph');
+      expect(call).toContain('mount=local');
+    });
+
+    it('maps raw graph node and edge fields', async () => {
+      const rawGraph = {
+        nodes: [
+          {
+            id: '/arch/overview',
+            title: 'Architecture Overview',
+            category: 'arch',
+            inbound_count: 2,
+          },
+        ],
+        edges: [{ source: '/infra/k8s', target: '/arch/overview' }],
+      };
+      const client = makeClient({ get: vi.fn().mockResolvedValue(rawGraph) });
+      const graph = await buildMimirHttpAdapter(client).pages.getGraph();
+      expect(graph.nodes[0]).toMatchObject({
+        id: '/arch/overview',
+        title: 'Architecture Overview',
+        category: 'arch',
+        inboundCount: 2,
+      });
+      expect(graph.edges[0]).toMatchObject({ source: '/infra/k8s', target: '/arch/overview' });
+    });
+  });
+
+  describe('pages.listEntities', () => {
+    it('calls GET /entities without query string when no options', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).pages.listEntities();
+      expect(client.get).toHaveBeenCalledWith('/entities');
+    });
+
+    it('appends kind query param when kind is provided', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).pages.listEntities({ kind: 'org' });
+      const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(call).toContain('/entities');
+      expect(call).toContain('kind=org');
+    });
+
+    it('maps raw entity meta fields', async () => {
+      const rawEntities = [
+        {
+          path: '/entities/niuulabs',
+          title: 'Niuu Labs',
+          entity_kind: 'org',
+          summary: 'The organisation behind Niuu.',
+          relationship_count: 3,
+        },
+      ];
+      const client = makeClient({ get: vi.fn().mockResolvedValue(rawEntities) });
+      const entities = await buildMimirHttpAdapter(client).pages.listEntities();
+      expect(entities[0]).toMatchObject({
+        path: '/entities/niuulabs',
+        title: 'Niuu Labs',
+        entityKind: 'org',
+        summary: 'The organisation behind Niuu.',
+        relationshipCount: 3,
+      });
+    });
+  });
 });

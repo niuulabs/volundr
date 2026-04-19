@@ -37,10 +37,7 @@ export function ConfidenceBadge({ value, className }: ConfidenceBadgeProps) {
       aria-valuemax={100}
     >
       <span className="niuu-conf-badge__track" aria-hidden="true">
-        <span
-          className="niuu-conf-badge__fill"
-          style={{ width: `${pct}%` }}
-        />
+        <span className="niuu-conf-badge__fill" style={{ width: `${pct}%` }} />
       </span>
       <span className="niuu-conf-badge__num">{pct}</span>
     </span>

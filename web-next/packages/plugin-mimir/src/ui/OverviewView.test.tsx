@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
-import { renderWithProviders as wrap } from '../__test-utils__/render';
+import { renderWithMimir as wrap } from '../testing/renderWithMimir';
 import { OverviewView } from './OverviewView';
 import { createMimirMockAdapter } from '../adapters/mock';
 import type { IMimirService } from '../ports';

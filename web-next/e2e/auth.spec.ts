@@ -88,8 +88,9 @@ test('OIDC callback: handles code in URL and cleans up query string', async ({ p
 
 test('RequireAuth: no redirect when auth is disabled', async ({ page }) => {
   // With default config (no auth.issuer), RequireAuth must not redirect to /login.
-  // We verify the URL stays at / after the app fully renders.
+  // The shell redirects / to the first enabled plugin, so we verify the URL
+  // does NOT contain /login (auth redirect would go there).
   await page.goto('/');
   await expect(page.getByText('hello from the mock adapter')).toBeVisible({ timeout: 5000 });
-  await expect(page).toHaveURL('http://localhost:5173/');
+  await expect(page).not.toHaveURL(/\/login/);
 });

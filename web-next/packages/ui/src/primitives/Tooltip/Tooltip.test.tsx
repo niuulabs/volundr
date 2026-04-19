@@ -62,9 +62,7 @@ describe('Tooltip', () => {
     expect(trigger).toHaveAttribute('data-state', 'closed');
     await user.hover(trigger);
     // After hover, Radix sets data-state on the trigger
-    await waitFor(() =>
-      expect(trigger.getAttribute('data-state')).not.toBe('closed'),
-    );
+    await waitFor(() => expect(trigger.getAttribute('data-state')).not.toBe('closed'));
   });
 
   it('accepts side prop without errors', async () => {
