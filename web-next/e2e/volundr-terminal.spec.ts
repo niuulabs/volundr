@@ -32,8 +32,9 @@ test('type a command in terminal and see echoed output', async ({ page }) => {
   await page.keyboard.type('ls');
   await page.keyboard.press('Enter');
 
-  // Verify xterm mounted by checking for the .xterm-viewport element xterm.js always creates.
-  await expect(container.locator('.xterm-viewport')).toBeVisible({ timeout: 5_000 });
+  // Verify xterm mounted by checking for the .xterm-rows element xterm.js always creates.
+  // (.xterm-viewport is the scrollbar overlay — it may be hidden when content fits the view)
+  await expect(container.locator('.xterm-rows')).toBeAttached({ timeout: 5_000 });
 });
 
 test('reconnect button triggers re-subscription', async ({ page }) => {

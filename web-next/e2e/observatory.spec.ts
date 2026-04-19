@@ -30,8 +30,8 @@ test('registry page renders entity type list', async ({ page }) => {
   await page.goto('/registry');
   await expect(page.getByText('Registry').first()).toBeVisible();
   await expect(page.getByText('Realm').first()).toBeVisible({ timeout: 5000 });
-  await expect(page.getByText('Cluster')).toBeVisible({ timeout: 5000 });
-  await expect(page.getByText('Raid')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('Cluster').first()).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('Raid').first()).toBeVisible({ timeout: 5000 });
 });
 
 test('registry: Types tab is active by default', async ({ page }) => {
@@ -53,7 +53,8 @@ test('registry: search filters type list', async ({ page }) => {
   await page.goto('/registry');
   await page.waitForSelector('[data-testid="tab-types"]', { timeout: 5000 });
 
-  await page.fill('[aria-label="Filter types"]', 'realm');
+  // Filter by 'vlan' — unique to realm's description; cluster description doesn't contain it
+  await page.fill('[aria-label="Filter types"]', 'vlan');
   await expect(page.getByTestId('type-row-realm')).toBeVisible();
   await expect(page.getByTestId('type-row-cluster')).not.toBeVisible();
 });

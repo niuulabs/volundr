@@ -26,7 +26,8 @@ test('hello plugin round-trips through HTTP client with token provider', async (
       body: JSON.stringify({
         theme: 'ice',
         plugins: { hello: { enabled: true, order: 1 } },
-        services: { hello: { baseUrl: '/api/niuu/hello', mode: 'http' } },
+        // baseUrl must be absolute — Zod validates with z.string().url()
+        services: { hello: { baseUrl: 'http://localhost:5173/api/niuu/hello', mode: 'http' } },
       }),
     }),
   );
