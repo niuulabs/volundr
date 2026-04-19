@@ -14,14 +14,19 @@ if (typeof window.ResizeObserver === 'undefined') {
   };
 }
 
-// Radix UI Toast swipe detection calls hasPointerCapture on DOM elements.
-// jsdom doesn't implement it; stub it on Element.prototype.
-if (typeof Element.prototype.hasPointerCapture === 'undefined') {
+// jsdom doesn't implement Element.prototype.scrollIntoView.
+// Radix UI and ValidationSummary use it in focus-jump flows.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
+
+// jsdom doesn't implement PointerEvent methods used by Radix UI primitives.
+if (!Element.prototype.hasPointerCapture) {
   Element.prototype.hasPointerCapture = () => false;
 }
-if (typeof Element.prototype.setPointerCapture === 'undefined') {
+if (!Element.prototype.setPointerCapture) {
   Element.prototype.setPointerCapture = () => {};
 }
-if (typeof Element.prototype.releasePointerCapture === 'undefined') {
+if (!Element.prototype.releasePointerCapture) {
   Element.prototype.releasePointerCapture = () => {};
 }
