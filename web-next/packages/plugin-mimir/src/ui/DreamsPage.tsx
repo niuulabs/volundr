@@ -14,7 +14,9 @@ function DreamRow({ cycle }: DreamRowProps) {
   return (
     <li className="dreams-page__cycle" data-testid="dream-cycle">
       <div className="dreams-page__cycle-header">
-        <span className="dreams-page__cycle-time">{formatTimestamp(cycle.timestamp, 'medium')}</span>
+        <span className="dreams-page__cycle-time">
+          {formatTimestamp(cycle.timestamp, 'medium')}
+        </span>
         <Chip tone="muted">{cycle.ravn}</Chip>
         <span className="dreams-page__cycle-duration">{formatDuration(cycle.durationMs)}</span>
       </div>
