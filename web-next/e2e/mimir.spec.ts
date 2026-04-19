@@ -12,20 +12,23 @@ test('navigate to /mimir renders the placeholder page', async ({ page }) => {
 test('/mimir shows loading state then mount list', async ({ page }) => {
   await page.goto('/mimir');
   await expect(
-    page.getByText(/loading mounts/).or(page.getByText(/mounts connected/)),
+    page
+      .getByText(/loading mounts/)
+      .or(page.getByText(/mounts connected/))
+      .first(),
   ).toBeVisible();
-  await expect(page.getByText(/mounts connected/)).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText(/mounts connected/).first()).toBeVisible({ timeout: 5000 });
 });
 
 test('/mimir shows individual mount names', async ({ page }) => {
   await page.goto('/mimir');
-  await expect(page.getByText('local')).toBeVisible({ timeout: 5000 });
-  await expect(page.getByText('shared')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('local').first()).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('shared').first()).toBeVisible({ timeout: 5000 });
 });
 
 test('mimir rune is visible in the rail', async ({ page }) => {
   await page.goto('/mimir');
-  await expect(page.getByText('ᛗ')).toBeVisible();
+  await expect(page.getByText('ᛗ').first()).toBeVisible();
 });
 
 // ---------------------------------------------------------------------------
