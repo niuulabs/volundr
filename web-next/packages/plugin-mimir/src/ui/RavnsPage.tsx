@@ -2,6 +2,7 @@ import { StateDot, Chip, RavnAvatar } from '@niuulabs/ui';
 import { useRavns } from '../application/useRavns';
 import type { RavnState } from '../domain/ravn-binding';
 import type { DotState } from '@niuulabs/ui';
+import { formatDuration, formatTimestamp } from './format';
 import './RavnsPage.css';
 
 const STATE_DOT: Record<RavnState, DotState> = {
@@ -9,22 +10,6 @@ const STATE_DOT: Record<RavnState, DotState> = {
   idle: 'idle',
   offline: 'failed',
 };
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  const rem = s % 60;
-  return rem > 0 ? `${m}m ${rem}s` : `${m}m`;
-}
-
-function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  });
-}
 
 export function RavnsPage() {
   const { data, isLoading, isError, error } = useRavns();

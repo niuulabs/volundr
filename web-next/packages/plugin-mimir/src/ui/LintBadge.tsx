@@ -3,6 +3,7 @@
  *
  * Plugin-local for now; promote to @niuulabs/ui when a second plugin needs it.
  */
+import './LintBadge.css';
 
 export interface LintBadgeSummary {
   error: number;

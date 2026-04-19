@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StateDot, Chip } from '@niuulabs/ui';
 import { useLint } from '../application/useLint';
+import { useRavns } from '../application/useRavns';
 import { LintBadge } from './LintBadge';
 import type { LintIssue, IssueSeverity, LintRule } from '../domain/lint';
 import './LintPage.css';
@@ -15,8 +16,6 @@ const RULE_DESCRIPTIONS: Record<LintRule, string> = {
   L11: 'Stale mount index',
   L12: 'Invalid frontmatter',
 };
-
-const MOCK_RAVNS = ['ravn-fjolnir', 'ravn-skald', 'ravn-galdra'];
 
 interface IssueSeverityFilterProps {
   active: IssueSeverity | null;
@@ -132,6 +131,8 @@ export function LintPage() {
     isFixing,
     isReassigning,
   } = useLint();
+  const { data: ravns } = useRavns();
+  const ravnIds = ravns?.map((r) => r.ravnId) ?? [];
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [severityFilter, setSeverityFilter] = useState<IssueSeverity | null>(null);
@@ -237,7 +238,7 @@ export function LintPage() {
                 data-testid="assignee-select"
               >
                 <option value="">Assign to…</option>
-                {MOCK_RAVNS.map((r) => (
+                {ravnIds.map((r) => (
                   <option key={r} value={r}>
                     {r}
                   </option>

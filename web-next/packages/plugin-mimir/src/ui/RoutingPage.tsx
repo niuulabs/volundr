@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { StateDot, Chip } from '@niuulabs/ui';
 import { useRouting } from '../application/useRouting';
 import type { WriteRoutingRule } from '../domain/routing';
@@ -234,8 +234,8 @@ export function RoutingPage() {
               </thead>
               <tbody>
                 {rules.map((rule) => (
-                  <>
-                    <tr key={rule.id} className="routing-page__row" data-testid="routing-rule-row">
+                  <Fragment key={rule.id}>
+                    <tr className="routing-page__row" data-testid="routing-rule-row">
                       <td className="routing-page__cell routing-page__cell--priority">
                         {rule.priority}
                       </td>
@@ -291,7 +291,7 @@ export function RoutingPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

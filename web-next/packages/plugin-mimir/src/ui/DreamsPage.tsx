@@ -1,23 +1,8 @@
 import { StateDot, Chip } from '@niuulabs/ui';
 import { useDreams } from '../application/useDreams';
 import type { DreamCycle } from '../domain/lint';
+import { formatDuration, formatTimestamp } from './format';
 import './DreamsPage.css';
-
-function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  const rem = s % 60;
-  return rem > 0 ? `${m}m ${rem}s` : `${m}m`;
-}
 
 interface DreamRowProps {
   cycle: DreamCycle;
@@ -29,7 +14,7 @@ function DreamRow({ cycle }: DreamRowProps) {
   return (
     <li className="dreams-page__cycle" data-testid="dream-cycle">
       <div className="dreams-page__cycle-header">
-        <span className="dreams-page__cycle-time">{formatTimestamp(cycle.timestamp)}</span>
+        <span className="dreams-page__cycle-time">{formatTimestamp(cycle.timestamp, 'medium')}</span>
         <Chip tone="muted">{cycle.ravn}</Chip>
         <span className="dreams-page__cycle-duration">{formatDuration(cycle.durationMs)}</span>
       </div>
