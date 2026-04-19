@@ -285,7 +285,9 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
 
   const handleDrop = (e: React.DragEvent, targetId: string) => {
     e.preventDefault();
-    if (dragId) tryReparent(dragId, targetId);
+    // Prefer state value; fall back to dataTransfer for fast-firing synthetic events.
+    const childId = dragId ?? e.dataTransfer?.getData('text/plain') ?? null;
+    if (childId) tryReparent(childId, targetId);
     setDragId(null);
     setOverId(null);
   };

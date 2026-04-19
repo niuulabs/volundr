@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('status composites showcase', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/hello/status-showcase');
+    await expect(page.getByText(/status composites/i)).toBeVisible({ timeout: 5000 });
   });
 
   test('page renders the heading', async ({ page }) => {
@@ -36,7 +37,7 @@ test.describe('status composites showcase', () => {
   test('ConfidenceBadge — renders grid including null placeholder', async ({ page }) => {
     const grid = page.getByTestId('confidence-badge-grid');
     await expect(grid).toBeVisible();
-    await expect(grid.getByText('—')).toBeVisible();
+    await expect(grid.getByText('—').first()).toBeVisible();
   });
 
   test('ConfidenceBadge — renders numeric percentages', async ({ page }) => {
