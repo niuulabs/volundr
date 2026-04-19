@@ -11,6 +11,16 @@ import {
   buildRavnTriggerAdapter,
   buildRavnBudgetAdapter,
 } from '@niuulabs/plugin-ravn';
+import {
+  createMockTyrService,
+  createMockDispatcherService,
+  createMockTyrSessionService,
+  createMockTrackerService,
+  buildTyrHttpAdapter,
+  buildDispatcherHttpAdapter,
+  buildTyrSessionHttpAdapter,
+  buildTrackerHttpAdapter,
+} from '@niuulabs/plugin-tyr';
 import { createMimirMockAdapter, buildMimirHttpAdapter } from '@niuulabs/plugin-mimir';
 import {
   createMockRegistryRepository,
@@ -50,6 +60,7 @@ function hasWsBackend(svc: ServiceConfig | undefined): svc is ServiceConfig & { 
 export function buildServices(config: NiuuConfig): ServicesMap {
   const helloSvc = config.services['hello'];
   const ravnSvc = config.services['ravn'];
+  const tyrSvc = config.services['tyr'];
   const mimirSvc = config.services['mimir'];
   const volundrSvc = config.services['volundr'];
   const volundrPtySvc = config.services['volundr.pty'];
@@ -101,8 +112,25 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     ? buildObservatoryEventsSseStream(obsEventsSvc.baseUrl)
     : createMockEventStream();
 
+  // ── Tyr ──
+  const tyrClient = hasHttpBackend(tyrSvc) ? createApiClient(tyrSvc.baseUrl) : null;
+  const tyrService = tyrClient ? buildTyrHttpAdapter(tyrClient) : createMockTyrService();
+  const dispatcherService = tyrClient
+    ? buildDispatcherHttpAdapter(tyrClient)
+    : createMockDispatcherService();
+  const tyrSessionService = tyrClient
+    ? buildTyrSessionHttpAdapter(tyrClient)
+    : createMockTyrSessionService();
+  const trackerService = tyrClient
+    ? buildTrackerHttpAdapter(tyrClient)
+    : createMockTrackerService();
+
   return {
     hello,
+    tyr: tyrService,
+    'tyr.dispatcher': dispatcherService,
+    'tyr.sessions': tyrSessionService,
+    'tyr.tracker': trackerService,
     'ravn.personas': ravnPersonas,
     'ravn.ravens': ravnRavens,
     'ravn.sessions': ravnSessions,
