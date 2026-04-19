@@ -12,6 +12,7 @@ import { useTriggers } from './hooks/useTriggers';
 import { useSessions } from './hooks/useSessions';
 import { useFleetBudget, useRavnBudgets } from './hooks/useBudget';
 import { topBudgetSpenders } from './grouping';
+import './OverviewPage.css';
 
 const LOG_TAIL_LIMIT = 20;
 const TOP_SPENDERS_COUNT = 5;
@@ -81,15 +82,7 @@ export function OverviewPage() {
   }
 
   return (
-    <div
-      data-testid="overview-page"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--space-6)',
-        padding: 'var(--space-6)',
-      }}
-    >
+    <div data-testid="overview-page" className="rv-overview">
       {/* KPI strip */}
       <KpiStrip>
         <div data-testid="kpi-total">
@@ -117,74 +110,23 @@ export function OverviewPage() {
       </KpiStrip>
 
       {/* 2-column body */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 'var(--space-6)',
-          alignItems: 'start',
-        }}
-      >
+      <div className="rv-overview__grid">
         {/* Left: Active ravens list */}
         <section aria-labelledby="active-ravens-heading">
-          <h3
-            id="active-ravens-heading"
-            style={{
-              margin: '0 0 var(--space-3)',
-              fontSize: 'var(--text-sm)',
-              fontWeight: 600,
-              color: 'var(--color-text-secondary)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-            }}
-          >
+          <h3 id="active-ravens-heading" className="rv-section-heading">
             Active ravens
           </h3>
           {ravnList.filter((r) => r.status === 'active').length === 0 ? (
-            <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
-              No active ravens
-            </p>
+            <p className="rv-empty-text">No active ravens</p>
           ) : (
-            <ul
-              style={{
-                listStyle: 'none',
-                margin: 0,
-                padding: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 'var(--space-2)',
-              }}
-              data-testid="active-ravens-list"
-            >
+            <ul className="rv-active-list" data-testid="active-ravens-list">
               {ravnList
                 .filter((r) => r.status === 'active')
                 .map((r) => (
-                  <li
-                    key={r.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-3)',
-                      padding: 'var(--space-2) var(--space-3)',
-                      background: 'var(--color-bg-secondary)',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--color-border)',
-                    }}
-                    data-testid="active-ravn-row"
-                  >
+                  <li key={r.id} className="rv-active-row" data-testid="active-ravn-row">
                     <StateDot state="running" pulse size={8} />
-                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500, flex: 1 }}>
-                      {r.personaName}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--color-text-muted)',
-                        fontFamily: 'var(--font-mono)',
-                      }}
-                    >
-                      {r.model}
-                    </span>
+                    <span className="rv-active-row__name">{r.personaName}</span>
+                    <span className="rv-active-row__model">{r.model}</span>
                   </li>
                 ))}
             </ul>
@@ -193,85 +135,25 @@ export function OverviewPage() {
 
         {/* Right: Budget spenders + sparkline */}
         <section aria-labelledby="burning-now-heading">
-          <h3
-            id="burning-now-heading"
-            style={{
-              margin: '0 0 var(--space-3)',
-              fontSize: 'var(--text-sm)',
-              fontWeight: 600,
-              color: 'var(--color-text-secondary)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-            }}
-          >
+          <h3 id="burning-now-heading" className="rv-section-heading">
             Burning now
           </h3>
 
           {/* Fleet hourly sparkline */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-3)',
-              marginBottom: 'var(--space-4)',
-              padding: 'var(--space-2) var(--space-3)',
-              background: 'var(--color-bg-secondary)',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--color-border)',
-            }}
-            data-testid="fleet-sparkline"
-          >
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-              Fleet hourly cost
-            </span>
+          <div className="rv-fleet-sparkline" data-testid="fleet-sparkline">
+            <span className="rv-fleet-sparkline__label">Fleet hourly cost</span>
             <Sparkline values={hourlyValues} width={120} height={28} />
           </div>
 
           {/* Top spenders */}
-          <ul
-            style={{
-              listStyle: 'none',
-              margin: 0,
-              padding: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--space-2)',
-            }}
-            data-testid="top-spenders-list"
-          >
+          <ul className="rv-spenders-list" data-testid="top-spenders-list">
             {spenders.map((r) => {
               const b = budgets[r.id];
               return (
-                <li
-                  key={r.id}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 'var(--space-1)',
-                    padding: 'var(--space-2) var(--space-3)',
-                    background: 'var(--color-bg-secondary)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                  }}
-                  data-testid="spender-row"
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>
-                      {r.personaName}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--color-text-muted)',
-                        fontFamily: 'var(--font-mono)',
-                      }}
-                    >
+                <li key={r.id} className="rv-spender-row" data-testid="spender-row">
+                  <div className="rv-spender-row__header">
+                    <span className="rv-spender-row__name">{r.personaName}</span>
+                    <span className="rv-spender-row__amount">
                       {b ? `$${b.spentUsd.toFixed(2)} / $${b.capUsd.toFixed(2)}` : '—'}
                     </span>
                   </div>
@@ -292,112 +174,27 @@ export function OverviewPage() {
 
       {/* Log tail */}
       <section aria-labelledby="log-tail-heading">
-        <h3
-          id="log-tail-heading"
-          style={{
-            margin: '0 0 var(--space-3)',
-            fontSize: 'var(--text-sm)',
-            fontWeight: 600,
-            color: 'var(--color-text-secondary)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-          }}
-        >
+        <h3 id="log-tail-heading" className="rv-section-heading">
           Recent activity
         </h3>
-        <div
-          style={{
-            background: 'var(--color-bg-secondary)',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--color-border)',
-            overflow: 'hidden',
-          }}
-          data-testid="log-tail"
-        >
+        <div className="rv-log-panel" data-testid="log-tail">
           {logTail.length === 0 ? (
-            <p
-              style={{
-                padding: 'var(--space-4)',
-                color: 'var(--color-text-muted)',
-                fontSize: 'var(--text-sm)',
-              }}
-            >
-              No recent activity
-            </p>
+            <p className="rv-log-empty">No recent activity</p>
           ) : (
-            <table
-              style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                fontSize: 'var(--text-xs)',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
+            <table className="rv-log-table">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <th
-                    style={{
-                      padding: 'var(--space-2) var(--space-3)',
-                      textAlign: 'left',
-                      color: 'var(--color-text-muted)',
-                      fontWeight: 500,
-                    }}
-                  >
-                    Time
-                  </th>
-                  <th
-                    style={{
-                      padding: 'var(--space-2) var(--space-3)',
-                      textAlign: 'left',
-                      color: 'var(--color-text-muted)',
-                      fontWeight: 500,
-                    }}
-                  >
-                    Persona
-                  </th>
-                  <th
-                    style={{
-                      padding: 'var(--space-2) var(--space-3)',
-                      textAlign: 'left',
-                      color: 'var(--color-text-muted)',
-                      fontWeight: 500,
-                    }}
-                  >
-                    Event
-                  </th>
+                <tr className="rv-log-thead-row">
+                  <th className="rv-log-th">Time</th>
+                  <th className="rv-log-th">Persona</th>
+                  <th className="rv-log-th">Event</th>
                 </tr>
               </thead>
               <tbody>
                 {logTail.map((entry) => (
-                  <tr
-                    key={entry.key}
-                    style={{ borderBottom: '1px solid var(--color-border-subtle)' }}
-                    data-testid="log-row"
-                  >
-                    <td
-                      style={{
-                        padding: 'var(--space-2) var(--space-3)',
-                        color: 'var(--color-text-muted)',
-                      }}
-                    >
-                      {new Date(entry.ts).toLocaleTimeString()}
-                    </td>
-                    <td
-                      style={{
-                        padding: 'var(--space-2) var(--space-3)',
-                        color: 'var(--color-text-secondary)',
-                      }}
-                    >
-                      {entry.persona}
-                    </td>
-                    <td
-                      style={{
-                        padding: 'var(--space-2) var(--space-3)',
-                        color: 'var(--color-text-primary)',
-                      }}
-                    >
-                      {entry.text}
-                    </td>
+                  <tr key={entry.key} className="rv-log-row" data-testid="log-row">
+                    <td className="rv-log-td--time">{new Date(entry.ts).toLocaleTimeString()}</td>
+                    <td className="rv-log-td--persona">{entry.persona}</td>
+                    <td className="rv-log-td--event">{entry.text}</td>
                   </tr>
                 ))}
               </tbody>

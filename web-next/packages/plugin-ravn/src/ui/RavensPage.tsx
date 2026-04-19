@@ -1,32 +1,17 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, Fragment } from 'react';
 import { StateDot, BudgetBar, LoadingState, ErrorState } from '@niuulabs/ui';
 import type { Ravn } from '../domain/ravn';
 import { useRavens } from './hooks/useRavens';
 import { useRavnBudgets } from './hooks/useBudget';
-import { groupRavens, type GroupKey } from './grouping';
+import { groupRavens, ravnStatusToDotState, type GroupKey } from './grouping';
 import { RavnDetail } from './RavnDetail';
+import { loadStorage, saveStorage } from './storage';
+import './RavensPage.css';
 
 export type LayoutVariant = 'split' | 'table' | 'cards';
 
 const LAYOUT_STORAGE_KEY = 'ravn.ravens.layout';
 const GROUP_STORAGE_KEY = 'ravn.ravens.group';
-
-function loadStorage<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function saveStorage<T>(key: string, value: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // ignore
-  }
-}
 
 interface RavnRowProps {
   ravn: Ravn;
@@ -37,55 +22,19 @@ interface RavnRowProps {
   onClick?: () => void;
 }
 
-function RavnListRow({
-  ravn,
-  budgetSpent,
-  budgetCap,
-  budgetWarnAt,
-  selected,
-  onClick,
-}: RavnRowProps) {
-  const dotState =
-    ravn.status === 'active'
-      ? 'running'
-      : ravn.status === 'suspended'
-        ? 'attention'
-        : ravn.status === 'failed'
-          ? 'failed'
-          : 'unknown';
-
+function RavnListRow({ ravn, budgetSpent, budgetCap, budgetWarnAt, selected, onClick }: RavnRowProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       data-testid="ravn-list-row"
       aria-selected={selected}
-      style={{
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 'var(--space-3)',
-        padding: 'var(--space-3)',
-        background: selected ? 'var(--color-bg-tertiary)' : 'transparent',
-        border: 'none',
-        borderBottom: '1px solid var(--color-border-subtle)',
-        cursor: 'pointer',
-        textAlign: 'left',
-      }}
+      className="rv-list-row"
     >
-      <StateDot state={dotState} pulse={ravn.status === 'active'} size={8} />
-      <span
-        style={{
-          flex: 1,
-          fontSize: 'var(--text-sm)',
-          fontWeight: 500,
-          color: 'var(--color-text-primary)',
-        }}
-      >
-        {ravn.personaName}
-      </span>
+      <StateDot state={ravnStatusToDotState(ravn.status)} pulse={ravn.status === 'active'} size={8} />
+      <span className="rv-list-row__name">{ravn.personaName}</span>
       {budgetCap != null && budgetSpent != null && (
-        <div style={{ width: 64, flexShrink: 0 }}>
+        <div className="rv-list-row__budget">
           <BudgetBar
             spent={budgetSpent}
             cap={budgetCap}
@@ -106,55 +55,19 @@ interface RavnCardProps {
 }
 
 function RavnCard({ ravn, budget, selected, onClick }: RavnCardProps) {
-  const dotState =
-    ravn.status === 'active'
-      ? 'running'
-      : ravn.status === 'suspended'
-        ? 'attention'
-        : ravn.status === 'failed'
-          ? 'failed'
-          : 'unknown';
-
   return (
     <button
       type="button"
       onClick={onClick}
       data-testid="ravn-card"
       aria-selected={selected}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--space-2)',
-        padding: 'var(--space-4)',
-        background: selected ? 'var(--color-bg-tertiary)' : 'var(--color-bg-secondary)',
-        border: `1px solid ${selected ? 'var(--color-border)' : 'var(--color-border-subtle)'}`,
-        borderRadius: 'var(--radius-md)',
-        cursor: 'pointer',
-        textAlign: 'left',
-      }}
+      className="rv-card"
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-        <StateDot state={dotState} pulse={ravn.status === 'active'} size={8} />
-        <span
-          style={{
-            fontSize: 'var(--text-sm)',
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-            flex: 1,
-          }}
-        >
-          {ravn.personaName}
-        </span>
+      <div className="rv-card__header">
+        <StateDot state={ravnStatusToDotState(ravn.status)} pulse={ravn.status === 'active'} size={8} />
+        <span className="rv-card__name">{ravn.personaName}</span>
       </div>
-      <span
-        style={{
-          fontSize: 'var(--text-xs)',
-          color: 'var(--color-text-muted)',
-          fontFamily: 'var(--font-mono)',
-        }}
-      >
-        {ravn.model}
-      </span>
+      <span className="rv-card__model">{ravn.model}</span>
       {budget && (
         <BudgetBar
           spent={budget.spentUsd}
@@ -177,55 +90,22 @@ interface RavnTableRowProps {
 }
 
 function RavnTableRow({ ravn, budget, selected, onClick }: RavnTableRowProps) {
-  const dotState =
-    ravn.status === 'active'
-      ? 'running'
-      : ravn.status === 'suspended'
-        ? 'attention'
-        : ravn.status === 'failed'
-          ? 'failed'
-          : 'unknown';
-
   return (
     <tr
       onClick={onClick}
       data-testid="ravn-table-row"
       aria-selected={selected}
-      style={{
-        background: selected ? 'var(--color-bg-tertiary)' : 'transparent',
-        cursor: 'pointer',
-        borderBottom: '1px solid var(--color-border-subtle)',
-      }}
+      className="rv-table-row"
     >
-      <td
-        style={{
-          padding: 'var(--space-3)',
-          fontSize: 'var(--text-sm)',
-          fontWeight: 500,
-          color: 'var(--color-text-primary)',
-        }}
-      >
-        {ravn.personaName}
-      </td>
-      <td style={{ padding: 'var(--space-3)' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <StateDot state={dotState} pulse={ravn.status === 'active'} size={8} />
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-            {ravn.status}
-          </span>
+      <td className="rv-td--persona">{ravn.personaName}</td>
+      <td className="rv-td--status">
+        <span className="rv-td-status-inner">
+          <StateDot state={ravnStatusToDotState(ravn.status)} pulse={ravn.status === 'active'} size={8} />
+          <span>{ravn.status}</span>
         </span>
       </td>
-      <td
-        style={{
-          padding: 'var(--space-3)',
-          fontSize: 'var(--text-xs)',
-          color: 'var(--color-text-muted)',
-          fontFamily: 'var(--font-mono)',
-        }}
-      >
-        {ravn.model}
-      </td>
-      <td style={{ padding: 'var(--space-3)', minWidth: 120 }}>
+      <td className="rv-td--model">{ravn.model}</td>
+      <td className="rv-td--budget">
         {budget ? (
           <BudgetBar
             spent={budget.spentUsd}
@@ -234,7 +114,7 @@ function RavnTableRow({ ravn, budget, selected, onClick }: RavnTableRowProps) {
             size="sm"
           />
         ) : (
-          <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>—</span>
+          <span className="rv-td--dash">—</span>
         )}
       </td>
     </tr>
@@ -248,33 +128,9 @@ interface GroupHeaderProps {
 
 function GroupHeader({ label, count }: GroupHeaderProps) {
   return (
-    <div
-      style={{
-        padding: 'var(--space-2) var(--space-3)',
-        fontSize: 'var(--text-xs)',
-        fontWeight: 600,
-        color: 'var(--color-text-muted)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.06em',
-        background: 'var(--color-bg-primary)',
-        borderBottom: '1px solid var(--color-border)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}
-    >
+    <div className="rv-group-header">
       <span>{label}</span>
-      <span
-        style={{
-          fontSize: 'var(--text-xs)',
-          padding: '0 var(--space-2)',
-          borderRadius: 'var(--radius-full)',
-          background: 'var(--color-bg-elevated)',
-          color: 'var(--color-text-muted)',
-        }}
-      >
-        {count}
-      </span>
+      <span className="rv-group-header__badge">{count}</span>
     </div>
   );
 }
@@ -325,27 +181,14 @@ export function RavensPage() {
   }
 
   return (
-    <div
-      data-testid="ravens-page"
-      style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
-    >
+    <div data-testid="ravens-page" className="rv-ravens">
       {/* Toolbar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-4)',
-          padding: 'var(--space-3) var(--space-6)',
-          borderBottom: '1px solid var(--color-border)',
-          background: 'var(--color-bg-primary)',
-        }}
-      >
-        {/* Layout selector */}
+      <div className="rv-ravens__toolbar">
         <div
           role="group"
           aria-label="Layout variant"
           data-testid="layout-selector"
-          style={{ display: 'flex', gap: 'var(--space-1)' }}
+          className="rv-layout-group"
         >
           {(['split', 'table', 'cards'] as LayoutVariant[]).map((v) => (
             <button
@@ -355,30 +198,17 @@ export function RavensPage() {
               aria-checked={layout === v}
               onClick={() => handleLayoutChange(v)}
               data-testid={`layout-btn-${v}`}
-              style={{
-                padding: 'var(--space-1) var(--space-3)',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--color-border)',
-                background: layout === v ? 'var(--color-bg-tertiary)' : 'transparent',
-                color: layout === v ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                cursor: 'pointer',
-                fontSize: 'var(--text-xs)',
-                fontWeight: layout === v ? 600 : 400,
-              }}
+              className="rv-layout-btn"
             >
               {v}
             </button>
           ))}
         </div>
 
-        <div style={{ width: '1px', height: 16, background: 'var(--color-border)' }} />
+        <div className="rv-toolbar-divider" />
 
-        {/* Grouping selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <label
-            htmlFor="group-select"
-            style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}
-          >
+        <div className="rv-group-by">
+          <label htmlFor="group-select" className="rv-group-by__label">
             Group by
           </label>
           <select
@@ -386,15 +216,7 @@ export function RavensPage() {
             value={groupBy}
             onChange={(e) => handleGroupChange(e.target.value as GroupKey)}
             data-testid="grouping-selector"
-            style={{
-              fontSize: 'var(--text-xs)',
-              padding: 'var(--space-1) var(--space-2)',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--color-border)',
-              background: 'var(--color-bg-secondary)',
-              color: 'var(--color-text-primary)',
-              cursor: 'pointer',
-            }}
+            className="rv-group-by__select"
           >
             {(['none', 'state', 'persona', 'location'] as GroupKey[]).map((g) => (
               <option key={g} value={g}>
@@ -404,32 +226,17 @@ export function RavensPage() {
           </select>
         </div>
 
-        <span
-          style={{
-            marginLeft: 'auto',
-            fontSize: 'var(--text-xs)',
-            color: 'var(--color-text-muted)',
-          }}
-        >
+        <span className="rv-ravens__count">
           {ravnList.length} ravn{ravnList.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       {/* Content area */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="rv-ravens__content">
         {/* Split layout */}
         {layout === 'split' && (
           <>
-            <div
-              style={{
-                width: 280,
-                flexShrink: 0,
-                overflowY: 'auto',
-                borderRight: '1px solid var(--color-border)',
-                background: 'var(--color-bg-primary)',
-              }}
-              data-testid="layout-split"
-            >
+            <div className="rv-split__list" data-testid="layout-split">
               {groupEntries.map(([groupLabel, groupRavns]) => (
                 <div key={groupLabel}>
                   {groupBy !== 'none' && (
@@ -453,21 +260,11 @@ export function RavensPage() {
               ))}
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div className="rv-split__detail">
               {selectedRavn ? (
                 <RavnDetail ravn={selectedRavn} onClose={() => setSelectedRavnId(null)} />
               ) : (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '100%',
-                    color: 'var(--color-text-muted)',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                  data-testid="detail-empty"
-                >
+                <div className="rv-detail-empty" data-testid="detail-empty">
                   Select a ravn to view details
                 </div>
               )}
@@ -477,26 +274,12 @@ export function RavensPage() {
 
         {/* Table layout */}
         {layout === 'table' && (
-          <div
-            style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4) var(--space-6)' }}
-            data-testid="layout-table"
-          >
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="rv-table-layout" data-testid="layout-table">
+            <table className="rv-table">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                <tr className="rv-thead-row">
                   {TABLE_COLUMNS.map((col) => (
-                    <th
-                      key={col}
-                      style={{
-                        padding: 'var(--space-2) var(--space-3)',
-                        textAlign: 'left',
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--color-text-muted)',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.06em',
-                      }}
-                    >
+                    <th key={col} className="rv-th">
                       {col}
                     </th>
                   ))}
@@ -504,21 +287,10 @@ export function RavensPage() {
               </thead>
               <tbody>
                 {groupEntries.map(([groupLabel, groupRavns]) => (
-                  <>
+                  <Fragment key={groupLabel}>
                     {groupBy !== 'none' && (
-                      <tr key={`group-${groupLabel}`}>
-                        <td
-                          colSpan={TABLE_COLUMNS.length}
-                          style={{
-                            padding: 'var(--space-2) var(--space-3)',
-                            fontSize: 'var(--text-xs)',
-                            fontWeight: 600,
-                            color: 'var(--color-text-muted)',
-                            background: 'var(--color-bg-primary)',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.06em',
-                          }}
-                        >
+                      <tr>
+                        <td colSpan={TABLE_COLUMNS.length} className="rv-group-td">
                           {groupLabel} ({groupRavns.length})
                         </td>
                       </tr>
@@ -532,7 +304,7 @@ export function RavensPage() {
                         onClick={() => setSelectedRavnId(r.id === selectedRavnId ? null : r.id)}
                       />
                     ))}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -541,40 +313,15 @@ export function RavensPage() {
 
         {/* Cards layout */}
         {layout === 'cards' && (
-          <div
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: 'var(--space-6)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--space-6)',
-            }}
-            data-testid="layout-cards"
-          >
+          <div className="rv-cards-layout" data-testid="layout-cards">
             {groupEntries.map(([groupLabel, groupRavns]) => (
               <div key={groupLabel}>
                 {groupBy !== 'none' && (
-                  <h4
-                    style={{
-                      margin: '0 0 var(--space-3)',
-                      fontSize: 'var(--text-xs)',
-                      fontWeight: 600,
-                      color: 'var(--color-text-muted)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                    }}
-                  >
+                  <h4 className="rv-cards-section__heading">
                     {groupLabel} ({groupRavns.length})
                   </h4>
                 )}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                    gap: 'var(--space-3)',
-                  }}
-                >
+                <div className="rv-cards-grid">
                   {groupRavns.map((r) => (
                     <RavnCard
                       key={r.id}
