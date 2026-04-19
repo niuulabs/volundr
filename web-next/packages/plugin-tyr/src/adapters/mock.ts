@@ -203,7 +203,7 @@ const SEED_PHASES: Phase[] = [
     sagaId: '00000000-0000-0000-0000-000000000001',
     trackerId: 'NIU-M3',
     number: 3,
-    name: 'Phase 3: Hardening',
+    name: 'Phase 3: Security',
     status: 'pending',
     confidence: 50,
     raids: [SEED_RAIDS[2]!, SEED_RAIDS[3]!, SEED_RAIDS[4]!],
