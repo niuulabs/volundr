@@ -313,4 +313,101 @@ test('registry: cycle is rejected — dragging ancestor onto descendant does not
   const after = await page.getByTestId('json-output').textContent();
   const versionAfter = JSON.parse(after ?? '{}').version as number;
   expect(versionAfter).toBe(versionBefore);
+// ── NIU-665 overlay e2e tests ─────────────────────────────────────────────
+
+test('clicking a topology node opens the EntityDrawer', async ({ page }) => {
+  await page.goto('/observatory');
+
+  // Wait for topology to load (node list appears)
+  const nodeList = page.getByTestId('topology-node-list');
+  await expect(nodeList).toBeVisible({ timeout: 5000 });
+
+  // Click the realm-asgard node button
+  const realmBtn = page.getByTestId('node-btn-realm-asgard');
+  await expect(realmBtn).toBeVisible();
+  await realmBtn.click();
+
+  // EntityDrawer should be open with the realm node's label as the title
+  await expect(page.getByRole('dialog', { name: /asgard/i })).toBeVisible({ timeout: 3000 });
+});
+
+test('EntityDrawer close button dismisses the drawer', async ({ page }) => {
+  await page.goto('/observatory');
+  await page.getByTestId('topology-node-list').waitFor({ state: 'visible', timeout: 5000 });
+
+  await page.getByTestId('node-btn-realm-asgard').click();
+  await expect(page.getByRole('dialog', { name: /asgard/i })).toBeVisible();
+
+  await page.getByRole('button', { name: /close/i }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+});
+
+test('realm EntityDrawer shows resident list', async ({ page }) => {
+  await page.goto('/observatory');
+  await page.getByTestId('topology-node-list').waitFor({ state: 'visible', timeout: 5000 });
+
+  await page.getByTestId('node-btn-realm-asgard').click();
+  const dialog = page.getByRole('dialog', { name: /asgard/i });
+  await expect(dialog).toBeVisible();
+
+  // Realm asgard contains clusters and host
+  await expect(dialog.getByText('Residents')).toBeVisible();
+  await expect(dialog.getByText('valaskjálf')).toBeVisible();
+});
+
+test('clicking a resident in the drawer navigates to that resident (drill-in)', async ({ page }) => {
+  await page.goto('/observatory');
+  await page.getByTestId('topology-node-list').waitFor({ state: 'visible', timeout: 5000 });
+
+  // Open realm drawer
+  await page.getByTestId('node-btn-realm-asgard').click();
+  await expect(page.getByRole('dialog', { name: /asgard/i })).toBeVisible();
+
+  // Click the cluster resident
+  const residentBtn = page.getByTestId('resident-cluster-valaskjalf');
+  await expect(residentBtn).toBeVisible();
+  await residentBtn.click();
+
+  // Drawer should now show the cluster node
+  await expect(page.getByRole('dialog', { name: /valask/i })).toBeVisible({ timeout: 3000 });
+});
+
+test('cluster EntityDrawer shows residents', async ({ page }) => {
+  await page.goto('/observatory');
+  await page.getByTestId('topology-node-list').waitFor({ state: 'visible', timeout: 5000 });
+
+  // Click the cluster node directly
+  const clusterBtn = page.getByTestId('node-btn-cluster-valaskjalf');
+  await expect(clusterBtn).toBeVisible();
+  await clusterBtn.click();
+
+  const dialog = page.getByRole('dialog', { name: /valask/i });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText('Residents')).toBeVisible();
+  // tyr-0, bifrost-0, volundr-0, mimir-0, raid-0 are in valaskjalf or valhalla
+  await expect(dialog.getByText('tyr-0')).toBeVisible();
+});
+
+test('ConnectionLegend overlay is visible on observatory page', async ({ page }) => {
+  await page.goto('/observatory');
+  await expect(
+    page.getByRole('list', { name: /connection types/i }),
+  ).toBeVisible({ timeout: 3000 });
+  await expect(page.getByTestId('legend-solid')).toBeVisible();
+  await expect(page.getByTestId('legend-raid')).toBeVisible();
+});
+
+test('EventLog overlay is visible and shows events', async ({ page }) => {
+  await page.goto('/observatory');
+  const eventLog = page.getByTestId('event-log');
+  await expect(eventLog).toBeVisible({ timeout: 3000 });
+  // Seed events include 'tyr-0' as source
+  await expect(eventLog.getByText('tyr-0')).toBeVisible({ timeout: 5000 });
+});
+
+test('Minimap overlay is visible on observatory page', async ({ page }) => {
+  await page.goto('/observatory');
+  await expect(
+    page.getByRole('img', { name: /topology minimap/i }),
+  ).toBeVisible({ timeout: 3000 });
 });
