@@ -32,7 +32,6 @@ export function useHistory({
       query.data
         ? applyHistoryFilters(query.data, { ravnId, personaName, sagaId, outcome, dateFrom, dateTo })
         : [],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [query.data, ravnId, personaName, sagaId, outcome, dateFrom, dateTo],
   );
 
