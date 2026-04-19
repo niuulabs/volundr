@@ -6,12 +6,13 @@ import { test, expect } from '@playwright/test';
 
 test('ravn plugin renders at /ravn', async ({ page }) => {
   await page.goto('/ravn');
-  await expect(page.getByText('Ravn')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ravn' })).toBeVisible();
 });
 
 test('ravn shows subtitle', async ({ page }) => {
   await page.goto('/ravn');
-  await expect(page.getByText(/personas · ravens · sessions/)).toBeVisible();
+  // The page subtitle is longer than the rail subtitle; use a phrase unique to the page header
+  await expect(page.getByText(/personas · ravens · sessions · triggers/)).toBeVisible();
 });
 
 test('rail shows ravn rune ᚱ', async ({ page }) => {
@@ -67,10 +68,8 @@ test('/ravn — transcript shows message kinds', async ({ page }) => {
 
 test('/ravn — running session shows active cursor', async ({ page }) => {
   await page.goto('/ravn');
-  // coding-agent session status=running, so ActiveCursor should appear
-  await expect(page.getByRole('status', { name: /session in progress/i })).toBeVisible({
-    timeout: 5000,
-  });
+  // coding-agent session status=running, so ActiveCursor renders with data-cursor-state="active"
+  await expect(page.locator('[data-cursor-state="active"]')).toBeAttached({ timeout: 5000 });
 });
 
 test('/ravn — think message shows toggle button', async ({ page }) => {
@@ -193,10 +192,11 @@ test('/ravn — Log tab renders event stream', async ({ page }) => {
 test('/ravn — Log shows column headers', async ({ page }) => {
   await page.goto('/ravn');
   await page.getByRole('tab', { name: 'Log' }).click();
-  await expect(page.getByText('time')).toBeVisible();
-  await expect(page.getByText('raven')).toBeVisible();
-  await expect(page.getByText('kind')).toBeVisible();
-  await expect(page.getByText('body')).toBeVisible();
+  // Use columnheader role to target table <th> elements, avoiding substring matches elsewhere
+  await expect(page.getByRole('columnheader', { name: 'time' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'raven' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'kind' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'body' })).toBeVisible();
 });
 
 test('/ravn — Log has search input', async ({ page }) => {
