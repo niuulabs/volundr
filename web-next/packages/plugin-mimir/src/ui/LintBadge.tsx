@@ -28,7 +28,12 @@ export function LintBadge({ summary, size = 'md', className }: LintBadgeProps) {
   if (!hasIssues) {
     return (
       <span
-        className={['lint-badge', 'lint-badge--clean', size === 'sm' ? 'lint-badge--sm' : '', className]
+        className={[
+          'lint-badge',
+          'lint-badge--clean',
+          size === 'sm' ? 'lint-badge--sm' : '',
+          className,
+        ]
           .filter(Boolean)
           .join(' ')}
         aria-label="no lint issues"

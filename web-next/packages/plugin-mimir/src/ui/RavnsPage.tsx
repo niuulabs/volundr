@@ -114,7 +114,10 @@ export function RavnsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="ravns-page__dream ravns-page__dream--none" data-testid="ravn-no-dream">
+                <div
+                  className="ravns-page__dream ravns-page__dream--none"
+                  data-testid="ravn-no-dream"
+                >
                   <span className="ravns-page__dream-label">Last dream</span>
                   <span className="ravns-page__dream-none-text">no dream cycles yet</span>
                 </div>

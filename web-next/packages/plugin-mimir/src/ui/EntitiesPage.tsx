@@ -26,11 +26,7 @@ export function EntitiesPage() {
     <div className="entities-page">
       <h2 className="entities-page__title">Entities</h2>
 
-      <div
-        className="entities-page__filter"
-        role="group"
-        aria-label="Filter by entity type"
-      >
+      <div className="entities-page__filter" role="group" aria-label="Filter by entity type">
         <button
           className={[
             'entities-page__filter-btn',

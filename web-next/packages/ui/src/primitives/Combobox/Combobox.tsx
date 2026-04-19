@@ -35,9 +35,7 @@ export function Combobox({
 
   const selectedLabel = options.find((o) => o.value === value)?.label ?? '';
 
-  const filtered = options.filter((o) =>
-    o.label.toLowerCase().includes(query.toLowerCase()),
-  );
+  const filtered = options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()));
 
   const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
 
@@ -111,7 +109,11 @@ export function Combobox({
             placeholder={placeholder}
             disabled={disabled}
             autoComplete="off"
-            className={cn('niuu-form-control niuu-combobox__input', hasError && 'niuu-form-control--error niuu-combobox__input--error', className)}
+            className={cn(
+              'niuu-form-control niuu-combobox__input',
+              hasError && 'niuu-form-control--error niuu-combobox__input--error',
+              className,
+            )}
           />
         </div>
       </Popover.Anchor>

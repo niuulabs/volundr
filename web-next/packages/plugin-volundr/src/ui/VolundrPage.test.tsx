@@ -32,9 +32,7 @@ describe('VolundrPage', () => {
 
   it('renders seeded sessions once data loads', async () => {
     wrap(<VolundrPage />);
-    await waitFor(() =>
-      expect(screen.getByText('feat/refactor-auth')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('feat/refactor-auth')).toBeInTheDocument());
   });
 
   it('renders the stats KPI strip', async () => {
@@ -55,9 +53,7 @@ describe('VolundrPage', () => {
       getSessions: async () => [],
     };
     wrap(<VolundrPage />, emptyService);
-    await waitFor(() =>
-      expect(screen.getByText(/No sessions yet/)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/No sessions yet/)).toBeInTheDocument());
   });
 
   it('shows error state when the service throws', async () => {
@@ -68,9 +64,7 @@ describe('VolundrPage', () => {
       },
     };
     wrap(<VolundrPage />, failingService);
-    await waitFor(() =>
-      expect(screen.getByText('service unavailable')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('service unavailable')).toBeInTheDocument());
   });
 
   it('renders the rune glyph', () => {

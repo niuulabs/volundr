@@ -16,11 +16,7 @@ import type { MimirGraph } from '../domain/api-types';
  * With hops=1 the returned graph contains the focus node, its immediate
  * neighbours, and all edges among them.
  */
-export function nHopSubgraph(
-  graph: MimirGraph,
-  focusId: string,
-  hops: number,
-): MimirGraph {
+export function nHopSubgraph(graph: MimirGraph, focusId: string, hops: number): MimirGraph {
   const nodeExists = graph.nodes.some((n) => n.id === focusId);
   if (!nodeExists) {
     return { nodes: [], edges: [] };
@@ -48,9 +44,7 @@ export function nHopSubgraph(
   }
 
   const nodes = graph.nodes.filter((n) => reachable.has(n.id));
-  const edges = graph.edges.filter(
-    (e) => reachable.has(e.source) && reachable.has(e.target),
-  );
+  const edges = graph.edges.filter((e) => reachable.has(e.source) && reachable.has(e.target));
 
   return { nodes, edges };
 }

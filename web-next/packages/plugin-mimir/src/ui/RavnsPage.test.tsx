@@ -20,9 +20,7 @@ describe('RavnsPage', () => {
 
   it('renders ravn items after load', async () => {
     wrap(<RavnsPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
   });
 
   it('shows each ravn id', async () => {
@@ -33,9 +31,7 @@ describe('RavnsPage', () => {
 
   it('shows ravn state labels', async () => {
     wrap(<RavnsPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('ravn-state').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('ravn-state').length).toBeGreaterThan(0));
     const states = screen.getAllByTestId('ravn-state');
     const texts = states.map((el) => el.textContent);
     expect(texts).toContain('active');
@@ -44,9 +40,7 @@ describe('RavnsPage', () => {
 
   it('shows dream stats for ravns that have dream cycles', async () => {
     wrap(<RavnsPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('ravn-dream').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('ravn-dream').length).toBeGreaterThan(0));
     // First ravn has dream cycle — verify stats
     const dream = screen.getAllByTestId('ravn-dream')[0]!;
     expect(dream).toBeInTheDocument();
@@ -54,16 +48,12 @@ describe('RavnsPage', () => {
 
   it('shows "no dream cycles yet" for ravns without dreams', async () => {
     wrap(<RavnsPage />);
-    await waitFor(() =>
-      expect(screen.getByTestId('ravn-no-dream')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('ravn-no-dream')).toBeInTheDocument());
   });
 
   it('shows mount chips for each ravn', async () => {
     wrap(<RavnsPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
     // 'local' mount should be visible
     expect(screen.getAllByText(/local/).length).toBeGreaterThan(0);
   });
@@ -79,9 +69,7 @@ describe('RavnsPage', () => {
       },
     };
     wrap(<RavnsPage />, failing);
-    await waitFor(() =>
-      expect(screen.getByText('ravns service down')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('ravns service down')).toBeInTheDocument());
   });
 
   it('shows empty message when bindings list is empty', async () => {
@@ -93,8 +81,6 @@ describe('RavnsPage', () => {
       },
     };
     wrap(<RavnsPage />, empty);
-    await waitFor(() =>
-      expect(screen.getByText(/no ravn bindings/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/no ravn bindings/i)).toBeInTheDocument());
   });
 });

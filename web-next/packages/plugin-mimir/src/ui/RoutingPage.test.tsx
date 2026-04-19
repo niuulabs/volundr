@@ -83,9 +83,7 @@ describe('RoutingPage', () => {
     fireEvent.change(screen.getByTestId('test-path-input'), {
       target: { value: '/infra/k8s' },
     });
-    await waitFor(() =>
-      expect(screen.getByTestId('test-result')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('test-result')).toBeInTheDocument());
     expect(screen.getByTestId('test-result')).toHaveTextContent(/platform/);
   });
 
@@ -102,9 +100,7 @@ describe('RoutingPage', () => {
     fireEvent.change(screen.getByTestId('test-path-input'), {
       target: { value: '/some/path' },
     });
-    await waitFor(() =>
-      expect(screen.getByTestId('test-result')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('test-result')).toBeInTheDocument());
     expect(screen.getByTestId('test-result')).toHaveTextContent(/no active rule/i);
   });
 
@@ -119,9 +115,7 @@ describe('RoutingPage', () => {
       },
     };
     wrap(<RoutingPage />, failing);
-    await waitFor(() =>
-      expect(screen.getByText('routing service down')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('routing service down')).toBeInTheDocument());
   });
 
   it('saving a rule via the form calls upsertRule', async () => {

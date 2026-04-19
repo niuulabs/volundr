@@ -101,7 +101,16 @@ export function ShapeSvg({
     case 'rounded-rect':
       return (
         <svg {...svgProps}>
-          <rect x="-7" y="-5" width="14" height="10" rx="2" fill="none" stroke={c} strokeWidth="1.4" />
+          <rect
+            x="-7"
+            y="-5"
+            width="14"
+            height="10"
+            rx="2"
+            fill="none"
+            stroke={c}
+            strokeWidth="1.4"
+          />
         </svg>
       );
 
@@ -162,7 +171,15 @@ export function ShapeSvg({
     case 'halo':
       return (
         <svg {...svgProps}>
-          <circle cx="0" cy="0" r="7" fill="none" stroke={c} strokeWidth="1" strokeDasharray="1 2" />
+          <circle
+            cx="0"
+            cy="0"
+            r="7"
+            fill="none"
+            stroke={c}
+            strokeWidth="1"
+            strokeDasharray="1 2"
+          />
           <circle cx="0" cy="0" r="2.5" fill={c} />
         </svg>
       );
@@ -171,14 +188,7 @@ export function ShapeSvg({
     case 'mimir-small':
       return (
         <svg {...svgProps}>
-          <circle
-            cx="0"
-            cy="0"
-            r="5"
-            fill="var(--color-bg-primary)"
-            stroke={c}
-            strokeWidth="1.4"
-          />
+          <circle cx="0" cy="0" r="5" fill="var(--color-bg-primary)" stroke={c} strokeWidth="1.4" />
           <text
             x="0"
             y="1"

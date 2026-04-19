@@ -24,7 +24,12 @@ export function useRouting(): UseRoutingReturn {
   const service = useService<IMimirService>('mimir');
   const queryClient = useQueryClient();
 
-  const { data: rules = [], isLoading, isError, error } = useQuery({
+  const {
+    data: rules = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
     queryKey: ['mimir', 'routing'],
     queryFn: () => service.mounts.listRoutingRules(),
   });

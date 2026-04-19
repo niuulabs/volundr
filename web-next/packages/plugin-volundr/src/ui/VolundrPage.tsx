@@ -20,8 +20,8 @@ export function VolundrPage() {
       </div>
 
       <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)' }}>
-        Provisions and manages remote dev pods. Sessions move through a lifecycle:
-        requested → provisioning → ready → running → idle → terminating → terminated.
+        Provisions and manages remote dev pods. Sessions move through a lifecycle: requested →
+        provisioning → ready → running → idle → terminating → terminated.
       </p>
 
       {stats.data && (
@@ -56,7 +56,9 @@ export function VolundrPage() {
       )}
 
       {sessions.data && sessions.data.length === 0 && (
-        <p style={{ color: 'var(--color-text-muted)' }}>No sessions yet — start one to get going.</p>
+        <p style={{ color: 'var(--color-text-muted)' }}>
+          No sessions yet — start one to get going.
+        </p>
       )}
 
       {sessions.data && sessions.data.length > 0 && (
@@ -118,7 +120,13 @@ function KpiTile({ label, value }: { label: string; value: number | string }) {
       >
         {value}
       </div>
-      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 'var(--space-1)' }}>
+      <div
+        style={{
+          fontSize: 'var(--text-xs)',
+          color: 'var(--color-text-muted)',
+          marginTop: 'var(--space-1)',
+        }}
+      >
         {label}
       </div>
     </div>

@@ -54,14 +54,14 @@ export interface Session {
 
 /** Legal transitions in the session lifecycle state machine. */
 const VALID_TRANSITIONS: Record<SessionState, readonly SessionState[]> = {
-  requested:   ['provisioning', 'failed'],
+  requested: ['provisioning', 'failed'],
   provisioning: ['ready', 'failed'],
-  ready:       ['running', 'terminating', 'failed'],
-  running:     ['idle', 'terminating', 'failed'],
-  idle:        ['running', 'terminating', 'failed'],
+  ready: ['running', 'terminating', 'failed'],
+  running: ['idle', 'terminating', 'failed'],
+  idle: ['running', 'terminating', 'failed'],
   terminating: ['terminated', 'failed'],
-  terminated:  [],
-  failed:      ['terminated'],
+  terminated: [],
+  failed: ['terminated'],
 };
 
 /**
@@ -78,9 +78,7 @@ export function canTransition(from: SessionState, to: SessionState): boolean {
  */
 export function transitionSession(session: Session, to: SessionState): Session {
   if (!canTransition(session.state, to)) {
-    throw new Error(
-      `Invalid session state transition: ${session.state} → ${to}`,
-    );
+    throw new Error(`Invalid session state transition: ${session.state} → ${to}`);
   }
   return { ...session, state: to };
 }

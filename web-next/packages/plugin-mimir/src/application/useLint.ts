@@ -21,7 +21,12 @@ export function useLint(mountName?: string): UseLintReturn {
   const queryClient = useQueryClient();
   const queryKey = ['mimir', 'lint', mountName ?? null];
 
-  const { data: report, isLoading, isError, error } = useQuery({
+  const {
+    data: report,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
     queryKey,
     queryFn: () => service.lint.getLintReport(mountName),
   });

@@ -27,10 +27,7 @@ function SeverityFilter({ active, onChange }: IssueSeverityFilterProps) {
   return (
     <div className="lint-page__severity-filter" role="group" aria-label="Filter by severity">
       <button
-        className={[
-          'lint-page__filter-btn',
-          active == null ? 'lint-page__filter-btn--active' : '',
-        ]
+        className={['lint-page__filter-btn', active == null ? 'lint-page__filter-btn--active' : '']
           .filter(Boolean)
           .join(' ')}
         onClick={() => onChange(null)}
@@ -104,9 +101,7 @@ function IssueRow({ issue, selected, onToggle, onAutoFix, isFixing }: IssueRowPr
           </code>
           <span className="lint-page__issue-page">{issue.page}</span>
           <Chip tone="muted">{issue.mount}</Chip>
-          {issue.assignee && (
-            <span className="lint-page__issue-assignee">{issue.assignee}</span>
-          )}
+          {issue.assignee && <span className="lint-page__issue-assignee">{issue.assignee}</span>}
         </div>
         <p className="lint-page__issue-message">{issue.message}</p>
       </div>
@@ -126,16 +121,23 @@ function IssueRow({ issue, selected, onToggle, onAutoFix, isFixing }: IssueRowPr
 }
 
 export function LintPage() {
-  const { issues, summary, isLoading, isError, error, runAutoFix, reassignIssues, isFixing, isReassigning } =
-    useLint();
+  const {
+    issues,
+    summary,
+    isLoading,
+    isError,
+    error,
+    runAutoFix,
+    reassignIssues,
+    isFixing,
+    isReassigning,
+  } = useLint();
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [severityFilter, setSeverityFilter] = useState<IssueSeverity | null>(null);
   const [assignTarget, setAssignTarget] = useState('');
 
-  const filtered = severityFilter
-    ? issues.filter((i) => i.severity === severityFilter)
-    : issues;
+  const filtered = severityFilter ? issues.filter((i) => i.severity === severityFilter) : issues;
 
   const autoFixableIds = filtered.filter((i) => i.autoFix).map((i) => i.id);
 

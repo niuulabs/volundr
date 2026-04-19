@@ -31,7 +31,15 @@ export interface FieldProps {
   children: ReactNode;
 }
 
-export function Field({ id: idProp, label, hint, error, required = false, className, children }: FieldProps) {
+export function Field({
+  id: idProp,
+  label,
+  hint,
+  error,
+  required = false,
+  className,
+  children,
+}: FieldProps) {
   const autoId = useId();
   const id = idProp ?? autoId;
   const hintId = hint ? `${id}-hint` : undefined;
@@ -45,7 +53,8 @@ export function Field({ id: idProp, label, hint, error, required = false, classN
           {label}
           {required && (
             <span className="niuu-field__required" aria-hidden="true">
-              {' '}*
+              {' '}
+              *
             </span>
           )}
         </label>

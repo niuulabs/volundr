@@ -60,7 +60,9 @@ export function BudgetBar({
       {showLabel && (
         <div className="niuu-budget-bar__label">
           <span className="niuu-budget-bar__spent">${spent.toFixed(2)}</span>
-          <span className="niuu-budget-bar__divider" aria-hidden="true">/</span>
+          <span className="niuu-budget-bar__divider" aria-hidden="true">
+            /
+          </span>
           <span className="niuu-budget-bar__cap">${cap.toFixed(2)}</span>
         </div>
       )}

@@ -121,12 +121,7 @@ function RuleForm({ rule, onSave, onCancel, isSaving }: RuleFormProps) {
         >
           {isSaving ? 'saving…' : 'Save rule'}
         </button>
-        <button
-          type="button"
-          className="routing-page__btn"
-          onClick={onCancel}
-          aria-label="Cancel"
-        >
+        <button type="button" className="routing-page__btn" onClick={onCancel} aria-label="Cancel">
           Cancel
         </button>
       </div>
@@ -254,9 +249,7 @@ export function RoutingPage() {
                         <span
                           className={[
                             'routing-page__active',
-                            rule.active
-                              ? 'routing-page__active--yes'
-                              : 'routing-page__active--no',
+                            rule.active ? 'routing-page__active--yes' : 'routing-page__active--no',
                           ].join(' ')}
                         >
                           {rule.active ? 'yes' : 'no'}

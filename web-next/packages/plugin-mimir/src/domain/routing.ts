@@ -41,13 +41,8 @@ export interface RouteTestResult {
  * Rules are sorted by ascending priority; the first active rule whose prefix
  * is a prefix of the path wins. Returns null mountName when no rule matches.
  */
-export function resolveRoute(
-  rules: WriteRoutingRule[],
-  path: string,
-): RouteTestResult {
-  const active = rules
-    .filter((r) => r.active)
-    .sort((a, b) => a.priority - b.priority);
+export function resolveRoute(rules: WriteRoutingRule[], path: string): RouteTestResult {
+  const active = rules.filter((r) => r.active).sort((a, b) => a.priority - b.priority);
 
   for (const rule of active) {
     if (path.startsWith(rule.prefix)) {

@@ -247,7 +247,14 @@ describe('buildMimirHttpAdapter', () => {
 
     it('maps raw graph node and edge fields', async () => {
       const rawGraph = {
-        nodes: [{ id: '/arch/overview', title: 'Architecture Overview', category: 'arch', inbound_count: 2 }],
+        nodes: [
+          {
+            id: '/arch/overview',
+            title: 'Architecture Overview',
+            category: 'arch',
+            inbound_count: 2,
+          },
+        ],
         edges: [{ source: '/infra/k8s', target: '/arch/overview' }],
       };
       const client = makeClient({ get: vi.fn().mockResolvedValue(rawGraph) });

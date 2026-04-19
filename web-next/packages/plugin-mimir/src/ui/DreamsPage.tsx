@@ -77,9 +77,7 @@ function DreamRow({ cycle }: DreamRowProps) {
           <strong>{cycle.lintFixes}</strong> lint fixes
         </span>
         {totalActivity === 0 && (
-          <span className="dreams-page__cycle-stat dreams-page__cycle-stat--idle">
-            no changes
-          </span>
+          <span className="dreams-page__cycle-stat dreams-page__cycle-stat--idle">no changes</span>
         )}
       </div>
     </li>

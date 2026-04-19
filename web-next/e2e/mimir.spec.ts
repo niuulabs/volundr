@@ -183,7 +183,10 @@ test('/mimir/routing shows routing rules', async ({ page }) => {
 test('/mimir/routing — clicking Edit opens the rule editor', async ({ page }) => {
   await page.goto('/mimir/routing');
   await page.getByTestId('routing-rule-row').first().waitFor({ timeout: 5000 });
-  await page.getByRole('button', { name: /edit rule/i }).first().click();
+  await page
+    .getByRole('button', { name: /edit rule/i })
+    .first()
+    .click();
   await expect(page.getByTestId('rule-editor')).toBeVisible();
   await expect(page.getByRole('form', { name: /routing rule editor/i })).toBeVisible();
 });
@@ -191,7 +194,10 @@ test('/mimir/routing — clicking Edit opens the rule editor', async ({ page }) 
 test('/mimir/routing — can edit prefix in the rule form', async ({ page }) => {
   await page.goto('/mimir/routing');
   await page.getByTestId('routing-rule-row').first().waitFor({ timeout: 5000 });
-  await page.getByRole('button', { name: /edit rule/i }).first().click();
+  await page
+    .getByRole('button', { name: /edit rule/i })
+    .first()
+    .click();
   const prefixInput = page.getByLabel(/path prefix/i);
   await prefixInput.fill('/newprefix');
   await expect(prefixInput).toHaveValue('/newprefix');
@@ -200,7 +206,10 @@ test('/mimir/routing — can edit prefix in the rule form', async ({ page }) => 
 test('/mimir/routing — saving an edited rule submits the form', async ({ page }) => {
   await page.goto('/mimir/routing');
   await page.getByTestId('routing-rule-row').first().waitFor({ timeout: 5000 });
-  await page.getByRole('button', { name: /edit rule/i }).first().click();
+  await page
+    .getByRole('button', { name: /edit rule/i })
+    .first()
+    .click();
   await page.getByLabel(/path prefix/i).fill('/updated');
   await page.getByRole('button', { name: /save rule/i }).click();
   // Editor closes after save

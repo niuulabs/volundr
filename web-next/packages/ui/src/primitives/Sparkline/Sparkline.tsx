@@ -114,12 +114,7 @@ export function Sparkline({
       style={{ display: 'block' }}
       aria-hidden="true"
     >
-      {fill && (
-        <path
-          d={areaPath}
-          fill="color-mix(in srgb, var(--brand-300) 15%, transparent)"
-        />
-      )}
+      {fill && <path d={areaPath} fill="color-mix(in srgb, var(--brand-300) 15%, transparent)" />}
       <path d={linePath} fill="none" stroke="var(--brand-300)" strokeWidth={STROKE_WIDTH} />
     </svg>
   );

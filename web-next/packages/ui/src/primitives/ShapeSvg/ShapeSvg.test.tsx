@@ -67,13 +67,10 @@ describe('ShapeSvg', () => {
     ['brand-500', 'var(--brand-500)'],
     ['slate-300', 'var(--color-text-secondary)'],
     ['slate-400', 'var(--color-text-muted)'],
-  ] satisfies [ShapeColor, string][])(
-    'color "%s" resolves to "%s"',
-    (colorProp, expectedVar) => {
-      const { container } = render(<ShapeSvg shape="dot" color={colorProp} />);
-      expect(container.innerHTML).toContain(expectedVar);
-    },
-  );
+  ] satisfies [ShapeColor, string][])('color "%s" resolves to "%s"', (colorProp, expectedVar) => {
+    const { container } = render(<ShapeSvg shape="dot" color={colorProp} />);
+    expect(container.innerHTML).toContain(expectedVar);
+  });
 
   it('uses shape as default aria-label', () => {
     render(<ShapeSvg shape="pentagon" />);
@@ -177,10 +174,9 @@ describe('SERVICE_RUNES', () => {
 describe('RUNE_MAP', () => {
   it('contains no forbidden runes', () => {
     for (const [key, rune] of Object.entries(RUNE_MAP)) {
-      expect(
-        FORBIDDEN_RUNES.has(rune),
-        `RUNE_MAP["${key}"] = "${rune}" is a forbidden rune`,
-      ).toBe(false);
+      expect(FORBIDDEN_RUNES.has(rune), `RUNE_MAP["${key}"] = "${rune}" is a forbidden rune`).toBe(
+        false,
+      );
     }
   });
 

@@ -20,23 +20,17 @@ describe('LintPage', () => {
 
   it('renders lint issues after load', async () => {
     wrap(<LintPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0));
   });
 
   it('shows the lint badge summary', async () => {
     wrap(<LintPage />);
-    await waitFor(() =>
-      expect(screen.getByTestId('lint-badge')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('lint-badge')).toBeInTheDocument());
   });
 
   it('shows "Fix all auto-fixable" button when fixable issues exist', async () => {
     wrap(<LintPage />);
-    await waitFor(() =>
-      expect(screen.getByTestId('fix-all-btn')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('fix-all-btn')).toBeInTheDocument());
   });
 
   it('renders severity filter buttons', async () => {
@@ -52,9 +46,7 @@ describe('LintPage', () => {
 
   it('clicking a severity filter shows only matching issues', async () => {
     wrap(<LintPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0));
     const allCount = screen.getAllByTestId('lint-issue').length;
     fireEvent.click(screen.getByRole('button', { name: /error/i }));
     await waitFor(() => {
@@ -65,9 +57,7 @@ describe('LintPage', () => {
 
   it('shows auto-fix button for fixable issues', async () => {
     wrap(<LintPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('autofix-btn').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('autofix-btn').length).toBeGreaterThan(0));
   });
 
   it('clicking auto-fix on individual issue calls runAutoFix', async () => {
@@ -83,9 +73,7 @@ describe('LintPage', () => {
       },
     };
     wrap(<LintPage />, spy);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('autofix-btn').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('autofix-btn').length).toBeGreaterThan(0));
     fireEvent.click(screen.getAllByTestId('autofix-btn')[0]!);
     await waitFor(() => expect(fixedIds).toBeDefined());
     expect(Array.isArray(fixedIds)).toBe(true);
@@ -111,21 +99,17 @@ describe('LintPage', () => {
 
   it('selecting an issue shows the bulk action bar', async () => {
     wrap(<LintPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0),
-    );
-    const checkbox = screen.getAllByRole('checkbox').find(
-      (c) => c.getAttribute('aria-label')?.startsWith('Select issue'),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0));
+    const checkbox = screen
+      .getAllByRole('checkbox')
+      .find((c) => c.getAttribute('aria-label')?.startsWith('Select issue'));
     fireEvent.click(checkbox!);
     expect(screen.getByTestId('bulk-bar')).toBeInTheDocument();
   });
 
   it('select-all checkbox selects all visible issues', async () => {
     wrap(<LintPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByTestId('select-all-checkbox'));
     expect(screen.getByTestId('bulk-bar')).toBeInTheDocument();
   });
@@ -145,9 +129,7 @@ describe('LintPage', () => {
       },
     };
     wrap(<LintPage />, spy);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0));
     // Select all
     fireEvent.click(screen.getByTestId('select-all-checkbox'));
     // Pick assignee
@@ -170,9 +152,7 @@ describe('LintPage', () => {
       },
     };
     wrap(<LintPage />, failing);
-    await waitFor(() =>
-      expect(screen.getByText('lint service down')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('lint service down')).toBeInTheDocument());
   });
 
   it('shows "No issues" when lint report is empty', async () => {
@@ -188,8 +168,6 @@ describe('LintPage', () => {
       },
     };
     wrap(<LintPage />, empty);
-    await waitFor(() =>
-      expect(screen.getByText(/no issues found/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/no issues found/i)).toBeInTheDocument());
   });
 });

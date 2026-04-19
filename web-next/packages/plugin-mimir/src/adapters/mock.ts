@@ -188,7 +188,8 @@ const MOCK_ENTITY_PAGES: Page[] = [
   {
     path: '/entities/hexagonal-arch',
     title: 'Hexagonal Architecture',
-    summary: 'Software architecture pattern separating business logic from infrastructure via ports and adapters.',
+    summary:
+      'Software architecture pattern separating business logic from infrastructure via ports and adapters.',
     category: 'concept',
     type: 'entity',
     entityType: 'concept',
@@ -550,8 +551,7 @@ export function createMimirMockAdapter(): IMimirService {
           relationshipCount:
             p.zones
               ?.filter((z) => z.kind === 'relationships')
-              .flatMap((z) => (z.kind === 'relationships' ? z.items : []))
-              .length ?? 0,
+              .flatMap((z) => (z.kind === 'relationships' ? z.items : [])).length ?? 0,
         }));
       },
     },
@@ -570,9 +570,7 @@ export function createMimirMockAdapter(): IMimirService {
 
     lint: {
       async getLintReport(mountName?: string): Promise<LintReport> {
-        const issues = mountName
-          ? lintIssues.filter((i) => i.mount === mountName)
-          : lintIssues;
+        const issues = mountName ? lintIssues.filter((i) => i.mount === mountName) : lintIssues;
         return {
           issues,
           pagesChecked: MOCK_PAGES.length,
@@ -594,9 +592,7 @@ export function createMimirMockAdapter(): IMimirService {
       },
 
       async reassignIssues(issueIds: string[], assignee: string): Promise<LintReport> {
-        lintIssues = lintIssues.map((i) =>
-          issueIds.includes(i.id) ? { ...i, assignee } : i,
-        );
+        lintIssues = lintIssues.map((i) => (issueIds.includes(i.id) ? { ...i, assignee } : i));
         return {
           issues: lintIssues,
           pagesChecked: MOCK_PAGES.length,
