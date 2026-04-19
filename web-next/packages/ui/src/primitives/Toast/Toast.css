@@ -55,8 +55,8 @@
 
 /* Variant: error */
 .niuu-toast--error {
-  border-color: color-mix(in srgb, var(--color-critical-bo) 60%, transparent);
-  background: color-mix(in srgb, var(--color-critical-bg) 40%, var(--color-bg-elevated));
+  border-color: color-mix(in srgb, var(--color-critical) 40%, transparent);
+  background: color-mix(in srgb, var(--color-critical) 8%, var(--color-bg-elevated));
 }
 
 /* Variant: warning */
