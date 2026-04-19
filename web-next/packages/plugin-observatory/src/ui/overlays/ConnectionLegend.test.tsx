@@ -47,7 +47,7 @@ describe('ConnectionLegend', () => {
   });
 
   it('renders SVG lines with correct markup for each kind', () => {
-    const { container } = render(<ConnectionLegend />);
+    render(<ConnectionLegend />);
     // solid: plain line
     const solidItem = screen.getByTestId('legend-solid');
     expect(solidItem.querySelector('line')).toBeInTheDocument();
@@ -58,7 +58,5 @@ describe('ConnectionLegend', () => {
     const raidItem = screen.getByTestId('legend-raid');
     expect(raidItem.querySelector('circle')).toBeInTheDocument();
     expect(raidItem.querySelector('g')).toBeInTheDocument();
-    // suppress unused variable warning
-    void container;
   });
 });

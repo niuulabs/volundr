@@ -23,7 +23,7 @@ export interface MinimapProps {
 export function Minimap({ topology, selectedNodeId = null }: MinimapProps) {
   if (!topology || topology.nodes.length === 0) {
     return (
-      <div className="obs-minimap obs-minimap--empty" aria-label="Minimap — no topology">
+      <div className="obs-minimap obs-minimap--empty" aria-label="Minimap — no topology" data-testid="minimap-panel">
         <span className="obs-minimap__empty-label">no topology</span>
       </div>
     );
@@ -32,7 +32,7 @@ export function Minimap({ topology, selectedNodeId = null }: MinimapProps) {
   const positions = computeCircularLayout(topology.nodes, MINIMAP_W, MINIMAP_H, PADDING);
 
   return (
-    <div className="obs-minimap" aria-label="Minimap">
+    <div className="obs-minimap" aria-label="Minimap" data-testid="minimap-panel">
       <svg
         width={MINIMAP_W}
         height={MINIMAP_H}

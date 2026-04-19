@@ -17,12 +17,11 @@ const EDGE_LEGEND: LegendEntry[] = [
 
 export function ConnectionLegend() {
   return (
-    <div className="obs-conn-legend" role="list" aria-label="Connection types">
+    <ul className="obs-conn-legend" aria-label="Connection types">
       {EDGE_LEGEND.map(({ kind, label, description }) => (
-        <div
+        <li
           key={kind}
           className="obs-conn-legend__item"
-          role="listitem"
           data-kind={kind}
           data-testid={`legend-${kind}`}
         >
@@ -31,9 +30,9 @@ export function ConnectionLegend() {
           </svg>
           <span className="obs-conn-legend__label">{label}</span>
           <span className="obs-conn-legend__desc">{description}</span>
-        </div>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 

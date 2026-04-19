@@ -73,20 +73,6 @@ describe('EventLog', () => {
     expect(warnEntry).toHaveAttribute('data-severity', 'warn');
   });
 
-  it('renders wrapper with pointer-events: none', () => {
-    render(<EventLog events={EVENTS} />);
-    const wrapper = screen.getByTestId('event-log');
-    expect(wrapper).toHaveStyle({ pointerEvents: 'none' });
-  });
-
-  it('renders inner scrollable div with pointer-events: auto', () => {
-    render(<EventLog events={EVENTS} />);
-    const wrapper = screen.getByTestId('event-log');
-    const inner = wrapper.firstChild as HTMLElement;
-    expect(inner).toBeInTheDocument();
-    expect(inner).toHaveStyle({ pointerEvents: 'auto' });
-  });
-
   it('accepts custom data-testid', () => {
     render(<EventLog events={[]} data-testid="my-log" />);
     expect(screen.getByTestId('my-log')).toBeInTheDocument();

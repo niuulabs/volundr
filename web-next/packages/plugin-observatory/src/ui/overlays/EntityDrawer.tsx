@@ -1,5 +1,6 @@
 import { Drawer, DrawerContent, Sparkline, StateDot } from '@niuulabs/ui';
-import type { TopologyNode, Topology, Registry, NodeStatus } from '../../domain';
+import type { DotState } from '@niuulabs/ui';
+import type { TopologyNode, Topology, Registry } from '../../domain';
 import './EntityDrawer.css';
 
 export interface EntityDrawerProps {
@@ -9,15 +10,6 @@ export interface EntityDrawerProps {
   registry: Registry | null;
   onClose: () => void;
   onNodeSelect?: (node: TopologyNode) => void;
-}
-
-function nodeStatusToDotState(status: NodeStatus) {
-  if (status === 'healthy') return 'healthy' as const;
-  if (status === 'degraded') return 'degraded' as const;
-  if (status === 'failed') return 'failed' as const;
-  if (status === 'idle') return 'idle' as const;
-  if (status === 'observing') return 'observing' as const;
-  return 'unknown' as const;
 }
 
 const CONTAINER_KINDS = new Set(['realm', 'cluster', 'host']);
@@ -55,7 +47,7 @@ export function EntityDrawer({
                   {entityType?.label ?? node.typeId}
                 </span>
                 <div className="obs-entity-drawer__status">
-                  <StateDot state={nodeStatusToDotState(node.status)} />
+                  <StateDot state={node.status as DotState} />
                   <span className="obs-entity-drawer__status-text">{node.status}</span>
                 </div>
               </div>
@@ -90,7 +82,7 @@ export function EntityDrawer({
                           <span className="obs-entity-drawer__resident-label">
                             {resident.label}
                           </span>
-                          <StateDot state={nodeStatusToDotState(resident.status)} />
+                          <StateDot state={resident.status as DotState} />
                         </button>
                       </li>
                     );

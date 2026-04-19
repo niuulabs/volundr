@@ -35,7 +35,7 @@ export function ObservatoryPage() {
       <TopologyCanvas
         topology={topology}
         onNodeClick={handleNodeClick}
-        showMinimap
+        showMinimap={false}
         style={{ flex: 1, minHeight: 0 }}
       />
 
