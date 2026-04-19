@@ -37,7 +37,7 @@ export function ShellLayout() {
         <div className="niuu-shell__rail-brand" title="Niuu">
           {brand}
         </div>
-        {plugins.map((p) => (
+        {plugins.filter((p) => !p.navHidden).map((p) => (
           <button
             key={p.id}
             type="button"

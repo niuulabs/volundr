@@ -11,6 +11,8 @@ export interface PluginDescriptor {
   rune: string;
   title: string;
   subtitle: string;
+  /** When true, the plugin's rune button is hidden from the shell rail nav. */
+  navHidden?: boolean;
 
   routes?: (rootRoute: AnyRoute) => AnyRoute[];
 
