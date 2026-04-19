@@ -46,10 +46,7 @@ export function OverviewTab({ session }: OverviewTabProps) {
   const { resources } = session;
 
   return (
-    <div
-      className="niuu-flex niuu-flex-col niuu-gap-6 niuu-p-4"
-      data-testid="overview-tab"
-    >
+    <div className="niuu-flex niuu-flex-col niuu-gap-6 niuu-p-4" data-testid="overview-tab">
       {/* Identity */}
       <section className="niuu-flex niuu-flex-col niuu-gap-3">
         <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">Identity</h3>
@@ -149,9 +146,7 @@ export function OverviewTab({ session }: OverviewTabProps) {
       {/* Environment */}
       {Object.keys(session.env).length > 0 && (
         <section className="niuu-flex niuu-flex-col niuu-gap-3">
-          <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">
-            Environment
-          </h3>
+          <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">Environment</h3>
           <ul className="niuu-flex niuu-flex-col niuu-gap-1">
             {Object.entries(session.env).map(([k, v]) => (
               <li key={k} className="niuu-font-mono niuu-text-xs niuu-text-text-secondary">

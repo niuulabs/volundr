@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  appendExecEntry,
-  updateExecEntry,
-  type ExecEntry,
-} from './exec';
+import { appendExecEntry, updateExecEntry, type ExecEntry } from './exec';
 
 const BASE_ENTRY: ExecEntry = {
   id: 'e1',

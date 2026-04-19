@@ -1,5 +1,13 @@
 import { useNavigate } from '@tanstack/react-router';
-import { Rune, KpiStrip, KpiCard, Table, LifecycleBadge, LoadingState, ErrorState } from '@niuulabs/ui';
+import {
+  Rune,
+  KpiStrip,
+  KpiCard,
+  Table,
+  LifecycleBadge,
+  LoadingState,
+  ErrorState,
+} from '@niuulabs/ui';
 import type { TableColumn } from '@niuulabs/ui';
 import { useVolundrSessions, useVolundrStats } from './useVolundrSessions';
 import { useVolundrClusters } from './hooks/useVolundrClusters';
@@ -36,7 +44,10 @@ function UsageBar({ value, label }: { value: number; label: string }) {
         aria-valuemax={100}
         aria-label={label}
       >
-        <div className={`niuu-h-full niuu-rounded-full ${colorClass}`} style={{ width: `${pct.toFixed(1)}%` }} />
+        <div
+          className={`niuu-h-full niuu-rounded-full ${colorClass}`}
+          style={{ width: `${pct.toFixed(1)}%` }}
+        />
       </div>
     </div>
   );
@@ -77,14 +88,19 @@ function sessionBadgeState(
   state: SessionState,
 ): 'provisioning' | 'running' | 'idle' | 'terminating' | 'terminated' | 'failed' | 'ready' {
   if (state === 'requested') return 'provisioning';
-  return state as 'provisioning' | 'running' | 'idle' | 'terminating' | 'terminated' | 'failed' | 'ready';
+  return state as
+    | 'provisioning'
+    | 'running'
+    | 'idle'
+    | 'terminating'
+    | 'terminated'
+    | 'failed'
+    | 'ready';
 }
 
 type ActiveSessionRow = Session & { id: string };
 
-function buildActiveColumns(
-  onView: (id: string) => void,
-): TableColumn<ActiveSessionRow>[] {
+function buildActiveColumns(onView: (id: string) => void): TableColumn<ActiveSessionRow>[] {
   return [
     {
       key: 'id',
@@ -96,9 +112,7 @@ function buildActiveColumns(
     {
       key: 'persona',
       header: 'Persona',
-      render: (s) => (
-        <span className="niuu-text-sm niuu-text-text-secondary">{s.personaName}</span>
-      ),
+      render: (s) => <span className="niuu-text-sm niuu-text-text-secondary">{s.personaName}</span>,
     },
     {
       key: 'state',
@@ -229,9 +243,7 @@ export function VolundrPage() {
           <ErrorState
             title="Failed to load sessions"
             message={
-              domainSessions.error instanceof Error
-                ? domainSessions.error.message
-                : 'Unknown error'
+              domainSessions.error instanceof Error ? domainSessions.error.message : 'Unknown error'
             }
           />
         )}
