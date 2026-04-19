@@ -351,11 +351,16 @@ export function buildTyrHttpAdapter(client: ApiClient): ITyrService {
     },
 
     async spawnPlanSession(spec: string, repo: string) {
-      const raw = await client.post<{ session_id: string; chat_endpoint: string | null }>(
-        '/sagas/plan',
-        { spec, repo },
-      );
-      return { sessionId: raw.session_id, chatEndpoint: raw.chat_endpoint } satisfies PlanSession;
+      const raw = await client.post<{
+        session_id: string;
+        chat_endpoint: string | null;
+        questions?: { id: string; question: string; hint?: string }[];
+      }>('/sagas/plan', { spec, repo });
+      return {
+        sessionId: raw.session_id,
+        chatEndpoint: raw.chat_endpoint,
+        questions: raw.questions ?? [],
+      } satisfies PlanSession;
     },
 
     async extractStructure(text: string) {

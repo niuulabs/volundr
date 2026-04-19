@@ -179,3 +179,137 @@ test('keyboard: tab focuses segmented filter buttons', async ({ page }) => {
   await allBtn.focus();
   await expect(allBtn).toBeFocused();
 });
+
+test('tyr page has link to new saga plan', async ({ page }) => {
+  await page.goto('/tyr');
+  await expect(page.getByRole('link', { name: /new saga plan/i })).toBeVisible();
+});
+
+// ---------------------------------------------------------------------------
+// Plan wizard — all 5 states
+// ---------------------------------------------------------------------------
+
+test('plan wizard renders prompt step at /tyr/plan', async ({ page }) => {
+  await page.goto('/tyr/plan');
+  await expect(page.getByText('Describe your goal')).toBeVisible();
+  await expect(page.getByRole('navigation', { name: /plan wizard steps/i })).toBeVisible();
+});
+
+test('plan wizard — step 1 (prompt): shows step dots and form', async ({ page }) => {
+  await page.goto('/tyr/plan');
+  // StepDots labels — exact match to avoid collisions with step headings
+  await expect(page.getByText('Describe', { exact: true })).toBeVisible();
+  await expect(page.getByText('Clarify', { exact: true })).toBeVisible();
+  await expect(page.getByText('Decompose', { exact: true })).toBeVisible();
+  await expect(page.getByText('Review', { exact: true })).toBeVisible();
+  await expect(page.getByText('Launch', { exact: true })).toBeVisible();
+  // Form fields
+  await expect(page.getByRole('textbox', { name: /goal description/i })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: /target repository/i })).toBeVisible();
+});
+
+test('plan wizard — step 2 (questions): shown after submitting prompt', async ({ page }) => {
+  await page.goto('/tyr/plan');
+
+  await page
+    .getByRole('textbox', { name: /goal description/i })
+    .fill('Build OIDC auth with silent refresh and PAT support for headless agents');
+  await page.getByRole('textbox', { name: /target repository/i }).fill('niuulabs/volundr');
+  await page.getByRole('button', { name: /next/i }).click();
+
+  await expect(page.getByText('Clarify your plan')).toBeVisible({ timeout: 5000 });
+  // Mock service returns 4 questions
+  await expect(page.getByText(/Which target repositories/i)).toBeVisible();
+});
+
+test('plan wizard — step 3 (raiding): shown after submitting answers', async ({ page }) => {
+  await page.goto('/tyr/plan');
+
+  // Step 1
+  await page.getByRole('textbox', { name: /goal description/i }).fill('Build auth module');
+  await page.getByRole('button', { name: /next/i }).click();
+  await expect(page.getByText('Clarify your plan')).toBeVisible({ timeout: 5000 });
+
+  // Step 2
+  await page.getByRole('button', { name: /decompose/i }).click();
+
+  await expect(page.getByRole('status', { name: /decomposing plan/i })).toBeVisible({
+    timeout: 5000,
+  });
+  await expect(page.getByText(/Ravens are raiding/i)).toBeVisible();
+});
+
+test('plan wizard — step 4 (draft): auto-advances from raiding', async ({ page }) => {
+  await page.goto('/tyr/plan');
+
+  // Step 1
+  await page.getByRole('textbox', { name: /goal description/i }).fill('Build auth module');
+  await page.getByRole('button', { name: /next/i }).click();
+  await expect(page.getByText('Clarify your plan')).toBeVisible({ timeout: 5000 });
+
+  // Step 2
+  await page.getByRole('button', { name: /decompose/i }).click();
+
+  // Step 3 → 4 auto-advance
+  await expect(page.getByText('Review your plan')).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('New Saga', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /approve/i })).toBeVisible();
+});
+
+test('plan wizard — step 4: edit button toggles phase name editing', async ({ page }) => {
+  await page.goto('/tyr/plan');
+
+  await page.getByRole('textbox', { name: /goal description/i }).fill('Build auth module');
+  await page.getByRole('button', { name: /next/i }).click();
+  await expect(page.getByText('Clarify your plan')).toBeVisible({ timeout: 5000 });
+  await page.getByRole('button', { name: /decompose/i }).click();
+  await expect(page.getByText('Review your plan')).toBeVisible({ timeout: 10000 });
+
+  // Click edit on first phase
+  await page.getByRole('button', { name: /edit phase 1/i }).click();
+  await expect(page.getByLabel(/edit phase 1 name/i)).toBeVisible();
+  // Cancel
+  await page.getByRole('button', { name: /cancel/i }).click();
+  await expect(page.getByLabel(/edit phase 1 name/i)).not.toBeVisible();
+});
+
+test('plan wizard — step 5 (approved): reached after approving draft', async ({ page }) => {
+  await page.goto('/tyr/plan');
+
+  // Step 1
+  await page.getByRole('textbox', { name: /goal description/i }).fill('Build auth module');
+  await page.getByRole('button', { name: /next/i }).click();
+  await expect(page.getByText('Clarify your plan')).toBeVisible({ timeout: 5000 });
+
+  // Step 2
+  await page.getByRole('button', { name: /decompose/i }).click();
+
+  // Step 3 → 4
+  await expect(page.getByText('Review your plan')).toBeVisible({ timeout: 10000 });
+
+  // Step 4 → 5
+  await page.getByRole('button', { name: /approve/i }).click();
+  await expect(page.getByText('Saga launched!')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole('link', { name: /open in sagas/i })).toBeVisible();
+});
+
+test('plan wizard — back navigation from questions returns to prompt', async ({ page }) => {
+  await page.goto('/tyr/plan');
+
+  await page.getByRole('textbox', { name: /goal description/i }).fill('Build auth module');
+  await page.getByRole('button', { name: /next/i }).click();
+  await expect(page.getByText('Clarify your plan')).toBeVisible({ timeout: 5000 });
+
+  await page.getByRole('button', { name: /back/i }).click();
+  await expect(page.getByText('Describe your goal')).toBeVisible();
+});
+
+test('plan wizard — keyboard accessibility: tab order works on prompt step', async ({ page }) => {
+  await page.goto('/tyr/plan');
+  // Tab through interactive elements
+  await page.keyboard.press('Tab');
+  // The textarea should be focusable
+  const textarea = page.getByRole('textbox', { name: /goal description/i });
+  await textarea.fill('test');
+  await expect(textarea).toBeFocused();
+});

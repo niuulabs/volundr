@@ -7,6 +7,7 @@ import { DispatchView } from './ui/DispatchView';
 import { SettingsPage, SettingsIndexPage } from './ui/settings/SettingsPage';
 import { SettingsRail } from './ui/settings/SettingsRail';
 import { SettingsTopbar } from './ui/settings/SettingsTopbar';
+import { PlanWizard } from './ui/PlanWizard';
 
 export const tyrPlugin = definePlugin({
   id: 'tyr',
@@ -63,6 +64,11 @@ export const tyrPlugin = definePlugin({
       getParentRoute: () => rootRoute,
       path: '/tyr/settings/audit',
       component: () => SettingsPage({ section: 'audit' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/plan',
+      component: PlanWizard,
     }),
   ],
   subnav: () => SettingsRail(),
@@ -190,6 +196,17 @@ export {
 } from './domain/workflow';
 
 export { dispatcherStateSchema, dispatchRuleSchema } from './domain/dispatcher';
+
+export {
+  PLAN_STEPS,
+  PLAN_STEP_LABELS,
+  planTransition,
+  canTransition,
+  stepIndex,
+  PlanTransitionError,
+  type PlanStep,
+  type ClarifyingQuestion,
+} from './domain/plan';
 
 export { tyrSessionStatusSchema, sessionInfoSchema } from './domain/session';
 

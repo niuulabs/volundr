@@ -76,11 +76,12 @@ describe('createMockTyrService', () => {
     expect(session.chatEndpoint).toBeNull();
   });
 
-  it('extractStructure returns found: false by default', async () => {
+  it('extractStructure returns found: true with sample structure', async () => {
     const svc = createMockTyrService();
     const result = await svc.extractStructure('some text');
-    expect(result.found).toBe(false);
-    expect(result.structure).toBeNull();
+    expect(result.found).toBe(true);
+    expect(result.structure).not.toBeNull();
+    expect(result.structure?.phases.length).toBeGreaterThan(0);
   });
 });
 

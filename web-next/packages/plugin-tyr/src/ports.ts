@@ -18,6 +18,7 @@ import type {
   AuditEntry,
   AuditFilter,
 } from './domain/settings';
+import type { ClarifyingQuestion } from './domain/plan';
 
 // Re-export domain types so consumers can import from a single location.
 export type { Saga, Phase } from './domain/saga';
@@ -34,6 +35,7 @@ export type {
   AuditEntryKind,
   AuditFilter,
 } from './domain/settings';
+export type { ClarifyingQuestion } from './domain/plan';
 
 // ---------------------------------------------------------------------------
 // ITyrService — saga lifecycle and planning
@@ -61,6 +63,8 @@ export interface CommitSagaRequest {
 export interface PlanSession {
   sessionId: string;
   chatEndpoint: string | null;
+  /** Clarifying questions from the planning raven. Empty when the backend omits them. */
+  questions: ClarifyingQuestion[];
 }
 
 export interface RaidSpec {
