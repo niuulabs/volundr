@@ -38,7 +38,12 @@ export function UIShowcasePage() {
         <div className="ui-showcase__section-label">PersonaAvatar — all roles</div>
         <div className="ui-showcase__row">
           {ROLES.map((role) => (
-            <PersonaAvatar key={role} role={role} letter={role.charAt(0).toUpperCase()} size={32} />
+            <PersonaAvatar
+              key={role}
+              role={role}
+              letter={(role[0] ?? '').toUpperCase()}
+              size={32}
+            />
           ))}
         </div>
       </section>

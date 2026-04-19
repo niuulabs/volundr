@@ -12,6 +12,8 @@ import type {
   ITyrSessionService,
   ITrackerBrowserService,
   ITyrIntegrationService,
+  IDispatchBus,
+  DispatchResult,
   CommitSagaRequest,
   PlanSession,
   ExtractedStructure,
@@ -112,6 +114,67 @@ const SEED_RAIDS: Raid[] = [
     createdAt: '2026-01-13T09:00:00Z',
     updatedAt: '2026-01-13T11:00:00Z',
   },
+  // Dispatch-queue seed data — raids in dispatchable states
+  {
+    id: '00000000-0000-0000-0000-000000000012',
+    phaseId: '00000000-0000-0000-0000-000000000102',
+    trackerId: 'NIU-503',
+    name: 'Harden JWT validation',
+    description: 'Add clock-skew tolerance and token audience checks.',
+    acceptanceCriteria: ['JWT rejects tampered tokens', 'Clock skew ≤ 60s tolerated'],
+    declaredFiles: ['src/auth/jwt.ts'],
+    estimateHours: 3,
+    status: 'pending',
+    confidence: 80,
+    sessionId: null,
+    reviewerSessionId: null,
+    reviewRound: 0,
+    branch: null,
+    chronicleSummary: null,
+    retryCount: 0,
+    createdAt: '2026-01-14T08:00:00Z',
+    updatedAt: '2026-01-14T08:00:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000013',
+    phaseId: '00000000-0000-0000-0000-000000000102',
+    trackerId: 'NIU-504',
+    name: 'Write auth integration tests',
+    description: 'End-to-end tests for the full auth flow.',
+    acceptanceCriteria: ['All auth happy paths covered', 'Token expiry tested'],
+    declaredFiles: ['tests/auth/integration.test.ts'],
+    estimateHours: 5,
+    status: 'pending',
+    confidence: 45,
+    sessionId: null,
+    reviewerSessionId: null,
+    reviewRound: 0,
+    branch: null,
+    chronicleSummary: null,
+    retryCount: 0,
+    createdAt: '2026-01-14T09:00:00Z',
+    updatedAt: '2026-01-14T09:00:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000014',
+    phaseId: '00000000-0000-0000-0000-000000000102',
+    trackerId: 'NIU-505',
+    name: 'Add refresh token rotation',
+    description: 'Rotate refresh tokens on every use.',
+    acceptanceCriteria: ['Old refresh tokens invalidated on use', 'New token issued atomically'],
+    declaredFiles: ['src/auth/refresh.ts'],
+    estimateHours: 4,
+    status: 'queued',
+    confidence: 75,
+    sessionId: null,
+    reviewerSessionId: null,
+    reviewRound: 0,
+    branch: null,
+    chronicleSummary: null,
+    retryCount: 0,
+    createdAt: '2026-01-15T10:00:00Z',
+    updatedAt: '2026-01-15T10:30:00Z',
+  },
 ];
 
 const SEED_PHASES: Phase[] = [
@@ -131,7 +194,7 @@ const SEED_PHASES: Phase[] = [
     trackerId: 'NIU-M2',
     number: 2,
     name: 'Phase 2: PAT Support',
-    status: 'active',
+    status: 'complete',
     confidence: 65,
     raids: [SEED_RAIDS[1]!],
   },
@@ -140,10 +203,10 @@ const SEED_PHASES: Phase[] = [
     sagaId: '00000000-0000-0000-0000-000000000001',
     trackerId: 'NIU-M3',
     number: 3,
-    name: 'Phase 3: Hardening',
+    name: 'Phase 3: Security',
     status: 'pending',
     confidence: 50,
-    raids: [],
+    raids: [SEED_RAIDS[2]!, SEED_RAIDS[3]!, SEED_RAIDS[4]!],
   },
 ];
 
@@ -447,6 +510,24 @@ export function createMockTrackerService(): ITrackerBrowserService {
         phaseSummary: { total: 0, completed: 0 },
       };
       return saga;
+    },
+  };
+}
+
+/**
+ * Create an in-memory IDispatchBus (Sleipnir stub).
+ *
+ * Immediately resolves all dispatches — callers apply optimistic updates
+ * in the UI layer. Use in tests and local development.
+ */
+export function createMockDispatchBus(): IDispatchBus {
+  return {
+    async dispatch(_raidId: string): Promise<void> {
+      // No-op in mock; UI handles optimistic status update.
+    },
+
+    async dispatchBatch(raidIds: string[]): Promise<DispatchResult> {
+      return { dispatched: raidIds, failed: [] };
     },
   };
 }

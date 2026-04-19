@@ -42,18 +42,27 @@ interface RawPersonaProduces {
   schema_def: Record<string, unknown>;
 }
 
+interface RawPersonaConsumesEvent {
+  name: string;
+  injects?: string[];
+  trust?: number;
+}
+
 interface RawPersonaConsumes {
-  event_types: string[];
-  injects: string[];
+  events: RawPersonaConsumesEvent[];
 }
 
 interface RawPersonaFanIn {
   strategy: string;
-  contributes_to: string;
+  params: Record<string, unknown>;
 }
 
 interface RawPersonaSummary {
   name: string;
+  role: string;
+  letter: string;
+  color: string;
+  summary: string;
   permission_mode: string;
   allowed_tools: string[];
   iteration_budget: number;
@@ -64,12 +73,14 @@ interface RawPersonaSummary {
 }
 
 interface RawPersonaDetail extends RawPersonaSummary {
+  description: string;
   system_prompt_template: string;
   forbidden_tools: string[];
-  llm: RawPersonaLLM;
+  llm: RawPersonaLLM & { temperature?: number };
   produces: RawPersonaProduces;
   consumes: RawPersonaConsumes;
   fan_in: RawPersonaFanIn;
+  mimir_write_routing?: string;
   yaml_source: string;
 }
 
@@ -80,6 +91,10 @@ interface RawPersonaDetail extends RawPersonaSummary {
 function toSummary(raw: RawPersonaSummary): PersonaSummary {
   return {
     name: raw.name,
+    role: raw.role as PersonaSummary['role'],
+    letter: raw.letter,
+    color: raw.color,
+    summary: raw.summary,
     permissionMode: raw.permission_mode,
     allowedTools: raw.allowed_tools,
     iterationBudget: raw.iteration_budget,
@@ -93,24 +108,30 @@ function toSummary(raw: RawPersonaSummary): PersonaSummary {
 function toDetail(raw: RawPersonaDetail): PersonaDetail {
   return {
     ...toSummary(raw),
+    description: raw.description,
     systemPromptTemplate: raw.system_prompt_template,
     forbiddenTools: raw.forbidden_tools,
     llm: {
       primaryAlias: raw.llm.primary_alias,
       thinkingEnabled: raw.llm.thinking_enabled,
       maxTokens: raw.llm.max_tokens,
+      temperature: raw.llm.temperature,
     },
     produces: {
       eventType: raw.produces.event_type,
-      schemaDef: raw.produces.schema_def,
+      schemaDef: raw.produces.schema_def as PersonaDetail['produces']['schemaDef'],
     },
     consumes: {
-      eventTypes: raw.consumes.event_types,
-      injects: raw.consumes.injects,
+      events: raw.consumes.events.map((e) => ({
+        name: e.name,
+        injects: e.injects,
+        trust: e.trust,
+      })),
     },
+    mimirWriteRouting: raw.mimir_write_routing as PersonaDetail['mimirWriteRouting'],
     fanIn: {
       strategy: raw.fan_in.strategy,
-      contributesTo: raw.fan_in.contributes_to,
+      params: raw.fan_in.params,
     },
     yamlSource: raw.yaml_source,
   };
@@ -119,6 +140,11 @@ function toDetail(raw: RawPersonaDetail): PersonaDetail {
 function toRequestBody(req: PersonaCreateRequest): Record<string, unknown> {
   return {
     name: req.name,
+    role: req.role,
+    letter: req.letter,
+    color: req.color,
+    summary: req.summary,
+    description: req.description,
     system_prompt_template: req.systemPromptTemplate,
     allowed_tools: req.allowedTools,
     forbidden_tools: req.forbiddenTools,
@@ -127,11 +153,13 @@ function toRequestBody(req: PersonaCreateRequest): Record<string, unknown> {
     llm_primary_alias: req.llmPrimaryAlias,
     llm_thinking_enabled: req.llmThinkingEnabled,
     llm_max_tokens: req.llmMaxTokens,
+    llm_temperature: req.llmTemperature,
     produces_event_type: req.producesEventType,
-    consumes_event_types: req.consumesEventTypes,
-    consumes_injects: req.consumesInjects,
+    produces_schema: req.producesSchema,
+    consumes_events: req.consumesEvents,
     fan_in_strategy: req.fanInStrategy,
-    fan_in_contributes_to: req.fanInContributesTo,
+    fan_in_params: req.fanInParams,
+    mimir_write_routing: req.mimirWriteRouting,
   };
 }
 

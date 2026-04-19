@@ -16,10 +16,12 @@ import {
   createMockDispatcherService,
   createMockTyrSessionService,
   createMockTrackerService,
+  createMockDispatchBus,
   buildTyrHttpAdapter,
   buildDispatcherHttpAdapter,
   buildTyrSessionHttpAdapter,
   buildTrackerHttpAdapter,
+  buildDispatchBusHttpAdapter,
 } from '@niuulabs/plugin-tyr';
 import { createMimirMockAdapter, buildMimirHttpAdapter } from '@niuulabs/plugin-mimir';
 import {
@@ -32,6 +34,9 @@ import {
 } from '@niuulabs/plugin-observatory';
 import {
   createMockVolundrService,
+  createMockClusterAdapter,
+  createMockTemplateStore,
+  createMockSessionStore,
   buildVolundrHttpAdapter,
   createMockPtyStream,
   createMockMetricsStream,
@@ -124,6 +129,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const trackerService = tyrClient
     ? buildTrackerHttpAdapter(tyrClient)
     : createMockTrackerService();
+  const dispatchBus = tyrClient ? buildDispatchBusHttpAdapter(tyrClient) : createMockDispatchBus();
 
   return {
     hello,
@@ -131,6 +137,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     'tyr.dispatcher': dispatcherService,
     'tyr.sessions': tyrSessionService,
     'tyr.tracker': trackerService,
+    'tyr.dispatch': dispatchBus,
     'ravn.personas': ravnPersonas,
     'ravn.ravens': ravnRavens,
     'ravn.sessions': ravnSessions,
@@ -141,6 +148,13 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     ptyStream,
     metricsStream,
     filesystem: createMockFileSystemPort(),
+    // NIU-678 pages (ClustersPage, TemplatesPage, HistoryPage)
+    'volundr.clusters': createMockClusterAdapter(),
+    'volundr.templates': createMockTemplateStore(),
+    'volundr.sessions': createMockSessionStore(),
+    // VolundrPage overview hooks (useVolundrClusters, useSessionStore)
+    clusterAdapter: createMockClusterAdapter(),
+    sessionStore: createMockSessionStore(),
     'observatory.registry': observatoryRegistry,
     'observatory.topology': observatoryTopology,
     'observatory.events': observatoryEvents,

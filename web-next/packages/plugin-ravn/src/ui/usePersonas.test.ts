@@ -1,11 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ServicesProvider } from '@niuulabs/plugin-sdk';
-import type { ReactNode } from 'react';
-import { createElement } from 'react';
 import { usePersonas } from './usePersonas';
 import type { PersonaSummary } from '../ports';
+import { wrapWithServices } from '../testing/wrapWithRavn';
 
 const samplePersona: PersonaSummary = {
   name: 'coder',
@@ -18,16 +15,7 @@ const samplePersona: PersonaSummary = {
   consumesEvents: ['code.requested'],
 };
 
-function makeWrapper(service: Record<string, unknown>) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return createElement(
-      QueryClientProvider,
-      { client },
-      createElement(ServicesProvider, { services: service }, children),
-    );
-  };
-}
+const makeWrapper = wrapWithServices;
 
 describe('usePersonas', () => {
   it('returns personas list from the service', async () => {

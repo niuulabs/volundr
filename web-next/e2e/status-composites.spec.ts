@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('status composites showcase', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/hello/status-showcase');
+    await expect(page.getByText(/status composites/i)).toBeVisible({ timeout: 5000 });
   });
 
   test('page renders the heading', async ({ page }) => {
