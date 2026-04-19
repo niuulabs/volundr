@@ -40,6 +40,9 @@ export function groupRavens(ravens: Ravn[], by: GroupKey): Record<string, Ravn[]
   return groups;
 }
 
+/** Default number of top budget spenders to show. */
+const TOP_BUDGET_SPENDERS_DEFAULT = 5;
+
 /**
  * Return the top-N ravens ordered by USD spent today (descending).
  * Ravens with no budget entry are treated as $0 spent.
@@ -47,7 +50,7 @@ export function groupRavens(ravens: Ravn[], by: GroupKey): Record<string, Ravn[]
 export function topBudgetSpenders(
   ravens: Ravn[],
   budgets: Record<string, BudgetState>,
-  n = 5,
+  n = TOP_BUDGET_SPENDERS_DEFAULT,
 ): Ravn[] {
   return [...ravens]
     .sort((a, b) => (budgets[b.id]?.spentUsd ?? 0) - (budgets[a.id]?.spentUsd ?? 0))
