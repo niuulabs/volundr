@@ -57,3 +57,30 @@ export const OidcError: Story = {
     </AuthContext.Provider>
   ),
 };
+
+/** Constellation ambient background. */
+export const AmbientConstellation: Story = {
+  render: () => (
+    <AuthContext.Provider value={signedOutAuth}>
+      <LoginPage ambient="constellation" />
+    </AuthContext.Provider>
+  ),
+};
+
+/** Lattice ambient background. */
+export const AmbientLattice: Story = {
+  render: () => (
+    <AuthContext.Provider value={signedOutAuth}>
+      <LoginPage ambient="lattice" />
+    </AuthContext.Provider>
+  ),
+};
+
+/** Topology ambient background (default). */
+export const AmbientTopology: Story = {
+  render: () => (
+    <AuthContext.Provider value={signedOutAuth}>
+      <LoginPage ambient="topology" />
+    </AuthContext.Provider>
+  ),
+};

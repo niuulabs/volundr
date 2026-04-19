@@ -30,3 +30,36 @@ if (!Element.prototype.setPointerCapture) {
 if (!Element.prototype.releasePointerCapture) {
   Element.prototype.releasePointerCapture = () => {};
 }
+
+// jsdom doesn't implement HTMLCanvasElement.prototype.getContext.
+// Return a minimal stub so canvas-based components (e.g. AmbientTopology)
+// don't print "Not implemented" warnings during tests.
+if (typeof HTMLCanvasElement !== 'undefined') {
+  HTMLCanvasElement.prototype.getContext = () =>
+    ({
+      clearRect: () => {},
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      arc: () => {},
+      fill: () => {},
+      stroke: () => {},
+      setTransform: () => {},
+      strokeStyle: '',
+      lineWidth: 0,
+      fillStyle: '',
+    }) as unknown as CanvasRenderingContext2D;
+}
+
+// matchMedia is not implemented in jsdom; provide a silent stub so components
+// that call window.matchMedia() (e.g. useReducedMotion) don't throw.
+if (typeof window.matchMedia === 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: () => ({
+      matches: false,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }),
+  });
+}

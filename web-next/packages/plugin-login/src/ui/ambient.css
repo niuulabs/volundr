@@ -1,0 +1,25 @@
+/* ================================================================
+   Ambient background — shared positioning for all three variants.
+   ================================================================ */
+
+.login-ambient {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Pause CSS-driven shimmer / rotate animations when the user
+   prefers reduced motion. Canvas-based variants handle this in JS. */
+@media (prefers-reduced-motion: reduce) {
+  .login-ambient animate,
+  .login-ambient animateTransform {
+    display: none;
+  }
+
+  .login-ambient circle[opacity] {
+    opacity: 0.5;
+  }
+}
