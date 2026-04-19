@@ -68,7 +68,8 @@ function RuleCard({
           Dispatch rules
         </h3>
       </div>
-      <dl className="niuu-grid niuu-gap-x-8 niuu-gap-y-1 niuu-text-xs niuu-text-text-secondary niuu-m-0"
+      <dl
+        className="niuu-grid niuu-gap-x-8 niuu-gap-y-1 niuu-text-xs niuu-text-text-secondary niuu-m-0"
         style={{ gridTemplateColumns: 'repeat(4, auto)' }}
       >
         <dt className="niuu-text-text-muted">Confidence threshold</dt>
@@ -168,10 +169,7 @@ function BatchDispatchBar({
       <span className="niuu-text-sm niuu-text-text-secondary">
         {selectedCount} raid{selectedCount !== 1 ? 's' : ''} selected
       </span>
-      <Tooltip
-        content={canDispatch ? undefined : 'Select only ready raids to dispatch'}
-        side="top"
-      >
+      <Tooltip content={canDispatch ? undefined : 'Select only ready raids to dispatch'} side="top">
         <button
           type="button"
           onClick={onDispatch}
@@ -337,11 +335,7 @@ export function DispatchView() {
       width: '130px',
       render: (row) => {
         const level =
-          row.raid.confidence >= 80
-            ? 'high'
-            : row.raid.confidence >= 50
-              ? 'medium'
-              : 'low';
+          row.raid.confidence >= 80 ? 'high' : row.raid.confidence >= 50 ? 'medium' : 'low';
         return (
           <div className="niuu-flex niuu-items-center niuu-gap-2">
             <ConfidenceBar level={level} />

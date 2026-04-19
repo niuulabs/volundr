@@ -234,9 +234,7 @@ describe('checkFeasibility', () => {
   it('is not feasible when upstream is blocked', () => {
     const phase1 = makePhaseWithNumber(1, 'pending');
     const phase2 = makePhase({ number: 2 });
-    const result = checkFeasibility(
-      makeCtx({ phase: phase2, allPhasesForSaga: [phase1, phase2] }),
-    );
+    const result = checkFeasibility(makeCtx({ phase: phase2, allPhasesForSaga: [phase1, phase2] }));
     expect(result.feasible).toBe(false);
     const gate = result.gates.find((g) => g.name === 'upstream_blocked');
     expect(gate?.passed).toBe(false);

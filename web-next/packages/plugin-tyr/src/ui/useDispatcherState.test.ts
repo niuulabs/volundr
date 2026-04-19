@@ -37,7 +37,9 @@ describe('useDispatcherState', () => {
 
   it('exposes error when service throws', async () => {
     const failing: IDispatcherService = {
-      getState: async () => { throw new Error('dispatcher offline'); },
+      getState: async () => {
+        throw new Error('dispatcher offline');
+      },
       setRunning: async () => {},
       setThreshold: async () => {},
       setAutoContinue: async () => {},

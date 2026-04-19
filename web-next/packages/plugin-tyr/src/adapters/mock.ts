@@ -194,7 +194,7 @@ const SEED_PHASES: Phase[] = [
     trackerId: 'NIU-M2',
     number: 2,
     name: 'Phase 2: PAT Support',
-    status: 'active',
+    status: 'complete',
     confidence: 65,
     raids: [SEED_RAIDS[1]!],
   },

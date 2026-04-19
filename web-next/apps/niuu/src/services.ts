@@ -126,9 +126,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const trackerService = tyrClient
     ? buildTrackerHttpAdapter(tyrClient)
     : createMockTrackerService();
-  const dispatchBus = tyrClient
-    ? buildDispatchBusHttpAdapter(tyrClient)
-    : createMockDispatchBus();
+  const dispatchBus = tyrClient ? buildDispatchBusHttpAdapter(tyrClient) : createMockDispatchBus();
 
   return {
     hello,

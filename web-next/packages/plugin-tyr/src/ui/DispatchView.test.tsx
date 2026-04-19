@@ -81,11 +81,13 @@ function makePhase(raids: Raid[], number = 1, status: Phase['status'] = 'active'
   };
 }
 
-function makeServices(overrides: {
-  tyr?: Partial<ITyrService>;
-  dispatcher?: Partial<IDispatcherService>;
-  dispatch?: Partial<IDispatchBus>;
-} = {}) {
+function makeServices(
+  overrides: {
+    tyr?: Partial<ITyrService>;
+    dispatcher?: Partial<IDispatcherService>;
+    dispatch?: Partial<IDispatchBus>;
+  } = {},
+) {
   const saga = makeSaga();
   const raid = makeRaid();
   const phase = makePhase([raid]);
@@ -190,10 +192,20 @@ describe('DispatchView', () => {
 
   it('filters to ready raids only', async () => {
     const user = userEvent.setup();
-    const readyRaid = makeRaid({ id: '00000000-0000-0000-0000-000000000011', name: 'Ready Raid', confidence: 80 });
-    const blockedRaid = makeRaid({ id: '00000000-0000-0000-0000-000000000012', name: 'Low Conf Raid', confidence: 20 });
+    const readyRaid = makeRaid({
+      id: '00000000-0000-0000-0000-000000000011',
+      name: 'Ready Raid',
+      confidence: 80,
+    });
+    const blockedRaid = makeRaid({
+      id: '00000000-0000-0000-0000-000000000012',
+      name: 'Low Conf Raid',
+      confidence: 20,
+    });
     const phase = makePhase([readyRaid, blockedRaid]);
-    const services = makeServices({ tyr: { getSagas: async () => [makeSaga()], getPhases: async () => [phase] } });
+    const services = makeServices({
+      tyr: { getSagas: async () => [makeSaga()], getPhases: async () => [phase] },
+    });
 
     render(<DispatchView />, { wrapper: wrap(services) });
     await waitFor(() => screen.getByText('Ready Raid'));
@@ -205,10 +217,20 @@ describe('DispatchView', () => {
 
   it('filters to blocked raids only', async () => {
     const user = userEvent.setup();
-    const readyRaid = makeRaid({ id: '00000000-0000-0000-0000-000000000011', name: 'Ready Raid', confidence: 80 });
-    const blockedRaid = makeRaid({ id: '00000000-0000-0000-0000-000000000012', name: 'Low Conf Raid', confidence: 20 });
+    const readyRaid = makeRaid({
+      id: '00000000-0000-0000-0000-000000000011',
+      name: 'Ready Raid',
+      confidence: 80,
+    });
+    const blockedRaid = makeRaid({
+      id: '00000000-0000-0000-0000-000000000012',
+      name: 'Low Conf Raid',
+      confidence: 20,
+    });
     const phase = makePhase([readyRaid, blockedRaid]);
-    const services = makeServices({ tyr: { getSagas: async () => [makeSaga()], getPhases: async () => [phase] } });
+    const services = makeServices({
+      tyr: { getSagas: async () => [makeSaga()], getPhases: async () => [phase] },
+    });
 
     render(<DispatchView />, { wrapper: wrap(services) });
     await waitFor(() => screen.getByText('Ready Raid'));
@@ -220,10 +242,21 @@ describe('DispatchView', () => {
 
   it('filters to queue raids only', async () => {
     const user = userEvent.setup();
-    const pendingRaid = makeRaid({ id: '00000000-0000-0000-0000-000000000011', name: 'Pending Raid', status: 'pending' });
-    const runningRaid = makeRaid({ id: '00000000-0000-0000-0000-000000000012', name: 'Running Raid', status: 'running', confidence: 80 });
+    const pendingRaid = makeRaid({
+      id: '00000000-0000-0000-0000-000000000011',
+      name: 'Pending Raid',
+      status: 'pending',
+    });
+    const runningRaid = makeRaid({
+      id: '00000000-0000-0000-0000-000000000012',
+      name: 'Running Raid',
+      status: 'running',
+      confidence: 80,
+    });
     const phase = makePhase([pendingRaid, runningRaid]);
-    const services = makeServices({ tyr: { getSagas: async () => [makeSaga()], getPhases: async () => [phase] } });
+    const services = makeServices({
+      tyr: { getSagas: async () => [makeSaga()], getPhases: async () => [phase] },
+    });
 
     render(<DispatchView />, { wrapper: wrap(services) });
     await waitFor(() => screen.getByText('Pending Raid'));
@@ -235,10 +268,15 @@ describe('DispatchView', () => {
 
   it('filters by search query', async () => {
     const user = userEvent.setup();
-    const raid1 = makeRaid({ id: '00000000-0000-0000-0000-000000000011', name: 'OIDC integration' });
+    const raid1 = makeRaid({
+      id: '00000000-0000-0000-0000-000000000011',
+      name: 'OIDC integration',
+    });
     const raid2 = makeRaid({ id: '00000000-0000-0000-0000-000000000012', name: 'PAT generation' });
     const phase = makePhase([raid1, raid2]);
-    const services = makeServices({ tyr: { getSagas: async () => [makeSaga()], getPhases: async () => [phase] } });
+    const services = makeServices({
+      tyr: { getSagas: async () => [makeSaga()], getPhases: async () => [phase] },
+    });
 
     render(<DispatchView />, { wrapper: wrap(services) });
     await waitFor(() => screen.getByText('OIDC integration'));
@@ -272,7 +310,9 @@ describe('DispatchView', () => {
     const user = userEvent.setup();
     const lowConfRaid = makeRaid({ confidence: 20 });
     const phase = makePhase([lowConfRaid]);
-    const services = makeServices({ tyr: { getSagas: async () => [makeSaga()], getPhases: async () => [phase] } });
+    const services = makeServices({
+      tyr: { getSagas: async () => [makeSaga()], getPhases: async () => [phase] },
+    });
 
     render(<DispatchView />, { wrapper: wrap(services) });
     await waitFor(() => screen.getByText('Test Raid'));
@@ -285,7 +325,9 @@ describe('DispatchView', () => {
 
   it('calls dispatchBatch and clears selection on batch dispatch', async () => {
     const user = userEvent.setup();
-    const dispatchSpy = vi.fn().mockResolvedValue({ dispatched: ['00000000-0000-0000-0000-000000000010'], failed: [] });
+    const dispatchSpy = vi
+      .fn()
+      .mockResolvedValue({ dispatched: ['00000000-0000-0000-0000-000000000010'], failed: [] });
     const services = makeServices({ dispatch: { dispatchBatch: dispatchSpy } });
 
     render(<DispatchView />, { wrapper: wrap(services) });
@@ -293,7 +335,9 @@ describe('DispatchView', () => {
 
     await user.click(screen.getByRole('checkbox', { name: /select row/i }));
     await user.click(screen.getByRole('button', { name: /dispatch/i }));
-    await waitFor(() => expect(dispatchSpy).toHaveBeenCalledWith(['00000000-0000-0000-0000-000000000010']));
+    await waitFor(() =>
+      expect(dispatchSpy).toHaveBeenCalledWith(['00000000-0000-0000-0000-000000000010']),
+    );
     // Selection cleared
     await waitFor(() => expect(screen.queryByText(/1 raid selected/i)).not.toBeInTheDocument());
   });
@@ -324,9 +368,7 @@ describe('DispatchView', () => {
     await user.click(screen.getByRole('button', { name: /dispatch/i }));
 
     // Optimistic update: selection cleared immediately, raid still visible as "queued"
-    await waitFor(() =>
-      expect(screen.queryByText(/1 raid selected/i)).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByText(/1 raid selected/i)).not.toBeInTheDocument());
     // Raid still visible in "all" tab with queued status (optimistic)
     expect(screen.getByText('Test Raid')).toBeInTheDocument();
   });
