@@ -195,7 +195,7 @@ export function Terminal({
           <span
             className={cn(
               'niuu-inline-block niuu-h-1.5 niuu-w-1.5 niuu-rounded-full niuu-animate-pulse',
-              connectionState === 'reconnecting' ? 'niuu-bg-accent-amber' : 'niuu-bg-text-muted',
+              connectionState === 'reconnecting' ? 'niuu-bg-brand' : 'niuu-bg-text-muted',
             )}
           />
           {connectionState === 'reconnecting' ? 'reconnecting…' : 'connecting…'}
