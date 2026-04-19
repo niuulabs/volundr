@@ -50,7 +50,7 @@ export function WorkflowBuilderPage() {
         {/* Workflow tabs */}
         {workflows && workflows.length > 0 && (
           <div style={{ display: 'flex', gap: 4 }}>
-            {workflows.map((wf) => {
+            {workflows.map((wf: Workflow) => {
               const isActive = displayed?.id === wf.id;
               return (
                 <button

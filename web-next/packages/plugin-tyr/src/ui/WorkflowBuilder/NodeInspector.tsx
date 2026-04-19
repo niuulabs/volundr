@@ -19,11 +19,11 @@ export interface NodeInspectorProps {
   onRemovePersona: WorkflowBuilderActions['removePersonaFromStage'];
 }
 
-export function NodeInspector({ node, onClose, onUpdateLabel, onAddPersona, onRemovePersona }: NodeInspectorProps) {
+export function NodeInspector({ node, onClose, onUpdateLabel, onAddPersona: _onAddPersona, onRemovePersona }: NodeInspectorProps) {
   const kindLabel = node.kind === 'stage' ? 'Stage' : node.kind === 'gate' ? 'Gate' : 'Condition';
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog open onOpenChange={(open: boolean) => { if (!open) onClose(); }}>
       <DialogContent
         title={`${kindLabel}: ${node.label}`}
         description={`Node ID: ${node.id}`}

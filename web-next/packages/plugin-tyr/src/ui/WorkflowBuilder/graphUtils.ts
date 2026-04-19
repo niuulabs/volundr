@@ -114,31 +114,6 @@ export function edgeToPath(edge: WorkflowEdge, nodes: Map<string, WorkflowNode>)
 // YAML serialiser
 // ---------------------------------------------------------------------------
 
-function yamlValue(value: unknown, indent: number): string {
-  const pad = '  '.repeat(indent);
-  if (value === null || value === undefined) return 'null';
-  if (typeof value === 'string') return JSON.stringify(value);
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) {
-    if (value.length === 0) return '[]';
-    return value
-      .map((item) => `\n${pad}- ${yamlValue(item, indent + 1).trimStart()}`)
-      .join('');
-  }
-  if (typeof value === 'object') {
-    return Object.entries(value as Record<string, unknown>)
-      .map(([k, v]) => {
-        const rendered = yamlValue(v, indent + 1);
-        if (rendered.startsWith('\n')) {
-          return `\n${pad}${k}:${rendered}`;
-        }
-        return `\n${pad}${k}: ${rendered}`;
-      })
-      .join('');
-  }
-  return String(value);
-}
-
 /**
  * Serialise a Workflow to a human-readable YAML string.
  *

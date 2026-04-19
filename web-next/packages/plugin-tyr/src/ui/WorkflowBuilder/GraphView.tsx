@@ -15,7 +15,7 @@
  * Owner: plugin-tyr (WorkflowBuilder).
  */
 
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import type { WorkflowNode, WorkflowEdge } from '../../domain/workflow';
 import type { WorkflowBuilderActions } from './useWorkflowBuilder';
 import { STAGE_WIDTH, STAGE_HEIGHT, GATE_SIZE, COND_RADIUS, edgeToPath } from './graphUtils';
@@ -64,7 +64,7 @@ interface NodeProps {
   isConnectingMode: boolean;
 }
 
-function StageNode({ node, selected, connecting, onSelect, onInspect, onStartConnect, onCompleteConnect, onDelete, onDragEnd, isConnectingMode }: NodeProps) {
+function StageNode({ node, selected, connecting: _connecting, onSelect, onInspect, onStartConnect, onCompleteConnect, onDelete, onDragEnd, isConnectingMode }: NodeProps) {
   const dragRef = useRef<{ startX: number; startY: number; nx: number; ny: number } | null>(null);
   const { x, y } = node.position;
   const fill = selected ? 'var(--color-bg-elevated)' : C.nodeFill;
