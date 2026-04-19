@@ -3,6 +3,7 @@ export * from './primitives/StateDot';
 export * from './primitives/Rune';
 export * from './primitives/Kbd';
 export * from './primitives/LiveBadge';
+export * from './primitives/ShapeSvg';
 export * from './primitives/StatusBadge';
 export * from './primitives/ConfidenceBar';
 export * from './primitives/ConfidenceBadge';
