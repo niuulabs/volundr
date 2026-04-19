@@ -1,6 +1,5 @@
 import { defineConfig } from 'tsup';
-import { writeFileSync } from 'node:fs';
-import { concatCssFiles } from '../../build/concat-css';
+import { execSync } from 'node:child_process';
 
 export default defineConfig({
   entry: ['src/index.tsx'],
@@ -18,6 +17,8 @@ export default defineConfig({
     '@niuulabs/domain',
   ],
   onSuccess: async () => {
-    writeFileSync('dist/styles.css', concatCssFiles('src'));
+    execSync('postcss src/styles.css -o dist/styles.css', {
+      stdio: 'inherit',
+    });
   },
 });

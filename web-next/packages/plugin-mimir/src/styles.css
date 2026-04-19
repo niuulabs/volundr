@@ -1,0 +1,13 @@
+/*
+ * @niuulabs/plugin-mimir entrypoint stylesheet.
+ * Page-level CSS first (co-located with each view), then Tailwind utilities.
+ * Build: tsup onSuccess → postcss (postcss-import + tailwindcss + autoprefixer).
+ */
+
+@import './ui/MimirPage.css';
+@import './ui/SearchPage.css';
+@import './ui/EntitiesPage.css';
+@import './ui/GraphPage.css';
+
+@tailwind components;
+@tailwind utilities;

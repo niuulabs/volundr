@@ -1,4 +1,5 @@
 import { defineConfig } from 'tsup';
+import { execSync } from 'node:child_process';
 
 export default defineConfig({
   entry: ['src/index.ts'],
@@ -14,4 +15,9 @@ export default defineConfig({
     '@niuulabs/ui',
     '@niuulabs/domain',
   ],
+  onSuccess: async () => {
+    execSync('postcss src/styles.css -o dist/styles.css', {
+      stdio: 'inherit',
+    });
+  },
 });
