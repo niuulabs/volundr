@@ -1,5 +1,10 @@
+import type { ComponentType } from 'react';
 import { useAuth } from '@niuulabs/auth';
+import { AmbientTopology } from './AmbientTopology';
+import { AmbientConstellation } from './AmbientConstellation';
+import { AmbientLattice } from './AmbientLattice';
 import { LogoKnot } from './LogoKnot';
+import { useAmbient, type AmbientVariant } from './useAmbient';
 import './LoginPage.css';
 
 interface LoginPageProps {
@@ -7,7 +12,15 @@ interface LoginPageProps {
   oidcError?: string;
   /** Override the OIDC error description (default: read from ?error_description= URL param). */
   oidcErrorDescription?: string;
+  /** Force a specific ambient variant (default: reads/writes localStorage). */
+  ambient?: AmbientVariant;
 }
+
+const AMBIENT_MAP: Record<AmbientVariant, ComponentType> = {
+  topology: AmbientTopology,
+  constellation: AmbientConstellation,
+  lattice: AmbientLattice,
+};
 
 function LockIcon() {
   return (
@@ -39,8 +52,12 @@ function LockIcon() {
 export function LoginPage({
   oidcError: errorProp,
   oidcErrorDescription: descProp,
+  ambient: ambientProp,
 }: LoginPageProps = {}) {
   const { login, loading } = useAuth();
+  const [storedAmbient] = useAmbient();
+  const activeAmbient = ambientProp ?? storedAmbient;
+  const AmbientComponent = AMBIENT_MAP[activeAmbient];
 
   const params =
     typeof window !== 'undefined'
@@ -51,7 +68,7 @@ export function LoginPage({
 
   return (
     <div className="login-page" data-testid="login-page">
-      <div className="login-page__ambient" aria-hidden />
+      <AmbientComponent />
 
       <div className="login-page__build login-page__mono">
         <span className="login-page__build-dot" aria-hidden />
