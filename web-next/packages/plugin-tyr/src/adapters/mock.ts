@@ -14,6 +14,8 @@ import type {
   ITyrIntegrationService,
   IDispatchBus,
   DispatchResult,
+  ITyrSettingsService,
+  IAuditLogService,
   CommitSagaRequest,
   PlanSession,
   ExtractedStructure,
@@ -21,6 +23,11 @@ import type {
   CreateIntegrationParams,
   ConnectionTestResult,
   TelegramSetupResult,
+  FlockConfig,
+  DispatchDefaults,
+  NotificationSettings,
+  AuditEntry,
+  AuditFilter,
 } from '../ports';
 import type { Saga, Phase, Raid } from '../domain/saga';
 import type { DispatcherState } from '../domain/dispatcher';
@@ -311,6 +318,91 @@ const SEED_ISSUES: TrackerIssue[] = [
   },
 ];
 
+const SEED_FLOCK_CONFIG: FlockConfig = {
+  flockName: 'Niuu Core',
+  defaultBaseBranch: 'main',
+  defaultTrackerType: 'linear',
+  defaultRepos: ['niuulabs/volundr'],
+  maxActiveSagas: 5,
+  autoCreateMilestones: true,
+  updatedAt: '2026-01-01T00:00:00Z',
+};
+
+const SEED_DISPATCH_DEFAULTS: DispatchDefaults = {
+  confidenceThreshold: 70,
+  maxConcurrentRaids: 3,
+  autoContinue: false,
+  batchSize: 10,
+  retryPolicy: {
+    maxRetries: 2,
+    retryDelaySeconds: 30,
+    escalateOnExhaustion: true,
+  },
+  updatedAt: '2026-01-01T00:00:00Z',
+};
+
+const SEED_NOTIFICATION_SETTINGS: NotificationSettings = {
+  channel: 'telegram',
+  onRaidPendingApproval: true,
+  onRaidMerged: false,
+  onRaidFailed: true,
+  onSagaComplete: true,
+  onDispatcherError: true,
+  webhookUrl: null,
+  updatedAt: '2026-01-01T00:00:00Z',
+};
+
+const SEED_AUDIT_ENTRIES: AuditEntry[] = [
+  {
+    id: '00000000-0000-0000-0000-000000000a01',
+    kind: 'settings.flock_config.updated',
+    summary: 'Updated flock name to "Niuu Core"',
+    actor: 'user-1',
+    payload: { before: { flockName: 'Old Name' }, after: { flockName: 'Niuu Core' } },
+    createdAt: '2026-01-10T08:00:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000a02',
+    kind: 'dispatcher.started',
+    summary: 'Dispatcher started',
+    actor: 'system',
+    payload: null,
+    createdAt: '2026-01-10T09:00:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000a03',
+    kind: 'raid.dispatched',
+    summary: 'Raid "Implement OIDC flow" dispatched (confidence: 90)',
+    actor: 'dispatcher',
+    payload: { raidId: '00000000-0000-0000-0000-000000000010', confidence: 90 },
+    createdAt: '2026-01-10T09:05:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000a04',
+    kind: 'raid.merged',
+    summary: 'Raid "Implement OIDC flow" merged',
+    actor: 'dispatcher',
+    payload: { raidId: '00000000-0000-0000-0000-000000000010' },
+    createdAt: '2026-01-12T14:00:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000a05',
+    kind: 'settings.dispatch_defaults.updated',
+    summary: 'Confidence threshold changed from 65 to 70',
+    actor: 'user-1',
+    payload: { before: { confidenceThreshold: 65 }, after: { confidenceThreshold: 70 } },
+    createdAt: '2026-01-13T10:00:00Z',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000a06',
+    kind: 'dispatcher.threshold_changed',
+    summary: 'Dispatch threshold set to 70',
+    actor: 'user-1',
+    payload: { threshold: 70 },
+    createdAt: '2026-01-13T10:01:00Z',
+  },
+];
+
 const SEED_INTEGRATIONS: IntegrationConnection[] = [
   {
     id: 'int-linear',
@@ -528,6 +620,81 @@ export function createMockDispatchBus(): IDispatchBus {
 
     async dispatchBatch(raidIds: string[]): Promise<DispatchResult> {
       return { dispatched: raidIds, failed: [] };
+    },
+  };
+}
+
+/**
+ * Create an in-memory ITyrSettingsService.
+ */
+export function createMockTyrSettingsService(): ITyrSettingsService {
+  let flockConfig: FlockConfig = { ...SEED_FLOCK_CONFIG };
+  let dispatchDefaults: DispatchDefaults = {
+    ...SEED_DISPATCH_DEFAULTS,
+    retryPolicy: { ...SEED_DISPATCH_DEFAULTS.retryPolicy },
+  };
+  let notificationSettings: NotificationSettings = { ...SEED_NOTIFICATION_SETTINGS };
+
+  return {
+    async getFlockConfig() {
+      return { ...flockConfig };
+    },
+
+    async updateFlockConfig(patch) {
+      flockConfig = { ...flockConfig, ...patch, updatedAt: new Date().toISOString() };
+      return { ...flockConfig };
+    },
+
+    async getDispatchDefaults() {
+      return { ...dispatchDefaults, retryPolicy: { ...dispatchDefaults.retryPolicy } };
+    },
+
+    async updateDispatchDefaults(patch) {
+      const retryPolicy = patch.retryPolicy
+        ? { ...dispatchDefaults.retryPolicy, ...patch.retryPolicy }
+        : dispatchDefaults.retryPolicy;
+      dispatchDefaults = { ...dispatchDefaults, ...patch, retryPolicy, updatedAt: new Date().toISOString() };
+      return { ...dispatchDefaults, retryPolicy: { ...dispatchDefaults.retryPolicy } };
+    },
+
+    async getNotificationSettings() {
+      return { ...notificationSettings };
+    },
+
+    async updateNotificationSettings(patch) {
+      notificationSettings = { ...notificationSettings, ...patch, updatedAt: new Date().toISOString() };
+      return { ...notificationSettings };
+    },
+  };
+}
+
+/**
+ * Create an in-memory IAuditLogService.
+ */
+export function createMockAuditLogService(): IAuditLogService {
+  const entries: AuditEntry[] = [...SEED_AUDIT_ENTRIES];
+
+  return {
+    async listAuditEntries(filter?: AuditFilter) {
+      let result = [...entries];
+
+      if (filter?.kinds && filter.kinds.length > 0) {
+        result = result.filter((e) => filter.kinds!.includes(e.kind));
+      }
+      if (filter?.actor) {
+        result = result.filter((e) => e.actor === filter.actor);
+      }
+      if (filter?.since) {
+        result = result.filter((e) => e.createdAt >= filter.since!);
+      }
+      if (filter?.until) {
+        result = result.filter((e) => e.createdAt <= filter.until!);
+      }
+      if (filter?.limit) {
+        result = result.slice(0, filter.limit);
+      }
+
+      return result;
     },
   };
 }

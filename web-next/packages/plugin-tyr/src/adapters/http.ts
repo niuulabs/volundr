@@ -17,6 +17,8 @@ import type {
   ITyrIntegrationService,
   IDispatchBus,
   DispatchResult,
+  ITyrSettingsService,
+  IAuditLogService,
   CommitSagaRequest,
   PlanSession,
   ExtractedStructure,
@@ -25,6 +27,11 @@ import type {
   CreateIntegrationParams,
   ConnectionTestResult,
   TelegramSetupResult,
+  FlockConfig,
+  DispatchDefaults,
+  NotificationSettings,
+  AuditEntry,
+  AuditFilter,
 } from '../ports';
 import type { Saga, Phase, Raid } from '../domain/saga';
 import type { DispatcherState } from '../domain/dispatcher';
@@ -524,6 +531,193 @@ export function buildDispatchBusHttpAdapter(client: ApiClient): IDispatchBus {
 
     async dispatchBatch(raidIds: string[]): Promise<DispatchResult> {
       return client.post<DispatchResult>('/dispatch/batch', { raid_ids: raidIds });
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Settings raw types (snake_case)
+// ---------------------------------------------------------------------------
+
+interface RawRetryPolicy {
+  max_retries: number;
+  retry_delay_seconds: number;
+  escalate_on_exhaustion: boolean;
+}
+
+interface RawFlockConfig {
+  flock_name: string;
+  default_base_branch: string;
+  default_tracker_type: string;
+  default_repos: string[];
+  max_active_sagas: number;
+  auto_create_milestones: boolean;
+  updated_at: string;
+}
+
+interface RawDispatchDefaults {
+  confidence_threshold: number;
+  max_concurrent_raids: number;
+  auto_continue: boolean;
+  batch_size: number;
+  retry_policy: RawRetryPolicy;
+  updated_at: string;
+}
+
+interface RawNotificationSettings {
+  channel: string;
+  on_raid_pending_approval: boolean;
+  on_raid_merged: boolean;
+  on_raid_failed: boolean;
+  on_saga_complete: boolean;
+  on_dispatcher_error: boolean;
+  webhook_url: string | null;
+  updated_at: string;
+}
+
+interface RawAuditEntry {
+  id: string;
+  kind: string;
+  summary: string;
+  actor: string;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Settings transforms
+// ---------------------------------------------------------------------------
+
+function toFlockConfig(raw: RawFlockConfig): FlockConfig {
+  return {
+    flockName: raw.flock_name,
+    defaultBaseBranch: raw.default_base_branch,
+    defaultTrackerType: raw.default_tracker_type,
+    defaultRepos: raw.default_repos,
+    maxActiveSagas: raw.max_active_sagas,
+    autoCreateMilestones: raw.auto_create_milestones,
+    updatedAt: raw.updated_at,
+  };
+}
+
+function toDispatchDefaults(raw: RawDispatchDefaults): DispatchDefaults {
+  return {
+    confidenceThreshold: raw.confidence_threshold,
+    maxConcurrentRaids: raw.max_concurrent_raids,
+    autoContinue: raw.auto_continue,
+    batchSize: raw.batch_size,
+    retryPolicy: {
+      maxRetries: raw.retry_policy.max_retries,
+      retryDelaySeconds: raw.retry_policy.retry_delay_seconds,
+      escalateOnExhaustion: raw.retry_policy.escalate_on_exhaustion,
+    },
+    updatedAt: raw.updated_at,
+  };
+}
+
+function toNotificationSettings(raw: RawNotificationSettings): NotificationSettings {
+  return {
+    channel: raw.channel as NotificationSettings['channel'],
+    onRaidPendingApproval: raw.on_raid_pending_approval,
+    onRaidMerged: raw.on_raid_merged,
+    onRaidFailed: raw.on_raid_failed,
+    onSagaComplete: raw.on_saga_complete,
+    onDispatcherError: raw.on_dispatcher_error,
+    webhookUrl: raw.webhook_url,
+    updatedAt: raw.updated_at,
+  };
+}
+
+function toAuditEntry(raw: RawAuditEntry): AuditEntry {
+  return {
+    id: raw.id,
+    kind: raw.kind as AuditEntry['kind'],
+    summary: raw.summary,
+    actor: raw.actor,
+    payload: raw.payload,
+    createdAt: raw.created_at,
+  };
+}
+
+/**
+ * Build an ITyrSettingsService backed by the Tyr settings API.
+ */
+export function buildTyrSettingsHttpAdapter(client: ApiClient): ITyrSettingsService {
+  return {
+    async getFlockConfig() {
+      const raw = await client.get<RawFlockConfig>('/settings/flock');
+      return toFlockConfig(raw);
+    },
+
+    async updateFlockConfig(patch) {
+      const body: Record<string, unknown> = {};
+      if (patch.flockName !== undefined) body['flock_name'] = patch.flockName;
+      if (patch.defaultBaseBranch !== undefined) body['default_base_branch'] = patch.defaultBaseBranch;
+      if (patch.defaultTrackerType !== undefined) body['default_tracker_type'] = patch.defaultTrackerType;
+      if (patch.defaultRepos !== undefined) body['default_repos'] = patch.defaultRepos;
+      if (patch.maxActiveSagas !== undefined) body['max_active_sagas'] = patch.maxActiveSagas;
+      if (patch.autoCreateMilestones !== undefined) body['auto_create_milestones'] = patch.autoCreateMilestones;
+      const raw = await client.patch<RawFlockConfig>('/settings/flock', body);
+      return toFlockConfig(raw);
+    },
+
+    async getDispatchDefaults() {
+      const raw = await client.get<RawDispatchDefaults>('/settings/dispatch');
+      return toDispatchDefaults(raw);
+    },
+
+    async updateDispatchDefaults(patch) {
+      const body: Record<string, unknown> = {};
+      if (patch.confidenceThreshold !== undefined) body['confidence_threshold'] = patch.confidenceThreshold;
+      if (patch.maxConcurrentRaids !== undefined) body['max_concurrent_raids'] = patch.maxConcurrentRaids;
+      if (patch.autoContinue !== undefined) body['auto_continue'] = patch.autoContinue;
+      if (patch.batchSize !== undefined) body['batch_size'] = patch.batchSize;
+      if (patch.retryPolicy !== undefined) {
+        body['retry_policy'] = {
+          max_retries: patch.retryPolicy.maxRetries,
+          retry_delay_seconds: patch.retryPolicy.retryDelaySeconds,
+          escalate_on_exhaustion: patch.retryPolicy.escalateOnExhaustion,
+        };
+      }
+      const raw = await client.patch<RawDispatchDefaults>('/settings/dispatch', body);
+      return toDispatchDefaults(raw);
+    },
+
+    async getNotificationSettings() {
+      const raw = await client.get<RawNotificationSettings>('/settings/notifications');
+      return toNotificationSettings(raw);
+    },
+
+    async updateNotificationSettings(patch) {
+      const body: Record<string, unknown> = {};
+      if (patch.channel !== undefined) body['channel'] = patch.channel;
+      if (patch.onRaidPendingApproval !== undefined) body['on_raid_pending_approval'] = patch.onRaidPendingApproval;
+      if (patch.onRaidMerged !== undefined) body['on_raid_merged'] = patch.onRaidMerged;
+      if (patch.onRaidFailed !== undefined) body['on_raid_failed'] = patch.onRaidFailed;
+      if (patch.onSagaComplete !== undefined) body['on_saga_complete'] = patch.onSagaComplete;
+      if (patch.onDispatcherError !== undefined) body['on_dispatcher_error'] = patch.onDispatcherError;
+      if (patch.webhookUrl !== undefined) body['webhook_url'] = patch.webhookUrl;
+      const raw = await client.patch<RawNotificationSettings>('/settings/notifications', body);
+      return toNotificationSettings(raw);
+    },
+  };
+}
+
+/**
+ * Build an IAuditLogService backed by the Tyr audit API.
+ */
+export function buildTyrAuditLogHttpAdapter(client: ApiClient): IAuditLogService {
+  return {
+    async listAuditEntries(filter?: AuditFilter) {
+      const params = new URLSearchParams();
+      if (filter?.kinds) params.set('kinds', filter.kinds.join(','));
+      if (filter?.actor) params.set('actor', filter.actor);
+      if (filter?.since) params.set('since', filter.since);
+      if (filter?.until) params.set('until', filter.until);
+      if (filter?.limit) params.set('limit', String(filter.limit));
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const raw = await client.get<RawAuditEntry[]>(`/audit${query}`);
+      return raw.map(toAuditEntry);
     },
   };
 }
