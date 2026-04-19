@@ -8,8 +8,8 @@ test('mimir plugin: rail shows rune and /mimir route renders', async ({ page }) 
 
 test('mimir plugin: /mimir page renders placeholder', async ({ page }) => {
   await page.goto('/mimir');
-  // Title must be visible
-  await expect(page.getByText(/Mímir/)).toBeVisible();
+  // Title must be visible (use exact text to avoid matching the topbar <h1>Mímir</h1>)
+  await expect(page.getByText('Mímir · the well of knowledge')).toBeVisible();
   await expect(page.getByText(/the well of knowledge/)).toBeVisible();
   // Loading then stats cards should appear
   await expect(

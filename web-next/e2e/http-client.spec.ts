@@ -25,7 +25,7 @@ test.describe('HTTP client', () => {
           theme: 'ice',
           plugins: { hello: { enabled: true, order: 1 } },
           services: {
-            hello: { baseUrl: '/api/v1/hello', mode: 'http' },
+            hello: { baseUrl: 'http://localhost:5173/api/v1/hello', mode: 'http' },
           },
         }),
       });
@@ -58,7 +58,7 @@ test.describe('HTTP client', () => {
           theme: 'ice',
           plugins: { hello: { enabled: true, order: 1 } },
           services: {
-            hello: { baseUrl: '/api/v1/hello', mode: 'http' },
+            hello: { baseUrl: 'http://localhost:5173/api/v1/hello', mode: 'http' },
           },
         }),
       });
@@ -90,7 +90,7 @@ test.describe('HTTP client', () => {
           theme: 'ice',
           plugins: { hello: { enabled: true, order: 1 } },
           services: {
-            hello: { baseUrl: '/api/v1/hello', mode: 'http' },
+            hello: { baseUrl: 'http://localhost:5173/api/v1/hello', mode: 'http' },
           },
         }),
       });
