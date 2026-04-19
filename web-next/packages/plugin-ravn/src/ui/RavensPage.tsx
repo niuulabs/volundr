@@ -47,12 +47,12 @@ function RavnListRow({
 }: RavnRowProps) {
   const dotState =
     ravn.status === 'active'
-      ? 'ok'
+      ? 'running'
       : ravn.status === 'suspended'
-        ? 'warn'
+        ? 'attention'
         : ravn.status === 'failed'
-          ? 'err'
-          : 'mute';
+          ? 'failed'
+          : 'unknown';
 
   return (
     <button
@@ -108,12 +108,12 @@ interface RavnCardProps {
 function RavnCard({ ravn, budget, selected, onClick }: RavnCardProps) {
   const dotState =
     ravn.status === 'active'
-      ? 'ok'
+      ? 'running'
       : ravn.status === 'suspended'
-        ? 'warn'
+        ? 'attention'
         : ravn.status === 'failed'
-          ? 'err'
-          : 'mute';
+          ? 'failed'
+          : 'unknown';
 
   return (
     <button
@@ -179,12 +179,12 @@ interface RavnTableRowProps {
 function RavnTableRow({ ravn, budget, selected, onClick }: RavnTableRowProps) {
   const dotState =
     ravn.status === 'active'
-      ? 'ok'
+      ? 'running'
       : ravn.status === 'suspended'
-        ? 'warn'
+        ? 'attention'
         : ravn.status === 'failed'
-          ? 'err'
-          : 'mute';
+          ? 'failed'
+          : 'unknown';
 
   return (
     <tr
