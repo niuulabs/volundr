@@ -244,6 +244,32 @@ pnpm format             # prettier
 pnpm build              # build all packages, then the app
 ```
 
+## Git hooks — install once per clone
+
+The workspace ships a `.pre-commit-config.yaml` at the repo root that catches the
+same errors CI would catch, before you round-trip to GitHub:
+
+- **pre-commit** (runs on every `git commit`, ~2s): prettier + eslint auto-fix on
+  staged files under `web-next/`
+- **pre-push** (runs on every `git push`, ~30s): builds all packages, runs
+  `pnpm typecheck`, `pnpm test` (coverage gate), and `pnpm format:check`
+
+Install both hook types once:
+
+```bash
+# from the workspace root (not web-next/)
+pre-commit install --hook-type pre-commit --hook-type pre-push
+```
+
+If pnpm isn't on your `PATH`, either `corepack enable` (recommended — ships with
+Node 16.10+) or install pnpm globally. The hooks extend `PATH` to cover the
+common install locations (`~/.npm-global/bin`, `~/.local/share/pnpm`,
+`/opt/homebrew/bin`, `/usr/local/bin`).
+
+**Do not skip `pre-push` with `--no-verify`.** If a hook fails, fix the issue.
+Every failure a dev sees locally is a failure that would otherwise waste a CI
+run and a round-trip.
+
 ## Coverage thresholds — non-negotiable
 
 Configured in `vitest.config.ts`: **85% statements / branches / functions / lines**.
