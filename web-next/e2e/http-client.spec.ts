@@ -1,16 +1,17 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * E2E: Hello plugin round-trips through the HTTP client + mocked token provider.
+ * E2E: Hello plugin round-trips through the HTTP client.
  *
  * Strategy:
  * 1. Override config.json to set hello service to HTTP mode
- * 2. Intercept the API call and verify Authorization header
- * 3. Return mock greeting data
- * 4. Verify the UI renders the API-supplied greetings
+ * 2. Intercept the API call and return mock greeting data
+ * 3. Verify the UI renders the API-supplied greetings
+ *
+ * Token provider integration is covered by unit tests in client.test.ts.
  */
-test.describe('HTTP client + token provider', () => {
-  test('hello plugin fetches greetings via HTTP client with auth token', async ({ page }) => {
+test.describe('HTTP client', () => {
+  test('hello plugin fetches greetings via HTTP client', async ({ page }) => {
     const mockGreetings = [
       { id: 'e2e-1', text: 'greeting from API', mood: 'warm' },
       { id: 'e2e-2', text: 'token was accepted', mood: 'curious' },
@@ -30,7 +31,6 @@ test.describe('HTTP client + token provider', () => {
       });
     });
 
-    // Track whether the API was called with the right auth header
     // Intercept the hello API call
     await page.route('**/api/v1/hello/greetings', async (route) => {
       await route.fulfill({
@@ -39,35 +39,14 @@ test.describe('HTTP client + token provider', () => {
       });
     });
 
-    // Set a token provider before the app loads
-    await page.addInitScript(() => {
-      // The app will call setTokenProvider; we hook into it by pre-setting
-      // a global that services.ts or App.tsx can pick up.
-      // For the e2e test, we inject the token provider after modules load.
-      (window as unknown as Record<string, unknown>).__E2E_TOKEN__ = 'e2e-test-jwt';
-    });
-
     await page.goto('/');
-
-    // Inject the token provider into the running app
-    await page.evaluate(() => {
-      // Access the @niuulabs/query module via the app's module system.
-      // Vite exposes the module in the page scope.
-      const token = (window as unknown as Record<string, unknown>).__E2E_TOKEN__ as string;
-      if (token) {
-        // Dynamic import to set the token provider
-        import('/src/e2e-token-setup.ts').catch(() => {
-          // Module might not exist in non-e2e builds — that's fine
-        });
-      }
-    });
 
     // The greetings should render from the mocked API response
     await expect(page.getByText('greeting from API')).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('token was accepted')).toBeVisible();
 
-    // The greeting UI should show both items
-    expect(mockGreetings).toHaveLength(2);
+    // Verify the page rendered both greeting items
+    await expect(page.locator('li')).toHaveCount(2);
   });
 
   test('hello plugin shows loading state before data resolves', async ({ page }) => {
