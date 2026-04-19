@@ -49,8 +49,7 @@ test('OIDC callback: handles code in URL and cleans up query string', async ({ p
         issuer: 'http://localhost:9876/realms/test',
         authorization_endpoint: 'http://localhost:9876/realms/test/protocol/openid-connect/auth',
         token_endpoint: 'http://localhost:9876/realms/test/protocol/openid-connect/token',
-        end_session_endpoint:
-          'http://localhost:9876/realms/test/protocol/openid-connect/logout',
+        end_session_endpoint: 'http://localhost:9876/realms/test/protocol/openid-connect/logout',
         jwks_uri: 'http://localhost:9876/realms/test/protocol/openid-connect/certs',
         response_types_supported: ['code'],
         subject_types_supported: ['public'],
