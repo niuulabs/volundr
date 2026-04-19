@@ -11,7 +11,15 @@
 
 import { useState, useCallback } from 'react';
 import type { Workflow, WorkflowNode, WorkflowNodeKind } from '../../domain/workflow';
-import { makeNodeId, makeEdgeId, defaultBezierCPs, STAGE_WIDTH, STAGE_HEIGHT, GATE_SIZE, COND_RADIUS } from './graphUtils';
+import {
+  makeNodeId,
+  makeEdgeId,
+  defaultBezierCPs,
+  STAGE_WIDTH,
+  STAGE_HEIGHT,
+  GATE_SIZE,
+  COND_RADIUS,
+} from './graphUtils';
 
 export type WorkflowView = 'graph' | 'pipeline' | 'yaml';
 
@@ -62,7 +70,9 @@ function makeNewNode(kind: WorkflowNodeKind, position: { x: number; y: number })
   }
 }
 
-export function useWorkflowBuilder(initial: Workflow): WorkflowBuilderState & WorkflowBuilderActions {
+export function useWorkflowBuilder(
+  initial: Workflow,
+): WorkflowBuilderState & WorkflowBuilderActions {
   const [workflow, setWorkflowState] = useState<Workflow>(initial);
   const [view, setViewState] = useState<WorkflowView>('graph');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -80,16 +90,13 @@ export function useWorkflowBuilder(initial: Workflow): WorkflowBuilderState & Wo
 
   const setWorkflow = useCallback((w: Workflow) => setWorkflowState(w), []);
 
-  const addNode = useCallback(
-    (kind: WorkflowNodeKind, position?: { x: number; y: number }) => {
-      setWorkflowState((prev) => {
-        const pos = position ?? nextPosition(prev);
-        const node = makeNewNode(kind, pos);
-        return { ...prev, nodes: [...prev.nodes, node] };
-      });
-    },
-    [],
-  );
+  const addNode = useCallback((kind: WorkflowNodeKind, position?: { x: number; y: number }) => {
+    setWorkflowState((prev) => {
+      const pos = position ?? nextPosition(prev);
+      const node = makeNewNode(kind, pos);
+      return { ...prev, nodes: [...prev.nodes, node] };
+    });
+  }, []);
 
   const deleteNode = useCallback((id: string) => {
     setWorkflowState((prev) => ({
@@ -116,27 +123,22 @@ export function useWorkflowBuilder(initial: Workflow): WorkflowBuilderState & Wo
 
   const cancelConnect = useCallback(() => setConnectingFromId(null), []);
 
-  const completeConnect = useCallback(
-    (targetId: string) => {
-      setConnectingFromId((fromId) => {
-        if (!fromId || fromId === targetId) return null;
-        setWorkflowState((prev) => {
-          const alreadyExists = prev.edges.some(
-            (e) => e.source === fromId && e.target === targetId,
-          );
-          if (alreadyExists) return prev;
-          const srcNode = prev.nodes.find((n) => n.id === fromId);
-          const tgtNode = prev.nodes.find((n) => n.id === targetId);
-          if (!srcNode || !tgtNode) return prev;
-          const { cp1, cp2 } = defaultBezierCPs(srcNode.position, tgtNode.position);
-          const newEdge = { id: makeEdgeId(), source: fromId, target: targetId, cp1, cp2 };
-          return { ...prev, edges: [...prev.edges, newEdge] };
-        });
-        return null;
+  const completeConnect = useCallback((targetId: string) => {
+    setConnectingFromId((fromId) => {
+      if (!fromId || fromId === targetId) return null;
+      setWorkflowState((prev) => {
+        const alreadyExists = prev.edges.some((e) => e.source === fromId && e.target === targetId);
+        if (alreadyExists) return prev;
+        const srcNode = prev.nodes.find((n) => n.id === fromId);
+        const tgtNode = prev.nodes.find((n) => n.id === targetId);
+        if (!srcNode || !tgtNode) return prev;
+        const { cp1, cp2 } = defaultBezierCPs(srcNode.position, tgtNode.position);
+        const newEdge = { id: makeEdgeId(), source: fromId, target: targetId, cp1, cp2 };
+        return { ...prev, edges: [...prev.edges, newEdge] };
       });
-    },
-    [],
-  );
+      return null;
+    });
+  }, []);
 
   const addPersonaToStage = useCallback((nodeId: string, personaId: string) => {
     setWorkflowState((prev) => ({

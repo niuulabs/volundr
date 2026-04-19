@@ -130,9 +130,7 @@ describe('ValidationPanel', () => {
     fireEvent.click(screen.getByTestId('validation-pill'));
     const issues = screen.queryAllByTestId(/^validation-issue-/);
     // Find an issue that is not "global" (has a real nodeId)
-    const nodeIssue = issues.find(
-      (el) => !el.getAttribute('data-testid')?.endsWith('-global'),
-    );
+    const nodeIssue = issues.find((el) => !el.getAttribute('data-testid')?.endsWith('-global'));
     if (nodeIssue) {
       fireEvent.click(nodeIssue);
       expect(onSelectNode).toHaveBeenCalled();

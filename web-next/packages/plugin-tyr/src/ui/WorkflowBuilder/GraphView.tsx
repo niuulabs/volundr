@@ -64,7 +64,18 @@ interface NodeProps {
   isConnectingMode: boolean;
 }
 
-function StageNode({ node, selected, connecting: _connecting, onSelect, onInspect, onStartConnect, onCompleteConnect, onDelete, onDragEnd, isConnectingMode }: NodeProps) {
+function StageNode({
+  node,
+  selected,
+  connecting: _connecting,
+  onSelect,
+  onInspect,
+  onStartConnect,
+  onCompleteConnect,
+  onDelete,
+  onDragEnd,
+  isConnectingMode,
+}: NodeProps) {
   const dragRef = useRef<{ startX: number; startY: number; nx: number; ny: number } | null>(null);
   const { x, y } = node.position;
   const fill = selected ? 'var(--color-bg-elevated)' : C.nodeFill;
@@ -102,7 +113,10 @@ function StageNode({ node, selected, connecting: _connecting, onSelect, onInspec
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onContextMenu={(e) => { e.preventDefault(); onInspect(); }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onInspect();
+      }}
       style={{ cursor: isConnectingMode ? 'crosshair' : 'grab' }}
     >
       <rect
@@ -125,7 +139,9 @@ function StageNode({ node, selected, connecting: _connecting, onSelect, onInspec
         fontFamily="var(--font-sans)"
         style={{ pointerEvents: 'none', userSelect: 'none' }}
       >
-        {node.kind === 'stage' && node.label.length > 18 ? node.label.slice(0, 16) + '…' : node.label}
+        {node.kind === 'stage' && node.label.length > 18
+          ? node.label.slice(0, 16) + '…'
+          : node.label}
       </text>
       {node.kind === 'stage' && node.personaIds.length > 0 && (
         <text
@@ -138,7 +154,9 @@ function StageNode({ node, selected, connecting: _connecting, onSelect, onInspec
           fontFamily="var(--font-sans)"
           style={{ pointerEvents: 'none', userSelect: 'none' }}
         >
-          {node.kind === 'stage' ? `${node.personaIds.length} persona${node.personaIds.length !== 1 ? 's' : ''}` : ''}
+          {node.kind === 'stage'
+            ? `${node.personaIds.length} persona${node.personaIds.length !== 1 ? 's' : ''}`
+            : ''}
         </text>
       )}
       {selected && !isConnectingMode && (
@@ -146,20 +164,51 @@ function StageNode({ node, selected, connecting: _connecting, onSelect, onInspec
           {/* Connect button */}
           <g
             data-testid={`connect-btn-${node.id}`}
-            onClick={(e) => { e.stopPropagation(); onStartConnect(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onStartConnect();
+            }}
             style={{ cursor: 'pointer' }}
           >
-            <circle cx={x + STAGE_WIDTH + 10} cy={y + STAGE_HEIGHT / 2} r={8} fill="var(--color-brand)" />
-            <text x={x + STAGE_WIDTH + 10} y={y + STAGE_HEIGHT / 2} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={12} style={{ pointerEvents: 'none' }}>→</text>
+            <circle
+              cx={x + STAGE_WIDTH + 10}
+              cy={y + STAGE_HEIGHT / 2}
+              r={8}
+              fill="var(--color-brand)"
+            />
+            <text
+              x={x + STAGE_WIDTH + 10}
+              y={y + STAGE_HEIGHT / 2}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="white"
+              fontSize={12}
+              style={{ pointerEvents: 'none' }}
+            >
+              →
+            </text>
           </g>
           {/* Delete button */}
           <g
             data-testid={`delete-btn-${node.id}`}
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
             style={{ cursor: 'pointer' }}
           >
             <circle cx={x + STAGE_WIDTH / 2} cy={y - 10} r={7} fill="var(--color-critical)" />
-            <text x={x + STAGE_WIDTH / 2} y={y - 10} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={10} style={{ pointerEvents: 'none' }}>×</text>
+            <text
+              x={x + STAGE_WIDTH / 2}
+              y={y - 10}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="white"
+              fontSize={10}
+              style={{ pointerEvents: 'none' }}
+            >
+              ×
+            </text>
           </g>
         </>
       )}
@@ -177,7 +226,17 @@ function StageNode({ node, selected, connecting: _connecting, onSelect, onInspec
   );
 }
 
-function GateNode({ node, selected, onSelect, onInspect, onStartConnect, onCompleteConnect, onDelete, onDragEnd, isConnectingMode }: NodeProps) {
+function GateNode({
+  node,
+  selected,
+  onSelect,
+  onInspect,
+  onStartConnect,
+  onCompleteConnect,
+  onDelete,
+  onDragEnd,
+  isConnectingMode,
+}: NodeProps) {
   const dragRef = useRef<{ startX: number; startY: number; nx: number; ny: number } | null>(null);
   const { x, y } = node.position;
   const H = GATE_SIZE / 2;
@@ -188,7 +247,10 @@ function GateNode({ node, selected, onSelect, onInspect, onStartConnect, onCompl
 
   function handleMouseDown(e: React.MouseEvent) {
     e.stopPropagation();
-    if (isConnectingMode) { onCompleteConnect(); return; }
+    if (isConnectingMode) {
+      onCompleteConnect();
+      return;
+    }
     dragRef.current = { startX: e.clientX, startY: e.clientY, nx: x, ny: y };
     onSelect();
   }
@@ -208,8 +270,13 @@ function GateNode({ node, selected, onSelect, onInspect, onStartConnect, onCompl
       data-selected={selected ? 'true' : undefined}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
-      onMouseUp={() => { dragRef.current = null; }}
-      onContextMenu={(e) => { e.preventDefault(); onInspect(); }}
+      onMouseUp={() => {
+        dragRef.current = null;
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onInspect();
+      }}
       style={{ cursor: isConnectingMode ? 'crosshair' : 'grab' }}
     >
       <path
@@ -218,18 +285,61 @@ function GateNode({ node, selected, onSelect, onInspect, onStartConnect, onCompl
         stroke={stroke}
         strokeWidth={sw}
       />
-      <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fill={C.text} fontSize={11} fontFamily="var(--font-sans)" style={{ pointerEvents: 'none', userSelect: 'none' }}>
+      <text
+        x={cx}
+        y={cy}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill={C.text}
+        fontSize={11}
+        fontFamily="var(--font-sans)"
+        style={{ pointerEvents: 'none', userSelect: 'none' }}
+      >
         {node.label.length > 8 ? node.label.slice(0, 7) + '…' : node.label}
       </text>
       {selected && !isConnectingMode && (
         <>
-          <g data-testid={`connect-btn-${node.id}`} onClick={(e) => { e.stopPropagation(); onStartConnect(); }} style={{ cursor: 'pointer' }}>
+          <g
+            data-testid={`connect-btn-${node.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onStartConnect();
+            }}
+            style={{ cursor: 'pointer' }}
+          >
             <circle cx={x + GATE_SIZE + 10} cy={cy} r={8} fill="var(--color-brand)" />
-            <text x={x + GATE_SIZE + 10} y={cy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={12} style={{ pointerEvents: 'none' }}>→</text>
+            <text
+              x={x + GATE_SIZE + 10}
+              y={cy}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="white"
+              fontSize={12}
+              style={{ pointerEvents: 'none' }}
+            >
+              →
+            </text>
           </g>
-          <g data-testid={`delete-btn-${node.id}`} onClick={(e) => { e.stopPropagation(); onDelete(); }} style={{ cursor: 'pointer' }}>
+          <g
+            data-testid={`delete-btn-${node.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            style={{ cursor: 'pointer' }}
+          >
             <circle cx={cx} cy={y - 10} r={7} fill="var(--color-critical)" />
-            <text x={cx} y={y - 10} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={10} style={{ pointerEvents: 'none' }}>×</text>
+            <text
+              x={cx}
+              y={y - 10}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="white"
+              fontSize={10}
+              style={{ pointerEvents: 'none' }}
+            >
+              ×
+            </text>
           </g>
         </>
       )}
@@ -237,7 +347,17 @@ function GateNode({ node, selected, onSelect, onInspect, onStartConnect, onCompl
   );
 }
 
-function CondNode({ node, selected, onSelect, onInspect, onStartConnect, onCompleteConnect, onDelete, onDragEnd, isConnectingMode }: NodeProps) {
+function CondNode({
+  node,
+  selected,
+  onSelect,
+  onInspect,
+  onStartConnect,
+  onCompleteConnect,
+  onDelete,
+  onDragEnd,
+  isConnectingMode,
+}: NodeProps) {
   const dragRef = useRef<{ startX: number; startY: number; nx: number; ny: number } | null>(null);
   const { x, y } = node.position;
   const cx = x + COND_RADIUS;
@@ -247,7 +367,10 @@ function CondNode({ node, selected, onSelect, onInspect, onStartConnect, onCompl
 
   function handleMouseDown(e: React.MouseEvent) {
     e.stopPropagation();
-    if (isConnectingMode) { onCompleteConnect(); return; }
+    if (isConnectingMode) {
+      onCompleteConnect();
+      return;
+    }
     dragRef.current = { startX: e.clientX, startY: e.clientY, nx: x, ny: y };
     onSelect();
   }
@@ -267,23 +390,71 @@ function CondNode({ node, selected, onSelect, onInspect, onStartConnect, onCompl
       data-selected={selected ? 'true' : undefined}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
-      onMouseUp={() => { dragRef.current = null; }}
-      onContextMenu={(e) => { e.preventDefault(); onInspect(); }}
+      onMouseUp={() => {
+        dragRef.current = null;
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onInspect();
+      }}
       style={{ cursor: isConnectingMode ? 'crosshair' : 'grab' }}
     >
       <circle cx={cx} cy={cy} r={COND_RADIUS} fill={C.cond} stroke={stroke} strokeWidth={sw} />
-      <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fill={C.text} fontSize={10} fontFamily="var(--font-sans)" style={{ pointerEvents: 'none', userSelect: 'none' }}>
+      <text
+        x={cx}
+        y={cy}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill={C.text}
+        fontSize={10}
+        fontFamily="var(--font-sans)"
+        style={{ pointerEvents: 'none', userSelect: 'none' }}
+      >
         {node.label.length > 6 ? node.label.slice(0, 5) + '…' : node.label}
       </text>
       {selected && !isConnectingMode && (
         <>
-          <g data-testid={`connect-btn-${node.id}`} onClick={(e) => { e.stopPropagation(); onStartConnect(); }} style={{ cursor: 'pointer' }}>
+          <g
+            data-testid={`connect-btn-${node.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onStartConnect();
+            }}
+            style={{ cursor: 'pointer' }}
+          >
             <circle cx={cx + COND_RADIUS + 10} cy={cy} r={8} fill="var(--color-brand)" />
-            <text x={cx + COND_RADIUS + 10} y={cy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={12} style={{ pointerEvents: 'none' }}>→</text>
+            <text
+              x={cx + COND_RADIUS + 10}
+              y={cy}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="white"
+              fontSize={12}
+              style={{ pointerEvents: 'none' }}
+            >
+              →
+            </text>
           </g>
-          <g data-testid={`delete-btn-${node.id}`} onClick={(e) => { e.stopPropagation(); onDelete(); }} style={{ cursor: 'pointer' }}>
+          <g
+            data-testid={`delete-btn-${node.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            style={{ cursor: 'pointer' }}
+          >
             <circle cx={cx} cy={cy - COND_RADIUS - 10} r={7} fill="var(--color-critical)" />
-            <text x={cx} y={cy - COND_RADIUS - 10} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={10} style={{ pointerEvents: 'none' }}>×</text>
+            <text
+              x={cx}
+              y={cy - COND_RADIUS - 10}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="white"
+              fontSize={10}
+              style={{ pointerEvents: 'none' }}
+            >
+              ×
+            </text>
           </g>
         </>
       )}
@@ -291,7 +462,13 @@ function CondNode({ node, selected, onSelect, onInspect, onStartConnect, onCompl
   );
 }
 
-function WorkflowEdgePath({ edge, nodes }: { edge: WorkflowEdge; nodes: Map<string, WorkflowNode> }) {
+function WorkflowEdgePath({
+  edge,
+  nodes,
+}: {
+  edge: WorkflowEdge;
+  nodes: Map<string, WorkflowNode>;
+}) {
   const d = edgeToPath(edge, nodes);
   if (!d) return null;
   return (
@@ -394,7 +571,10 @@ export function GraphView({
 
   function handleSvgMouseDown(e: React.MouseEvent<SVGSVGElement>) {
     if ((e.target as Element).closest('[data-testid^="workflow-node"]')) return;
-    if (isConnectingMode) { onCancelConnect(); return; }
+    if (isConnectingMode) {
+      onCancelConnect();
+      return;
+    }
     onSelectNode(null);
     panRef.current = { startX: e.clientX, startY: e.clientY, tx: transform.x, ty: transform.y };
   }
@@ -497,7 +677,11 @@ export function GraphView({
       <svg
         ref={svgRef}
         data-testid="graph-canvas"
-        style={{ width: '100%', height: '100%', cursor: isConnectingMode ? 'crosshair' : panRef.current ? 'grabbing' : 'default' }}
+        style={{
+          width: '100%',
+          height: '100%',
+          cursor: isConnectingMode ? 'crosshair' : panRef.current ? 'grabbing' : 'default',
+        }}
         onMouseDown={handleSvgMouseDown}
         onMouseMove={handleSvgMouseMove}
         onMouseUp={handleSvgMouseUp}

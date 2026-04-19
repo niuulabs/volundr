@@ -19,15 +19,23 @@ export interface NodeInspectorProps {
   onRemovePersona: WorkflowBuilderActions['removePersonaFromStage'];
 }
 
-export function NodeInspector({ node, onClose, onUpdateLabel, onAddPersona: _onAddPersona, onRemovePersona }: NodeInspectorProps) {
+export function NodeInspector({
+  node,
+  onClose,
+  onUpdateLabel,
+  onAddPersona: _onAddPersona,
+  onRemovePersona,
+}: NodeInspectorProps) {
   const kindLabel = node.kind === 'stage' ? 'Stage' : node.kind === 'gate' ? 'Gate' : 'Condition';
 
   return (
-    <Dialog open onOpenChange={(open: boolean) => { if (!open) onClose(); }}>
-      <DialogContent
-        title={`${kindLabel}: ${node.label}`}
-        description={`Node ID: ${node.id}`}
-      >
+    <Dialog
+      open
+      onOpenChange={(open: boolean) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent title={`${kindLabel}: ${node.label}`} description={`Node ID: ${node.id}`}>
         <div data-testid="node-inspector" style={{ fontFamily: 'var(--font-sans)', fontSize: 13 }}>
           {/* Kind badge */}
           <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -37,7 +45,12 @@ export function NodeInspector({ node, onClose, onUpdateLabel, onAddPersona: _onA
                 fontWeight: 600,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
-                color: node.kind === 'stage' ? 'var(--color-brand)' : node.kind === 'gate' ? 'var(--color-accent-amber)' : 'var(--color-accent-cyan)',
+                color:
+                  node.kind === 'stage'
+                    ? 'var(--color-brand)'
+                    : node.kind === 'gate'
+                      ? 'var(--color-accent-amber)'
+                      : 'var(--color-accent-cyan)',
                 background: 'var(--color-bg-elevated)',
                 padding: '2px 8px',
                 borderRadius: 4,
@@ -49,7 +62,14 @@ export function NodeInspector({ node, onClose, onUpdateLabel, onAddPersona: _onA
 
           {/* Label editor */}
           <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 4 }}>
+            <span
+              style={{
+                display: 'block',
+                fontSize: 11,
+                color: 'var(--color-text-muted)',
+                marginBottom: 4,
+              }}
+            >
               Label
             </span>
             <input
@@ -73,7 +93,14 @@ export function NodeInspector({ node, onClose, onUpdateLabel, onAddPersona: _onA
           {/* Kind-specific fields */}
           {node.kind === 'gate' && (
             <div style={{ marginBottom: 12 }}>
-              <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 4 }}>
+              <span
+                style={{
+                  display: 'block',
+                  fontSize: 11,
+                  color: 'var(--color-text-muted)',
+                  marginBottom: 4,
+                }}
+              >
                 Condition
               </span>
               <div
@@ -95,7 +122,14 @@ export function NodeInspector({ node, onClose, onUpdateLabel, onAddPersona: _onA
 
           {node.kind === 'cond' && (
             <div style={{ marginBottom: 12 }}>
-              <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 4 }}>
+              <span
+                style={{
+                  display: 'block',
+                  fontSize: 11,
+                  color: 'var(--color-text-muted)',
+                  marginBottom: 4,
+                }}
+              >
                 Predicate
               </span>
               <div
@@ -119,7 +153,14 @@ export function NodeInspector({ node, onClose, onUpdateLabel, onAddPersona: _onA
             <>
               {/* Raid linkage */}
               <div style={{ marginBottom: 12 }}>
-                <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 4 }}>
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: 11,
+                    color: 'var(--color-text-muted)',
+                    marginBottom: 4,
+                  }}
+                >
                   Raid ID
                 </span>
                 <div
@@ -140,11 +181,20 @@ export function NodeInspector({ node, onClose, onUpdateLabel, onAddPersona: _onA
 
               {/* Personas */}
               <div style={{ marginBottom: 12 }}>
-                <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 4 }}>
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: 11,
+                    color: 'var(--color-text-muted)',
+                    marginBottom: 4,
+                  }}
+                >
                   Personas
                 </span>
                 {node.personaIds.length === 0 ? (
-                  <div style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>None assigned</div>
+                  <div style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>
+                    None assigned
+                  </div>
                 ) : (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                     {node.personaIds.map((pid) => (

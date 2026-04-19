@@ -105,7 +105,9 @@ export function ValidationPanel({ workflow, onSelectNode }: ValidationPanelProps
                 fontFamily: 'var(--font-sans)',
               }}
               onMouseEnter={(e) => {
-                if (issue.nodeId) (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-bg-elevated)';
+                if (issue.nodeId)
+                  (e.currentTarget as HTMLButtonElement).style.background =
+                    'var(--color-bg-elevated)';
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.background = 'transparent';

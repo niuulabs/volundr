@@ -295,10 +295,36 @@ const SEED_WORKFLOWS: Workflow[] = [
       },
     ],
     edges: [
-      { id: 'e1', source: 'stage-setup', target: 'gate-qa', cp1: { x: 80, y: 0 }, cp2: { x: -80, y: 0 } },
-      { id: 'e2', source: 'gate-qa', target: 'cond-green', cp1: { x: 80, y: 0 }, cp2: { x: -80, y: 0 } },
-      { id: 'e3', source: 'cond-green', target: 'stage-merge', label: 'yes', cp1: { x: 80, y: -40 }, cp2: { x: -80, y: -20 } },
-      { id: 'e4', source: 'cond-green', target: 'stage-rollback', label: 'no', cp1: { x: 80, y: 40 }, cp2: { x: -80, y: 20 } },
+      {
+        id: 'e1',
+        source: 'stage-setup',
+        target: 'gate-qa',
+        cp1: { x: 80, y: 0 },
+        cp2: { x: -80, y: 0 },
+      },
+      {
+        id: 'e2',
+        source: 'gate-qa',
+        target: 'cond-green',
+        cp1: { x: 80, y: 0 },
+        cp2: { x: -80, y: 0 },
+      },
+      {
+        id: 'e3',
+        source: 'cond-green',
+        target: 'stage-merge',
+        label: 'yes',
+        cp1: { x: 80, y: -40 },
+        cp2: { x: -80, y: -20 },
+      },
+      {
+        id: 'e4',
+        source: 'cond-green',
+        target: 'stage-rollback',
+        label: 'no',
+        cp1: { x: 80, y: 40 },
+        cp2: { x: -80, y: 20 },
+      },
     ],
   },
   {
@@ -323,7 +349,13 @@ const SEED_WORKFLOWS: Workflow[] = [
       },
     ],
     edges: [
-      { id: 'e1', source: 'stage-scaffold', target: 'stage-implement', cp1: { x: 80, y: 0 }, cp2: { x: -80, y: 0 } },
+      {
+        id: 'e1',
+        source: 'stage-scaffold',
+        target: 'stage-implement',
+        cp1: { x: 80, y: 0 },
+        cp2: { x: -80, y: 0 },
+      },
     ],
   },
 ];

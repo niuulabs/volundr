@@ -62,7 +62,7 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
   } = builder;
 
   const inspectorNode = inspectorNodeId
-    ? workflow.nodes.find((n) => n.id === inspectorNodeId) ?? null
+    ? (workflow.nodes.find((n) => n.id === inspectorNodeId) ?? null)
     : null;
 
   function handleSave() {

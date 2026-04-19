@@ -76,7 +76,13 @@ const cyclicWorkflow: Workflow = {
   ],
   edges: [
     { id: 'e1', source: 'stage-a', target: 'stage-b', cp1: { x: 80, y: 0 }, cp2: { x: -80, y: 0 } },
-    { id: 'e2', source: 'stage-b', target: 'stage-a', cp1: { x: -80, y: 40 }, cp2: { x: 80, y: 40 } },
+    {
+      id: 'e2',
+      source: 'stage-b',
+      target: 'stage-a',
+      cp1: { x: -80, y: 40 },
+      cp2: { x: 80, y: 40 },
+    },
   ],
 };
 
@@ -139,10 +145,26 @@ export const GraphStageNodes: StoryObj<typeof GraphView> = {
   render: () => (
     <GraphView
       nodes={[
-        { id: 's1', kind: 'stage', label: 'Stage A', raidId: null, personaIds: ['p1'], position: { x: 80, y: 100 } },
-        { id: 's2', kind: 'stage', label: 'Stage B', raidId: null, personaIds: [], position: { x: 280, y: 100 } },
+        {
+          id: 's1',
+          kind: 'stage',
+          label: 'Stage A',
+          raidId: null,
+          personaIds: ['p1'],
+          position: { x: 80, y: 100 },
+        },
+        {
+          id: 's2',
+          kind: 'stage',
+          label: 'Stage B',
+          raidId: null,
+          personaIds: [],
+          position: { x: 280, y: 100 },
+        },
       ]}
-      edges={[{ id: 'e1', source: 's1', target: 's2', cp1: { x: 80, y: 0 }, cp2: { x: -80, y: 0 } }]}
+      edges={[
+        { id: 'e1', source: 's1', target: 's2', cp1: { x: 80, y: 0 }, cp2: { x: -80, y: 0 } },
+      ]}
       selectedNodeId={null}
       connectingFromId={null}
       onSelectNode={noop}
@@ -160,7 +182,15 @@ export const GraphStageNodes: StoryObj<typeof GraphView> = {
 export const GraphGateNode: StoryObj<typeof GraphView> = {
   render: () => (
     <GraphView
-      nodes={[{ id: 'g1', kind: 'gate', label: 'QA gate', condition: 'all pass', position: { x: 200, y: 120 } }]}
+      nodes={[
+        {
+          id: 'g1',
+          kind: 'gate',
+          label: 'QA gate',
+          condition: 'all pass',
+          position: { x: 200, y: 120 },
+        },
+      ]}
       edges={[]}
       selectedNodeId={null}
       connectingFromId={null}
@@ -179,7 +209,15 @@ export const GraphGateNode: StoryObj<typeof GraphView> = {
 export const GraphCondNode: StoryObj<typeof GraphView> = {
   render: () => (
     <GraphView
-      nodes={[{ id: 'c1', kind: 'cond', label: 'Green?', predicate: 'ci.ok', position: { x: 200, y: 120 } }]}
+      nodes={[
+        {
+          id: 'c1',
+          kind: 'cond',
+          label: 'Green?',
+          predicate: 'ci.ok',
+          position: { x: 200, y: 120 },
+        },
+      ]}
       edges={[]}
       selectedNodeId={null}
       connectingFromId={null}
@@ -219,21 +257,11 @@ export const GraphMixedNodes: StoryObj<typeof GraphView> = {
 // ---------------------------------------------------------------------------
 
 export const PipelineLayout: StoryObj<typeof PipelineView> = {
-  render: () => (
-    <PipelineView
-      nodes={simpleWorkflow.nodes}
-      edges={simpleWorkflow.edges}
-    />
-  ),
+  render: () => <PipelineView nodes={simpleWorkflow.nodes} edges={simpleWorkflow.edges} />,
 };
 
 export const PipelineWithCycle: StoryObj<typeof PipelineView> = {
-  render: () => (
-    <PipelineView
-      nodes={cyclicWorkflow.nodes}
-      edges={cyclicWorkflow.edges}
-    />
-  ),
+  render: () => <PipelineView nodes={cyclicWorkflow.nodes} edges={cyclicWorkflow.edges} />,
 };
 
 export const PipelineEmpty: StoryObj<typeof PipelineView> = {
@@ -267,7 +295,10 @@ export const ValidationNoIssues: StoryObj<typeof ValidationPanel> = {
 export const ValidationWithCycle: StoryObj<typeof ValidationPanel> = {
   render: () => (
     <div style={{ position: 'relative', height: 300, background: 'var(--color-bg-primary)' }}>
-      <ValidationPanel workflow={cyclicWorkflow} onSelectNode={(id) => console.log('Select:', id)} />
+      <ValidationPanel
+        workflow={cyclicWorkflow}
+        onSelectNode={(id) => console.log('Select:', id)}
+      />
     </div>
   ),
 };

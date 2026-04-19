@@ -37,7 +37,9 @@ test('workflow builder page renders at /tyr/workflows', async ({ page }) => {
 test('workflow builder shows workflow tabs after loading', async ({ page }) => {
   await page.goto('/tyr/workflows');
   // Mock service returns two seed workflows; wait for tabs to appear
-  await expect(page.getByText(/Auth Rewrite Workflow/).or(page.getByText(/loading/i))).toBeVisible();
+  await expect(
+    page.getByText(/Auth Rewrite Workflow/).or(page.getByText(/loading/i)),
+  ).toBeVisible();
   await expect(page.getByTestId('workflow-builder')).toBeVisible({ timeout: 5000 });
 });
 
@@ -129,16 +131,16 @@ test('delete selected node button removes the node', async ({ page }) => {
   await page.goto('/tyr/workflows');
   await expect(page.getByTestId('workflow-builder')).toBeVisible({ timeout: 5000 });
 
-  // Add a node so we have something to delete
-  await page.getByTestId('add-stage').click();
   const nodes = page.locator('[data-testid^="workflow-node-"]');
+  // Wait for seed nodes to be present
+  await expect(nodes.first()).toBeVisible({ timeout: 5000 });
   const countBefore = await nodes.count();
 
-  // Click the last added node (it should be the first node in DOM order or last)
-  const lastNode = nodes.last();
-  await lastNode.click();
+  // Click the first seed node (always visible at a known position in the viewport)
+  // Use force:true because SVG <g> elements may fail Playwright's actionability checks
+  await nodes.first().click({ force: true });
 
-  // The delete-selected button should appear in toolbar
+  // The delete-selected button should appear in the toolbar
   const deleteBtn = page.getByTestId('delete-selected');
   await expect(deleteBtn).toBeVisible();
   await deleteBtn.click();

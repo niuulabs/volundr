@@ -140,7 +140,9 @@ export function workflowToYaml(workflow: {
       lines.push(`    label: ${JSON.stringify(node.label)}`);
       if (node.kind === 'stage') {
         lines.push(`    raidId: ${node.raidId === null ? 'null' : JSON.stringify(node.raidId)}`);
-        lines.push(`    personaIds: ${node.personaIds.length === 0 ? '[]' : `[${node.personaIds.map((p) => JSON.stringify(p)).join(', ')}]`}`);
+        lines.push(
+          `    personaIds: ${node.personaIds.length === 0 ? '[]' : `[${node.personaIds.map((p) => JSON.stringify(p)).join(', ')}]`}`,
+        );
       }
       if (node.kind === 'gate') {
         lines.push(`    condition: ${JSON.stringify(node.condition)}`);

@@ -99,7 +99,9 @@ export function PipelineView({ nodes, edges, selectedNodeId, onSelectNode }: Pip
                   data-selected={isSelected ? 'true' : undefined}
                   onClick={() => onSelectNode?.(id)}
                   style={{
-                    background: isSelected ? 'var(--color-bg-elevated)' : 'var(--color-bg-secondary)',
+                    background: isSelected
+                      ? 'var(--color-bg-elevated)'
+                      : 'var(--color-bg-secondary)',
                     border: `1px solid ${isSelected ? 'var(--color-brand)' : 'var(--color-border)'}`,
                     borderRadius: 6,
                     padding: '8px 14px',

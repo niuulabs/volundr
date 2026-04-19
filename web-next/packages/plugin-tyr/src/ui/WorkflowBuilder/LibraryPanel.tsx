@@ -56,7 +56,9 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
       >
         Personas
       </div>
-      <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 4, overflowY: 'auto' }}>
+      <div
+        style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 4, overflowY: 'auto' }}
+      >
         {personas.map((persona) => (
           <div
             key={persona.id}
@@ -81,7 +83,9 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
               gap: 4,
             }}
           >
-            <span style={{ fontSize: 8, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
+            <span
+              style={{ fontSize: 8, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}
+            >
               {persona.role}
             </span>
             <span>{persona.label}</span>

@@ -56,7 +56,15 @@ describe('PipelineView', () => {
     render(
       <PipelineView
         nodes={[stageA, stageB]}
-        edges={[{ id: 'e1', source: 'stage-a', target: 'stage-b', cp1: { x: 80, y: 0 }, cp2: { x: -80, y: 0 } }]}
+        edges={[
+          {
+            id: 'e1',
+            source: 'stage-a',
+            target: 'stage-b',
+            cp1: { x: 80, y: 0 },
+            cp2: { x: -80, y: 0 },
+          },
+        ]}
       />,
     );
     expect(screen.getByTestId('pipeline-view')).toBeInTheDocument();
@@ -69,12 +77,7 @@ describe('PipelineView', () => {
   });
 
   it('renders a node button for each node', () => {
-    render(
-      <PipelineView
-        nodes={[stageA, stageB, gateC, condD]}
-        edges={linearEdges}
-      />,
-    );
+    render(<PipelineView nodes={[stageA, stageB, gateC, condD]} edges={linearEdges} />);
     expect(screen.getByTestId('pipeline-node-stage-a')).toBeInTheDocument();
     expect(screen.getByTestId('pipeline-node-stage-b')).toBeInTheDocument();
     expect(screen.getByTestId('pipeline-node-gate-c')).toBeInTheDocument();
@@ -91,7 +94,15 @@ describe('PipelineView', () => {
     render(
       <PipelineView
         nodes={[stageA, stageB]}
-        edges={[{ id: 'e1', source: 'stage-a', target: 'stage-b', cp1: { x: 80, y: 0 }, cp2: { x: -80, y: 0 } }]}
+        edges={[
+          {
+            id: 'e1',
+            source: 'stage-a',
+            target: 'stage-b',
+            cp1: { x: 80, y: 0 },
+            cp2: { x: -80, y: 0 },
+          },
+        ]}
         onSelectNode={onSelectNode}
       />,
     );
@@ -103,7 +114,15 @@ describe('PipelineView', () => {
     render(
       <PipelineView
         nodes={[stageA, stageB]}
-        edges={[{ id: 'e1', source: 'stage-a', target: 'stage-b', cp1: { x: 80, y: 0 }, cp2: { x: -80, y: 0 } }]}
+        edges={[
+          {
+            id: 'e1',
+            source: 'stage-a',
+            target: 'stage-b',
+            cp1: { x: 80, y: 0 },
+            cp2: { x: -80, y: 0 },
+          },
+        ]}
         selectedNodeId="stage-a"
       />,
     );
@@ -118,8 +137,22 @@ describe('PipelineView', () => {
 
   it('shows cycle nodes section when a cycle is present', () => {
     const cyclicNodes: WorkflowNode[] = [
-      { id: 'a', kind: 'stage', label: 'A', raidId: null, personaIds: [], position: { x: 0, y: 0 } },
-      { id: 'b', kind: 'stage', label: 'B', raidId: null, personaIds: [], position: { x: 200, y: 0 } },
+      {
+        id: 'a',
+        kind: 'stage',
+        label: 'A',
+        raidId: null,
+        personaIds: [],
+        position: { x: 0, y: 0 },
+      },
+      {
+        id: 'b',
+        kind: 'stage',
+        label: 'B',
+        raidId: null,
+        personaIds: [],
+        position: { x: 200, y: 0 },
+      },
     ];
     const cyclicEdges: WorkflowEdge[] = [
       { id: 'e1', source: 'a', target: 'b', cp1: { x: 80, y: 0 }, cp2: { x: -80, y: 0 } },
@@ -130,12 +163,7 @@ describe('PipelineView', () => {
   });
 
   it('shows layer labels for linear chain', () => {
-    render(
-      <PipelineView
-        nodes={[stageA, stageB, gateC, condD]}
-        edges={linearEdges}
-      />,
-    );
+    render(<PipelineView nodes={[stageA, stageB, gateC, condD]} edges={linearEdges} />);
     // Each node in a different layer
     expect(screen.getByText('Layer 0')).toBeInTheDocument();
     expect(screen.getByText('Layer 1')).toBeInTheDocument();

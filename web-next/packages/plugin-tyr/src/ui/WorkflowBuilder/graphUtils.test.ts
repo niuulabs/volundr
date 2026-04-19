@@ -143,7 +143,10 @@ describe('edgeToPath', () => {
   };
 
   it('returns an SVG path string for valid source/target', () => {
-    const nodes = new Map([['a', stageA], ['b', stageB]]);
+    const nodes = new Map([
+      ['a', stageA],
+      ['b', stageB],
+    ]);
     const path = edgeToPath(edge, nodes);
     expect(path).not.toBeNull();
     expect(path).toMatch(/^M /);

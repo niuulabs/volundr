@@ -8,4 +8,8 @@ export { NodeInspector } from './NodeInspector';
 export { LibraryPanel, DEFAULT_PERSONAS } from './LibraryPanel';
 export type { PersonaEntry } from './LibraryPanel';
 export { useWorkflowBuilder } from './useWorkflowBuilder';
-export type { WorkflowView, WorkflowBuilderState, WorkflowBuilderActions } from './useWorkflowBuilder';
+export type {
+  WorkflowView,
+  WorkflowBuilderState,
+  WorkflowBuilderActions,
+} from './useWorkflowBuilder';

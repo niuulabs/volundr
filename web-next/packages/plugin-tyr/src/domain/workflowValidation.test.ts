@@ -6,7 +6,10 @@ import type { Workflow, WorkflowNode, WorkflowEdge } from './workflow';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeStage(id: string, opts: { raidId?: string | null; personaIds?: string[] } = {}): WorkflowNode {
+function makeStage(
+  id: string,
+  opts: { raidId?: string | null; personaIds?: string[] } = {},
+): WorkflowNode {
   return {
     id,
     kind: 'stage',
@@ -63,10 +66,7 @@ function makeWorkflow(nodes: WorkflowNode[], edges: WorkflowEdge[]): Workflow {
 
 describe('validateWorkflowFull — valid workflow', () => {
   it('returns no issues for a fully valid linear workflow', () => {
-    const nodes = [
-      makeStage('s1', { raidId: 'r1', personaIds: ['p1'] }),
-      makeGate('g1'),
-    ];
+    const nodes = [makeStage('s1', { raidId: 'r1', personaIds: ['p1'] }), makeGate('g1')];
     const edges = [makeEdge('e1', 's1', 'g1')];
     const issues = validateWorkflowFull(makeWorkflow(nodes, edges));
     // gate has incoming (s1→g1); stage has outgoing (s1→g1)
@@ -104,11 +104,7 @@ describe('validateWorkflowFull — cycle', () => {
 
   it('all cycle issues have error severity', () => {
     const nodes = [makeStage('a'), makeStage('b'), makeStage('c')];
-    const edges = [
-      makeEdge('e1', 'a', 'b'),
-      makeEdge('e2', 'b', 'c'),
-      makeEdge('e3', 'c', 'a'),
-    ];
+    const edges = [makeEdge('e1', 'a', 'b'), makeEdge('e2', 'b', 'c'), makeEdge('e3', 'c', 'a')];
     const issues = validateWorkflowFull(makeWorkflow(nodes, edges));
     for (const issue of issues.filter((i) => i.kind === 'cycle')) {
       expect(issue.severity).toBe('error');
@@ -169,7 +165,9 @@ describe('validateWorkflowFull — dangling_condition', () => {
     const nodes = [makeStage('a'), makeCond('c1'), makeStage('b')];
     const edges = [makeEdge('e1', 'a', 'c1'), makeEdge('e2', 'c1', 'b')];
     const issues = validateWorkflowFull(makeWorkflow(nodes, edges));
-    expect(issues.filter((i) => i.kind === 'dangling_condition').some((i) => i.nodeId === 'c1')).toBe(true);
+    expect(
+      issues.filter((i) => i.kind === 'dangling_condition').some((i) => i.nodeId === 'c1'),
+    ).toBe(true);
   });
 
   it('does NOT report dangling_condition for cond node with 2 outgoing edges', () => {

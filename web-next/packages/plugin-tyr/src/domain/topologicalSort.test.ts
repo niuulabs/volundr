@@ -53,20 +53,26 @@ describe('topologicalSort', () => {
   });
 
   it('handles a linear chain', () => {
-    const layers = topologicalSort(['a', 'b', 'c'], [
-      { source: 'a', target: 'b' },
-      { source: 'b', target: 'c' },
-    ]);
+    const layers = topologicalSort(
+      ['a', 'b', 'c'],
+      [
+        { source: 'a', target: 'b' },
+        { source: 'b', target: 'c' },
+      ],
+    );
     expect(layers.map((l) => l.nodeIds)).toEqual([['a'], ['b'], ['c']]);
   });
 
   it('omits cycled nodes from the output (does not hang)', () => {
     // a → b → c → b (cycle b→c→b)
-    const layers = topologicalSort(['a', 'b', 'c'], [
-      { source: 'a', target: 'b' },
-      { source: 'b', target: 'c' },
-      { source: 'c', target: 'b' },
-    ]);
+    const layers = topologicalSort(
+      ['a', 'b', 'c'],
+      [
+        { source: 'a', target: 'b' },
+        { source: 'b', target: 'c' },
+        { source: 'c', target: 'b' },
+      ],
+    );
     // 'a' is reachable; 'b' and 'c' are in the cycle so never reach in-degree 0
     expect(layers[0]!.nodeIds).toEqual(['a']);
     expect(layers).toHaveLength(1);
@@ -108,43 +114,58 @@ describe('detectCycle', () => {
   });
 
   it('detects a simple two-node cycle', () => {
-    const cycle = detectCycle(['a', 'b'], [
-      { source: 'a', target: 'b' },
-      { source: 'b', target: 'a' },
-    ]);
+    const cycle = detectCycle(
+      ['a', 'b'],
+      [
+        { source: 'a', target: 'b' },
+        { source: 'b', target: 'a' },
+      ],
+    );
     expect(cycle.sort()).toEqual(['a', 'b']);
   });
 
   it('detects a three-node cycle', () => {
-    const cycle = detectCycle(['a', 'b', 'c'], [
-      { source: 'a', target: 'b' },
-      { source: 'b', target: 'c' },
-      { source: 'c', target: 'a' },
-    ]);
+    const cycle = detectCycle(
+      ['a', 'b', 'c'],
+      [
+        { source: 'a', target: 'b' },
+        { source: 'b', target: 'c' },
+        { source: 'c', target: 'a' },
+      ],
+    );
     expect(cycle.sort()).toEqual(['a', 'b', 'c']);
   });
 
   it('detects only the nodes in the cycle, not innocent bystanders', () => {
     // a → b → c → b  (b and c cycle; a is an entry node)
-    const cycle = detectCycle(['a', 'b', 'c'], [
-      { source: 'a', target: 'b' },
-      { source: 'b', target: 'c' },
-      { source: 'c', target: 'b' },
-    ]);
+    const cycle = detectCycle(
+      ['a', 'b', 'c'],
+      [
+        { source: 'a', target: 'b' },
+        { source: 'b', target: 'c' },
+        { source: 'c', target: 'b' },
+      ],
+    );
     // 'a' feeds into the cycle but is not itself cycling
     expect(cycle).toContain('b');
     expect(cycle).toContain('c');
   });
 
   it('returns deterministic (sorted) output', () => {
-    const cycleA = detectCycle(['z', 'y'], [
-      { source: 'z', target: 'y' },
-      { source: 'y', target: 'z' },
-    ]);
-    const cycleB = detectCycle(['y', 'z'], [
-      { source: 'y', target: 'z' },
-      { source: 'z', target: 'y' },
-    ]);
+    const cycleA = detectCycle(
+      ['z', 'y'],
+      [
+        { source: 'z', target: 'y' },
+        { source: 'y', target: 'z' },
+      ],
+    );
+    const cycleB = detectCycle(
+      ['y', 'z'],
+      [
+        { source: 'y', target: 'z' },
+        { source: 'z', target: 'y' },
+      ],
+    );
     expect(cycleA).toEqual(cycleB);
     expect(cycleA).toEqual(['y', 'z']);
   });
@@ -158,12 +179,15 @@ describe('detectCycle', () => {
 
   it('identifies multiple independent cycles', () => {
     // group1: a→b→a; group2: c→d→c
-    const cycle = detectCycle(['a', 'b', 'c', 'd'], [
-      { source: 'a', target: 'b' },
-      { source: 'b', target: 'a' },
-      { source: 'c', target: 'd' },
-      { source: 'd', target: 'c' },
-    ]);
+    const cycle = detectCycle(
+      ['a', 'b', 'c', 'd'],
+      [
+        { source: 'a', target: 'b' },
+        { source: 'b', target: 'a' },
+        { source: 'c', target: 'd' },
+        { source: 'd', target: 'c' },
+      ],
+    );
     expect(cycle.sort()).toEqual(['a', 'b', 'c', 'd']);
   });
 });

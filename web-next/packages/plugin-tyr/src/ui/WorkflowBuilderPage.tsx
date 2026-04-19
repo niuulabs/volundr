@@ -18,7 +18,7 @@ export function WorkflowBuilderPage() {
   const { data: workflows, isLoading, isError, error } = useWorkflows();
   const [activeWorkflow, setActiveWorkflow] = useState<Workflow | null>(null);
 
-  const displayed = activeWorkflow ?? (workflows?.[0] ?? null);
+  const displayed = activeWorkflow ?? workflows?.[0] ?? null;
 
   return (
     <div
@@ -43,7 +43,9 @@ export function WorkflowBuilderPage() {
           gap: 12,
         }}
       >
-        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+        <h2
+          style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--color-text-primary)' }}
+        >
           Workflows
         </h2>
 

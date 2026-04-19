@@ -172,7 +172,9 @@ describe('useWorkflowBuilder — deleteNode', () => {
   it('removes edges connected to the deleted node', () => {
     const { result } = renderHook(() => useWorkflowBuilder(makeWorkflow()));
     act(() => result.current.deleteNode('stage-1'));
-    expect(result.current.workflow.edges.filter((e) => e.source === 'stage-1' || e.target === 'stage-1')).toHaveLength(0);
+    expect(
+      result.current.workflow.edges.filter((e) => e.source === 'stage-1' || e.target === 'stage-1'),
+    ).toHaveLength(0);
   });
 
   it('clears selectedNodeId when deleting the selected node', () => {
