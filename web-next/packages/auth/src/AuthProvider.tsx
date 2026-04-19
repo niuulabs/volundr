@@ -54,11 +54,25 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
   );
 }
 
-interface AuthProviderProps {
-  children: ReactNode;
+export interface LoginPageComponentProps {
+  onLogin: () => void;
+  loading?: boolean;
+  error?: string | null;
 }
 
-export function AuthProvider({ children }: AuthProviderProps) {
+interface AuthProviderProps {
+  children: ReactNode;
+  /**
+   * Custom login page component rendered when OIDC is enabled but the user
+   * is not authenticated.  Receives `onLogin` (triggers signinRedirect) and
+   * optional `loading` / `error` props.
+   *
+   * When omitted, the built-in minimal LoginPage is used.
+   */
+  loginPageComponent?: React.ComponentType<LoginPageComponentProps>;
+}
+
+export function AuthProvider({ children, loginPageComponent }: AuthProviderProps) {
   const config = useConfig();
   const oidcConfig = useMemo(
     () => buildOidcConfig(config.auth),
@@ -170,7 +184,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   if (enabled && !value.authenticated) {
-    return <LoginPage onLogin={login} />;
+    const LoginComponent = loginPageComponent ?? LoginPage;
+    return <LoginComponent onLogin={login} loading={false} error={null} />;
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

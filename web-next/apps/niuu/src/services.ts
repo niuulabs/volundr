@@ -1,4 +1,5 @@
 import { createMockHelloService, createHttpHelloService } from '@niuulabs/plugin-hello';
+import { createMockMimirService, createHttpMimirService } from '@niuulabs/plugin-mimir';
 import { createMockVolundrService } from '@niuulabs/plugin-volundr';
 import {
   createMockRegistryRepository,
@@ -16,6 +17,12 @@ export function buildServices(config: NiuuConfig): ServicesMap {
       ? createHttpHelloService(createApiClient(helloConfig.baseUrl))
       : createMockHelloService();
 
+  const mimirConfig = config.services.mimir;
+  const mimirService =
+    mimirConfig?.mode === 'http' && mimirConfig.baseUrl
+      ? createHttpMimirService(createApiClient(mimirConfig.baseUrl))
+      : createMockMimirService();
+
   const ravnConfig = config.services.ravn;
   const ravnService =
     ravnConfig?.mode === 'http' && ravnConfig.baseUrl
@@ -24,6 +31,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
 
   return {
     hello: helloService,
+    mimir: mimirService,
     volundr: createMockVolundrService(),
     'observatory.registry': createMockRegistryRepository(),
     'observatory.topology': createMockLiveTopologyStream(),

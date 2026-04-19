@@ -1,5 +1,6 @@
 // Provider
 export { AuthProvider } from './AuthProvider';
+export type { LoginPageComponentProps } from './AuthProvider';
 
 // Route guard
 export { RequireAuth } from './RequireAuth';
