@@ -45,8 +45,8 @@
 
 .niuu-mount-chip--archive {
   color: var(--color-accent-amber, #f59e0b);
-  border-color: color-mix(in srgb, #f59e0b 25%, transparent);
-  background: color-mix(in srgb, #f59e0b 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent-amber, #f59e0b) 25%, transparent);
+  background: color-mix(in srgb, var(--color-accent-amber, #f59e0b) 8%, transparent);
 }
 
 .niuu-mount-chip--archive .niuu-mount-chip__name {
