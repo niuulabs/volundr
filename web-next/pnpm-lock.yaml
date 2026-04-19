@@ -32,6 +32,9 @@ importers:
       '@storybook/test':
         specifier: ^8.4.7
         version: 8.6.15(storybook@8.6.18(prettier@3.8.3))
+      '@tanstack/react-query':
+        specifier: ^5.62.0
+        version: 5.99.1(react@19.2.5)
       '@testing-library/jest-dom':
         specifier: ^6.6.3
         version: 6.9.1
@@ -119,6 +122,9 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@22.19.17)(jiti@1.21.7)(jsdom@26.1.0)(yaml@2.8.3)
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
 
   apps/niuu:
     dependencies:
