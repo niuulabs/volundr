@@ -57,10 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function init() {
       try {
-        if (
-          window.location.search.includes('code=') ||
-          window.location.search.includes('error=')
-        ) {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('code') || params.has('error')) {
           const callbackUser = await mgr.signinRedirectCallback();
           if (!cancelled) setUser(callbackUser);
           window.history.replaceState({}, document.title, window.location.pathname);
@@ -80,12 +78,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const handleUserLoaded = (loadedUser: User) => setUser(loadedUser);
     const handleUserUnloaded = () => setUser(null);
+    const handleTokenExpired = () => {
+      mgr.signinSilent().catch(() => setUser(null));
+    };
 
     mgr.events.addUserLoaded(handleUserLoaded);
     mgr.events.addUserUnloaded(handleUserUnloaded);
-    mgr.events.addAccessTokenExpired(() => {
-      mgr.signinSilent().catch(() => setUser(null));
-    });
+    mgr.events.addAccessTokenExpired(handleTokenExpired);
 
     init();
 
@@ -93,18 +92,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       mgr.events.removeUserLoaded(handleUserLoaded);
       mgr.events.removeUserUnloaded(handleUserUnloaded);
+      mgr.events.removeAccessTokenExpired(handleTokenExpired);
     };
   }, [oidcConfig]);
 
-  const value: AuthContextValue = {
-    enabled,
-    authenticated: enabled ? user !== null && !user.expired : true,
-    loading,
-    user,
-    accessToken: user?.access_token ?? null,
-    login,
-    logout,
-  };
+  const value: AuthContextValue = useMemo(
+    () => ({
+      enabled,
+      authenticated: enabled ? user !== null && !user.expired : true,
+      loading,
+      user,
+      accessToken: user?.access_token ?? null,
+      login,
+      logout,
+    }),
+    [enabled, user, loading, login, logout],
+  );
 
   if (loading) {
     return (

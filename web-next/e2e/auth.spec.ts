@@ -61,7 +61,6 @@ test('OIDC callback: handles code in URL and cleans up query string', async ({ p
 
   // Stub the OIDC token endpoint to return a stub session
   await page.route('**/protocol/openid-connect/token', async (route) => {
-    const now = Math.floor(Date.now() / 1000);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -88,8 +87,10 @@ test('OIDC callback: handles code in URL and cleans up query string', async ({ p
   await expect(page).toHaveURL(/localhost:5173/);
 });
 
-test('RequireAuth: protected content renders when auth is disabled', async ({ page }) => {
-  // With default config (no auth), RequireAuth should always render children
+test('RequireAuth: no redirect when auth is disabled', async ({ page }) => {
+  // With default config (no auth.issuer), RequireAuth must not redirect to /login.
+  // We verify the URL stays at / after the app fully renders.
   await page.goto('/');
-  await expect(page.getByText('hello · smoke test')).toBeVisible();
+  await expect(page.getByText('hello from the mock adapter')).toBeVisible({ timeout: 5000 });
+  await expect(page).toHaveURL('http://localhost:5173/');
 });

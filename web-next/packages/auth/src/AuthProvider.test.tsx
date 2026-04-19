@@ -47,6 +47,7 @@ function createMockManager(overrides: Record<string, unknown> = {}) {
       addAccessTokenExpired: vi.fn(),
       removeUserLoaded: vi.fn(),
       removeUserUnloaded: vi.fn(),
+      removeAccessTokenExpired: vi.fn(),
     },
     settings: { authority: oidcConfig.authority },
     ...overrides,
@@ -280,6 +281,7 @@ describe('AuthProvider', () => {
         addAccessTokenExpired: vi.fn(),
         removeUserLoaded: vi.fn(),
         removeUserUnloaded: vi.fn(),
+        removeAccessTokenExpired: vi.fn(),
       },
     });
     vi.mocked(getUserManager).mockReturnValue(mockMgr as never);
@@ -293,6 +295,67 @@ describe('AuthProvider', () => {
     });
 
     expect(screen.getByTestId('token')).toHaveTextContent('renewed-token');
+  });
+
+  it('calls signinSilent when access token expires', async () => {
+    vi.mocked(getOidcConfig).mockReturnValue(oidcConfig);
+    let tokenExpiredCallback: (() => void) | undefined;
+    const mockMgr = createMockManager({
+      getUser: vi.fn().mockResolvedValue(null),
+      signinSilent: vi.fn().mockResolvedValue({ expired: false, access_token: 'renewed' }),
+      events: {
+        addUserLoaded: vi.fn(),
+        addUserUnloaded: vi.fn(),
+        addAccessTokenExpired: vi.fn((cb: () => void) => {
+          tokenExpiredCallback = cb;
+        }),
+        removeUserLoaded: vi.fn(),
+        removeUserUnloaded: vi.fn(),
+        removeAccessTokenExpired: vi.fn(),
+      },
+    });
+    vi.mocked(getUserManager).mockReturnValue(mockMgr as never);
+
+    renderWithConfig();
+
+    await screen.findByTestId('enabled');
+
+    await act(async () => {
+      tokenExpiredCallback?.();
+    });
+
+    expect(mockMgr.signinSilent).toHaveBeenCalled();
+  });
+
+  it('clears user when signinSilent fails on token expiry', async () => {
+    vi.mocked(getOidcConfig).mockReturnValue(oidcConfig);
+    let tokenExpiredCallback: (() => void) | undefined;
+    const mockMgr = createMockManager({
+      getUser: vi.fn().mockResolvedValue({ expired: false, access_token: 'old-token' }),
+      signinSilent: vi.fn().mockRejectedValue(new Error('silent renew failed')),
+      events: {
+        addUserLoaded: vi.fn(),
+        addUserUnloaded: vi.fn(),
+        addAccessTokenExpired: vi.fn((cb: () => void) => {
+          tokenExpiredCallback = cb;
+        }),
+        removeUserLoaded: vi.fn(),
+        removeUserUnloaded: vi.fn(),
+        removeAccessTokenExpired: vi.fn(),
+      },
+    });
+    vi.mocked(getUserManager).mockReturnValue(mockMgr as never);
+
+    renderWithConfig();
+
+    await screen.findByTestId('token');
+    expect(screen.getByTestId('token')).toHaveTextContent('old-token');
+
+    await act(async () => {
+      tokenExpiredCallback?.();
+    });
+
+    expect(screen.getByTestId('token')).toHaveTextContent('none');
   });
 
   it('removes token provider on unmount when auth is enabled', async () => {
