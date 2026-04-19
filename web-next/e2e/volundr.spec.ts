@@ -20,7 +20,7 @@ test('volundr overview shows KPI strip after data loads', async ({ page }) => {
 test('volundr overview shows cluster health section', async ({ page }) => {
   await page.goto('/volundr');
   await expect(page.getByText('Cluster health')).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByTestId('cluster-card')).toBeVisible();
+  await expect(page.getByTestId('cluster-card').first()).toBeVisible();
 });
 
 test('volundr rail icon is visible and links to the page', async ({ page }) => {
