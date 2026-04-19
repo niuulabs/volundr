@@ -1,24 +1,21 @@
 import '@testing-library/jest-dom/vitest';
+import { vi } from 'vitest';
 
 // TanStack Router calls window.scrollTo during scroll-restoration inside tests.
 // jsdom doesn't implement it; stub it out to keep test output clean.
 Object.defineProperty(window, 'scrollTo', { value: () => {}, writable: true });
 
-// Radix UI uses ResizeObserver (e.g. Tooltip/Popover arrow sizing).
-// jsdom doesn't implement it; provide a no-op stub.
-if (typeof window.ResizeObserver === 'undefined') {
-  window.ResizeObserver = class ResizeObserver {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
-}
+// ResizeObserver is not available in jsdom — used by SessionChat scroll tracking
+// and Radix UI primitives (Tooltip/Popover arrow sizing).
+global.ResizeObserver = vi.fn().mockImplementation(() => ({
+  observe: vi.fn(),
+  unobserve: vi.fn(),
+  disconnect: vi.fn(),
+}));
 
-// jsdom doesn't implement Element.prototype.scrollIntoView.
-// Radix UI and ValidationSummary use it in focus-jump flows.
-if (!Element.prototype.scrollIntoView) {
-  Element.prototype.scrollIntoView = () => {};
-}
+// scrollIntoView is not implemented in jsdom — used by SlashCommandMenu,
+// SessionChat, and Radix UI focus-jump flows.
+Element.prototype.scrollIntoView = vi.fn();
 
 // jsdom doesn't implement PointerEvent methods used by Radix UI primitives.
 if (!Element.prototype.hasPointerCapture) {

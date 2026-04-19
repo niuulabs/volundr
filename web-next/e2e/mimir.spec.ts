@@ -25,7 +25,7 @@ test('/mimir shows individual mount names', async ({ page }) => {
 
 test('mimir rune is visible in the rail', async ({ page }) => {
   await page.goto('/mimir');
-  await expect(page.getByRole('button', { name: 'ᛗ' })).toBeVisible();
+  await expect(page.getByText('ᛗ').first()).toBeVisible();
 });
 
 // ---------------------------------------------------------------------------

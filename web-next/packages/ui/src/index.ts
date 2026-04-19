@@ -33,3 +33,6 @@ export * from './primitives/Select';
 export * from './primitives/Combobox';
 export * from './primitives/ValidationSummary';
 export { cn } from './utils/cn';
+
+/* Chat */
+export * from './chat';
