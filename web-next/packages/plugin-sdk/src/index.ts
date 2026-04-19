@@ -10,3 +10,19 @@ export {
   type PluginConfig,
   type ServiceConfig,
 } from './config';
+
+// Ports
+export type { AppIdentity, IIdentityService } from './ports/identity.port';
+export type {
+  FeatureScope,
+  FeatureModule,
+  UserFeaturePreference,
+  IFeatureCatalogService,
+} from './ports/feature-catalog.port';
+
+// Adapters
+export { buildIdentityAdapter, createMockIdentityService } from './adapters/identity.adapter';
+export {
+  buildFeatureCatalogAdapter,
+  createMockFeatureCatalogService,
+} from './adapters/feature-catalog.adapter';
