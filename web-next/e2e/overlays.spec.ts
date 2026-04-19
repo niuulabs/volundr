@@ -21,6 +21,8 @@ test.describe('Dialog overlay', () => {
 });
 
 test.describe('Dialog — Storybook iframe', () => {
+  // Storybook runs at :6006 which is not served in CI
+  test.skip(!!process.env.CI, 'Storybook is not served in CI');
   test.skip(({ browserName }) => browserName !== 'chromium', 'Storybook e2e only in chromium');
 
   test('dialog opens, focus is trapped, escape closes it', async ({ page, baseURL }) => {
