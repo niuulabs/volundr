@@ -11,13 +11,14 @@ function makeClient() {
 
 function withVolundr(adapter?: IClusterAdapter) {
   const svc = adapter ?? createMockClusterAdapter();
-  return (Story: React.ComponentType) => (
+  const Decorator = (Story: React.ComponentType) => (
     <QueryClientProvider client={makeClient()}>
       <ServicesProvider services={{ 'volundr.clusters': svc }}>
         <Story />
       </ServicesProvider>
     </QueryClientProvider>
   );
+  return Decorator;
 }
 
 const meta: Meta<typeof ClustersPage> = {

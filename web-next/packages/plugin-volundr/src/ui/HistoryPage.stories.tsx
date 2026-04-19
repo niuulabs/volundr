@@ -11,13 +11,14 @@ function makeClient() {
 
 function withVolundr(store?: ISessionStore) {
   const svc = store ?? createMockSessionStore();
-  return (Story: React.ComponentType) => (
+  const Decorator = (Story: React.ComponentType) => (
     <QueryClientProvider client={makeClient()}>
       <ServicesProvider services={{ 'volundr.sessions': svc }}>
         <Story />
       </ServicesProvider>
     </QueryClientProvider>
   );
+  return Decorator;
 }
 
 const meta: Meta<typeof HistoryPage> = {

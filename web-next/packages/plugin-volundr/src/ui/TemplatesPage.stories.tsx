@@ -11,13 +11,14 @@ function makeClient() {
 
 function withVolundr(store?: ITemplateStore) {
   const svc = store ?? createMockTemplateStore();
-  return (Story: React.ComponentType) => (
+  const Decorator = (Story: React.ComponentType) => (
     <QueryClientProvider client={makeClient()}>
       <ServicesProvider services={{ 'volundr.templates': svc }}>
         <Story />
       </ServicesProvider>
     </QueryClientProvider>
   );
+  return Decorator;
 }
 
 const meta: Meta<typeof TemplatesPage> = {
