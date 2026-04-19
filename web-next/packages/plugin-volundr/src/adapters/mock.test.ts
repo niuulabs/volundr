@@ -244,7 +244,13 @@ describe('createMockClusterAdapter', () => {
       image: 'ubuntu:22.04',
       mounts: [],
       env: {},
-      resources: { cpuRequest: 1000, cpuLimit: 2000, memRequestMi: 512, memLimitMi: 1024, gpuCount: 0 },
+      resources: {
+        cpuRequest: 1000,
+        cpuLimit: 2000,
+        memRequestMi: 512,
+        memLimitMi: 1024,
+        gpuCount: 0,
+      },
     });
     expect(typeof podName).toBe('string');
     expect(podName.length).toBeGreaterThan(0);
@@ -291,12 +297,22 @@ describe('createMockSessionStore', () => {
   it('lists all sessions', async () => {
     const store = createMockSessionStore();
     const s1: Session = {
-      id: 'a', ravnId: 'r', personaName: 'p', templateId: 't', clusterId: 'c',
-      state: 'running', startedAt: '',
+      id: 'a',
+      ravnId: 'r',
+      personaName: 'p',
+      templateId: 't',
+      clusterId: 'c',
+      state: 'running',
+      startedAt: '',
     };
     const s2: Session = {
-      id: 'b', ravnId: 'r', personaName: 'p', templateId: 't', clusterId: 'c',
-      state: 'idle', startedAt: '',
+      id: 'b',
+      ravnId: 'r',
+      personaName: 'p',
+      templateId: 't',
+      clusterId: 'c',
+      state: 'idle',
+      startedAt: '',
     };
     await store.save(s1);
     await store.save(s2);
@@ -307,12 +323,22 @@ describe('createMockSessionStore', () => {
   it('filters sessions by state', async () => {
     const store = createMockSessionStore();
     const s1: Session = {
-      id: 'a', ravnId: 'r', personaName: 'p', templateId: 't', clusterId: 'c',
-      state: 'running', startedAt: '',
+      id: 'a',
+      ravnId: 'r',
+      personaName: 'p',
+      templateId: 't',
+      clusterId: 'c',
+      state: 'running',
+      startedAt: '',
     };
     const s2: Session = {
-      id: 'b', ravnId: 'r', personaName: 'p', templateId: 't', clusterId: 'c',
-      state: 'idle', startedAt: '',
+      id: 'b',
+      ravnId: 'r',
+      personaName: 'p',
+      templateId: 't',
+      clusterId: 'c',
+      state: 'idle',
+      startedAt: '',
     };
     await store.save(s1);
     await store.save(s2);
@@ -324,12 +350,22 @@ describe('createMockSessionStore', () => {
   it('filters sessions by clusterId', async () => {
     const store = createMockSessionStore();
     const s1: Session = {
-      id: 'a', ravnId: 'r', personaName: 'p', templateId: 't', clusterId: 'cluster-A',
-      state: 'running', startedAt: '',
+      id: 'a',
+      ravnId: 'r',
+      personaName: 'p',
+      templateId: 't',
+      clusterId: 'cluster-A',
+      state: 'running',
+      startedAt: '',
     };
     const s2: Session = {
-      id: 'b', ravnId: 'r', personaName: 'p', templateId: 't', clusterId: 'cluster-B',
-      state: 'running', startedAt: '',
+      id: 'b',
+      ravnId: 'r',
+      personaName: 'p',
+      templateId: 't',
+      clusterId: 'cluster-B',
+      state: 'running',
+      startedAt: '',
     };
     await store.save(s1);
     await store.save(s2);
@@ -340,8 +376,13 @@ describe('createMockSessionStore', () => {
   it('deletes a session', async () => {
     const store = createMockSessionStore();
     const s: Session = {
-      id: 'x', ravnId: 'r', personaName: 'p', templateId: 't', clusterId: 'c',
-      state: 'terminated', startedAt: '',
+      id: 'x',
+      ravnId: 'r',
+      personaName: 'p',
+      templateId: 't',
+      clusterId: 'c',
+      state: 'terminated',
+      startedAt: '',
     };
     await store.save(s);
     await store.delete('x');
@@ -362,7 +403,13 @@ describe('createMockTemplateStore', () => {
       mounts: [],
       env: {},
       tools: [],
-      resources: { cpuRequest: 500, cpuLimit: 1000, memRequestMi: 256, memLimitMi: 512, gpuCount: 0 },
+      resources: {
+        cpuRequest: 500,
+        cpuLimit: 1000,
+        memRequestMi: 256,
+        memLimitMi: 512,
+        gpuCount: 0,
+      },
       ttlSec: 3600,
       idleTimeoutSec: 600,
       clusterAffinity: [],
@@ -380,9 +427,17 @@ describe('createMockTemplateStore', () => {
   it('lists all templates', async () => {
     const store = createMockTemplateStore();
     const tpl: Template = {
-      id: 't1', name: 'T', version: 1, image: 'img', mounts: [], env: {}, tools: [],
+      id: 't1',
+      name: 'T',
+      version: 1,
+      image: 'img',
+      mounts: [],
+      env: {},
+      tools: [],
       resources: { cpuRequest: 0, cpuLimit: 0, memRequestMi: 0, memLimitMi: 0, gpuCount: 0 },
-      ttlSec: 3600, idleTimeoutSec: 600, clusterAffinity: [],
+      ttlSec: 3600,
+      idleTimeoutSec: 600,
+      clusterAffinity: [],
     };
     await store.save(tpl);
     const list = await store.list();
@@ -392,9 +447,17 @@ describe('createMockTemplateStore', () => {
   it('deletes a template', async () => {
     const store = createMockTemplateStore();
     const tpl: Template = {
-      id: 'd1', name: 'D', version: 1, image: 'img', mounts: [], env: {}, tools: [],
+      id: 'd1',
+      name: 'D',
+      version: 1,
+      image: 'img',
+      mounts: [],
+      env: {},
+      tools: [],
       resources: { cpuRequest: 0, cpuLimit: 0, memRequestMi: 0, memLimitMi: 0, gpuCount: 0 },
-      ttlSec: 3600, idleTimeoutSec: 600, clusterAffinity: [],
+      ttlSec: 3600,
+      idleTimeoutSec: 600,
+      clusterAffinity: [],
     };
     await store.save(tpl);
     await store.delete('d1');
@@ -708,11 +771,24 @@ describe('createMockVolundrService — remaining methods', () => {
 
   it('saveTemplate returns the passed template', async () => {
     const tpl = {
-      name: 'test', description: 'desc', isDefault: false, repos: [], setupScripts: [],
-      workspaceLayout: {}, cliTool: 'claude', workloadType: 'standard', model: null,
-      systemPrompt: null, resourceConfig: {}, mcpServers: [], envVars: {}, envSecretRefs: [],
-      workloadConfig: {}, terminalSidecar: { enabled: false, allowedCommands: [] },
-      skills: [], rules: [],
+      name: 'test',
+      description: 'desc',
+      isDefault: false,
+      repos: [],
+      setupScripts: [],
+      workspaceLayout: {},
+      cliTool: 'claude',
+      workloadType: 'standard',
+      model: null,
+      systemPrompt: null,
+      resourceConfig: {},
+      mcpServers: [],
+      envVars: {},
+      envSecretRefs: [],
+      workloadConfig: {},
+      terminalSidecar: { enabled: false, allowedCommands: [] },
+      skills: [],
+      rules: [],
     };
     const saved = await svc.saveTemplate(tpl);
     expect(saved.name).toBe('test');
