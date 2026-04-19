@@ -53,16 +53,12 @@ describe('SessionsPage', () => {
 
   it('shows running sessions in the running tab', async () => {
     wrap();
-    await waitFor(() =>
-      expect(screen.getByText('ds-1')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('ds-1')).toBeInTheDocument());
   });
 
   it('shows session counts in tab badges', async () => {
     wrap();
-    await waitFor(() =>
-      expect(screen.getByTestId('state-count-running')).toHaveTextContent('1'),
-    );
+    await waitFor(() => expect(screen.getByTestId('state-count-running')).toHaveTextContent('1'));
   });
 
   it('shows empty state when no sessions match the selected state', async () => {
@@ -71,33 +67,25 @@ describe('SessionsPage', () => {
       listSessions: vi.fn().mockResolvedValue([]),
     };
     wrap(emptyStore);
-    await waitFor(() =>
-      expect(screen.getByText(/No running sessions/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/No running sessions/i)).toBeInTheDocument());
   });
 
   it('shows failed sessions when failed tab is clicked', async () => {
     wrap();
     fireEvent.click(screen.getByTestId('state-tab-failed'));
-    await waitFor(() =>
-      expect(screen.getByText('ds-4')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('ds-4')).toBeInTheDocument());
   });
 
   it('shows terminated sessions when terminated tab is clicked', async () => {
     wrap();
     fireEvent.click(screen.getByTestId('state-tab-terminated'));
-    await waitFor(() =>
-      expect(screen.getByText('ds-5')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('ds-5')).toBeInTheDocument());
   });
 
   it('shows provisioning sessions when provisioning tab is clicked', async () => {
     wrap();
     fireEvent.click(screen.getByTestId('state-tab-provisioning'));
-    await waitFor(() =>
-      expect(screen.getByText('ds-3')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('ds-3')).toBeInTheDocument());
   });
 
   it('shows error state when session store fails', async () => {
@@ -106,9 +94,7 @@ describe('SessionsPage', () => {
       listSessions: vi.fn().mockRejectedValue(new Error('store failed')),
     };
     wrap(failingStore);
-    await waitFor(() =>
-      expect(screen.getByText('Failed to load sessions')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Failed to load sessions')).toBeInTheDocument());
   });
 
   it('shows loading state before data resolves', () => {
@@ -122,8 +108,6 @@ describe('SessionsPage', () => {
 
   it('shows a view button for each visible session', async () => {
     wrap();
-    await waitFor(() =>
-      expect(screen.getByTestId('view-session-ds-1')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('view-session-ds-1')).toBeInTheDocument());
   });
 });

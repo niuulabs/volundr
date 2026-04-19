@@ -17,10 +17,7 @@ export interface ExecEntry {
 }
 
 /** Append a new entry to the exec history list. */
-export function appendExecEntry(
-  history: ExecEntry[],
-  entry: ExecEntry,
-): ExecEntry[] {
+export function appendExecEntry(history: ExecEntry[], entry: ExecEntry): ExecEntry[] {
   return [...history, entry];
 }
 

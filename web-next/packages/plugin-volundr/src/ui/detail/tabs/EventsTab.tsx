@@ -7,10 +7,7 @@ interface EventsTabProps {
 /** Events tab — chronological session lifecycle events. */
 export function EventsTab({ events }: EventsTabProps) {
   return (
-    <div
-      className="niuu-flex niuu-flex-col niuu-gap-2 niuu-p-4"
-      data-testid="events-tab"
-    >
+    <div className="niuu-flex niuu-flex-col niuu-gap-2 niuu-p-4" data-testid="events-tab">
       {events.length === 0 ? (
         <p
           className="niuu-py-8 niuu-text-center niuu-text-sm niuu-text-text-muted"

@@ -3,7 +3,11 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { SessionDetailPage } from './SessionDetailPage';
-import { createMockFileSystemPort, createMockSessionStore, createMockMetricsStream } from '../adapters/mock';
+import {
+  createMockFileSystemPort,
+  createMockSessionStore,
+  createMockMetricsStream,
+} from '../adapters/mock';
 import type { IPtyStream } from '../ports/IPtyStream';
 import type { IFileSystemPort } from '../ports/IFileSystemPort';
 import type { ISessionStore } from '../ports/ISessionStore';
@@ -163,9 +167,7 @@ describe('SessionDetailPage', () => {
   it('shows events in the events tab', async () => {
     wrap(<SessionDetailPage sessionId="ds-1" />);
     fireEvent.click(screen.getByTestId('tab-events'));
-    await waitFor(() =>
-      expect(screen.getAllByTestId('event-row').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('event-row').length).toBeGreaterThan(0));
   });
 
   it('shows exec input and run button in exec tab', () => {
@@ -191,9 +193,7 @@ describe('SessionDetailPage', () => {
   it('shows a lifecycle badge for known sessions', async () => {
     wrap(<SessionDetailPage sessionId="ds-1" />);
     // The LifecycleBadge renders a span with the state name as text content.
-    await waitFor(() =>
-      expect(screen.getByTestId('overview-tab')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('overview-tab')).toBeInTheDocument());
     // Badge text 'running' appears in the overview tab header.
     expect(screen.getAllByText('running').length).toBeGreaterThan(0);
   });
@@ -204,9 +204,7 @@ describe('SessionDetailPage', () => {
       getSession: vi.fn().mockRejectedValue(new Error('store error')),
     };
     wrap(<SessionDetailPage sessionId="ds-1" />, { sessionStore: failingStore });
-    await waitFor(() =>
-      expect(screen.getByText('Failed to load session')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Failed to load session')).toBeInTheDocument());
   });
 });
 
@@ -227,9 +225,7 @@ describe('ExecTab integration', () => {
     fireEvent.change(screen.getByTestId('exec-input'), { target: { value: 'echo hello' } });
     fireEvent.click(screen.getByTestId('exec-run-btn'));
 
-    await waitFor(() =>
-      expect(screen.getByTestId('exec-entry')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('exec-entry')).toBeInTheDocument());
     expect(screen.getByText(/echo hello/)).toBeInTheDocument();
   });
 });
