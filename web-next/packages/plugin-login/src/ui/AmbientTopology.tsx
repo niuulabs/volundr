@@ -61,9 +61,11 @@ export function AmbientTopology() {
       ctx.clearRect(0, 0, w, h);
 
       for (let i = 0; i < nodes.length; i++) {
+        const a = nodes[i];
+        if (!a) continue;
         for (let j = i + 1; j < nodes.length; j++) {
-          const a = nodes[i];
           const b = nodes[j];
+          if (!b) continue;
           const dx = a.x - b.x;
           const dy = a.y - b.y;
           const d = Math.sqrt(dx * dx + dy * dy);
