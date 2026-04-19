@@ -1,8 +1,8 @@
-import { useEffect, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { Outlet, useRouter, useRouterState } from '@tanstack/react-router';
 import { useConfig } from '@niuulabs/plugin-sdk';
-import { LiveBadge, Kbd } from '@niuulabs/ui';
+import { LiveBadge, Kbd, useCommandPalette, useCommandPaletteRegistry } from '@niuulabs/ui';
 import { useShellContext } from './ShellContext';
 import './Shell.css';
 
@@ -19,9 +19,11 @@ export function ShellLayout() {
   const router = useRouter();
   const { location } = useRouterState({ select: (s) => ({ location: s.location }) });
   const pathname = location.pathname;
+  const { setOpen } = useCommandPalette();
+  const { register, unregister } = useCommandPaletteRegistry();
 
   // System plugins (e.g. login) register routes but stay out of the nav rail.
-  const navPlugins = enabled.filter((p) => !p.system);
+  const navPlugins = useMemo(() => enabled.filter((p) => !p.system), [enabled]);
 
   const activeId = activePluginId(
     pathname,
@@ -36,10 +38,31 @@ export function ShellLayout() {
     }
   }, [activeId]);
 
-  const handleSelect = (id: string) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    router.navigate({ to: `/${id}` as any });
-  };
+  const handleSelect = useCallback(
+    (id: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      router.navigate({ to: `/${id}` as any });
+    },
+    [router],
+  );
+
+  // Register "switch plugin" default commands for all nav plugins
+  useEffect(() => {
+    for (const plugin of navPlugins) {
+      register({
+        id: `switch:${plugin.id}`,
+        title: plugin.title,
+        subtitle: plugin.subtitle,
+        keywords: ['switch', 'navigate', 'go', 'plugin', plugin.id],
+        execute: () => handleSelect(plugin.id),
+      });
+    }
+    return () => {
+      for (const plugin of navPlugins) {
+        unregister(`switch:${plugin.id}`);
+      }
+    };
+  }, [navPlugins, register, unregister, handleSelect]);
 
   const subnavNode: ReactNode = active?.subnav?.(ctx) ?? null;
 
@@ -82,7 +105,14 @@ export function ShellLayout() {
         <div className="niuu-shell__topbar-right">
           {active?.topbarRight?.(ctx)}
           <LiveBadge />
-          <Kbd>⌘K</Kbd>
+          <button
+            type="button"
+            className="niuu-shell__cp-btn"
+            onClick={() => setOpen(true)}
+            aria-label="Open command palette (⌘K)"
+          >
+            <Kbd>⌘K</Kbd>
+          </button>
         </div>
       </header>
 

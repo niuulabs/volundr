@@ -20,6 +20,7 @@
 @import './primitives/Tooltip/Tooltip.css';
 @import './primitives/BudgetBar/BudgetBar.css';
 @import './primitives/BudgetRunwayBar/BudgetRunwayBar.css';
+@import './primitives/CommandPalette/CommandPalette.css';
 
 @tailwind components;
 @tailwind utilities;
