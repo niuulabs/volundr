@@ -59,7 +59,7 @@ jobs:
   python-lint:
     name: "Python: Lint"
     # Skipped on web-next scaffold branches — only web-next tests run there.
-    if: ${{ !startsWith(github.ref_name, 'feat/web-next') }}
+    if: ${{ !startsWith(github.ref_name, 'feat/web-next') && !startsWith(github.ref_name, 'feat/niuu-web') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -84,7 +84,7 @@ jobs:
 
   python-test-volundr:
     name: "Python: Test Volundr"
-    if: ${{ !startsWith(github.ref_name, 'feat/web-next') }}
+    if: ${{ !startsWith(github.ref_name, 'feat/web-next') && !startsWith(github.ref_name, 'feat/niuu-web') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -119,7 +119,7 @@ jobs:
 
   python-test-tyr:
     name: "Python: Test Tyr"
-    if: ${{ !startsWith(github.ref_name, 'feat/web-next') }}
+    if: ${{ !startsWith(github.ref_name, 'feat/web-next') && !startsWith(github.ref_name, 'feat/niuu-web') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -157,7 +157,7 @@ jobs:
   # ---------------------------------------------------------------------------
   web-lint:
     name: "Web: Lint"
-    if: ${{ !startsWith(github.ref_name, 'feat/web-next') }}
+    if: ${{ !startsWith(github.ref_name, 'feat/web-next') && !startsWith(github.ref_name, 'feat/niuu-web') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -186,7 +186,7 @@ jobs:
 
   web-test:
     name: "Web: Test"
-    if: ${{ !startsWith(github.ref_name, 'feat/web-next') }}
+    if: ${{ !startsWith(github.ref_name, 'feat/web-next') && !startsWith(github.ref_name, 'feat/niuu-web') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -222,7 +222,7 @@ jobs:
   build-container-image:
     name: "Build ${{ matrix.container }} (${{ matrix.platform }})"
     needs: meta
-    if: ${{ !startsWith(github.ref_name, 'feat/web-next') }}
+    if: ${{ !startsWith(github.ref_name, 'feat/web-next') && !startsWith(github.ref_name, 'feat/niuu-web') }}
     runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions:
       contents: read
@@ -267,7 +267,7 @@ jobs:
   merge-container-manifests:
     name: "Manifest ${{ matrix.container }}"
     needs: [meta, build-container-image]
-    if: ${{ !startsWith(github.ref_name, 'feat/web-next') }}
+    if: ${{ !startsWith(github.ref_name, 'feat/web-next') && !startsWith(github.ref_name, 'feat/niuu-web') }}
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -307,7 +307,7 @@ jobs:
   build-charts:
     name: Build Helm Charts
     needs: meta
-    if: ${{ !startsWith(github.ref_name, 'feat/web-next') }}
+    if: ${{ !startsWith(github.ref_name, 'feat/web-next') && !startsWith(github.ref_name, 'feat/niuu-web') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

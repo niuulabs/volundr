@@ -28,16 +28,23 @@ describe('RegistryPage', () => {
 
   it('renders entity types once data loads', async () => {
     wrap(<RegistryPage />);
-    await waitFor(() => expect(screen.getByText('Realm')).toBeInTheDocument());
-    expect(screen.getByText('Cluster')).toBeInTheDocument();
-    expect(screen.getByText('Host')).toBeInTheDocument();
-    expect(screen.getByText('Raid')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('Realm').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('Cluster').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Host').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Raid').length).toBeGreaterThan(0);
   });
 
   it('shows version and type count in the metadata line', async () => {
     wrap(<RegistryPage />);
-    await waitFor(() => expect(screen.getByText(/v7/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/rev/)).toBeInTheDocument());
+    expect(screen.getByText('7')).toBeInTheDocument();
     expect(screen.getByText(/18 types/)).toBeInTheDocument();
+  });
+
+  it('renders the Types tab by default', async () => {
+    wrap(<RegistryPage />);
+    await waitFor(() => expect(screen.getByTestId('tab-types')).toBeInTheDocument());
+    expect(screen.getByTestId('tab-types')).toHaveAttribute('aria-selected', 'true');
   });
 
   it('renders error state when the repository throws', async () => {
