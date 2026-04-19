@@ -4,6 +4,9 @@ import { TyrPage } from './ui/TyrPage';
 import { SagasPage } from './ui/SagasPage';
 import { SagaDetailRoute } from './ui/SagaDetailPage';
 import { DispatchView } from './ui/DispatchView';
+import { SettingsPage, SettingsIndexPage } from './ui/settings/SettingsPage';
+import { SettingsRail } from './ui/settings/SettingsRail';
+import { SettingsTopbar } from './ui/settings/SettingsTopbar';
 
 export const tyrPlugin = definePlugin({
   id: 'tyr',
@@ -31,7 +34,39 @@ export const tyrPlugin = definePlugin({
       path: '/tyr/dispatch',
       component: DispatchView,
     }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings',
+      component: SettingsIndexPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/personas',
+      component: () => SettingsPage({ section: 'personas' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/flock',
+      component: () => SettingsPage({ section: 'flock' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/dispatch',
+      component: () => SettingsPage({ section: 'dispatch' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/notifications',
+      component: () => SettingsPage({ section: 'notifications' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/audit',
+      component: () => SettingsPage({ section: 'audit' }),
+    }),
   ],
+  subnav: () => SettingsRail(),
+  topbarRight: () => SettingsTopbar(),
 });
 
 // Mock adapters
@@ -42,6 +77,8 @@ export {
   createMockTrackerService,
   createMockTyrIntegrationService,
   createMockDispatchBus,
+  createMockTyrSettingsService,
+  createMockAuditLogService,
 } from './adapters/mock';
 
 // HTTP adapters
@@ -52,6 +89,8 @@ export {
   buildTrackerHttpAdapter,
   buildTyrIntegrationHttpAdapter,
   buildDispatchBusHttpAdapter,
+  buildTyrSettingsHttpAdapter,
+  buildTyrAuditLogHttpAdapter,
 } from './adapters/http';
 
 // Port interfaces + request/response types
@@ -63,6 +102,11 @@ export type {
   ITyrIntegrationService,
   IDispatchBus,
   DispatchResult,
+  ITyrSettingsService,
+  IAuditLogService,
+  ITyrPersonaViewService,
+  TyrPersonaSummary,
+  TyrPersonaDetail,
   CommitSagaRequest,
   PlanSession,
   RaidSpec,
@@ -72,6 +116,14 @@ export type {
   CreateIntegrationParams,
   ConnectionTestResult,
   TelegramSetupResult,
+  FlockConfig,
+  DispatchDefaults,
+  RetryPolicy,
+  NotificationSettings,
+  NotificationChannel,
+  AuditEntry,
+  AuditEntryKind,
+  AuditFilter,
   // Re-exported domain types
   Saga,
   Phase,
@@ -148,3 +200,14 @@ export {
   repoInfoSchema,
   type RepoInfo as TrackerRepoInfo,
 } from './domain/tracker';
+
+export {
+  flockConfigSchema,
+  dispatchDefaultsSchema,
+  retryPolicySchema,
+  notificationSettingsSchema,
+  notificationChannelSchema,
+  auditEntrySchema,
+  auditEntryKindSchema,
+  auditFilterSchema,
+} from './domain/settings';

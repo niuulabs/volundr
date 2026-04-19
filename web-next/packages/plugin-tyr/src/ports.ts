@@ -11,12 +11,29 @@ import type { Saga, Phase } from './domain/saga';
 import type { DispatcherState } from './domain/dispatcher';
 import type { SessionInfo } from './domain/session';
 import type { TrackerProject, TrackerMilestone, TrackerIssue } from './domain/tracker';
+import type {
+  FlockConfig,
+  DispatchDefaults,
+  NotificationSettings,
+  AuditEntry,
+  AuditFilter,
+} from './domain/settings';
 
 // Re-export domain types so consumers can import from a single location.
 export type { Saga, Phase } from './domain/saga';
 export type { DispatcherState, DispatchRule } from './domain/dispatcher';
 export type { SessionInfo, TyrSessionStatus } from './domain/session';
 export type { TrackerProject, TrackerMilestone, TrackerIssue, RepoInfo } from './domain/tracker';
+export type {
+  FlockConfig,
+  DispatchDefaults,
+  RetryPolicy,
+  NotificationSettings,
+  NotificationChannel,
+  AuditEntry,
+  AuditEntryKind,
+  AuditFilter,
+} from './domain/settings';
 
 // ---------------------------------------------------------------------------
 // ITyrService — saga lifecycle and planning
@@ -200,4 +217,75 @@ export interface DispatchResult {
 export interface IDispatchBus {
   dispatch(raidId: string): Promise<void>;
   dispatchBatch(raidIds: string[]): Promise<DispatchResult>;
+}
+
+// ---------------------------------------------------------------------------
+// ITyrPersonaViewService — minimal persona read port (mirrors IPersonaStore)
+// Tyr Settings uses this to browse Ravn personas without duplicating the port.
+// The 'ravn.personas' service key is wired at the app level with Ravn's adapter.
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal persona summary shape needed by the Tyr settings personas browser.
+ * Shape is intentionally compatible with plugin-ravn's PersonaSummary.
+ */
+export interface TyrPersonaSummary {
+  name: string;
+  permissionMode: string;
+  allowedTools: string[];
+  iterationBudget: number;
+  isBuiltin: boolean;
+  hasOverride: boolean;
+  producesEvent: string;
+  consumesEvents: string[];
+}
+
+/**
+ * Minimal persona detail shape used by the Tyr settings YAML editor.
+ */
+export interface TyrPersonaDetail extends TyrPersonaSummary {
+  systemPromptTemplate: string;
+  forbiddenTools: string[];
+  yamlSource: string;
+}
+
+/**
+ * Minimal read-only persona port used by Tyr Settings.
+ * The consumer must wire 'ravn.personas' (or compatible) in ServicesProvider.
+ */
+export interface ITyrPersonaViewService {
+  listPersonas(filter?: 'all' | 'builtin' | 'custom'): Promise<TyrPersonaSummary[]>;
+  getPersonaYaml(name: string): Promise<string>;
+}
+
+// ---------------------------------------------------------------------------
+// ITyrSettingsService — flock config, dispatch defaults, notification settings
+// ---------------------------------------------------------------------------
+
+/**
+ * Settings service for Tyr — manages flock config, dispatch defaults,
+ * and notification settings.
+ */
+export interface ITyrSettingsService {
+  getFlockConfig(): Promise<FlockConfig>;
+  updateFlockConfig(patch: Partial<Omit<FlockConfig, 'updatedAt'>>): Promise<FlockConfig>;
+  getDispatchDefaults(): Promise<DispatchDefaults>;
+  updateDispatchDefaults(
+    patch: Partial<Omit<DispatchDefaults, 'updatedAt'>>,
+  ): Promise<DispatchDefaults>;
+  getNotificationSettings(): Promise<NotificationSettings>;
+  updateNotificationSettings(
+    patch: Partial<Omit<NotificationSettings, 'updatedAt'>>,
+  ): Promise<NotificationSettings>;
+}
+
+// ---------------------------------------------------------------------------
+// IAuditLogService — immutable audit trail for settings changes + dispatch events
+// ---------------------------------------------------------------------------
+
+/**
+ * Read-only audit log service.
+ */
+export interface IAuditLogService {
+  listAuditEntries(filter?: AuditFilter): Promise<AuditEntry[]>;
 }
