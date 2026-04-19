@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { createRoute, createMemoryHistory } from '@tanstack/react-router';
 import { ConfigProvider, FeatureCatalogProvider, definePlugin } from '@niuulabs/plugin-sdk';
 import { Shell } from './Shell';
 
@@ -8,7 +9,13 @@ const pluginA = definePlugin({
   rune: 'ᚨ',
   title: 'Alpha',
   subtitle: 'first',
-  render: () => <div data-testid="alpha-content">alpha-rendered</div>,
+  routes: (root) => [
+    createRoute({
+      getParentRoute: () => root,
+      path: '/alpha',
+      component: () => <div data-testid="alpha-content">alpha-rendered</div>,
+    }),
+  ],
 });
 
 const pluginB = definePlugin({
@@ -16,7 +23,13 @@ const pluginB = definePlugin({
   rune: 'ᛒ',
   title: 'Beta',
   subtitle: 'second',
-  render: () => <div data-testid="beta-content">beta-rendered</div>,
+  routes: (root) => [
+    createRoute({
+      getParentRoute: () => root,
+      path: '/beta',
+      component: () => <div data-testid="beta-content">beta-rendered</div>,
+    }),
+  ],
 });
 
 function wrap(
@@ -42,24 +55,120 @@ describe('Shell', () => {
     localStorage.clear();
   });
 
-  it('renders the first enabled plugin by default', () => {
-    wrap(<Shell plugins={[pluginA, pluginB]} />);
-    expect(screen.getByTestId('alpha-content')).toBeInTheDocument();
+  it('renders the first enabled plugin by default', async () => {
+    wrap(
+      <Shell
+        plugins={[pluginA, pluginB]}
+        history={createMemoryHistory({ initialEntries: ['/alpha'] })}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('alpha-content')).toBeInTheDocument();
+    });
     expect(screen.queryByTestId('beta-content')).not.toBeInTheDocument();
   });
 
-  it('switches active plugin on rail click and persists to localStorage', () => {
-    wrap(<Shell plugins={[pluginA, pluginB]} />);
+  it('switches active plugin on rail click and persists to localStorage', async () => {
+    wrap(
+      <Shell
+        plugins={[pluginA, pluginB]}
+        history={createMemoryHistory({ initialEntries: ['/alpha'] })}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('alpha-content')).toBeInTheDocument();
+    });
     fireEvent.click(screen.getByTitle('Beta · second'));
-    expect(screen.getByTestId('beta-content')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('beta-content')).toBeInTheDocument();
+    });
     expect(localStorage.getItem('niuu.active')).toBe('beta');
   });
 
-  it('hides plugins disabled via config', () => {
-    wrap(<Shell plugins={[pluginA, pluginB]} />, {
-      alpha: { enabled: false, order: 1 },
+  it('hides plugins disabled via config', async () => {
+    wrap(
+      <Shell
+        plugins={[pluginA, pluginB]}
+        history={createMemoryHistory({ initialEntries: ['/beta'] })}
+      />,
+      {
+        alpha: { enabled: false, order: 1 },
+      },
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('beta-content')).toBeInTheDocument();
     });
     expect(screen.queryByTitle('Alpha · first')).not.toBeInTheDocument();
-    expect(screen.getByTestId('beta-content')).toBeInTheDocument();
+  });
+
+  it('renders 404 for unknown paths', async () => {
+    wrap(
+      <Shell
+        plugins={[pluginA]}
+        history={createMemoryHistory({ initialEntries: ['/nonexistent'] })}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByText('404')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Page not found')).toBeInTheDocument();
+  });
+
+  it('redirects / to the first plugin', async () => {
+    wrap(
+      <Shell
+        plugins={[pluginA, pluginB]}
+        history={createMemoryHistory({ initialEntries: ['/'] })}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('alpha-content')).toBeInTheDocument();
+    });
+  });
+
+  it('syncs localStorage from router state', async () => {
+    wrap(
+      <Shell
+        plugins={[pluginA, pluginB]}
+        history={createMemoryHistory({ initialEntries: ['/beta'] })}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('beta-content')).toBeInTheDocument();
+    });
+    expect(localStorage.getItem('niuu.active')).toBe('beta');
+  });
+
+  it('renders subnav when plugin provides one', async () => {
+    const pluginWithSubnav = definePlugin({
+      id: 'sub',
+      rune: 'ᛊ',
+      title: 'Sub',
+      subtitle: 'subnav test',
+      subnav: () => <div data-testid="subnav-content">subnav</div>,
+      routes: (root) => [
+        createRoute({
+          getParentRoute: () => root,
+          path: '/sub',
+          component: () => <div data-testid="sub-content">sub-rendered</div>,
+        }),
+      ],
+    });
+    wrap(
+      <Shell
+        plugins={[pluginWithSubnav]}
+        history={createMemoryHistory({ initialEntries: ['/sub'] })}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('subnav-content')).toBeInTheDocument();
+    });
+  });
+
+  it('renders with no plugins', async () => {
+    wrap(<Shell plugins={[]} history={createMemoryHistory({ initialEntries: ['/'] })} />);
+    await waitFor(() => {
+      expect(screen.getByText('0 plugins loaded')).toBeInTheDocument();
+    });
   });
 });
