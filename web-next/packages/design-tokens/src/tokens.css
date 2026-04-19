@@ -84,6 +84,9 @@ design/tokens.css
   --color-critical-bg: color-mix(in srgb, #ef4444 15%, transparent);
   --color-critical-bo: color-mix(in srgb, #ef4444 35%, transparent);
 
+  /* ── Semantic indicators ─────────────────────────────── */
+  --color-delta-up: #10b981;
+
   /* ── Semantic status ─────────────────────────────────── */
   --status-healthy: var(--brand-200);
   --status-running: var(--brand-300);

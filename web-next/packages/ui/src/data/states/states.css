@@ -53,10 +53,10 @@
 
 /* ── ErrorState tint ──────────────────────────────────── */
 .niuu-state--error .niuu-state__title {
-  color: var(--color-critical-fg, #ef4444);
+  color: var(--color-critical-fg);
 }
 
 .niuu-state--error .niuu-state__icon {
-  color: var(--color-critical-fg, #ef4444);
+  color: var(--color-critical-fg);
   opacity: 0.8;
 }

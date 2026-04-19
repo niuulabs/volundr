@@ -58,11 +58,11 @@
 }
 
 .niuu-kpi-card__delta--up {
-  color: #10b981; /* emerald-500 */
+  color: var(--color-delta-up);
 }
 
 .niuu-kpi-card__delta--down {
-  color: var(--color-critical-fg, #ef4444);
+  color: var(--color-critical-fg);
 }
 
 .niuu-kpi-card__delta--neutral {

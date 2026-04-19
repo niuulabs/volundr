@@ -12,6 +12,7 @@ import {
   LoadingState,
   ErrorState,
 } from '@niuulabs/ui';
+import './ShowcasePage.css';
 
 interface DispatchRow {
   id: string;
@@ -62,25 +63,8 @@ export function ShowcasePage() {
   });
 
   return (
-    <div
-      style={{
-        padding: '24px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '32px',
-        maxWidth: '900px',
-      }}
-    >
-      <h2
-        style={{
-          margin: 0,
-          fontFamily: 'var(--font-mono)',
-          fontSize: '14px',
-          color: 'var(--color-text-muted)',
-        }}
-      >
-        NIU-658 · Data surfaces showcase
-      </h2>
+    <div className="showcase-page">
+      <h2 className="showcase-page__heading">NIU-658 · Data surfaces showcase</h2>
 
       {/* KpiStrip */}
       <section aria-label="KPI metrics">
@@ -99,22 +83,13 @@ export function ShowcasePage() {
       </section>
 
       {/* Mode switcher */}
-      <div style={{ display: 'flex', gap: '8px' }}>
+      <div className="showcase-mode-switcher">
         {(['data', 'loading', 'empty', 'error'] as DataMode[]).map((m) => (
           <button
             key={m}
             data-testid={`mode-${m}`}
             onClick={() => setMode(m)}
-            style={{
-              padding: '4px 12px',
-              background: mode === m ? 'var(--color-brand)' : 'var(--color-bg-secondary)',
-              color: mode === m ? '#000' : 'var(--color-text-secondary)',
-              border: '1px solid var(--color-border)',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '12px',
-            }}
+            className={`showcase-mode-btn${mode === m ? ' showcase-mode-btn--active' : ''}`}
           >
             {m}
           </button>
@@ -133,21 +108,7 @@ export function ShowcasePage() {
           icon="📭"
           title="No dispatches found"
           description="Try adjusting your filters or create a new dispatch."
-          action={
-            <button
-              style={{
-                padding: '6px 14px',
-                background: 'var(--color-brand)',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-sans)',
-                fontSize: '13px',
-              }}
-            >
-              New Dispatch
-            </button>
-          }
+          action={<button className="showcase-action-btn">New Dispatch</button>}
         />
       )}
       {mode === 'error' && (
@@ -156,20 +117,7 @@ export function ShowcasePage() {
           title="Could not load dispatches"
           message="The Tyr service returned a 503. Check your connection and retry."
           action={
-            <button
-              style={{
-                padding: '6px 14px',
-                background: 'var(--color-bg-elevated)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                color: 'var(--color-text-primary)',
-                fontFamily: 'var(--font-sans)',
-                fontSize: '13px',
-              }}
-            >
-              Retry
-            </button>
+            <button className="showcase-action-btn showcase-action-btn--secondary">Retry</button>
           }
         />
       )}
@@ -188,13 +136,7 @@ export function ShowcasePage() {
           expandedId={expandedId}
           onExpandChange={setExpandedId}
           getExpandedContent={(row) => (
-            <div
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
-                color: 'var(--color-text-secondary)',
-              }}
-            >
+            <div className="showcase-expand-detail">
               <strong>ID:</strong> {row.id} &nbsp;·&nbsp; <strong>Status:</strong> {row.status}{' '}
               &nbsp;·&nbsp; <strong>Duration:</strong> {row.duration}
             </div>
