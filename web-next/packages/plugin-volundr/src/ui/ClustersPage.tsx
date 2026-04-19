@@ -1,5 +1,5 @@
 import { StateDot, Chip } from '@niuulabs/ui';
-import type { Cluster, ClusterCapacity, NodeStatus } from '../domain/cluster';
+import type { Cluster, NodeStatus } from '../domain/cluster';
 import { useClusters } from './useClusters';
 import './ClustersPage.css';
 

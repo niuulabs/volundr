@@ -189,7 +189,7 @@ export function HistoryPage() {
                   <div className="history-page__outcome">
                     <StateDot state={outcomeState(session.state)} />
                     <Chip
-                      tone={session.state === 'terminated' ? 'neutral' : 'critical'}
+                      tone={session.state === 'terminated' ? 'default' : 'critical'}
                     >
                       {outcomeLabel(session.state)}
                     </Chip>

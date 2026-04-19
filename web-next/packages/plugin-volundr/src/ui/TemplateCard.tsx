@@ -40,8 +40,8 @@ export function TemplateCard({
       </div>
 
       <div className="tpl-card__resources">
-        <Chip tone="neutral">CPU {spec.resources.cpuRequest}–{spec.resources.cpuLimit}</Chip>
-        <Chip tone="neutral">Mem {spec.resources.memRequestMi}–{spec.resources.memLimitMi} Mi</Chip>
+        <Chip tone="default">CPU {spec.resources.cpuRequest}–{spec.resources.cpuLimit}</Chip>
+        <Chip tone="default">Mem {spec.resources.memRequestMi}–{spec.resources.memLimitMi} Mi</Chip>
         {spec.resources.gpuCount > 0 && (
           <Chip tone="brand">GPU ×{spec.resources.gpuCount}</Chip>
         )}
