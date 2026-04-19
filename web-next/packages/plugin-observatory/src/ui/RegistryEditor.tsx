@@ -270,7 +270,8 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
   const handleDragOver = (e: React.DragEvent, targetId: string) => {
     const currentDragId = dragIdRef.current;
     if (!currentDragId) return;
-    const invalid = isDescendant(registry, currentDragId, targetId, byId) || currentDragId === targetId;
+    const invalid =
+      isDescendant(registry, currentDragId, targetId, byId) || currentDragId === targetId;
     try {
       if (e.dataTransfer) e.dataTransfer.dropEffect = invalid ? 'none' : 'move';
     } catch {
