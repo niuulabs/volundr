@@ -125,6 +125,9 @@ importers:
       '@niuulabs/design-tokens':
         specifier: workspace:*
         version: link:../../packages/design-tokens
+      '@niuulabs/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@niuulabs/plugin-hello':
         specifier: workspace:*
         version: link:../../packages/plugin-hello

@@ -27,7 +27,7 @@ test('observatory page shows recent events', async ({ page }) => {
 test('registry page renders entity type list', async ({ page }) => {
   await page.goto('/registry');
   await expect(page.getByText('Registry').first()).toBeVisible();
-  await expect(page.getByText('Realm')).toBeVisible({ timeout: 5000 });
-  await expect(page.getByText('Cluster')).toBeVisible({ timeout: 5000 });
-  await expect(page.getByText('Raid')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('Realm').first()).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('Cluster').first()).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('Raid').first()).toBeVisible({ timeout: 5000 });
 });
