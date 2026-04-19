@@ -276,6 +276,26 @@ pnpm format             # prettier
 pnpm build              # build all packages, then the app
 ```
 
+## Authenticated services — tokens are already in the environment
+
+This session is pre-authenticated for GitHub and Linear. If you hit an auth
+failure calling `gh`, the GitHub API, or the Linear MCP tools, **the token is
+already available — look before you ask**:
+
+- **GitHub CLI** — `gh auth status` should show a logged-in account. `gh` reads
+  from `~/.config/gh/hosts.yml` automatically. Git HTTPS operations use the same
+  credentials.
+- **GitHub API directly** — if you need to call the raw API with curl or from a
+  script, the `gh` CLI is the simplest path (`gh api repos/...`) because it
+  injects the token. Do not fabricate URLs or invent tokens.
+- **Linear** — the MCP tools under `mcp__claude_ai_Linear__*` are already wired
+  and use the session's Linear API key. No further setup needed. If a tool call
+  fails, it's not an auth issue — re-read the error.
+
+Never add a token to code, commit messages, `.env` files, or logs. If a token
+ever shows up in a diff, the commit is wrong — the TruffleHog pre-commit hook
+will block the push.
+
 ## Git hooks — install once per clone
 
 The workspace ships a `.pre-commit-config.yaml` at the repo root that catches the
