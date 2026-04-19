@@ -1,8 +1,36 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import { HistoryPage } from './HistoryPage';
 import { renderWithVolundr } from '../testing/renderWithVolundr';
 import { createMockSessionStore } from '../adapters/mock';
+
+// Link from TanStack Router requires a full router context which is provided
+// by the Shell in production but not in unit tests. Stub it as a plain <a>
+// so HistoryPage tests remain fast and self-contained.
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>();
+  return {
+    ...actual,
+    Link: ({
+      children,
+      to,
+      params,
+      ...rest
+    }: {
+      children: React.ReactNode;
+      to: string;
+      params?: Record<string, string>;
+      [key: string]: unknown;
+    }) => {
+      const href = to.replace(/\$(\w+)/g, (_, key: string) => params?.[key] ?? '');
+      return (
+        <a href={href} {...rest}>
+          {children}
+        </a>
+      );
+    },
+  };
+});
 
 describe('HistoryPage', () => {
   it('renders the heading', () => {
@@ -135,5 +163,15 @@ describe('HistoryPage', () => {
     renderWithVolundr(<HistoryPage />);
     await waitFor(() => expect(screen.getByText('saga-auth')).toBeInTheDocument());
     expect(screen.getByText('saga-api')).toBeInTheDocument();
+  });
+
+  it('detail links point to /volundr/session/:id/archived', async () => {
+    renderWithVolundr(<HistoryPage />);
+    await waitFor(() =>
+      expect(screen.getAllByRole('link', { name: /details/i }).length).toBeGreaterThan(0),
+    );
+    const links = screen.getAllByRole('link', { name: /details/i });
+    // ds-2 is the first terminated session (ds-1 is running, excluded)
+    expect(links[0]).toHaveAttribute('href', '/volundr/session/ds-2/archived');
   });
 });

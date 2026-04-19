@@ -12,19 +12,6 @@ export function useTemplates() {
   });
 }
 
-/** Mutation: clone a template by creating a new one with same spec. */
-export function useCloneTemplate() {
-  const store = useService<ITemplateStore>('volundr.templates');
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: ({ name, spec }: { name: string; spec: PodSpec }) =>
-      store.createTemplate(name, spec),
-    onSuccess: () => {
-      void client.invalidateQueries({ queryKey: ['volundr', 'templates'] });
-    },
-  });
-}
-
 /** Mutation: update an existing template's spec (increments version). */
 export function useUpdateTemplate() {
   const store = useService<ITemplateStore>('volundr.templates');

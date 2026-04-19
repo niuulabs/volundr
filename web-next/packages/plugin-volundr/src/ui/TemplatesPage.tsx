@@ -14,7 +14,6 @@ import type { PodSpec } from '../domain/pod';
 import { cloneName, buildCloneSpec } from '../application/templateUtils';
 import {
   useTemplates,
-  useCloneTemplate,
   useCreateTemplate,
   useUpdateTemplate,
 } from './useTemplates';
@@ -155,7 +154,6 @@ function validate(values: FormValues): ValidationError[] {
 
 export function TemplatesPage() {
   const templates = useTemplates();
-  const cloneMutation = useCloneTemplate();
   const createMutation = useCreateTemplate();
   const updateMutation = useUpdateTemplate();
 
@@ -183,12 +181,12 @@ export function TemplatesPage() {
     (template: Template) => {
       setCloningId(template.id);
       const spec = buildCloneSpec(template);
-      cloneMutation.mutate(
+      createMutation.mutate(
         { name: cloneName(template.name), spec },
         { onSettled: () => setCloningId(null) },
       );
     },
-    [cloneMutation],
+    [createMutation],
   );
 
   const handleSave = useCallback(() => {

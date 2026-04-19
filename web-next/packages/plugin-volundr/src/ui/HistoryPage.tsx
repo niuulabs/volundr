@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import { StateDot, Chip } from '@niuulabs/ui';
 import type { Session } from '../domain/session';
 import { useHistory } from './useHistory';
@@ -200,13 +201,14 @@ export function HistoryPage() {
                   {durationMs(session.startedAt, session.terminatedAt)}
                 </td>
                 <td>
-                  <a
-                    href={`/volundr/history/${session.id}`}
+                  <Link
+                    to="/volundr/session/$sessionId/archived"
+                    params={{ sessionId: session.id }}
                     className="history-page__detail-link"
                     aria-label={`View details for session ${session.id}`}
                   >
                     Details →
-                  </a>
+                  </Link>
                 </td>
               </tr>
             ))}
