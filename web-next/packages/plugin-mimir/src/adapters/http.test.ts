@@ -269,6 +269,49 @@ describe('buildMimirHttpAdapter', () => {
     });
   });
 
+  describe('mounts.getRecentWrites', () => {
+    it('calls GET /mounts/recent-writes with default limit', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).mounts.getRecentWrites();
+      const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(call).toContain('/mounts/recent-writes');
+      expect(call).toContain('limit=20');
+    });
+
+    it('passes explicit limit', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).mounts.getRecentWrites(5);
+      const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(call).toContain('limit=5');
+    });
+  });
+
+  describe('pages.listSources', () => {
+    it('calls GET /sources without query string when no options', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).pages.listSources();
+      expect(client.get).toHaveBeenCalledWith('/sources');
+    });
+
+    it('appends origin_type and mount query params', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).pages.listSources({ originType: 'web', mountName: 'local' });
+      const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(call).toContain('origin_type=web');
+      expect(call).toContain('mount=local');
+    });
+  });
+
+  describe('pages.getPageSources', () => {
+    it('calls GET /page/sources with encoded path', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).pages.getPageSources('/arch/overview');
+      const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(call).toContain('/page/sources');
+      expect(call).toContain('path=%2Farch%2Foverview');
+    });
+  });
+
   describe('pages.listEntities', () => {
     it('calls GET /entities without query string when no options', async () => {
       const client = makeClient({ get: vi.fn().mockResolvedValue([]) });

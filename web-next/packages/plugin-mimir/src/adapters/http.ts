@@ -15,6 +15,8 @@ import type { EmbeddingSearchResult } from '../ports/IEmbeddingStore';
 import type { EntityKind, EntityMeta } from '../domain/entity';
 import type { WriteRoutingRule } from '../domain/routing';
 import type { RavnBinding } from '../domain/ravn-binding';
+import type { Source, OriginType } from '../domain/source';
+import type { RecentWrite } from '../ports/IMountAdapter';
 import { tallySeverity } from '../domain/lint';
 
 // ---------------------------------------------------------------------------
@@ -286,6 +288,10 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
       async listRavnBindings(): Promise<RavnBinding[]> {
         return client.get<RavnBinding[]>('/ravns/bindings');
       },
+
+      async getRecentWrites(limit = 20): Promise<RecentWrite[]> {
+        return client.get<RecentWrite[]>(`/mounts/recent-writes?limit=${limit}`);
+      },
     },
 
     pages: {
@@ -345,6 +351,18 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
         const qs = options?.kind ? `?kind=${encodeURIComponent(options.kind)}` : '';
         const raw = await client.get<RawEntityMeta[]>(`/entities${qs}`);
         return raw.map(toEntityMeta);
+      },
+
+      async listSources(options?: { originType?: OriginType; mountName?: string }): Promise<Source[]> {
+        const params = new URLSearchParams();
+        if (options?.originType) params.set('origin_type', options.originType);
+        if (options?.mountName) params.set('mount', options.mountName);
+        const qs = params.toString() ? `?${params.toString()}` : '';
+        return client.get<Source[]>(`/sources${qs}`);
+      },
+
+      async getPageSources(path: string): Promise<Source[]> {
+        return client.get<Source[]>(`/page/sources?path=${encodeURIComponent(path)}`);
       },
     },
 
