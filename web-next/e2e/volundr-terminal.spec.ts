@@ -36,8 +36,10 @@ test('type a command in terminal and see echoed output', async ({ page }) => {
   await expect(page.getByTestId('terminal-connection-status')).not.toBeVisible({ timeout: 5_000 });
 
   // Click the terminal area to focus it.
+  // force: true skips the actionability stability check — xterm's ResizeObserver
+  // can keep the container "not stable" for a tick after connecting.
   const container = page.getByTestId('terminal-container');
-  await container.click();
+  await container.click({ force: true });
 
   // Type into the terminal — xterm captures keyboard events on the canvas.
   await page.keyboard.type('ls');
@@ -51,7 +53,9 @@ test('type a command in terminal and see echoed output', async ({ page }) => {
 test('reconnect button triggers re-subscription', async ({ page }) => {
   await openTerminalTab(page);
   await expect(page.getByTestId('terminal-reconnect-button')).toBeVisible({ timeout: 5_000 });
-  await page.getByTestId('terminal-reconnect-button').click();
+  // force: true — xterm layout can keep the parent container "not stable"
+  // briefly after connecting, which affects child elements' actionability.
+  await page.getByTestId('terminal-reconnect-button').click({ force: true });
   // After reconnect, the connection badge should appear briefly then disappear.
   await expect(page.getByTestId('terminal-connection-status')).not.toBeVisible({ timeout: 8_000 });
 });
