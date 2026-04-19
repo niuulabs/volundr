@@ -6,5 +6,11 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
-  external: ['react', '@tanstack/react-query', '@niuulabs/plugin-sdk', '@niuulabs/ui'],
+  external: [
+    'react',
+    '@tanstack/react-query',
+    '@niuulabs/plugin-sdk',
+    '@niuulabs/query',
+    '@niuulabs/ui',
+  ],
 });
