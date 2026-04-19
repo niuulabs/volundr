@@ -30,7 +30,7 @@ function EditZoneBody({
   textareaRef,
 }: {
   zone: Zone;
-  textareaRef: React.RefObject<HTMLTextAreaElement>;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
   const text = zoneToEditableText(zone);
   return (
