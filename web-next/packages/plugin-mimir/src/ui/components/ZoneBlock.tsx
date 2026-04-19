@@ -30,7 +30,7 @@ function EditZoneBody({
   textareaRef,
 }: {
   zone: Zone;
-  textareaRef: React.RefObject<HTMLTextAreaElement>;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
   const text = zoneToEditableText(zone);
   return (
@@ -65,13 +65,10 @@ export function ZoneBlock({
     editState.status === 'editing' &&
     editState.path === pagePath &&
     editState.zoneKind === zone.kind;
-  const isSavingThis =
-    editState.status === 'saving' && editState.path === pagePath;
+  const isSavingThis = editState.status === 'saving' && editState.path === pagePath;
   const isSaved = editState.status === 'saved' && editState.path === pagePath;
   const errorMessage =
-    editState.status === 'error' && editState.path === pagePath
-      ? editState.message
-      : null;
+    editState.status === 'error' && editState.path === pagePath ? editState.message : null;
 
   const canEdit = editState.status === 'idle';
   const label = ZONE_LABELS[zone.kind] ?? zone.kind;
@@ -102,12 +99,7 @@ export function ZoneBlock({
               >
                 save
               </button>
-              <button
-                type="button"
-                className="mm-btn"
-                onClick={onCancel}
-                aria-label="cancel edit"
-              >
+              <button type="button" className="mm-btn" onClick={onCancel} aria-label="cancel edit">
                 cancel
               </button>
             </>
@@ -118,7 +110,10 @@ export function ZoneBlock({
       <div className="mm-zone-body">
         {isSaved && (
           <div className="mm-save-banner">
-            ✓ saved → {pageMounts.map((m) => <MountChip key={m} name={m} />)}
+            ✓ saved →{' '}
+            {pageMounts.map((m) => (
+              <MountChip key={m} name={m} />
+            ))}
           </div>
         )}
         {errorMessage && <div className="mm-error-banner">{errorMessage}</div>}

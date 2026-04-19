@@ -89,8 +89,21 @@ export { resolveRoute } from './domain/routing';
 export type { RavnState, RavnBinding } from './domain/ravn-binding';
 export type { Source, OriginType } from './domain/source';
 export type { EntityKind, EntityMeta } from './domain/entity';
-export type { FileTreeDir, FileTreeLeaf, FileTreeItem, WikilinkTarget, ZoneEditState, ZoneEditAction } from './domain';
-export { buildFileTree, mergeFileTrees, resolveWikilink, detectBrokenWikilinks, zoneEditReducer } from './domain';
+export type {
+  FileTreeDir,
+  FileTreeLeaf,
+  FileTreeItem,
+  WikilinkTarget,
+  ZoneEditState,
+  ZoneEditAction,
+} from './domain';
+export {
+  buildFileTree,
+  mergeFileTrees,
+  resolveWikilink,
+  detectBrokenWikilinks,
+  zoneEditReducer,
+} from './domain';
 
 // UI components (plugin-local; promote to @niuulabs/ui when a second plugin needs them)
 export { WikilinkPill } from './ui/components/WikilinkPill';

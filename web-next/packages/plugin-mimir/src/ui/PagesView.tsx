@@ -28,9 +28,9 @@ export function PagesView() {
 
   // Auto-select the first page once data loads.
   useEffect(() => {
-    if (selectedPath === null && allPages.length > 0) {
-      setSelectedPath(allPages[0]?.path ?? null);
-    }
+    if (selectedPath !== null) return;
+    const first = allPages[0];
+    if (first) setSelectedPath(first.path);
   }, [allPages, selectedPath]);
 
   const activePagePath = selectedPath ?? allPages[0]?.path ?? null;

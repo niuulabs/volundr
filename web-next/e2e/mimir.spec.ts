@@ -51,7 +51,10 @@ test('can open a page and see its title', async ({ page }) => {
   const archDir = page.getByText('arch/');
   await expect(archDir).toBeVisible({ timeout: 5000 });
   // Leaf node for overview
-  await page.getByRole('button', { name: /overview/ }).first().click();
+  await page
+    .getByRole('button', { name: /overview/ })
+    .first()
+    .click();
   await expect(page.getByText('Architecture Overview')).toBeVisible({ timeout: 5000 });
 });
 
@@ -59,7 +62,10 @@ test('edit a zone and cancel restores read mode', async ({ page }) => {
   await page.goto('/mimir');
   await page.getByRole('tab', { name: 'Pages' }).click();
   // Open architecture overview
-  await page.getByRole('button', { name: /overview/ }).first().click();
+  await page
+    .getByRole('button', { name: /overview/ })
+    .first()
+    .click();
   await expect(page.getByText('Architecture Overview')).toBeVisible({ timeout: 5000 });
   // Click edit on first zone
   const editBtn = page.getByRole('button', { name: /edit key-facts zone/ });
@@ -75,7 +81,10 @@ test('edit a zone and cancel restores read mode', async ({ page }) => {
 test('save a zone shows destination mount in success banner', async ({ page }) => {
   await page.goto('/mimir');
   await page.getByRole('tab', { name: 'Pages' }).click();
-  await page.getByRole('button', { name: /overview/ }).first().click();
+  await page
+    .getByRole('button', { name: /overview/ })
+    .first()
+    .click();
   await expect(page.getByText('Architecture Overview')).toBeVisible({ timeout: 5000 });
   const editBtn = page.getByRole('button', { name: /edit key-facts zone/ });
   await expect(editBtn).toBeVisible({ timeout: 5000 });
