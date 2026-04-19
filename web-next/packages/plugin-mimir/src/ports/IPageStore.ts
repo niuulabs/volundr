@@ -1,5 +1,6 @@
 import type { PageMeta, Page, SearchResult } from '../domain/page';
-import type { MimirStats } from '../domain/api-types';
+import type { MimirStats, MimirGraph } from '../domain/api-types';
+import type { EntityKind, EntityMeta } from '../domain/entity';
 
 export type SearchMode = 'fts' | 'semantic' | 'hybrid';
 
@@ -35,4 +36,16 @@ export interface IPageStore {
    * Defaults to hybrid mode.
    */
   search(query: string, mode?: SearchMode): Promise<SearchResult[]>;
+
+  /**
+   * Fetch the knowledge graph (page nodes + relationship edges).
+   * Optionally scoped to a single mount.
+   */
+  getGraph(options?: { mountName?: string }): Promise<MimirGraph>;
+
+  /**
+   * List entity pages, optionally filtered by entity kind.
+   * Returns lightweight EntityMeta summaries suitable for list views.
+   */
+  listEntities(options?: { kind?: EntityKind }): Promise<EntityMeta[]>;
 }

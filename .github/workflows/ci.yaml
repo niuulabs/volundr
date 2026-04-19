@@ -89,7 +89,13 @@ jobs:
           # web-next scaffold branches: run only the web-next test suite.
           # Python backend + web/ frontend tests are disabled here to speed up
           # the new UI build. Revert when web-next reaches parity.
-          if [[ "$HEAD" == feat/web-next* ]] || [[ "$BASE" == feat/web-next* ]]; then
+          #
+          # Matches:
+          #   - feat/web-next-*                      (legacy scaffold branches)
+          #   - feat/niuu-web-*                      (current scaffold: feat/niuu-web-composable-plugin-ui)
+          #   - niu-<ticket> targeting either of the above (child PRs)
+          if [[ "$HEAD" == feat/web-next* ]] || [[ "$BASE" == feat/web-next* ]] \
+             || [[ "$HEAD" == feat/niuu-web* ]] || [[ "$BASE" == feat/niuu-web* ]]; then
             echo "python=false" >> $GITHUB_OUTPUT
             echo "web=false" >> $GITHUB_OUTPUT
             echo "helm=false" >> $GITHUB_OUTPUT

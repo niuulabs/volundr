@@ -49,7 +49,7 @@ describe('getOidcConfig', () => {
     expect(oidcConfig!.authority).toBe('https://auth.example.com');
     expect(oidcConfig!.clientId).toBe('niuu-web');
     expect(oidcConfig!.scope).toBe('openid profile email');
-    expect(oidcConfig!.redirectUri).toBe(window.location.origin);
+    expect(oidcConfig!.redirectUri).toBe(`${window.location.origin}/login/callback`);
     expect(oidcConfig!.postLogoutRedirectUri).toBe(window.location.origin);
   });
 });

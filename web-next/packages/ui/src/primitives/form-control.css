@@ -1,0 +1,39 @@
+/* Shared base class for all form control elements (input, textarea, select trigger, combobox input). */
+.niuu-form-control {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  outline: none;
+}
+
+.niuu-form-control::placeholder {
+  color: var(--color-text-muted);
+}
+
+.niuu-form-control:focus {
+  border-color: var(--color-brand-500, var(--brand-500));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand-500, var(--brand-500)) 25%, transparent);
+}
+
+.niuu-form-control:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--color-bg-tertiary);
+}
+
+.niuu-form-control--error {
+  border-color: var(--color-critical-fg);
+}
+
+.niuu-form-control--error:focus {
+  border-color: var(--color-critical-fg);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-critical-fg) 25%, transparent);
+}

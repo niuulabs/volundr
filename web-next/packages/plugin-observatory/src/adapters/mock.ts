@@ -5,13 +5,7 @@ import type {
   TopologyListener,
   ObservatoryEventListener,
 } from '../ports';
-import type {
-  Registry,
-  Topology,
-  TopologyNode,
-  TopologyEdge,
-  ObservatoryEvent,
-} from '../domain';
+import type { Registry, Topology, TopologyNode, TopologyEdge, ObservatoryEvent } from '../domain';
 
 // ── Seed registry (mirrors DEFAULT_REGISTRY from web2/niuu_handoff/flokk_observatory/design/data.jsx) ──
 
@@ -323,7 +317,8 @@ const SEED_REGISTRY: Registry = {
       canContain: [],
       parentTypes: ['realm'],
       category: 'device',
-      description: 'SLA resin printer on YDP WebSocket. Saturn 4 Ultras named after legendary weapons.',
+      description:
+        'SLA resin printer on YDP WebSocket. Saturn 4 Ultras named after legendary weapons.',
       fields: [{ key: 'model', label: 'Model', type: 'string' }],
     },
     {
@@ -338,7 +333,8 @@ const SEED_REGISTRY: Registry = {
       canContain: [],
       parentTypes: ['realm'],
       category: 'device',
-      description: 'ESP32 room presence node — mmWave, mic, speaker. Named for the locale it inhabits.',
+      description:
+        'ESP32 room presence node — mmWave, mic, speaker. Named for the locale it inhabits.',
       fields: [{ key: 'sensors', label: 'Sensors', type: 'tags' }],
     },
     {
@@ -372,7 +368,12 @@ const SEED_REGISTRY: Registry = {
         'Ephemeral flock — ravens dispatched by a Týr to execute a saga. Forms, works, dissolves.',
       fields: [
         { key: 'purpose', label: 'Purpose', type: 'string' },
-        { key: 'state', label: 'State', type: 'select', options: ['forming', 'working', 'dissolving'] },
+        {
+          key: 'state',
+          label: 'State',
+          type: 'select',
+          options: ['forming', 'working', 'dissolving'],
+        },
         { key: 'composition', label: 'Composition', type: 'tags' },
       ],
     },

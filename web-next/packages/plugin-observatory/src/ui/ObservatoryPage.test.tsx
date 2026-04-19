@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { ObservatoryPage } from './ObservatoryPage';
-import { createMockTopologyStream } from '../adapters/mock';
+import { createMockTopologyStream, createMockEventStream } from '../adapters/mock';
 import { makeCtxMock } from './TopologyCanvas/test-helpers';
 
 beforeEach(() => {
@@ -18,7 +18,10 @@ function wrap(ui: React.ReactNode) {
   return render(
     <QueryClientProvider client={client}>
       <ServicesProvider
-        services={{ 'observatory.topology': createMockTopologyStream() }}
+        services={{
+          'observatory.topology': createMockTopologyStream(),
+          'observatory.events': createMockEventStream(),
+        }}
       >
         {ui}
       </ServicesProvider>
