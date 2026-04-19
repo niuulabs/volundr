@@ -12,6 +12,7 @@ import type {
   ITyrSessionService,
   ITrackerBrowserService,
   ITyrIntegrationService,
+  IWorkflowService,
   IDispatchBus,
   DispatchResult,
   ITyrSettingsService,
@@ -33,6 +34,7 @@ import type { Saga, Phase, Raid } from '../domain/saga';
 import type { DispatcherState } from '../domain/dispatcher';
 import type { SessionInfo } from '../domain/session';
 import type { TrackerProject, TrackerMilestone, TrackerIssue } from '../domain/tracker';
+import type { Workflow } from '../domain/workflow';
 
 // ---------------------------------------------------------------------------
 // Seed data
@@ -315,6 +317,116 @@ const SEED_ISSUES: TrackerIssue[] = [
     priority: 1,
     url: 'https://linear.app/niuu/issue/NIU-671',
     milestoneId: null,
+  },
+];
+
+const SEED_WORKFLOWS: Workflow[] = [
+  {
+    id: '00000000-0000-0000-0000-000000000a01',
+    name: 'Auth Rewrite Workflow',
+    nodes: [
+      {
+        id: 'stage-setup',
+        kind: 'stage',
+        label: 'Set up CI',
+        raidId: '00000000-0000-0000-0000-000000000010',
+        personaIds: ['persona-build'],
+        position: { x: 100, y: 100 },
+      },
+      {
+        id: 'gate-qa',
+        kind: 'gate',
+        label: 'QA sign-off',
+        condition: 'All acceptance tests pass',
+        position: { x: 380, y: 100 },
+      },
+      {
+        id: 'cond-green',
+        kind: 'cond',
+        label: 'All green?',
+        predicate: 'ci.exitCode === 0',
+        position: { x: 620, y: 100 },
+      },
+      {
+        id: 'stage-merge',
+        kind: 'stage',
+        label: 'Merge to main',
+        raidId: '00000000-0000-0000-0000-000000000011',
+        personaIds: ['persona-ship'],
+        position: { x: 860, y: 60 },
+      },
+      {
+        id: 'stage-rollback',
+        kind: 'stage',
+        label: 'Rollback',
+        raidId: null,
+        personaIds: [],
+        position: { x: 860, y: 180 },
+      },
+    ],
+    edges: [
+      {
+        id: 'e1',
+        source: 'stage-setup',
+        target: 'gate-qa',
+        cp1: { x: 80, y: 0 },
+        cp2: { x: -80, y: 0 },
+      },
+      {
+        id: 'e2',
+        source: 'gate-qa',
+        target: 'cond-green',
+        cp1: { x: 80, y: 0 },
+        cp2: { x: -80, y: 0 },
+      },
+      {
+        id: 'e3',
+        source: 'cond-green',
+        target: 'stage-merge',
+        label: 'yes',
+        cp1: { x: 80, y: -40 },
+        cp2: { x: -80, y: -20 },
+      },
+      {
+        id: 'e4',
+        source: 'cond-green',
+        target: 'stage-rollback',
+        label: 'no',
+        cp1: { x: 80, y: 40 },
+        cp2: { x: -80, y: 20 },
+      },
+    ],
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000a02',
+    name: 'Plugin Ravn Workflow',
+    nodes: [
+      {
+        id: 'stage-scaffold',
+        kind: 'stage',
+        label: 'Scaffold plugin',
+        raidId: null,
+        personaIds: ['persona-plan'],
+        position: { x: 100, y: 100 },
+      },
+      {
+        id: 'stage-implement',
+        kind: 'stage',
+        label: 'Implement ports',
+        raidId: null,
+        personaIds: [],
+        position: { x: 380, y: 100 },
+      },
+    ],
+    edges: [
+      {
+        id: 'e1',
+        source: 'stage-scaffold',
+        target: 'stage-implement',
+        cp1: { x: 80, y: 0 },
+        cp2: { x: -80, y: 0 },
+      },
+    ],
   },
 ];
 
@@ -878,6 +990,32 @@ export function createMockTyrIntegrationService(): ITyrIntegrationService {
 
     async getTelegramSetup(): Promise<TelegramSetupResult> {
       return { deeplink: 'https://t.me/niuu_bot?start=mock', token: 'mock-telegram-token' };
+    },
+  };
+}
+
+/**
+ * Create an in-memory IWorkflowService backed by seed workflow DAGs.
+ */
+export function createMockWorkflowService(): IWorkflowService {
+  const workflows = new Map<string, Workflow>(SEED_WORKFLOWS.map((w) => [w.id, w]));
+
+  return {
+    async listWorkflows() {
+      return Array.from(workflows.values());
+    },
+
+    async getWorkflow(id: string) {
+      return workflows.get(id) ?? null;
+    },
+
+    async saveWorkflow(workflow: Workflow) {
+      workflows.set(workflow.id, workflow);
+      return workflow;
+    },
+
+    async deleteWorkflow(id: string) {
+      workflows.delete(id);
     },
   };
 }

@@ -1,6 +1,7 @@
 import { createRoute } from '@tanstack/react-router';
 import { definePlugin } from '@niuulabs/plugin-sdk';
 import { TyrPage } from './ui/TyrPage';
+import { WorkflowBuilderPage } from './ui/WorkflowBuilderPage';
 import { SagasPage } from './ui/SagasPage';
 import { SagaDetailRoute } from './ui/SagaDetailPage';
 import { DispatchView } from './ui/DispatchView';
@@ -19,6 +20,11 @@ export const tyrPlugin = definePlugin({
       getParentRoute: () => rootRoute,
       path: '/tyr',
       component: TyrPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/workflows',
+      component: WorkflowBuilderPage,
     }),
     createRoute({
       getParentRoute: () => rootRoute,
@@ -82,6 +88,7 @@ export {
   createMockTyrSessionService,
   createMockTrackerService,
   createMockTyrIntegrationService,
+  createMockWorkflowService,
   createMockDispatchBus,
   createMockTyrSettingsService,
   createMockAuditLogService,
@@ -106,6 +113,7 @@ export type {
   ITyrSessionService,
   ITrackerBrowserService,
   ITyrIntegrationService,
+  IWorkflowService,
   IDispatchBus,
   DispatchResult,
   ITyrSettingsService,
@@ -196,6 +204,15 @@ export {
 } from './domain/workflow';
 
 export { dispatcherStateSchema, dispatchRuleSchema } from './domain/dispatcher';
+
+export { topologicalSort, detectCycle } from './domain/topologicalSort';
+export type { TopologicalLayer } from './domain/topologicalSort';
+
+export { validateWorkflowFull } from './domain/workflowValidation';
+export type { WorkflowIssue, WorkflowIssueKind } from './domain/workflowValidation';
+
+// WorkflowBuilder UI
+export { WorkflowBuilder } from './ui/WorkflowBuilder';
 
 export {
   PLAN_STEPS,

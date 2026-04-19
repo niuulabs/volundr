@@ -29,6 +29,8 @@ export const workflowStageNodeSchema = z.object({
   label: z.string().min(1),
   /** Optional reference to the Raid this stage maps to. */
   raidId: z.string().nullable(),
+  /** Persona IDs assigned to this stage (drives missing_persona validation). */
+  personaIds: z.array(z.string()).default([]),
   position: positionSchema,
 });
 export type WorkflowStageNode = z.infer<typeof workflowStageNodeSchema>;
