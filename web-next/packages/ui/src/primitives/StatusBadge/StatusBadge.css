@@ -1,0 +1,82 @@
+.niuu-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+}
+
+.niuu-status-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  background: currentColor;
+}
+
+.niuu-status-badge__label {
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* ── running ──────────────────────────────────────── */
+.niuu-status-badge--running {
+  color: var(--status-running);
+  border-color: color-mix(in srgb, var(--status-running) 30%, transparent);
+  background: color-mix(in srgb, var(--status-running) 12%, transparent);
+}
+
+.niuu-status-badge--running .niuu-status-badge__dot {
+  animation: niuu-status-badge-pulse 1.6s ease-in-out infinite;
+}
+
+/* ── queued ───────────────────────────────────────── */
+.niuu-status-badge--queued {
+  color: var(--status-queued);
+  border-color: color-mix(in srgb, var(--status-queued) 30%, transparent);
+  background: color-mix(in srgb, var(--status-queued) 12%, transparent);
+}
+
+/* ── ok ───────────────────────────────────────────── */
+.niuu-status-badge--ok {
+  color: var(--status-healthy);
+  border-color: color-mix(in srgb, var(--status-healthy) 30%, transparent);
+  background: color-mix(in srgb, var(--status-healthy) 12%, transparent);
+}
+
+/* ── review ───────────────────────────────────────── */
+.niuu-status-badge--review {
+  color: var(--status-review);
+  border-color: color-mix(in srgb, var(--status-review) 30%, transparent);
+  background: color-mix(in srgb, var(--status-review) 12%, transparent);
+}
+
+/* ── failed ───────────────────────────────────────── */
+.niuu-status-badge--failed {
+  color: var(--color-critical-fg);
+  border-color: var(--color-critical-bo);
+  background: var(--color-critical-bg);
+}
+
+/* ── archived ─────────────────────────────────────── */
+.niuu-status-badge--archived {
+  color: var(--status-archived);
+  border-color: transparent;
+  background: transparent;
+}
+
+@keyframes niuu-status-badge-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}

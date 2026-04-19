@@ -1,0 +1,57 @@
+.niuu-confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.niuu-confidence-badge--empty {
+  color: var(--color-text-faint);
+}
+
+.niuu-confidence-badge__track {
+  display: inline-block;
+  width: 32px;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-elevated);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.niuu-confidence-badge__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width var(--transition-normal);
+}
+
+.niuu-confidence-badge__fill--high {
+  background: var(--status-healthy);
+}
+
+.niuu-confidence-badge__fill--medium {
+  background: var(--status-attention);
+}
+
+.niuu-confidence-badge__fill--low {
+  background: var(--color-critical);
+}
+
+.niuu-confidence-badge__pct {
+  font-size: 10px;
+}
+
+.niuu-confidence-badge__pct--high {
+  color: var(--status-healthy);
+}
+
+.niuu-confidence-badge__pct--medium {
+  color: var(--status-attention);
+}
+
+.niuu-confidence-badge__pct--low {
+  color: var(--color-critical-fg);
+}
