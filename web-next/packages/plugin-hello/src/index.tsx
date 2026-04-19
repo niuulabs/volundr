@@ -1,6 +1,7 @@
 import { createRoute, type AnyRoute } from '@tanstack/react-router';
 import { definePlugin } from '@niuulabs/plugin-sdk';
 import { HelloPage } from './ui/HelloPage';
+import { ShowcasePage } from './ui/ShowcasePage';
 
 export const helloPlugin = definePlugin({
   id: 'hello',
@@ -12,6 +13,11 @@ export const helloPlugin = definePlugin({
       getParentRoute: () => rootRoute,
       path: '/hello',
       component: HelloPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/showcase',
+      component: ShowcasePage,
     }),
   ],
 });

@@ -1,0 +1,50 @@
+.niuu-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-10) var(--space-6);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+/* ── Spinner ──────────────────────────────────────────── */
+
+.niuu-loading-state__spinner {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--color-border-subtle);
+  border-top-color: var(--color-brand);
+  border-radius: var(--radius-full);
+  animation: niuu-spin 0.7s linear infinite;
+}
+
+@keyframes niuu-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Text ─────────────────────────────────────────────── */
+
+.niuu-loading-state__title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.niuu-loading-state__description {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  max-width: 280px;
+}
+
+.niuu-loading-state__action {
+  margin-top: var(--space-2);
+}

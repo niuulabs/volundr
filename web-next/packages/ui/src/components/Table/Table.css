@@ -1,0 +1,162 @@
+.niuu-table-wrap {
+  width: 100%;
+  overflow: auto;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.niuu-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+}
+
+/* ── Head ──────────────────────────────────────────────── */
+
+.niuu-table__head {
+  background: var(--color-bg-tertiary);
+}
+
+.niuu-table--sticky-header .niuu-table__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.niuu-table__th {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border-subtle);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.niuu-table__th--sortable {
+  cursor: pointer;
+}
+
+.niuu-table__th--sortable:hover {
+  color: var(--color-text-secondary);
+  background: var(--color-bg-elevated);
+}
+
+.niuu-table__th--sorted {
+  color: var(--color-text-primary);
+}
+
+.niuu-table__th--check,
+.niuu-table__th--expand {
+  width: 2.5rem;
+  padding: var(--space-2);
+}
+
+.niuu-table__th-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.niuu-table__sort-icon {
+  font-size: var(--text-xs);
+  color: var(--color-brand);
+}
+
+.niuu-table__sort-icon--none {
+  color: var(--color-text-faint);
+}
+
+/* ── Body ──────────────────────────────────────────────── */
+
+.niuu-table__row {
+  border-bottom: 1px solid var(--color-border-subtle);
+  transition: background var(--transition-fast);
+}
+
+.niuu-table__row:last-child {
+  border-bottom: none;
+}
+
+.niuu-table__row:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.niuu-table__row--selected {
+  background: color-mix(in srgb, var(--brand-500) 8%, transparent);
+}
+
+.niuu-table__row--selected:hover {
+  background: color-mix(in srgb, var(--brand-500) 12%, transparent);
+}
+
+.niuu-table__row--detail {
+  background: var(--color-bg-primary);
+}
+
+.niuu-table__td {
+  padding: var(--space-3);
+  vertical-align: middle;
+  color: var(--color-text-primary);
+}
+
+.niuu-table__td--check,
+.niuu-table__td--expand {
+  width: 2.5rem;
+  padding: var(--space-2);
+  text-align: center;
+}
+
+.niuu-table__td--detail {
+  padding: var(--space-4);
+}
+
+/* ── Controls ─────────────────────────────────────────── */
+
+.niuu-table__checkbox {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-brand);
+  cursor: pointer;
+}
+
+.niuu-table__expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  border-radius: var(--radius-sm);
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
+  padding: 0;
+}
+
+.niuu-table__expand-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-elevated);
+}
+
+.niuu-table__expand-btn--open {
+  color: var(--color-brand);
+}
+
+/* ── Empty ─────────────────────────────────────────────── */
+
+.niuu-table__empty-cell {
+  padding: var(--space-10);
+  text-align: center;
+  color: var(--color-text-muted);
+}

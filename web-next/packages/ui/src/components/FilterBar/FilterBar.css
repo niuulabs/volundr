@@ -1,0 +1,186 @@
+.niuu-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+/* ── Search input ─────────────────────────────────────── */
+
+.niuu-filter-bar__search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 180px;
+  flex: 1;
+  max-width: 320px;
+}
+
+.niuu-filter-bar__search-icon {
+  position: absolute;
+  left: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+  pointer-events: none;
+  line-height: 1;
+}
+
+.niuu-filter-bar__search {
+  width: 100%;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-6);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.niuu-filter-bar__search::placeholder {
+  color: var(--color-text-faint);
+}
+
+.niuu-filter-bar__search:focus {
+  border-color: var(--color-brand);
+}
+
+.niuu-filter-bar__search::-webkit-search-cancel-button {
+  display: none;
+}
+
+.niuu-filter-bar__search-clear {
+  position: absolute;
+  right: var(--space-1);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+
+.niuu-filter-bar__search-clear:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-elevated);
+}
+
+/* ── Chips area ───────────────────────────────────────── */
+
+.niuu-filter-bar__chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+/* ── Actions ──────────────────────────────────────────── */
+
+.niuu-filter-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+/* ── FilterChip ───────────────────────────────────────── */
+
+.niuu-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  height: 24px;
+  padding: 0 var(--space-1);
+  background: color-mix(in srgb, var(--brand-500) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-500) 30%, transparent);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  color: var(--brand-300);
+  white-space: nowrap;
+}
+
+.niuu-filter-chip__label {
+  font-weight: 500;
+  padding: 0 var(--space-1);
+}
+
+.niuu-filter-chip__sep {
+  color: var(--brand-400);
+}
+
+.niuu-filter-chip__value {
+  padding: 0 var(--space-1);
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+}
+
+.niuu-filter-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--brand-400);
+  font-size: 14px;
+  line-height: 1;
+  border-radius: var(--radius-full);
+  padding: 0;
+  margin-left: 2px;
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.niuu-filter-chip__remove:hover {
+  color: var(--color-critical-fg);
+  background: var(--color-critical-bg);
+}
+
+/* ── FilterToggle ─────────────────────────────────────── */
+
+.niuu-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 var(--space-2);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.niuu-filter-toggle:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+  background: var(--color-bg-elevated);
+}
+
+.niuu-filter-toggle--active {
+  color: var(--brand-300);
+  background: color-mix(in srgb, var(--brand-500) 12%, transparent);
+  border-color: color-mix(in srgb, var(--brand-500) 30%, transparent);
+}
+
+.niuu-filter-toggle--active:hover {
+  background: color-mix(in srgb, var(--brand-500) 18%, transparent);
+}

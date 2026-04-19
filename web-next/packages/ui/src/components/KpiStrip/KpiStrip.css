@@ -1,0 +1,10 @@
+.niuu-kpi-strip {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.niuu-kpi-strip > * {
+  flex: 1 1 140px;
+}

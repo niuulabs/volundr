@@ -1,0 +1,36 @@
+.niuu-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-10) var(--space-6);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.niuu-empty-state__icon {
+  font-size: 2rem;
+  line-height: 1;
+  opacity: 0.5;
+}
+
+.niuu-empty-state__title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.niuu-empty-state__description {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 320px;
+}
+
+.niuu-empty-state__action {
+  margin-top: var(--space-2);
+}
