@@ -8,6 +8,15 @@
 
 export type EntityKind = 'person' | 'org' | 'concept' | 'project' | 'component' | 'technology';
 
+export const ENTITY_KINDS: EntityKind[] = [
+  'person',
+  'org',
+  'concept',
+  'project',
+  'component',
+  'technology',
+];
+
 export interface EntityMeta {
   /** Page path — same as the underlying Page.path. */
   path: string;

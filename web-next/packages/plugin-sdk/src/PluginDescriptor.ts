@@ -11,6 +11,12 @@ export interface PluginDescriptor {
   rune: string;
   title: string;
   subtitle: string;
+  /**
+   * System plugins register routes but are excluded from the navigation rail
+   * and from the default index redirect. Use for cross-cutting routes like
+   * /login and /login/callback.
+   */
+  system?: boolean;
 
   routes?: (rootRoute: AnyRoute) => AnyRoute[];
 
