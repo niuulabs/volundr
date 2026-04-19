@@ -2,12 +2,9 @@ import { useState, useCallback, useRef, useId } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { cn } from '../../utils/cn';
 import { useField } from '../Field';
+import type { Option } from '../option';
 
-export interface ComboboxOption {
-  value: string;
-  label: string;
-  disabled?: boolean;
-}
+export type ComboboxOption = Option;
 
 export interface ComboboxProps {
   options: ComboboxOption[];
@@ -114,7 +111,7 @@ export function Combobox({
             placeholder={placeholder}
             disabled={disabled}
             autoComplete="off"
-            className={cn('niuu-combobox__input', hasError && 'niuu-combobox__input--error', className)}
+            className={cn('niuu-form-control niuu-combobox__input', hasError && 'niuu-form-control--error niuu-combobox__input--error', className)}
           />
         </div>
       </Popover.Anchor>
@@ -128,7 +125,7 @@ export function Combobox({
         >
           <ul id={listboxId} role="listbox" className="niuu-combobox__list">
             {filtered.length === 0 ? (
-              <li className="niuu-combobox__empty" role="option" aria-selected={false}>
+              <li className="niuu-combobox__empty" role="status">
                 {emptyMessage}
               </li>
             ) : (

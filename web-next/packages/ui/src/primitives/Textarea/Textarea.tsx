@@ -22,7 +22,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         ref={ref}
         id={id}
         rows={rows}
-        className={cn('niuu-textarea', hasError && 'niuu-textarea--error', className)}
+        className={cn('niuu-form-control niuu-textarea', hasError && 'niuu-form-control--error niuu-textarea--error', className)}
         aria-invalid={hasError || undefined}
         aria-describedby={describedBy}
         {...props}

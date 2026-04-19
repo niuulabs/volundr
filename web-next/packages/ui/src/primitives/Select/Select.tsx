@@ -1,12 +1,9 @@
 import * as RadixSelect from '@radix-ui/react-select';
 import { cn } from '../../utils/cn';
 import { useField } from '../Field';
+import type { Option } from '../option';
 
-export interface SelectOption {
-  value: string;
-  label: string;
-  disabled?: boolean;
-}
+export type SelectOption = Option;
 
 export interface SelectProps {
   options: SelectOption[];
@@ -43,7 +40,7 @@ export function Select({
     >
       <RadixSelect.Trigger
         id={id}
-        className={cn('niuu-select__trigger', hasError && 'niuu-select__trigger--error', className)}
+        className={cn('niuu-form-control niuu-select__trigger', hasError && 'niuu-form-control--error niuu-select__trigger--error', className)}
         aria-invalid={hasError || undefined}
         aria-describedby={describedBy}
       >

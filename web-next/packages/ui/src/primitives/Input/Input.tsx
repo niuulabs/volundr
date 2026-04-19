@@ -16,7 +16,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       <input
         ref={ref}
         id={id}
-        className={cn('niuu-input', hasError && 'niuu-input--error', className)}
+        className={cn('niuu-form-control niuu-input', hasError && 'niuu-form-control--error niuu-input--error', className)}
         aria-invalid={hasError || undefined}
         aria-describedby={describedBy}
         {...props}

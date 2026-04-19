@@ -82,7 +82,7 @@ export function FormShowcasePage() {
 
   if (submitted) {
     return (
-      <div style={{ padding: '2rem' }}>
+      <div className="niuu-p-8">
         <h1>Form submitted successfully!</h1>
         <button
           type="button"
@@ -99,18 +99,18 @@ export function FormShowcasePage() {
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '480px' }}>
+    <div className="niuu-p-8 niuu-max-w-lg">
       <h1>Form Showcase</h1>
       <p>Submit the form with empty fields to see validation.</p>
 
       {errors.length > 0 && (
-        <div style={{ marginBottom: '1.5rem' }}>
+        <div className="niuu-mb-6">
           <ValidationSummary errors={errors} />
         </div>
       )}
 
       <form onSubmit={handleSubmit} noValidate>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="niuu-flex niuu-flex-col niuu-gap-4">
           <Field
             id="form-name"
             label="Full name"
@@ -142,6 +142,7 @@ export function FormShowcasePage() {
           <Field
             id="form-bio"
             label="Bio"
+            required
             hint="Tell us a bit about yourself"
             error={errors.find((e) => e.id === 'form-bio')?.message}
           >
