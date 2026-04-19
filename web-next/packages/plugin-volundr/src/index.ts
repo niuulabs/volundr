@@ -67,6 +67,7 @@ export { SessionsPage } from './ui/SessionsPage';
 // Domain types
 export type { Session, SessionState, SessionResources, SessionEvent } from './domain/session';
 export { canTransition, transitionSession } from './domain/session';
+export { toLifecycleState } from './ui/utils/toLifecycleState';
 export type { ExecEntry, ExecStatus } from './domain/exec';
 export { appendExecEntry, updateExecEntry } from './domain/exec';
 export type { PodSpec, Mount, MountSource, ResourceSpec, MountKind } from './domain/pod';

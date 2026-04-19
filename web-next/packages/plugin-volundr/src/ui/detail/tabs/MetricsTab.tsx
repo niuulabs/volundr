@@ -9,11 +9,15 @@ interface MetricChartProps {
   values: number[];
   latest: string;
   unit: string;
+  'data-testid'?: string;
 }
 
-function MetricChart({ label, values, latest, unit }: MetricChartProps) {
+function MetricChart({ label, values, latest, unit, 'data-testid': testId }: MetricChartProps) {
   return (
-    <div className="niuu-flex niuu-flex-col niuu-gap-1 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4">
+    <div
+      className="niuu-flex niuu-flex-col niuu-gap-1 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
+      data-testid={testId}
+    >
       <div className="niuu-flex niuu-items-center niuu-justify-between">
         <span className="niuu-text-sm niuu-text-text-secondary">{label}</span>
         <span className="niuu-font-mono niuu-text-sm niuu-text-text-primary">

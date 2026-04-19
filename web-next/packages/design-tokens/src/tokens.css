@@ -111,8 +111,10 @@
 
   /* ── State tokens (ravn/budget components) ───────────── */
   --state-ok: #10b981;
+  --state-ok-bg: color-mix(in srgb, var(--state-ok) 15%, transparent);
   --state-mute: var(--color-text-muted);
   --state-warn: #f59e0b;
+  --state-warn-bg: color-mix(in srgb, var(--state-warn) 15%, transparent);
   --state-err: var(--color-critical);
 
   /* ── Tool categories ─────────────────────────────────── */
