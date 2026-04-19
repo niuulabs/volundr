@@ -9,6 +9,7 @@ import {
   useConfig,
 } from '@niuulabs/plugin-sdk';
 import { createQueryClient } from '@niuulabs/query';
+import { AuthProvider } from '@niuulabs/auth';
 import { Shell } from '@niuulabs/shell';
 import { plugins } from './plugins';
 import { buildServices } from './services';
@@ -18,11 +19,13 @@ function AppInner() {
   const services = useMemo(() => buildServices(config), [config]);
 
   return (
-    <ServicesProvider services={services}>
-      <FeatureCatalogProvider>
-        <Shell plugins={plugins} />
-      </FeatureCatalogProvider>
-    </ServicesProvider>
+    <AuthProvider>
+      <ServicesProvider services={services}>
+        <FeatureCatalogProvider>
+          <Shell plugins={plugins} />
+        </FeatureCatalogProvider>
+      </ServicesProvider>
+    </AuthProvider>
   );
 }
 
@@ -47,18 +50,7 @@ export function App() {
 
 function BootScreen({ label }: { label: string }) {
   return (
-    <div
-      style={{
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--color-bg-primary, #09090b)',
-        color: 'var(--color-text-secondary, #a1a1aa)',
-        fontFamily: 'var(--font-mono, ui-monospace)',
-        fontSize: 12,
-      }}
-    >
+    <div className="niuu-h-screen niuu-flex niuu-items-center niuu-justify-center niuu-bg-bg-primary niuu-text-text-secondary niuu-font-mono niuu-text-xs">
       {label}
     </div>
   );

@@ -10,8 +10,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@niuulabs/auth": "workspace:*",
     "@niuulabs/design-tokens": "workspace:*",
     "@niuulabs/plugin-hello": "workspace:*",
+    "@niuulabs/plugin-mimir": "workspace:*",
+    "@niuulabs/plugin-observatory": "workspace:*",
     "@niuulabs/plugin-volundr": "workspace:*",
     "@niuulabs/plugin-sdk": "workspace:*",
     "@niuulabs/query": "workspace:*",
@@ -27,6 +30,9 @@
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3",
     "vite": "^6.0.0"
   }
