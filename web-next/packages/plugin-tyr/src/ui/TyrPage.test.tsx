@@ -12,6 +12,8 @@ import { createMockTyrService, createMockDispatcherService } from '../adapters/m
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: vi.fn().mockReturnValue(vi.fn()),
+  Link: ({ children }: { to: string; className?: string; children?: unknown }) =>
+    children as unknown as JSX.Element | null,
 }));
 
 function wrap(services: Record<string, unknown>) {

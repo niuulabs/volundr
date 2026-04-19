@@ -12,11 +12,11 @@ test.describe('Tyr Settings index', () => {
 
   test('settings index shows all 5 section links', async ({ page }) => {
     await page.goto('/tyr/settings');
-    await expect(page.getByText('Personas')).toBeVisible();
-    await expect(page.getByText('Flock Config')).toBeVisible();
-    await expect(page.getByText('Dispatch Defaults')).toBeVisible();
-    await expect(page.getByText('Notifications')).toBeVisible();
-    await expect(page.getByText('Audit Log')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Personas' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Flock Config' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Dispatch Defaults' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Notifications' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Audit Log' })).toBeVisible();
   });
 });
 
@@ -62,7 +62,9 @@ test.describe('Tyr Dispatch Defaults settings', () => {
   });
 
   test('shows retry policy section', async ({ page }) => {
-    await expect(page.getByText('Retry Policy')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('heading', { name: 'Retry Policy' })).toBeVisible({
+      timeout: 5000,
+    });
   });
 });
 
@@ -76,7 +78,7 @@ test.describe('Tyr Audit Log settings', () => {
   });
 
   test('renders audit log section heading', async ({ page }) => {
-    await expect(page.getByText('Audit Log')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Audit Log' })).toBeVisible();
   });
 
   test('shows audit log entries after loading', async ({ page }) => {
@@ -142,7 +144,7 @@ test.describe('Tyr Personas settings', () => {
   });
 
   test('renders personas section heading', async ({ page }) => {
-    await expect(page.getByText('Personas')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Personas' })).toBeVisible();
   });
 
   test('shows persona list after loading', async ({ page }) => {
@@ -168,7 +170,7 @@ test.describe('Tyr Notifications settings', () => {
   });
 
   test('renders notifications section heading', async ({ page }) => {
-    await expect(page.getByText('Notifications')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
   });
 
   test('shows event toggle rows', async ({ page }) => {
@@ -201,6 +203,6 @@ test.describe('Dispatch defaults applied to dispatch behaviour', () => {
 
     // Navigate back to /tyr — the Tyr page is still accessible
     await page.goto('/tyr');
-    await expect(page.getByText(/tyr · sagas · raids · dispatch/)).toBeVisible();
+    await expect(page.getByText('Tyr · Dashboard')).toBeVisible();
   });
 });
