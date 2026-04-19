@@ -30,12 +30,16 @@ export function EntityDrawer({
   onNodeSelect,
 }: EntityDrawerProps) {
   const entityType = node ? registry?.types.find((t) => t.id === node.typeId) : undefined;
-  const residents =
-    node && topology ? topology.nodes.filter((n) => n.parentId === node.id) : [];
+  const residents = node && topology ? topology.nodes.filter((n) => n.parentId === node.id) : [];
   const isContainerKind = node ? CONTAINER_KINDS.has(node.typeId) : false;
 
   return (
-    <Drawer open={node !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Drawer
+      open={node !== null}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       {node && (
         <DrawerContent title={node.label} width={360}>
           {/* HEAD — rune · label · status · sparkline */}
@@ -79,10 +83,7 @@ export function EntityDrawer({
                           data-testid={`resident-${resident.id}`}
                         >
                           {residentType && (
-                            <span
-                              className="obs-entity-drawer__resident-rune"
-                              aria-hidden="true"
-                            >
+                            <span className="obs-entity-drawer__resident-rune" aria-hidden="true">
                               {residentType.rune}
                             </span>
                           )}

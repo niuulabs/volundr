@@ -357,7 +357,9 @@ test('realm EntityDrawer shows resident list', async ({ page }) => {
   await expect(dialog.getByText('valaskjálf')).toBeVisible();
 });
 
-test('clicking a resident in the drawer navigates to that resident (drill-in)', async ({ page }) => {
+test('clicking a resident in the drawer navigates to that resident (drill-in)', async ({
+  page,
+}) => {
   await page.goto('/observatory');
   await page.getByTestId('topology-node-list').waitFor({ state: 'visible', timeout: 5000 });
 
@@ -392,9 +394,9 @@ test('cluster EntityDrawer shows residents', async ({ page }) => {
 
 test('ConnectionLegend overlay is visible on observatory page', async ({ page }) => {
   await page.goto('/observatory');
-  await expect(
-    page.getByRole('list', { name: /connection types/i }),
-  ).toBeVisible({ timeout: 3000 });
+  await expect(page.getByRole('list', { name: /connection types/i })).toBeVisible({
+    timeout: 3000,
+  });
   await expect(page.getByTestId('legend-solid')).toBeVisible();
   await expect(page.getByTestId('legend-raid')).toBeVisible();
 });
@@ -409,7 +411,5 @@ test('EventLog overlay is visible and shows events', async ({ page }) => {
 
 test('Minimap overlay is visible on observatory page', async ({ page }) => {
   await page.goto('/observatory');
-  await expect(
-    page.getByRole('img', { name: /topology minimap/i }),
-  ).toBeVisible({ timeout: 3000 });
+  await expect(page.getByRole('img', { name: /topology minimap/i })).toBeVisible({ timeout: 3000 });
 });

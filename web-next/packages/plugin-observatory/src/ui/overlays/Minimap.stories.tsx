@@ -17,7 +17,14 @@ type Story = StoryObj<typeof Minimap>;
 
 export const NoTopology: Story = {
   render: () => (
-    <div style={{ width: '100vw', height: '100vh', background: 'var(--color-bg-primary)', position: 'relative' }}>
+    <div
+      style={{
+        width: '100vw',
+        height: '100vh',
+        background: 'var(--color-bg-primary)',
+        position: 'relative',
+      }}
+    >
       <Minimap topology={null} />
     </div>
   ),
@@ -25,7 +32,14 @@ export const NoTopology: Story = {
 
 export const WithTopology: Story = {
   render: () => (
-    <div style={{ width: '100vw', height: '100vh', background: 'var(--color-bg-primary)', position: 'relative' }}>
+    <div
+      style={{
+        width: '100vw',
+        height: '100vh',
+        background: 'var(--color-bg-primary)',
+        position: 'relative',
+      }}
+    >
       <Minimap topology={TOPOLOGY} />
     </div>
   ),
@@ -35,13 +49,23 @@ function WithSelectedNodeDemo() {
   const [selected, setSelected] = useState<string | null>('realm-asgard');
   return (
     <div
-      style={{ width: '100vw', height: '100vh', background: 'var(--color-bg-primary)', position: 'relative' }}
+      style={{
+        width: '100vw',
+        height: '100vh',
+        background: 'var(--color-bg-primary)',
+        position: 'relative',
+      }}
     >
       <div style={{ padding: 'var(--space-4)' }}>
         {TOPOLOGY.nodes.map((n: TopologyNode) => (
           <button
             key={n.id}
-            style={{ display: 'block', marginBottom: 4, fontFamily: 'var(--font-mono)', fontSize: 12 }}
+            style={{
+              display: 'block',
+              marginBottom: 4,
+              fontFamily: 'var(--font-mono)',
+              fontSize: 12,
+            }}
             onClick={() => setSelected(n.id)}
           >
             {n.label} ({n.typeId})

@@ -58,7 +58,11 @@ const DEGRADED_NODE: TopologyNode = {
 
 function renderDrawer(
   node: TopologyNode | null,
-  overrides?: { topology?: Topology | null; registry?: Registry | null; onNodeSelect?: (n: TopologyNode) => void },
+  overrides?: {
+    topology?: Topology | null;
+    registry?: Registry | null;
+    onNodeSelect?: (n: TopologyNode) => void;
+  },
 ) {
   const onClose = vi.fn();
   return {
@@ -151,9 +155,7 @@ describe('EntityDrawer', () => {
   it('does not show Fields for non-container when entity has no fields', () => {
     const emptyFieldsRegistry: Registry = {
       ...REGISTRY,
-      types: REGISTRY.types.map((t) =>
-        t.id === 'tyr' ? { ...t, fields: [] } : t,
-      ),
+      types: REGISTRY.types.map((t) => (t.id === 'tyr' ? { ...t, fields: [] } : t)),
     };
     renderDrawer(TYR_NODE, { registry: emptyFieldsRegistry });
     expect(screen.queryByText('Fields')).toBeNull();
@@ -184,9 +186,13 @@ describe('EntityDrawer', () => {
   });
 
   it('shows typeId as fallback label when entity type not in registry', () => {
-    renderDrawer(
-      { id: 'x', typeId: 'unknown-type', label: 'x', parentId: null, status: 'unknown' },
-    );
+    renderDrawer({
+      id: 'x',
+      typeId: 'unknown-type',
+      label: 'x',
+      parentId: null,
+      status: 'unknown',
+    });
     expect(screen.getByText('unknown-type')).toBeInTheDocument();
   });
 

@@ -8,13 +8,7 @@ const TOPOLOGY = createMockTopologyStream().getSnapshot()!;
 // Registry loaded synchronously from seed
 const REGISTRY = await createMockRegistryRepository().getRegistry();
 
-function Controlled({
-  node,
-  label,
-}: {
-  node: TopologyNode;
-  label: string;
-}) {
+function Controlled({ node, label }: { node: TopologyNode; label: string }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<TopologyNode | null>(null);
 
@@ -25,7 +19,10 @@ function Controlled({
         node={open ? (selected ?? node) : null}
         topology={TOPOLOGY}
         registry={REGISTRY}
-        onClose={() => { setOpen(false); setSelected(null); }}
+        onClose={() => {
+          setOpen(false);
+          setSelected(null);
+        }}
         onNodeSelect={(n) => setSelected(n)}
       />
     </div>
@@ -61,28 +58,19 @@ export const ClusterKind: Story = {
 
 export const HostKind: Story = {
   render: () => (
-    <Controlled
-      node={TOPOLOGY.nodes.find((n) => n.typeId === 'host')!}
-      label="Open Host drawer"
-    />
+    <Controlled node={TOPOLOGY.nodes.find((n) => n.typeId === 'host')!} label="Open Host drawer" />
   ),
 };
 
 export const EntityKind: Story = {
   render: () => (
-    <Controlled
-      node={TOPOLOGY.nodes.find((n) => n.typeId === 'tyr')!}
-      label="Open Týr drawer"
-    />
+    <Controlled node={TOPOLOGY.nodes.find((n) => n.typeId === 'tyr')!} label="Open Týr drawer" />
   ),
 };
 
 export const RaidKind: Story = {
   render: () => (
-    <Controlled
-      node={TOPOLOGY.nodes.find((n) => n.typeId === 'raid')!}
-      label="Open Raid drawer"
-    />
+    <Controlled node={TOPOLOGY.nodes.find((n) => n.typeId === 'raid')!} label="Open Raid drawer" />
   ),
 };
 

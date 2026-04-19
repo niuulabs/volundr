@@ -72,9 +72,7 @@ describe('Minimap', () => {
   });
 
   it('increases circle radius for selected node', () => {
-    const { container } = render(
-      <Minimap topology={TWO_NODE_TOPOLOGY} selectedNodeId="n1" />,
-    );
+    const { container } = render(<Minimap topology={TWO_NODE_TOPOLOGY} selectedNodeId="n1" />);
     const circles = container.querySelectorAll<SVGCircleElement>('circle[data-node-id]');
     const n1Circle = Array.from(circles).find((c) => c.getAttribute('data-node-id') === 'n1');
     const n2Circle = Array.from(circles).find((c) => c.getAttribute('data-node-id') === 'n2');
@@ -84,9 +82,7 @@ describe('Minimap', () => {
   });
 
   it('adds stroke to selected node circle', () => {
-    const { container } = render(
-      <Minimap topology={TWO_NODE_TOPOLOGY} selectedNodeId="n1" />,
-    );
+    const { container } = render(<Minimap topology={TWO_NODE_TOPOLOGY} selectedNodeId="n1" />);
     const circles = container.querySelectorAll<SVGCircleElement>('circle[data-node-id]');
     const n1Circle = Array.from(circles).find((c) => c.getAttribute('data-node-id') === 'n1');
     const n2Circle = Array.from(circles).find((c) => c.getAttribute('data-node-id') === 'n2');

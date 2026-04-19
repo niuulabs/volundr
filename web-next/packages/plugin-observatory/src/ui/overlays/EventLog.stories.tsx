@@ -52,10 +52,34 @@ export const LiveStream: Story = {
 export const AllSeverities: Story = {
   render: () => {
     const events: ObservatoryEvent[] = [
-      { id: '1', timestamp: '2026-04-19T00:00:01Z', severity: 'debug', sourceId: 'svc-a', message: 'debug message' },
-      { id: '2', timestamp: '2026-04-19T00:00:02Z', severity: 'info', sourceId: 'svc-b', message: 'informational message' },
-      { id: '3', timestamp: '2026-04-19T00:00:03Z', severity: 'warn', sourceId: 'svc-c', message: 'warning: queue depth rising' },
-      { id: '4', timestamp: '2026-04-19T00:00:04Z', severity: 'error', sourceId: 'svc-d', message: 'error: inference timeout' },
+      {
+        id: '1',
+        timestamp: '2026-04-19T00:00:01Z',
+        severity: 'debug',
+        sourceId: 'svc-a',
+        message: 'debug message',
+      },
+      {
+        id: '2',
+        timestamp: '2026-04-19T00:00:02Z',
+        severity: 'info',
+        sourceId: 'svc-b',
+        message: 'informational message',
+      },
+      {
+        id: '3',
+        timestamp: '2026-04-19T00:00:03Z',
+        severity: 'warn',
+        sourceId: 'svc-c',
+        message: 'warning: queue depth rising',
+      },
+      {
+        id: '4',
+        timestamp: '2026-04-19T00:00:04Z',
+        severity: 'error',
+        sourceId: 'svc-d',
+        message: 'error: inference timeout',
+      },
     ];
     return <EventLog events={events} />;
   },

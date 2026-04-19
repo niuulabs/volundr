@@ -26,12 +26,7 @@ export function ConnectionLegend() {
           data-kind={kind}
           data-testid={`legend-${kind}`}
         >
-          <svg
-            className="obs-conn-legend__line-svg"
-            width={32}
-            height={12}
-            aria-hidden="true"
-          >
+          <svg className="obs-conn-legend__line-svg" width={32} height={12} aria-hidden="true">
             <EdgeLine kind={kind} />
           </svg>
           <span className="obs-conn-legend__label">{label}</span>
@@ -77,7 +72,12 @@ function EdgeLine({ kind }: { kind: EdgeKind }) {
 
   if (kind === 'soft') {
     return (
-      <line {...base} stroke="var(--color-text-muted)" strokeDasharray="1 3" strokeLinecap="round" />
+      <line
+        {...base}
+        stroke="var(--color-text-muted)"
+        strokeDasharray="1 3"
+        strokeLinecap="round"
+      />
     );
   }
 
