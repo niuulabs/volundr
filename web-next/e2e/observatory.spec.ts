@@ -10,12 +10,12 @@ test.describe('observatory plugin', () => {
 
     await obsButton.click();
     await expect(page).toHaveURL(/\/observatory/);
-    await expect(page.getByText('Flokk · Observatory')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Flokk · Observatory', level: 2 })).toBeVisible();
   });
 
   test('deep link /observatory renders the page', async ({ page }) => {
     await page.goto('/observatory');
-    await expect(page.getByText('Flokk · Observatory')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Flokk · Observatory', level: 2 })).toBeVisible();
     await expect(page.getByText(/Live topology view/)).toBeVisible();
     await expect(
       page.getByText(/loading registry/).or(page.getByText('entity types')),
@@ -30,7 +30,7 @@ test.describe('observatory plugin', () => {
 
   test('localStorage.niuu.active is set to observatory when visiting it', async ({ page }) => {
     await page.goto('/observatory');
-    await expect(page.getByText('Flokk · Observatory')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Flokk · Observatory', level: 2 })).toBeVisible();
 
     const stored = await page.evaluate(() => localStorage.getItem('niuu.active'));
     expect(stored).toBe('observatory');
