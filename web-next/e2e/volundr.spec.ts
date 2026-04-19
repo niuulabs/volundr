@@ -14,5 +14,5 @@ test('navigating to /volundr renders the placeholder', async ({ page }) => {
 
 test('volundr page renders the forge rune', async ({ page }) => {
   await page.goto('/volundr');
-  await expect(page.getByText('ᚲ')).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('main').getByText('ᚲ')).toBeVisible({ timeout: 5000 });
 });
