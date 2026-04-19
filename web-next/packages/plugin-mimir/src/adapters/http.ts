@@ -415,9 +415,7 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
       },
 
       async getPageSources(path: string): Promise<Source[]> {
-        const raw = await client.get<RawSource[]>(
-          `/page/sources?path=${encodeURIComponent(path)}`,
-        );
+        const raw = await client.get<RawSource[]>(`/page/sources?path=${encodeURIComponent(path)}`);
         return raw.map(toSource);
       },
     },
