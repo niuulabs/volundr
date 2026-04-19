@@ -77,8 +77,6 @@ describe('GraphPage', () => {
       },
     };
     wrap(<GraphPage />, failing);
-    await waitFor(() =>
-      expect(screen.getByText('graph service unavailable')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('graph service unavailable')).toBeInTheDocument());
   });
 });

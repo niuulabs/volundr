@@ -42,9 +42,7 @@ export function ValidationSummary({
               className="niuu-validation-summary__link"
               onClick={() => focusField(id)}
             >
-              <span className="niuu-validation-summary__label">{label}:</span>
-              {' '}
-              {message}
+              <span className="niuu-validation-summary__label">{label}:</span> {message}
             </button>
           </li>
         ))}

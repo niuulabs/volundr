@@ -10,7 +10,9 @@
   font-size: var(--text-sm);
   color: var(--color-text-primary);
   line-height: 1.5;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
   outline: none;
 }
 
@@ -20,7 +22,8 @@
 
 .niuu-form-control:focus {
   border-color: var(--color-brand-500, var(--brand-500));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand-500, var(--brand-500)) 25%, transparent);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--color-brand-500, var(--brand-500)) 25%, transparent);
 }
 
 .niuu-form-control:disabled {

@@ -155,7 +155,9 @@ describe('buildVolundrHttpAdapter', () => {
   it('toggleFeature calls POST /features/modules/:key/toggle', async () => {
     const client = makeClient();
     await buildVolundrHttpAdapter(client).toggleFeature('some-feature', true);
-    expect(client.post).toHaveBeenCalledWith('/features/modules/some-feature/toggle', { enabled: true });
+    expect(client.post).toHaveBeenCalledWith('/features/modules/some-feature/toggle', {
+      enabled: true,
+    });
   });
 
   it('revokeToken calls DELETE /tokens/:id', async () => {
@@ -212,9 +214,7 @@ describe('buildVolundrHttpAdapter', () => {
   it('getCIStatus includes repoUrl and branch as query params', async () => {
     const client = makeClient();
     await buildVolundrHttpAdapter(client).getCIStatus(42, 'github.com/org/repo', 'feat/x');
-    expect(client.get).toHaveBeenCalledWith(
-      expect.stringContaining('/repos/prs/42/ci'),
-    );
+    expect(client.get).toHaveBeenCalledWith(expect.stringContaining('/repos/prs/42/ci'));
   });
 });
 
@@ -291,7 +291,9 @@ describe('buildVolundrHttpAdapter — full method sweep', () => {
     await svc.reprovisionTenant('t1');
     await svc.storeUserCredential('key', { token: 'abc' });
     await svc.storeTenantCredential('key', { token: 'abc' });
-    await svc.createIntegration({ type: 'github', config: {} } as Parameters<typeof svc.createIntegration>[0]);
+    await svc.createIntegration({ type: 'github', config: {} } as Parameters<
+      typeof svc.createIntegration
+    >[0]);
     await svc.testIntegration('int-1');
     await svc.restoreWorkspace('ws-1');
     await svc.createToken('my-token');
@@ -303,9 +305,15 @@ describe('buildVolundrHttpAdapter — full method sweep', () => {
     await svc.updateSession('sess-1', { name: 'updated' });
     await svc.updateTenant('t1', { name: 'acme-v2' });
     await svc.updateTrackerIssueStatus('issue-1', 'done');
-    await svc.saveTemplate({ name: 'tpl', description: '', config: {} } as Parameters<typeof svc.saveTemplate>[0]);
-    await svc.updateAdminSettings({ storage: { provider: 's3', bucket: 'b', region: 'us-east-1' } });
-    await svc.updateUserFeaturePreferences([{ key: 'dark-mode', enabled: true }] as Parameters<typeof svc.updateUserFeaturePreferences>[0]);
+    await svc.saveTemplate({ name: 'tpl', description: '', config: {} } as Parameters<
+      typeof svc.saveTemplate
+    >[0]);
+    await svc.updateAdminSettings({
+      storage: { provider: 's3', bucket: 'b', region: 'us-east-1' },
+    });
+    await svc.updateUserFeaturePreferences([{ key: 'dark-mode', enabled: true }] as Parameters<
+      typeof svc.updateUserFeaturePreferences
+    >[0]);
 
     // DELETE methods
     await svc.deletePreset('p1');

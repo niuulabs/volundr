@@ -110,10 +110,10 @@
   --status-gated: var(--color-gate);
 
   /* ── State tokens (ravn/budget components) ───────────── */
-  --state-ok:   #10b981;
+  --state-ok: #10b981;
   --state-mute: var(--color-text-muted);
   --state-warn: #f59e0b;
-  --state-err:  var(--color-critical);
+  --state-err: var(--color-critical);
 
   /* ── Tool categories ─────────────────────────────────── */
   --color-tool-search: var(--brand-200);

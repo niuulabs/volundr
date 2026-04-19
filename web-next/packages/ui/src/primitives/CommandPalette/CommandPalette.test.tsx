@@ -45,14 +45,18 @@ function TestInner({ commands }: { commands: Command[] }) {
         unregister(cmd.id);
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <>
       <div data-testid="open-state">{open ? 'open' : 'closed'}</div>
-      <button onClick={() => setOpen(true)} data-testid="btn-open">Open</button>
-      <button onClick={() => setOpen(false)} data-testid="btn-close">Close</button>
+      <button onClick={() => setOpen(true)} data-testid="btn-open">
+        Open
+      </button>
+      <button onClick={() => setOpen(false)} data-testid="btn-close">
+        Close
+      </button>
     </>
   );
 }
@@ -136,9 +140,7 @@ describe('useCommandPaletteRegistry', () => {
         return null;
       }
       render(<Bad />);
-    }).toThrow(
-      'useCommandPaletteRegistry must be used within a <CommandPaletteProvider>',
-    );
+    }).toThrow('useCommandPaletteRegistry must be used within a <CommandPaletteProvider>');
     spy.mockRestore();
   });
 });

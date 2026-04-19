@@ -46,7 +46,13 @@ test.describe('UI Composites showcase', () => {
   test('LifecycleBadge renders all 7 lifecycle states', async ({ page }) => {
     const section = page.getByTestId('section-lifecycle-badge');
     const states = [
-      'provisioning', 'ready', 'running', 'idle', 'terminating', 'terminated', 'failed',
+      'provisioning',
+      'ready',
+      'running',
+      'idle',
+      'terminating',
+      'terminated',
+      'failed',
     ];
     for (const state of states) {
       await expect(section.getByLabel(state).first()).toBeVisible();

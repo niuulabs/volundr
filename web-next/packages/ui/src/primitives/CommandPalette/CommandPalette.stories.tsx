@@ -74,8 +74,8 @@ function CommandRegistrar({ commands }: { commands: Command[] }) {
         unregister(cmd.id);
       }
     };
-  // Commands are stable demo objects — no need to re-register on every render
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Commands are stable demo objects — no need to re-register on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return null;
 }

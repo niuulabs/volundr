@@ -35,7 +35,10 @@ export interface CommandPaletteProviderProps {
   initialOpen?: boolean;
 }
 
-export function CommandPaletteProvider({ children, initialOpen = false }: CommandPaletteProviderProps) {
+export function CommandPaletteProvider({
+  children,
+  initialOpen = false,
+}: CommandPaletteProviderProps) {
   const [open, setOpen] = useState(initialOpen);
   const [commands, setCommands] = useState<Map<string, Command>>(new Map());
 
@@ -66,11 +69,7 @@ export function CommandPaletteProvider({ children, initialOpen = false }: Comman
   return (
     <CommandPaletteContext.Provider value={{ open, setOpen, register, unregister }}>
       {children}
-      <CommandPaletteDialog
-        open={open}
-        onOpenChange={setOpen}
-        commands={[...commands.values()]}
-      />
+      <CommandPaletteDialog open={open} onOpenChange={setOpen} commands={[...commands.values()]} />
     </CommandPaletteContext.Provider>
   );
 }
@@ -89,9 +88,7 @@ export function useCommandPaletteRegistry(): Pick<
 > {
   const ctx = useContext(CommandPaletteContext);
   if (ctx === null) {
-    throw new Error(
-      'useCommandPaletteRegistry must be used within a <CommandPaletteProvider>',
-    );
+    throw new Error('useCommandPaletteRegistry must be used within a <CommandPaletteProvider>');
   }
   return { register: ctx.register, unregister: ctx.unregister };
 }
@@ -180,9 +177,7 @@ function CommandPaletteDialog({ open, onOpenChange, commands }: CommandPaletteDi
   };
 
   const activeItemId =
-    filtered[activeIndex] != null
-      ? `${listId}-item-${filtered[activeIndex]!.id}`
-      : undefined;
+    filtered[activeIndex] != null ? `${listId}-item-${filtered[activeIndex]!.id}` : undefined;
 
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
@@ -200,7 +195,9 @@ function CommandPaletteDialog({ open, onOpenChange, commands }: CommandPaletteDi
           <RadixDialog.Title className="niuu-cp-sr-only">Command Palette</RadixDialog.Title>
 
           <div className="niuu-cp-search">
-            <span className="niuu-cp-icon" aria-hidden="true">⌘</span>
+            <span className="niuu-cp-icon" aria-hidden="true">
+              ⌘
+            </span>
             <input
               ref={inputRef}
               role="combobox"

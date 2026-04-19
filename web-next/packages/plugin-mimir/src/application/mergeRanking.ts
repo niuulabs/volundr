@@ -42,7 +42,5 @@ export function mergeSearchResults(allResults: MountSearchResults[]): SearchResu
     }
   }
 
-  return [...best.values()]
-    .sort((a, b) => b.score - a.score)
-    .map(({ result }) => result);
+  return [...best.values()].sort((a, b) => b.score - a.score).map(({ result }) => result);
 }

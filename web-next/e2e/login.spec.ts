@@ -62,7 +62,9 @@ test('login page shows niuu wordmark', async ({ page }) => {
   await stubOidc(page);
   await page.goto('/login');
 
-  await expect(page.getByRole('heading', { level: 1, name: 'niuu' }).first()).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'niuu' }).first()).toBeVisible({
+    timeout: 5000,
+  });
 });
 
 test('unauthenticated user with OIDC config is redirected to /login from root', async ({

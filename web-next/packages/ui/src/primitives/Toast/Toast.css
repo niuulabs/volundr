@@ -45,18 +45,34 @@
 }
 
 @keyframes niuu-toast-in {
-  from { opacity: 0; translate: 0 12px; }
-  to { opacity: 1; translate: 0 0; }
+  from {
+    opacity: 0;
+    translate: 0 12px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
 }
 
 @keyframes niuu-toast-out {
-  from { opacity: 1; translate: 0 0; }
-  to { opacity: 0; translate: 0 4px; }
+  from {
+    opacity: 1;
+    translate: 0 0;
+  }
+  to {
+    opacity: 0;
+    translate: 0 4px;
+  }
 }
 
 @keyframes niuu-toast-swipe-out {
-  from { translate: var(--radix-toast-swipe-end-x) 0; }
-  to { translate: calc(100% + var(--space-6)) 0; }
+  from {
+    translate: var(--radix-toast-swipe-end-x) 0;
+  }
+  to {
+    translate: calc(100% + var(--space-6)) 0;
+  }
 }
 
 .niuu-toast--success {
@@ -108,7 +124,9 @@
   cursor: pointer;
   font-size: var(--text-xs);
   flex-shrink: 0;
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .niuu-toast-close:hover {

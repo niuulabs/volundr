@@ -16,7 +16,13 @@ describe('Input', () => {
 
   it('forwards ref', () => {
     let ref: HTMLInputElement | null = null;
-    render(<Input ref={(el) => { ref = el; }} />);
+    render(
+      <Input
+        ref={(el) => {
+          ref = el;
+        }}
+      />,
+    );
     expect(ref).toBeInstanceOf(HTMLInputElement);
   });
 

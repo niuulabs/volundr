@@ -115,12 +115,7 @@ export type SessionSource = GitSource | LocalMountSource;
 // Tracker integration
 // ---------------------------------------------------------------------------
 
-export type TrackerIssueStatus =
-  | 'backlog'
-  | 'todo'
-  | 'in_progress'
-  | 'done'
-  | 'cancelled';
+export type TrackerIssueStatus = 'backlog' | 'todo' | 'in_progress' | 'done' | 'cancelled';
 
 export interface TrackerIssue {
   id: string;
@@ -203,13 +198,7 @@ export interface VolundrLog {
   message: string;
 }
 
-export type ChronicleEventType =
-  | 'message'
-  | 'file'
-  | 'git'
-  | 'terminal'
-  | 'error'
-  | 'session';
+export type ChronicleEventType = 'message' | 'file' | 'git' | 'terminal' | 'error' | 'session';
 
 export interface ChronicleEvent {
   t: number;

@@ -1,20 +1,28 @@
-import {
-  PersonaAvatar,
-  RavnAvatar,
-  MountChip,
-  DeployBadge,
-  LifecycleBadge,
-} from '@niuulabs/ui';
+import { PersonaAvatar, RavnAvatar, MountChip, DeployBadge, LifecycleBadge } from '@niuulabs/ui';
 import type { PersonaRole } from '@niuulabs/domain';
 import type { LifecycleState, DeploymentKind, MountChipRole } from '@niuulabs/ui';
 import './UIShowcasePage.css';
 
 const ROLES: PersonaRole[] = [
-  'plan', 'build', 'verify', 'review', 'gate', 'audit', 'ship', 'index', 'report',
+  'plan',
+  'build',
+  'verify',
+  'review',
+  'gate',
+  'audit',
+  'ship',
+  'index',
+  'report',
 ];
 
 const LIFECYCLE_STATES: LifecycleState[] = [
-  'provisioning', 'ready', 'running', 'idle', 'terminating', 'terminated', 'failed',
+  'provisioning',
+  'ready',
+  'running',
+  'idle',
+  'terminating',
+  'terminated',
+  'failed',
 ];
 
 const DEPLOY_KINDS: DeploymentKind[] = ['k8s', 'systemd', 'pi', 'mobile', 'ephemeral'];
@@ -30,12 +38,7 @@ export function UIShowcasePage() {
         <div className="ui-showcase__section-label">PersonaAvatar — all roles</div>
         <div className="ui-showcase__row">
           {ROLES.map((role) => (
-            <PersonaAvatar
-              key={role}
-              role={role}
-              letter={role.charAt(0).toUpperCase()}
-              size={32}
-            />
+            <PersonaAvatar key={role} role={role} letter={role.charAt(0).toUpperCase()} size={32} />
           ))}
         </div>
       </section>

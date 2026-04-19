@@ -25,10 +25,7 @@ export function OverlaysPage() {
             <DialogTrigger asChild>
               <button data-testid="dialog-trigger">Open dialog</button>
             </DialogTrigger>
-            <DialogContent
-              title="Confirm action"
-              description="This action cannot be undone."
-            >
+            <DialogContent title="Confirm action" description="This action cannot be undone.">
               <p data-testid="dialog-body" className="niuu-m-0 niuu-text-text-secondary">
                 Dialog body content.
               </p>
@@ -62,7 +59,9 @@ export function OverlaysPage() {
               <button data-testid="popover-trigger">Open popover</button>
             </PopoverTrigger>
             <PopoverContent>
-              <p data-testid="popover-body" className="niuu-m-0">Popover body content.</p>
+              <p data-testid="popover-body" className="niuu-m-0">
+                Popover body content.
+              </p>
             </PopoverContent>
           </Popover>
         </section>
