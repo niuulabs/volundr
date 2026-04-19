@@ -167,6 +167,24 @@ describe('computeLayout', () => {
     expect(dist).toBeCloseTo(LAYOUT.NODE_SCATTER_DIST, 5);
   });
 
+  it('places mimir_sub nodes at exactly SUB_MIMIR_RING from the primary Mímir', () => {
+    const topology: Topology = {
+      timestamp: '2026-04-19T00:00:00Z',
+      nodes: [
+        { id: 'mimir-0',     typeId: 'mimir',     label: 'mímir-0',      parentId: null,      status: 'healthy' },
+        { id: 'mimir-sub-0', typeId: 'mimir_sub', label: 'mímir/code',   parentId: 'mimir-0', status: 'healthy' },
+      ],
+      edges: [],
+    };
+    const positions = computeLayout(topology);
+    const mimiPos = positions.get('mimir-0')!;
+    const subPos = positions.get('mimir-sub-0')!;
+    expect(mimiPos).toBeDefined();
+    expect(subPos).toBeDefined();
+    const dist = Math.hypot(subPos.x - mimiPos.x, subPos.y - mimiPos.y);
+    expect(dist).toBeCloseTo(LAYOUT.SUB_MIMIR_RING, 5);
+  });
+
   it('realm positions do not depend on node array order', () => {
     const reversed: Topology = {
       ...TEST_TOPOLOGY,

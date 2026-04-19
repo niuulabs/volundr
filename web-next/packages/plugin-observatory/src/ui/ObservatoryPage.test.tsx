@@ -4,42 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { ObservatoryPage } from './ObservatoryPage';
 import { createMockTopologyStream } from '../adapters/mock';
-
-// ── Canvas mock (same stub as TopologyCanvas.test.tsx) ────────────────────────
-
-function makeCtxMock() {
-  const gradient = { addColorStop: vi.fn() };
-  return {
-    clearRect: vi.fn(),
-    fillRect: vi.fn(),
-    strokeRect: vi.fn(),
-    beginPath: vi.fn(),
-    closePath: vi.fn(),
-    moveTo: vi.fn(),
-    lineTo: vi.fn(),
-    quadraticCurveTo: vi.fn(),
-    arc: vi.fn(),
-    fill: vi.fn(),
-    stroke: vi.fn(),
-    fillText: vi.fn(),
-    strokeText: vi.fn(),
-    save: vi.fn(),
-    restore: vi.fn(),
-    translate: vi.fn(),
-    scale: vi.fn(),
-    setTransform: vi.fn(),
-    setLineDash: vi.fn(),
-    createRadialGradient: vi.fn().mockReturnValue(gradient),
-    fillStyle: '',
-    strokeStyle: '',
-    lineWidth: 1,
-    font: '',
-    textAlign: 'left' as CanvasTextAlign,
-    textBaseline: 'alphabetic' as CanvasTextBaseline,
-    lineCap: 'butt' as CanvasLineCap,
-    lineDashOffset: 0,
-  };
-}
+import { makeCtxMock } from './TopologyCanvas/test-helpers';
 
 beforeEach(() => {
   HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue(makeCtxMock());

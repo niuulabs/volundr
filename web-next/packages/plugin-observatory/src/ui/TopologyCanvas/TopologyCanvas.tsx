@@ -8,7 +8,7 @@ import {
   defaultCamera,
   type Camera,
 } from './canvasMath';
-import { computeLayout } from './layoutEngine';
+import { computeLayout, HOST_HALF_W, HOST_HALF_H } from './layoutEngine';
 import {
   drawStars,
   drawZones,
@@ -17,7 +17,8 @@ import {
   drawMimir,
   drawMinimap,
 } from './renderer';
-import { CANVAS } from './config';
+import { CANVAS, HIT_RADIUS } from './config';
+import './TopologyCanvas.css';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -136,7 +137,6 @@ export function TopologyCanvas({
       if (!panKeys.includes(e.key)) return;
       e.preventDefault();
       camRef.current = applyKeyPan(camRef.current, e.key, CANVAS.PAN_KEY_STEP);
-      setZoomPct(Math.round(camRef.current.zoom * 100)); // trigger rerender for zoom display
     };
 
     canvas.addEventListener('keydown', onKeyDown);
@@ -159,9 +159,9 @@ export function TopologyCanvas({
         const p = pos.get(node.id);
         if (!p) continue;
         if (node.typeId === 'host') {
-          if (Math.abs(wx - p.x) < 50 && Math.abs(wy - p.y) < 30) return node.id;
+          if (Math.abs(wx - p.x) < HOST_HALF_W && Math.abs(wy - p.y) < HOST_HALF_H) return node.id;
         } else {
-          const r = node.typeId === 'mimir' ? 42 : (16 + 6);
+          const r = HIT_RADIUS[node.typeId] ?? HIT_RADIUS['tyr']!;
           if ((wx - p.x) ** 2 + (wy - p.y) ** 2 < r * r) return node.id;
         }
       }
@@ -370,15 +370,15 @@ export function TopologyCanvas({
 
   return (
     <div
-      className={className}
-      style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', ...style }}
+      className={['topology-canvas-wrapper', className].filter(Boolean).join(' ')}
+      style={style}
     >
       <canvas
         ref={canvasRef}
         data-testid="topology-canvas"
         tabIndex={0}
         aria-label="Live topology canvas — drag to pan, scroll to zoom, arrow keys to pan"
-        style={{ display: 'block', width: '100%', height: '100%', cursor: 'grab' }}
+        className="topology-canvas"
         onMouseMove={handleMouseMove}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
@@ -389,49 +389,34 @@ export function TopologyCanvas({
       {/* Camera controls — top-right overlay */}
       <div
         data-testid="camera-controls"
-        style={{
-          position: 'absolute',
-          top: 12,
-          right: 12,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          padding: '4px 8px',
-          background: 'rgba(9,9,11,0.72)',
-          border: '1px solid rgba(147,197,253,0.2)',
-          borderRadius: 6,
-          fontSize: 11,
-          fontFamily: 'var(--font-mono, monospace)',
-          color: 'rgba(186,230,253,0.8)',
-          userSelect: 'none',
-        }}
+        className="camera-controls"
       >
         <button
           aria-label="Zoom in"
           onClick={zoomIn}
-          style={camBtnStyle}
+          className="camera-btn"
         >
           +
         </button>
         <span
           data-testid="zoom-display"
-          style={{ minWidth: 36, textAlign: 'center' }}
+          className="zoom-display"
         >
           {zoomPct}%
         </span>
         <button
           aria-label="Zoom out"
           onClick={zoomOut}
-          style={camBtnStyle}
+          className="camera-btn"
         >
           −
         </button>
-        <div style={{ width: 1, height: 14, background: 'rgba(147,197,253,0.2)', margin: '0 2px' }} />
+        <div className="camera-divider" />
         <button
           aria-label="Reset camera"
           data-testid="camera-reset"
           onClick={resetCamera}
-          style={camBtnStyle}
+          className="camera-btn"
         >
           ⊙
         </button>
@@ -441,20 +426,13 @@ export function TopologyCanvas({
       {showMinimap && (
         <div
           data-testid="minimap-panel"
-          style={{
-            position: 'absolute',
-            bottom: 12,
-            right: 12,
-            border: '1px solid rgba(147,197,253,0.18)',
-            borderRadius: 6,
-            overflow: 'hidden',
-          }}
+          className="minimap-panel"
         >
           <canvas
             ref={minimapRef}
             width={CANVAS.MINIMAP_W}
             height={CANVAS.MINIMAP_H}
-            style={{ display: 'block', cursor: 'crosshair' }}
+            className="minimap-canvas"
             onClick={handleMinimapClick}
             aria-label="Minimap — click to pan"
           />
@@ -463,13 +441,3 @@ export function TopologyCanvas({
     </div>
   );
 }
-
-const camBtnStyle: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  color: 'inherit',
-  fontSize: 14,
-  lineHeight: 1,
-  padding: '0 4px',
-};

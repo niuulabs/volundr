@@ -53,7 +53,8 @@ function placeNearParent(
  * 2. Realms → hash-based angle, fixed radius from origin
  * 3. Clusters → inside parent realm
  * 4. Hosts  → around parent realm perimeter
- * 5. Everything else → scattered near parent (cluster / host / realm)
+ * 5. Sub-Mímir → orbiting at SUB_MIMIR_RING from primary Mímir
+ * 6. Everything else → scattered near parent (cluster / host / realm)
  */
 export function computeLayout(topology: Topology): Map<string, NodePosition> {
   const positions = new Map<string, NodePosition>();
@@ -90,9 +91,16 @@ export function computeLayout(topology: Topology): Map<string, NodePosition> {
     positions.set(node.id, placeNearParent(node, parentPos, LAYOUT.HOST_RING_DIST));
   }
 
-  // Pass 5 — Remaining nodes (tyr, bifrost, volundr, ravn_long, ravn_raid,
+  // Pass 5 — Sub-Mímir nodes orbit at SUB_MIMIR_RING from the primary Mímir
+  for (const node of nodes) {
+    if (node.typeId !== 'mimir_sub') continue;
+    const parentPos = node.parentId ? positions.get(node.parentId) : undefined;
+    positions.set(node.id, placeNearParent(node, parentPos, LAYOUT.SUB_MIMIR_RING));
+  }
+
+  // Pass 6 — Remaining nodes (tyr, bifrost, volundr, ravn_long, ravn_raid,
   //           skuld, valkyrie, service, model, printer, vaettir, beacon,
-  //           mimir_sub, raid, …) near their parent.
+  //           raid, …) near their parent.
   for (const node of nodes) {
     if (positions.has(node.id)) continue;
     const parentPos = node.parentId ? positions.get(node.parentId) : undefined;
