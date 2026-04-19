@@ -46,6 +46,7 @@ describe('RavnPage', () => {
     render(<RavnPage />, { wrapper: wrap(allServices()) });
     expect(screen.getByTestId('ravn-tab-overview')).toBeInTheDocument();
     expect(screen.getByTestId('ravn-tab-ravens')).toBeInTheDocument();
+    expect(screen.getByTestId('ravn-tab-personas')).toBeInTheDocument();
   });
 
   it('renders sessions, triggers, events, budget, log tabs', () => {
@@ -128,5 +129,34 @@ describe('RavnPage', () => {
     localStorage.setItem('ravn.tab', '"ravens"');
     render(<RavnPage />, { wrapper: wrap(allServices()) });
     await waitFor(() => expect(screen.getByTestId('ravens-page')).toBeInTheDocument());
+  });
+});
+
+describe('RavnPage — Personas tab', () => {
+  it('switches to the personas tab', async () => {
+    render(<RavnPage />, { wrapper: wrap(allServices()) });
+    await waitFor(() => screen.getByTestId('ravn-tab-personas'));
+    fireEvent.click(screen.getByTestId('ravn-tab-personas'));
+    await waitFor(() => expect(screen.getByTestId('personas-page')).toBeInTheDocument());
+    expect(screen.queryByTestId('overview-page')).not.toBeInTheDocument();
+  });
+
+  it('shows the persona list after switching to personas tab', async () => {
+    render(<RavnPage />, { wrapper: wrap(allServices()) });
+    fireEvent.click(screen.getByTestId('ravn-tab-personas'));
+    await waitFor(() => expect(screen.getByTestId('persona-list')).toBeInTheDocument());
+  });
+
+  it('persists personas tab to localStorage', async () => {
+    render(<RavnPage />, { wrapper: wrap(allServices()) });
+    await waitFor(() => screen.getByTestId('ravn-tab-personas'));
+    fireEvent.click(screen.getByTestId('ravn-tab-personas'));
+    expect(localStorage.getItem('ravn.tab')).toBe('"personas"');
+  });
+
+  it('restores personas tab from localStorage on mount', async () => {
+    localStorage.setItem('ravn.tab', '"personas"');
+    render(<RavnPage />, { wrapper: wrap(allServices()) });
+    await waitFor(() => expect(screen.getByTestId('personas-page')).toBeInTheDocument());
   });
 });

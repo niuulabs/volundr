@@ -16,8 +16,6 @@ export default defineConfig({
     '@niuulabs/domain',
   ],
   onSuccess: async () => {
-    execSync('postcss src/styles.css -o dist/styles.css', {
-      stdio: 'inherit',
-    });
+    execSync('postcss src/styles.css -o dist/styles.css', { stdio: 'inherit' });
   },
 });
