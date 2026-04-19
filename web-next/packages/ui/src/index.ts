@@ -16,4 +16,5 @@ export * from './data/Table';
 export * from './data/FilterBar';
 export * from './data/KpiStrip';
 export * from './data/states';
+export * from './primitives/ShapeSvg';
 export { cn } from './utils/cn';
