@@ -2,9 +2,17 @@
   "theme": "ice",
   "plugins": {
     "hello": { "enabled": true, "order": 1 },
-    "showcase": { "enabled": true, "order": 2 }
+    "showcase": { "enabled": true, "order": 2 },
+    "mimir": { "enabled": true, "order": 3 },
+    "observatory": { "enabled": true, "order": 4 },
+    "volundr": { "enabled": true, "order": 5 }
   },
   "services": {
-    "hello": { "mode": "mock" }
+    "hello": { "mode": "mock" },
+    "mimir": { "mode": "mock" },
+    "observatory.registry": { "mode": "mock" },
+    "observatory.topology": { "mode": "mock" },
+    "observatory.events": { "mode": "mock" },
+    "volundr": { "mode": "mock" }
   }
 }

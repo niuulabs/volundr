@@ -1,5 +1,8 @@
 import { createRoute } from '@tanstack/react-router';
 import { helloPlugin } from '@niuulabs/plugin-hello';
+import { mimirPlugin } from '@niuulabs/plugin-mimir';
+import { observatoryPlugin } from '@niuulabs/plugin-observatory';
+import { volundrPlugin } from '@niuulabs/plugin-volundr';
 import { definePlugin, type PluginDescriptor } from '@niuulabs/plugin-sdk';
 import { ShowcasePage } from './showcase/ShowcasePage';
 
@@ -17,4 +20,4 @@ const showcasePlugin = definePlugin({
   ],
 });
 
-export const plugins: PluginDescriptor[] = [helloPlugin, showcasePlugin];
+export const plugins: PluginDescriptor[] = [helloPlugin, showcasePlugin, mimirPlugin, observatoryPlugin, volundrPlugin];
