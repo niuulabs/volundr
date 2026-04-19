@@ -21,6 +21,14 @@ export interface ILintEngine {
   runAutoFix(issueIds?: string[]): Promise<LintReport>;
 
   /**
+   * Assign one or more issues to a ravn and return the updated lint report.
+   *
+   * @param issueIds IDs of the issues to reassign.
+   * @param assignee Ravn ID to assign the issues to.
+   */
+  reassignIssues(issueIds: string[], assignee: string): Promise<LintReport>;
+
+  /**
    * Fetch recent dream-cycle run records, most-recent-first.
    *
    * @param limit Maximum records to return (default: 20).

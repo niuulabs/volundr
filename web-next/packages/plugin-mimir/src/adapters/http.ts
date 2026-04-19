@@ -13,6 +13,8 @@ import type { LintReport, DreamCycle, LintIssue, IssueSeverity, LintRule } from 
 import type { MimirStats, MimirGraph, GraphNode, GraphEdge } from '../domain/api-types';
 import type { EmbeddingSearchResult } from '../ports/IEmbeddingStore';
 import type { EntityKind, EntityMeta } from '../domain/entity';
+import type { WriteRoutingRule } from '../domain/routing';
+import type { RavnBinding } from '../domain/ravn-binding';
 import type { Source, OriginType } from '../domain/source';
 import type { RecentWrite } from '../ports/IMountAdapter';
 import { tallySeverity } from '../domain/lint';
@@ -319,6 +321,22 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
         return raw.map(toMount);
       },
 
+      async listRoutingRules(): Promise<WriteRoutingRule[]> {
+        return client.get<WriteRoutingRule[]>('/routing/rules');
+      },
+
+      async upsertRoutingRule(rule: WriteRoutingRule): Promise<WriteRoutingRule> {
+        return client.put<WriteRoutingRule>(`/routing/rules/${rule.id}`, rule);
+      },
+
+      async deleteRoutingRule(id: string): Promise<void> {
+        await client.delete<void>(`/routing/rules/${id}`);
+      },
+
+      async listRavnBindings(): Promise<RavnBinding[]> {
+        return client.get<RavnBinding[]>('/ravns/bindings');
+      },
+
       async getRecentWrites(limit?: number): Promise<RecentWrite[]> {
         const qs = limit != null ? `?limit=${limit}` : '';
         const raw = await client.get<RawRecentWrite[]>(`/mounts/recent-writes${qs}`);
@@ -359,22 +377,6 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
         await client.put<void>('/page', body);
       },
 
-      async listSources(options): Promise<Source[]> {
-        const params = new URLSearchParams();
-        if (options?.originType) params.set('originType', options.originType);
-        if (options?.mountName) params.set('mount', options.mountName);
-        const qs = params.toString() ? `?${params.toString()}` : '';
-        const raw = await client.get<RawSource[]>(`/sources${qs}`);
-        return raw.map(toSource);
-      },
-
-      async getPageSources(path: string): Promise<Source[]> {
-        const raw = await client.get<RawSource[]>(
-          `/pages/sources?path=${encodeURIComponent(path)}`,
-        );
-        return raw.map(toSource);
-      },
-
       async search(query: string, mode: SearchMode = 'hybrid'): Promise<SearchResult[]> {
         const raw = await client.get<RawSearchResult[]>(
           `/search?q=${encodeURIComponent(query)}&mode=${mode}`,
@@ -399,6 +401,23 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
         const qs = options?.kind ? `?kind=${encodeURIComponent(options.kind)}` : '';
         const raw = await client.get<RawEntityMeta[]>(`/entities${qs}`);
         return raw.map(toEntityMeta);
+      },
+
+      async listSources(options?: {
+        originType?: OriginType;
+        mountName?: string;
+      }): Promise<Source[]> {
+        const params = new URLSearchParams();
+        if (options?.originType) params.set('origin_type', options.originType);
+        if (options?.mountName) params.set('mount', options.mountName);
+        const qs = params.toString() ? `?${params.toString()}` : '';
+        const raw = await client.get<RawSource[]>(`/sources${qs}`);
+        return raw.map(toSource);
+      },
+
+      async getPageSources(path: string): Promise<Source[]> {
+        const raw = await client.get<RawSource[]>(`/page/sources?path=${encodeURIComponent(path)}`);
+        return raw.map(toSource);
       },
     },
 
@@ -433,6 +452,14 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
       async getDreamCycles(limit = 20): Promise<DreamCycle[]> {
         const raw = await client.get<RawDreamCycle[]>(`/dreams?limit=${limit}`);
         return raw.map(toDreamCycle);
+      },
+
+      async reassignIssues(issueIds: string[], assignee: string): Promise<LintReport> {
+        const raw = await client.post<RawLintReport>('/lint/reassign', {
+          issue_ids: issueIds,
+          assignee,
+        });
+        return toLintReport(raw);
       },
     },
   };
