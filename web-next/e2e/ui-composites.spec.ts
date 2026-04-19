@@ -49,18 +49,19 @@ test.describe('UI Composites showcase', () => {
       'provisioning', 'ready', 'running', 'idle', 'terminating', 'terminated', 'failed',
     ];
     for (const state of states) {
-      await expect(section.getByLabel(state)).toBeVisible();
+      await expect(section.getByLabel(state).first()).toBeVisible();
     }
   });
 
   test('LifecycleBadge "failed" state renders with critical styling', async ({ page }) => {
-    const failedBadge = page.getByLabel('failed');
+    const section = page.getByTestId('section-lifecycle-badge');
+    const failedBadge = section.getByLabel('failed').first();
     await expect(failedBadge).toHaveClass(/niuu-lifecycle-badge--failed/);
   });
 
   test('LifecycleBadge "running" state has a pulsing dot', async ({ page }) => {
     const section = page.getByTestId('section-lifecycle-badge');
-    const runningBadge = section.getByLabel('running');
+    const runningBadge = section.getByLabel('running').first();
     const pulsingDot = runningBadge.locator('.niuu-state-dot--pulse');
     await expect(pulsingDot).toBeVisible();
   });

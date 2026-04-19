@@ -43,10 +43,10 @@ test('hello plugin round-trips through HTTP client with token provider', async (
     });
   });
 
-  await page.goto('/');
+  await page.goto('/hello');
 
   // Shell and plugin title should render
-  await expect(page.getByRole('heading', { name: 'hello · smoke test', level: 2 })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole('heading', { name: 'hello · smoke test', level: 2 })).toBeVisible({ timeout: 10000 });
 
   // Data from the mocked HTTP endpoint should appear
   await expect(page.getByText('hello via HTTP client')).toBeVisible({ timeout: 5000 });

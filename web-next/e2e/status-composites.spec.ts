@@ -59,6 +59,7 @@ test.describe('status composites showcase', () => {
   });
 
   test('keyboard accessibility — page is tabbable', async ({ page }) => {
+    await page.locator('body').click();
     await page.keyboard.press('Tab');
     const focused = page.locator(':focus').first();
     await expect(focused).toBeVisible();
