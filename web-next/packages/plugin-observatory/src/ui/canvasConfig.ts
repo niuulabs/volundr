@@ -34,6 +34,14 @@ export const CANVAS_CONFIG = {
   /** Service dots placed at this fraction of parent-container radius. */
   serviceRingFactor: 0.42,
 
+  /** Placement fractions for remaining entity types (fraction of parent radius). */
+  valkyrieRingFactor: 0.72,
+  raidRingFactor: 0.60,
+  ravnLongRingFactor: 0.38,
+  ravnRaidRingFactor: 0.30,
+  skuldRingFactor: 0.28,
+  defaultRingFactor: 0.40,
+
   /** Sub-Mímir orbit radius around primary Mímir. */
   subMimirRingRadius: 170,
 

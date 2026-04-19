@@ -107,7 +107,7 @@ describe('ObservatoryPage', () => {
     );
   });
 
-  it('shows error state when the registry service throws', async () => {
+  it('does not crash when registry service throws', async () => {
     const failing = {
       loadRegistry: async () => {
         throw new Error('registry unavailable');

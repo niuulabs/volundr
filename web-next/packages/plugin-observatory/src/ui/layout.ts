@@ -336,13 +336,13 @@ function resolveParentRadius(
 
 function typeRadiusFraction(typeId: string): number {
   switch (typeId) {
-    case 'service': return CANVAS_CONFIG.serviceRingFactor;
-    case 'model':   return CANVAS_CONFIG.modelFanRadius / CANVAS_CONFIG.clusterDefaultRadius;
-    case 'valkyrie': return 0.72;
-    case 'raid':    return 0.60;
-    case 'ravn_long': return 0.38;
-    case 'ravn_raid': return 0.30;
-    case 'skuld':   return 0.28;
-    default:        return 0.40;
+    case 'service':   return CANVAS_CONFIG.serviceRingFactor;
+    case 'model':     return CANVAS_CONFIG.modelFanRadius / CANVAS_CONFIG.clusterDefaultRadius;
+    case 'valkyrie':  return CANVAS_CONFIG.valkyrieRingFactor;
+    case 'raid':      return CANVAS_CONFIG.raidRingFactor;
+    case 'ravn_long': return CANVAS_CONFIG.ravnLongRingFactor;
+    case 'ravn_raid': return CANVAS_CONFIG.ravnRaidRingFactor;
+    case 'skuld':     return CANVAS_CONFIG.skuldRingFactor;
+    default:          return CANVAS_CONFIG.defaultRingFactor;
   }
 }

@@ -10,6 +10,7 @@ import {
   drawMimir,
   drawNode,
   drawMinimap,
+  nodeSize,
 } from './canvasRenderer';
 import type { TopologySnapshot } from '../domain/topology';
 import styles from './TopologyCanvas.module.css';
@@ -327,9 +328,7 @@ export function TopologyCanvas({
           continue;
         }
 
-        const size = (CANVAS_CONFIG.nodeSizes as Record<string, number>)[entity.typeId] ??
-          CANVAS_CONFIG.nodeSizes.default;
-        const hitR = size + 6;
+        const hitR = nodeSize(entity.typeId) + 6;
         if (Math.hypot(wx - pos.x, wy - pos.y) < hitR) {
           return entity.id;
         }

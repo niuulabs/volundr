@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { TopologyCanvas } from './TopologyCanvas';
 import type { TopologySnapshot } from '../domain/topology';
+import storyStyles from './TopologyCanvas.stories.module.css';
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
@@ -253,7 +254,7 @@ const meta: Meta<typeof TopologyCanvas> = {
   },
   decorators: [
     (Story) => (
-      <div style={{ width: '100vw', height: '100vh', background: '#09090b' }}>
+      <div className={storyStyles.storyWrap}>
         <Story />
       </div>
     ),

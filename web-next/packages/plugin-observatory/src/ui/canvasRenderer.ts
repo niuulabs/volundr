@@ -7,6 +7,7 @@
 import { CANVAS_CONFIG, MIMIR_RUNES } from './canvasConfig';
 import type { Point, LayoutMap } from './layout';
 import type { TopologyEntity, TopologySnapshot } from '../domain/topology';
+import { CONNECTION_VISUAL } from '../domain/connections';
 import type { Connection, ConnectionKind } from '../domain/connections';
 
 // ── Colour helpers ────────────────────────────────────────────────────────
@@ -54,7 +55,7 @@ function typeColor(typeId: string): RGB {
   }
 }
 
-function nodeSize(typeId: string): number {
+export function nodeSize(typeId: string): number {
   return (
     (CANVAS_CONFIG.nodeSizes as Record<string, number>)[typeId] ??
     CANVAS_CONFIG.nodeSizes.default
@@ -118,7 +119,7 @@ export function drawRealmRing(
   ctx.textAlign = 'center';
   ctx.fillText(label.toUpperCase(), x, y - radius - 28);
 
-  if (dns ?? vlan != null) {
+  if (dns != null || vlan != null) {
     ctx.fillStyle = rgba(C.slate, 0.52);
     ctx.font = '9px JetBrainsMono NF, monospace';
     const meta = [dns, vlan != null ? `VLAN ${vlan}` : null].filter(Boolean).join('  ·  ');
@@ -167,18 +168,19 @@ export function drawConnection(
   ctx.save();
   ctx.lineCap = 'round';
 
+  // Use line width from the canonical CONNECTION_VISUAL definition to avoid drift.
+  ctx.lineWidth = CONNECTION_VISUAL[kind].width;
+
   switch (kind) {
     case 'solid':
       // Control: Týr → Völundr. Solid indigo, no dash.
       ctx.strokeStyle = rgba(C.indigo, 0.32);
-      ctx.lineWidth = 1.4;
       ctx.setLineDash([]);
       break;
 
     case 'dashed-anim':
       // Active dispatch: Týr ⇝ raid coord. Animated dashes.
       ctx.strokeStyle = rgba(C.frost, 0.42);
-      ctx.lineWidth = 1.4;
       ctx.setLineDash([3, 5]);
       ctx.lineDashOffset = -now / 80;
       break;
@@ -186,7 +188,6 @@ export function drawConnection(
     case 'dashed-long':
       // External model: Bifröst → provider. Longer dashes.
       ctx.strokeStyle = rgba(C.indigo, 0.24);
-      ctx.lineWidth = 1.2;
       ctx.setLineDash([6, 4]);
       ctx.lineDashOffset = -now / 120;
       break;
@@ -194,14 +195,12 @@ export function drawConnection(
     case 'soft':
       // Read channel: ravn → Mímir. Thin, soft.
       ctx.strokeStyle = rgba(C.moon, 0.22);
-      ctx.lineWidth = 0.9;
       ctx.setLineDash([]);
       break;
 
     case 'raid':
       // Raid cohesion between members.
       ctx.strokeStyle = rgba(C.frost, 0.38);
-      ctx.lineWidth = 1.0;
       ctx.setLineDash([]);
       break;
   }
