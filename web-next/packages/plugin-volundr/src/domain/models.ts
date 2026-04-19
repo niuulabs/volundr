@@ -6,9 +6,6 @@
  * instead.
  */
 
-// Re-export shared identity types from plugin-sdk.
-export type { AppIdentity } from '@niuulabs/plugin-sdk';
-
 // Re-export feature-catalog types from plugin-sdk.
 export type {
   FeatureScope,
