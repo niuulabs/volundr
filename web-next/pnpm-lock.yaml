@@ -7,6 +7,34 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@niuulabs/design-tokens':
+        specifier: workspace:*
+        version: link:packages/design-tokens
+      '@niuulabs/plugin-hello':
+        specifier: workspace:*
+        version: link:packages/plugin-hello
+      '@niuulabs/plugin-login':
+        specifier: workspace:*
+        version: link:packages/plugin-login
+      '@niuulabs/plugin-mimir':
+        specifier: workspace:*
+        version: link:packages/plugin-mimir
+      '@niuulabs/plugin-observatory':
+        specifier: workspace:*
+        version: link:packages/plugin-observatory
+      '@niuulabs/plugin-ravn':
+        specifier: workspace:*
+        version: link:packages/plugin-ravn
+      '@niuulabs/plugin-volundr':
+        specifier: workspace:*
+        version: link:packages/plugin-volundr
+      '@niuulabs/shell':
+        specifier: workspace:*
+        version: link:packages/shell
+      '@niuulabs/ui':
+        specifier: workspace:*
+        version: link:packages/ui
     devDependencies:
       '@eslint/js':
         specifier: ^9.18.0
