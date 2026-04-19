@@ -31,7 +31,10 @@ export function DialogContent({ title, description, children, className }: Dialo
   return (
     <RadixDialog.Portal>
       <RadixDialog.Overlay className="niuu-dialog-overlay" />
-      <RadixDialog.Content className={cn('niuu-dialog-content', className)}>
+      <RadixDialog.Content
+        className={cn('niuu-dialog-content', className)}
+        {...(!description && { 'aria-describedby': undefined })}
+      >
         <div className="niuu-dialog-header">
           <RadixDialog.Title className="niuu-dialog-title">{title}</RadixDialog.Title>
           <RadixDialog.Close className="niuu-dialog-close" aria-label="Close">

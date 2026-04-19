@@ -48,6 +48,7 @@ export function DrawerContent({
         className={cn('niuu-drawer-content', `niuu-drawer-content--${side}`, className)}
         style={{ '--niuu-drawer-width': `${width}px` } as CSSProperties}
         aria-label={title}
+        {...(!description && { 'aria-describedby': undefined })}
       >
         <div className="niuu-drawer-header">
           <RadixDialog.Title className="niuu-drawer-title">{title}</RadixDialog.Title>

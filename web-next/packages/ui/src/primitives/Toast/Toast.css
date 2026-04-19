@@ -106,7 +106,7 @@
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--text-xs);
   flex-shrink: 0;
   transition: background 120ms ease, color 120ms ease;
 }
