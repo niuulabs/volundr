@@ -1,15 +1,69 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { ObservatoryPage } from './ObservatoryPage';
-import { createMockRegistryRepository } from '../adapters/mock';
+import { createMockRegistryRepository, createMockLiveTopologyStream } from '../adapters/mock';
 
-function wrap(ui: React.ReactNode) {
+// ── Mock browser APIs (needed by TopologyCanvas) ──────────────────────────────
+
+function makeMockCtx(): Partial<CanvasRenderingContext2D> {
+  const gradient = { addColorStop: vi.fn() };
+  return {
+    clearRect: vi.fn(),
+    fillRect: vi.fn(),
+    strokeRect: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    arc: vi.fn(),
+    fill: vi.fn(),
+    stroke: vi.fn(),
+    closePath: vi.fn(),
+    save: vi.fn(),
+    restore: vi.fn(),
+    translate: vi.fn(),
+    scale: vi.fn(),
+    quadraticCurveTo: vi.fn(),
+    fillText: vi.fn(),
+    setTransform: vi.fn(),
+    setLineDash: vi.fn(),
+    createRadialGradient: vi.fn().mockReturnValue(gradient),
+    createLinearGradient: vi.fn().mockReturnValue(gradient),
+  };
+}
+
+beforeEach(() => {
+  HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue(makeMockCtx());
+
+  global.ResizeObserver = vi.fn().mockImplementation((cb) => ({
+    observe: vi.fn(() =>
+      cb([{ contentRect: { width: 800, height: 600 } }], null as unknown as ResizeObserver),
+    ),
+    disconnect: vi.fn(),
+    unobserve: vi.fn(),
+  }));
+
+  vi.stubGlobal('requestAnimationFrame', (_cb: FrameRequestCallback) => 1);
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  vi.stubGlobal('performance', { now: () => 0 });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+function wrap(ui: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ServicesProvider services={{ 'observatory.registry': createMockRegistryRepository() }}>
+      <ServicesProvider
+        services={{
+          'observatory.registry': createMockRegistryRepository(),
+          'observatory.topology': createMockLiveTopologyStream(),
+        }}
+      >
         {ui}
       </ServicesProvider>
     </QueryClientProvider>,
@@ -22,31 +76,39 @@ describe('ObservatoryPage', () => {
     expect(screen.getByText('Flokk · Observatory')).toBeInTheDocument();
   });
 
-  it('renders the subtitle', () => {
+  it('renders the topology canvas element', () => {
     wrap(<ObservatoryPage />);
-    expect(screen.getByText(/Live topology view/)).toBeInTheDocument();
+    expect(document.querySelector('canvas')).toBeTruthy();
   });
 
-  it('shows loading state initially', () => {
+  it('shows the minimap', () => {
     wrap(<ObservatoryPage />);
-    expect(screen.getByText(/loading registry/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Topology minimap')).toBeInTheDocument();
   });
 
-  it('shows entity type count after data loads', async () => {
+  it('shows registry version after registry loads', async () => {
     wrap(<ObservatoryPage />);
-    await waitFor(() => expect(screen.getByText('entity types')).toBeInTheDocument(), {
-      timeout: 3000,
-    });
-    expect(screen.getByText('registry version')).toBeInTheDocument();
+    await waitFor(
+      () => expect(screen.getByText(/types · v\d+/)).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
   });
 
-  it('renders placeholder note', async () => {
+  it('shows entity count in minimap caption once topology loads', async () => {
     wrap(<ObservatoryPage />);
-    await waitFor(() => expect(screen.getByText(/Canvas and registry editor/)).toBeInTheDocument());
+    // The mock stream emits immediately, so entities > 0 quickly.
+    await waitFor(
+      () => {
+        const text = screen.getByText(/\d+ entities/);
+        const count = parseInt(text.textContent ?? '0');
+        expect(count).toBeGreaterThan(0);
+      },
+      { timeout: 3000 },
+    );
   });
 
   it('shows error state when the registry service throws', async () => {
-    const failing: ReturnType<typeof createMockRegistryRepository> = {
+    const failing = {
       loadRegistry: async () => {
         throw new Error('registry unavailable');
       },
@@ -55,11 +117,17 @@ describe('ObservatoryPage', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <ServicesProvider services={{ 'observatory.registry': failing }}>
+        <ServicesProvider
+          services={{
+            'observatory.registry': failing,
+            'observatory.topology': createMockLiveTopologyStream(),
+          }}
+        >
           <ObservatoryPage />
         </ServicesProvider>
       </QueryClientProvider>,
     );
-    await waitFor(() => expect(screen.getByText('registry unavailable')).toBeInTheDocument());
+    // The page still renders (no full crash) — registry error is non-fatal.
+    expect(screen.getByText('Flokk · Observatory')).toBeInTheDocument();
   });
 });

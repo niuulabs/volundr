@@ -38,3 +38,6 @@ export type {
 } from './domain/topology';
 export type { ConnectionKind, Connection } from './domain/connections';
 export type { ObservatoryEvent, EventSource } from './domain/events';
+
+export { TopologyCanvas } from './ui/TopologyCanvas';
+export type { TopologyCanvasProps } from './ui/TopologyCanvas';
