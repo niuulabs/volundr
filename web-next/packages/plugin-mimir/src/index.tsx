@@ -4,6 +4,10 @@ import { MimirPage } from './ui/MimirPage';
 import { SearchPage } from './ui/SearchPage';
 import { GraphPage } from './ui/GraphPage';
 import { EntitiesPage } from './ui/EntitiesPage';
+import { RavnsPage } from './ui/RavnsPage';
+import { RoutingPage } from './ui/RoutingPage';
+import { LintPage } from './ui/LintPage';
+import { DreamsPage } from './ui/DreamsPage';
 
 export const mimirPlugin = definePlugin({
   id: 'mimir',
@@ -30,6 +34,26 @@ export const mimirPlugin = definePlugin({
       getParentRoute: () => rootRoute,
       path: '/mimir/entities',
       component: EntitiesPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/mimir/ravns',
+      component: RavnsPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/mimir/routing',
+      component: RoutingPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/mimir/lint',
+      component: LintPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/mimir/dreams',
+      component: DreamsPage,
     }),
   ],
 });
@@ -59,5 +83,8 @@ export type {
   SearchResult,
 } from './domain/page';
 export type { LintRule, IssueSeverity, LintIssue, LintReport, DreamCycle } from './domain/lint';
+export type { WriteRoutingRule, RouteTestResult } from './domain/routing';
+export { resolveRoute } from './domain/routing';
+export type { RavnState, RavnBinding } from './domain/ravn-binding';
 export type { Source, OriginType } from './domain/source';
 export type { EntityKind, EntityMeta } from './domain/entity';
