@@ -32,9 +32,8 @@ test('type a command in terminal and see echoed output', async ({ page }) => {
   await page.keyboard.type('ls');
   await page.keyboard.press('Enter');
 
-  // The mock stream echoes input back — xterm renders it to canvas.
-  // We verify by checking the canvas element exists (xterm renders to canvas).
-  await expect(container.locator('canvas').first()).toBeVisible({ timeout: 5_000 });
+  // Verify xterm mounted by checking for the .xterm-viewport element xterm.js always creates.
+  await expect(container.locator('.xterm-viewport')).toBeVisible({ timeout: 5_000 });
 });
 
 test('reconnect button triggers re-subscription', async ({ page }) => {

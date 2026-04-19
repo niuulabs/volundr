@@ -39,7 +39,7 @@ test.describe('UI Composites showcase', () => {
     const section = page.getByTestId('section-deploy-badge');
     const kinds = ['k8s', 'systemd', 'pi', 'mobile', 'ephemeral'];
     for (const kind of kinds) {
-      await expect(section.getByLabelText(kind)).toBeVisible();
+      await expect(section.getByLabel(kind)).toBeVisible();
     }
   });
 
@@ -49,18 +49,18 @@ test.describe('UI Composites showcase', () => {
       'provisioning', 'ready', 'running', 'idle', 'terminating', 'terminated', 'failed',
     ];
     for (const state of states) {
-      await expect(section.getByLabelText(state)).toBeVisible();
+      await expect(section.getByLabel(state)).toBeVisible();
     }
   });
 
   test('LifecycleBadge "failed" state renders with critical styling', async ({ page }) => {
-    const failedBadge = page.getByLabelText('failed');
+    const failedBadge = page.getByLabel('failed');
     await expect(failedBadge).toHaveClass(/niuu-lifecycle-badge--failed/);
   });
 
   test('LifecycleBadge "running" state has a pulsing dot', async ({ page }) => {
     const section = page.getByTestId('section-lifecycle-badge');
-    const runningBadge = section.getByLabelText('running');
+    const runningBadge = section.getByLabel('running');
     const pulsingDot = runningBadge.locator('.niuu-state-dot--pulse');
     await expect(pulsingDot).toBeVisible();
   });
@@ -68,7 +68,7 @@ test.describe('UI Composites showcase', () => {
   test('keyboard accessibility: tab reaches the showcase content', async ({ page }) => {
     await page.keyboard.press('Tab');
     // The page should be keyboard-navigable — focus moves into the content area
-    const focused = page.locator(':focus');
+    const focused = page.locator(':focus').first();
     await expect(focused).toBeVisible();
   });
 });

@@ -38,7 +38,7 @@ test.describe('CommandPalette', () => {
   test('type to filter narrows results', async ({ page }) => {
     await page.keyboard.press('Control+k');
     await page.getByPlaceholder('Search commands…').fill('showcase');
-    await expect(page.getByRole('option', { name: /showcase/i })).toBeVisible();
+    await expect(page.getByRole('option', { name: /showcase/i }).first()).toBeVisible();
     // Items that don't match should be hidden
     await expect(page.getByRole('option', { name: /^hello$/i })).toBeHidden();
   });

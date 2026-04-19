@@ -12,7 +12,7 @@ test.describe('Showcase page — data surfaces', () => {
   test('KpiStrip renders KPI cards', async ({ page }) => {
     await expect(page.getByText('Total Dispatches')).toBeVisible();
     await expect(page.getByText('1,204')).toBeVisible();
-    await expect(page.getByText('Running')).toBeVisible();
+    await expect(page.getByText('Running', { exact: true })).toBeVisible();
     await expect(page.getByText('Error Rate')).toBeVisible();
   });
 

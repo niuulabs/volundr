@@ -4,7 +4,7 @@ test('observatory rail button navigates to /observatory', async ({ page }) => {
   await page.goto('/');
 
   // The rail should contain a button for the Observatory plugin (rune ᚠ)
-  const railButton = page.getByRole('button', { name: /observatory/i });
+  const railButton = page.locator('.niuu-shell__rail button[title*="Observatory"]');
   await expect(railButton).toBeVisible();
 
   await railButton.click();

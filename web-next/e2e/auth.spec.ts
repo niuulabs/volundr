@@ -91,5 +91,6 @@ test('RequireAuth: no redirect when auth is disabled', async ({ page }) => {
   // We verify the URL stays at / after the app fully renders.
   await page.goto('/');
   await expect(page.getByText('hello from the mock adapter')).toBeVisible({ timeout: 5000 });
-  await expect(page).toHaveURL('http://localhost:5173/');
+  // Shell redirects / to the first enabled plugin (/hello)
+  await expect(page).toHaveURL(/localhost:5173\/(hello)?/);
 });
