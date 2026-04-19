@@ -33,16 +33,12 @@ const defaultServices = {
 describe('TyrPage (DashboardPage alias)', () => {
   it('renders the Tyr dashboard heading', async () => {
     render(<TyrPage />, { wrapper: wrap(defaultServices) });
-    await waitFor(() =>
-      expect(screen.getByText(/Tyr · Dashboard/)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/Tyr · Dashboard/)).toBeInTheDocument());
   });
 
   it('renders the Tyr rune glyph', async () => {
     render(<TyrPage />, { wrapper: wrap(defaultServices) });
-    await waitFor(() =>
-      expect(screen.getByText('ᛏ', { hidden: true })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('ᛏ', { hidden: true })).toBeInTheDocument());
   });
 
   it('shows active sagas section', async () => {
@@ -54,9 +50,7 @@ describe('TyrPage (DashboardPage alias)', () => {
 
   it('shows KPI strip', async () => {
     render(<TyrPage />, { wrapper: wrap(defaultServices) });
-    await waitFor(() =>
-      expect(screen.getByRole('group', { name: /KPI/i })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole('group', { name: /KPI/i })).toBeInTheDocument());
   });
 
   it('shows error state when service throws', async () => {

@@ -32,10 +32,9 @@ function makeWrapper(service: Record<string, unknown>) {
 describe('usePhases', () => {
   it('returns phases for a given saga ID', async () => {
     const svc = { getPhases: vi.fn().mockResolvedValue([MOCK_PHASE]) };
-    const { result } = renderHook(
-      () => usePhases('00000000-0000-0000-0000-000000000001'),
-      { wrapper: makeWrapper({ tyr: svc }) },
-    );
+    const { result } = renderHook(() => usePhases('00000000-0000-0000-0000-000000000001'), {
+      wrapper: makeWrapper({ tyr: svc }),
+    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(1);
     expect(result.current.data?.[0]?.name).toBe('Phase 1: Foundation');
@@ -62,20 +61,18 @@ describe('usePhases', () => {
 
   it('enters error state when service rejects', async () => {
     const svc = { getPhases: vi.fn().mockRejectedValue(new Error('phases unavailable')) };
-    const { result } = renderHook(
-      () => usePhases('00000000-0000-0000-0000-000000000001'),
-      { wrapper: makeWrapper({ tyr: svc }) },
-    );
+    const { result } = renderHook(() => usePhases('00000000-0000-0000-0000-000000000001'), {
+      wrapper: makeWrapper({ tyr: svc }),
+    });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error).toBeInstanceOf(Error);
   });
 
   it('starts in loading state when sagaId is present', () => {
     const svc = { getPhases: vi.fn().mockReturnValue(new Promise(() => undefined)) };
-    const { result } = renderHook(
-      () => usePhases('00000000-0000-0000-0000-000000000001'),
-      { wrapper: makeWrapper({ tyr: svc }) },
-    );
+    const { result } = renderHook(() => usePhases('00000000-0000-0000-0000-000000000001'), {
+      wrapper: makeWrapper({ tyr: svc }),
+    });
     expect(result.current.isLoading).toBe(true);
   });
 });

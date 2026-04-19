@@ -17,8 +17,11 @@ test('tyr dashboard shows active sagas from seed data', async ({ page }) => {
 
 test('tyr dashboard shows KPI strip', async ({ page }) => {
   await page.goto('/tyr');
-  await expect(page.getByText('Active Sagas')).toBeVisible();
-  await expect(page.getByText('Dispatcher')).toBeVisible();
+  // Scope to KPI group since "Active Sagas" also appears as a section heading
+  const kpiGroup = page.getByRole('group', { name: /KPI/i });
+  await expect(kpiGroup).toBeVisible();
+  await expect(kpiGroup.getByText('Active Sagas')).toBeVisible();
+  await expect(kpiGroup.getByText('Dispatcher')).toBeVisible();
 });
 
 test('tyr sagas page renders at /tyr/sagas', async ({ page }) => {

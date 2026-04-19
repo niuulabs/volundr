@@ -39,16 +39,12 @@ export function DashboardPage() {
   const completedSagas = (sagas ?? []).filter((s) => s.status === 'complete');
   const avgConfidence =
     activeSagas.length > 0
-      ? Math.round(
-          activeSagas.reduce((sum, s) => sum + s.confidence, 0) / activeSagas.length,
-        )
+      ? Math.round(activeSagas.reduce((sum, s) => sum + s.confidence, 0) / activeSagas.length)
       : 0;
 
   if (isLoading) return <LoadingState label="Loading dashboard…" />;
   if (isError)
-    return (
-      <ErrorState message={error instanceof Error ? error.message : 'Failed to load sagas'} />
-    );
+    return <ErrorState message={error instanceof Error ? error.message : 'Failed to load sagas'} />;
 
   return (
     <div className="niuu-p-6 niuu-space-y-6">

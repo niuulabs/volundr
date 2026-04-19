@@ -15,9 +15,7 @@ import { useSagas } from './useSagas';
 
 type StatusFilter = SagaStatus | 'all';
 
-function phaseStatusToCell(
-  status: 'pending' | 'active' | 'gated' | 'complete',
-): PipeCellStatus {
+function phaseStatusToCell(status: 'pending' | 'active' | 'gated' | 'complete'): PipeCellStatus {
   switch (status) {
     case 'complete':
       return 'ok';
@@ -45,9 +43,7 @@ export function SagasPage() {
 
   if (isLoading) return <LoadingState label="Loading sagas…" />;
   if (isError)
-    return (
-      <ErrorState message={error instanceof Error ? error.message : 'Failed to load sagas'} />
-    );
+    return <ErrorState message={error instanceof Error ? error.message : 'Failed to load sagas'} />;
 
   const allSagas = sagas ?? [];
 
@@ -86,11 +82,7 @@ export function SagasPage() {
           className="niuu-px-3 niuu-py-1.5 niuu-rounded-md niuu-bg-bg-secondary niuu-border niuu-border-border niuu-text-sm niuu-text-text-primary niuu-placeholder-text-muted niuu-outline-none"
         />
 
-        <nav
-          className="niuu-flex niuu-gap-1"
-          role="tablist"
-          aria-label="Filter sagas by status"
-        >
+        <nav className="niuu-flex niuu-gap-1" role="tablist" aria-label="Filter sagas by status">
           {STATUS_TABS.map((tab) => (
             <button
               key={tab.value}
@@ -152,16 +144,13 @@ export function SagasPage() {
                       {new Date(saga.createdAt).toLocaleDateString()}
                     </p>
                     <Pipe
-                      cells={Array.from(
-                        { length: saga.phaseSummary.total },
-                        (_, i) => ({
-                          status:
-                            i < saga.phaseSummary.completed
-                              ? phaseStatusToCell('complete')
-                              : phaseStatusToCell('pending'),
-                          label: `Phase ${i + 1}`,
-                        }),
-                      )}
+                      cells={Array.from({ length: saga.phaseSummary.total }, (_, i) => ({
+                        status:
+                          i < saga.phaseSummary.completed
+                            ? phaseStatusToCell('complete')
+                            : phaseStatusToCell('pending'),
+                        label: `Phase ${i + 1}`,
+                      }))}
                     />
                   </div>
                   <div className="niuu-flex-shrink-0">

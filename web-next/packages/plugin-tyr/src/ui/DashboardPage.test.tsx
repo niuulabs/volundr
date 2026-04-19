@@ -42,16 +42,12 @@ const defaultServices = () => ({
 describe('DashboardPage', () => {
   it('renders the dashboard heading', async () => {
     render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByText(/Tyr · Dashboard/)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/Tyr · Dashboard/)).toBeInTheDocument());
   });
 
   it('renders the Tyr rune', async () => {
     render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByText('ᛏ', { hidden: true })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('ᛏ', { hidden: true })).toBeInTheDocument());
   });
 
   it('shows loading state initially', () => {
@@ -66,7 +62,9 @@ describe('DashboardPage', () => {
   it('shows error state when service throws', async () => {
     const failingSvc = {
       tyr: {
-        getSagas: async () => { throw new Error('network error'); },
+        getSagas: async () => {
+          throw new Error('network error');
+        },
         getPhases: () => Promise.resolve([]),
       },
       'tyr.dispatcher': createMockDispatcherService(),
@@ -92,9 +90,7 @@ describe('DashboardPage', () => {
 
   it('shows 1 completed saga from seed data', async () => {
     render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByText('Plugin Ravn Scaffold')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Plugin Ravn Scaffold')).toBeInTheDocument());
   });
 
   it('renders active sagas section', async () => {
@@ -143,9 +139,7 @@ describe('DashboardPage', () => {
       'tyr.dispatcher': createMockDispatcherService(),
     };
     render(<DashboardPage />, { wrapper: wrap(completeSvc) });
-    await waitFor(() =>
-      expect(screen.getByText('No active sagas')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('No active sagas')).toBeInTheDocument());
   });
 
   it('clicking an active saga calls navigate with the saga ID', async () => {

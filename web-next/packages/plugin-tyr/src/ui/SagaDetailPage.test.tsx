@@ -152,7 +152,9 @@ describe('SagaDetailPage', () => {
     await waitFor(() => expect(screen.getByText('Implement OIDC flow')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /Expand raid Implement OIDC flow/i }));
     await waitFor(() =>
-      expect(screen.getByRole('region', { name: /Raid detail: Implement OIDC flow/i })).toBeInTheDocument(),
+      expect(
+        screen.getByRole('region', { name: /Raid detail: Implement OIDC flow/i }),
+      ).toBeInTheDocument(),
     );
   });
 
@@ -186,9 +188,7 @@ describe('SagaDetailPage', () => {
     render(<SagaDetailPage sagaId={SAGA_ID} />, { wrapper: wrap({ tyr: svc }) });
     await waitFor(() => expect(screen.getByText('Implement OIDC flow')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /Expand raid Implement OIDC flow/i }));
-    await waitFor(() =>
-      expect(screen.getByText('OIDC flow implemented.')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('OIDC flow implemented.')).toBeInTheDocument());
   });
 
   it('clicking "Open session" navigates to Völundr session page', async () => {

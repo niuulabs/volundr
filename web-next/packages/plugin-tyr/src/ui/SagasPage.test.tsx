@@ -58,9 +58,7 @@ describe('SagasPage', () => {
 
   it('renders the Tyr rune', async () => {
     render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
-    await waitFor(() =>
-      expect(screen.getByText('ᛏ', { hidden: true })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('ᛏ', { hidden: true })).toBeInTheDocument());
   });
 
   it('shows loading state initially', () => {
@@ -71,7 +69,9 @@ describe('SagasPage', () => {
 
   it('shows error state when service throws', async () => {
     const failingSvc = {
-      getSagas: async () => { throw new Error('fetch error'); },
+      getSagas: async () => {
+        throw new Error('fetch error');
+      },
     };
     render(<SagasPage />, { wrapper: wrap({ tyr: failingSvc }) });
     await waitFor(() => expect(screen.getByText('fetch error')).toBeInTheDocument());

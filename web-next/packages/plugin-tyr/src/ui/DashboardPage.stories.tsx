@@ -10,10 +10,7 @@ import {
   Outlet,
 } from '@tanstack/react-router';
 import { DashboardPage } from './DashboardPage';
-import {
-  createMockTyrService,
-  createMockDispatcherService,
-} from '../adapters/mock';
+import { createMockTyrService, createMockDispatcherService } from '../adapters/mock';
 import type { Saga } from '../domain/saga';
 import type { DispatcherState } from '../domain/dispatcher';
 

@@ -15,9 +15,7 @@ import type { PipeCellStatus } from '@niuulabs/ui';
 import { useSaga } from './useSaga';
 import { usePhases } from './usePhases';
 
-function phaseStatusToCell(
-  status: 'pending' | 'active' | 'gated' | 'complete',
-): PipeCellStatus {
+function phaseStatusToCell(status: 'pending' | 'active' | 'gated' | 'complete'): PipeCellStatus {
   switch (status) {
     case 'complete':
       return 'ok';
@@ -138,7 +136,12 @@ export function SagaDetailPage({ sagaId }: SagaDetailPageProps) {
   const navigate = useNavigate();
   const [expandedRaidId, setExpandedRaidId] = useState<string | null>(null);
 
-  const { data: saga, isLoading: sagaLoading, isError: sagaError, error: sagaErr } = useSaga(sagaId);
+  const {
+    data: saga,
+    isLoading: sagaLoading,
+    isError: sagaError,
+    error: sagaErr,
+  } = useSaga(sagaId);
   const {
     data: phases,
     isLoading: phasesLoading,
@@ -161,8 +164,7 @@ export function SagaDetailPage({ sagaId }: SagaDetailPageProps) {
         message={phasesErr instanceof Error ? phasesErr.message : 'Failed to load phases'}
       />
     );
-  if (!saga)
-    return <ErrorState message={`Saga "${sagaId}" not found`} />;
+  if (!saga) return <ErrorState message={`Saga "${sagaId}" not found`} />;
 
   const allPhases = phases ?? [];
 
@@ -221,7 +223,17 @@ export function SagaDetailPage({ sagaId }: SagaDetailPageProps) {
                 <h3 className="niuu-m-0 niuu-text-base niuu-font-semibold niuu-text-text-primary">
                   {phase.name}
                 </h3>
-                <StatusBadge status={phase.status === 'active' ? 'active' : phase.status === 'complete' ? 'complete' : phase.status === 'gated' ? 'gated' : 'pending'} />
+                <StatusBadge
+                  status={
+                    phase.status === 'active'
+                      ? 'active'
+                      : phase.status === 'complete'
+                        ? 'complete'
+                        : phase.status === 'gated'
+                          ? 'gated'
+                          : 'pending'
+                  }
+                />
                 <ConfidenceBadge value={phase.confidence / 100} />
               </div>
 
@@ -259,11 +271,7 @@ export function SagaDetailPage({ sagaId }: SagaDetailPageProps) {
                                 />
                               )}
                               {raid.reviewerSessionId && (
-                                <PersonaAvatar
-                                  role="review"
-                                  letter="R"
-                                  size={22}
-                                />
+                                <PersonaAvatar role="review" letter="R" size={22} />
                               )}
                             </div>
                             <ConfidenceBadge value={raid.confidence / 100} />
