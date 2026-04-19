@@ -6,7 +6,7 @@ import {
   type AnyRouter,
 } from '@tanstack/react-router';
 import type { RouterHistory } from '@tanstack/react-router';
-import type { PluginDescriptor, PluginCtx } from '@niuulabs/plugin-sdk';
+import type { PluginDescriptor } from '@niuulabs/plugin-sdk';
 import { ShellLayout } from './ShellLayout';
 import { NotFoundPage } from './NotFoundPage';
 import { useShellContext } from './ShellContext';
@@ -60,7 +60,7 @@ export function composeRouter(
 
     // Auto-generated fallback route — uses plugin.render(ctx) as its component.
     function RenderFallback() {
-      const { ctx }: { ctx: PluginCtx } = useShellContext();
+      const { ctx } = useShellContext();
       return plugin.render?.(ctx) ?? null;
     }
 
