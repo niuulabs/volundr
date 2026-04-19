@@ -21,16 +21,16 @@ describe('MarkdownContent', () => {
 
   it('shows copy button in code block and copies on click', async () => {
     render(<MarkdownContent content={'```\nsome code\n```'} />);
-    const copyBtn = screen.getAllByRole('button').find(b => b.title === 'Copy');
+    const copyBtn = screen.getAllByRole('button').find((b) => b.title === 'Copy');
     expect(copyBtn).toBeDefined();
     fireEvent.click(copyBtn!);
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
     expect(screen.getByTitle('Copied!')).toBeInTheDocument();
   });
 
   it('collapses code block on click', () => {
     render(<MarkdownContent content={'```js\ncode\n```'} />);
-    const collapseBtn = screen.getAllByRole('button').find(b => b.title === 'Collapse');
+    const collapseBtn = screen.getAllByRole('button').find((b) => b.title === 'Collapse');
     fireEvent.click(collapseBtn!);
     expect(screen.queryByText('code')).not.toBeInTheDocument();
   });
@@ -52,13 +52,13 @@ describe('MarkdownContent', () => {
   });
 
   it('renders unordered list', () => {
-    render(<MarkdownContent content={"- item one\n- item two\n- item three"} />);
+    render(<MarkdownContent content={'- item one\n- item two\n- item three'} />);
     const items = screen.getAllByRole('listitem');
     expect(items).toHaveLength(3);
   });
 
   it('renders ordered list', () => {
-    render(<MarkdownContent content={"1. first\n2. second"} />);
+    render(<MarkdownContent content={'1. first\n2. second'} />);
     expect(screen.getByRole('list')).toBeInTheDocument();
     expect(screen.getByText('first')).toBeInTheDocument();
   });
@@ -80,32 +80,32 @@ describe('MarkdownContent', () => {
   });
 
   it('renders outcome card embedded in text', () => {
-    const content = "Before\n```outcome\nverdict: pass\n```\nAfter";
+    const content = 'Before\n```outcome\nverdict: pass\n```\nAfter';
     render(<MarkdownContent content={content} />);
     expect(screen.getByTestId('outcome-card')).toBeInTheDocument();
   });
 
   it('enables word wrap on word-wrap button click', () => {
     const { container } = render(<MarkdownContent content={'```js\nconst x = 1\n```'} />);
-    const wrapBtn = screen.getAllByRole('button').find(b => b.title === 'Enable word wrap');
+    const wrapBtn = screen.getAllByRole('button').find((b) => b.title === 'Enable word wrap');
     fireEvent.click(wrapBtn!);
     expect(container.querySelector('.niuu-chat-md-codeblock-pre--wrap')).toBeInTheDocument();
   });
 
   it('shows h3-h6 headings', () => {
-    render(<MarkdownContent content={"### H3\n#### H4\n##### H5\n###### H6"} />);
+    render(<MarkdownContent content={'### H3\n#### H4\n##### H5\n###### H6'} />);
     expect(screen.getByRole('heading', { level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 6 })).toBeInTheDocument();
   });
 
   it('skips empty lines gracefully', () => {
-    render(<MarkdownContent content={"Line one\n\nLine two"} />);
+    render(<MarkdownContent content={'Line one\n\nLine two'} />);
     expect(screen.getByText('Line one')).toBeInTheDocument();
     expect(screen.getByText('Line two')).toBeInTheDocument();
   });
 
   it('renders blockquote', () => {
-    render(<MarkdownContent content={"> This is a quote"} />);
+    render(<MarkdownContent content={'> This is a quote'} />);
     expect(screen.getByRole('blockquote')).toBeInTheDocument();
   });
 });

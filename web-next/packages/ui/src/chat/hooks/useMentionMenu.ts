@@ -40,7 +40,7 @@ export function useMentionMenu(
   sessionHost: string | null = null,
   chatEndpoint: string | null = null,
   participants: ReadonlyMap<string, RoomParticipant> = new Map(),
-  onFetchFiles?: (path: string, apiBase: string) => Promise<FileEntry[]>
+  onFetchFiles?: (path: string, apiBase: string) => Promise<FileEntry[]>,
 ): UseMentionMenuReturn {
   const [isOpen, setIsOpen] = useState(false);
   const [items, setItems] = useState<MentionMenuItem[]>([]);
@@ -66,9 +66,9 @@ export function useMentionMenu(
         const entries = await onFetchFiles(query, apiBase);
         const fileItems: MentionMenuItem[] = entries
           .slice(0, MAX_ITEMS)
-          .map(entry => ({ kind: 'file', entry }));
-        setItems(prev => {
-          const agentItems = prev.filter(i => i.kind === 'agent');
+          .map((entry) => ({ kind: 'file', entry }));
+        setItems((prev) => {
+          const agentItems = prev.filter((i) => i.kind === 'agent');
           return [...agentItems, ...fileItems];
         });
       } catch {
@@ -77,32 +77,29 @@ export function useMentionMenu(
         setLoading(false);
       }
     },
-    [buildApiBase, onFetchFiles]
+    [buildApiBase, onFetchFiles],
   );
 
-  const selectItem = useCallback(
-    (item: MentionMenuItem): string => {
-      if (item.kind === 'file') {
-        setMentions(prev => {
-          const already = prev.some(m => m.kind === 'file' && m.entry.path === item.entry.path);
-          if (already) return prev;
-          return [...prev, { kind: 'file', entry: item.entry }];
-        });
-        setIsOpen(false);
-        return item.entry.path;
-      }
-      setMentions(prev => {
-        const already = prev.some(
-          m => m.kind === 'agent' && m.participant.peerId === item.participant.peerId
-        );
+  const selectItem = useCallback((item: MentionMenuItem): string => {
+    if (item.kind === 'file') {
+      setMentions((prev) => {
+        const already = prev.some((m) => m.kind === 'file' && m.entry.path === item.entry.path);
         if (already) return prev;
-        return [...prev, { kind: 'agent', participant: item.participant }];
+        return [...prev, { kind: 'file', entry: item.entry }];
       });
       setIsOpen(false);
-      return item.participant.persona;
-    },
-    []
-  );
+      return item.entry.path;
+    }
+    setMentions((prev) => {
+      const already = prev.some(
+        (m) => m.kind === 'agent' && m.participant.peerId === item.participant.peerId,
+      );
+      if (already) return prev;
+      return [...prev, { kind: 'agent', participant: item.participant }];
+    });
+    setIsOpen(false);
+    return item.participant.persona;
+  }, []);
 
   const expandDirectory = useCallback(
     (item: MentionMenuItem) => {
@@ -110,7 +107,7 @@ export function useMentionMenu(
       const path = item.entry.path;
       void fetchFiles(path);
     },
-    [fetchFiles]
+    [fetchFiles],
   );
 
   const handleChange = useCallback(
@@ -129,8 +126,8 @@ export function useMentionMenu(
 
       // Build agent items
       const agentItems: MentionMenuItem[] = Array.from(participants.values())
-        .filter(p => !query || p.persona.toLowerCase().includes(query.toLowerCase()))
-        .map(p => ({ kind: 'agent', participant: p }));
+        .filter((p) => !query || p.persona.toLowerCase().includes(query.toLowerCase()))
+        .map((p) => ({ kind: 'agent', participant: p }));
 
       setItems(agentItems.slice(0, MAX_ITEMS));
       setIsOpen(true);
@@ -139,7 +136,7 @@ export function useMentionMenu(
       // Fetch file entries if a file API is available
       void fetchFiles(query);
     },
-    [participants, fetchFiles]
+    [participants, fetchFiles],
   );
 
   const handleKeyDown = useCallback(
@@ -147,12 +144,14 @@ export function useMentionMenu(
       if (!isOpen) return false;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedIndex(prev => (prev + 1) % Math.max(items.length, 1));
+        setSelectedIndex((prev) => (prev + 1) % Math.max(items.length, 1));
         return true;
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedIndex(prev => (prev - 1 + Math.max(items.length, 1)) % Math.max(items.length, 1));
+        setSelectedIndex(
+          (prev) => (prev - 1 + Math.max(items.length, 1)) % Math.max(items.length, 1),
+        );
         return true;
       }
       if (e.key === 'Escape') {
@@ -173,15 +172,15 @@ export function useMentionMenu(
       }
       return false;
     },
-    [isOpen, items, selectedIndex, selectItem, expandDirectory]
+    [isOpen, items, selectedIndex, selectItem, expandDirectory],
   );
 
   const removeMention = useCallback((id: string) => {
-    setMentions(prev =>
-      prev.filter(m => {
+    setMentions((prev) =>
+      prev.filter((m) => {
         if (m.kind === 'file') return m.entry.path !== id;
         return m.participant.peerId !== id;
-      })
+      }),
     );
   }, []);
 

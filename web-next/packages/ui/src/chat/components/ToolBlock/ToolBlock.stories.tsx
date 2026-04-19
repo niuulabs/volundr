@@ -31,7 +31,9 @@ const editBlock = {
 };
 
 export const BashClosed: Story = { args: { block: bashBlock } };
-export const BashOpen: Story = { args: { block: bashBlock, result: bashResult, defaultOpen: true } };
+export const BashOpen: Story = {
+  args: { block: bashBlock, result: bashResult, defaultOpen: true },
+};
 export const EditOpen: Story = { args: { block: editBlock, defaultOpen: true } };
 
 export const Group: StoryObj<typeof ToolGroupBlock> = {

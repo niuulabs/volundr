@@ -32,7 +32,10 @@ function ParticipantLabel({
     <div className="niuu-chat-room-label">
       <button
         type="button"
-        className={cn('niuu-chat-room-persona-btn', isSelected && 'niuu-chat-room-persona-btn--selected')}
+        className={cn(
+          'niuu-chat-room-persona-btn',
+          isSelected && 'niuu-chat-room-persona-btn--selected',
+        )}
         onClick={() => onSelectAgent?.(participant.peerId)}
         style={{ '--niuu-persona-color': color } as React.CSSProperties}
       >
@@ -75,18 +78,22 @@ export function RoomMessage({
       {message.metadata?.messageType !== 'system' && message.role === 'user' && (
         <UserMessage message={message} />
       )}
-      {message.metadata?.messageType !== 'system' && message.role === 'assistant' && message.status === 'running' && (
-        <StreamingMessage content={message.content} parts={message.parts} />
-      )}
-      {message.metadata?.messageType !== 'system' && message.role === 'assistant' && message.status !== 'running' && (
-        <AssistantMessage
-          message={message}
-          onCopy={onCopy}
-          onRegenerate={onRegenerate}
-          onBookmark={onBookmark}
-          bookmarked={bookmarked}
-        />
-      )}
+      {message.metadata?.messageType !== 'system' &&
+        message.role === 'assistant' &&
+        message.status === 'running' && (
+          <StreamingMessage content={message.content} parts={message.parts} />
+        )}
+      {message.metadata?.messageType !== 'system' &&
+        message.role === 'assistant' &&
+        message.status !== 'running' && (
+          <AssistantMessage
+            message={message}
+            onCopy={onCopy}
+            onRegenerate={onRegenerate}
+            onBookmark={onBookmark}
+            bookmarked={bookmarked}
+          />
+        )}
     </div>
   );
 }

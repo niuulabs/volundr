@@ -9,7 +9,7 @@
   border-left: 2px solid var(--niuu-participant-color, var(--color-border));
 }
 
-.niuu-chat-mesh-card[data-event-type="notification"][data-urgent] {
+.niuu-chat-mesh-card[data-event-type='notification'][data-urgent] {
   border-left-color: var(--color-accent-amber);
 }
 
@@ -47,15 +47,15 @@
   margin-left: auto;
 }
 
-.niuu-chat-mesh-verdict-icon[data-verdict="pass"] {
+.niuu-chat-mesh-verdict-icon[data-verdict='pass'] {
   color: var(--color-accent-emerald);
 }
 
-.niuu-chat-mesh-verdict-icon[data-verdict="fail"] {
+.niuu-chat-mesh-verdict-icon[data-verdict='fail'] {
   color: var(--color-accent-red);
 }
 
-.niuu-chat-mesh-verdict-icon[data-verdict="changes"] {
+.niuu-chat-mesh-verdict-icon[data-verdict='changes'] {
   color: var(--color-accent-amber);
 }
 
@@ -85,10 +85,16 @@
   font-weight: 600;
 }
 
-.niuu-chat-mesh-verdict[data-verdict="pass"] { color: var(--color-accent-emerald); }
-.niuu-chat-mesh-verdict[data-verdict="fail"] { color: var(--color-accent-red); }
-.niuu-chat-mesh-verdict[data-verdict="needs_changes"],
-.niuu-chat-mesh-verdict[data-verdict="needs_review"] { color: var(--color-accent-amber); }
+.niuu-chat-mesh-verdict[data-verdict='pass'] {
+  color: var(--color-accent-emerald);
+}
+.niuu-chat-mesh-verdict[data-verdict='fail'] {
+  color: var(--color-accent-red);
+}
+.niuu-chat-mesh-verdict[data-verdict='needs_changes'],
+.niuu-chat-mesh-verdict[data-verdict='needs_review'] {
+  color: var(--color-accent-amber);
+}
 
 .niuu-chat-mesh-reason,
 .niuu-chat-mesh-recommendation {

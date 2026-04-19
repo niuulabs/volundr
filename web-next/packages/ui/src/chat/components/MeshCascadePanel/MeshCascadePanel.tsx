@@ -23,11 +23,11 @@ export function MeshCascadePanel({ events, onEventClick, className }: MeshCascad
 
   if (events.length === 0) return null;
 
-  const outcomes = events.filter(e => e.type === 'outcome').length;
-  const delegations = events.filter(e => e.type === 'mesh_message').length;
-  const notifications = events.filter(e => e.type === 'notification').length;
+  const outcomes = events.filter((e) => e.type === 'outcome').length;
+  const delegations = events.filter((e) => e.type === 'mesh_message').length;
+  const notifications = events.filter((e) => e.type === 'notification').length;
 
-  const latestOutcome = [...events].reverse().find(e => e.type === 'outcome');
+  const latestOutcome = [...events].reverse().find((e) => e.type === 'outcome');
   const latestVerdict = latestOutcome?.type === 'outcome' ? latestOutcome.verdict : undefined;
 
   return (
@@ -46,16 +46,28 @@ export function MeshCascadePanel({ events, onEventClick, className }: MeshCascad
         </div>
         <div className="niuu-chat-cascade-header-right">
           <span className="niuu-chat-cascade-summary">
-            {outcomes > 0 && <span>{outcomes} outcome{outcomes !== 1 ? 's' : ''}</span>}
-            {delegations > 0 && <span>{delegations} delegation{delegations !== 1 ? 's' : ''}</span>}
-            {notifications > 0 && <span>{notifications} alert{notifications !== 1 ? 's' : ''}</span>}
+            {outcomes > 0 && (
+              <span>
+                {outcomes} outcome{outcomes !== 1 ? 's' : ''}
+              </span>
+            )}
+            {delegations > 0 && (
+              <span>
+                {delegations} delegation{delegations !== 1 ? 's' : ''}
+              </span>
+            )}
+            {notifications > 0 && (
+              <span>
+                {notifications} alert{notifications !== 1 ? 's' : ''}
+              </span>
+            )}
           </span>
         </div>
       </div>
 
       <div className="niuu-chat-cascade-content" ref={scrollRef}>
         <div className="niuu-chat-cascade-timeline">
-          {events.map(event => (
+          {events.map((event) => (
             <div
               key={event.id}
               className="niuu-chat-cascade-timeline-item"

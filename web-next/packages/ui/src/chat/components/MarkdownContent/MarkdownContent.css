@@ -5,10 +5,24 @@
   line-height: 1.6;
 }
 
-.niuu-chat-md-h1 { font-size: var(--text-xl); font-weight: 700; margin: var(--space-4) 0 var(--space-2); }
-.niuu-chat-md-h2 { font-size: var(--text-lg); font-weight: 600; margin: var(--space-3) 0 var(--space-2); }
-.niuu-chat-md-h3 { font-size: var(--text-base); font-weight: 600; margin: var(--space-3) 0 var(--space-1); }
-.niuu-chat-md-h4, .niuu-chat-md-h5, .niuu-chat-md-h6 {
+.niuu-chat-md-h1 {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  margin: var(--space-4) 0 var(--space-2);
+}
+.niuu-chat-md-h2 {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  margin: var(--space-3) 0 var(--space-2);
+}
+.niuu-chat-md-h3 {
+  font-size: var(--text-base);
+  font-weight: 600;
+  margin: var(--space-3) 0 var(--space-1);
+}
+.niuu-chat-md-h4,
+.niuu-chat-md-h5,
+.niuu-chat-md-h6 {
   font-size: var(--text-sm);
   font-weight: 600;
   margin: var(--space-2) 0 var(--space-1);
@@ -59,8 +73,13 @@
 }
 
 @keyframes niuu-chat-cursor-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 /* ── Code Block ─────────────────────────────────────────── */

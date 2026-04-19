@@ -76,15 +76,15 @@
   flex-shrink: 0;
 }
 
-.niuu-chat-peer-status-dot[data-status="thinking"] {
+.niuu-chat-peer-status-dot[data-status='thinking'] {
   background-color: var(--color-accent-purple);
 }
 
-.niuu-chat-peer-status-dot[data-status="tool_executing"] {
+.niuu-chat-peer-status-dot[data-status='tool_executing'] {
   background-color: var(--color-accent-cyan);
 }
 
-.niuu-chat-peer-status-dot[data-status="idle"] {
+.niuu-chat-peer-status-dot[data-status='idle'] {
   background-color: var(--color-accent-emerald);
 }
 
@@ -152,17 +152,17 @@
   color: var(--color-text-muted);
 }
 
-.niuu-chat-peer-meta-tag[data-variant="subscribe"] {
+.niuu-chat-peer-meta-tag[data-variant='subscribe'] {
   color: var(--color-accent-purple);
   background-color: color-mix(in srgb, var(--color-accent-purple) 12%, transparent);
 }
 
-.niuu-chat-peer-meta-tag[data-variant="emit"] {
+.niuu-chat-peer-meta-tag[data-variant='emit'] {
   color: var(--color-accent-cyan);
   background-color: color-mix(in srgb, var(--color-accent-cyan) 12%, transparent);
 }
 
-.niuu-chat-peer-meta-tag[data-variant="tool"] {
+.niuu-chat-peer-meta-tag[data-variant='tool'] {
   color: var(--color-accent-emerald);
   background-color: color-mix(in srgb, var(--color-accent-emerald) 12%, transparent);
 }

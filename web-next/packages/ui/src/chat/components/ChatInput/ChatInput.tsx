@@ -24,15 +24,38 @@ const EMPTY_PARTICIPANTS: ReadonlyMap<string, RoomParticipant> = new Map();
 const ACCEPTED_FILE_TYPES = [
   'image/*',
   'application/pdf',
-  '.ts', '.tsx', '.js', '.jsx', '.py', '.rs', '.go',
-  '.java', '.c', '.cpp', '.h', '.hpp', '.css', '.html',
-  '.json', '.yaml', '.yml', '.toml', '.md', '.txt', '.sh',
-  '.bash', '.sql',
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.py',
+  '.rs',
+  '.go',
+  '.java',
+  '.c',
+  '.cpp',
+  '.h',
+  '.hpp',
+  '.css',
+  '.html',
+  '.json',
+  '.yaml',
+  '.yml',
+  '.toml',
+  '.md',
+  '.txt',
+  '.sh',
+  '.bash',
+  '.sql',
 ].join(',');
 
 interface ChatInputProps {
   onSend: (text: string, attachments: FileAttachment[]) => void;
-  onSendDirected?: (participants: RoomParticipant[], text: string, attachments: FileAttachment[]) => void;
+  onSendDirected?: (
+    participants: RoomParticipant[],
+    text: string,
+    attachments: FileAttachment[],
+  ) => void;
   isLoading: boolean;
   onStop: () => void;
   disabled?: boolean;
@@ -66,7 +89,13 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const slashMenu = useSlashMenu(availableCommands as SlashCommand[] | undefined);
-  const mentionMenu = useMentionMenu(sessionId, sessionHost, chatEndpoint, participants, onFetchFiles);
+  const mentionMenu = useMentionMenu(
+    sessionId,
+    sessionHost,
+    chatEndpoint,
+    participants,
+    onFetchFiles,
+  );
   const {
     attachments: fileAttachmentsList,
     isDragging,
@@ -103,14 +132,14 @@ export function ChatInput({
 
     const agentMentions = mentionMenu.mentions
       .filter((m): m is { kind: 'agent'; participant: RoomParticipant } => m.kind === 'agent')
-      .map(m => m.participant);
+      .map((m) => m.participant);
 
     const fileMentions = mentionMenu.mentions.filter(
-      (m): m is Extract<SelectedMention, { kind: 'file' }> => m.kind === 'file'
+      (m): m is Extract<SelectedMention, { kind: 'file' }> => m.kind === 'file',
     );
 
-    const agentPrefixes = agentMentions.map(p => `@${p.persona}`);
-    const filePaths = fileMentions.map(m => `@${m.entry.path}`);
+    const agentPrefixes = agentMentions.map((p) => `@${p.persona}`);
+    const filePaths = fileMentions.map((m) => `@${m.entry.path}`);
     const allPrefixes = [...agentPrefixes, ...filePaths];
     const fullMessage = allPrefixes.length > 0 ? `${allPrefixes.join(' ')} ${trimmed}` : trimmed;
 
@@ -126,7 +155,15 @@ export function ChatInput({
       const id = m.kind === 'file' ? m.entry.path : m.participant.peerId;
       mentionMenu.removeMention(id);
     }
-  }, [input, disabled, onSend, onSendDirected, mentionMenu, fileAttachmentsList, clearFileAttachments]);
+  }, [
+    input,
+    disabled,
+    onSend,
+    onSendDirected,
+    mentionMenu,
+    fileAttachmentsList,
+    clearFileAttachments,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -175,7 +212,7 @@ export function ChatInput({
       e.preventDefault();
       handleSend();
     },
-    [handleSend, slashMenu, mentionMenu, input]
+    [handleSend, slashMenu, mentionMenu, input],
   );
 
   const handleChange = useCallback(
@@ -186,7 +223,7 @@ export function ChatInput({
       slashMenu.handleChange(value);
       mentionMenu.handleChange(value, cursorPos);
     },
-    [slashMenu, mentionMenu]
+    [slashMenu, mentionMenu],
   );
 
   const handleAttachClick = useCallback(() => {
@@ -201,7 +238,7 @@ export function ChatInput({
       addFiles(files);
       e.target.value = '';
     },
-    [addFiles]
+    [addFiles],
   );
 
   return (
@@ -217,14 +254,14 @@ export function ChatInput({
     >
       {(fileAttachmentsList.length > 0 || mentionMenu.mentions.length > 0) && (
         <div className="niuu-chat-input-attachments">
-          {mentionMenu.mentions.map(mention => (
+          {mentionMenu.mentions.map((mention) => (
             <MentionPill
               key={mention.kind === 'file' ? mention.entry.path : mention.participant.peerId}
               mention={mention}
               onRemove={mentionMenu.removeMention}
             />
           ))}
-          {fileAttachmentsList.map(attachment => (
+          {fileAttachmentsList.map((attachment) => (
             <span key={attachment.id} className="niuu-chat-attachment-chip">
               {attachment.previewUrl && (
                 <img
@@ -252,7 +289,7 @@ export function ChatInput({
           <SlashCommandMenu
             selectedIndex={slashMenu.selectedIndex}
             commands={slashMenu.filteredCommands}
-            onSelect={cmd => {
+            onSelect={(cmd) => {
               const newInput = slashMenu.selectCommand(cmd);
               setInput(newInput);
               textareaRef.current?.focus();
@@ -264,7 +301,7 @@ export function ChatInput({
             items={mentionMenu.items}
             selectedIndex={mentionMenu.selectedIndex}
             loading={mentionMenu.loading}
-            onSelect={item => {
+            onSelect={(item) => {
               const selectedLabel = mentionMenu.selectItem(item);
               const textarea = textareaRef.current;
               if (textarea) {
@@ -278,7 +315,7 @@ export function ChatInput({
               }
               textareaRef.current?.focus();
             }}
-            onExpand={item => {
+            onExpand={(item) => {
               mentionMenu.expandDirectory(item);
               textareaRef.current?.focus();
             }}

@@ -136,10 +136,13 @@ describe('ChatInput', () => {
         onSend={onSend}
         onSendDirected={onSendDirected}
         participants={participants}
-      />
+      />,
     );
     const textarea = screen.getByTestId('chat-textarea');
-    fireEvent.change(textarea, { target: { value: '@' }, nativeEvent: { target: { selectionStart: 1 } } });
+    fireEvent.change(textarea, {
+      target: { value: '@' },
+      nativeEvent: { target: { selectionStart: 1 } },
+    });
     // Select the agent mention directly
     const mentionMenu = screen.queryByTestId('mention-menu');
     if (mentionMenu) {

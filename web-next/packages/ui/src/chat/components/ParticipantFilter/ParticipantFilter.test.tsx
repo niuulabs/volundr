@@ -17,7 +17,7 @@ describe('ParticipantFilter', () => {
         onFilterChange={vi.fn()}
         showInternal={false}
         onToggleInternal={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByTestId('filter-tab-all')).toBeInTheDocument();
     expect(screen.getByTestId('filter-tab-peer-1')).toBeInTheDocument();
@@ -33,7 +33,7 @@ describe('ParticipantFilter', () => {
         onFilterChange={onFilterChange}
         showInternal={false}
         onToggleInternal={vi.fn()}
-      />
+      />,
     );
     fireEvent.click(screen.getByTestId('filter-tab-peer-1'));
     expect(onFilterChange).toHaveBeenCalledWith('peer-1');
@@ -47,7 +47,7 @@ describe('ParticipantFilter', () => {
         onFilterChange={vi.fn()}
         showInternal={false}
         onToggleInternal={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByText('Björk (Björk)')).toBeInTheDocument();
   });
@@ -60,7 +60,7 @@ describe('ParticipantFilter', () => {
         onFilterChange={vi.fn()}
         showInternal={false}
         onToggleInternal={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByTestId('filter-tab-peer-1')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('filter-tab-all')).toHaveAttribute('aria-pressed', 'false');
@@ -75,7 +75,7 @@ describe('ParticipantFilter', () => {
         onFilterChange={vi.fn()}
         showInternal={false}
         onToggleInternal={onToggleInternal}
-      />
+      />,
     );
     fireEvent.click(screen.getByTestId('internal-toggle'));
     expect(onToggleInternal).toHaveBeenCalled();
@@ -89,7 +89,7 @@ describe('ParticipantFilter', () => {
         onFilterChange={vi.fn()}
         showInternal={false}
         onToggleInternal={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByTestId('internal-toggle')).toHaveAttribute('aria-pressed', 'false');
     rerender(
@@ -99,7 +99,7 @@ describe('ParticipantFilter', () => {
         onFilterChange={vi.fn()}
         showInternal={true}
         onToggleInternal={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByTestId('internal-toggle')).toHaveAttribute('aria-pressed', 'true');
   });

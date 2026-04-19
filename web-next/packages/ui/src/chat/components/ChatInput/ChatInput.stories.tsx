@@ -10,11 +10,13 @@ const meta = {
   title: 'Chat/ChatInput',
   component: ChatInput,
   parameters: { layout: 'centered' },
-  decorators: [(Story: React.ComponentType) => (
-    <div style={{ width: 600 }}>
-      <Story />
-    </div>
-  )],
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div style={{ width: 600 }}>
+        <Story />
+      </div>
+    ),
+  ],
   args: {
     onSend: (text: string) => console.log('send:', text),
     onStop: () => console.log('stop'),

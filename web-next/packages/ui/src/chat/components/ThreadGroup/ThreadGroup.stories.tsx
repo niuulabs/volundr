@@ -4,8 +4,20 @@ import type { ChatMessage } from '../../types';
 
 const now = new Date();
 const messages: ChatMessage[] = [
-  { id: 'm1', role: 'assistant', content: 'Analyzing the problem...', createdAt: now, participant: { peerId: 'p1', persona: 'Odin' } },
-  { id: 'm2', role: 'assistant', content: 'Found a solution.', createdAt: now, participant: { peerId: 'p1', persona: 'Odin' } },
+  {
+    id: 'm1',
+    role: 'assistant',
+    content: 'Analyzing the problem...',
+    createdAt: now,
+    participant: { peerId: 'p1', persona: 'Odin' },
+  },
+  {
+    id: 'm2',
+    role: 'assistant',
+    content: 'Found a solution.',
+    createdAt: now,
+    participant: { peerId: 'p1', persona: 'Odin' },
+  },
 ];
 
 const meta: Meta<typeof ThreadGroup> = {

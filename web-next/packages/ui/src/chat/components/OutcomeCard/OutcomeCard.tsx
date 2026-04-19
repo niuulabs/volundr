@@ -4,8 +4,7 @@ import { cn } from '../../../utils/cn';
 import type { MeshVerdict } from '../../types';
 import './OutcomeCard.css';
 
-const OUTCOME_BLOCK_RE =
-  /```outcome\n([\s\S]*?)```|<outcome>([\s\S]*?)<\/outcome>/;
+const OUTCOME_BLOCK_RE = /```outcome\n([\s\S]*?)```|<outcome>([\s\S]*?)<\/outcome>/;
 
 const VERDICT_ICONS: Record<MeshVerdict, typeof CheckCircle> = {
   approve: CheckCircle,
@@ -41,11 +40,18 @@ export function OutcomeCard({ raw }: OutcomeCardProps) {
   const Icon = verdict && VERDICT_ICONS[verdict] ? VERDICT_ICONS[verdict] : CheckCircle;
 
   return (
-    <div className={cn('niuu-chat-outcome', verdict && `niuu-chat-outcome--${verdict}`)} data-testid="outcome-card">
+    <div
+      className={cn('niuu-chat-outcome', verdict && `niuu-chat-outcome--${verdict}`)}
+      data-testid="outcome-card"
+    >
       <div className="niuu-chat-outcome-header">
         <Icon className="niuu-chat-outcome-icon" />
         <span className="niuu-chat-outcome-label">Outcome</span>
-        {verdict && <span className={`niuu-chat-outcome-badge niuu-chat-outcome-badge--${verdict}`}>{verdict}</span>}
+        {verdict && (
+          <span className={`niuu-chat-outcome-badge niuu-chat-outcome-badge--${verdict}`}>
+            {verdict}
+          </span>
+        )}
       </div>
       {summary && <p className="niuu-chat-outcome-summary">{summary}</p>}
       <div className="niuu-chat-outcome-fields">
@@ -61,7 +67,7 @@ export function OutcomeCard({ raw }: OutcomeCardProps) {
       <button
         type="button"
         className="niuu-chat-outcome-toggle"
-        onClick={() => setShowRaw(prev => !prev)}
+        onClick={() => setShowRaw((prev) => !prev)}
       >
         {showRaw ? 'Hide raw' : 'Show raw'}
       </button>
@@ -73,7 +79,9 @@ export function OutcomeCard({ raw }: OutcomeCardProps) {
 /**
  * Detect if text contains an outcome block and extract the raw content.
  */
-export function extractOutcomeBlock(text: string): { before: string; raw: string; after: string } | null {
+export function extractOutcomeBlock(
+  text: string,
+): { before: string; raw: string; after: string } | null {
   const match = OUTCOME_BLOCK_RE.exec(text);
   if (!match) return null;
   const raw = (match[1] ?? match[2] ?? '').trim();

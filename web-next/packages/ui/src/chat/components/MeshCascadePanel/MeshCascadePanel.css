@@ -56,16 +56,16 @@
   background-color: var(--color-text-muted);
 }
 
-.niuu-chat-cascade-status-dot[data-verdict="pass"] {
+.niuu-chat-cascade-status-dot[data-verdict='pass'] {
   background-color: var(--color-accent-emerald);
 }
 
-.niuu-chat-cascade-status-dot[data-verdict="fail"] {
+.niuu-chat-cascade-status-dot[data-verdict='fail'] {
   background-color: var(--color-accent-red);
 }
 
-.niuu-chat-cascade-status-dot[data-verdict="needs_changes"],
-.niuu-chat-cascade-status-dot[data-verdict="needs_review"] {
+.niuu-chat-cascade-status-dot[data-verdict='needs_changes'],
+.niuu-chat-cascade-status-dot[data-verdict='needs_review'] {
   background-color: var(--color-accent-amber);
 }
 

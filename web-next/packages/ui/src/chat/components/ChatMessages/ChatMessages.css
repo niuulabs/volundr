@@ -94,8 +94,13 @@
 }
 
 @keyframes niuu-chat-avatar-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .niuu-chat-avatar-icon {
@@ -267,7 +272,9 @@
 }
 
 @keyframes niuu-chat-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .niuu-chat-dots-container {
@@ -285,12 +292,24 @@
   animation: niuu-chat-dot-bounce 1.4s ease-in-out infinite;
 }
 
-.niuu-chat-dot:nth-child(2) { animation-delay: 0.16s; }
-.niuu-chat-dot:nth-child(3) { animation-delay: 0.32s; }
+.niuu-chat-dot:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.niuu-chat-dot:nth-child(3) {
+  animation-delay: 0.32s;
+}
 
 @keyframes niuu-chat-dot-bounce {
-  0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
-  40% { transform: scale(1); opacity: 1; }
+  0%,
+  80%,
+  100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* ── System Message ─────────────────────────────────────── */

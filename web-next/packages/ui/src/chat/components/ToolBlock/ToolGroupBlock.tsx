@@ -20,7 +20,7 @@ export function ToolGroupBlock({ toolName, blocks }: ToolGroupBlockProps) {
       <button
         type="button"
         className="niuu-chat-tool-group-header"
-        onClick={() => setIsOpen(prev => !prev)}
+        onClick={() => setIsOpen((prev) => !prev)}
         aria-expanded={isOpen}
       >
         <ToolIcon toolName={toolName} className="niuu-chat-tool-icon" />

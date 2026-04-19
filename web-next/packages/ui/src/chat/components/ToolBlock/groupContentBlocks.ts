@@ -21,7 +21,11 @@ export type ContentBlock = ToolUseBlock | ToolResultBlock | TextBlock | { type: 
 export type GroupedContent =
   | { kind: 'text'; text: string }
   | { kind: 'single'; block: ToolUseBlock; result?: ToolResultBlock }
-  | { kind: 'group'; toolName: string; blocks: Array<{ block: ToolUseBlock; result?: ToolResultBlock }> };
+  | {
+      kind: 'group';
+      toolName: string;
+      blocks: Array<{ block: ToolUseBlock; result?: ToolResultBlock }>;
+    };
 
 export function groupContentBlocks(blocks: ContentBlock[]): GroupedContent[] {
   // Build a lookup from tool_use_id → tool_result for id-based matching
@@ -38,7 +42,10 @@ export function groupContentBlocks(blocks: ContentBlock[]): GroupedContent[] {
 
   while (i < blocks.length) {
     const block = blocks[i];
-    if (!block) { i++; continue; }
+    if (!block) {
+      i++;
+      continue;
+    }
 
     if (block.type === 'text') {
       result.push({ kind: 'text', text: (block as TextBlock).text });
@@ -62,7 +69,7 @@ export function groupContentBlocks(blocks: ContentBlock[]): GroupedContent[] {
       if (blk.type === 'tool_result') {
         const rb = blk as ToolResultBlock;
         // Skip tool_results that belong to uses already collected in this group
-        if (group.some(g => g.block.id === rb.tool_use_id)) {
+        if (group.some((g) => g.block.id === rb.tool_use_id)) {
           j++;
           continue;
         }

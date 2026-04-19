@@ -36,7 +36,7 @@ export function ThreadGroup({ messages, isCollapsed, onToggle }: ThreadGroupProp
   return (
     <div
       className="niuu-chat-thread-group"
-      style={color ? { '--niuu-thread-color': color } as React.CSSProperties : undefined}
+      style={color ? ({ '--niuu-thread-color': color } as React.CSSProperties) : undefined}
       data-testid="thread-group"
     >
       <button
@@ -56,11 +56,15 @@ export function ThreadGroup({ messages, isCollapsed, onToggle }: ThreadGroupProp
         {timeRange && <span className="niuu-chat-thread-time">{timeRange}</span>}
       </button>
 
-      <div className={cn('niuu-chat-thread-body', isCollapsed && 'niuu-chat-thread-body--collapsed')}>
-        {messages.map(msg => {
-          if (msg.metadata?.messageType === 'system') return <SystemMessage key={msg.id} message={msg} />;
+      <div
+        className={cn('niuu-chat-thread-body', isCollapsed && 'niuu-chat-thread-body--collapsed')}
+      >
+        {messages.map((msg) => {
+          if (msg.metadata?.messageType === 'system')
+            return <SystemMessage key={msg.id} message={msg} />;
           if (msg.role === 'user') return <UserMessage key={msg.id} message={msg} />;
-          if (msg.status === 'running') return <StreamingMessage key={msg.id} content={msg.content} parts={msg.parts} />;
+          if (msg.status === 'running')
+            return <StreamingMessage key={msg.id} content={msg.content} parts={msg.parts} />;
           return <AssistantMessage key={msg.id} message={msg} />;
         })}
       </div>

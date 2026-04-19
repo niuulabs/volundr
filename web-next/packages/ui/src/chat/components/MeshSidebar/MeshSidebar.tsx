@@ -44,9 +44,9 @@ function PeerCard({ participant, isSelected, onSelect }: PeerCardProps) {
         <button
           type="button"
           className="niuu-chat-peer-expand-toggle"
-          onClick={e => {
+          onClick={(e) => {
             e.stopPropagation();
-            setExpanded(v => !v);
+            setExpanded((v) => !v);
           }}
         >
           {expanded ? 'hide details' : 'show details'}
@@ -59,8 +59,10 @@ function PeerCard({ participant, isSelected, onSelect }: PeerCardProps) {
             <>
               <span className="niuu-chat-peer-meta-label">Subscribes</span>
               <div className="niuu-chat-peer-meta-tags">
-                {participant.subscribesTo.map(evt => (
-                  <span key={evt} className="niuu-chat-peer-meta-tag" data-variant="subscribe">{evt}</span>
+                {participant.subscribesTo.map((evt) => (
+                  <span key={evt} className="niuu-chat-peer-meta-tag" data-variant="subscribe">
+                    {evt}
+                  </span>
                 ))}
               </div>
             </>
@@ -69,8 +71,10 @@ function PeerCard({ participant, isSelected, onSelect }: PeerCardProps) {
             <>
               <span className="niuu-chat-peer-meta-label">Emits</span>
               <div className="niuu-chat-peer-meta-tags">
-                {participant.emits.map(evt => (
-                  <span key={evt} className="niuu-chat-peer-meta-tag" data-variant="emit">{evt}</span>
+                {participant.emits.map((evt) => (
+                  <span key={evt} className="niuu-chat-peer-meta-tag" data-variant="emit">
+                    {evt}
+                  </span>
                 ))}
               </div>
             </>
@@ -79,8 +83,10 @@ function PeerCard({ participant, isSelected, onSelect }: PeerCardProps) {
             <>
               <span className="niuu-chat-peer-meta-label">Tools</span>
               <div className="niuu-chat-peer-meta-tags">
-                {participant.tools.map(tool => (
-                  <span key={tool} className="niuu-chat-peer-meta-tag" data-variant="tool">{tool}</span>
+                {participant.tools.map((tool) => (
+                  <span key={tool} className="niuu-chat-peer-meta-tag" data-variant="tool">
+                    {tool}
+                  </span>
                 ))}
               </div>
             </>
@@ -92,7 +98,7 @@ function PeerCard({ participant, isSelected, onSelect }: PeerCardProps) {
 }
 
 export function MeshSidebar({ participants, selectedPeerId, onSelectPeer }: MeshSidebarProps) {
-  const peers = Array.from(participants.values()).filter(p => p.participantType === 'ravn');
+  const peers = Array.from(participants.values()).filter((p) => p.participantType === 'ravn');
 
   if (peers.length === 0) return null;
 
@@ -103,7 +109,7 @@ export function MeshSidebar({ participants, selectedPeerId, onSelectPeer }: Mesh
         <span className="niuu-chat-mesh-sidebar-count">{peers.length}</span>
       </div>
       <div className="niuu-chat-mesh-sidebar-peer-list">
-        {peers.map(peer => (
+        {peers.map((peer) => (
           <PeerCard
             key={peer.peerId}
             participant={peer}

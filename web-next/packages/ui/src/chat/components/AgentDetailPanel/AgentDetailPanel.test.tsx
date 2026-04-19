@@ -13,7 +13,12 @@ const participant: RoomParticipant = {
 
 const events: AgentInternalEvent[] = [
   { id: 'ev-1', frameType: 'thought', data: 'Analyzing the problem...' },
-  { id: 'ev-2', frameType: 'tool_start', data: 'bash', metadata: { tool_name: 'bash', input: 'ls -la' } },
+  {
+    id: 'ev-2',
+    frameType: 'tool_start',
+    data: 'bash',
+    metadata: { tool_name: 'bash', input: 'ls -la' },
+  },
   { id: 'ev-3', frameType: 'tool_result', data: 'total 24\n...', metadata: { tool_name: 'bash' } },
 ];
 
@@ -99,7 +104,7 @@ describe('AgentDetailPanel', () => {
       <div>
         <AgentDetailPanel participant={participant} events={events} onClose={onClose} />
         <input data-testid="test-input" />
-      </div>
+      </div>,
     );
     const input = screen.getByTestId('test-input');
     input.focus();

@@ -64,7 +64,14 @@ export interface AgentInternalEvent {
   metadata?: Record<string, unknown>;
 }
 
-export type MeshVerdict = 'approve' | 'pass' | 'retry' | 'escalate' | 'fail' | 'needs_changes' | 'needs_review';
+export type MeshVerdict =
+  | 'approve'
+  | 'pass'
+  | 'retry'
+  | 'escalate'
+  | 'fail'
+  | 'needs_changes'
+  | 'needs_review';
 
 interface MeshEventBase {
   id: string;

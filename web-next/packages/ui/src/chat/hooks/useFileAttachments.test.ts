@@ -3,7 +3,10 @@ import { renderHook, act } from '@testing-library/react';
 import { useFileAttachments } from './useFileAttachments';
 
 beforeEach(() => {
-  Object.defineProperty(URL, 'createObjectURL', { value: vi.fn(() => 'blob:mock'), writable: true });
+  Object.defineProperty(URL, 'createObjectURL', {
+    value: vi.fn(() => 'blob:mock'),
+    writable: true,
+  });
   Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), writable: true });
 });
 
@@ -56,7 +59,9 @@ describe('useFileAttachments', () => {
       result.current.addFiles(makeFileList(file));
     });
     const id = result.current.attachments[0].id;
-    act(() => { result.current.removeAttachment(id); });
+    act(() => {
+      result.current.removeAttachment(id);
+    });
     expect(result.current.attachments).toHaveLength(0);
   });
 
@@ -69,7 +74,9 @@ describe('useFileAttachments', () => {
     await act(async () => {
       result.current.addFiles(makeFileList(...files));
     });
-    act(() => { result.current.clearAttachments(); });
+    act(() => {
+      result.current.clearAttachments();
+    });
     expect(result.current.attachments).toHaveLength(0);
   });
 
@@ -118,7 +125,9 @@ describe('useFileAttachments', () => {
       },
       preventDefault: vi.fn(),
     } as unknown as React.ClipboardEvent;
-    act(() => { result.current.handlePaste(pasteEvent); });
+    act(() => {
+      result.current.handlePaste(pasteEvent);
+    });
     expect(result.current.attachments).toHaveLength(0);
   });
 });

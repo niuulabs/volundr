@@ -18,7 +18,10 @@ const p1: RoomParticipant = { peerId: 'p1', persona: 'Ada', color: '#38bdf8' };
 const p2: RoomParticipant = { peerId: 'p2', persona: 'Björk', color: '#a78bfa' };
 
 const oneParticipant = new Map([['p1', p1]]);
-const twoParticipants = new Map([['p1', p1], ['p2', p2]]);
+const twoParticipants = new Map([
+  ['p1', p1],
+  ['p2', p2],
+]);
 
 describe('useRoomState — non-room mode', () => {
   it('isRoomMode is false with <= 1 participant', () => {
@@ -68,7 +71,7 @@ describe('useRoomState — room mode', () => {
       makeMsg({ role: 'assistant', content: 'secret', visibility: 'internal' }),
     ];
     const { result } = renderHook(() => useRoomState(msgs, twoParticipants));
-    expect(result.current.visibleMessages.map(m => m.content)).toEqual(['public']);
+    expect(result.current.visibleMessages.map((m) => m.content)).toEqual(['public']);
   });
 
   it('shows internal messages after toggleInternal', () => {
@@ -77,7 +80,9 @@ describe('useRoomState — room mode', () => {
       makeMsg({ role: 'assistant', content: 'secret', visibility: 'internal' }),
     ];
     const { result } = renderHook(() => useRoomState(msgs, twoParticipants));
-    act(() => { result.current.toggleInternal(); });
+    act(() => {
+      result.current.toggleInternal();
+    });
     expect(result.current.visibleMessages).toHaveLength(2);
   });
 
@@ -87,8 +92,10 @@ describe('useRoomState — room mode', () => {
       makeMsg({ role: 'assistant', content: 'from p2', participant: p2 }),
     ];
     const { result } = renderHook(() => useRoomState(msgs, twoParticipants));
-    act(() => { result.current.setActiveFilter('p1'); });
-    expect(result.current.visibleMessages.map(m => m.content)).toEqual(['from p1']);
+    act(() => {
+      result.current.setActiveFilter('p1');
+    });
+    expect(result.current.visibleMessages.map((m) => m.content)).toEqual(['from p1']);
   });
 
   it('shows all messages when filter reset to "all"', () => {
@@ -97,8 +104,12 @@ describe('useRoomState — room mode', () => {
       makeMsg({ role: 'assistant', content: 'from p2', participant: p2 }),
     ];
     const { result } = renderHook(() => useRoomState(msgs, twoParticipants));
-    act(() => { result.current.setActiveFilter('p1'); });
-    act(() => { result.current.setActiveFilter('all'); });
+    act(() => {
+      result.current.setActiveFilter('p1');
+    });
+    act(() => {
+      result.current.setActiveFilter('all');
+    });
     expect(result.current.visibleMessages).toHaveLength(2);
   });
 });
@@ -110,7 +121,9 @@ describe('useRoomState — thread collapsing', () => {
       makeMsg({ role: 'assistant', content: 'b', visibility: 'internal', threadId: 't1' }),
     ];
     const { result } = renderHook(() => useRoomState(msgs, twoParticipants));
-    act(() => { result.current.toggleInternal(); });
+    act(() => {
+      result.current.toggleInternal();
+    });
     // t1 should be a collapsed thread
     expect(result.current.collapsedThreads.has('t1')).toBe(true);
   });
@@ -121,8 +134,12 @@ describe('useRoomState — thread collapsing', () => {
       makeMsg({ role: 'assistant', content: 'b', visibility: 'internal', threadId: 't1' }),
     ];
     const { result } = renderHook(() => useRoomState(msgs, twoParticipants));
-    act(() => { result.current.toggleInternal(); });
-    act(() => { result.current.toggleThread('t1'); });
+    act(() => {
+      result.current.toggleInternal();
+    });
+    act(() => {
+      result.current.toggleThread('t1');
+    });
     expect(result.current.collapsedThreads.has('t1')).toBe(false);
   });
 
@@ -132,9 +149,15 @@ describe('useRoomState — thread collapsing', () => {
       makeMsg({ role: 'assistant', content: 'b', visibility: 'internal', threadId: 't1' }),
     ];
     const { result } = renderHook(() => useRoomState(msgs, twoParticipants));
-    act(() => { result.current.toggleInternal(); });
-    act(() => { result.current.toggleThread('t1'); }); // expand
-    act(() => { result.current.toggleThread('t1'); }); // collapse again
+    act(() => {
+      result.current.toggleInternal();
+    });
+    act(() => {
+      result.current.toggleThread('t1');
+    }); // expand
+    act(() => {
+      result.current.toggleThread('t1');
+    }); // collapse again
     expect(result.current.collapsedThreads.has('t1')).toBe(true);
   });
 
@@ -143,7 +166,9 @@ describe('useRoomState — thread collapsing', () => {
       makeMsg({ role: 'assistant', content: 'a', visibility: 'internal', threadId: 't1' }),
     ];
     const { result } = renderHook(() => useRoomState(msgs, twoParticipants));
-    act(() => { result.current.toggleInternal(); });
+    act(() => {
+      result.current.toggleInternal();
+    });
     expect(result.current.collapsedThreads.size).toBe(0);
   });
 });

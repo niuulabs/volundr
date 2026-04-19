@@ -40,7 +40,9 @@ describe('UserMessage', () => {
   it('renders attachment badges', () => {
     const msg = {
       ...userMsg,
-      attachments: [{ name: 'image.jpg', type: 'image' as const, size: 1024, contentType: 'image/jpeg' }],
+      attachments: [
+        { name: 'image.jpg', type: 'image' as const, size: 1024, contentType: 'image/jpeg' },
+      ],
     };
     render(<UserMessage message={msg} />);
     expect(screen.getByText('image.jpg')).toBeInTheDocument();
@@ -65,7 +67,7 @@ describe('AssistantMessage', () => {
     // action bar is visible on hover — show it by focusing
     const wrapper = screen.getByTestId('assistant-message');
     fireEvent.mouseOver(wrapper);
-    const copyBtn = screen.getAllByRole('button').find(b => b.title === 'Copy');
+    const copyBtn = screen.getAllByRole('button').find((b) => b.title === 'Copy');
     if (copyBtn) fireEvent.click(copyBtn);
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Hello user');
   });
@@ -73,7 +75,7 @@ describe('AssistantMessage', () => {
   it('calls onRegenerate with message id', () => {
     const onRegenerate = vi.fn();
     render(<AssistantMessage message={assistantMsg} onRegenerate={onRegenerate} />);
-    const regenBtn = screen.getAllByRole('button').find(b => b.title === 'Regenerate');
+    const regenBtn = screen.getAllByRole('button').find((b) => b.title === 'Regenerate');
     if (regenBtn) fireEvent.click(regenBtn);
     expect(onRegenerate).toHaveBeenCalledWith('a1');
   });
@@ -116,9 +118,7 @@ describe('StreamingMessage', () => {
   });
 
   it('renders tool blocks when parts contain tool_use', () => {
-    const parts = [
-      { type: 'tool_use' as const, id: 't1', name: 'Bash', input: { command: 'ls' } },
-    ];
+    const parts = [{ type: 'tool_use' as const, id: 't1', name: 'Bash', input: { command: 'ls' } }];
     render(<StreamingMessage content="partial" parts={parts} />);
     expect(screen.getByTestId('tool-block')).toBeInTheDocument();
   });
@@ -139,7 +139,7 @@ describe('AssistantMessage — extended', () => {
   it('calls onBookmark when bookmark button clicked', () => {
     const onBookmark = vi.fn();
     render(<AssistantMessage message={assistantMsg} onBookmark={onBookmark} />);
-    const bookmarkBtn = screen.getAllByRole('button').find(b => b.title === 'Bookmark');
+    const bookmarkBtn = screen.getAllByRole('button').find((b) => b.title === 'Bookmark');
     if (bookmarkBtn) fireEvent.click(bookmarkBtn);
     expect(onBookmark).toHaveBeenCalledWith('a1', true);
   });
@@ -149,7 +149,14 @@ describe('AssistantMessage — extended', () => {
       ...assistantMsg,
       id: 'u2',
       role: 'user' as const,
-      attachments: [{ name: 'video.mp4', type: 'file' as const, size: 2 * 1024 * 1024, contentType: 'video/mp4' }],
+      attachments: [
+        {
+          name: 'video.mp4',
+          type: 'file' as const,
+          size: 2 * 1024 * 1024,
+          contentType: 'video/mp4',
+        },
+      ],
     };
     render(<UserMessage message={msg} />);
     expect(screen.getByText('2.0MB')).toBeInTheDocument();

@@ -69,11 +69,7 @@ describe('SessionChat', () => {
 
   it('shows model switch button when capability enabled', () => {
     render(
-      <SessionChat
-        {...defaultProps}
-        capabilities={{ set_model: true }}
-        onSetModel={vi.fn()}
-      />
+      <SessionChat {...defaultProps} capabilities={{ set_model: true }} onSetModel={vi.fn()} />,
     );
     expect(screen.getByTestId('model-switch-toggle')).toBeInTheDocument();
   });
@@ -85,11 +81,7 @@ describe('SessionChat', () => {
 
   it('shows model input bar when toggle clicked', () => {
     render(
-      <SessionChat
-        {...defaultProps}
-        capabilities={{ set_model: true }}
-        onSetModel={vi.fn()}
-      />
+      <SessionChat {...defaultProps} capabilities={{ set_model: true }} onSetModel={vi.fn()} />,
     );
     fireEvent.click(screen.getByTestId('model-switch-toggle'));
     expect(screen.getByTestId('model-input-bar')).toBeInTheDocument();
@@ -101,7 +93,7 @@ describe('SessionChat', () => {
         {...defaultProps}
         capabilities={{ set_thinking_tokens: true }}
         onSetThinkingTokens={vi.fn()}
-      />
+      />,
     );
     fireEvent.click(screen.getByTestId('thinking-budget-toggle'));
     expect(screen.getByTestId('thinking-menu')).toBeInTheDocument();
@@ -114,7 +106,7 @@ describe('SessionChat', () => {
         {...defaultProps}
         capabilities={{ set_thinking_tokens: true }}
         onSetThinkingTokens={onSetThinkingTokens}
-      />
+      />,
     );
     fireEvent.click(screen.getByTestId('thinking-budget-toggle'));
     fireEvent.click(screen.getByTestId('thinking-4K'));
@@ -139,7 +131,7 @@ describe('SessionChat', () => {
         {...defaultProps}
         capabilities={{ rewind_files: true }}
         onRewindFiles={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByTestId('rewind-files')).toBeInTheDocument();
   });
@@ -151,7 +143,7 @@ describe('SessionChat', () => {
         {...defaultProps}
         capabilities={{ rewind_files: true }}
         onRewindFiles={onRewindFiles}
-      />
+      />,
     );
     fireEvent.click(screen.getByTestId('rewind-files'));
     expect(onRewindFiles).toHaveBeenCalled();
@@ -160,11 +152,7 @@ describe('SessionChat', () => {
   it('submits model input on Enter key', () => {
     const onSetModel = vi.fn();
     render(
-      <SessionChat
-        {...defaultProps}
-        capabilities={{ set_model: true }}
-        onSetModel={onSetModel}
-      />
+      <SessionChat {...defaultProps} capabilities={{ set_model: true }} onSetModel={onSetModel} />,
     );
     fireEvent.click(screen.getByTestId('model-switch-toggle'));
     const modelInput = screen.getByLabelText('Model ID input');
@@ -175,11 +163,7 @@ describe('SessionChat', () => {
 
   it('closes model input on Escape key', () => {
     render(
-      <SessionChat
-        {...defaultProps}
-        capabilities={{ set_model: true }}
-        onSetModel={vi.fn()}
-      />
+      <SessionChat {...defaultProps} capabilities={{ set_model: true }} onSetModel={vi.fn()} />,
     );
     fireEvent.click(screen.getByTestId('model-switch-toggle'));
     expect(screen.getByTestId('model-input-bar')).toBeInTheDocument();
@@ -190,14 +174,12 @@ describe('SessionChat', () => {
   it('submits model input on submit button click', () => {
     const onSetModel = vi.fn();
     render(
-      <SessionChat
-        {...defaultProps}
-        capabilities={{ set_model: true }}
-        onSetModel={onSetModel}
-      />
+      <SessionChat {...defaultProps} capabilities={{ set_model: true }} onSetModel={onSetModel} />,
     );
     fireEvent.click(screen.getByTestId('model-switch-toggle'));
-    fireEvent.change(screen.getByLabelText('Model ID input'), { target: { value: 'claude-haiku' } });
+    fireEvent.change(screen.getByLabelText('Model ID input'), {
+      target: { value: 'claude-haiku' },
+    });
     fireEvent.click(screen.getByTestId('model-submit'));
     expect(onSetModel).toHaveBeenCalledWith('claude-haiku');
   });
@@ -205,11 +187,7 @@ describe('SessionChat', () => {
   it('does not submit empty model input', () => {
     const onSetModel = vi.fn();
     render(
-      <SessionChat
-        {...defaultProps}
-        capabilities={{ set_model: true }}
-        onSetModel={onSetModel}
-      />
+      <SessionChat {...defaultProps} capabilities={{ set_model: true }} onSetModel={onSetModel} />,
     );
     fireEvent.click(screen.getByTestId('model-switch-toggle'));
     fireEvent.click(screen.getByTestId('model-submit'));
@@ -228,13 +206,15 @@ describe('SessionChat', () => {
   });
 
   it('renders permissions slot when provided', () => {
-    const renderPermissions = vi.fn().mockReturnValue(<div data-testid="perm-slot">Permissions</div>);
+    const renderPermissions = vi
+      .fn()
+      .mockReturnValue(<div data-testid="perm-slot">Permissions</div>);
     render(
       <SessionChat
         {...defaultProps}
         pendingPermissions={[{ requestId: 'req-1', toolName: 'Bash', description: 'Run bash?' }]}
         renderPermissions={renderPermissions}
-      />
+      />,
     );
     expect(screen.getByTestId('perm-slot')).toBeInTheDocument();
     expect(renderPermissions).toHaveBeenCalled();
@@ -259,9 +239,7 @@ describe('SessionChat', () => {
   });
 
   it('renders room messages when participants provided', () => {
-    const participants = new Map([
-      ['p1', { peerId: 'p1', persona: 'Ada' }],
-    ]);
+    const participants = new Map([['p1', { peerId: 'p1', persona: 'Ada' }]]);
     const roomMessages = [
       {
         id: 'm1',
@@ -271,13 +249,7 @@ describe('SessionChat', () => {
         participant: { peerId: 'p1', persona: 'Ada' },
       },
     ];
-    render(
-      <SessionChat
-        {...defaultProps}
-        messages={roomMessages}
-        participants={participants}
-      />
-    );
+    render(<SessionChat {...defaultProps} messages={roomMessages} participants={participants} />);
     expect(screen.getByTestId('room-message')).toBeInTheDocument();
   });
 
@@ -286,24 +258,13 @@ describe('SessionChat', () => {
       ['p1', { peerId: 'p1', persona: 'Ada' }],
       ['p2', { peerId: 'p2', persona: 'Björk' }],
     ]);
-    render(
-      <SessionChat
-        {...defaultProps}
-        participants={participants}
-        connected={true}
-      />
-    );
+    render(<SessionChat {...defaultProps} participants={participants} connected={true} />);
     expect(screen.getByTestId('internal-toggle')).toBeInTheDocument();
   });
 
   it('calls onMessageCountChange when messages change', () => {
     const onMessageCountChange = vi.fn();
-    render(
-      <SessionChat
-        {...defaultProps}
-        onMessageCountChange={onMessageCountChange}
-      />
-    );
+    render(<SessionChat {...defaultProps} onMessageCountChange={onMessageCountChange} />);
     expect(onMessageCountChange).toHaveBeenCalledWith(2);
   });
 });

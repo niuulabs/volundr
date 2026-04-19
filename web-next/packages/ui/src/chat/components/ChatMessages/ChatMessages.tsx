@@ -31,7 +31,7 @@ function formatFileSize(bytes: number): string {
 }
 
 function hasToolParts(parts?: readonly ChatMessagePart[]): boolean {
-  return parts?.some(p => p.type === 'tool_use') ?? false;
+  return parts?.some((p) => p.type === 'tool_use') ?? false;
 }
 
 function partsToContentBlocks(parts: readonly ChatMessagePart[]): ToolContentBlock[] {
@@ -112,11 +112,12 @@ export function AssistantMessage({
   const [thumbState, setThumbState] = useState<'up' | 'down' | null>(null);
   const [reasoningOpen, setReasoningOpen] = useState(false);
 
-  const reasoningParts = (message.parts?.filter(p => p.type === 'reasoning') ?? []) as Array<{
+  const reasoningParts = (message.parts?.filter((p) => p.type === 'reasoning') ?? []) as Array<{
     readonly type: 'reasoning';
     readonly text?: string;
   }>;
-  const hasReasoning = reasoningParts.length > 0 && reasoningParts.some(p => p.text && p.text.length > 0);
+  const hasReasoning =
+    reasoningParts.length > 0 && reasoningParts.some((p) => p.text && p.text.length > 0);
 
   const meta = message.metadata;
   const model = meta?.usage ? Object.keys(meta.usage)[0] : undefined;
@@ -139,7 +140,9 @@ export function AssistantMessage({
           {tokens && (
             <>
               <span className="niuu-chat-header-sep">&middot;</span>
-              <span className="niuu-chat-token-info">{tokens.input}&rarr;{tokens.output} tok</span>
+              <span className="niuu-chat-token-info">
+                {tokens.input}&rarr;{tokens.output} tok
+              </span>
             </>
           )}
         </div>
@@ -149,7 +152,7 @@ export function AssistantMessage({
             <button
               type="button"
               className="niuu-chat-reasoning-trigger"
-              onClick={() => setReasoningOpen(prev => !prev)}
+              onClick={() => setReasoningOpen((prev) => !prev)}
             >
               {reasoningOpen ? (
                 <ChevronDown className="niuu-chat-reasoning-chevron" />
@@ -162,7 +165,9 @@ export function AssistantMessage({
             {reasoningOpen && (
               <div className="niuu-chat-reasoning-content">
                 {reasoningParts.map((part, i) => (
-                  <div key={i} className="niuu-chat-reasoning-text">{part.text}</div>
+                  <div key={i} className="niuu-chat-reasoning-text">
+                    {part.text}
+                  </div>
                 ))}
               </div>
             )}
@@ -178,11 +183,25 @@ export function AssistantMessage({
         </div>
 
         <div className="niuu-chat-action-bar">
-          <button type="button" className="niuu-chat-action-btn" onClick={handleCopy} title={copied ? 'Copied' : 'Copy'}>
-            {copied ? <Check className="niuu-chat-action-icon" /> : <Copy className="niuu-chat-action-icon" />}
+          <button
+            type="button"
+            className="niuu-chat-action-btn"
+            onClick={handleCopy}
+            title={copied ? 'Copied' : 'Copy'}
+          >
+            {copied ? (
+              <Check className="niuu-chat-action-icon" />
+            ) : (
+              <Copy className="niuu-chat-action-icon" />
+            )}
           </button>
           {onRegenerate && (
-            <button type="button" className="niuu-chat-action-btn" onClick={() => onRegenerate(message.id)} title="Regenerate">
+            <button
+              type="button"
+              className="niuu-chat-action-btn"
+              onClick={() => onRegenerate(message.id)}
+              title="Regenerate"
+            >
               <RefreshCw className="niuu-chat-action-icon" />
             </button>
           )}
@@ -191,7 +210,7 @@ export function AssistantMessage({
             type="button"
             className="niuu-chat-action-btn"
             data-active={thumbState === 'up'}
-            onClick={() => setThumbState(prev => prev === 'up' ? null : 'up')}
+            onClick={() => setThumbState((prev) => (prev === 'up' ? null : 'up'))}
             title="Helpful"
           >
             <ThumbsUp className="niuu-chat-action-icon" />
@@ -200,7 +219,7 @@ export function AssistantMessage({
             type="button"
             className="niuu-chat-action-btn"
             data-active={thumbState === 'down'}
-            onClick={() => setThumbState(prev => prev === 'down' ? null : 'down')}
+            onClick={() => setThumbState((prev) => (prev === 'down' ? null : 'down'))}
             title="Not helpful"
           >
             <ThumbsDown className="niuu-chat-action-icon" />
@@ -222,7 +241,13 @@ export function AssistantMessage({
 
 /* ── AssistantContentWithTools ── */
 
-function AssistantContentWithTools({ parts, fallbackContent }: { parts: readonly ChatMessagePart[]; fallbackContent: string }) {
+function AssistantContentWithTools({
+  parts,
+  fallbackContent,
+}: {
+  parts: readonly ChatMessagePart[];
+  fallbackContent: string;
+}) {
   const blocks = partsToContentBlocks(parts);
   const grouped = groupContentBlocks(blocks);
 
@@ -256,7 +281,7 @@ interface StreamingMessageProps {
 }
 
 export function StreamingMessage({ content, parts, model }: StreamingMessageProps) {
-  const reasoningParts = (parts?.filter(p => p.type === 'reasoning' && p.text) ?? []) as Array<{
+  const reasoningParts = (parts?.filter((p) => p.type === 'reasoning' && p.text) ?? []) as Array<{
     readonly type: 'reasoning';
     readonly text?: string;
   }>;
@@ -279,7 +304,9 @@ export function StreamingMessage({ content, parts, model }: StreamingMessageProp
           </div>
           <div className="niuu-chat-reasoning-content">
             {reasoningParts.map((part, i) => (
-              <div key={i} className="niuu-chat-reasoning-text">{part.text}</div>
+              <div key={i} className="niuu-chat-reasoning-text">
+                {part.text}
+              </div>
             ))}
           </div>
         </div>

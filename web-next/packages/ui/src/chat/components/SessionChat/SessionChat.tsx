@@ -76,7 +76,11 @@ export interface SessionChatProps {
 
   /* ── Callbacks ── */
   onSend: (text: string, attachments: FileAttachment[]) => void;
-  onSendDirected?: (participants: RoomParticipant[], text: string, attachments: FileAttachment[]) => void;
+  onSendDirected?: (
+    participants: RoomParticipant[],
+    text: string,
+    attachments: FileAttachment[],
+  ) => void;
   onStop?: () => void;
   onClear?: () => void;
   onSetModel?: (model: string) => void;
@@ -92,7 +96,7 @@ export interface SessionChatProps {
   /** Render slot for permission UI — receives pending list and respond callback */
   renderPermissions?: (
     permissions: PermissionRequest[],
-    onRespond: (requestId: string, behavior: PermissionBehavior) => void
+    onRespond: (requestId: string, behavior: PermissionBehavior) => void,
   ) => ReactNode;
 }
 
@@ -169,7 +173,7 @@ export function SessionChat({
       if (event.type !== 'outcome') return;
       const targetTime = event.timestamp.getTime();
       const participantMsgs = messages.filter(
-        m => m.participant?.peerId === event.participantId && m.role === 'assistant'
+        (m) => m.participant?.peerId === event.participantId && m.role === 'assistant',
       );
       if (participantMsgs.length === 0) return;
       const closest = participantMsgs.reduce((best, m) => {
@@ -184,12 +188,15 @@ export function SessionChat({
         setTimeout(() => setHighlightedMsgId(null), 2000);
       }
     },
-    [messages]
+    [messages],
   );
 
   const hasConversation = useMemo(
-    () => messages.some(m => m.role === 'user' || (m.role === 'assistant' && !m.metadata?.messageType)),
-    [messages]
+    () =>
+      messages.some(
+        (m) => m.role === 'user' || (m.role === 'assistant' && !m.metadata?.messageType),
+      ),
+    [messages],
   );
 
   type MessageGroup =
@@ -198,13 +205,16 @@ export function SessionChat({
 
   const renderedGroups = useMemo((): MessageGroup[] => {
     if (!isRoomMode || !showInternal) {
-      return visibleMessages.map(m => ({ type: 'single', message: m }));
+      return visibleMessages.map((m) => ({ type: 'single', message: m }));
     }
     const result: MessageGroup[] = [];
     let i = 0;
     while (i < visibleMessages.length) {
       const msg = visibleMessages[i];
-      if (!msg) { i++; continue; }
+      if (!msg) {
+        i++;
+        continue;
+      }
       if (msg.visibility === 'internal' && msg.threadId) {
         const threadId = msg.threadId;
         const threadMsgs: (typeof visibleMessages)[number][] = [msg];
@@ -275,7 +285,7 @@ export function SessionChat({
       messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
       return;
     }
-    setNewMessageCount(prev => prev + countDelta);
+    setNewMessageCount((prev) => prev + countDelta);
   }, [visibleMessages.length]);
 
   useEffect(() => {
@@ -295,7 +305,7 @@ export function SessionChat({
       onSetThinkingTokens?.(tokens);
       setShowThinkingMenu(false);
     },
-    [onSetThinkingTokens]
+    [onSetThinkingTokens],
   );
 
   const handleSend = useCallback(
@@ -303,7 +313,7 @@ export function SessionChat({
       userSentRef.current = true;
       onSend(text, fileAttachments);
     },
-    [onSend]
+    [onSend],
   );
 
   const handleSendDirected = useCallback(
@@ -311,21 +321,21 @@ export function SessionChat({
       userSentRef.current = true;
       onSendDirected?.(agentParticipants, text, fileAttachments);
     },
-    [onSendDirected]
+    [onSendDirected],
   );
 
   const handlePermissionRespond = useCallback(
     (requestId: string, behavior: PermissionBehavior) => {
       onPermissionRespond?.(requestId, behavior);
     },
-    [onPermissionRespond]
+    [onPermissionRespond],
   );
 
   const handleSelectAgent = useCallback(
     (peerId: string) => {
       setActiveFilter(activeFilter === peerId ? 'all' : peerId);
     },
-    [activeFilter, setActiveFilter]
+    [activeFilter, setActiveFilter],
   );
 
   const handleCopy = useCallback(
@@ -336,7 +346,7 @@ export function SessionChat({
       }
       navigator.clipboard?.writeText(text).catch(() => undefined);
     },
-    [onCopy]
+    [onCopy],
   );
 
   const handleRegenerate = useCallback(
@@ -345,7 +355,7 @@ export function SessionChat({
         onRegenerate(messageId);
         return;
       }
-      const idx = messages.findIndex(m => m.id === messageId);
+      const idx = messages.findIndex((m) => m.id === messageId);
       if (idx < 0) return;
       for (let i = idx - 1; i >= 0; i--) {
         const m = messages[i];
@@ -355,7 +365,7 @@ export function SessionChat({
         }
       }
     },
-    [messages, onRegenerate, onSend]
+    [messages, onRegenerate, onSend],
   );
 
   const handleBookmark = useCallback(
@@ -375,7 +385,7 @@ export function SessionChat({
         // localStorage may not be available
       }
     },
-    [onBookmark]
+    [onBookmark],
   );
 
   const hasSidebar = participants.size > 0;
@@ -432,7 +442,7 @@ export function SessionChat({
                   <button
                     type="button"
                     className="niuu-chat-control-btn"
-                    onClick={() => setShowModelInput(prev => !prev)}
+                    onClick={() => setShowModelInput((prev) => !prev)}
                     title="Switch model"
                     data-testid="model-switch-toggle"
                   >
@@ -445,7 +455,7 @@ export function SessionChat({
                     <button
                       type="button"
                       className="niuu-chat-control-btn"
-                      onClick={() => setShowThinkingMenu(prev => !prev)}
+                      onClick={() => setShowThinkingMenu((prev) => !prev)}
                       title="Set thinking budget"
                       data-testid="thinking-budget-toggle"
                     >
@@ -453,7 +463,7 @@ export function SessionChat({
                     </button>
                     {showThinkingMenu && (
                       <div className="niuu-chat-thinking-menu" data-testid="thinking-menu">
-                        {THINKING_PRESETS.map(preset => (
+                        {THINKING_PRESETS.map((preset) => (
                           <button
                             key={preset.value}
                             type="button"
@@ -484,7 +494,10 @@ export function SessionChat({
                 {isRoomMode && (
                   <button
                     type="button"
-                    className={cn('niuu-chat-control-btn', showInternal && 'niuu-chat-control-btn--active')}
+                    className={cn(
+                      'niuu-chat-control-btn',
+                      showInternal && 'niuu-chat-control-btn--active',
+                    )}
                     onClick={toggleInternal}
                     title={showInternal ? 'Hide internal messages' : 'Show internal messages'}
                     aria-pressed={showInternal}
@@ -510,8 +523,8 @@ export function SessionChat({
               type="text"
               className="niuu-chat-model-input"
               value={modelInput}
-              onChange={e => setModelInput(e.target.value)}
-              onKeyDown={e => {
+              onChange={(e) => setModelInput(e.target.value)}
+              onKeyDown={(e) => {
                 if (e.key === 'Enter') handleModelSubmit();
                 if (e.key === 'Escape') setShowModelInput(false);
               }}
@@ -541,7 +554,7 @@ export function SessionChat({
         {hasConversation || isStreaming ? (
           <div className="niuu-chat-messages-container" ref={scrollContainerRef}>
             <div className="niuu-chat-messages-inner">
-              {renderedGroups.map(group => {
+              {renderedGroups.map((group) => {
                 if (group.type === 'thread') {
                   return (
                     <ThreadGroup
@@ -639,7 +652,7 @@ export function SessionChat({
         ) : (
           <SessionEmptyChat
             sessionName={sessionName}
-            onSuggestionClick={text => handleSend(text, [])}
+            onSuggestionClick={(text) => handleSend(text, [])}
           />
         )}
 

@@ -25,7 +25,7 @@ export function ParticipantFilter({
   return (
     <div className="niuu-chat-participant-filter" data-testid="participant-filter">
       <div className="niuu-chat-filter-tabs">
-        {options.map(peerId => {
+        {options.map((peerId) => {
           const p = peerId === FILTER_ALL ? null : participants.get(peerId);
           const isActive = activeFilter === peerId;
           return (
@@ -59,7 +59,10 @@ export function ParticipantFilter({
 
       <button
         type="button"
-        className={cn('niuu-chat-internal-toggle', showInternal && 'niuu-chat-internal-toggle--active')}
+        className={cn(
+          'niuu-chat-internal-toggle',
+          showInternal && 'niuu-chat-internal-toggle--active',
+        )}
         onClick={onToggleInternal}
         title={showInternal ? 'Hide internal messages' : 'Show internal messages'}
         aria-pressed={showInternal}

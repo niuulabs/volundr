@@ -14,8 +14,17 @@ function InlineCode({ children }: { children: string }) {
   return (
     <div className="niuu-chat-rc-codeblock" data-testid="rendered-code-block">
       <div className="niuu-chat-rc-codeblock-header">
-        <button type="button" className="niuu-chat-rc-copy-btn" onClick={handleCopy} title={copied ? 'Copied!' : 'Copy'}>
-          {copied ? <Check className="niuu-chat-rc-copy-icon" /> : <Copy className="niuu-chat-rc-copy-icon" />}
+        <button
+          type="button"
+          className="niuu-chat-rc-copy-btn"
+          onClick={handleCopy}
+          title={copied ? 'Copied!' : 'Copy'}
+        >
+          {copied ? (
+            <Check className="niuu-chat-rc-copy-icon" />
+          ) : (
+            <Copy className="niuu-chat-rc-copy-icon" />
+          )}
         </button>
       </div>
       <pre className="niuu-chat-rc-pre">{children}</pre>
@@ -47,7 +56,11 @@ export function RenderedContent({ content, className }: RenderedContentProps) {
           return <InlineCode key={i}>{codeMatch[2] ?? ''}</InlineCode>;
         }
         if (!part.trim()) return null;
-        return <p key={i} className="niuu-chat-rc-p">{part}</p>;
+        return (
+          <p key={i} className="niuu-chat-rc-p">
+            {part}
+          </p>
+        );
       })}
     </div>
   );

@@ -101,7 +101,9 @@
 }
 
 @keyframes niuu-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .niuu-chat-mention-empty {

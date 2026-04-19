@@ -25,7 +25,7 @@ function isVisibleMessage(msg: ChatMessage): boolean {
  */
 export function useRoomState(
   messages: readonly ChatMessage[],
-  participants: ReadonlyMap<string, RoomParticipant>
+  participants: ReadonlyMap<string, RoomParticipant>,
 ): UseRoomStateReturn {
   const [activeFilter, setActiveFilter] = useState<string>(FILTER_ALL);
   const [showInternal, setShowInternal] = useState(false);
@@ -34,11 +34,11 @@ export function useRoomState(
   const isRoomMode = participants.size > 1;
 
   const toggleInternal = useCallback(() => {
-    setShowInternal(prev => !prev);
+    setShowInternal((prev) => !prev);
   }, []);
 
   const toggleThread = useCallback((threadId: string) => {
-    setExpandedThreads(prev => {
+    setExpandedThreads((prev) => {
       const next = new Set(prev);
       if (next.has(threadId)) {
         next.delete(threadId);
@@ -51,7 +51,7 @@ export function useRoomState(
 
   const filteredMessages = useMemo(() => {
     if (!isRoomMode) return messages;
-    return messages.filter(msg => {
+    return messages.filter((msg) => {
       if (!showInternal && msg.visibility === 'internal') return false;
       if (activeFilter !== FILTER_ALL && msg.participant?.peerId !== activeFilter) return false;
       return true;
@@ -60,7 +60,7 @@ export function useRoomState(
 
   const visibleMessages = useMemo(
     () => filteredMessages.filter(isVisibleMessage),
-    [filteredMessages]
+    [filteredMessages],
   );
 
   const threadGroups = useMemo((): ReadonlySet<string> => {
@@ -69,7 +69,10 @@ export function useRoomState(
     let i = 0;
     while (i < visibleMessages.length) {
       const msg = visibleMessages[i];
-      if (!msg) { i++; continue; }
+      if (!msg) {
+        i++;
+        continue;
+      }
       if (msg.visibility === 'internal' && msg.threadId) {
         const threadId = msg.threadId;
         let count = 1;

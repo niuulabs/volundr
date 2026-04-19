@@ -24,7 +24,7 @@ export function SessionEmptyChat({ sessionName, onSuggestionClick }: SessionEmpt
           Start working — ask a question or give an instruction.
         </div>
         <div className="niuu-chat-empty-suggestions">
-          {SUGGESTIONS.map(text => (
+          {SUGGESTIONS.map((text) => (
             <button
               key={text}
               type="button"

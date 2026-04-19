@@ -23,11 +23,13 @@ const meta = {
   title: 'Chat/SessionChat',
   component: SessionChat,
   parameters: { layout: 'fullscreen' },
-  decorators: [(Story: React.ComponentType) => (
-    <div style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>
-      <Story />
-    </div>
-  )],
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>
+        <Story />
+      </div>
+    ),
+  ],
   args: {
     messages,
     connected: true,

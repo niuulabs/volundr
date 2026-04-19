@@ -6,13 +6,17 @@ import type { ChatMessage } from '../../types';
 const now = new Date();
 
 const userMsg: ChatMessage = {
-  id: 'r1', role: 'user', content: 'Hello from user',
+  id: 'r1',
+  role: 'user',
+  content: 'Hello from user',
   createdAt: now,
   participant: { peerId: 'p1', persona: 'Odin' },
 };
 
 const assistantMsg: ChatMessage = {
-  id: 'r2', role: 'assistant', content: 'Response from agent',
+  id: 'r2',
+  role: 'assistant',
+  content: 'Response from agent',
   createdAt: now,
   participant: { peerId: 'p1', persona: 'Odin' },
 };
@@ -44,7 +48,9 @@ describe('RoomMessage', () => {
 
   it('renders system message for system messageType', () => {
     const sysMsg: ChatMessage = {
-      id: 'r3', role: 'system' as const, content: 'System event',
+      id: 'r3',
+      role: 'system' as const,
+      content: 'System event',
       createdAt: now,
       metadata: { messageType: 'system' },
     };
@@ -54,7 +60,9 @@ describe('RoomMessage', () => {
 
   it('renders streaming message for running assistant', () => {
     const streamMsg: ChatMessage = {
-      id: 'r4', role: 'assistant', content: 'partial...',
+      id: 'r4',
+      role: 'assistant',
+      content: 'partial...',
       createdAt: now,
       status: 'running',
       participant: { peerId: 'p1', persona: 'Odin' },
@@ -79,7 +87,9 @@ describe('RoomMessage', () => {
 
   it('renders without participant gracefully', () => {
     const noPartMsg: ChatMessage = {
-      id: 'r5', role: 'user', content: 'No participant',
+      id: 'r5',
+      role: 'user',
+      content: 'No participant',
       createdAt: now,
     };
     render(<RoomMessage message={noPartMsg} />);

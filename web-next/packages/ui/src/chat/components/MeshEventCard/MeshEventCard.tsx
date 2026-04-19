@@ -1,6 +1,11 @@
 import { CheckCircle, XCircle, AlertTriangle, ArrowRight, HelpCircle } from 'lucide-react';
 import { resolveParticipantColor } from '../../utils/participantColor';
-import type { MeshEvent, MeshOutcomeEvent, MeshDelegationEvent, MeshNotificationEvent } from '../../types';
+import type {
+  MeshEvent,
+  MeshOutcomeEvent,
+  MeshDelegationEvent,
+  MeshNotificationEvent,
+} from '../../types';
 import './MeshEventCard.css';
 
 function getVerdictIcon(verdict: string | undefined) {
@@ -37,7 +42,8 @@ function OutcomeCard({ event }: { event: MeshOutcomeEvent }) {
         <div className="niuu-chat-mesh-verdict" data-verdict={event.verdict}>
           {event.verdict === 'pass' && 'Passed'}
           {event.verdict === 'fail' && 'Failed'}
-          {(event.verdict === 'needs_changes' || event.verdict === 'needs_review') && 'Changes Requested'}
+          {(event.verdict === 'needs_changes' || event.verdict === 'needs_review') &&
+            'Changes Requested'}
         </div>
       )}
       <div className="niuu-chat-mesh-timestamp">

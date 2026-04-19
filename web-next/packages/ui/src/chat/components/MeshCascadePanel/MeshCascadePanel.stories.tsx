@@ -41,11 +41,13 @@ const meta = {
   title: 'Chat/MeshCascadePanel',
   component: MeshCascadePanel,
   parameters: { layout: 'centered' },
-  decorators: [(Story: React.ComponentType) => (
-    <div style={{ width: 360, height: 600 }}>
-      <Story />
-    </div>
-  )],
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div style={{ width: 360, height: 600 }}>
+        <Story />
+      </div>
+    ),
+  ],
 } satisfies Meta<typeof MeshCascadePanel>;
 
 export default meta;

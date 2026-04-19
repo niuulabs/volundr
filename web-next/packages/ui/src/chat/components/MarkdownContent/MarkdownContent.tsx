@@ -25,7 +25,7 @@ function CodeBlock({ language, code }: CodeBlockProps) {
           <button
             type="button"
             className="niuu-chat-md-codeblock-btn"
-            onClick={() => setWordWrap(prev => !prev)}
+            onClick={() => setWordWrap((prev) => !prev)}
             title={wordWrap ? 'Disable word wrap' : 'Enable word wrap'}
             aria-pressed={wordWrap}
           >
@@ -34,7 +34,7 @@ function CodeBlock({ language, code }: CodeBlockProps) {
           <button
             type="button"
             className="niuu-chat-md-codeblock-btn"
-            onClick={() => setCollapsed(prev => !prev)}
+            onClick={() => setCollapsed((prev) => !prev)}
             title={collapsed ? 'Expand' : 'Collapse'}
           >
             {collapsed ? (
@@ -58,7 +58,12 @@ function CodeBlock({ language, code }: CodeBlockProps) {
         </div>
       </div>
       {!collapsed && (
-        <pre className={cn('niuu-chat-md-codeblock-pre', wordWrap && 'niuu-chat-md-codeblock-pre--wrap')}>
+        <pre
+          className={cn(
+            'niuu-chat-md-codeblock-pre',
+            wordWrap && 'niuu-chat-md-codeblock-pre--wrap',
+          )}
+        >
           <code>{code}</code>
         </pre>
       )}
@@ -128,14 +133,21 @@ function TextSegment({ content, isStreaming }: { content: string; isStreaming?: 
 
   while (i < lines.length) {
     const line = lines[i];
-    if (line === undefined) { i++; continue; }
+    if (line === undefined) {
+      i++;
+      continue;
+    }
 
     // Heading
     const headingMatch = /^(#{1,6})\s+(.+)$/.exec(line);
     if (headingMatch) {
       const level = (headingMatch[1] ?? '').length as 1 | 2 | 3 | 4 | 5 | 6;
       const Tag = `h${level}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
-      elements.push(<Tag key={i} className={`niuu-chat-md-h${level}`}>{headingMatch[2] ?? ''}</Tag>);
+      elements.push(
+        <Tag key={i} className={`niuu-chat-md-h${level}`}>
+          {headingMatch[2] ?? ''}
+        </Tag>,
+      );
       i++;
       continue;
     }
@@ -145,7 +157,7 @@ function TextSegment({ content, isStreaming }: { content: string; isStreaming?: 
       elements.push(
         <blockquote key={i} className="niuu-chat-md-blockquote">
           {line.slice(2)}
-        </blockquote>
+        </blockquote>,
       );
       i++;
       continue;
@@ -162,8 +174,10 @@ function TextSegment({ content, isStreaming }: { content: string; isStreaming?: 
       }
       elements.push(
         <ul key={`ul-${i}`} className="niuu-chat-md-ul">
-          {listItems.map((item, idx) => <li key={idx}>{renderInline(item)}</li>)}
-        </ul>
+          {listItems.map((item, idx) => (
+            <li key={idx}>{renderInline(item)}</li>
+          ))}
+        </ul>,
       );
       continue;
     }
@@ -179,8 +193,10 @@ function TextSegment({ content, isStreaming }: { content: string; isStreaming?: 
       }
       elements.push(
         <ol key={`ol-${i}`} className="niuu-chat-md-ol">
-          {listItems.map((item, idx) => <li key={idx}>{renderInline(item)}</li>)}
-        </ol>
+          {listItems.map((item, idx) => (
+            <li key={idx}>{renderInline(item)}</li>
+          ))}
+        </ol>,
       );
       continue;
     }
@@ -198,7 +214,7 @@ function TextSegment({ content, isStreaming }: { content: string; isStreaming?: 
         {isStreaming && i === lines.length - 1 && (
           <span className="niuu-chat-md-cursor">{CURSOR_CHAR}</span>
         )}
-      </p>
+      </p>,
     );
     i++;
   }
@@ -221,12 +237,22 @@ function renderInline(text: string): React.ReactNode {
     if (match[2]) {
       parts.push(<strong key={key++}>{match[2]}</strong>);
     } else if (match[3]) {
-      parts.push(<code key={key++} className="niuu-chat-md-inline-code">{match[3]}</code>);
+      parts.push(
+        <code key={key++} className="niuu-chat-md-inline-code">
+          {match[3]}
+        </code>,
+      );
     } else if (match[4] && match[5]) {
       parts.push(
-        <a key={key++} href={match[5]} className="niuu-chat-md-link" target="_blank" rel="noreferrer">
+        <a
+          key={key++}
+          href={match[5]}
+          className="niuu-chat-md-link"
+          target="_blank"
+          rel="noreferrer"
+        >
           {match[4]}
-        </a>
+        </a>,
       );
     }
     last = match.index + match[0].length;
@@ -254,7 +280,11 @@ export function MarkdownContent({ content, isStreaming = false }: MarkdownConten
           return <OutcomeCard key={i} raw={seg.raw} />;
         }
         return (
-          <TextSegment key={i} content={seg.content} isStreaming={isStreaming && i === segments.length - 1} />
+          <TextSegment
+            key={i}
+            content={seg.content}
+            isStreaming={isStreaming && i === segments.length - 1}
+          />
         );
       })}
     </div>

@@ -29,7 +29,7 @@ describe('RenderedContent', () => {
     render(<RenderedContent content={'```js\nconsole.log(1)\n```'} />);
     const copyBtn = screen.getByRole('button');
     fireEvent.click(copyBtn);
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
     expect(screen.getByTitle('Copied!')).toBeInTheDocument();
   });
 

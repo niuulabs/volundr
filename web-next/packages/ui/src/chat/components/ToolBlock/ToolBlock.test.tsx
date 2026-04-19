@@ -83,7 +83,11 @@ describe('ToolBlock', () => {
   });
 
   it('shows output when result provided (Bash)', () => {
-    const toolResult = { type: 'tool_result' as const, tool_use_id: '1', content: 'file1.ts\nfile2.ts' };
+    const toolResult = {
+      type: 'tool_result' as const,
+      tool_use_id: '1',
+      content: 'file1.ts\nfile2.ts',
+    };
     render(<ToolBlock block={bashBlock} result={toolResult} defaultOpen />);
     expect(screen.getByText(/file1\.ts/)).toBeInTheDocument();
   });
@@ -105,7 +109,9 @@ describe('ToolBlock', () => {
 
   it('shows Read output when result provided', () => {
     const readBlock = {
-      type: 'tool_use' as const, id: '3', name: 'Read',
+      type: 'tool_use' as const,
+      id: '3',
+      name: 'Read',
       input: { file_path: '/src/main.ts' },
     };
     const toolResult = { type: 'tool_result' as const, tool_use_id: '3', content: 'const x = 1;' };
@@ -116,7 +122,9 @@ describe('ToolBlock', () => {
   it('shows truncation for Read output > 20 lines', () => {
     const longOutput = Array.from({ length: 25 }, (_, i) => `line${i + 1}`).join('\n');
     const readBlock = {
-      type: 'tool_use' as const, id: '6', name: 'Read',
+      type: 'tool_use' as const,
+      id: '6',
+      name: 'Read',
       input: { file_path: '/big.ts' },
     };
     const toolResult = { type: 'tool_result' as const, tool_use_id: '6', content: longOutput };
@@ -126,7 +134,9 @@ describe('ToolBlock', () => {
 
   it('renders Glob preview', () => {
     const globBlock = {
-      type: 'tool_use' as const, id: '7', name: 'Glob',
+      type: 'tool_use' as const,
+      id: '7',
+      name: 'Glob',
       input: { pattern: '**/*.ts' },
     };
     render(<ToolBlock block={globBlock} />);
@@ -135,7 +145,9 @@ describe('ToolBlock', () => {
 
   it('renders Grep preview', () => {
     const grepBlock = {
-      type: 'tool_use' as const, id: '8', name: 'Grep',
+      type: 'tool_use' as const,
+      id: '8',
+      name: 'Grep',
       input: { pattern: 'function foo' },
     };
     render(<ToolBlock block={grepBlock} />);
@@ -144,7 +156,9 @@ describe('ToolBlock', () => {
 
   it('renders WebSearch preview', () => {
     const wsBlock = {
-      type: 'tool_use' as const, id: '9', name: 'WebSearch',
+      type: 'tool_use' as const,
+      id: '9',
+      name: 'WebSearch',
       input: { query: 'typescript generics' },
     };
     render(<ToolBlock block={wsBlock} />);
@@ -153,7 +167,9 @@ describe('ToolBlock', () => {
 
   it('renders WebFetch preview', () => {
     const wfBlock = {
-      type: 'tool_use' as const, id: '10', name: 'WebFetch',
+      type: 'tool_use' as const,
+      id: '10',
+      name: 'WebFetch',
       input: { url: 'https://example.com' },
     };
     render(<ToolBlock block={wfBlock} />);
@@ -162,7 +178,9 @@ describe('ToolBlock', () => {
 
   it('renders Agent preview', () => {
     const agentBlock = {
-      type: 'tool_use' as const, id: '11', name: 'Agent',
+      type: 'tool_use' as const,
+      id: '11',
+      name: 'Agent',
       input: { description: 'Run sub-agent task' },
     };
     render(<ToolBlock block={agentBlock} />);
@@ -171,17 +189,25 @@ describe('ToolBlock', () => {
 
   it('renders generic tool output when result provided', () => {
     const genericBlock = {
-      type: 'tool_use' as const, id: '12', name: 'CustomTool',
+      type: 'tool_use' as const,
+      id: '12',
+      name: 'CustomTool',
       input: { key: 'val' },
     };
-    const toolResult = { type: 'tool_result' as const, tool_use_id: '12', content: 'custom output' };
+    const toolResult = {
+      type: 'tool_result' as const,
+      tool_use_id: '12',
+      content: 'custom output',
+    };
     render(<ToolBlock block={genericBlock} result={toolResult} defaultOpen />);
     expect(screen.getByText(/custom output/)).toBeInTheDocument();
   });
 
   it('renders Write content preview when expanded', () => {
     const writeBlock = {
-      type: 'tool_use' as const, id: '13', name: 'Write',
+      type: 'tool_use' as const,
+      id: '13',
+      name: 'Write',
       input: { file_path: '/out.ts', content: 'export const x = 1;' },
     };
     render(<ToolBlock block={writeBlock} defaultOpen />);

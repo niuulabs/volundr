@@ -56,12 +56,12 @@
   border-radius: var(--radius-full);
 }
 
-.niuu-chat-agent-activity-badge[data-status="thinking"] {
+.niuu-chat-agent-activity-badge[data-status='thinking'] {
   color: var(--color-accent-purple);
   border-color: color-mix(in srgb, var(--color-accent-purple) 30%, transparent);
 }
 
-.niuu-chat-agent-activity-badge[data-status="tool_executing"] {
+.niuu-chat-agent-activity-badge[data-status='tool_executing'] {
   color: var(--color-accent-cyan);
   border-color: color-mix(in srgb, var(--color-accent-cyan) 30%, transparent);
 }
@@ -125,15 +125,15 @@
   background-color: var(--color-bg-primary);
 }
 
-.niuu-chat-agent-event[data-type="thought"] {
+.niuu-chat-agent-event[data-type='thought'] {
   border-color: color-mix(in srgb, var(--color-accent-purple) 20%, transparent);
 }
 
-.niuu-chat-agent-event[data-type="tool_start"] {
+.niuu-chat-agent-event[data-type='tool_start'] {
   border-color: color-mix(in srgb, var(--color-accent-cyan) 20%, transparent);
 }
 
-.niuu-chat-agent-event[data-type="tool_result"] {
+.niuu-chat-agent-event[data-type='tool_result'] {
   border-color: color-mix(in srgb, var(--color-accent-emerald) 20%, transparent);
 }
 

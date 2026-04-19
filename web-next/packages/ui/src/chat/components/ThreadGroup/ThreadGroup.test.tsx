@@ -5,8 +5,22 @@ import type { ChatMessage } from '../../types';
 
 const now = new Date();
 const messages: ChatMessage[] = [
-  { id: 'm1', role: 'assistant', content: 'First message', createdAt: now, visibility: 'internal', threadId: 't1' },
-  { id: 'm2', role: 'assistant', content: 'Second message', createdAt: now, visibility: 'internal', threadId: 't1' },
+  {
+    id: 'm1',
+    role: 'assistant',
+    content: 'First message',
+    createdAt: now,
+    visibility: 'internal',
+    threadId: 't1',
+  },
+  {
+    id: 'm2',
+    role: 'assistant',
+    content: 'Second message',
+    createdAt: now,
+    visibility: 'internal',
+    threadId: 't1',
+  },
 ];
 
 describe('ThreadGroup', () => {

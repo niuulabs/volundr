@@ -12,9 +12,15 @@ interface MentionMenuProps {
   onExpand: (item: MentionMenuItem) => void;
 }
 
-export function MentionMenu({ items, selectedIndex, loading, onSelect, onExpand }: MentionMenuProps) {
-  const agentItems = items.filter(i => i.kind === 'agent');
-  const fileItems = items.filter(i => i.kind === 'file');
+export function MentionMenu({
+  items,
+  selectedIndex,
+  loading,
+  onSelect,
+  onExpand,
+}: MentionMenuProps) {
+  const agentItems = items.filter((i) => i.kind === 'agent');
+  const fileItems = items.filter((i) => i.kind === 'file');
 
   return (
     <div className="niuu-chat-mention-menu" role="listbox" data-testid="mention-menu">
@@ -32,7 +38,7 @@ export function MentionMenu({ items, selectedIndex, loading, onSelect, onExpand 
                 type="button"
                 className={cn(
                   'niuu-chat-mention-item',
-                  idx === selectedIndex && 'niuu-chat-mention-item--selected'
+                  idx === selectedIndex && 'niuu-chat-mention-item--selected',
                 )}
                 role="option"
                 aria-selected={idx === selectedIndex}
@@ -66,16 +72,21 @@ export function MentionMenu({ items, selectedIndex, loading, onSelect, onExpand 
                 type="button"
                 className={cn(
                   'niuu-chat-mention-item',
-                  idx === selectedIndex && 'niuu-chat-mention-item--selected'
+                  idx === selectedIndex && 'niuu-chat-mention-item--selected',
                 )}
                 role="option"
                 aria-selected={idx === selectedIndex}
                 data-menu-index={idx}
                 style={{ paddingLeft: `${(depth + 1) * 12}px` }}
-                onClick={() => isDir ? onExpand(item) : onSelect(item)}
+                onClick={() => (isDir ? onExpand(item) : onSelect(item))}
                 onDoubleClick={() => isDir && onSelect(item)}
               >
-                <Icon className={cn('niuu-chat-mention-file-icon', isDir && 'niuu-chat-mention-file-icon--dir')} />
+                <Icon
+                  className={cn(
+                    'niuu-chat-mention-file-icon',
+                    isDir && 'niuu-chat-mention-file-icon--dir',
+                  )}
+                />
                 <span className="niuu-chat-mention-item-name">{entry.name}</span>
                 {isDir && <span className="niuu-chat-mention-dir-badge">dir</span>}
               </button>
@@ -88,9 +99,7 @@ export function MentionMenu({ items, selectedIndex, loading, onSelect, onExpand 
           <Loader2 className="niuu-chat-mention-spinner" />
         </div>
       )}
-      {!loading && items.length === 0 && (
-        <div className="niuu-chat-mention-empty">No results</div>
-      )}
+      {!loading && items.length === 0 && <div className="niuu-chat-mention-empty">No results</div>}
     </div>
   );
 }

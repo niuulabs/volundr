@@ -26,8 +26,10 @@ describe('OutcomeCard', () => {
   });
 
   it('applies verdict class for fail', () => {
-    const { container } = render(<OutcomeCard raw={"verdict: fail\nsummary: failed"} />);
-    expect(container.querySelector('[data-testid="outcome-card"]')).toHaveClass('niuu-chat-outcome--fail');
+    const { container } = render(<OutcomeCard raw={'verdict: fail\nsummary: failed'} />);
+    expect(container.querySelector('[data-testid="outcome-card"]')).toHaveClass(
+      'niuu-chat-outcome--fail',
+    );
   });
 });
 

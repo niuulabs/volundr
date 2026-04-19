@@ -102,7 +102,7 @@ export function AgentDetailPanel({ participant, events, onClose }: AgentDetailPa
       messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
       return;
     }
-    setNewCount(prev => prev + delta);
+    setNewCount((prev) => prev + delta);
   }, [events.length]);
 
   useEffect(() => {
@@ -161,7 +161,7 @@ export function AgentDetailPanel({ participant, events, onClose }: AgentDetailPa
               Waiting for agent activity…
             </div>
           ) : (
-            events.map(evt => <EventItem key={evt.id} event={evt} />)
+            events.map((evt) => <EventItem key={evt.id} event={evt} />)
           )}
           <div ref={messagesEndRef} />
         </div>
@@ -175,7 +175,9 @@ export function AgentDetailPanel({ participant, events, onClose }: AgentDetailPa
           >
             <ArrowDownIcon className="niuu-chat-agent-scroll-icon" />
             {newCount > 0 && (
-              <span className="niuu-chat-agent-scroll-badge">{newCount > 99 ? '99+' : newCount}</span>
+              <span className="niuu-chat-agent-scroll-badge">
+                {newCount > 99 ? '99+' : newCount}
+              </span>
             )}
           </button>
         )}

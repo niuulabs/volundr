@@ -29,14 +29,12 @@ export function useSlashMenu(availableCommands?: SlashCommand[]): UseSlashMenuRe
         return;
       }
       const query = value.slice(1).toLowerCase();
-      const filtered = availableCommands.filter(cmd =>
-        cmd.name.toLowerCase().includes(query)
-      );
+      const filtered = availableCommands.filter((cmd) => cmd.name.toLowerCase().includes(query));
       setFilteredCommands(filtered);
       setSelectedIndex(0);
       setIsOpen(filtered.length > 0);
     },
-    [availableCommands]
+    [availableCommands],
   );
 
   const handleKeyDown = useCallback(
@@ -44,12 +42,12 @@ export function useSlashMenu(availableCommands?: SlashCommand[]): UseSlashMenuRe
       if (!isOpen) return false;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedIndex(prev => (prev + 1) % filteredCommands.length);
+        setSelectedIndex((prev) => (prev + 1) % filteredCommands.length);
         return true;
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedIndex(prev => (prev - 1 + filteredCommands.length) % filteredCommands.length);
+        setSelectedIndex((prev) => (prev - 1 + filteredCommands.length) % filteredCommands.length);
         return true;
       }
       if (e.key === 'Escape') {
@@ -66,10 +64,18 @@ export function useSlashMenu(availableCommands?: SlashCommand[]): UseSlashMenuRe
       }
       return false;
     },
-    [isOpen, filteredCommands, selectedIndex, selectCommand]
+    [isOpen, filteredCommands, selectedIndex, selectCommand],
   );
 
   const close = useCallback(() => setIsOpen(false), []);
 
-  return { isOpen, filteredCommands, selectedIndex, handleChange, handleKeyDown, selectCommand, close };
+  return {
+    isOpen,
+    filteredCommands,
+    selectedIndex,
+    handleChange,
+    handleKeyDown,
+    selectCommand,
+    close,
+  };
 }

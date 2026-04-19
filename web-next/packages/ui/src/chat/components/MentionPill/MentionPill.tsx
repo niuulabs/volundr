@@ -13,7 +13,10 @@ export function MentionPill({ mention, onRemove }: MentionPillProps) {
     const { participant } = mention;
     const color = resolveParticipantColor(participant.peerId, participant.color);
     return (
-      <span className="niuu-chat-mention-pill niuu-chat-mention-pill--agent" data-testid="mention-pill-agent">
+      <span
+        className="niuu-chat-mention-pill niuu-chat-mention-pill--agent"
+        data-testid="mention-pill-agent"
+      >
         <span
           className="niuu-chat-mention-pill-dot"
           style={{ backgroundColor: color }}
@@ -35,9 +38,14 @@ export function MentionPill({ mention, onRemove }: MentionPillProps) {
   const { entry } = mention;
   const Icon = entry.type === 'directory' ? Folder : File;
   return (
-    <span className="niuu-chat-mention-pill niuu-chat-mention-pill--file" data-testid="mention-pill-file">
+    <span
+      className="niuu-chat-mention-pill niuu-chat-mention-pill--file"
+      data-testid="mention-pill-file"
+    >
       <Icon className="niuu-chat-mention-pill-file-icon" aria-hidden="true" />
-      <span className="niuu-chat-mention-pill-text niuu-chat-mention-pill-text--path">{entry.path}</span>
+      <span className="niuu-chat-mention-pill-text niuu-chat-mention-pill-text--path">
+        {entry.path}
+      </span>
       <button
         type="button"
         className="niuu-chat-mention-pill-remove"

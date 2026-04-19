@@ -30,9 +30,7 @@ function extractPreview(block: ToolUseBlock): string {
     case 'Agent':
       return String(input.description ?? input.prompt ?? '').slice(0, 80);
     default:
-      return Object.values(input)[0] != null
-        ? String(Object.values(input)[0]).slice(0, 80)
-        : '';
+      return Object.values(input)[0] != null ? String(Object.values(input)[0]).slice(0, 80) : '';
   }
 }
 
@@ -47,7 +45,9 @@ function ToolDetail({ block, result }: ToolDetailProps) {
   const output = result?.content ?? '';
   const outputLines = output.split('\n');
   const isTruncated = outputLines.length > MAX_OUTPUT_LINES && !showFull;
-  const displayedOutput = isTruncated ? outputLines.slice(0, MAX_OUTPUT_LINES).join('\n') + '\n...' : output;
+  const displayedOutput = isTruncated
+    ? outputLines.slice(0, MAX_OUTPUT_LINES).join('\n') + '\n...'
+    : output;
 
   if (name === 'Bash') {
     return (
@@ -82,10 +82,14 @@ function ToolDetail({ block, result }: ToolDetailProps) {
       <div className="niuu-chat-tool-detail">
         <p className="niuu-chat-tool-filepath">{String(input.file_path ?? input.path ?? '')}</p>
         {input.old_string != null && (
-          <pre className="niuu-chat-tool-diff niuu-chat-tool-diff--old">{String(input.old_string)}</pre>
+          <pre className="niuu-chat-tool-diff niuu-chat-tool-diff--old">
+            {String(input.old_string)}
+          </pre>
         )}
         {input.new_string != null && (
-          <pre className="niuu-chat-tool-diff niuu-chat-tool-diff--new">{String(input.new_string)}</pre>
+          <pre className="niuu-chat-tool-diff niuu-chat-tool-diff--new">
+            {String(input.new_string)}
+          </pre>
         )}
       </div>
     );
@@ -166,18 +170,19 @@ export function ToolBlock({ block, result, defaultOpen = false }: ToolBlockProps
   const preview = extractPreview(block);
 
   return (
-    <div className={cn('niuu-chat-tool-block', `niuu-chat-tool-block--${category}`)} data-testid="tool-block">
+    <div
+      className={cn('niuu-chat-tool-block', `niuu-chat-tool-block--${category}`)}
+      data-testid="tool-block"
+    >
       <button
         type="button"
         className="niuu-chat-tool-header"
-        onClick={() => setIsOpen(prev => !prev)}
+        onClick={() => setIsOpen((prev) => !prev)}
         aria-expanded={isOpen}
       >
         <ToolIcon toolName={block.name} className="niuu-chat-tool-icon" />
         <span className="niuu-chat-tool-label">{label}</span>
-        {!isOpen && preview && (
-          <span className="niuu-chat-tool-preview">{preview}</span>
-        )}
+        {!isOpen && preview && <span className="niuu-chat-tool-preview">{preview}</span>}
         <span className="niuu-chat-tool-chevron">
           {isOpen ? (
             <ChevronDown className="niuu-chat-tool-chevron-icon" />

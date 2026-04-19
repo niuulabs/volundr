@@ -74,7 +74,7 @@
   transition: color var(--transition-fast);
 }
 
-.niuu-chat-status-indicator[data-connected="true"] {
+.niuu-chat-status-indicator[data-connected='true'] {
   color: var(--color-accent-emerald);
 }
 

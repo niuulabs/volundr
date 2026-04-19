@@ -4,7 +4,13 @@ import { SlashCommandMenu } from './SlashCommandMenu';
 const meta: Meta<typeof SlashCommandMenu> = {
   title: 'Chat/SlashCommandMenu',
   component: SlashCommandMenu,
-  decorators: [Story => <div style={{ position: 'relative', height: 250, paddingTop: 220 }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ position: 'relative', height: 250, paddingTop: 220 }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 

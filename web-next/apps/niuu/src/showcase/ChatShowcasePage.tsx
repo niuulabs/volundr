@@ -55,7 +55,7 @@ export function ChatShowcasePage() {
       content: text,
       createdAt: new Date(),
     };
-    setMessages(prev => [...prev, userMsg]);
+    setMessages((prev) => [...prev, userMsg]);
 
     // Simulate a short streaming response
     setStreamingContent('Thinking…');
@@ -72,7 +72,7 @@ export function ChatShowcasePage() {
           content: words.join(' '),
           createdAt: new Date(),
         };
-        setMessages(prev => [...prev, assistantMsg]);
+        setMessages((prev) => [...prev, assistantMsg]);
         setStreamingContent(undefined);
       }
     }, 80);

@@ -52,23 +52,23 @@ export function useFileAttachments(): UseFileAttachmentsReturn {
   const addFiles = useCallback(
     (fileList: FileList) => {
       const filesArray = Array.from(fileList);
-      Promise.all(filesArray.map(processFile)).then(newAttachments => {
-        setAttachments(prev => [...prev, ...newAttachments]);
+      Promise.all(filesArray.map(processFile)).then((newAttachments) => {
+        setAttachments((prev) => [...prev, ...newAttachments]);
       });
     },
-    [processFile]
+    [processFile],
   );
 
   const removeAttachment = useCallback((id: string) => {
-    setAttachments(prev => {
-      const att = prev.find(a => a.id === id);
+    setAttachments((prev) => {
+      const att = prev.find((a) => a.id === id);
       if (att?.previewUrl) URL.revokeObjectURL(att.previewUrl);
-      return prev.filter(a => a.id !== id);
+      return prev.filter((a) => a.id !== id);
     });
   }, []);
 
   const clearAttachments = useCallback(() => {
-    setAttachments(prev => {
+    setAttachments((prev) => {
       for (const att of prev) {
         if (att.previewUrl) URL.revokeObjectURL(att.previewUrl);
       }
@@ -94,13 +94,15 @@ export function useFileAttachments(): UseFileAttachmentsReturn {
         addFiles(e.dataTransfer.files);
       }
     },
-    [addFiles]
+    [addFiles],
   );
 
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
       const items = Array.from(e.clipboardData.items);
-      const imageItems = items.filter(item => item.kind === 'file' && item.type.startsWith('image/'));
+      const imageItems = items.filter(
+        (item) => item.kind === 'file' && item.type.startsWith('image/'),
+      );
       if (imageItems.length === 0) return;
       e.preventDefault();
       const dt = new DataTransfer();
@@ -110,7 +112,7 @@ export function useFileAttachments(): UseFileAttachmentsReturn {
       }
       if (dt.files.length > 0) addFiles(dt.files);
     },
-    [addFiles]
+    [addFiles],
   );
 
   return {
