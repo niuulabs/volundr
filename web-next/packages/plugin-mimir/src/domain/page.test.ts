@@ -58,14 +58,14 @@ describe('getZoneByKind', () => {
 });
 
 describe('toPageMeta', () => {
-  it('strips related and zones fields from a Page', () => {
+  it('carries related through and strips zones from a Page', () => {
     const page: Page = {
       ...basePage,
       related: ['/other'],
       zones: [{ kind: 'assessment', text: 'ok' }],
     };
     const meta = toPageMeta(page);
-    expect(meta).not.toHaveProperty('related');
+    expect(meta.related).toEqual(['/other']);
     expect(meta).not.toHaveProperty('zones');
   });
 

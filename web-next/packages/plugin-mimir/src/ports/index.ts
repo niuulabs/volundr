@@ -3,7 +3,7 @@ import type { IPageStore } from './IPageStore';
 import type { IEmbeddingStore } from './IEmbeddingStore';
 import type { ILintEngine } from './ILintEngine';
 
-export type { IMountAdapter } from './IMountAdapter';
+export type { IMountAdapter, RecentWrite } from './IMountAdapter';
 export type { IPageStore, SearchMode } from './IPageStore';
 export type { IEmbeddingStore, EmbeddingSearchResult } from './IEmbeddingStore';
 export type { ILintEngine } from './ILintEngine';
