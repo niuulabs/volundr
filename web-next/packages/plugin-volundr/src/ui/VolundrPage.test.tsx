@@ -54,7 +54,7 @@ describe('VolundrPage (Overview)', () => {
   it('renders the cluster health section', async () => {
     wrap();
     await waitFor(() => expect(screen.getByText('Eitri')).toBeInTheDocument());
-    expect(screen.getByTestId('cluster-card')).toBeInTheDocument();
+    expect(screen.getAllByTestId('cluster-card').length).toBeGreaterThan(0);
   });
 
   it('renders an active sessions section', async () => {

@@ -308,7 +308,7 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
     events: [{ ts: '2026-03-10T08:05:00Z', kind: 'failed', body: 'OOMKilled' }],
   },
   {
-    id: 'ds-4',
+    id: 'ds-4b',
     ravnId: 'r2',
     personaName: 'bard',
     templateId: 'tpl-default',

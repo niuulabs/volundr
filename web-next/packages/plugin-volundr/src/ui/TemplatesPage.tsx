@@ -12,11 +12,7 @@ import type { ValidationError } from '@niuulabs/ui';
 import type { Template } from '../domain/template';
 import type { PodSpec } from '../domain/pod';
 import { cloneName, buildCloneSpec } from '../application/templateUtils';
-import {
-  useTemplates,
-  useCreateTemplate,
-  useUpdateTemplate,
-} from './useTemplates';
+import { useTemplates, useCreateTemplate, useUpdateTemplate } from './useTemplates';
 import { TemplateCard } from './TemplateCard';
 import './TemplatesPage.css';
 

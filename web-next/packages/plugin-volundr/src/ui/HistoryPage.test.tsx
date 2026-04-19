@@ -50,22 +50,24 @@ describe('HistoryPage', () => {
   it('renders only terminated/failed sessions', async () => {
     renderWithVolundr(<HistoryPage />);
     await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBeGreaterThan(0));
-    // Seed has ds-1 (running), ds-2 (terminated), ds-3 (failed), ds-4 (terminated)
-    expect(screen.getAllByTestId('history-row').length).toBe(3);
+    // Seed: ds-1(running), ds-2(idle), ds-3(provisioning) excluded; ds-4(failed),
+    // ds-5(terminated), + 3 historical (ds-2 term, ds-3 failed, ds-4 term) = 5 total
+    expect(screen.getAllByTestId('history-row').length).toBe(5);
   });
 
   it('shows session IDs in rows', async () => {
     renderWithVolundr(<HistoryPage />);
     await waitFor(() => expect(screen.getByText('ds-2')).toBeInTheDocument());
     expect(screen.getByText('ds-3')).toBeInTheDocument();
-    expect(screen.getByText('ds-4')).toBeInTheDocument();
+    expect(screen.getByText('ds-4')).toBeInTheDocument(); // new active/failed
+    expect(screen.getByText('ds-4b')).toBeInTheDocument(); // historical/terminated
     expect(screen.queryByText('ds-1')).not.toBeInTheDocument(); // running session excluded
   });
 
   it('shows outcome chips', async () => {
     renderWithVolundr(<HistoryPage />);
     await waitFor(() => expect(screen.getAllByText('terminated').length).toBeGreaterThan(0));
-    expect(screen.getByText('failed')).toBeInTheDocument();
+    expect(screen.getAllByText('failed').length).toBeGreaterThan(0);
   });
 
   it('shows persona names', async () => {
@@ -83,40 +85,45 @@ describe('HistoryPage', () => {
 
   it('filters rows by raven ID', async () => {
     renderWithVolundr(<HistoryPage />);
-    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBeGreaterThan(0));
     const ravnFilter = screen.getByLabelText(/raven id/i);
     fireEvent.change(ravnFilter, { target: { value: 'r2' } });
+    // Historical ds-3 (r2/failed) + historical ds-4b (r2/terminated) = 2
     await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(2));
     expect(screen.queryByText('ds-2')).not.toBeInTheDocument();
-    // ds-3 and ds-4 belong to r2
     expect(screen.getByText('ds-3')).toBeInTheDocument();
-    expect(screen.getByText('ds-4')).toBeInTheDocument();
+    expect(screen.getByText('ds-4b')).toBeInTheDocument();
   });
 
   it('filters rows by persona name', async () => {
     renderWithVolundr(<HistoryPage />);
-    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBeGreaterThan(0));
     const personaFilter = screen.getByLabelText(/persona/i);
     fireEvent.change(personaFilter, { target: { value: 'skald' } });
+    // Only historical ds-2 has personaName 'skald'
     await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(1));
     expect(screen.getByText('ds-2')).toBeInTheDocument();
   });
 
   it('filters by outcome button — failed', async () => {
     renderWithVolundr(<HistoryPage />);
-    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('button', { name: 'failed' }));
-    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(1));
+    // New ds-4 (active/failed) + historical ds-3 (failed) = 2
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(2));
     expect(screen.getByText('ds-3')).toBeInTheDocument();
   });
 
   it('clicking All outcome button restores all rows', async () => {
     renderWithVolundr(<HistoryPage />);
-    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBeGreaterThan(0));
+    const totalCount = screen.getAllByTestId('history-row').length;
     fireEvent.click(screen.getByRole('button', { name: 'failed' }));
-    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(1));
+    await waitFor(() =>
+      expect(screen.getAllByTestId('history-row').length).toBeLessThan(totalCount),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'All' }));
-    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(totalCount));
   });
 
   it('shows Clear filters button when a filter is active', async () => {
@@ -129,12 +136,13 @@ describe('HistoryPage', () => {
 
   it('Clear filters button resets all filters', async () => {
     renderWithVolundr(<HistoryPage />);
-    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBeGreaterThan(0));
+    const totalCount = screen.getAllByTestId('history-row').length;
     const ravnFilter = screen.getByLabelText(/raven id/i);
     fireEvent.change(ravnFilter, { target: { value: 'r2' } });
     await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(2));
     fireEvent.click(screen.getByRole('button', { name: /clear filters/i }));
-    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(3));
+    await waitFor(() => expect(screen.getAllByTestId('history-row').length).toBe(totalCount));
   });
 
   it('shows error state when session store throws', async () => {
@@ -171,7 +179,9 @@ describe('HistoryPage', () => {
       expect(screen.getAllByRole('link', { name: /details/i }).length).toBeGreaterThan(0),
     );
     const links = screen.getAllByRole('link', { name: /details/i });
-    // ds-2 is the first terminated session (ds-1 is running, excluded)
-    expect(links[0]).toHaveAttribute('href', '/volundr/session/ds-2/archived');
+    // Verify all detail links use the correct archived route pattern
+    for (const link of links) {
+      expect(link.getAttribute('href')).toMatch(/^\/volundr\/session\/.+\/archived$/);
+    }
   });
 });

@@ -144,9 +144,13 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     ptyStream,
     metricsStream,
     filesystem: createMockFileSystemPort(),
+    // NIU-678 pages (ClustersPage, TemplatesPage, HistoryPage)
     'volundr.clusters': createMockClusterAdapter(),
     'volundr.templates': createMockTemplateStore(),
     'volundr.sessions': createMockSessionStore(),
+    // VolundrPage overview hooks (useVolundrClusters, useSessionStore)
+    clusterAdapter: createMockClusterAdapter(),
+    sessionStore: createMockSessionStore(),
     'observatory.registry': observatoryRegistry,
     'observatory.topology': observatoryTopology,
     'observatory.events': observatoryEvents,
