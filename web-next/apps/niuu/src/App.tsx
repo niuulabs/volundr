@@ -10,6 +10,7 @@ import {
 } from '@niuulabs/plugin-sdk';
 import { createQueryClient } from '@niuulabs/query';
 import { AuthProvider } from '@niuulabs/auth';
+import { LoginPage } from '@niuulabs/plugin-login';
 import { Shell } from '@niuulabs/shell';
 import { plugins } from './plugins';
 import { buildServices } from './services';
@@ -38,7 +39,7 @@ export function App() {
     >
       <ThemeProvider theme="ice">
         <QueryClientProvider client={queryClient}>
-          <AuthProvider>
+          <AuthProvider loginPageComponent={LoginPage}>
             <AppInner />
           </AuthProvider>
           <ReactQueryDevtools initialIsOpen={false} />
