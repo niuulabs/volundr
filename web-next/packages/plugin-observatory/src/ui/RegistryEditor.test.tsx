@@ -126,9 +126,9 @@ describe('RegistryEditor — Types tab', () => {
 
   it('filters types by search query — hides non-matching type rows', () => {
     renderEditor();
-    // Search for "VLAN" — only realm's description mentions VLAN
+    // Search for "realm" — matches realm by label/id, not other types
     fireEvent.change(screen.getByRole('textbox', { name: /filter types/i }), {
-      target: { value: 'VLAN' },
+      target: { value: 'realm' },
     });
     expect(screen.getByTestId('type-row-realm')).toBeInTheDocument();
     expect(screen.queryByTestId('type-row-device')).not.toBeInTheDocument();

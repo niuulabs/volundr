@@ -54,9 +54,7 @@ describe('SearchPage', () => {
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'xyzxyzxyz_no_match_at_all' },
     });
-    await waitFor(() =>
-      expect(screen.getByText(/no results found/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/no results found/i)).toBeInTheDocument());
   });
 
   it('shows error state when the service throws', async () => {
@@ -71,9 +69,7 @@ describe('SearchPage', () => {
     };
     wrap(<SearchPage />, failing);
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'test' } });
-    await waitFor(() =>
-      expect(screen.getByText('search service down')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('search service down')).toBeInTheDocument());
   });
 
   it('each result shows title, category and path', async () => {

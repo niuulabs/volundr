@@ -29,9 +29,7 @@ describe('mergeSearchResults', () => {
     const r1 = makeResult('/a');
     const r2 = makeResult('/b');
     const r3 = makeResult('/c');
-    const merged = mergeSearchResults([
-      { mountName: 'local', priority: 1, results: [r1, r2, r3] },
-    ]);
+    const merged = mergeSearchResults([{ mountName: 'local', priority: 1, results: [r1, r2, r3] }]);
     expect(merged.map((r) => r.path)).toEqual(['/a', '/b', '/c']);
   });
 
@@ -102,9 +100,7 @@ describe('mergeSearchResults', () => {
 
   it('handles a single result in a single mount', () => {
     const r = makeResult('/single');
-    const merged = mergeSearchResults([
-      { mountName: 'local', priority: 1, results: [r] },
-    ]);
+    const merged = mergeSearchResults([{ mountName: 'local', priority: 1, results: [r] }]);
     expect(merged).toHaveLength(1);
     expect(merged[0]!.path).toBe('/single');
   });

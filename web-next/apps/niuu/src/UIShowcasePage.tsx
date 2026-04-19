@@ -1,20 +1,28 @@
-import {
-  PersonaAvatar,
-  RavnAvatar,
-  MountChip,
-  DeployBadge,
-  LifecycleBadge,
-} from '@niuulabs/ui';
+import { PersonaAvatar, RavnAvatar, MountChip, DeployBadge, LifecycleBadge } from '@niuulabs/ui';
 import type { PersonaRole } from '@niuulabs/domain';
 import type { LifecycleState, DeploymentKind, MountChipRole } from '@niuulabs/ui';
 import './UIShowcasePage.css';
 
 const ROLES: PersonaRole[] = [
-  'plan', 'build', 'verify', 'review', 'gate', 'audit', 'ship', 'index', 'report',
+  'plan',
+  'build',
+  'verify',
+  'review',
+  'gate',
+  'audit',
+  'ship',
+  'index',
+  'report',
 ];
 
 const LIFECYCLE_STATES: LifecycleState[] = [
-  'provisioning', 'ready', 'running', 'idle', 'terminating', 'terminated', 'failed',
+  'provisioning',
+  'ready',
+  'running',
+  'idle',
+  'terminating',
+  'terminated',
+  'failed',
 ];
 
 const DEPLOY_KINDS: DeploymentKind[] = ['k8s', 'systemd', 'pi', 'mobile', 'ephemeral'];
@@ -33,7 +41,7 @@ export function UIShowcasePage() {
             <PersonaAvatar
               key={role}
               role={role}
-              letter={role[0].toUpperCase()}
+              letter={(role[0] ?? role).toUpperCase()}
               size={32}
             />
           ))}

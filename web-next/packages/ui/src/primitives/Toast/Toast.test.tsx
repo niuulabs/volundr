@@ -69,18 +69,14 @@ describe('ToastProvider / useToast', () => {
     const user = setup();
     render(<Harness opts={{ title: 'Warning', tone: 'warning' }} />);
     await user.click(screen.getByRole('button', { name: 'Show toast' }));
-    await waitFor(() =>
-      expect(document.querySelector('.niuu-toast--warning')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(document.querySelector('.niuu-toast--warning')).toBeInTheDocument());
   });
 
   it('applies default tone class when no tone given', async () => {
     const user = setup();
     render(<Harness opts={{ title: 'Info' }} />);
     await user.click(screen.getByRole('button', { name: 'Show toast' }));
-    await waitFor(() =>
-      expect(document.querySelector('.niuu-toast--default')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(document.querySelector('.niuu-toast--default')).toBeInTheDocument());
   });
 
   it('dismiss button removes the toast', async () => {

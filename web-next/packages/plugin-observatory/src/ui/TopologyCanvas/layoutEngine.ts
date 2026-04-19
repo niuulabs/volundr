@@ -24,7 +24,7 @@ export function hashAngle(id: string): number {
   for (let i = 0; i < id.length; i++) {
     h = (((h << 5) + h) ^ id.charCodeAt(i)) >>> 0;
   }
-  return (h % 10000) / 10000 * Math.PI * 2;
+  return ((h % 10000) / 10000) * Math.PI * 2;
 }
 
 /** Host rounded-rect half-width in world units. */

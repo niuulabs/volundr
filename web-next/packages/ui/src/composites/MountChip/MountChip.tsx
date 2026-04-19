@@ -64,10 +64,7 @@ export function MountChip({ name, role, priority, className }: MountChipProps) {
   }
 
   return (
-    <span
-      className={cn('niuu-mount-chip', `niuu-mount-chip--${role}`, className)}
-      title={tooltip}
-    >
+    <span className={cn('niuu-mount-chip', `niuu-mount-chip--${role}`, className)} title={tooltip}>
       <span className="niuu-mount-chip__dot" aria-hidden />
       <span className="niuu-mount-chip__name">{name}</span>
       <span className="niuu-mount-chip__role">{role}</span>

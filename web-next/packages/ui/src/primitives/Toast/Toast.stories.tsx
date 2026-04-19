@@ -12,7 +12,15 @@ export default meta;
 
 type Story = StoryObj<typeof ToastProvider>;
 
-function ToastDemo({ title, description, tone }: { title: string; description?: string; tone?: ToastTone }) {
+function ToastDemo({
+  title,
+  description,
+  tone,
+}: {
+  title: string;
+  description?: string;
+  tone?: ToastTone;
+}) {
   const { toast } = useToast();
   return (
     <button onClick={() => toast({ title, description, tone })}>
@@ -31,7 +39,11 @@ export const Success: Story = {
 
 export const Critical: Story = {
   render: () => (
-    <ToastDemo title="Deployment failed" description="Check the logs for details." tone="critical" />
+    <ToastDemo
+      title="Deployment failed"
+      description="Check the logs for details."
+      tone="critical"
+    />
   ),
 };
 

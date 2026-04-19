@@ -47,10 +47,13 @@ describe('MountChip', () => {
       expect(container.querySelector('.niuu-mount-chip__dot')).not.toBeInTheDocument();
     });
 
-    it.each(KIND_ROLES as ('local' | 'shared' | 'domain')[])('shows the correct glyph for "%s"', (role) => {
-      render(<MountChip name="well" role={role} />);
-      expect(screen.getByText(MOUNT_KIND_GLYPH[role])).toBeInTheDocument();
-    });
+    it.each(KIND_ROLES as ('local' | 'shared' | 'domain')[])(
+      'shows the correct glyph for "%s"',
+      (role) => {
+        render(<MountChip name="well" role={role} />);
+        expect(screen.getByText(MOUNT_KIND_GLYPH[role])).toBeInTheDocument();
+      },
+    );
 
     it('applies the role modifier class', () => {
       const { container } = render(<MountChip name="well" role="domain" />);

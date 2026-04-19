@@ -20,20 +20,14 @@ describe('EntitiesPage', () => {
 
   it('renders entity items after load', async () => {
     wrap(<EntitiesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('entity-item').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('entity-item').length).toBeGreaterThan(0));
   });
 
   it('renders filter buttons for entity kinds', () => {
     wrap(<EntitiesPage />);
     expect(screen.getByRole('button', { name: /all/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /org/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /concept/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /org/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /concept/i })).toBeInTheDocument();
   });
 
   it('"All" filter button is active by default', () => {
@@ -51,9 +45,7 @@ describe('EntitiesPage', () => {
 
   it('filtering by kind shows only that kind', async () => {
     wrap(<EntitiesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('entity-item').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('entity-item').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('button', { name: /org/i }));
     await waitFor(() => {
       const items = screen.queryAllByTestId('entity-item');
@@ -65,9 +57,7 @@ describe('EntitiesPage', () => {
 
   it('shows entity titles in the list', async () => {
     wrap(<EntitiesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('entity-item').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('entity-item').length).toBeGreaterThan(0));
     // Verify entity title is rendered
     const items = screen.getAllByTestId('entity-item');
     const first = items[0]!;
@@ -76,9 +66,7 @@ describe('EntitiesPage', () => {
 
   it('shows entity paths in mono font', async () => {
     wrap(<EntitiesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('entity-item').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('entity-item').length).toBeGreaterThan(0));
     const paths = document.querySelectorAll('.entities-page__item-path');
     expect(paths.length).toBeGreaterThan(0);
   });
@@ -94,8 +82,6 @@ describe('EntitiesPage', () => {
       },
     };
     wrap(<EntitiesPage />, failing);
-    await waitFor(() =>
-      expect(screen.getByText('entities service down')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('entities service down')).toBeInTheDocument());
   });
 });

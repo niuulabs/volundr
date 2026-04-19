@@ -12,7 +12,7 @@ test.describe('Showcase page — data surfaces', () => {
   test('KpiStrip renders KPI cards', async ({ page }) => {
     await expect(page.getByText('Total Dispatches')).toBeVisible();
     await expect(page.getByText('1,204')).toBeVisible();
-    await expect(page.getByText('Running')).toBeVisible();
+    await expect(page.getByText('Running').first()).toBeVisible();
     await expect(page.getByText('Error Rate')).toBeVisible();
   });
 
@@ -42,16 +42,16 @@ test.describe('Showcase page — data surfaces', () => {
     await expect(page.getByText('dispatch-prod-001')).toBeVisible();
   });
 
-  test('Table sorting: clicking Name header sorts ascending then descending', async ({ page }) => {
+  test('Table sorting: clicking Name header toggles sort direction', async ({ page }) => {
     const nameHeader = page.getByRole('columnheader', { name: /Name/ });
 
-    // Click once → ascending
-    await nameHeader.click();
-    await expect(nameHeader).toHaveAttribute('aria-sort', 'ascending');
-
-    // Click again → descending
+    // Table starts sorted by name ascending — first click toggles to descending
     await nameHeader.click();
     await expect(nameHeader).toHaveAttribute('aria-sort', 'descending');
+
+    // Second click returns to ascending
+    await nameHeader.click();
+    await expect(nameHeader).toHaveAttribute('aria-sort', 'ascending');
   });
 
   test('Table row selection: select-all checkbox selects all rows', async ({ page }) => {
@@ -67,14 +67,14 @@ test.describe('Showcase page — data surfaces', () => {
   test('Table row expand: clicking expand shows detail row', async ({ page }) => {
     const expandBtns = page.getByRole('button', { name: 'expand row' });
     await expandBtns.first().click();
-    // Expanded content shows ID: d1
-    await expect(page.getByText(/ID:\s*d1/)).toBeVisible();
+    // Table starts sorted by name asc: dispatch-dev-010 (d3) is first alphabetically
+    await expect(page.getByText(/ID:\s*d3/)).toBeVisible();
   });
 
   test('Table row expand: clicking again collapses', async ({ page }) => {
     await page.getByRole('button', { name: 'expand row' }).first().click();
     await page.getByRole('button', { name: 'collapse row' }).click();
-    await expect(page.getByText(/ID:\s*d1/)).not.toBeVisible();
+    await expect(page.getByText(/ID:\s*d3/)).not.toBeVisible();
   });
 
   // ── LoadingState ──────────────────────────────────────

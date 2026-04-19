@@ -36,7 +36,7 @@ test.describe('status composites showcase', () => {
   test('ConfidenceBadge — renders grid including null placeholder', async ({ page }) => {
     const grid = page.getByTestId('confidence-badge-grid');
     await expect(grid).toBeVisible();
-    await expect(grid.getByText('—')).toBeVisible();
+    await expect(grid.getByText('—').first()).toBeVisible();
   });
 
   test('ConfidenceBadge — renders numeric percentages', async ({ page }) => {

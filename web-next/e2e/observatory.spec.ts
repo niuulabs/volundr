@@ -196,10 +196,10 @@ test('clicking the minimap pans the main camera', async ({ page }) => {
 // ── Registry page ─────────────────────────────────────────────────────────────
 test('registry page renders entity type list', async ({ page }) => {
   await page.goto('/registry');
-  await expect(page.getByText('Registry')).toBeVisible();
-  await expect(page.getByText('Realm')).toBeVisible({ timeout: 5000 });
-  await expect(page.getByText('Cluster')).toBeVisible({ timeout: 5000 });
-  await expect(page.getByText('Raid')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('Registry').first()).toBeVisible();
+  await expect(page.getByTestId('type-row-realm')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByTestId('type-row-cluster')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByTestId('type-row-raid')).toBeVisible({ timeout: 5000 });
 });
 
 test('registry: Types tab is active by default', async ({ page }) => {

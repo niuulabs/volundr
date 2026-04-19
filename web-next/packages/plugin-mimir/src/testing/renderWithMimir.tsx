@@ -4,7 +4,10 @@ import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { createMimirMockAdapter } from '../adapters/mock';
 import type { IMimirService } from '../ports';
 
-export function renderWithMimir(ui: React.ReactNode, service?: IMimirService) {
+export function renderWithMimir(
+  ui: React.ReactNode,
+  service?: IMimirService,
+): ReturnType<typeof render> {
   const svc = service ?? createMimirMockAdapter();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(

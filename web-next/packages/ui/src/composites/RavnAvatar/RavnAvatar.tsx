@@ -49,12 +49,7 @@ export function RavnAvatar({
       >
         {rune}
       </span>
-      <StateDot
-        state={state}
-        size={dotSize}
-        pulse={pulse}
-        className="niuu-ravn-av__dot"
-      />
+      <StateDot state={state} size={dotSize} pulse={pulse} className="niuu-ravn-av__dot" />
     </span>
   );
 }

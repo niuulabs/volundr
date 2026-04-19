@@ -18,20 +18,38 @@ beforeEach(() => {
 const MOCK_TOPOLOGY: Topology = {
   timestamp: '2026-04-19T00:00:00Z',
   nodes: [
-    { id: 'mimir-0',      typeId: 'mimir',     label: 'mímir',    parentId: null,         status: 'healthy' },
-    { id: 'realm-asgard', typeId: 'realm',     label: 'asgard',   parentId: null,         status: 'healthy' },
-    { id: 'cluster-vk',   typeId: 'cluster',   label: 'valaskjálf', parentId: 'realm-asgard', status: 'healthy' },
-    { id: 'tyr-0',        typeId: 'tyr',       label: 'tyr-0',    parentId: 'cluster-vk', status: 'healthy' },
-    { id: 'bifrost-0',    typeId: 'bifrost',   label: 'bifröst',  parentId: 'cluster-vk', status: 'healthy' },
-    { id: 'host-mjolnir', typeId: 'host',      label: 'mjölnir',  parentId: 'realm-asgard', status: 'healthy' },
-    { id: 'raid-0',       typeId: 'raid',      label: 'raid-0',   parentId: 'cluster-vk', status: 'observing' },
+    { id: 'mimir-0', typeId: 'mimir', label: 'mímir', parentId: null, status: 'healthy' },
+    { id: 'realm-asgard', typeId: 'realm', label: 'asgard', parentId: null, status: 'healthy' },
+    {
+      id: 'cluster-vk',
+      typeId: 'cluster',
+      label: 'valaskjálf',
+      parentId: 'realm-asgard',
+      status: 'healthy',
+    },
+    { id: 'tyr-0', typeId: 'tyr', label: 'tyr-0', parentId: 'cluster-vk', status: 'healthy' },
+    {
+      id: 'bifrost-0',
+      typeId: 'bifrost',
+      label: 'bifröst',
+      parentId: 'cluster-vk',
+      status: 'healthy',
+    },
+    {
+      id: 'host-mjolnir',
+      typeId: 'host',
+      label: 'mjölnir',
+      parentId: 'realm-asgard',
+      status: 'healthy',
+    },
+    { id: 'raid-0', typeId: 'raid', label: 'raid-0', parentId: 'cluster-vk', status: 'observing' },
   ],
   edges: [
-    { id: 'e1', sourceId: 'tyr-0',     targetId: 'bifrost-0', kind: 'solid' },
-    { id: 'e2', sourceId: 'tyr-0',     targetId: 'raid-0',    kind: 'dashed-anim' },
-    { id: 'e3', sourceId: 'bifrost-0', targetId: 'mimir-0',   kind: 'dashed-long' },
-    { id: 'e4', sourceId: 'bifrost-0', targetId: 'mimir-0',   kind: 'soft' },
-    { id: 'e5', sourceId: 'raid-0',    targetId: 'tyr-0',     kind: 'raid' },
+    { id: 'e1', sourceId: 'tyr-0', targetId: 'bifrost-0', kind: 'solid' },
+    { id: 'e2', sourceId: 'tyr-0', targetId: 'raid-0', kind: 'dashed-anim' },
+    { id: 'e3', sourceId: 'bifrost-0', targetId: 'mimir-0', kind: 'dashed-long' },
+    { id: 'e4', sourceId: 'bifrost-0', targetId: 'mimir-0', kind: 'soft' },
+    { id: 'e5', sourceId: 'raid-0', targetId: 'tyr-0', kind: 'raid' },
   ],
 };
 
@@ -164,11 +182,11 @@ describe('TopologyCanvas', () => {
     const allEdges: Topology = {
       ...MOCK_TOPOLOGY,
       edges: [
-        { id: 'e-solid',       sourceId: 'tyr-0',     targetId: 'bifrost-0', kind: 'solid' },
-        { id: 'e-dashed-anim', sourceId: 'tyr-0',     targetId: 'raid-0',    kind: 'dashed-anim' },
-        { id: 'e-dashed-long', sourceId: 'bifrost-0', targetId: 'mimir-0',   kind: 'dashed-long' },
-        { id: 'e-soft',        sourceId: 'bifrost-0', targetId: 'mimir-0',   kind: 'soft' },
-        { id: 'e-raid',        sourceId: 'raid-0',    targetId: 'tyr-0',     kind: 'raid' },
+        { id: 'e-solid', sourceId: 'tyr-0', targetId: 'bifrost-0', kind: 'solid' },
+        { id: 'e-dashed-anim', sourceId: 'tyr-0', targetId: 'raid-0', kind: 'dashed-anim' },
+        { id: 'e-dashed-long', sourceId: 'bifrost-0', targetId: 'mimir-0', kind: 'dashed-long' },
+        { id: 'e-soft', sourceId: 'bifrost-0', targetId: 'mimir-0', kind: 'soft' },
+        { id: 'e-raid', sourceId: 'raid-0', targetId: 'tyr-0', kind: 'raid' },
       ],
     };
     expect(() => render(<TopologyCanvas topology={allEdges} />)).not.toThrow();

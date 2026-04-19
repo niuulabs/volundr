@@ -318,9 +318,7 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
       },
 
       async getGraph(options): Promise<MimirGraph> {
-        const qs = options?.mountName
-          ? `?mount=${encodeURIComponent(options.mountName)}`
-          : '';
+        const qs = options?.mountName ? `?mount=${encodeURIComponent(options.mountName)}` : '';
         const raw = await client.get<RawGraph>(`/graph${qs}`);
         return toGraph(raw);
       },

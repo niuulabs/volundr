@@ -26,7 +26,13 @@ describe('Textarea', () => {
 
   it('forwards ref', () => {
     let ref: HTMLTextAreaElement | null = null;
-    render(<Textarea ref={(el) => { ref = el; }} />);
+    render(
+      <Textarea
+        ref={(el) => {
+          ref = el;
+        }}
+      />,
+    );
     expect(ref).toBeInstanceOf(HTMLTextAreaElement);
   });
 

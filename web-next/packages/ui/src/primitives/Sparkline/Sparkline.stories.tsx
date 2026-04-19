@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Sparkline } from './Sparkline';
 
-const SAMPLE_24 = Array.from({ length: 24 }, (_, i) =>
-  0.3 + 0.5 * Math.sin(i / 4) + 0.1 * Math.cos(i / 2),
+const SAMPLE_24 = Array.from(
+  { length: 24 },
+  (_, i) => 0.3 + 0.5 * Math.sin(i / 4) + 0.1 * Math.cos(i / 2),
 );
 
 const meta: Meta<typeof Sparkline> = {
