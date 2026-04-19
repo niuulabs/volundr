@@ -125,19 +125,30 @@ Three feature-flag tiers, any of which can hide a plugin:
 2. **Runtime operator flags** — `public/config.json` `{ plugins.<id>.enabled }`
 3. **Runtime per-user flags** — backend `FeatureCatalog` (future; same port pattern)
 
-### 6. Design tokens are the source of truth for styling
+### 6. Tailwind is the default styling layer, driven by design tokens
 
-`@niuulabs/design-tokens` owns `tokens.css`. It is ported verbatim from
-`web2/niuu_handoff/flokk_observatory/design/tokens.css` and is the single source of
-truth for color, spacing, typography, motion, and theme (ice / amber / spring).
+Styling in `web-next/` uses **Tailwind CSS** mapped to our design tokens. `.claude/rules/web-styles.md`
+bans Tailwind — that ban applies to the legacy `web/` app only, not here.
 
-- **Single brand theme policy** — default is `ice`. App does not theme-switch per plugin.
-- Components use CSS custom properties (`var(--color-brand)`, `var(--space-3)`).
-- Do **not** hard-code hex colors or pixel values in component CSS.
-- Tailwind is allowed _inside plugin packages_ if needed, but must compile to values
-  driven by the token variables. Consumers should not need to install Tailwind.
-- CSS files are prefixed (`.niuu-chip`, `.niuu-shell__rail`) so multiple packages
-  can ship CSS without collisions.
+- **`@niuulabs/design-tokens` owns `tokens.css`** — ported verbatim from
+  `web2/niuu_handoff/flokk_observatory/design/tokens.css`. It is the single source
+  of truth for color, spacing, typography, motion, and theme (ice / amber / spring).
+- **Tailwind config reads from tokens** — `tailwind.config.ts` in each package
+  pulls from `tokens.css` via `theme.extend`. Never hard-code hex or px in a class
+  (`bg-[#09090b]` is a bug — use `bg-bg-primary` mapped to `var(--color-bg-primary)`).
+- **Single brand theme policy** — default is `ice`. `[data-theme]` on `<html>` swaps
+  token values; Tailwind classes don't change.
+- **Each plugin package publishes its own pre-compiled CSS.** Consumers install the
+  plugin and import its `styles.css`. They do **not** need Tailwind in their build.
+  Each package runs Tailwind at build time (tsup + postcss) and ships only the
+  classes it actually uses.
+- **Shared preset** — `@niuulabs/design-tokens/tailwind.preset.ts` centralizes the
+  token mapping so every package's `tailwind.config.ts` inherits it.
+- **Class prefix per package** — use Tailwind's `prefix: 'niuu-'` (or package-scoped
+  prefix) so two packages can't collide when their CSS is concatenated on a host page.
+- **No inline styles, no CSS-in-JS.** Tailwind + tokens covers the surface.
+- **One-off component CSS is still fine** when a utility soup gets unwieldy — co-locate
+  a `.css` file next to the component, use `@apply` against token-backed utilities.
 
 ### 7. Routing is code-based, not file-based
 
@@ -256,7 +267,9 @@ web-next/
   from `web/src/modules/shared/components/SessionChat/`).
 - **File-based routing** — see rule 7.
 - **CSS-in-JS / styled-components / emotion** — runtime cost, not needed.
-- **Tailwind as a consumer dependency** — consumers only need `tokens.css`.
+- **Tailwind as a _consumer_ dependency** — we use Tailwind _inside_ our packages at
+  build time, but consumers just import the pre-compiled `styles.css`. No Tailwind
+  install required on the host side.
 - **ORM** — doesn't apply here (backend concern), but noted for consistency.
 
 ---
@@ -407,8 +420,10 @@ Edit `apps/niuu/public/config.json` and refresh the browser. No rebuild.
   through DI. If you see `import { buildTyrAdapter } from '../adapters/...'` inside
   `ui/`, that's a bug.
 - **Don't hard-code plugin IDs in the shell.** Shell reads `plugins` prop + config.
-- **Don't hard-code colors.** Use `var(--color-*)` / `var(--brand-*)`. Red is
-  reserved for failures — use `var(--color-critical)`, never a brand color.
+- **Don't hard-code colors.** Use Tailwind classes backed by tokens
+  (`bg-bg-primary`, `text-text-secondary`, `border-border`) — never raw hex or
+  arbitrary values like `bg-[#09090b]`. Red is reserved for failures — use the
+  `critical` token (`bg-critical`, `text-critical`), never a brand color.
 - **Don't add a component to a plugin if a sibling plugin already needs it.** Promote
   to `@niuulabs/ui` on the spot.
 - **Don't bypass `ConfigProvider`.** All env-dependent values (URLs, flags, theme)
