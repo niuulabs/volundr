@@ -46,7 +46,7 @@ import '@niuulabs/design-tokens/tokens.css';
 import '@niuulabs/ui/styles.css';
 import '@niuulabs/shell/styles.css';
 
-<ConfigProvider endpoint="/config.json" fallback={<Loading/>}>
+<ConfigProvider endpoint="/config.json" fallback={<Loading />}>
   <ThemeProvider theme="ice">
     <QueryClientProvider client={createQueryClient()}>
       <ServicesProvider services={{ tyr: myTyrAdapter }}>
@@ -56,7 +56,7 @@ import '@niuulabs/shell/styles.css';
       </ServicesProvider>
     </QueryClientProvider>
   </ThemeProvider>
-</ConfigProvider>
+</ConfigProvider>;
 ```
 
 ### 2. Hexagonal architecture per plugin
@@ -75,6 +75,7 @@ plugin-<name>/
 ```
 
 Rules:
+
 - `ui/` may import from `application/`, `domain/`, `ports/`. Never from `adapters/`.
 - `adapters/` implement `ports/`. Consumers can ignore the built-in adapters and
   inject their own.
@@ -87,7 +88,7 @@ Components get services from `useService<T>(key)`. The consumer wires adapters i
 
 ```ts
 // inside plugin-tyr:
-const tyr = useService<ITyrService>('tyr');         // contract only
+const tyr = useService<ITyrService>('tyr'); // contract only
 ```
 
 ```ts
@@ -119,6 +120,7 @@ with Zod. Operators edit the file and refresh the browser — no rebuild. The co
 declares which plugins are enabled, service URLs, theme, auth config.
 
 Three feature-flag tiers, any of which can hide a plugin:
+
 1. **Install-time** — `apps/niuu/src/plugins.ts` imports; not imported = not bundled
 2. **Runtime operator flags** — `public/config.json` `{ plugins.<id>.enabled }`
 3. **Runtime per-user flags** — backend `FeatureCatalog` (future; same port pattern)
@@ -132,7 +134,7 @@ truth for color, spacing, typography, motion, and theme (ice / amber / spring).
 - **Single brand theme policy** — default is `ice`. App does not theme-switch per plugin.
 - Components use CSS custom properties (`var(--color-brand)`, `var(--space-3)`).
 - Do **not** hard-code hex colors or pixel values in component CSS.
-- Tailwind is allowed *inside plugin packages* if needed, but must compile to values
+- Tailwind is allowed _inside plugin packages_ if needed, but must compile to values
   driven by the token variables. Consumers should not need to install Tailwind.
 - CSS files are prefixed (`.niuu-chip`, `.niuu-shell__rail`) so multiple packages
   can ship CSS without collisions.
@@ -145,12 +147,12 @@ is incompatible with composability. This is a deliberate trade.
 
 ### 8. Module boundaries — what goes where
 
-| Live in `@niuulabs/ui` | Live in a specific plugin |
-|---|---|
-| Used by 2+ plugins | Used by only one plugin |
-| Design-system primitives (Chip, StateDot) | WorkflowBuilder (tyr), RaidMesh (tyr) |
-| Cross-plugin composites (PersonaAvatar, MountChip) | TopologyCanvas (observatory) |
-| Layout/overlay/form/data primitives | TemplateEditor (volundr) |
+| Live in `@niuulabs/ui`                             | Live in a specific plugin             |
+| -------------------------------------------------- | ------------------------------------- |
+| Used by 2+ plugins                                 | Used by only one plugin               |
+| Design-system primitives (Chip, StateDot)          | WorkflowBuilder (tyr), RaidMesh (tyr) |
+| Cross-plugin composites (PersonaAvatar, MountChip) | TopologyCanvas (observatory)          |
+| Layout/overlay/form/data primitives                | TemplateEditor (volundr)              |
 
 **Promotion rule:** start plugin-local, promote to `@niuulabs/ui` as soon as a second
 plugin needs it. Cheap to move.
@@ -186,15 +188,15 @@ web-next/
 
 ### What each package owns
 
-| Package | Role |
-|---|---|
-| `@niuulabs/design-tokens` | `tokens.css`, fonts (Inter + JetBrainsMono NF), `ThemeProvider` |
-| `@niuulabs/plugin-sdk` | `PluginDescriptor`, `ServicesProvider`, `ConfigProvider`, `FeatureCatalogProvider`, Zod config schema |
-| `@niuulabs/query` | `createQueryClient()` with Niuu defaults |
-| `@niuulabs/ui` | Shared primitives (Chip, StateDot, Rune, Kbd, LiveBadge today — grows) |
-| `@niuulabs/shell` | `Shell` — rail/topbar/subnav/content/footer. Host-agnostic, reads config + feature catalog, renders enabled plugins |
-| `@niuulabs/plugin-<name>` | One plugin = one package. Exports `<name>Plugin` + ports + domain types |
-| `@niuulabs/niuu` (app) | Reference composition. Imports plugins, wires services, serves `/config.json` |
+| Package                   | Role                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `@niuulabs/design-tokens` | `tokens.css`, fonts (Inter + JetBrainsMono NF), `ThemeProvider`                                                     |
+| `@niuulabs/plugin-sdk`    | `PluginDescriptor`, `ServicesProvider`, `ConfigProvider`, `FeatureCatalogProvider`, Zod config schema               |
+| `@niuulabs/query`         | `createQueryClient()` with Niuu defaults                                                                            |
+| `@niuulabs/ui`            | Shared primitives (Chip, StateDot, Rune, Kbd, LiveBadge today — grows)                                              |
+| `@niuulabs/shell`         | `Shell` — rail/topbar/subnav/content/footer. Host-agnostic, reads config + feature catalog, renders enabled plugins |
+| `@niuulabs/plugin-<name>` | One plugin = one package. Exports `<name>Plugin` + ports + domain types                                             |
+| `@niuulabs/niuu` (app)    | Reference composition. Imports plugins, wires services, serves `/config.json`                                       |
 
 ---
 
@@ -261,6 +263,7 @@ push. Both gates must pass. Playwright is part of CI from the start — do not d
 
 Every new plugin page, feature flow, and shell interaction ships with a Playwright
 spec in `e2e/`. Specs cover at least:
+
 1. The happy path (user can reach the feature and see its core content)
 2. Loading state (before data resolves)
 3. One error state (service fails, empty state, or permission denied)
@@ -277,16 +280,16 @@ See `packages/plugin-sdk/src/config.ts` for the Zod schema. Example:
 {
   "theme": "ice",
   "plugins": {
-    "observatory": { "enabled": true,  "order": 1 },
-    "tyr":         { "enabled": true,  "order": 4 },
-    "volundr":     { "enabled": false, "order": 5, "reason": "k8s not provisioned" }
+    "observatory": { "enabled": true, "order": 1 },
+    "tyr": { "enabled": true, "order": 4 },
+    "volundr": { "enabled": false, "order": 5, "reason": "k8s not provisioned" }
   },
   "services": {
-    "tyr":     { "baseUrl": "https://api.niuu.world/tyr",     "mode": "http" },
+    "tyr": { "baseUrl": "https://api.niuu.world/tyr", "mode": "http" },
     "volundr": { "baseUrl": "https://api.niuu.world/volundr", "mode": "http" }
   },
   "auth": {
-    "issuer":   "https://auth.niuu.world",
+    "issuer": "https://auth.niuu.world",
     "clientId": "niuu-web"
   }
 }
