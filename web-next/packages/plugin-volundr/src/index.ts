@@ -1,6 +1,7 @@
 import { createRoute } from '@tanstack/react-router';
 import { definePlugin } from '@niuulabs/plugin-sdk';
 import { VolundrPage } from './ui/VolundrPage';
+import { VolundrSessionRoute, VolundrArchivedRoute } from './ui/routes';
 
 export const volundrPlugin = definePlugin({
   id: 'volundr',
@@ -13,6 +14,16 @@ export const volundrPlugin = definePlugin({
       path: '/volundr',
       component: VolundrPage,
     }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/volundr/session/$sessionId',
+      component: VolundrSessionRoute,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/volundr/session/$sessionId/archived',
+      component: VolundrArchivedRoute,
+    }),
   ],
 });
 
@@ -23,6 +34,7 @@ export { createMockSessionStore } from './adapters/mock';
 export { createMockTemplateStore } from './adapters/mock';
 export { createMockPtyStream } from './adapters/mock';
 export { createMockMetricsStream } from './adapters/mock';
+export { createMockFileSystemPort } from './adapters/mock';
 export { buildVolundrHttpAdapter } from './adapters/http';
 
 // Port types
@@ -32,6 +44,15 @@ export type { ISessionStore, SessionFilters } from './ports/ISessionStore';
 export type { ITemplateStore } from './ports/ITemplateStore';
 export type { IPtyStream } from './ports/IPtyStream';
 export type { IMetricsStream, MetricPoint } from './ports/IMetricsStream';
+export type { IFileSystemPort, FileTreeNode } from './ports/IFileSystemPort';
+
+// UI components
+export { Terminal } from './ui/Terminal/Terminal';
+export type { TerminalProps } from './ui/Terminal/Terminal';
+export { FileTree } from './ui/FileTree/FileTree';
+export type { FileTreeProps } from './ui/FileTree/FileTree';
+export { FileViewer } from './ui/FileTree/FileViewer';
+export type { FileViewerProps } from './ui/FileTree/FileViewer';
 
 // Domain types
 export type { Session, SessionState, SessionResources, SessionEvent } from './domain/session';
