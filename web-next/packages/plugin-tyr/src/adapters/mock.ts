@@ -570,12 +570,14 @@ export function createMockTyrService(): ITyrService {
           },
           {
             id: 'q3',
-            question: 'Are there any acceptance criteria or constraints you want enforced across all raids?',
+            question:
+              'Are there any acceptance criteria or constraints you want enforced across all raids?',
             hint: 'e.g. all endpoints must have OpenAPI docs, no breaking API changes',
           },
           {
             id: 'q4',
-            question: 'What is the desired confidence threshold before the dispatcher auto-continues?',
+            question:
+              'What is the desired confidence threshold before the dispatcher auto-continues?',
             hint: 'e.g. 80 — raids below this will pause for operator approval',
           },
         ],
@@ -607,10 +609,7 @@ export function createMockTyrService(): ITyrService {
                 {
                   name: 'Implement HTTP adapters',
                   description: 'Build the REST API adapters for all service ports.',
-                  acceptanceCriteria: [
-                    'All endpoints covered',
-                    'Snake_case ↔ camelCase transform',
-                  ],
+                  acceptanceCriteria: ['All endpoints covered', 'Snake_case ↔ camelCase transform'],
                   declaredFiles: ['src/adapters/http.ts'],
                   estimateHours: 8,
                   confidence: 78,

@@ -19,9 +19,7 @@ export function PlanApproved({ saga, onNewPlan }: PlanApprovedProps) {
       <Rune glyph="ᛏ" size={48} />
 
       <div className="niuu-flex niuu-flex-col niuu-gap-2">
-        <h2 className="niuu-text-xl niuu-font-semibold niuu-text-text-primary">
-          Saga launched!
-        </h2>
+        <h2 className="niuu-text-xl niuu-font-semibold niuu-text-text-primary">Saga launched!</h2>
         <p className="niuu-text-sm niuu-text-text-secondary">
           <span className="niuu-font-medium niuu-text-brand-400">{saga.name}</span> has been created
           and is ready for the dispatcher.
@@ -35,7 +33,9 @@ export function PlanApproved({ saga, onNewPlan }: PlanApprovedProps) {
         </div>
         <div className="niuu-flex niuu-justify-between niuu-text-sm">
           <dt className="niuu-text-text-muted">Branch</dt>
-          <dd className="niuu-font-mono niuu-text-text-secondary niuu-text-xs">{saga.featureBranch}</dd>
+          <dd className="niuu-font-mono niuu-text-text-secondary niuu-text-xs">
+            {saga.featureBranch}
+          </dd>
         </div>
         <div className="niuu-flex niuu-justify-between niuu-text-sm">
           <dt className="niuu-text-text-muted">Phases</dt>
