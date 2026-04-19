@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { useService } from '@niuulabs/plugin-sdk';
 import type { IBudgetStream } from '../../ports';
@@ -34,13 +35,13 @@ export function useRavnBudgets(ravnIds: string[]): Record<string, BudgetState> {
     })),
   });
 
-  const budgets: Record<string, BudgetState> = {};
-
-  for (let i = 0; i < ravnIds.length; i++) {
-    const id = ravnIds[i];
-    const data = results[i]?.data;
-    if (id && data) budgets[id] = data;
-  }
-
-  return budgets;
+  return useMemo(() => {
+    const budgets: Record<string, BudgetState> = {};
+    for (let i = 0; i < ravnIds.length; i++) {
+      const id = ravnIds[i];
+      const data = results[i]?.data;
+      if (id && data) budgets[id] = data;
+    }
+    return budgets;
+  }, [results, ravnIds]);
 }
