@@ -172,7 +172,7 @@ export function OverviewPage() {
                     }}
                     data-testid="active-ravn-row"
                   >
-                    <StateDot state="ok" pulse size={8} />
+                    <StateDot state="running" pulse size={8} />
                     <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500, flex: 1 }}>
                       {r.personaName}
                     </span>

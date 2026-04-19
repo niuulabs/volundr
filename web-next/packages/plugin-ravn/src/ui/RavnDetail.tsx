@@ -142,12 +142,12 @@ function OverviewSection({ ravn, budget }: OverviewSectionProps) {
           <StateDot
             state={
               ravn.status === 'active'
-                ? 'ok'
+                ? 'running'
                 : ravn.status === 'suspended'
-                  ? 'warn'
+                  ? 'attention'
                   : ravn.status === 'failed'
-                    ? 'err'
-                    : 'mute'
+                    ? 'failed'
+                    : 'unknown'
             }
             pulse={ravn.status === 'active'}
             size={8}
@@ -365,7 +365,9 @@ function SessionsSection({ ravnId }: SessionsSectionProps) {
               data-testid="session-row"
             >
               <StateDot
-                state={s.status === 'running' ? 'ok' : s.status === 'failed' ? 'err' : 'mute'}
+                state={
+                  s.status === 'running' ? 'running' : s.status === 'failed' ? 'failed' : 'unknown'
+                }
                 pulse={s.status === 'running'}
                 size={8}
               />
@@ -534,12 +536,12 @@ export function RavnDetail({ ravn, onClose }: RavnDetailProps) {
         <StateDot
           state={
             ravn.status === 'active'
-              ? 'ok'
+              ? 'running'
               : ravn.status === 'suspended'
-                ? 'warn'
+                ? 'attention'
                 : ravn.status === 'failed'
-                  ? 'err'
-                  : 'mute'
+                  ? 'failed'
+                  : 'unknown'
           }
           pulse={ravn.status === 'active'}
           size={8}
