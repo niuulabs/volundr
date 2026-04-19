@@ -127,6 +127,15 @@ class ThreadContextRef:
     ref_summary: str
 
 
+class ThreadOwnershipError(RuntimeError):
+    """Raised when assign_thread_owner detects a conflicting owner."""
+
+    def __init__(self, path: str, current_owner: str) -> None:
+        super().__init__(f"Thread '{path}' already owned by '{current_owner}'")
+        self.path = path
+        self.current_owner = current_owner
+
+
 # ---------------------------------------------------------------------------
 # Wiki page types
 # ---------------------------------------------------------------------------
@@ -147,18 +156,18 @@ class MimirPageMeta:
     confidence: PageConfidence | None = None
     entity_type: EntityType | None = None
     related_entities: list[str] = field(default_factory=list)
+    is_thread: bool = False
+    # Set by action shapes when they write artifacts derived from a thread.
+    # The enricher skips pages with this flag to prevent feedback loops.
+    produced_by_thread: bool = False
     # Thread-specific fields (None / empty for wiki pages)
     thread_state: ThreadState | None = None
     thread_weight: float | None = None
-    is_thread: bool = False
     thread_owner_id: str | None = None
     thread_context_refs: list[ThreadContextRef] = field(default_factory=list)
     thread_next_action_hint: str | None = None
     thread_resolved_artifact_path: str | None = None
     thread_weight_signals: dict | None = None
-    # Set by action shapes when they write artifacts derived from a thread.
-    # The enricher skips pages with this flag to prevent feedback loops.
-    produced_by_thread: bool = False
 
 
 @dataclass
@@ -237,15 +246,6 @@ class MimirLintReport:
 # ---------------------------------------------------------------------------
 
 _VALID_REF_TYPES: frozenset[str] = frozenset({"conversation", "ingest", "observation", "search"})
-
-
-class ThreadOwnershipError(RuntimeError):
-    """Raised when assign_thread_owner detects a conflicting owner."""
-
-    def __init__(self, path: str, current_owner: str) -> None:
-        super().__init__(f"Thread '{path}' already owned by '{current_owner}'")
-        self.path = path
-        self.current_owner = current_owner
 
 
 class ThreadSchemaError(Exception):

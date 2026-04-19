@@ -221,10 +221,31 @@ def _build_memory(settings: Settings, llm: Any = None) -> Any:
         except Exception as exc:
             logger.warning("Failed to load custom memory backend %r: %s", backend, exc)
             return None
+        bc = settings.buri
+        reflection_model = settings.memory.reflection_model
+        return BuriMemoryAdapter(
+            dsn=dsn,
+            prefetch_budget=settings.memory.prefetch_budget,
+            prefetch_limit=settings.memory.prefetch_limit,
+            prefetch_min_relevance=settings.memory.prefetch_min_relevance,
+            recency_half_life_days=settings.memory.recency_half_life_days,
+            session_search_truncate_chars=settings.memory.session_search_truncate_chars,
+            cluster_merge_threshold=bc.cluster_merge_threshold,
+            extraction_model=bc.extraction_model,
+            reflection_model=reflection_model,
+            min_confidence=bc.min_confidence,
+            session_summary_max_tokens=bc.session_summary_max_tokens,
+            supersession_cosine_threshold=bc.supersession_cosine_threshold,
+            llm=llm,
+        )
 
-    if adapter is not None:
-        adapter._rolling_summary_max_chars = settings.memory.rolling_summary_max_chars
-    return adapter
+    # Custom backend via fully-qualified class path
+    try:
+        cls = _import_class(backend)
+        return cls(path=settings.memory.path)
+    except Exception as exc:
+        logger.warning("Failed to load custom memory backend %r: %s", backend, exc)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -516,7 +537,7 @@ def _filter_tools(
         if persona_config.allowed_tools:
             allowed_groups = _expand_allowed_tools(set(persona_config.allowed_tools))
         if persona_config.forbidden_tools:
-            forbidden_groups = _expand_allowed_tools(set(persona_config.forbidden_tools))
+            forbidden_groups = set(persona_config.forbidden_tools)
 
     if allowed_groups or enabled_names:
         tools = [
@@ -1982,6 +2003,9 @@ async def _run_daemon(
         # NIU-571: Apply trust gradient constraints for thread-triggered tasks
         tools = _apply_trust_filter(tools, settings, triggered_by)
 
+        # NIU-571: Apply trust gradient constraints for thread-triggered tasks
+        tools = _apply_trust_filter(tools, settings, triggered_by)
+
         return RavnAgent(
             llm=llm,
             tools=tools,
@@ -2323,7 +2347,6 @@ def _wire_mimir_triggers(
             settings.dream_cycle.token_budget_usd,
             settings.dream_cycle.poll_interval_seconds,
         )
-
 
 def _wire_cron(
     drive_loop: Any,

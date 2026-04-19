@@ -8,10 +8,18 @@
 # Override with RAVN_CONFIG env var to point to a custom path.
 #
 # Environment variable override format (RAVN_ prefix, __ for nesting):
+#   RAVN_ANTHROPIC__API_KEY=...
 #   RAVN_LLM__MODEL=your-model-name
 #   RAVN_THREAD__ENABLED=true
 #
 # Precedence (highest to lowest): env vars > yaml file > defaults
+
+# ---------------------------------------------------------------------------
+# Anthropic API
+# ---------------------------------------------------------------------------
+# anthropic:
+#   api_key: ""          # prefer ANTHROPIC_API_KEY env var
+#   base_url: "https://api.anthropic.com"
 
 # ---------------------------------------------------------------------------
 # LLM

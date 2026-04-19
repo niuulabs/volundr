@@ -1712,6 +1712,50 @@ class MeshConfig(BaseModel):
     sleipnir: MeshSleipnirConfig = Field(default_factory=MeshSleipnirConfig)
 
 
+class BuriConfig(BaseModel):
+    """Búri knowledge memory substrate configuration (NIU-541).
+
+    Controls typed fact graph, proto-RWKV session state, and proto-vMF
+    embedding cluster behaviour.  Active when ``memory.backend = 'buri'``.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable Búri knowledge memory features.",
+    )
+    cluster_merge_threshold: float = Field(
+        default=0.15,
+        description=(
+            "Cosine distance below which a new fact is merged into an existing cluster "
+            "rather than creating a new one.  Lower = tighter clusters."
+        ),
+    )
+    extraction_model: str = Field(
+        default="",
+        description=(
+            "Model to use for fact extraction. Empty = use settings.memory.reflection_model."
+        ),
+    )
+    min_confidence: float = Field(
+        default=0.6,
+        description=(
+            "Facts classified with confidence below this threshold are stored as "
+            "'observation' regardless of the inferred type."
+        ),
+    )
+    session_summary_max_tokens: int = Field(
+        default=400,
+        description="Maximum tokens for the proto-RWKV rolling session summary.",
+    )
+    supersession_cosine_threshold: float = Field(
+        default=0.85,
+        description=(
+            "Cosine similarity threshold above which an existing fact is considered "
+            "superseded by a new one (requires type match + entity overlap)."
+        ),
+    )
+
+
 class BrowserbaseConfig(BaseModel):
     """Browserbase cloud browser configuration."""
 
@@ -2458,6 +2502,9 @@ class Settings(BaseSettings):
 
     # NIU-571: trust gradient — constrains wakefulness tool availability
     trust: TrustGradientConfig = Field(default_factory=TrustGradientConfig)
+
+    # NIU-541: Búri knowledge memory substrate
+    buri: BuriConfig = Field(default_factory=BuriConfig)
 
     # NIU-540: Mímir persistent knowledge base
     mimir: MimirConfig = Field(default_factory=MimirConfig)

@@ -110,7 +110,7 @@ class TestUpsertPageWithThreadMeta:
         """upsert_page accepts MimirPageMeta as meta kwarg without raising."""
         adapter = _make_adapter(tmp_path)
         meta = _thread_meta(thread_state=ThreadState.pulling)
-        content = "# Assigned Thread\nBeing worked on."
+        content = "# Pulling Thread\nBeing worked on."
 
         # Should not raise even though meta may be ignored internally
         await adapter.upsert_page(meta.path, content, meta=meta)

@@ -581,6 +581,19 @@ async def test_list_threads_filtered_by_blocked_state(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_threads_filtered_by_pulling_state(tmp_path: Path) -> None:
+    """ThreadState.pulling must work as a filter value."""
+    adapter = _make_adapter(tmp_path)
+    await adapter.create_thread(title="Open Thread 2")
+    await adapter.create_thread(title="Pulling Thread")
+    await adapter.update_thread_state("threads/pulling-thread", ThreadState.pulling)
+    pages = await adapter.list_threads(state=ThreadState.pulling)
+    titles = [p.meta.title for p in pages]
+    assert "Pulling Thread" in titles
+    assert "Open Thread 2" not in titles
+
+
+@pytest.mark.asyncio
 async def test_list_threads_respects_limit(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
     for i in range(5):
