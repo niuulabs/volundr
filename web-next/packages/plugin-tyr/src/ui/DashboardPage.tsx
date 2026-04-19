@@ -1,5 +1,5 @@
 import { useQueries } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useService } from '@niuulabs/plugin-sdk';
 import {
   KpiStrip,
@@ -55,6 +55,12 @@ export function DashboardPage() {
           Tyr · Dashboard
         </h2>
         {dispatcher?.running && <StateDot state="healthy" pulse />}
+        <Link
+          to="/tyr/plan"
+          className="niuu-ml-auto niuu-text-sm niuu-font-medium niuu-text-brand hover:niuu-underline"
+        >
+          New Saga Plan
+        </Link>
       </header>
 
       <KpiStrip aria-label="Tyr KPI metrics">

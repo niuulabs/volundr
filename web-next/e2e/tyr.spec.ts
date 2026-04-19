@@ -385,6 +385,10 @@ test('validation pill shows error when cycle is created', async ({ page }) => {
   const idA = ((await nodeA.getAttribute('data-testid')) ?? '').replace('workflow-node-', '');
   const idB = ((await nodeB.getAttribute('data-testid')) ?? '').replace('workflow-node-', '');
 
+  // Scroll nodes into view before interacting (newly added nodes may be off-screen)
+  await nodeA.scrollIntoViewIfNeeded();
+  await nodeB.scrollIntoViewIfNeeded();
+
   // Create edge A→B
   await nodeA.click({ force: true });
   await page.getByTestId(`connect-btn-${idA}`).click({ force: true });
