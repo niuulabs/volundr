@@ -4,8 +4,6 @@ import { cn } from '../../utils/cn';
 import type { EventSpec } from '@niuulabs/domain';
 import './EventPicker.css';
 
-const NEW_PREFIX = '__new__:';
-
 export interface EventPickerProps {
   /** Currently selected event name. */
   value: string;
@@ -186,6 +184,3 @@ export function EventPicker({
     </Popover.Root>
   );
 }
-
-// Re-export NEW_PREFIX for consumers who need to detect newly created events.
-export { NEW_PREFIX as EVENT_PICKER_NEW_PREFIX };

@@ -6,7 +6,19 @@
  * ToolRegistry mirrors the backend TOOL_REGISTRY in src/ravn/tools/.
  */
 
-import type { EventCatalog, ToolRegistry } from '@niuulabs/domain';
+import type { EventCatalog, ToolRegistry, PersonaRole } from '@niuulabs/domain';
+
+export const PERSONA_ROLE_ORDER: PersonaRole[] = [
+  'plan',
+  'build',
+  'verify',
+  'review',
+  'gate',
+  'audit',
+  'ship',
+  'index',
+  'report',
+];
 
 export const SEED_EVENT_CATALOG: EventCatalog = [
   { name: 'code.changed', schema: { file: 'string', diff: 'string' } },

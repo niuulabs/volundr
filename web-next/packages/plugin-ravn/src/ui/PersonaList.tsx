@@ -1,18 +1,7 @@
 import { PersonaAvatar } from '@niuulabs/ui';
 import type { PersonaRole } from '@niuulabs/domain';
 import { usePersonas } from './usePersonas';
-
-const ROLE_ORDER: PersonaRole[] = [
-  'plan',
-  'build',
-  'verify',
-  'review',
-  'gate',
-  'audit',
-  'ship',
-  'index',
-  'report',
-];
+import { PERSONA_ROLE_ORDER } from '../catalog';
 
 const ROLE_LABEL: Record<PersonaRole, string> = {
   plan: 'Plan',
@@ -57,9 +46,9 @@ export function PersonaList({ selectedName, onSelect }: PersonaListProps) {
     return <div className="niuu-p-3 niuu-text-sm niuu-text-text-muted">No personas found.</div>;
   }
 
-  // Group by role, following ROLE_ORDER
+  // Group by role, following PERSONA_ROLE_ORDER
   const byRole = new Map<PersonaRole, typeof data>();
-  for (const role of ROLE_ORDER) {
+  for (const role of PERSONA_ROLE_ORDER) {
     byRole.set(role, []);
   }
   for (const p of data) {
@@ -78,7 +67,7 @@ export function PersonaList({ selectedName, onSelect }: PersonaListProps) {
       className="niuu-flex niuu-flex-col niuu-overflow-y-auto niuu-h-full niuu-py-2"
       data-testid="persona-list"
     >
-      {ROLE_ORDER.map((role) => {
+      {PERSONA_ROLE_ORDER.map((role) => {
         const personas = byRole.get(role) ?? [];
         if (personas.length === 0) return null;
 

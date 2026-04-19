@@ -3,19 +3,7 @@ import { EventPicker, SchemaEditor, ToolPicker, ValidationSummary, MountChip } f
 import type { FieldType, PersonaRole } from '@niuulabs/domain';
 import type { PersonaDetail, PersonaCreateRequest, PersonaConsumesEvent } from '../ports';
 import { validatePersona } from './validatePersona';
-import { SEED_EVENT_CATALOG, SEED_TOOL_REGISTRY } from '../catalog';
-
-const ROLES: PersonaRole[] = [
-  'plan',
-  'build',
-  'verify',
-  'review',
-  'gate',
-  'audit',
-  'ship',
-  'index',
-  'report',
-];
+import { SEED_EVENT_CATALOG, SEED_TOOL_REGISTRY, PERSONA_ROLE_ORDER } from '../catalog';
 
 const PERMISSION_MODES = ['default', 'safe', 'loose'] as const;
 const FAN_IN_STRATEGIES = [
@@ -220,7 +208,7 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
               value={form.role}
               onChange={(e) => update('role', e.target.value as PersonaRole)}
             >
-              {ROLES.map((r) => (
+              {PERSONA_ROLE_ORDER.map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>

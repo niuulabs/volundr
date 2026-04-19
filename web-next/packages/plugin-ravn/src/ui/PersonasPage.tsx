@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Rune } from '@niuulabs/ui';
-import { useService } from '@niuulabs/plugin-sdk';
-import type { IPersonaStore, PersonaCreateRequest } from '../ports';
+import type { PersonaCreateRequest } from '../ports';
 import { PersonaList } from './PersonaList';
 import { PersonaForm } from './PersonaForm';
 import { PersonaYaml } from './PersonaYaml';
@@ -110,11 +109,6 @@ export function PersonasPage() {
 }
 
 function EmptyState() {
-  // Access the service to display the total count
-  const service = useService<IPersonaStore>('ravn.personas');
-  // We just provide a stable reference here; the count is shown in PersonaList
-  void service; // suppress unused warning
-
   return (
     <div
       className="niuu-flex niuu-flex-col niuu-items-center niuu-justify-center niuu-h-full niuu-gap-4 niuu-text-text-muted"

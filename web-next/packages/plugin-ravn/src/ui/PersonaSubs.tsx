@@ -239,9 +239,9 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
             fontSize={10}
             fontFamily="var(--font-mono)"
             fill="var(--color-text-muted)"
-            style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}
+            letterSpacing="0.06em"
           >
-            {label}
+            {label.toUpperCase()}
           </text>
         ))}
       </svg>
