@@ -11,12 +11,14 @@ import type { Saga, Phase } from './domain/saga';
 import type { DispatcherState } from './domain/dispatcher';
 import type { SessionInfo } from './domain/session';
 import type { TrackerProject, TrackerMilestone, TrackerIssue } from './domain/tracker';
+import type { Workflow } from './domain/workflow';
 
 // Re-export domain types so consumers can import from a single location.
 export type { Saga, Phase } from './domain/saga';
 export type { DispatcherState, DispatchRule } from './domain/dispatcher';
 export type { SessionInfo, TyrSessionStatus } from './domain/session';
 export type { TrackerProject, TrackerMilestone, TrackerIssue, RepoInfo } from './domain/tracker';
+export type { Workflow } from './domain/workflow';
 
 // ---------------------------------------------------------------------------
 // ITyrService — saga lifecycle and planning
@@ -178,4 +180,18 @@ export interface ITyrIntegrationService {
   toggleIntegration(id: string, enabled: boolean): Promise<IntegrationConnection>;
   testConnection(id: string): Promise<ConnectionTestResult>;
   getTelegramSetup(): Promise<TelegramSetupResult>;
+}
+
+// ---------------------------------------------------------------------------
+// IWorkflowService — workflow DAG CRUD
+// ---------------------------------------------------------------------------
+
+/**
+ * Workflow management service — list, fetch, save, and delete Workflow DAGs.
+ */
+export interface IWorkflowService {
+  listWorkflows(): Promise<Workflow[]>;
+  getWorkflow(id: string): Promise<Workflow | null>;
+  saveWorkflow(workflow: Workflow): Promise<Workflow>;
+  deleteWorkflow(id: string): Promise<void>;
 }

@@ -16,6 +16,7 @@ import {
   createMockDispatcherService,
   createMockTyrSessionService,
   createMockTrackerService,
+  createMockWorkflowService,
   buildTyrHttpAdapter,
   buildDispatcherHttpAdapter,
   buildTyrSessionHttpAdapter,
@@ -124,6 +125,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const trackerService = tyrClient
     ? buildTrackerHttpAdapter(tyrClient)
     : createMockTrackerService();
+  const workflowService = createMockWorkflowService();
 
   return {
     hello,
@@ -131,6 +133,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     'tyr.dispatcher': dispatcherService,
     'tyr.sessions': tyrSessionService,
     'tyr.tracker': trackerService,
+    workflows: workflowService,
     'ravn.personas': ravnPersonas,
     'ravn.ravens': ravnRavens,
     'ravn.sessions': ravnSessions,
