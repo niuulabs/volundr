@@ -138,11 +138,6 @@ interface RawTrigger {
   path?: string;
 }
 
-interface RawBudget {
-  spent_usd: number;
-  cap_usd: number;
-  warn_at: number;
-}
 
 // ---------------------------------------------------------------------------
 // Transform — persona
@@ -205,11 +200,11 @@ function toRavenMount(raw: RawRavenMount): RavenMount {
   return { name: raw.name, role: raw.role, priority: raw.priority };
 }
 
-function toBudgetState(raw: RawRavenBudget | RawBudget): BudgetState {
+function toBudgetState(raw: RawRavenBudget): BudgetState {
   return {
-    spentUsd: (raw as RawRavenBudget).spent_usd,
-    capUsd: (raw as RawRavenBudget).cap_usd,
-    warnAt: (raw as RawRavenBudget).warn_at,
+    spentUsd: raw.spent_usd,
+    capUsd: raw.cap_usd,
+    warnAt: raw.warn_at,
   };
 }
 

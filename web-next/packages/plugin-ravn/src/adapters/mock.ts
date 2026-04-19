@@ -467,6 +467,8 @@ function createMockPersonaStore(): IPersonaStore {
         permissionMode: req.permissionMode,
         allowedTools: req.allowedTools,
         iterationBudget: req.iterationBudget,
+        producesEvent: req.producesEventType,
+        consumesEvents: req.consumesEventTypes,
         systemPromptTemplate: req.systemPromptTemplate,
         forbiddenTools: req.forbiddenTools,
         llm: {
@@ -474,6 +476,9 @@ function createMockPersonaStore(): IPersonaStore {
           thinkingEnabled: req.llmThinkingEnabled,
           maxTokens: req.llmMaxTokens,
         },
+        produces: { eventType: req.producesEventType, schemaDef: {} },
+        consumes: { eventTypes: req.consumesEventTypes, injects: req.consumesInjects },
+        fanIn: { strategy: req.fanInStrategy, contributesTo: req.fanInContributesTo },
       };
       customPersonas[idx] = updated;
       return updated;

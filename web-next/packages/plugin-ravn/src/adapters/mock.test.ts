@@ -140,6 +140,48 @@ describe('mock persona store — updatePersona', () => {
     expect(updated.iterationBudget).toBe(20);
   });
 
+  it('updates produces/consumes/fanIn fields', async () => {
+    await svc.personas.createPersona({
+      name: 'event-driven',
+      systemPromptTemplate: 'base',
+      allowedTools: [],
+      forbiddenTools: [],
+      permissionMode: 'read-only',
+      iterationBudget: 5,
+      llmPrimaryAlias: 'balanced',
+      llmThinkingEnabled: false,
+      llmMaxTokens: 0,
+      producesEventType: 'original.event',
+      consumesEventTypes: ['a'],
+      consumesInjects: ['x'],
+      fanInStrategy: 'first',
+      fanInContributesTo: 'group-a',
+    });
+    const updated = await svc.personas.updatePersona('event-driven', {
+      name: 'event-driven',
+      systemPromptTemplate: 'base',
+      allowedTools: [],
+      forbiddenTools: [],
+      permissionMode: 'read-only',
+      iterationBudget: 5,
+      llmPrimaryAlias: 'balanced',
+      llmThinkingEnabled: false,
+      llmMaxTokens: 0,
+      producesEventType: 'updated.event',
+      consumesEventTypes: ['b', 'c'],
+      consumesInjects: ['y'],
+      fanInStrategy: 'merge',
+      fanInContributesTo: 'group-b',
+    });
+    expect(updated.producesEvent).toBe('updated.event');
+    expect(updated.consumesEvents).toEqual(['b', 'c']);
+    expect(updated.produces.eventType).toBe('updated.event');
+    expect(updated.consumes.eventTypes).toEqual(['b', 'c']);
+    expect(updated.consumes.injects).toEqual(['y']);
+    expect(updated.fanIn.strategy).toBe('merge');
+    expect(updated.fanIn.contributesTo).toBe('group-b');
+  });
+
   it('throws when updating nonexistent or builtin persona', async () => {
     await expect(
       svc.personas.updatePersona('coding-agent', {
