@@ -8,6 +8,7 @@ import { volundrPlugin } from '@niuulabs/plugin-volundr';
 import { definePlugin, type PluginDescriptor } from '@niuulabs/plugin-sdk';
 import { ShowcasePage } from './showcase/ShowcasePage';
 import { UIShowcasePage } from './UIShowcasePage';
+import { ChatShowcasePage } from './showcase/ChatShowcasePage';
 
 const showcasePlugin = definePlugin({
   id: 'showcase',
@@ -37,6 +38,20 @@ const uiShowcasePlugin = definePlugin({
   ],
 });
 
+const chatShowcasePlugin = definePlugin({
+  id: 'chat-showcase',
+  rune: 'ᚷ',
+  title: 'Chat',
+  subtitle: 'SessionChat demo',
+  routes: (rootRoute) => [
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/chat-showcase',
+      component: ChatShowcasePage,
+    }),
+  ],
+});
+
 export const plugins: PluginDescriptor[] = [
   loginPlugin,
   helloPlugin,
@@ -46,4 +61,5 @@ export const plugins: PluginDescriptor[] = [
   ravnPlugin,
   volundrPlugin,
   uiShowcasePlugin,
+  chatShowcasePlugin,
 ];
