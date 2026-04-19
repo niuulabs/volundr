@@ -1,4 +1,5 @@
 import { createMockHelloService, createHttpHelloService } from '@niuulabs/plugin-hello';
+import { createMockRavnService, createHttpRavnService } from '@niuulabs/plugin-ravn';
 import { createApiClient } from '@niuulabs/query';
 import type { NiuuConfig, ServicesMap } from '@niuulabs/plugin-sdk';
 
@@ -9,7 +10,14 @@ export function buildServices(config: NiuuConfig): ServicesMap {
       ? createHttpHelloService(createApiClient(helloConfig.baseUrl))
       : createMockHelloService();
 
+  const ravnConfig = config.services.ravn;
+  const ravnService =
+    ravnConfig?.mode === 'http' && ravnConfig.baseUrl
+      ? createHttpRavnService(createApiClient(ravnConfig.baseUrl))
+      : createMockRavnService();
+
   return {
     hello: helloService,
+    ravn: ravnService,
   };
 }
