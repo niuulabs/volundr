@@ -64,7 +64,10 @@ export function SettingsIndexPage() {
           <button
             key={item.id}
             type="button"
-            onClick={() => void router.navigate({ to: `/tyr/settings/${item.id}` as any })}
+            onClick={() => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              void router.navigate({ to: `/tyr/settings/${item.id}` as any });
+            }}
             className="niuu-block niuu-w-full niuu-text-left niuu-p-4 niuu-border niuu-border-border niuu-rounded-md hover:niuu-bg-bg-secondary niuu-transition-colors"
             role="listitem"
           >
