@@ -3,6 +3,8 @@ import './ConfidenceBar.css';
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low';
 
+const LEVEL_VALUE: Record<ConfidenceLevel, number> = { high: 100, medium: 60, low: 25 };
+
 export interface ConfidenceBarProps {
   level: ConfidenceLevel;
   className?: string;
@@ -14,7 +16,7 @@ export function ConfidenceBar({ level, className }: ConfidenceBarProps) {
       className={cn('niuu-conf-bar', `niuu-conf-bar--${level}`, className)}
       role="meter"
       aria-label={`confidence: ${level}`}
-      aria-valuenow={level === 'high' ? 100 : level === 'medium' ? 60 : 25}
+      aria-valuenow={LEVEL_VALUE[level]}
       aria-valuemin={0}
       aria-valuemax={100}
     >

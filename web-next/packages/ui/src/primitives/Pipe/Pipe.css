@@ -45,7 +45,7 @@
 }
 
 .niuu-pipe__cell--gate {
-  background: #a855f7;
+  background: var(--color-gate);
 }
 
 .niuu-pipe__cell--pend {

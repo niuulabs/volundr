@@ -54,9 +54,9 @@
 }
 
 .niuu-status-badge--gate {
-  color: #c4b5fd;
-  background: color-mix(in srgb, #a855f7 15%, transparent);
-  border-color: color-mix(in srgb, #a855f7 35%, transparent);
+  color: var(--color-gate-fg);
+  background: var(--color-gate-bg);
+  border-color: var(--color-gate-bo);
 }
 
 /* ── Pulse (for active states) ─────────────────────────── */
