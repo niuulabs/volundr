@@ -17,9 +17,7 @@ export const RightDefault: Story = {
         <button>Open right drawer</button>
       </DrawerTrigger>
       <DrawerContent title="Details" description="Review and edit item details.">
-        <p style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
-          Drawer content goes here.
-        </p>
+        <p style={{ color: 'var(--color-text-secondary)', margin: 0 }}>Drawer content goes here.</p>
         <div style={{ marginTop: 'var(--space-4)' }}>
           <DrawerClose asChild>
             <button>Close</button>
