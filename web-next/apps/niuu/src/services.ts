@@ -1,4 +1,5 @@
 import { createMockHelloService, createHttpHelloService } from '@niuulabs/plugin-hello';
+import { createMockVolundrService } from '@niuulabs/plugin-volundr';
 import { createApiClient } from '@niuulabs/query';
 import type { NiuuConfig, ServicesMap } from '@niuulabs/plugin-sdk';
 
@@ -11,5 +12,6 @@ export function buildServices(config: NiuuConfig): ServicesMap {
 
   return {
     hello: helloService,
+    volundr: createMockVolundrService(),
   };
 }
