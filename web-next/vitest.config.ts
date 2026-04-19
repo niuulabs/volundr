@@ -11,6 +11,7 @@ export default defineConfig({
       '@niuulabs/design-tokens': resolve(__dirname, 'packages/design-tokens/src/index.ts'),
       '@niuulabs/domain': resolve(__dirname, 'packages/domain/src/index.ts'),
       '@niuulabs/plugin-hello': resolve(__dirname, 'packages/plugin-hello/src/index.tsx'),
+      '@niuulabs/plugin-tyr': resolve(__dirname, 'packages/plugin-tyr/src/index.ts'),
       '@niuulabs/plugin-login': resolve(__dirname, 'packages/plugin-login/src/index.ts'),
       '@niuulabs/plugin-sdk': resolve(__dirname, 'packages/plugin-sdk/src/index.ts'),
       '@niuulabs/query': resolve(__dirname, 'packages/query/src/index.ts'),

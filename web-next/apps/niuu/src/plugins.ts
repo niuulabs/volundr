@@ -4,6 +4,7 @@ import { loginPlugin } from '@niuulabs/plugin-login';
 import { ravnPlugin } from '@niuulabs/plugin-ravn';
 import { mimirPlugin } from '@niuulabs/plugin-mimir';
 import { observatoryPlugin } from '@niuulabs/plugin-observatory';
+import { tyrPlugin } from '@niuulabs/plugin-tyr';
 import { volundrPlugin } from '@niuulabs/plugin-volundr';
 import { definePlugin, type PluginDescriptor } from '@niuulabs/plugin-sdk';
 import { ShowcasePage } from './showcase/ShowcasePage';
@@ -59,6 +60,7 @@ export const plugins: PluginDescriptor[] = [
   mimirPlugin,
   observatoryPlugin,
   ravnPlugin,
+  tyrPlugin,
   volundrPlugin,
   uiShowcasePlugin,
   chatShowcasePlugin,
