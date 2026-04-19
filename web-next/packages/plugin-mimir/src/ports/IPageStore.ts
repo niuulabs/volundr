@@ -1,4 +1,5 @@
 import type { PageMeta, Page, SearchResult } from '../domain/page';
+import type { Source, OriginType } from '../domain/source';
 import type { MimirStats } from '../domain/api-types';
 
 export type SearchMode = 'fts' | 'semantic' | 'hybrid';
@@ -6,8 +7,8 @@ export type SearchMode = 'fts' | 'semantic' | 'hybrid';
 /**
  * Port: IPageStore
  *
- * CRUD and search over compiled pages. A page store is scoped to one or more
- * mounts depending on the adapter implementation.
+ * CRUD and search over compiled pages and their raw source records. A page
+ * store is scoped to one or more mounts depending on the adapter.
  */
 export interface IPageStore {
   /** Fleet-wide statistics (page count, categories, health). */
@@ -35,4 +36,15 @@ export interface IPageStore {
    * Defaults to hybrid mode.
    */
   search(query: string, mode?: SearchMode): Promise<SearchResult[]>;
+
+  /**
+   * List raw source records, optionally filtered by origin type and/or mount.
+   * Sources are the append-only ingest records that pages are compiled from.
+   */
+  listSources(options?: { originType?: OriginType; mountName?: string }): Promise<Source[]>;
+
+  /**
+   * Get the raw source records attributed to a specific page.
+   */
+  getPageSources(path: string): Promise<Source[]>;
 }
