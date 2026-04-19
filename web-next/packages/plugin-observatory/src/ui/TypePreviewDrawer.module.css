@@ -1,0 +1,123 @@
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 120px;
+}
+
+.emptyText {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+  font-style: italic;
+}
+
+.drawer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.shapeBox {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.headerInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.category {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: -0.015em;
+  margin-top: var(--space-1);
+}
+
+.rune {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--color-brand);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--color-brand) 45%, transparent);
+}
+
+.id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: color-mix(in srgb, var(--color-brand) 70%, var(--color-text-muted));
+  margin-top: var(--space-1);
+}
+
+.description {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sectionHead {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-muted);
+}
+
+.chipGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.fieldList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.fieldLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}

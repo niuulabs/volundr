@@ -1,5 +1,6 @@
 import { Rune, StateDot, Chip } from '@niuulabs/ui';
 import { useRegistry } from './useRegistry';
+import { RegistryEditor } from './RegistryEditor';
 import styles from './ObservatoryPage.module.css';
 
 export function ObservatoryPage() {
@@ -30,21 +31,23 @@ export function ObservatoryPage() {
       )}
 
       {data && (
-        <div className={styles.stats}>
-          <div className={styles.stat}>
-            <span className={styles.statLabel}>entity types</span>
-            <Chip tone="brand">{data.types.length}</Chip>
+        <>
+          <div className={styles.stats}>
+            <div className={styles.stat}>
+              <span className={styles.statLabel}>entity types</span>
+              <Chip tone="brand">{data.types.length}</Chip>
+            </div>
+            <div className={styles.stat}>
+              <span className={styles.statLabel}>registry version</span>
+              <Chip tone="default">v{data.version}</Chip>
+            </div>
           </div>
-          <div className={styles.stat}>
-            <span className={styles.statLabel}>registry version</span>
-            <Chip tone="default">v{data.version}</Chip>
-          </div>
-        </div>
-      )}
 
-      <p className={styles.placeholder}>
-        Canvas and registry editor arrive in subsequent tickets (NIU-664, NIU-665).
-      </p>
+          <div className={styles.editorWrapper}>
+            <RegistryEditor registry={data} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -1,0 +1,43 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.copyBtn {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+  min-width: 56px;
+}
+
+.copyBtn:hover {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+.code {
+  margin: 0;
+  padding: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  white-space: pre;
+}

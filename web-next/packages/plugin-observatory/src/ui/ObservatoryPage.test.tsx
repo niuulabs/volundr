@@ -40,9 +40,15 @@ describe('ObservatoryPage', () => {
     expect(screen.getByText('registry version')).toBeInTheDocument();
   });
 
-  it('renders placeholder note', async () => {
+  it('renders the RegistryEditor after data loads', async () => {
     wrap(<ObservatoryPage />);
-    await waitFor(() => expect(screen.getByText(/Canvas and registry editor/)).toBeInTheDocument());
+    await waitFor(
+      () => expect(screen.getByText('Entity type registry')).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    expect(screen.getByRole('tab', { name: 'Types' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Containment' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Json' })).toBeInTheDocument();
   });
 
   it('shows error state when the registry service throws', async () => {
