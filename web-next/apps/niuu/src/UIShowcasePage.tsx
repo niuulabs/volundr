@@ -33,7 +33,7 @@ export function UIShowcasePage() {
             <PersonaAvatar
               key={role}
               role={role}
-              letter={role[0].toUpperCase()}
+              letter={(role[0] ?? role).toUpperCase()}
               size={32}
             />
           ))}
