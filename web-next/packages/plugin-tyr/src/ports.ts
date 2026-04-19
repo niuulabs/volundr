@@ -179,3 +179,25 @@ export interface ITyrIntegrationService {
   testConnection(id: string): Promise<ConnectionTestResult>;
   getTelegramSetup(): Promise<TelegramSetupResult>;
 }
+
+// ---------------------------------------------------------------------------
+// IDispatchBus — Sleipnir emit adapter
+// ---------------------------------------------------------------------------
+
+export interface DispatchResult {
+  /** IDs of raids that were successfully queued for execution. */
+  dispatched: string[];
+  /** Raids that could not be dispatched and why. */
+  failed: { raidId: string; reason: string }[];
+}
+
+/**
+ * Sleipnir dispatch bus port.
+ *
+ * Emits raid dispatch events to the autonomous execution queue.
+ * Implementations: RabbitMQ (production), in-memory mock (dev/test).
+ */
+export interface IDispatchBus {
+  dispatch(raidId: string): Promise<void>;
+  dispatchBatch(raidIds: string[]): Promise<DispatchResult>;
+}
