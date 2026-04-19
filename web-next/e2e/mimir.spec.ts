@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test('navigate to /mimir renders the page header', async ({ page }) => {
   await page.goto('/mimir');
   await expect(page.getByText('Mímir').first()).toBeVisible();
-  await expect(page.getByText('the well of knowledge')).toBeVisible();
+  await expect(page.getByText('the well of knowledge').first()).toBeVisible();
 });
 
 test('/mimir renders tab navigation', async ({ page }) => {
