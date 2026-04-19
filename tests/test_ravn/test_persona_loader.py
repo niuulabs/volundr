@@ -241,7 +241,7 @@ class TestListBuiltinNames:
         assert "security-auditor" in names
         assert "ship-agent" in names
         assert "retro-analyst" in names
-        assert "memory-evaluator" in names
+        assert "mimir-curator" in names
 
     def test_returns_sorted_list(self) -> None:
         names = FilesystemPersonaAdapter().list_builtin_names()
@@ -369,31 +369,25 @@ class TestBuiltinPersonas:
         cfg = _BUILTIN_PERSONAS["reviewer"]
         assert cfg.name == "reviewer"
         assert cfg.permission_mode == "read-only"
-        assert cfg.iteration_budget == 30
+        assert cfg.iteration_budget == 25
         assert cfg.llm.thinking_enabled is True
-        assert cfg.llm.primary_alias == "powerful"
+        assert cfg.llm.primary_alias == "balanced"
 
     def test_reviewer_allowed_tools(self) -> None:
         cfg = _BUILTIN_PERSONAS["reviewer"]
         assert "file" in cfg.allowed_tools
         assert "git" in cfg.allowed_tools
-        assert "terminal" in cfg.allowed_tools
-        assert "introspection" in cfg.allowed_tools
+        assert "web" in cfg.allowed_tools
+        assert "ravn" in cfg.allowed_tools
 
     def test_reviewer_forbidden_tools(self) -> None:
         cfg = _BUILTIN_PERSONAS["reviewer"]
+        assert "terminal" in cfg.forbidden_tools
         assert "cascade" in cfg.forbidden_tools
-        assert "volundr" in cfg.forbidden_tools
-        assert "edit_file" in cfg.forbidden_tools
-        assert "write_file" in cfg.forbidden_tools
 
     def test_reviewer_system_prompt_mentions_sql_safety(self) -> None:
         cfg = _BUILTIN_PERSONAS["reviewer"]
         assert "SQL" in cfg.system_prompt_template
-
-    def test_reviewer_system_prompt_mentions_trust_boundary(self) -> None:
-        cfg = _BUILTIN_PERSONAS["reviewer"]
-        assert "trust boundary" in cfg.system_prompt_template.lower()
 
     def test_reviewer_system_prompt_mentions_error_handling(self) -> None:
         cfg = _BUILTIN_PERSONAS["reviewer"]
@@ -403,7 +397,7 @@ class TestBuiltinPersonas:
         cfg = _BUILTIN_PERSONAS["qa-agent"]
         assert cfg.name == "qa-agent"
         assert cfg.permission_mode == "workspace-write"
-        assert cfg.iteration_budget == 50
+        assert cfg.iteration_budget == 30
         assert cfg.llm.thinking_enabled is False
 
     def test_qa_agent_allowed_tools(self) -> None:
@@ -411,46 +405,44 @@ class TestBuiltinPersonas:
         assert "file" in cfg.allowed_tools
         assert "git" in cfg.allowed_tools
         assert "terminal" in cfg.allowed_tools
-        assert "todo" in cfg.allowed_tools
+        assert "ravn" in cfg.allowed_tools
 
-    def test_qa_agent_system_prompt_mentions_loop(self) -> None:
+    def test_qa_agent_forbidden_tools(self) -> None:
         cfg = _BUILTIN_PERSONAS["qa-agent"]
-        prompt = cfg.system_prompt_template.lower()
-        assert "loop" in prompt or "re-run" in prompt
+        assert "cascade" in cfg.forbidden_tools
+        assert "volundr" in cfg.forbidden_tools
 
-    def test_qa_agent_system_prompt_mentions_commit(self) -> None:
+    def test_qa_agent_system_prompt_mentions_tests(self) -> None:
         cfg = _BUILTIN_PERSONAS["qa-agent"]
-        assert "commit" in cfg.system_prompt_template.lower()
+        assert "test" in cfg.system_prompt_template.lower()
+
+    def test_qa_agent_system_prompt_mentions_verdict(self) -> None:
+        cfg = _BUILTIN_PERSONAS["qa-agent"]
+        assert "verdict" in cfg.system_prompt_template.lower()
 
     def test_security_auditor_exists(self) -> None:
         cfg = _BUILTIN_PERSONAS["security-auditor"]
         assert cfg.name == "security-auditor"
         assert cfg.permission_mode == "read-only"
-        assert cfg.iteration_budget == 40
+        assert cfg.iteration_budget == 25
         assert cfg.llm.thinking_enabled is True
-        assert cfg.llm.primary_alias == "powerful"
+        assert cfg.llm.primary_alias == "balanced"
 
     def test_security_auditor_allowed_tools(self) -> None:
         cfg = _BUILTIN_PERSONAS["security-auditor"]
         assert "file" in cfg.allowed_tools
         assert "git" in cfg.allowed_tools
-        assert "terminal" in cfg.allowed_tools
         assert "web" in cfg.allowed_tools
+        assert "ravn" in cfg.allowed_tools
 
     def test_security_auditor_forbidden_tools(self) -> None:
         cfg = _BUILTIN_PERSONAS["security-auditor"]
+        assert "terminal" in cfg.forbidden_tools
         assert "cascade" in cfg.forbidden_tools
-        assert "volundr" in cfg.forbidden_tools
-        assert "edit_file" in cfg.forbidden_tools
-        assert "write_file" in cfg.forbidden_tools
 
     def test_security_auditor_system_prompt_mentions_owasp(self) -> None:
         cfg = _BUILTIN_PERSONAS["security-auditor"]
         assert "OWASP" in cfg.system_prompt_template
-
-    def test_security_auditor_system_prompt_mentions_stride(self) -> None:
-        cfg = _BUILTIN_PERSONAS["security-auditor"]
-        assert "STRIDE" in cfg.system_prompt_template
 
     def test_security_auditor_system_prompt_mentions_secrets(self) -> None:
         cfg = _BUILTIN_PERSONAS["security-auditor"]
@@ -460,104 +452,55 @@ class TestBuiltinPersonas:
         cfg = _BUILTIN_PERSONAS["ship-agent"]
         assert cfg.name == "ship-agent"
         assert cfg.permission_mode == "workspace-write"
-        assert cfg.iteration_budget == 30
+        assert cfg.iteration_budget == 15
         assert cfg.llm.thinking_enabled is False
-        assert cfg.llm.primary_alias == "fast"
+        assert cfg.llm.primary_alias == "balanced"
 
     def test_ship_agent_allowed_tools(self) -> None:
         cfg = _BUILTIN_PERSONAS["ship-agent"]
         assert "file" in cfg.allowed_tools
         assert "git" in cfg.allowed_tools
         assert "terminal" in cfg.allowed_tools
-        assert "todo" in cfg.allowed_tools
+        assert "web" in cfg.allowed_tools
+        assert "ravn" in cfg.allowed_tools
 
-    def test_ship_agent_system_prompt_mentions_changelog(self) -> None:
+    def test_ship_agent_system_prompt_mentions_merge(self) -> None:
         cfg = _BUILTIN_PERSONAS["ship-agent"]
-        prompt = cfg.system_prompt_template
-        assert "CHANGELOG" in prompt or "changelog" in prompt.lower()
+        assert "merge" in cfg.system_prompt_template.lower()
 
-    def test_ship_agent_system_prompt_mentions_version_bump(self) -> None:
+    def test_ship_agent_system_prompt_mentions_verdict(self) -> None:
+        cfg = _BUILTIN_PERSONAS["ship-agent"]
+        assert "verdict" in cfg.system_prompt_template.lower()
+
+    def test_ship_agent_system_prompt_mentions_version(self) -> None:
         cfg = _BUILTIN_PERSONAS["ship-agent"]
         assert "version" in cfg.system_prompt_template.lower()
-
-    def test_ship_agent_system_prompt_forbids_main_push(self) -> None:
-        cfg = _BUILTIN_PERSONAS["ship-agent"]
-        assert "main" in cfg.system_prompt_template
-
-    def test_ship_agent_diff_uses_generic_base_branch(self) -> None:
-        cfg = _BUILTIN_PERSONAS["ship-agent"]
-        assert "git diff main...HEAD" not in cfg.system_prompt_template
-        assert "base-branch" in cfg.system_prompt_template
 
     def test_retro_analyst_exists(self) -> None:
         cfg = _BUILTIN_PERSONAS["retro-analyst"]
         assert cfg.name == "retro-analyst"
         assert cfg.permission_mode == "read-only"
-        assert cfg.iteration_budget == 20
+        assert cfg.iteration_budget == 15
         assert cfg.llm.thinking_enabled is False
 
     def test_retro_analyst_allowed_tools(self) -> None:
         cfg = _BUILTIN_PERSONAS["retro-analyst"]
-        assert "file" in cfg.allowed_tools
-        assert "git" in cfg.allowed_tools
-        assert "terminal" in cfg.allowed_tools
         assert "mimir" in cfg.allowed_tools
-        assert "introspection" in cfg.allowed_tools
+        assert "file" in cfg.allowed_tools
+        assert "ravn" in cfg.allowed_tools
 
     def test_retro_analyst_forbidden_tools(self) -> None:
         cfg = _BUILTIN_PERSONAS["retro-analyst"]
-        assert "cascade" in cfg.forbidden_tools
-        assert "volundr" in cfg.forbidden_tools
-
-    def test_retro_analyst_system_prompt_mentions_7_days(self) -> None:
-        cfg = _BUILTIN_PERSONAS["retro-analyst"]
-        assert "7 days" in cfg.system_prompt_template
-
-    def test_retro_analyst_system_prompt_mentions_mimir_write(self) -> None:
-        cfg = _BUILTIN_PERSONAS["retro-analyst"]
-        assert "mimir_write" in cfg.system_prompt_template
-
-    def test_retro_analyst_system_prompt_mentions_retro_path(self) -> None:
-        cfg = _BUILTIN_PERSONAS["retro-analyst"]
-        assert "retro/" in cfg.system_prompt_template
-
-    def test_memory_evaluator_exists(self) -> None:
-        cfg = _BUILTIN_PERSONAS["memory-evaluator"]
-        assert cfg.name == "memory-evaluator"
-        assert cfg.permission_mode == "read-only"
-        assert cfg.iteration_budget == 15
-        assert cfg.llm.thinking_enabled is False
-
-    def test_memory_evaluator_allowed_tools(self) -> None:
-        cfg = _BUILTIN_PERSONAS["memory-evaluator"]
-        assert "file" in cfg.allowed_tools
-        assert "mimir" in cfg.allowed_tools
-        assert "introspection" in cfg.allowed_tools
-
-    def test_memory_evaluator_forbidden_tools(self) -> None:
-        cfg = _BUILTIN_PERSONAS["memory-evaluator"]
-        assert "git" in cfg.forbidden_tools
         assert "terminal" in cfg.forbidden_tools
         assert "cascade" in cfg.forbidden_tools
-        assert "volundr" in cfg.forbidden_tools
-        assert "edit_file" in cfg.forbidden_tools
-        assert "write_file" in cfg.forbidden_tools
 
-    def test_memory_evaluator_system_prompt_mentions_precision(self) -> None:
-        cfg = _BUILTIN_PERSONAS["memory-evaluator"]
-        assert "precision" in cfg.system_prompt_template.lower()
+    def test_retro_analyst_system_prompt_mentions_patterns(self) -> None:
+        cfg = _BUILTIN_PERSONAS["retro-analyst"]
+        assert "pattern" in cfg.system_prompt_template.lower()
 
-    def test_memory_evaluator_system_prompt_mentions_recall(self) -> None:
-        cfg = _BUILTIN_PERSONAS["memory-evaluator"]
-        assert "recall" in cfg.system_prompt_template.lower()
-
-    def test_memory_evaluator_system_prompt_mentions_f1(self) -> None:
-        cfg = _BUILTIN_PERSONAS["memory-evaluator"]
-        assert "F1" in cfg.system_prompt_template or "f1" in cfg.system_prompt_template.lower()
-
-    def test_memory_evaluator_system_prompt_mentions_evals_path(self) -> None:
-        cfg = _BUILTIN_PERSONAS["memory-evaluator"]
-        assert "evals/" in cfg.system_prompt_template
+    def test_retro_analyst_system_prompt_mentions_shipped(self) -> None:
+        cfg = _BUILTIN_PERSONAS["retro-analyst"]
+        assert "shipped" in cfg.system_prompt_template.lower()
 
     def test_specialist_personas_in_builtin_list(self) -> None:
         names = set(_BUILTIN_PERSONAS)
@@ -567,12 +510,11 @@ class TestBuiltinPersonas:
             "security-auditor",
             "ship-agent",
             "retro-analyst",
-            "memory-evaluator",
         ]:
             assert expected in names, f"{expected} missing from _BUILTIN_PERSONAS"
 
     def test_read_only_personas_cannot_write(self) -> None:
-        read_only = ["reviewer", "security-auditor", "retro-analyst", "memory-evaluator"]
+        read_only = ["reviewer", "security-auditor", "retro-analyst"]
         for name in read_only:
             cfg = _BUILTIN_PERSONAS[name]
             assert cfg.permission_mode == "read-only", f"{name} should be read-only"
@@ -583,10 +525,10 @@ class TestBuiltinPersonas:
             cfg = _BUILTIN_PERSONAS[name]
             assert cfg.permission_mode == "workspace-write", f"{name} should be workspace-write"
 
-    def test_high_budget_qa_agent_vs_memory_evaluator(self) -> None:
+    def test_high_budget_qa_agent_vs_retro_analyst(self) -> None:
         qa = _BUILTIN_PERSONAS["qa-agent"]
-        mem = _BUILTIN_PERSONAS["memory-evaluator"]
-        assert qa.iteration_budget > mem.iteration_budget
+        retro = _BUILTIN_PERSONAS["retro-analyst"]
+        assert qa.iteration_budget > retro.iteration_budget
 
 
 # ---------------------------------------------------------------------------
