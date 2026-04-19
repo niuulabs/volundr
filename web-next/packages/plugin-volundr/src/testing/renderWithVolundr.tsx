@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { render, type RenderResult } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import {
@@ -22,7 +22,7 @@ export interface RenderWithVolundrOptions {
 export function renderWithVolundr(
   ui: React.ReactNode,
   options: RenderWithVolundrOptions = {},
-) {
+): RenderResult {
   const {
     service = createMockVolundrService(),
     clusterAdapter = createMockClusterAdapter(),
