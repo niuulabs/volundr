@@ -16,26 +16,40 @@ function wrap(services: Record<string, unknown>) {
   };
 }
 
-describe('RavnPage', () => {
-  it('renders the page title', async () => {
+describe('RavnPage (PersonasPage)', () => {
+  it('renders the ravn personas page', async () => {
     render(<RavnPage />, {
       wrapper: wrap({ 'ravn.personas': createMockPersonaStore() }),
     });
-    expect(screen.getByText(/ravn/)).toBeInTheDocument();
+    expect(screen.getByTestId('personas-page')).toBeInTheDocument();
   });
 
-  it('shows loading state then persona count', async () => {
+  it('shows the ravn rune glyph', () => {
     render(<RavnPage />, {
       wrapper: wrap({ 'ravn.personas': createMockPersonaStore() }),
     });
-    await waitFor(() => expect(screen.getByText(/21 personas loaded/)).toBeInTheDocument());
+    expect(screen.getAllByText('ᚱ')[0]).toBeInTheDocument();
   });
 
-  it('renders the Ravn rune glyph', async () => {
+  it('shows ravn subtitle text', () => {
     render(<RavnPage />, {
       wrapper: wrap({ 'ravn.personas': createMockPersonaStore() }),
     });
-    expect(screen.getByText('ᚱ')).toBeInTheDocument();
+    expect(screen.getByText(/ravn · personas · ravens · sessions/)).toBeInTheDocument();
+  });
+
+  it('loads and displays personas list', async () => {
+    render(<RavnPage />, {
+      wrapper: wrap({ 'ravn.personas': createMockPersonaStore() }),
+    });
+    await waitFor(() => expect(screen.getByTestId('persona-list')).toBeInTheDocument());
+  });
+
+  it('shows empty state before a persona is selected', () => {
+    render(<RavnPage />, {
+      wrapper: wrap({ 'ravn.personas': createMockPersonaStore() }),
+    });
+    expect(screen.getByTestId('personas-empty-state')).toBeInTheDocument();
   });
 
   it('shows error state when service throws', async () => {

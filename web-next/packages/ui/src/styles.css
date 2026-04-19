@@ -28,6 +28,9 @@
 @import './primitives/Select/Select.css';
 @import './primitives/Combobox/Combobox.css';
 @import './primitives/ValidationSummary/ValidationSummary.css';
+@import './primitives/EventPicker/EventPicker.css';
+@import './primitives/ToolPicker/ToolPicker.css';
+@import './primitives/SchemaEditor/SchemaEditor.css';
 
 @tailwind components;
 @tailwind utilities;

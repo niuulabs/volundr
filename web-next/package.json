@@ -48,6 +48,7 @@
     "eslint-plugin-storybook": "^0.11.2",
     "globals": "^15.14.0",
     "jsdom": "^26.0.0",
+    "lucide-react": "^0.468.0",
     "postcss": "^8",
     "postcss-cli": "^11",
     "postcss-import": "^16",
