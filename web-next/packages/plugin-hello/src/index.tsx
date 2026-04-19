@@ -1,3 +1,4 @@
+import { createRoute } from '@tanstack/react-router';
 import { definePlugin } from '@niuulabs/plugin-sdk';
 import { HelloPage } from './ui/HelloPage';
 
@@ -6,7 +7,13 @@ export const helloPlugin = definePlugin({
   rune: 'ᚺ',
   title: 'Hello',
   subtitle: 'smoke test plugin',
-  render: () => <HelloPage />,
+  routes: (rootRoute) => [
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/hello',
+      component: HelloPage,
+    }),
+  ],
 });
 
 export { createMockHelloService } from './adapters/mock';
