@@ -5,7 +5,9 @@ import { test, expect } from '@playwright/test';
 test('observatory rail button navigates to /observatory', async ({ page }) => {
   await page.goto('/');
 
-  const railButton = page.getByRole('button', { name: /observatory/i });
+  // The rail button's accessible name is the plugin rune (text content), not the title.
+  // Match on the title attribute which includes the plugin name.
+  const railButton = page.locator('button[title*="Observatory"]');
   await expect(railButton).toBeVisible();
 
   await railButton.click();
@@ -254,13 +256,21 @@ test('registry: drag a type, drop on valid target, verify parentTypes updated', 
   await page.click('[data-testid="tab-containment"]');
 
   // Wait for the containment tree to render before dragging.
-  const hostNode = page.getByTestId('tree-node-host');
-  const realmNode = page.getByTestId('tree-node-realm');
-  await expect(hostNode).toBeVisible({ timeout: 5000 });
-  await expect(realmNode).toBeVisible({ timeout: 5000 });
+  await expect(page.getByTestId('tree-node-host')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByTestId('tree-node-realm')).toBeVisible({ timeout: 5000 });
 
-  // Drag host onto realm. force:true bypasses actionability jitter in headless CI.
-  await hostNode.dragTo(realmNode, { force: true });
+  // Dispatch drag events via page.evaluate — Playwright's dragTo uses CDP drag
+  // events which hang in headless CI because the browser drag state machine
+  // requires dragover to call preventDefault before it fires drop. Native
+  // dispatchEvent calls are synchronous and React processes them immediately.
+  await page.evaluate(() => {
+    const host = document.querySelector('[data-testid="tree-node-host"]')!;
+    const realm = document.querySelector('[data-testid="tree-node-realm"]')!;
+    host.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true }));
+    realm.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true }));
+    realm.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true }));
+    host.dispatchEvent(new DragEvent('dragend', { bubbles: true }));
+  });
 
   // After drop the JSON should show host.parentTypes = ['realm']
   await page.click('[data-testid="tab-json"]');
@@ -287,7 +297,16 @@ test('registry: cycle is rejected — dragging ancestor onto descendant does not
   const versionBefore = JSON.parse(before ?? '{}').version as number;
 
   await page.click('[data-testid="tab-containment"]');
-  await realmNode.dragTo(hostNode);
+  await expect(realmNode).toBeVisible({ timeout: 5000 });
+  await expect(hostNode).toBeVisible({ timeout: 5000 });
+  await page.evaluate(() => {
+    const realm = document.querySelector('[data-testid="tree-node-realm"]')!;
+    const host = document.querySelector('[data-testid="tree-node-host"]')!;
+    realm.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true }));
+    host.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true }));
+    host.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true }));
+    realm.dispatchEvent(new DragEvent('dragend', { bubbles: true }));
+  });
 
   // Version should not change
   await page.click('[data-testid="tab-json"]');
