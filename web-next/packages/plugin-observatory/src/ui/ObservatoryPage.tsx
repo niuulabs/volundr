@@ -43,13 +43,29 @@ export function ObservatoryPage() {
           canvas. Interim mechanism until canvas hit-testing is connected (NIU-664). */}
       {topology && topology.nodes.length > 0 && (
         <ul
-          style={{ position: 'absolute', top: 0, left: 0, zIndex: 9999, listStyle: 'none', padding: 0, margin: 0 }}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            zIndex: 9999,
+            listStyle: 'none',
+            padding: 0,
+            margin: 0,
+          }}
           data-testid="topology-node-list"
         >
           {topology.nodes.map((node) => (
             <li key={node.id}>
               <button
-                style={{ width: 1, height: 1, padding: 0, overflow: 'hidden', border: 'none', background: 'none', cursor: 'default' }}
+                style={{
+                  width: 1,
+                  height: 1,
+                  padding: 0,
+                  overflow: 'hidden',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'default',
+                }}
                 onClick={() => setSelectedNode(node)}
                 data-testid={`node-btn-${node.id}`}
                 data-node-type={node.typeId}
