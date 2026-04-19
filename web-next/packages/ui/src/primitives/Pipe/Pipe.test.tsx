@@ -5,11 +5,7 @@ import type { PipePhase, PipePhaseStatus } from './Pipe';
 
 describe('Pipe', () => {
   it('renders one cell per phase', () => {
-    const phases: PipePhase[] = [
-      { status: 'done' },
-      { status: 'running' },
-      { status: 'pending' },
-    ];
+    const phases: PipePhase[] = [{ status: 'done' }, { status: 'running' }, { status: 'pending' }];
     const { container } = render(<Pipe phases={phases} />);
     const cells = container.querySelectorAll('.niuu-pipe__cell');
     expect(cells).toHaveLength(3);

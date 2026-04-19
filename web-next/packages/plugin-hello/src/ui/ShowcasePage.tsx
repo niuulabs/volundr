@@ -38,7 +38,10 @@ export function ShowcasePage() {
         <h3 style={{ marginBottom: 'var(--space-3)', color: 'var(--color-text-secondary)' }}>
           StatusBadge
         </h3>
-        <div data-testid="status-badges" style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+        <div
+          data-testid="status-badges"
+          style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}
+        >
           {STATUSES.map((s) => (
             <StatusBadge key={s} status={s} />
           ))}
@@ -60,7 +63,10 @@ export function ShowcasePage() {
         <h3 style={{ marginBottom: 'var(--space-3)', color: 'var(--color-text-secondary)' }}>
           ConfidenceBadge
         </h3>
-        <div data-testid="confidence-badges" style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)', alignItems: 'center' }}>
+        <div
+          data-testid="confidence-badges"
+          style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)', alignItems: 'center' }}
+        >
           <ConfidenceBadge value={0.92} />
           <ConfidenceBadge value={0.55} />
           <ConfidenceBadge value={0.2} />
@@ -76,7 +82,12 @@ export function ShowcasePage() {
         <div data-testid="pipes" style={{ display: 'grid', gap: 'var(--space-3)' }}>
           <Pipe phases={SAMPLE_PIPE} />
           <Pipe phases={FAILED_PIPE} />
-          <Pipe phases={Array.from({ length: 10 }, (_, i) => ({ status: 'done' as const, label: `step-${i + 1}` }))} />
+          <Pipe
+            phases={Array.from({ length: 10 }, (_, i) => ({
+              status: 'done' as const,
+              label: `step-${i + 1}`,
+            }))}
+          />
         </div>
       </section>
     </div>

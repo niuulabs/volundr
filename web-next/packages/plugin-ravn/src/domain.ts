@@ -71,13 +71,7 @@ export type Message = z.infer<typeof messageSchema>;
 // Session — live interaction thread
 // ---------------------------------------------------------------------------
 
-export const sessionStateSchema = z.enum([
-  'active',
-  'idle',
-  'suspended',
-  'failed',
-  'completed',
-]);
+export const sessionStateSchema = z.enum(['active', 'idle', 'suspended', 'failed', 'completed']);
 export type SessionState = z.infer<typeof sessionStateSchema>;
 
 export const sessionSchema = z.object({

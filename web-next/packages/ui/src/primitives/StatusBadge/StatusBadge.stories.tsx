@@ -18,7 +18,14 @@ export const Review: Story = { args: { status: 'review' } };
 export const Failed: Story = { args: { status: 'failed' } };
 export const Archived: Story = { args: { status: 'archived' } };
 
-const allStatuses: StatusBadgeStatus[] = ['running', 'queued', 'ok', 'review', 'failed', 'archived'];
+const allStatuses: StatusBadgeStatus[] = [
+  'running',
+  'queued',
+  'ok',
+  'review',
+  'failed',
+  'archived',
+];
 
 export const AllStatuses: Story = {
   render: () => (

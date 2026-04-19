@@ -1,13 +1,7 @@
 import { cn } from '../../utils/cn';
 import './StatusBadge.css';
 
-export type StatusBadgeStatus =
-  | 'running'
-  | 'queued'
-  | 'ok'
-  | 'review'
-  | 'failed'
-  | 'archived';
+export type StatusBadgeStatus = 'running' | 'queued' | 'ok' | 'review' | 'failed' | 'archived';
 
 export interface StatusBadgeProps {
   status: StatusBadgeStatus;

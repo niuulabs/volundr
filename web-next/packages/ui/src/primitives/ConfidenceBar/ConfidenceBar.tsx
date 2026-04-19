@@ -24,7 +24,13 @@ export function ConfidenceBar({ level, value, showLabel = false, className }: Co
   const pct = `${Math.round(clamped * 100)}%`;
 
   return (
-    <span className={cn('niuu-confidence-bar', className)} role="meter" aria-valuenow={Math.round(clamped * 100)} aria-valuemin={0} aria-valuemax={100}>
+    <span
+      className={cn('niuu-confidence-bar', className)}
+      role="meter"
+      aria-valuenow={Math.round(clamped * 100)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
       <span className="niuu-confidence-bar__track">
         <span
           className={cn('niuu-confidence-bar__fill', `niuu-confidence-bar__fill--${level}`)}
