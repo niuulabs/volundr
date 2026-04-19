@@ -125,6 +125,21 @@
   gap: var(--space-3);
 }
 
+/* ── Command palette trigger ────────────────────────── */
+.niuu-shell__cp-btn {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: opacity var(--transition-fast);
+}
+.niuu-shell__cp-btn:hover {
+  opacity: 0.75;
+}
+
 /* ── Subnav ────────────────────────────────────────── */
 .niuu-shell__subnav {
   grid-area: subnav;
