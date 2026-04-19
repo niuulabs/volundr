@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@niuulabs/auth': resolve(__dirname, 'packages/auth/src/index.ts'),
+      '@niuulabs/domain': resolve(__dirname, 'packages/domain/src/index.ts'),
       '@niuulabs/design-tokens': resolve(__dirname, 'packages/design-tokens/src/index.ts'),
       '@niuulabs/plugin-hello': resolve(__dirname, 'packages/plugin-hello/src/index.tsx'),
       '@niuulabs/plugin-login': resolve(__dirname, 'packages/plugin-login/src/index.ts'),

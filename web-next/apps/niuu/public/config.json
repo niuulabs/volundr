@@ -6,7 +6,8 @@
     "showcase": { "enabled": true, "order": 2 },
     "mimir": { "enabled": true, "order": 3 },
     "observatory": { "enabled": true, "order": 4 },
-    "volundr": { "enabled": true, "order": 5 }
+    "volundr": { "enabled": true, "order": 5 },
+    "ui-showcase": { "enabled": true, "order": 6 }
   },
   "services": {
     "hello": { "mode": "mock" },
