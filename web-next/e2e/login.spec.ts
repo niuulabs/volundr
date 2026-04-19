@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { MOCK_AUTHORITY, MOCK_TOKEN, buildIdToken, setupOidcRoutes } from './helpers/oidc-mocks';
 
 /**
  * Login plugin e2e specs.
@@ -10,36 +11,12 @@ import { test, expect } from '@playwright/test';
  *   unauthenticated user → /login → "Sign in" → OIDC callback → default plugin
  */
 
-const MOCK_AUTHORITY = 'http://localhost:5173/mock-oidc';
-const MOCK_TOKEN = 'e2e-access-token';
 const MOCK_SUBJECT = 'e2e-user-login-001';
 
-const discoveryDoc = {
-  issuer: MOCK_AUTHORITY,
-  authorization_endpoint: `${MOCK_AUTHORITY}/auth`,
-  token_endpoint: `${MOCK_AUTHORITY}/token`,
-  end_session_endpoint: `${MOCK_AUTHORITY}/logout`,
-  jwks_uri: `${MOCK_AUTHORITY}/jwks`,
-  response_types_supported: ['code'],
-  subject_types_supported: ['public'],
-  id_token_signing_alg_values_supported: ['RS256'],
+const LOGIN_ID_TOKEN_OPTS = {
+  email: 'login-e2e@example.com',
+  name: 'Login E2E User',
 };
-
-function buildIdToken(sub: string) {
-  const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const payload = btoa(
-    JSON.stringify({
-      sub,
-      email: 'login-e2e@example.com',
-      name: 'Login E2E User',
-      iss: MOCK_AUTHORITY,
-      aud: 'niuu-e2e',
-      exp: 9_999_999_999,
-      iat: 1_700_000_000,
-    }),
-  );
-  return `${header}.${payload}.signature`;
-}
 
 const authEnabledConfig = {
   theme: 'ice',
@@ -57,10 +34,7 @@ const authEnabledConfig = {
 test.describe('Login plugin', () => {
   test.beforeEach(async ({ page }) => {
     await page.route('/config.json', (route) => route.fulfill({ json: authEnabledConfig }));
-    await page.route(`${MOCK_AUTHORITY}/.well-known/openid-configuration`, (route) =>
-      route.fulfill({ json: discoveryDoc }),
-    );
-    await page.route(`${MOCK_AUTHORITY}/jwks`, (route) => route.fulfill({ json: { keys: [] } }));
+    await setupOidcRoutes(page);
   });
 
   test('unauthenticated user navigating to /login sees the Sign in button', async ({ page }) => {
@@ -95,7 +69,7 @@ test.describe('Login plugin', () => {
       route.fulfill({
         json: {
           access_token: MOCK_TOKEN,
-          id_token: buildIdToken(MOCK_SUBJECT),
+          id_token: buildIdToken(MOCK_SUBJECT, LOGIN_ID_TOKEN_OPTS),
           token_type: 'Bearer',
           expires_in: 3600,
         },
@@ -137,7 +111,7 @@ test.describe('Login plugin', () => {
       await route.fulfill({
         json: {
           access_token: MOCK_TOKEN,
-          id_token: buildIdToken(MOCK_SUBJECT),
+          id_token: buildIdToken(MOCK_SUBJECT, LOGIN_ID_TOKEN_OPTS),
           token_type: 'Bearer',
           expires_in: 3600,
         },
@@ -158,7 +132,13 @@ test.describe('Login plugin', () => {
 
   test('pre-existing session skips the login page', async ({ page }) => {
     await page.addInitScript(
-      (args: { authority: string; clientId: string; token: string; idToken: string }) => {
+      (args: {
+        authority: string;
+        clientId: string;
+        token: string;
+        idToken: string;
+        sub: string;
+      }) => {
         const userKey = `oidc.user:${args.authority}:${args.clientId}`;
         sessionStorage.setItem(
           userKey,
@@ -167,7 +147,7 @@ test.describe('Login plugin', () => {
             access_token: args.token,
             token_type: 'Bearer',
             expires_at: 9_999_999_999,
-            profile: { sub: MOCK_SUBJECT, email: 'login-e2e@example.com', name: 'Login E2E User' },
+            profile: { sub: args.sub, email: 'login-e2e@example.com', name: 'Login E2E User' },
           }),
         );
       },
@@ -175,7 +155,8 @@ test.describe('Login plugin', () => {
         authority: MOCK_AUTHORITY,
         clientId: 'niuu-e2e',
         token: MOCK_TOKEN,
-        idToken: buildIdToken(MOCK_SUBJECT),
+        idToken: buildIdToken(MOCK_SUBJECT, LOGIN_ID_TOKEN_OPTS),
+        sub: MOCK_SUBJECT,
       },
     );
 
@@ -185,9 +166,3 @@ test.describe('Login plugin', () => {
     await expect(page.getByTestId('login-page')).not.toBeVisible({ timeout: 10_000 });
   });
 });
-
-// ---------------------------------------------------------------------------
-// Inline MOCK_SUBJECT reference (btoa needs it in page context too)
-// ---------------------------------------------------------------------------
-const MOCK_SUBJECT_CONST = MOCK_SUBJECT;
-void MOCK_SUBJECT_CONST; // suppress unused warning

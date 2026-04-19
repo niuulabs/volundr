@@ -246,14 +246,3 @@
 .dim {
   color: var(--color-text-muted, #71717a);
 }
-
-.footLink {
-  color: color-mix(in srgb, var(--color-brand, #38bdf8) 80%, transparent);
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.footLink:hover {
-  color: var(--color-brand, #38bdf8);
-}

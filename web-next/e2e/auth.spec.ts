@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { MOCK_AUTHORITY, MOCK_TOKEN, buildIdToken, setupOidcRoutes } from './helpers/oidc-mocks';
 
 /**
  * Auth e2e specs — mocked OIDC flows.
@@ -10,37 +11,7 @@ import { test, expect } from '@playwright/test';
  * AuthProvider sees OIDC as enabled without modifying the static file.
  */
 
-const MOCK_AUTHORITY = 'http://localhost:5173/mock-oidc';
-const MOCK_TOKEN = 'e2e-access-token';
 const MOCK_SUBJECT = 'e2e-user-001';
-
-const discoveryDoc = {
-  issuer: MOCK_AUTHORITY,
-  authorization_endpoint: `${MOCK_AUTHORITY}/auth`,
-  token_endpoint: `${MOCK_AUTHORITY}/token`,
-  end_session_endpoint: `${MOCK_AUTHORITY}/logout`,
-  jwks_uri: `${MOCK_AUTHORITY}/jwks`,
-  response_types_supported: ['code'],
-  subject_types_supported: ['public'],
-  id_token_signing_alg_values_supported: ['RS256'],
-};
-
-/** Minimal JWT-shaped ID token (not verified — tests stub the JWKS endpoint). */
-function buildIdToken(sub: string) {
-  const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const payload = btoa(
-    JSON.stringify({
-      sub,
-      email: 'e2e@example.com',
-      name: 'E2E User',
-      iss: MOCK_AUTHORITY,
-      aud: 'niuu-e2e',
-      exp: 9_999_999_999,
-      iat: 1_700_000_000,
-    }),
-  );
-  return `${header}.${payload}.signature`;
-}
 
 /** Runtime config that tells AuthProvider to use our mock OIDC authority. */
 const authEnabledConfig = {
@@ -57,14 +28,7 @@ test.describe('Auth — mocked OIDC', () => {
   test.beforeEach(async ({ page }) => {
     // Override runtime config so AuthProvider sees auth as enabled.
     await page.route('/config.json', (route) => route.fulfill({ json: authEnabledConfig }));
-
-    // Serve OIDC discovery document (required by oidc-client-ts on init).
-    await page.route(`${MOCK_AUTHORITY}/.well-known/openid-configuration`, (route) =>
-      route.fulfill({ json: discoveryDoc }),
-    );
-
-    // Serve JWKS — empty; we skip signature verification in tests.
-    await page.route(`${MOCK_AUTHORITY}/jwks`, (route) => route.fulfill({ json: { keys: [] } }));
+    await setupOidcRoutes(page);
   });
 
   test('unauthenticated user sees the login page', async ({ page }) => {
@@ -114,14 +78,20 @@ test.describe('Auth — mocked OIDC', () => {
   test('pre-existing session skips the login page', async ({ page }) => {
     // Inject a valid session into sessionStorage before the page loads.
     await page.addInitScript(
-      (args: { authority: string; clientId: string; token: string; idToken: string }) => {
+      (args: {
+        authority: string;
+        clientId: string;
+        token: string;
+        idToken: string;
+        sub: string;
+      }) => {
         const userKey = `oidc.user:${args.authority}:${args.clientId}`;
         const user = {
           id_token: args.idToken,
           access_token: args.token,
           token_type: 'Bearer',
           expires_at: 9_999_999_999,
-          profile: { sub: 'e2e-user-001', email: 'e2e@example.com', name: 'E2E User' },
+          profile: { sub: args.sub, email: 'e2e@example.com', name: 'E2E User' },
         };
         sessionStorage.setItem(userKey, JSON.stringify(user));
       },
@@ -130,6 +100,7 @@ test.describe('Auth — mocked OIDC', () => {
         clientId: 'niuu-e2e',
         token: MOCK_TOKEN,
         idToken: buildIdToken(MOCK_SUBJECT),
+        sub: MOCK_SUBJECT,
       },
     );
 
@@ -144,7 +115,13 @@ test.describe('Auth — mocked OIDC', () => {
   test('logout navigates to the IDP logout endpoint', async ({ page }) => {
     // Pre-seed a valid session.
     await page.addInitScript(
-      (args: { authority: string; clientId: string; token: string; idToken: string }) => {
+      (args: {
+        authority: string;
+        clientId: string;
+        token: string;
+        idToken: string;
+        sub: string;
+      }) => {
         const userKey = `oidc.user:${args.authority}:${args.clientId}`;
         sessionStorage.setItem(
           userKey,
@@ -153,7 +130,7 @@ test.describe('Auth — mocked OIDC', () => {
             access_token: args.token,
             token_type: 'Bearer',
             expires_at: 9_999_999_999,
-            profile: { sub: 'e2e-user-001', email: 'e2e@example.com', name: 'E2E User' },
+            profile: { sub: args.sub, email: 'e2e@example.com', name: 'E2E User' },
           }),
         );
       },
@@ -162,6 +139,7 @@ test.describe('Auth — mocked OIDC', () => {
         clientId: 'niuu-e2e',
         token: MOCK_TOKEN,
         idToken: buildIdToken(MOCK_SUBJECT),
+        sub: MOCK_SUBJECT,
       },
     );
 

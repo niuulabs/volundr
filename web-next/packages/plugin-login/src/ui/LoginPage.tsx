@@ -1,5 +1,6 @@
 import { useEffect, useRef, useMemo } from 'react';
 import type { ReactNode } from 'react';
+import type { LoginPageComponentProps } from '@niuulabs/auth';
 import styles from './LoginPage.module.css';
 
 // ---------------------------------------------------------------------------
@@ -151,11 +152,8 @@ function AmbientTopology() {
 // LoginPage
 // ---------------------------------------------------------------------------
 
-export interface LoginPageProps {
-  onLogin: () => void;
-  loading?: boolean;
-  error?: string | null;
-}
+/** LoginPageProps re-uses the contract from @niuulabs/auth to keep them in sync. */
+export type LoginPageProps = LoginPageComponentProps;
 
 export function LoginPage({ onLogin, loading = false, error = null }: LoginPageProps): ReactNode {
   const buildLine = useMemo(() => {
@@ -231,7 +229,8 @@ export function LoginPage({ onLogin, loading = false, error = null }: LoginPageP
 
         <div className={styles.foot}>
           <span className={styles.dim}>no account?</span>
-          <span className={styles.footLink}>request access</span>
+          {/* TODO: wire to a real access-request flow */}
+          <span className={styles.dim}>request access</span>
         </div>
       </main>
     </div>

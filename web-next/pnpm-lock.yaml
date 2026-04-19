@@ -267,9 +267,6 @@ importers:
       '@niuulabs/plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk
-      '@niuulabs/ui':
-        specifier: workspace:*
-        version: link:../ui
     devDependencies:
       '@tanstack/react-router':
         specifier: ^1.95.0

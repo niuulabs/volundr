@@ -30,8 +30,7 @@
   },
   "dependencies": {
     "@niuulabs/auth": "workspace:*",
-    "@niuulabs/plugin-sdk": "workspace:*",
-    "@niuulabs/ui": "workspace:*"
+    "@niuulabs/plugin-sdk": "workspace:*"
   },
   "devDependencies": {
     "@tanstack/react-router": "^1.95.0",
