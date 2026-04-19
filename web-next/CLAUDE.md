@@ -145,7 +145,39 @@ TanStack Router routes are constructed in code and composed by the Shell from
 `PluginDescriptor.routes`. File-based routing cannot cross package boundaries, so it
 is incompatible with composability. This is a deliberate trade.
 
-### 8. Module boundaries — what goes where
+### 8. `web-next/` never imports from `web/` — copy, don't cross-reference
+
+`web/` is going to be deleted. Any reuse from there is done by **copying files**
+into their new home in `web-next/`, not by importing across the boundary. This
+keeps `web-next/` self-contained and means deleting `web/` at M8 is a safe op.
+
+When a ticket says "copy from `web/...`", the workflow is:
+
+1. Open the source files under `web/src/...` as reference.
+2. Copy them (or their essence) into `web-next/packages/<pkg>/src/...`.
+3. Rewrite imports: `@/modules/shared/...` → `@niuulabs/...`.
+4. Migrate the tests alongside — they must pass in the new location.
+5. Verify `grep -r "from ['\"].*\\.\\./.*web/" web-next/` returns nothing.
+
+Known sources we'll copy (not exhaustive — see individual tickets):
+
+| From `web/`                                   | To (web-next)                   | Ticket  |
+| --------------------------------------------- | ------------------------------- | ------- |
+| `src/modules/shared/api/client.ts`            | `@niuulabs/query` (HTTP client) | NIU-688 |
+| `src/modules/shared/ports/identity.port.ts`   | `@niuulabs/plugin-sdk`          | NIU-688 |
+| `src/modules/shared/ports/feature-catalog..`  | `@niuulabs/plugin-sdk`          | NIU-688 |
+| `src/modules/shared/adapters/*.ts`            | `@niuulabs/plugin-sdk`          | NIU-688 |
+| `src/auth/*`                                  | `@niuulabs/auth`                | NIU-651 |
+| `src/modules/mimir/api/*`                     | `@niuulabs/plugin-mimir`        | NIU-667 |
+| `src/modules/ravn/api/*`                      | `@niuulabs/plugin-ravn`         | NIU-671 |
+| `src/modules/tyr/{ports,adapters,models}/*`   | `@niuulabs/plugin-tyr`          | NIU-679 |
+| `src/modules/volundr/{ports,adapters,models}` | `@niuulabs/plugin-volundr`      | NIU-675 |
+| `src/modules/shared/components/SessionChat/`  | `@niuulabs/ui/chat`             | NIU-660 |
+
+Nothing else should be dragged across — and especially no UI components outside
+`SessionChat`, which get rebuilt fresh against the design tokens.
+
+### 9. Module boundaries — what goes where
 
 | Live in `@niuulabs/ui`                             | Live in a specific plugin             |
 | -------------------------------------------------- | ------------------------------------- |
