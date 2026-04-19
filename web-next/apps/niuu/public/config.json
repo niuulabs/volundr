@@ -1,6 +1,7 @@
 {
   "theme": "ice",
   "plugins": {
+    "login": { "enabled": true, "order": 0 },
     "hello": { "enabled": true, "order": 1 },
     "showcase": { "enabled": true, "order": 2 },
     "mimir": { "enabled": true, "order": 3 },
