@@ -121,7 +121,9 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const tyrSessionService = tyrClient
     ? buildTyrSessionHttpAdapter(tyrClient)
     : createMockTyrSessionService();
-  const trackerService = tyrClient ? buildTrackerHttpAdapter(tyrClient) : createMockTrackerService();
+  const trackerService = tyrClient
+    ? buildTrackerHttpAdapter(tyrClient)
+    : createMockTrackerService();
 
   return {
     hello,

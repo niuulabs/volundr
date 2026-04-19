@@ -7,9 +7,7 @@ test('tyr plugin renders at /tyr', async ({ page }) => {
 
 test('tyr shows sagas loaded after loading', async ({ page }) => {
   await page.goto('/tyr');
-  await expect(
-    page.getByText(/loading sagas/).or(page.getByText(/sagas loaded/)),
-  ).toBeVisible();
+  await expect(page.getByText(/loading sagas/).or(page.getByText(/sagas loaded/))).toBeVisible();
   await expect(page.getByText(/sagas loaded/)).toBeVisible({ timeout: 5000 });
 });
 

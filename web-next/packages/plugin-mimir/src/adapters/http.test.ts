@@ -375,43 +375,6 @@ describe('buildMimirHttpAdapter', () => {
     });
   });
 
-  describe('mounts.getRecentWrites', () => {
-    it('calls GET /mounts/recent-writes with default limit', async () => {
-      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
-      await buildMimirHttpAdapter(client).mounts.getRecentWrites();
-      expect(client.get).toHaveBeenCalledWith('/mounts/recent-writes?limit=20');
-    });
-
-    it('calls GET /mounts/recent-writes with custom limit', async () => {
-      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
-      await buildMimirHttpAdapter(client).mounts.getRecentWrites(5);
-      expect(client.get).toHaveBeenCalledWith('/mounts/recent-writes?limit=5');
-    });
-
-    it('maps raw recent-write fields to domain RecentWrite', async () => {
-      const raw = [
-        {
-          id: 'ev-001',
-          timestamp: '2026-04-19T09:02:00Z',
-          mount: 'shared',
-          page: '/arch/overview',
-          ravn: 'ravn-fjolnir',
-          kind: 'write',
-          message: 'updated key-facts zone',
-        },
-      ];
-      const client = makeClient({ get: vi.fn().mockResolvedValue(raw) });
-      const writes = await buildMimirHttpAdapter(client).mounts.getRecentWrites();
-      expect(writes[0]).toMatchObject({
-        id: 'ev-001',
-        mount: 'shared',
-        page: '/arch/overview',
-        ravn: 'ravn-fjolnir',
-        kind: 'write',
-      });
-    });
-  });
-
   describe('pages.listSources', () => {
     it('calls GET /sources without query string when no options', async () => {
       const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
@@ -458,11 +421,11 @@ describe('buildMimirHttpAdapter', () => {
   });
 
   describe('pages.getPageSources', () => {
-    it('calls GET /sources/page with encoded path', async () => {
+    it('calls GET /page/sources with encoded path', async () => {
       const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
       await buildMimirHttpAdapter(client).pages.getPageSources('/arch/overview');
       const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
-      expect(call).toContain('/sources/page');
+      expect(call).toContain('/page/sources');
       expect(call).toContain('path=%2Farch%2Foverview');
     });
 
