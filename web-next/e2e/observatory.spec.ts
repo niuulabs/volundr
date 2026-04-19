@@ -179,20 +179,14 @@ test('arrow keys pan the canvas when focused', async ({ page }) => {
 
 // ── Minimap interaction ───────────────────────────────────────────────────────
 
-test('clicking the minimap pans the main camera', async ({ page }) => {
+test('minimap SVG overlay is visible with topology content', async ({ page }) => {
   await page.goto('/observatory');
-  const minimap = page.locator('[data-testid="minimap-panel"] canvas');
-  await minimap.waitFor();
+  const minimapPanel = page.getByTestId('minimap-panel');
+  await minimapPanel.waitFor();
 
-  const zoomDisplay = page.getByTestId('zoom-display');
-  const before = await zoomDisplay.textContent();
-
-  // Click minimap top-left — pans camera to top-left of world
-  await minimap.click({ position: { x: 10, y: 10 } });
-
-  // Zoom should be unchanged; page should not crash
-  await expect(page.getByTestId('topology-canvas')).toBeVisible();
-  expect(await zoomDisplay.textContent()).toBe(before);
+  // New minimap is a static SVG overview, not a click-to-pan canvas
+  await expect(minimapPanel).toBeVisible();
+  await expect(minimapPanel.locator('svg')).toBeVisible();
 });
 
 // ── Registry page ─────────────────────────────────────────────────────────────
