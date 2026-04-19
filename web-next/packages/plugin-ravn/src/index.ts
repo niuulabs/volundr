@@ -26,7 +26,13 @@ export {
 } from './adapters/mock';
 
 // HTTP adapters
-export { buildRavnPersonaAdapter } from './adapters/http';
+export {
+  buildRavnPersonaAdapter,
+  buildRavnRavenAdapter,
+  buildRavnSessionAdapter,
+  buildRavnTriggerAdapter,
+  buildRavnBudgetAdapter,
+} from './adapters/http';
 
 // Port interfaces + types
 export type {
