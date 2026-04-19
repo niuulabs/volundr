@@ -47,7 +47,14 @@ jobs:
         pkg:
           - name: Volundr
             flag: backend-volundr
-            paths: "tests/ --ignore=tests/test_tyr --ignore=tests/integration"
+            paths: >-
+              tests/
+              --ignore=tests/test_tyr
+              --ignore=tests/test_ravn
+              --ignore=tests/ravn
+              --ignore=tests/test_bifrost
+              --ignore=tests/test_sleipnir
+              --ignore=tests/integration
             cov: "--cov=src/volundr --cov=src/cli --cov=src/niuu --cov=src/skuld"
           - name: Tyr
             flag: backend-tyr
@@ -55,8 +62,18 @@ jobs:
             cov: "--cov=src/tyr"
           - name: Ravn
             flag: backend-ravn
-            paths: "tests/ravn tests/test_ravn tests/test_bifrost tests/test_sleipnir"
-            cov: "--cov=src/ravn --cov=src/bifrost --cov=src/sleipnir"
+            # src/ravn/tui/ excluded via [tool.coverage.run] omit in pyproject.toml —
+            # Textual widgets need a real terminal and cannot run under plain pytest.
+            paths: "tests/ravn tests/test_ravn"
+            cov: "--cov=src/ravn"
+          - name: Bifrost
+            flag: backend-bifrost
+            paths: "tests/test_bifrost"
+            cov: "--cov=src/bifrost"
+          - name: Sleipnir
+            flag: backend-sleipnir
+            paths: "tests/test_sleipnir"
+            cov: "--cov=src/sleipnir"
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
