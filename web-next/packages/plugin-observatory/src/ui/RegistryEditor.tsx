@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ShapeSvg, Chip } from '@niuulabs/ui';
+import type { ShapeColor } from '@niuulabs/ui';
 import type { Registry, EntityType } from '../domain';
 import { isDescendant } from '../domain/containment';
 import { useRegistryEditor } from '../application/useRegistryEditor';
@@ -29,7 +30,7 @@ function TypePreviewDrawer({ type, onClose }: TypePreviewDrawerProps) {
     >
       <div className="niuu-p-4 niuu-border-b niuu-border-border-subtle niuu-flex niuu-items-start niuu-gap-3">
         <div className="niuu-w-12 niuu-h-12 niuu-flex niuu-items-center niuu-justify-center niuu-bg-bg-tertiary niuu-rounded-md niuu-border niuu-border-border-subtle niuu-shrink-0">
-          <ShapeSvg shape={type.shape} color={type.color} size={28} />
+          <ShapeSvg shape={type.shape} color={type.color as ShapeColor} size={28} />
         </div>
         <div className="niuu-flex-1 niuu-min-w-0">
           <div className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted niuu-uppercase niuu-tracking-[0.07em] niuu-mb-[2px]">
@@ -183,7 +184,7 @@ function TypesTab({ registry, selectedId, onSelect }: TypesTabProps) {
                 style={{ color: 'inherit' }}
               >
                 <span className="niuu-w-[22px] niuu-h-[22px] niuu-inline-flex niuu-items-center niuu-justify-center niuu-shrink-0">
-                  <ShapeSvg shape={t.shape} color={t.color} size={18} />
+                  <ShapeSvg shape={t.shape} color={t.color as ShapeColor} size={18} />
                 </span>
                 <span className="niuu-font-mono niuu-text-base niuu-text-brand niuu-font-bold niuu-w-5 niuu-text-center niuu-shrink-0">
                   {t.rune}
@@ -323,7 +324,7 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
             ⋮⋮
           </span>
           <span className="niuu-w-4 niuu-inline-flex niuu-justify-center niuu-shrink-0">
-            <ShapeSvg shape={t.shape} color={t.color} size={14} />
+            <ShapeSvg shape={t.shape} color={t.color as ShapeColor} size={14} />
           </span>
           <span className="niuu-font-mono niuu-text-brand niuu-text-[13px] niuu-font-bold niuu-shrink-0">
             {t.rune}
