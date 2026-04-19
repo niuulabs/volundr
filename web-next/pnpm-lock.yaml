@@ -428,6 +428,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@niuulabs/domain':
+        specifier: workspace:*
+        version: link:../domain
       clsx:
         specifier: ^2.1.1
         version: 2.1.1

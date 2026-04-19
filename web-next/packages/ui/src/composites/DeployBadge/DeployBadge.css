@@ -1,0 +1,47 @@
+.niuu-deploy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.niuu-deploy-badge__glyph {
+  font-size: 12px;
+  line-height: 1;
+  color: var(--brand-400);
+}
+
+.niuu-deploy-badge__label {
+  color: var(--color-text-secondary);
+}
+
+/* ── Kind-specific glyph tints ─────────────────────────── */
+
+.niuu-deploy-badge--k8s .niuu-deploy-badge__glyph {
+  color: var(--brand-300);
+}
+
+.niuu-deploy-badge--systemd .niuu-deploy-badge__glyph {
+  color: var(--brand-400);
+}
+
+.niuu-deploy-badge--pi .niuu-deploy-badge__glyph {
+  color: var(--color-accent-amber, #f59e0b);
+}
+
+.niuu-deploy-badge--mobile .niuu-deploy-badge__glyph {
+  color: var(--color-accent-emerald, #10b981);
+}
+
+.niuu-deploy-badge--ephemeral .niuu-deploy-badge__glyph {
+  color: var(--color-text-muted);
+}

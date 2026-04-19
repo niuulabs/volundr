@@ -1,0 +1,92 @@
+.niuu-lifecycle-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.niuu-lifecycle-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  background: currentColor;
+}
+
+.niuu-lifecycle-badge__label {
+  color: currentColor;
+}
+
+/* ── Pulse animation ──────────────────────────────────── */
+.niuu-lifecycle-badge--pulse .niuu-lifecycle-badge__dot {
+  animation: niuu-lifecycle-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes niuu-lifecycle-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ── State variants ───────────────────────────────────── */
+
+.niuu-lifecycle-badge--requested {
+  color: var(--status-queued, var(--brand-400));
+  border-color: color-mix(in srgb, var(--brand-400) 25%, transparent);
+  background: color-mix(in srgb, var(--brand-400) 8%, transparent);
+}
+
+.niuu-lifecycle-badge--provisioning {
+  color: var(--color-text-muted);
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-tertiary);
+}
+
+.niuu-lifecycle-badge--ready {
+  color: var(--status-healthy, var(--brand-200));
+  border-color: color-mix(in srgb, var(--brand-200) 30%, transparent);
+  background: color-mix(in srgb, var(--brand-200) 8%, transparent);
+}
+
+.niuu-lifecycle-badge--running {
+  color: var(--brand-300);
+  border-color: color-mix(in srgb, var(--brand-500) 35%, transparent);
+  background: color-mix(in srgb, var(--brand-500) 12%, transparent);
+}
+
+.niuu-lifecycle-badge--idle {
+  color: var(--color-text-muted);
+  border-color: var(--color-border-subtle);
+  background: transparent;
+}
+
+.niuu-lifecycle-badge--terminating {
+  color: var(--color-accent-amber, #f59e0b);
+  border-color: color-mix(in srgb, #f59e0b 25%, transparent);
+  background: color-mix(in srgb, #f59e0b 8%, transparent);
+}
+
+.niuu-lifecycle-badge--terminated {
+  color: var(--color-text-faint, #52525b);
+  border-color: var(--color-border-subtle);
+  background: transparent;
+}
+
+.niuu-lifecycle-badge--failed {
+  color: var(--color-critical-fg, #fca5a5);
+  border-color: var(--color-critical-bo);
+  background: var(--color-critical-bg);
+}

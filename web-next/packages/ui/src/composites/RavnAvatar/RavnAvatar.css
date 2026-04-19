@@ -1,0 +1,33 @@
+.niuu-ravn-avatar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.niuu-ravn-avatar svg {
+  position: absolute;
+  inset: 0;
+}
+
+.niuu-ravn-avatar__rune {
+  position: relative;
+  z-index: 1;
+  color: var(--brand-300);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  line-height: 1;
+  user-select: none;
+}
+
+.niuu-ravn-avatar__dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  z-index: 2;
+  background: var(--color-bg-secondary, #18181b);
+  border-radius: var(--radius-full);
+  line-height: 0;
+  padding: 1px;
+}

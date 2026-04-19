@@ -1,0 +1,23 @@
+.niuu-persona-avatar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.niuu-persona-avatar svg {
+  position: absolute;
+  inset: 0;
+}
+
+.niuu-persona-avatar__letter {
+  position: relative;
+  z-index: 1;
+  color: var(--brand-300);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  user-select: none;
+}
