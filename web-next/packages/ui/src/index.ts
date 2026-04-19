@@ -3,4 +3,8 @@ export * from './primitives/StateDot';
 export * from './primitives/Rune';
 export * from './primitives/Kbd';
 export * from './primitives/LiveBadge';
+export * from './data/Table';
+export * from './data/FilterBar';
+export * from './data/KpiStrip';
+export * from './data/states';
 export { cn } from './utils/cn';

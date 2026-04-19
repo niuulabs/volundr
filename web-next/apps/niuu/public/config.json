@@ -1,7 +1,8 @@
 {
   "theme": "ice",
   "plugins": {
-    "hello": { "enabled": true, "order": 1 }
+    "hello": { "enabled": true, "order": 1 },
+    "showcase": { "enabled": true, "order": 2 }
   },
   "services": {
     "hello": { "mode": "mock" }
