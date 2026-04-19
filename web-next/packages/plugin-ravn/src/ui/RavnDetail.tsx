@@ -88,7 +88,11 @@ function OverviewSection({ ravn, budget }: OverviewSectionProps) {
 
         <dt>State</dt>
         <dd className="rv-overview-dd--state">
-          <StateDot state={ravnStatusToDotState(ravn.status)} pulse={ravn.status === 'active'} size={8} />
+          <StateDot
+            state={ravnStatusToDotState(ravn.status)}
+            pulse={ravn.status === 'active'}
+            size={8}
+          />
           <span>{ravn.status}</span>
         </dd>
 
@@ -158,9 +162,7 @@ function ActivitySection({ ravnId }: ActivitySectionProps) {
   const { data: messages } = useMessages(ravnSession?.id ?? '');
 
   if (!ravnSession) {
-    return (
-      <p className="rv-empty-text">No sessions for this ravn</p>
-    );
+    return <p className="rv-empty-text">No sessions for this ravn</p>;
   }
 
   return (
@@ -227,8 +229,7 @@ function ConnectivitySection({ ravn }: ConnectivitySectionProps) {
   return (
     <div data-testid="connectivity-section-body">
       <p className="rv-connectivity-model">
-        Model:{' '}
-        <span className="rv-connectivity-model-value">{ravn.model}</span>
+        Model: <span className="rv-connectivity-model-value">{ravn.model}</span>
       </p>
       <p className="rv-connectivity-note">
         Event wiring is configured per-persona. View the{' '}

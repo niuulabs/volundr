@@ -22,7 +22,14 @@ interface RavnRowProps {
   onClick?: () => void;
 }
 
-function RavnListRow({ ravn, budgetSpent, budgetCap, budgetWarnAt, selected, onClick }: RavnRowProps) {
+function RavnListRow({
+  ravn,
+  budgetSpent,
+  budgetCap,
+  budgetWarnAt,
+  selected,
+  onClick,
+}: RavnRowProps) {
   return (
     <button
       type="button"
@@ -31,7 +38,11 @@ function RavnListRow({ ravn, budgetSpent, budgetCap, budgetWarnAt, selected, onC
       aria-selected={selected}
       className="rv-list-row"
     >
-      <StateDot state={ravnStatusToDotState(ravn.status)} pulse={ravn.status === 'active'} size={8} />
+      <StateDot
+        state={ravnStatusToDotState(ravn.status)}
+        pulse={ravn.status === 'active'}
+        size={8}
+      />
       <span className="rv-list-row__name">{ravn.personaName}</span>
       {budgetCap != null && budgetSpent != null && (
         <div className="rv-list-row__budget">
@@ -64,7 +75,11 @@ function RavnCard({ ravn, budget, selected, onClick }: RavnCardProps) {
       className="rv-card"
     >
       <div className="rv-card__header">
-        <StateDot state={ravnStatusToDotState(ravn.status)} pulse={ravn.status === 'active'} size={8} />
+        <StateDot
+          state={ravnStatusToDotState(ravn.status)}
+          pulse={ravn.status === 'active'}
+          size={8}
+        />
         <span className="rv-card__name">{ravn.personaName}</span>
       </div>
       <span className="rv-card__model">{ravn.model}</span>
@@ -100,7 +115,11 @@ function RavnTableRow({ ravn, budget, selected, onClick }: RavnTableRowProps) {
       <td className="rv-td--persona">{ravn.personaName}</td>
       <td className="rv-td--status">
         <span className="rv-td-status-inner">
-          <StateDot state={ravnStatusToDotState(ravn.status)} pulse={ravn.status === 'active'} size={8} />
+          <StateDot
+            state={ravnStatusToDotState(ravn.status)}
+            pulse={ravn.status === 'active'}
+            size={8}
+          />
           <span>{ravn.status}</span>
         </span>
       </td>
