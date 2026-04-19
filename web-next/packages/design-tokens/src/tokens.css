@@ -83,6 +83,12 @@
   --color-critical-bg: color-mix(in srgb, #ef4444 15%, transparent);
   --color-critical-bo: color-mix(in srgb, #ef4444 35%, transparent);
 
+  /* ── Gate (violet — approval / gated states) ──────────── */
+  --color-gate: #a855f7;
+  --color-gate-fg: #c4b5fd;
+  --color-gate-bg: color-mix(in srgb, #a855f7 15%, transparent);
+  --color-gate-bo: color-mix(in srgb, #a855f7 35%, transparent);
+
   /* ── Semantic status ─────────────────────────────────── */
   --status-healthy: var(--brand-200);
   --status-running: var(--brand-300);
@@ -98,6 +104,7 @@
   --status-unknown: var(--color-text-muted);
   --status-idle: var(--color-text-muted);
   --status-archived: var(--color-text-muted);
+  --status-gated: var(--color-gate);
 
   /* ── Tool categories ─────────────────────────────────── */
   --color-tool-search: var(--brand-200);
