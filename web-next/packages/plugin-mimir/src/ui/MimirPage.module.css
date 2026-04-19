@@ -1,0 +1,68 @@
+.page {
+  padding: var(--space-6);
+  max-width: 800px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-6);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.statCard {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.statLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-1);
+}
+
+.statValue {
+  font-size: var(--text-xl);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-accent-red);
+  font-size: var(--text-sm);
+}

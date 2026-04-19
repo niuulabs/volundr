@@ -4,12 +4,14 @@
     "hello": { "enabled": true, "order": 1 },
     "volundr": { "enabled": true, "order": 2 },
     "observatory": { "enabled": true, "order": 3 },
-    "ravn": { "enabled": true, "order": 4 }
+    "ravn": { "enabled": true, "order": 4 },
+    "mimir": { "enabled": true, "order": 5 }
   },
   "services": {
     "hello": { "mode": "mock" },
     "volundr": { "mode": "mock" },
     "observatory": { "mode": "mock" },
-    "ravn": { "mode": "mock" }
+    "ravn": { "mode": "mock" },
+    "mimir": { "mode": "mock" }
   }
 }
