@@ -7,6 +7,7 @@ import { observatoryPlugin } from '@niuulabs/plugin-observatory';
 import { volundrPlugin } from '@niuulabs/plugin-volundr';
 import { definePlugin, type PluginDescriptor } from '@niuulabs/plugin-sdk';
 import { ShowcasePage } from './showcase/ShowcasePage';
+import { UIShowcasePage } from './UIShowcasePage';
 
 const showcasePlugin = definePlugin({
   id: 'showcase',
@@ -22,6 +23,20 @@ const showcasePlugin = definePlugin({
   ],
 });
 
+const uiShowcasePlugin = definePlugin({
+  id: 'ui-showcase',
+  rune: 'ᚢ',
+  title: 'UI Showcase',
+  subtitle: 'identity composites',
+  routes: (rootRoute) => [
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/ui-showcase',
+      component: UIShowcasePage,
+    }),
+  ],
+});
+
 export const plugins: PluginDescriptor[] = [
   loginPlugin,
   helloPlugin,
@@ -30,4 +45,5 @@ export const plugins: PluginDescriptor[] = [
   observatoryPlugin,
   ravnPlugin,
   volundrPlugin,
+  uiShowcasePlugin,
 ];
