@@ -54,13 +54,7 @@ export interface Registry extends Omit<TypeRegistry, 'types'> {
 export type EdgeKind = 'solid' | 'dashed-anim' | 'dashed-long' | 'soft' | 'raid';
 
 /** Runtime health status of a topology node. */
-export type NodeStatus =
-  | 'healthy'
-  | 'degraded'
-  | 'failed'
-  | 'idle'
-  | 'observing'
-  | 'unknown';
+export type NodeStatus = 'healthy' | 'degraded' | 'failed' | 'idle' | 'observing' | 'unknown';
 
 /** An instance of an EntityType in the live topology graph. */
 export interface TopologyNode {

@@ -3,10 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { ObservatoryPage } from './ObservatoryPage';
-import {
-  createMockTopologyStream,
-  createMockEventStream,
-} from '../adapters/mock';
+import { createMockTopologyStream, createMockEventStream } from '../adapters/mock';
 
 function wrap(ui: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

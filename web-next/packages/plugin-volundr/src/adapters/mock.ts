@@ -451,7 +451,12 @@ export function createMockTemplateStore(): ITemplateStore {
     updateTemplate: async (id, spec) => {
       const existing = templates.find((t) => t.id === id);
       if (!existing) throw new Error(`Template not found: ${id}`);
-      return { ...existing, spec, version: existing.version + 1, updatedAt: new Date().toISOString() };
+      return {
+        ...existing,
+        spec,
+        version: existing.version + 1,
+        updatedAt: new Date().toISOString(),
+      };
     },
     deleteTemplate: async () => {},
   };
@@ -480,7 +485,13 @@ export function createMockMetricsStream(): IMetricsStream {
     subscribe: (_sessionId, onMetrics) => {
       onMetrics({ timestamp: Date.now(), cpu: 0.4, memMi: 320, gpu: 0 });
       const interval = setInterval(
-        () => onMetrics({ timestamp: Date.now(), cpu: Math.random(), memMi: 300 + Math.random() * 100, gpu: 0 }),
+        () =>
+          onMetrics({
+            timestamp: Date.now(),
+            cpu: Math.random(),
+            memMi: 300 + Math.random() * 100,
+            gpu: 0,
+          }),
         2_000,
       );
       return () => clearInterval(interval);

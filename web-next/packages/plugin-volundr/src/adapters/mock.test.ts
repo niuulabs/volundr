@@ -156,7 +156,12 @@ describe('createMockVolundrService', () => {
 
   it('createTenant returns a tenant with the given name', async () => {
     const svc = createMockVolundrService();
-    const tenant = await svc.createTenant({ name: 'acme', tier: 'pro', maxSessions: 10, maxStorageGb: 50 });
+    const tenant = await svc.createTenant({
+      name: 'acme',
+      tier: 'pro',
+      maxSessions: 10,
+      maxStorageGb: 50,
+    });
     expect(tenant.name).toBe('acme');
   });
 
@@ -262,7 +267,15 @@ describe('createMockSessionStore', () => {
       clusterId: 'cl-eitri',
       state: 'requested',
       startedAt: new Date().toISOString(),
-      resources: { cpuRequest: 1, cpuLimit: 2, cpuUsed: 0, memRequestMi: 512, memLimitMi: 1024, memUsedMi: 0, gpuCount: 0 },
+      resources: {
+        cpuRequest: 1,
+        cpuLimit: 2,
+        cpuUsed: 0,
+        memRequestMi: 512,
+        memLimitMi: 1024,
+        memUsedMi: 0,
+        gpuCount: 0,
+      },
       env: {},
     });
 
@@ -284,7 +297,9 @@ describe('createMockSessionStore', () => {
 
   it('updateSession throws for unknown id', async () => {
     const store = createMockSessionStore();
-    await expect(store.updateSession('nope', { state: 'idle' })).rejects.toThrow('Session not found');
+    await expect(store.updateSession('nope', { state: 'idle' })).rejects.toThrow(
+      'Session not found',
+    );
   });
 
   it('deleteSession removes the session and notifies', async () => {
@@ -341,7 +356,13 @@ describe('createMockTemplateStore', () => {
       env: {},
       envSecretRefs: [],
       tools: [],
-      resources: { cpuRequest: '0.5', cpuLimit: '1', memRequestMi: 256, memLimitMi: 512, gpuCount: 0 },
+      resources: {
+        cpuRequest: '0.5',
+        cpuLimit: '1',
+        memRequestMi: 256,
+        memLimitMi: 512,
+        gpuCount: 0,
+      },
       ttlSec: 1_800,
       idleTimeoutSec: 300,
     } as const;
@@ -362,9 +383,7 @@ describe('createMockTemplateStore', () => {
 
   it('updateTemplate throws for unknown id', async () => {
     const store = createMockTemplateStore();
-    await expect(
-      store.updateTemplate('nope', {} as never),
-    ).rejects.toThrow('Template not found');
+    await expect(store.updateTemplate('nope', {} as never)).rejects.toThrow('Template not found');
   });
 
   it('deleteTemplate resolves without throwing', async () => {

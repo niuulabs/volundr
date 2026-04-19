@@ -91,7 +91,12 @@ export function StatusShowcasePage() {
 
         <Section title="ConfidenceBar — levels">
           <div
-            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', alignItems: 'flex-start' }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-2)',
+              alignItems: 'flex-start',
+            }}
             data-testid="confidence-bar-grid"
           >
             <ConfidenceBar level="high" />
@@ -102,7 +107,12 @@ export function StatusShowcasePage() {
 
         <Section title="ConfidenceBadge — value range">
           <div
-            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', alignItems: 'flex-start' }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-2)',
+              alignItems: 'flex-start',
+            }}
             data-testid="confidence-badge-grid"
           >
             {([null, 0, 0.28, 0.5, 0.64, 0.8, 0.92] as (number | null)[]).map((v, i) => (
@@ -118,19 +128,30 @@ export function StatusShowcasePage() {
 
         <Section title="Pipe — phase progress">
           <div
-            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', alignItems: 'flex-start' }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-3)',
+              alignItems: 'flex-start',
+            }}
             data-testid="pipe-grid"
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <code style={{ fontSize: 11, color: 'var(--color-text-muted)', width: 72 }}>mixed</code>
+              <code style={{ fontSize: 11, color: 'var(--color-text-muted)', width: 72 }}>
+                mixed
+              </code>
               <Pipe cells={PIPE_CELLS} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <code style={{ fontSize: 11, color: 'var(--color-text-muted)', width: 72 }}>failed</code>
+              <code style={{ fontSize: 11, color: 'var(--color-text-muted)', width: 72 }}>
+                failed
+              </code>
               <Pipe cells={PIPE_FAILED} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <code style={{ fontSize: 11, color: 'var(--color-text-muted)', width: 72 }}>gated</code>
+              <code style={{ fontSize: 11, color: 'var(--color-text-muted)', width: 72 }}>
+                gated
+              </code>
               <Pipe cells={PIPE_GATED} />
             </div>
           </div>

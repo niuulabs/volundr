@@ -56,7 +56,13 @@ export function ObservatoryPage() {
 
       {recentEvents.length > 0 && (
         <section>
-          <h3 style={{ margin: '0 0 var(--space-3)', fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
+          <h3
+            style={{
+              margin: '0 0 var(--space-3)',
+              fontSize: 'var(--text-sm)',
+              color: 'var(--color-text-muted)',
+            }}
+          >
             Recent events
           </h3>
           <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 'var(--space-2)' }}>
