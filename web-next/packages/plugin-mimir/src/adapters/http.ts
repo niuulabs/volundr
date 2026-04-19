@@ -10,8 +10,9 @@ import type { Mount } from '@niuulabs/domain';
 import type { IMimirService, SearchMode } from '../ports';
 import type { PageMeta, Page, SearchResult } from '../domain/page';
 import type { LintReport, DreamCycle, LintIssue, IssueSeverity, LintRule } from '../domain/lint';
-import type { MimirStats } from '../domain/api-types';
+import type { MimirStats, MimirGraph, GraphNode, GraphEdge } from '../domain/api-types';
 import type { EmbeddingSearchResult } from '../ports/IEmbeddingStore';
+import type { EntityKind, EntityMeta } from '../domain/entity';
 import { tallySeverity } from '../domain/lint';
 
 // ---------------------------------------------------------------------------
@@ -109,6 +110,31 @@ interface RawDreamCycle {
   duration_ms: number;
 }
 
+interface RawGraphNode {
+  id: string;
+  title: string;
+  category: string;
+  inbound_count?: number;
+}
+
+interface RawGraphEdge {
+  source: string;
+  target: string;
+}
+
+interface RawGraph {
+  nodes: RawGraphNode[];
+  edges: RawGraphEdge[];
+}
+
+interface RawEntityMeta {
+  path: string;
+  title: string;
+  entity_kind: string;
+  summary: string;
+  relationship_count: number;
+}
+
 // ---------------------------------------------------------------------------
 // Mapping helpers
 // ---------------------------------------------------------------------------
@@ -201,6 +227,36 @@ function toDreamCycle(raw: RawDreamCycle): DreamCycle {
   };
 }
 
+function toGraphNode(raw: RawGraphNode): GraphNode {
+  return {
+    id: raw.id,
+    title: raw.title,
+    category: raw.category,
+    inboundCount: raw.inbound_count,
+  };
+}
+
+function toGraphEdge(raw: RawGraphEdge): GraphEdge {
+  return { source: raw.source, target: raw.target };
+}
+
+function toGraph(raw: RawGraph): MimirGraph {
+  return {
+    nodes: raw.nodes.map(toGraphNode),
+    edges: raw.edges.map(toGraphEdge),
+  };
+}
+
+function toEntityMeta(raw: RawEntityMeta): EntityMeta {
+  return {
+    path: raw.path,
+    title: raw.title,
+    entityKind: raw.entity_kind as EntityKind,
+    summary: raw.summary,
+    relationshipCount: raw.relationship_count,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Adapter factory
 // ---------------------------------------------------------------------------
@@ -259,6 +315,20 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
           type: r.type as SearchResult['type'],
           confidence: r.confidence as SearchResult['confidence'],
         }));
+      },
+
+      async getGraph(options): Promise<MimirGraph> {
+        const qs = options?.mountName
+          ? `?mount=${encodeURIComponent(options.mountName)}`
+          : '';
+        const raw = await client.get<RawGraph>(`/graph${qs}`);
+        return toGraph(raw);
+      },
+
+      async listEntities(options): Promise<EntityMeta[]> {
+        const qs = options?.kind ? `?kind=${encodeURIComponent(options.kind)}` : '';
+        const raw = await client.get<RawEntityMeta[]>(`/entities${qs}`);
+        return raw.map(toEntityMeta);
       },
     },
 
