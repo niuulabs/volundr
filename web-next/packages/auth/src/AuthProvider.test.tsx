@@ -121,7 +121,10 @@ describe('AuthProvider', () => {
     });
     vi.mocked(getUserManager).mockReturnValue(mockMgr as never);
 
-    renderWithConfig({ ...baseConfig, auth: { issuer: oidcConfig.authority, clientId: oidcConfig.clientId } });
+    renderWithConfig({
+      ...baseConfig,
+      auth: { issuer: oidcConfig.authority, clientId: oidcConfig.clientId },
+    });
 
     const enabled = await screen.findByTestId('enabled');
     expect(enabled).toHaveTextContent('true');
