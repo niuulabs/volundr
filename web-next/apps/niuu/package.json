@@ -13,6 +13,8 @@
     "@niuulabs/auth": "workspace:*",
     "@niuulabs/design-tokens": "workspace:*",
     "@niuulabs/plugin-hello": "workspace:*",
+    "@niuulabs/plugin-observatory": "workspace:*",
+    "@niuulabs/plugin-ravn": "workspace:*",
     "@niuulabs/plugin-sdk": "workspace:*",
     "@niuulabs/query": "workspace:*",
     "@niuulabs/shell": "workspace:*",
