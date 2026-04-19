@@ -7,16 +7,15 @@
 
 import type { ApiClient } from '@niuulabs/query';
 import type { Mount } from '@niuulabs/domain';
-import type { IMimirService, SearchMode } from '../ports';
+import type { IMimirService, SearchMode, RecentWrite } from '../ports';
 import type { PageMeta, Page, SearchResult } from '../domain/page';
+import type { Source, OriginType } from '../domain/source';
 import type { LintReport, DreamCycle, LintIssue, IssueSeverity, LintRule } from '../domain/lint';
 import type { MimirStats, MimirGraph, GraphNode, GraphEdge } from '../domain/api-types';
 import type { EmbeddingSearchResult } from '../ports/IEmbeddingStore';
 import type { EntityKind, EntityMeta } from '../domain/entity';
 import type { WriteRoutingRule } from '../domain/routing';
 import type { RavnBinding } from '../domain/ravn-binding';
-import type { Source, OriginType } from '../domain/source';
-import type { RecentWrite } from '../ports/IMountAdapter';
 import { tallySeverity } from '../domain/lint';
 
 // ---------------------------------------------------------------------------
@@ -103,6 +102,28 @@ interface RawEmbeddingResult {
   mount_name: string;
 }
 
+interface RawRecentWrite {
+  id: string;
+  timestamp: string;
+  mount: string;
+  page: string;
+  ravn: string;
+  kind: string;
+  message: string;
+}
+
+interface RawSource {
+  id: string;
+  title: string;
+  origin_type: string;
+  origin_url?: string;
+  origin_path?: string;
+  ingested_at: string;
+  ingest_agent: string;
+  compiled_into: string[];
+  content: string;
+}
+
 interface RawDreamCycle {
   id: string;
   timestamp: string;
@@ -137,28 +158,6 @@ interface RawEntityMeta {
   entity_kind: string;
   summary: string;
   relationship_count: number;
-}
-
-interface RawRecentWrite {
-  id: string;
-  timestamp: string;
-  mount: string;
-  page: string;
-  ravn: string;
-  kind: string;
-  message: string;
-}
-
-interface RawSource {
-  id: string;
-  title: string;
-  origin_type: string;
-  origin_url?: string;
-  origin_path?: string;
-  ingested_at: string;
-  ingest_agent: string;
-  compiled_into: string[];
-  content: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -240,6 +239,32 @@ function toEmbeddingResult(raw: RawEmbeddingResult): EmbeddingSearchResult {
   };
 }
 
+function toRecentWrite(raw: RawRecentWrite): RecentWrite {
+  return {
+    id: raw.id,
+    timestamp: raw.timestamp,
+    mount: raw.mount,
+    page: raw.page,
+    ravn: raw.ravn,
+    kind: raw.kind as RecentWrite['kind'],
+    message: raw.message,
+  };
+}
+
+function toSource(raw: RawSource): Source {
+  return {
+    id: raw.id,
+    title: raw.title,
+    originType: raw.origin_type as OriginType,
+    originUrl: raw.origin_url,
+    originPath: raw.origin_path,
+    ingestedAt: raw.ingested_at,
+    ingestAgent: raw.ingest_agent,
+    compiledInto: raw.compiled_into,
+    content: raw.content,
+  };
+}
+
 function toDreamCycle(raw: RawDreamCycle): DreamCycle {
   return {
     id: raw.id,
@@ -280,32 +305,6 @@ function toEntityMeta(raw: RawEntityMeta): EntityMeta {
     entityKind: raw.entity_kind as EntityKind,
     summary: raw.summary,
     relationshipCount: raw.relationship_count,
-  };
-}
-
-function toRecentWrite(raw: RawRecentWrite): RecentWrite {
-  return {
-    id: raw.id,
-    timestamp: raw.timestamp,
-    mount: raw.mount,
-    page: raw.page,
-    ravn: raw.ravn,
-    kind: raw.kind as RecentWrite['kind'],
-    message: raw.message,
-  };
-}
-
-function toSource(raw: RawSource): Source {
-  return {
-    id: raw.id,
-    title: raw.title,
-    originType: raw.origin_type as OriginType,
-    originUrl: raw.origin_url,
-    originPath: raw.origin_path,
-    ingestedAt: raw.ingested_at,
-    ingestAgent: raw.ingest_agent,
-    compiledInto: raw.compiled_into,
-    content: raw.content,
   };
 }
 
@@ -416,7 +415,9 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
       },
 
       async getPageSources(path: string): Promise<Source[]> {
-        const raw = await client.get<RawSource[]>(`/page/sources?path=${encodeURIComponent(path)}`);
+        const raw = await client.get<RawSource[]>(
+          `/page/sources?path=${encodeURIComponent(path)}`,
+        );
         return raw.map(toSource);
       },
     },
