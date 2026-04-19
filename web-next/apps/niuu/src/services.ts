@@ -1,4 +1,5 @@
 import { createMockHelloService, createHttpHelloService } from '@niuulabs/plugin-hello';
+import { createMockVolundrService } from '@niuulabs/plugin-volundr';
 import {
   createMockRegistryRepository,
   createMockLiveTopologyStream,
@@ -23,6 +24,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
 
   return {
     hello: helloService,
+    volundr: createMockVolundrService(),
     'observatory.registry': createMockRegistryRepository(),
     'observatory.topology': createMockLiveTopologyStream(),
     'observatory.events': createMockEventStream(),
