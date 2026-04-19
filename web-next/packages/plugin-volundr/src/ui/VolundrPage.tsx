@@ -1,18 +1,10 @@
 import { useNavigate } from '@tanstack/react-router';
-import {
-  Rune,
-  KpiStrip,
-  KpiCard,
-  Table,
-  LifecycleBadge,
-  LoadingState,
-  ErrorState,
-} from '@niuulabs/ui';
-import type { TableColumn } from '@niuulabs/ui';
-import { useVolundrSessions, useVolundrStats } from './useVolundrSessions';
+import { Rune, KpiStrip, KpiCard, Table, LoadingState, ErrorState } from '@niuulabs/ui';
+import { useVolundrStats } from './useVolundrSessions';
 import { useVolundrClusters } from './hooks/useVolundrClusters';
 import { useSessionList } from './hooks/useSessionStore';
-import type { Session, SessionState } from '../domain/session';
+import { buildSessionColumns } from './utils/sessionColumns';
+import type { Session } from '../domain/session';
 import type { Cluster } from '../domain/cluster';
 
 // ---------------------------------------------------------------------------
@@ -30,7 +22,7 @@ function memPct(cluster: Cluster): number {
 function UsageBar({ value, label }: { value: number; label: string }) {
   const pct = Math.min(1, value) * 100;
   const colorClass =
-    value > 0.85 ? 'niuu-bg-critical' : value > 0.6 ? 'niuu-bg-yellow-400' : 'niuu-bg-brand';
+    value > 0.85 ? 'niuu-bg-critical' : value > 0.6 ? 'niuu-bg-state-warn' : 'niuu-bg-brand';
   return (
     <div className="niuu-flex niuu-flex-col niuu-gap-1">
       <div className="niuu-flex niuu-justify-between niuu-text-xs niuu-text-text-muted">
@@ -63,7 +55,7 @@ function ClusterCard({ cluster }: { cluster: Cluster }) {
       <div className="niuu-flex niuu-items-center niuu-justify-between">
         <span className="niuu-font-medium niuu-text-sm niuu-text-text-primary">{cluster.name}</span>
         <span
-          className={`niuu-rounded-full niuu-px-2 niuu-py-0.5 niuu-text-xs ${allReady ? 'niuu-bg-green-900/30 niuu-text-green-400' : 'niuu-bg-yellow-900/30 niuu-text-yellow-400'}`}
+          className={`niuu-rounded-full niuu-px-2 niuu-py-0.5 niuu-text-xs ${allReady ? 'niuu-bg-state-ok-bg niuu-text-state-ok' : 'niuu-bg-state-warn-bg niuu-text-state-warn'}`}
         >
           {cluster.nodes.length} nodes
         </span>
@@ -73,74 +65,11 @@ function ClusterCard({ cluster }: { cluster: Cluster }) {
       <div className="niuu-flex niuu-items-center niuu-justify-between niuu-text-xs niuu-text-text-muted">
         <span>{cluster.runningSessions} running</span>
         {cluster.queuedProvisions > 0 && (
-          <span className="niuu-text-yellow-400">{cluster.queuedProvisions} queued</span>
+          <span className="niuu-text-state-warn">{cluster.queuedProvisions} queued</span>
         )}
       </div>
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Active sessions row
-// ---------------------------------------------------------------------------
-
-function sessionBadgeState(
-  state: SessionState,
-): 'provisioning' | 'running' | 'idle' | 'terminating' | 'terminated' | 'failed' | 'ready' {
-  if (state === 'requested') return 'provisioning';
-  return state as
-    | 'provisioning'
-    | 'running'
-    | 'idle'
-    | 'terminating'
-    | 'terminated'
-    | 'failed'
-    | 'ready';
-}
-
-type ActiveSessionRow = Session & { id: string };
-
-function buildActiveColumns(onView: (id: string) => void): TableColumn<ActiveSessionRow>[] {
-  return [
-    {
-      key: 'id',
-      header: 'Session',
-      render: (s) => (
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-primary">{s.id}</span>
-      ),
-    },
-    {
-      key: 'persona',
-      header: 'Persona',
-      render: (s) => <span className="niuu-text-sm niuu-text-text-secondary">{s.personaName}</span>,
-    },
-    {
-      key: 'state',
-      header: 'State',
-      render: (s) => <LifecycleBadge state={sessionBadgeState(s.state)} />,
-    },
-    {
-      key: 'cluster',
-      header: 'Cluster',
-      render: (s) => (
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">{s.clusterId}</span>
-      ),
-    },
-    {
-      key: 'actions',
-      header: '',
-      render: (s) => (
-        <button
-          className="niuu-rounded niuu-px-2 niuu-py-1 niuu-text-xs niuu-text-brand hover:niuu-bg-bg-elevated"
-          onClick={() => onView(s.id)}
-          data-testid={`open-session-${s.id}`}
-          aria-label={`Open session ${s.id}`}
-        >
-          Open →
-        </button>
-      ),
-    },
-  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -151,7 +80,6 @@ function buildActiveColumns(onView: (id: string) => void): TableColumn<ActiveSes
 export function VolundrPage() {
   const navigate = useNavigate();
 
-  const legacySessions = useVolundrSessions();
   const stats = useVolundrStats();
   const clusters = useVolundrClusters();
   const domainSessions = useSessionList();
@@ -160,7 +88,12 @@ export function VolundrPage() {
     void navigate({ to: `/volundr/session/$sessionId`, params: { sessionId } });
   }
 
-  const activeCols = buildActiveColumns(handleView);
+  const activeCols = buildSessionColumns({
+    onView: handleView,
+    buttonLabel: 'Open →',
+    testIdPrefix: 'open-session',
+    columns: ['id', 'persona', 'state', 'cluster', 'actions'],
+  });
 
   // Derive KPI values from domain sessions.
   const runningCount = domainSessions.data?.filter((s) => s.state === 'running').length ?? 0;
@@ -179,13 +112,11 @@ export function VolundrPage() {
   const totalQueued = clusters.data?.reduce((s, c) => s + c.queuedProvisions, 0) ?? 0;
 
   // Active + recently terminated (from domain sessions).
-  const activeSessions = (domainSessions.data?.filter(
-    (s) => s.state === 'running' || s.state === 'idle',
-  ) ?? []) as ActiveSessionRow[];
+  const activeSessions =
+    domainSessions.data?.filter((s) => s.state === 'running' || s.state === 'idle') ?? [];
 
-  const recentTerminations = (domainSessions.data?.filter(
-    (s) => s.state === 'terminated' || s.state === 'failed',
-  ) ?? []) as ActiveSessionRow[];
+  const recentTerminations =
+    domainSessions.data?.filter((s) => s.state === 'terminated' || s.state === 'failed') ?? [];
 
   return (
     <div className="niuu-flex niuu-flex-col niuu-gap-8 niuu-p-6" data-testid="volundr-overview">
@@ -204,10 +135,10 @@ export function VolundrPage() {
 
       {/* KPI strip */}
       <section aria-label="Session KPIs">
-        {(legacySessions.isLoading || clusters.isLoading) && (
+        {(domainSessions.isLoading || clusters.isLoading) && (
           <LoadingState label="Loading metrics…" />
         )}
-        {!legacySessions.isLoading && !clusters.isLoading && (
+        {!domainSessions.isLoading && !clusters.isLoading && (
           <KpiStrip>
             <KpiCard label="active" value={runningCount} data-testid="kpi-active" />
             <KpiCard label="idle" value={idleCount} data-testid="kpi-idle" />
@@ -253,11 +184,7 @@ export function VolundrPage() {
           </p>
         )}
         {activeSessions.length > 0 && (
-          <Table<ActiveSessionRow>
-            columns={activeCols}
-            rows={activeSessions}
-            aria-label="Active sessions"
-          />
+          <Table<Session> columns={activeCols} rows={activeSessions} aria-label="Active sessions" />
         )}
       </section>
 
@@ -286,7 +213,7 @@ export function VolundrPage() {
           <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">
             Recent terminations
           </h3>
-          <Table<ActiveSessionRow>
+          <Table<Session>
             columns={activeCols}
             rows={recentTerminations}
             aria-label="Recent terminations"
@@ -294,7 +221,7 @@ export function VolundrPage() {
         </section>
       )}
 
-      {/* Stats footer (from legacy service) */}
+      {/* Stats footer */}
       {stats.data && (
         <p className="niuu-text-xs niuu-text-text-muted">
           Tokens today:{' '}

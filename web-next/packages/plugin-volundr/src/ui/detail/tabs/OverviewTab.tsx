@@ -1,4 +1,5 @@
 import { LifecycleBadge } from '@niuulabs/ui';
+import { toLifecycleState } from '../../utils/toLifecycleState';
 import type { Session } from '../../../domain/session';
 
 interface OverviewTabProps {
@@ -63,20 +64,7 @@ export function OverviewTab({ session }: OverviewTabProps) {
           <dd className="niuu-font-mono niuu-text-text-primary">{session.templateId}</dd>
           <dt className="niuu-text-text-muted">State</dt>
           <dd>
-            <LifecycleBadge
-              state={
-                session.state === 'requested' || session.state === 'ready'
-                  ? 'provisioning'
-                  : session.state === 'terminating'
-                    ? 'terminating'
-                    : (session.state as
-                        | 'running'
-                        | 'idle'
-                        | 'provisioning'
-                        | 'terminated'
-                        | 'failed')
-              }
-            />
+            <LifecycleBadge state={toLifecycleState(session.state)} />
           </dd>
         </dl>
       </section>

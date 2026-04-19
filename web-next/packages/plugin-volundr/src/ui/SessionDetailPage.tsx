@@ -11,9 +11,10 @@ import { EventsTab } from './detail/tabs/EventsTab';
 import { MetricsTab } from './detail/tabs/MetricsTab';
 import { useExec } from './hooks/useExec';
 import { useMetrics } from './hooks/useMetrics';
+import { useSessionDetail } from './hooks/useSessionStore';
+import { toLifecycleState } from './utils/toLifecycleState';
 import type { IPtyStream } from '../ports/IPtyStream';
 import type { IFileSystemPort, FileTreeNode } from '../ports/IFileSystemPort';
-import type { ISessionStore } from '../ports/ISessionStore';
 
 export type SessionTab = 'overview' | 'terminal' | 'files' | 'exec' | 'events' | 'metrics';
 
@@ -46,12 +47,8 @@ export function SessionDetailPage({
 
   const ptyStream = useService<IPtyStream>('ptyStream');
   const filesystem = useService<IFileSystemPort>('filesystem');
-  const sessionStore = useService<ISessionStore>('sessionStore');
 
-  const sessionQuery = useQuery({
-    queryKey: ['volundr', 'domain-session', sessionId],
-    queryFn: () => sessionStore.getSession(sessionId),
-  });
+  const sessionQuery = useSessionDetail(sessionId);
 
   const treeQuery = useQuery<FileTreeNode[]>({
     queryKey: ['volundr', 'filetree', sessionId],
@@ -79,19 +76,6 @@ export function SessionDetailPage({
 
   const session = sessionQuery.data;
 
-  // Derive a LifecycleBadge-compatible state.
-  function badgeState(
-    state: string,
-  ): 'provisioning' | 'running' | 'idle' | 'terminating' | 'terminated' | 'failed' | 'ready' {
-    if (state === 'requested' || state === 'provisioning') return 'provisioning';
-    if (state === 'ready') return 'ready';
-    if (state === 'running') return 'running';
-    if (state === 'idle') return 'idle';
-    if (state === 'terminating') return 'terminating';
-    if (state === 'terminated') return 'terminated';
-    return 'failed';
-  }
-
   return (
     <div className="niuu-flex niuu-h-full niuu-flex-col" data-testid="session-detail-page">
       {/* Header */}
@@ -103,7 +87,7 @@ export function SessionDetailPage({
           {sessionId}
         </span>
 
-        {session && <LifecycleBadge state={badgeState(session.state)} />}
+        {session && <LifecycleBadge state={toLifecycleState(session.state)} />}
 
         {readOnly && (
           <span

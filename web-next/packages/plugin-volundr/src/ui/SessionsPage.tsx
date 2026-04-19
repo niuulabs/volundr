@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Table, LifecycleBadge, LoadingState, ErrorState, EmptyState } from '@niuulabs/ui';
-import type { TableColumn } from '@niuulabs/ui';
+import { Table, LoadingState, ErrorState, EmptyState } from '@niuulabs/ui';
 import { useSessionList } from './hooks/useSessionStore';
+import { buildSessionColumns } from './utils/sessionColumns';
 import { groupByState, SESSION_STATES } from './sessions/groupByState';
 import type { SessionState } from '../domain/session';
 import type { Session } from '../domain/session';
@@ -18,89 +18,20 @@ const STATE_LABELS: Record<SessionState, string> = {
   failed: 'Failed',
 };
 
-function lifecycleBadgeState(
-  state: SessionState,
-): 'provisioning' | 'running' | 'idle' | 'terminating' | 'terminated' | 'failed' | 'ready' {
-  if (state === 'requested') return 'provisioning';
-  return state as
-    | 'provisioning'
-    | 'running'
-    | 'idle'
-    | 'terminating'
-    | 'terminated'
-    | 'failed'
-    | 'ready';
-}
-
-type SessionRow = Session & { id: string };
-
-function buildColumns(onView: (id: string) => void): TableColumn<SessionRow>[] {
-  return [
-    {
-      key: 'id',
-      header: 'Session',
-      render: (s) => (
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-primary">{s.id}</span>
-      ),
-    },
-    {
-      key: 'persona',
-      header: 'Persona',
-      render: (s) => <span className="niuu-text-sm niuu-text-text-secondary">{s.personaName}</span>,
-    },
-    {
-      key: 'cluster',
-      header: 'Cluster',
-      render: (s) => (
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">{s.clusterId}</span>
-      ),
-    },
-    {
-      key: 'state',
-      header: 'State',
-      render: (s) => <LifecycleBadge state={lifecycleBadgeState(s.state)} />,
-    },
-    {
-      key: 'started',
-      header: 'Started',
-      render: (s) => (
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
-          {new Date(s.startedAt).toLocaleString()}
-        </span>
-      ),
-    },
-    {
-      key: 'actions',
-      header: '',
-      render: (s) => (
-        <button
-          className="niuu-rounded niuu-px-2 niuu-py-1 niuu-text-xs niuu-text-brand hover:niuu-bg-bg-elevated"
-          onClick={() => onView(s.id)}
-          data-testid={`view-session-${s.id}`}
-          aria-label={`View session ${s.id}`}
-        >
-          View →
-        </button>
-      ),
-    },
-  ];
-}
-
 /** Sessions page — state-grouped subnav + filterable session list. */
 export function SessionsPage() {
   const [activeState, setActiveState] = useState<SessionState>('running');
   const navigate = useNavigate();
-
   const sessionsQuery = useSessionList();
 
   const grouped = sessionsQuery.data ? groupByState(sessionsQuery.data) : null;
-  const visibleSessions = grouped ? (grouped[activeState] as SessionRow[]) : [];
+  const visibleSessions = grouped ? (grouped[activeState] as Session[]) : [];
 
   function handleView(sessionId: string) {
     void navigate({ to: `/volundr/session/$sessionId`, params: { sessionId } });
   }
 
-  const columns = buildColumns(handleView);
+  const columns = buildSessionColumns({ onView: handleView });
 
   return (
     <div className="niuu-flex niuu-h-full niuu-flex-col" data-testid="sessions-page">
@@ -165,7 +96,7 @@ export function SessionsPage() {
         )}
 
         {grouped && visibleSessions.length > 0 && (
-          <Table<SessionRow>
+          <Table<Session>
             columns={columns}
             rows={visibleSessions}
             aria-label={`${STATE_LABELS[activeState]} sessions`}
