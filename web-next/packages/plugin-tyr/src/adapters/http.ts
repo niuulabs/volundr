@@ -15,6 +15,8 @@ import type {
   ITyrSessionService,
   ITrackerBrowserService,
   ITyrIntegrationService,
+  IDispatchBus,
+  DispatchResult,
   CommitSagaRequest,
   PlanSession,
   ExtractedStructure,
@@ -506,6 +508,22 @@ export function buildTyrIntegrationHttpAdapter(client: ApiClient): ITyrIntegrati
 
     async getTelegramSetup() {
       return client.get<TelegramSetupResult>('/integrations/telegram/setup');
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Dispatch bus (Sleipnir) HTTP adapter
+// ---------------------------------------------------------------------------
+
+export function buildDispatchBusHttpAdapter(client: ApiClient): IDispatchBus {
+  return {
+    async dispatch(raidId: string): Promise<void> {
+      await client.post<void>(`/dispatch/${encodeURIComponent(raidId)}`, {});
+    },
+
+    async dispatchBatch(raidIds: string[]): Promise<DispatchResult> {
+      return client.post<DispatchResult>('/dispatch/batch', { raid_ids: raidIds });
     },
   };
 }
