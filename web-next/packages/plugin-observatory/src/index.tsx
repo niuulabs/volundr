@@ -46,3 +46,12 @@ export type {
   EventSeverity,
   ObservatoryEvent,
 } from './domain';
+
+// Overlay components — re-exported for consumers who want to embed them
+export { EntityDrawer } from './ui/overlays/EntityDrawer';
+export type { EntityDrawerProps } from './ui/overlays/EntityDrawer';
+export { EventLog } from './ui/overlays/EventLog';
+export type { EventLogProps } from './ui/overlays/EventLog';
+export { ConnectionLegend } from './ui/overlays/ConnectionLegend';
+export { Minimap } from './ui/overlays/Minimap';
+export type { MinimapProps } from './ui/overlays/Minimap';
