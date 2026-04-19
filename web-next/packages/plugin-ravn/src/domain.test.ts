@@ -315,9 +315,7 @@ describe('triggerSchema (discriminated union)', () => {
   });
 
   it('rejects unknown kind', () => {
-    expect(() =>
-      triggerSchema.parse({ id: 't9', ravnId: 'r1', kind: 'timer' }),
-    ).toThrow();
+    expect(() => triggerSchema.parse({ id: 't9', ravnId: 'r1', kind: 'timer' })).toThrow();
   });
 
   it('round-trips all kinds', () => {

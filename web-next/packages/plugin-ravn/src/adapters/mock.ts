@@ -344,16 +344,79 @@ const SEED_RAVENS: Raven[] = [
 // ---------------------------------------------------------------------------
 
 const SEED_MESSAGES: Message[] = [
-  { id: 'm1', sessionId: 's1', kind: 'system', body: 'You are a coding agent.', ts: '2026-04-19T09:12:34Z' },
-  { id: 'm2', sessionId: 's1', kind: 'user', body: 'Implement the auth middleware', ts: '2026-04-19T09:12:35Z' },
-  { id: 'm3', sessionId: 's1', kind: 'think', body: 'I need to understand the existing auth setup first.', ts: '2026-04-19T09:12:36Z' },
-  { id: 'm4', sessionId: 's1', kind: 'tool_call', body: 'read("src/auth/middleware.py")', ts: '2026-04-19T09:12:37Z', toolName: 'read' },
-  { id: 'm5', sessionId: 's1', kind: 'tool_result', body: '# auth middleware content', ts: '2026-04-19T09:12:38Z', toolName: 'read' },
-  { id: 'm6', sessionId: 's1', kind: 'asst', body: 'I have reviewed the existing auth setup. Implementing now.', ts: '2026-04-19T09:12:40Z' },
-  { id: 'm7', sessionId: 's1', kind: 'emit', body: 'code.changed', ts: '2026-04-19T09:55:00Z', eventName: 'code.changed' },
-  { id: 'm8', sessionId: 's2', kind: 'system', body: 'You are a reviewer persona.', ts: '2026-04-19T08:45:11Z' },
-  { id: 'm9', sessionId: 's2', kind: 'user', body: 'Review the auth PR', ts: '2026-04-19T08:45:12Z' },
-  { id: 'm10', sessionId: 's2', kind: 'asst', body: 'PR looks good. LGTM.', ts: '2026-04-19T08:46:00Z' },
+  {
+    id: 'm1',
+    sessionId: 's1',
+    kind: 'system',
+    body: 'You are a coding agent.',
+    ts: '2026-04-19T09:12:34Z',
+  },
+  {
+    id: 'm2',
+    sessionId: 's1',
+    kind: 'user',
+    body: 'Implement the auth middleware',
+    ts: '2026-04-19T09:12:35Z',
+  },
+  {
+    id: 'm3',
+    sessionId: 's1',
+    kind: 'think',
+    body: 'I need to understand the existing auth setup first.',
+    ts: '2026-04-19T09:12:36Z',
+  },
+  {
+    id: 'm4',
+    sessionId: 's1',
+    kind: 'tool_call',
+    body: 'read("src/auth/middleware.py")',
+    ts: '2026-04-19T09:12:37Z',
+    toolName: 'read',
+  },
+  {
+    id: 'm5',
+    sessionId: 's1',
+    kind: 'tool_result',
+    body: '# auth middleware content',
+    ts: '2026-04-19T09:12:38Z',
+    toolName: 'read',
+  },
+  {
+    id: 'm6',
+    sessionId: 's1',
+    kind: 'asst',
+    body: 'I have reviewed the existing auth setup. Implementing now.',
+    ts: '2026-04-19T09:12:40Z',
+  },
+  {
+    id: 'm7',
+    sessionId: 's1',
+    kind: 'emit',
+    body: 'code.changed',
+    ts: '2026-04-19T09:55:00Z',
+    eventName: 'code.changed',
+  },
+  {
+    id: 'm8',
+    sessionId: 's2',
+    kind: 'system',
+    body: 'You are a reviewer persona.',
+    ts: '2026-04-19T08:45:11Z',
+  },
+  {
+    id: 'm9',
+    sessionId: 's2',
+    kind: 'user',
+    body: 'Review the auth PR',
+    ts: '2026-04-19T08:45:12Z',
+  },
+  {
+    id: 'm10',
+    sessionId: 's2',
+    kind: 'asst',
+    body: 'PR looks good. LGTM.',
+    ts: '2026-04-19T08:46:00Z',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -395,10 +458,28 @@ const SEED_SESSIONS: Session[] = [
 // ---------------------------------------------------------------------------
 
 const SEED_TRIGGERS: Trigger[] = [
-  { id: 'trig1', ravnId: 'r1', kind: 'event', topic: 'feature.requested', producesEvent: 'code.changed' },
-  { id: 'trig2', ravnId: 'r2', kind: 'event', topic: 'code.changed', producesEvent: 'review.completed' },
+  {
+    id: 'trig1',
+    ravnId: 'r1',
+    kind: 'event',
+    topic: 'feature.requested',
+    producesEvent: 'code.changed',
+  },
+  {
+    id: 'trig2',
+    ravnId: 'r2',
+    kind: 'event',
+    topic: 'code.changed',
+    producesEvent: 'review.completed',
+  },
   { id: 'trig3', ravnId: 'r3', kind: 'event', topic: 'review.completed' },
-  { id: 'trig4', ravnId: 'r4', kind: 'cron', schedule: '0 * * * *', description: 'hourly health check' },
+  {
+    id: 'trig4',
+    ravnId: 'r4',
+    kind: 'cron',
+    schedule: '0 * * * *',
+    description: 'hourly health check',
+  },
   { id: 'trig5', ravnId: 'r1', kind: 'webhook', path: '/hooks/github' },
   { id: 'trig6', ravnId: 'r5', kind: 'manual' },
 ];
