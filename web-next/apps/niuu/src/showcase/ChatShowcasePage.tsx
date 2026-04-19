@@ -21,14 +21,14 @@ const INITIAL_MESSAGES: ChatMessage[] = [
     parts: [
       {
         type: 'tool_use',
-        toolCallId: 'call-1',
-        toolName: 'Bash',
-        args: { command: 'pnpm test' },
+        id: 'call-1',
+        name: 'Bash',
+        input: { command: 'pnpm test' },
       },
       {
         type: 'tool_result',
-        toolCallId: 'call-1',
-        result: '64 tests passed, 0 failed.',
+        tool_use_id: 'call-1',
+        content: '64 tests passed, 0 failed.',
       },
       {
         type: 'text',
