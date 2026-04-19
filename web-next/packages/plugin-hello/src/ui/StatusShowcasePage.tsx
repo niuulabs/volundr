@@ -3,6 +3,9 @@ import {
   ConfidenceBar,
   ConfidenceBadge,
   Pipe,
+  Sparkline,
+  BudgetBar,
+  BudgetRunwayBar,
   type BadgeStatus,
   type PipeCell,
 } from '@niuulabs/ui';
@@ -153,6 +156,62 @@ export function StatusShowcasePage() {
                 gated
               </code>
               <Pipe cells={PIPE_GATED} />
+            </div>
+          </div>
+        </Section>
+
+        <Section title="Sparkline — deterministic by id">
+          <div
+            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
+            data-testid="sparkline-grid"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <code style={{ fontSize: 11, color: 'var(--color-text-muted)', width: 80 }}>24 samples</code>
+              <Sparkline id="fleet-cost" />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <code style={{ fontSize: 11, color: 'var(--color-text-muted)', width: 80 }}>empty</code>
+              <Sparkline values={[]} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <code style={{ fontSize: 11, color: 'var(--color-text-muted)', width: 80 }}>single pt</code>
+              <Sparkline values={[0.7]} />
+            </div>
+          </div>
+        </Section>
+
+        <Section title="BudgetBar — spend percentage">
+          <div
+            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', width: 240 }}
+            data-testid="budget-bar-grid"
+          >
+            {([20, 50, 80, 95, 100, 130] as const).map((pct) => (
+              <div key={pct} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                <code style={{ fontSize: 11, color: 'var(--color-text-muted)', width: 36 }}>{pct}%</code>
+                <div style={{ flex: 1 }}>
+                  <BudgetBar spent={pct} cap={100} showLabel />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section title="BudgetRunwayBar — fleet runway">
+          <div
+            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', width: 300 }}
+            data-testid="budget-runway-grid"
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+              <code style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>on track — 50% spent, 90% proj, midday</code>
+              <BudgetRunwayBar spent={50} projected={90} cap={100} elapsedFrac={0.5} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+              <code style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>burning hot — projected over cap</code>
+              <BudgetRunwayBar spent={75} projected={130} cap={100} elapsedFrac={0.65} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+              <code style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>idle — barely any spend</code>
+              <BudgetRunwayBar spent={5} projected={10} cap={100} elapsedFrac={0.8} />
             </div>
           </div>
         </Section>
