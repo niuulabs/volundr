@@ -45,7 +45,7 @@ export function parseWikilinks(text: string): string[] {
  * `arch/overview` resolves to a page at `/arch/overview`.
  */
 export function resolveWikilink(slug: string, pages: PageMeta[]): WikilinkTarget {
-  const page = pages.find((p) => p.path.includes(slug)) ?? null;
+  const page = pages.find((p) => p.path === `/${slug}` || p.path === slug) ?? null;
   return { slug, page, broken: page === null };
 }
 

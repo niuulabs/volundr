@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { StateDot } from '@niuulabs/ui';
 import { MountChip } from './MountChip';
 import { ZoneBodyReadonly, zoneToEditableText } from './ZoneRenderers';
@@ -20,15 +21,22 @@ interface ZoneBlockProps {
   onNavigate: (path: string) => void;
   editState: ZoneEditState;
   onEdit: (zone: Zone) => void;
-  onSave: () => void;
+  onSave: (text: string) => void;
   onCancel: () => void;
 }
 
-function EditZoneBody({ zone }: { zone: Zone }) {
+function EditZoneBody({
+  zone,
+  textareaRef,
+}: {
+  zone: Zone;
+  textareaRef: React.RefObject<HTMLTextAreaElement>;
+}) {
   const text = zoneToEditableText(zone);
   return (
     <div className="mm-zone-edit-footer">
       <textarea
+        ref={textareaRef}
         className="mm-zone-edit-area"
         defaultValue={text}
         aria-label="zone edit area"
@@ -51,6 +59,8 @@ export function ZoneBlock({
   onSave,
   onCancel,
 }: ZoneBlockProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const isEditingThis =
     editState.status === 'editing' &&
     editState.path === pagePath &&
@@ -58,7 +68,10 @@ export function ZoneBlock({
   const isSavingThis =
     editState.status === 'saving' && editState.path === pagePath;
   const isSaved = editState.status === 'saved' && editState.path === pagePath;
-  const isError = editState.status === 'error' && editState.path === pagePath;
+  const errorMessage =
+    editState.status === 'error' && editState.path === pagePath
+      ? editState.message
+      : null;
 
   const canEdit = editState.status === 'idle';
   const label = ZONE_LABELS[zone.kind] ?? zone.kind;
@@ -84,7 +97,7 @@ export function ZoneBlock({
               <button
                 type="button"
                 className="mm-btn mm-btn--primary"
-                onClick={onSave}
+                onClick={() => onSave(textareaRef.current?.value ?? '')}
                 aria-label={`save ${zone.kind} zone`}
               >
                 save
@@ -108,12 +121,10 @@ export function ZoneBlock({
             ✓ saved → {pageMounts.map((m) => <MountChip key={m} name={m} />)}
           </div>
         )}
-        {isError && editState.status === 'error' && (
-          <div className="mm-error-banner">{editState.message}</div>
-        )}
+        {errorMessage && <div className="mm-error-banner">{errorMessage}</div>}
 
         {isEditingThis ? (
-          <EditZoneBody zone={editState.draft} />
+          <EditZoneBody zone={editState.draft} textareaRef={textareaRef} />
         ) : (
           <ZoneBodyReadonly zone={zone} allPages={allPages} onNavigate={onNavigate} />
         )}

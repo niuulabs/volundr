@@ -6,7 +6,7 @@
  * Right:  page meta panel (provenance, sources, backlinks)
  */
 
-import { useState, useReducer, useEffect, Fragment } from 'react';
+import { useState, useReducer, useEffect, useRef, Fragment } from 'react';
 import { useService } from '@niuulabs/plugin-sdk';
 import { useMimirPages, useMimirPage, useMimirPageSources } from './useMimirPages';
 import { TreeNode } from './components/TreeNode';
@@ -39,11 +39,19 @@ export function PagesView() {
   const service = useService<IMimirService>('mimir');
 
   const [editState, dispatch] = useReducer(zoneEditReducer, { status: 'idle' });
+  const saveResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up any pending reset timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (saveResetTimerRef.current !== null) clearTimeout(saveResetTimerRef.current);
+    };
+  }, []);
 
   const tree = mergeFileTrees(allPages);
 
   function handleNavigate(slug: string) {
-    const target = allPages.find((p) => p.path.includes(slug));
+    const target = allPages.find((p) => p.path === `/${slug}` || p.path === slug);
     if (target) setSelectedPath(target.path);
   }
 
@@ -52,14 +60,17 @@ export function PagesView() {
     dispatch({ type: 'START_EDIT', path: activePagePath, zoneKind: zone.kind, zone });
   }
 
-  async function handleSave() {
+  async function handleSave(text: string) {
     if (!page || editState.status !== 'editing') return;
     const mounts = page.mounts;
     dispatch({ type: 'BEGIN_SAVE', destinationMounts: mounts });
     try {
-      await service.pages.upsertPage(page.path, JSON.stringify(editState.draft), mounts[0]);
+      await service.pages.upsertPage(page.path, text, mounts[0]);
       dispatch({ type: 'SAVE_SUCCESS', savedAt: new Date().toISOString() });
-      setTimeout(() => dispatch({ type: 'RESET' }), ZONE_SAVE_RESET_DELAY_MS);
+      saveResetTimerRef.current = setTimeout(
+        () => dispatch({ type: 'RESET' }),
+        ZONE_SAVE_RESET_DELAY_MS,
+      );
     } catch (err) {
       dispatch({
         type: 'SAVE_ERROR',

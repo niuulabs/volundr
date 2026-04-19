@@ -61,6 +61,8 @@ export interface PageMeta {
   updatedBy: string;
   sourceIds: string[];
   size: number;
+  /** Related page slugs — carried through from Page so backlinks can be computed. */
+  related?: string[];
 }
 
 /** Full page with structured zone content. */
@@ -116,5 +118,6 @@ export function toPageMeta(page: Page): PageMeta {
     updatedBy: page.updatedBy,
     sourceIds: page.sourceIds,
     size: page.size,
+    related: page.related,
   };
 }

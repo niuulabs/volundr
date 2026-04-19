@@ -1,20 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ServicesProvider } from '@niuulabs/plugin-sdk';
+import { screen, waitFor, within } from '@testing-library/react';
+import { renderWithProviders as wrap } from '../__test-utils__/render';
 import { OverviewView } from './OverviewView';
 import { createMimirMockAdapter } from '../adapters/mock';
 import type { IMimirService } from '../ports';
-
-function wrap(ui: React.ReactNode, service?: IMimirService) {
-  const svc = service ?? createMimirMockAdapter();
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <ServicesProvider services={{ mimir: svc }}>{ui}</ServicesProvider>
-    </QueryClientProvider>,
-  );
-}
 
 describe('OverviewView', () => {
   it('renders loading state initially', () => {
