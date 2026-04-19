@@ -18,9 +18,7 @@ export const Default: Story = {
           <button>Open popover</button>
         </PopoverTrigger>
         <PopoverContent>
-          <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
-            Popover content here.
-          </p>
+          <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>Popover content here.</p>
         </PopoverContent>
       </Popover>
     </div>

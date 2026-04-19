@@ -21,7 +21,14 @@ export const Default: Story = {
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', margin: 0 }}>
           Are you sure you want to continue?
         </p>
-        <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-5)', justifyContent: 'flex-end' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 'var(--space-3)',
+            marginTop: 'var(--space-5)',
+            justifyContent: 'flex-end',
+          }}
+        >
           <DialogClose asChild>
             <button>Cancel</button>
           </DialogClose>

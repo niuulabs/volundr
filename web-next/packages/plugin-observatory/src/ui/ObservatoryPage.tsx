@@ -16,11 +16,7 @@ export function ObservatoryPage() {
       data-testid="observatory-page"
       style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column' }}
     >
-      <TopologyCanvas
-        topology={topology}
-        showMinimap
-        style={{ flex: 1, minHeight: 0 }}
-      />
+      <TopologyCanvas topology={topology} showMinimap style={{ flex: 1, minHeight: 0 }} />
     </div>
   );
 }

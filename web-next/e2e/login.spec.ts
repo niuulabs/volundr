@@ -55,14 +55,14 @@ test('login page renders the sign-in card when auth is enabled', async ({ page }
   // Shell resolves, login page overlays it
   await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 5000 });
   await expect(page.getByTestId('sign-in-btn')).toBeVisible();
-  await expect(page.getByText('Sign in')).toBeVisible();
+  await expect(page.getByTestId('sign-in-btn')).toContainText('Sign in');
 });
 
 test('login page shows niuu wordmark', async ({ page }) => {
   await stubOidc(page);
   await page.goto('/login');
 
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible({ timeout: 5000 });
 });
 
 test('unauthenticated user with OIDC config is redirected to /login from root', async ({

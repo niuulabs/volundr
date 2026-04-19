@@ -66,7 +66,7 @@
   cursor: not-allowed;
 }
 
-.niuu-select__item[data-state="checked"] {
+.niuu-select__item[data-state='checked'] {
   color: var(--color-brand-300, var(--brand-300));
 }
 

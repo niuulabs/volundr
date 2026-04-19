@@ -1,4 +1,12 @@
 import { createMockHelloService, buildHelloHttpAdapter } from '@niuulabs/plugin-hello';
+import {
+  createMockPersonaStore,
+  createMockRavenStream,
+  createMockSessionStream,
+  createMockTriggerStore,
+  createMockBudgetStream,
+  buildRavnPersonaAdapter,
+} from '@niuulabs/plugin-ravn';
 import { createMimirMockAdapter, buildMimirHttpAdapter } from '@niuulabs/plugin-mimir';
 import {
   createMockRegistryRepository,
@@ -16,6 +24,7 @@ import type { NiuuConfig, ServicesMap } from '@niuulabs/plugin-sdk';
 
 export function buildServices(config: NiuuConfig): ServicesMap {
   const helloSvc = config.services['hello'];
+  const ravnSvc = config.services['ravn'];
   const mimirSvc = config.services['mimir'];
   const volundrSvc = config.services['volundr'];
 
@@ -23,6 +32,11 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     helloSvc?.mode === 'http' && helloSvc.baseUrl
       ? buildHelloHttpAdapter(createApiClient(helloSvc.baseUrl))
       : createMockHelloService();
+
+  const ravnPersonaService =
+    ravnSvc?.mode === 'http' && ravnSvc.baseUrl
+      ? buildRavnPersonaAdapter(createApiClient(ravnSvc.baseUrl))
+      : createMockPersonaStore();
 
   const mimir =
     mimirSvc?.mode === 'http' && mimirSvc.baseUrl
@@ -36,6 +50,11 @@ export function buildServices(config: NiuuConfig): ServicesMap {
 
   return {
     hello,
+    'ravn.personas': ravnPersonaService,
+    'ravn.ravens': createMockRavenStream(),
+    'ravn.sessions': createMockSessionStream(),
+    'ravn.triggers': createMockTriggerStore(),
+    'ravn.budget': createMockBudgetStream(),
     mimir,
     volundr,
     ptyStream: createMockPtyStream(),

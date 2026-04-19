@@ -14,15 +14,25 @@
 }
 
 /* Gradient stop tokens (used by <stop> elements in inline SVG) */
-.ambient-stop-mid { stop-color: var(--ambient-glow-mid); }
-.ambient-stop-bg { stop-color: var(--color-bg-primary); }
-.ambient-stop-brand { stop-color: var(--brand-500); }
+.ambient-stop-mid {
+  stop-color: var(--ambient-glow-mid);
+}
+.ambient-stop-bg {
+  stop-color: var(--color-bg-primary);
+}
+.ambient-stop-brand {
+  stop-color: var(--brand-500);
+}
 
 /* Constellation star fill */
-.constellation-star { fill: var(--brand-300); }
+.constellation-star {
+  fill: var(--brand-300);
+}
 
 /* Lattice geometry strokes and rune fill */
-.lattice-rings-group { stroke: color-mix(in srgb, var(--brand-300) 14%, transparent); }
+.lattice-rings-group {
+  stroke: color-mix(in srgb, var(--brand-300) 14%, transparent);
+}
 .lattice-rune-text {
   fill: color-mix(in srgb, var(--brand-300) 30%, transparent);
   stroke: none;

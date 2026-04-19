@@ -125,6 +125,9 @@ importers:
       '@niuulabs/design-tokens':
         specifier: workspace:*
         version: link:../../packages/design-tokens
+      '@niuulabs/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@niuulabs/plugin-hello':
         specifier: workspace:*
         version: link:../../packages/plugin-hello
@@ -137,6 +140,9 @@ importers:
       '@niuulabs/plugin-observatory':
         specifier: workspace:*
         version: link:../../packages/plugin-observatory
+      '@niuulabs/plugin-ravn':
+        specifier: workspace:*
+        version: link:../../packages/plugin-ravn
       '@niuulabs/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
@@ -390,6 +396,43 @@ importers:
       tailwindcss:
         specifier: ^3.4.17
         version: 3.4.19(yaml@2.8.3)
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(jiti@1.21.7)(postcss@8.5.10)(typescript@5.9.3)(yaml@2.8.3)
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
+  packages/plugin-ravn:
+    dependencies:
+      '@niuulabs/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@niuulabs/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+      '@niuulabs/query':
+        specifier: workspace:*
+        version: link:../query
+      '@niuulabs/ui':
+        specifier: workspace:*
+        version: link:../ui
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@tanstack/react-query':
+        specifier: ^5.62.0
+        version: 5.99.1(react@19.2.5)
+      '@tanstack/react-router':
+        specifier: ^1.95.0
+        version: 1.168.23(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@types/react':
+        specifier: ^19.0.7
+        version: 19.2.14
+      react:
+        specifier: ^19.0.0
+        version: 19.2.5
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(jiti@1.21.7)(postcss@8.5.10)(typescript@5.9.3)(yaml@2.8.3)

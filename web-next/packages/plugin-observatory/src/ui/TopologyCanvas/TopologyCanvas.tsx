@@ -9,14 +9,7 @@ import {
   type Camera,
 } from './canvasMath';
 import { computeLayout, HOST_HALF_W, HOST_HALF_H } from './layoutEngine';
-import {
-  drawStars,
-  drawZones,
-  drawEdges,
-  drawNode,
-  drawMimir,
-  drawMinimap,
-} from './renderer';
+import { drawStars, drawZones, drawEdges, drawNode, drawMimir, drawMinimap } from './renderer';
 import { CANVAS, HIT_RADIUS } from './config';
 import './TopologyCanvas.css';
 
@@ -71,10 +64,7 @@ export function TopologyCanvas({
   const [zoomPct, setZoomPct] = useState(Math.round(CANVAS.INITIAL_ZOOM * 100));
 
   // Compute layout whenever topology changes (memoised — pure function)
-  const positions = useMemo(
-    () => (topology ? computeLayout(topology) : new Map()),
-    [topology],
-  );
+  const positions = useMemo(() => (topology ? computeLayout(topology) : new Map()), [topology]);
 
   // Stable reference to drawing data so the rAF loop always reads fresh values
   // without being re-subscribed on every state tick.
@@ -145,30 +135,27 @@ export function TopologyCanvas({
 
   // ── Hit detection ───────────────────────────────────────────────────────────
 
-  const hitTest = useCallback(
-    (sx: number, sy: number): string | null => {
-      const { w, h } = sizeRef.current;
-      const cam = camRef.current;
-      const wx = (sx - w / 2) / cam.zoom + cam.x;
-      const wy = (sy - h / 2) / cam.zoom + cam.y;
+  const hitTest = useCallback((sx: number, sy: number): string | null => {
+    const { w, h } = sizeRef.current;
+    const cam = camRef.current;
+    const wx = (sx - w / 2) / cam.zoom + cam.x;
+    const wy = (sy - h / 2) / cam.zoom + cam.y;
 
-      const { topology: topo, positions: pos } = drawRef.current;
-      if (!topo) return null;
+    const { topology: topo, positions: pos } = drawRef.current;
+    if (!topo) return null;
 
-      for (const node of topo.nodes) {
-        const p = pos.get(node.id);
-        if (!p) continue;
-        if (node.typeId === 'host') {
-          if (Math.abs(wx - p.x) < HOST_HALF_W && Math.abs(wy - p.y) < HOST_HALF_H) return node.id;
-        } else {
-          const r = HIT_RADIUS[node.typeId] ?? HIT_RADIUS['tyr']!;
-          if ((wx - p.x) ** 2 + (wy - p.y) ** 2 < r * r) return node.id;
-        }
+    for (const node of topo.nodes) {
+      const p = pos.get(node.id);
+      if (!p) continue;
+      if (node.typeId === 'host') {
+        if (Math.abs(wx - p.x) < HOST_HALF_W && Math.abs(wy - p.y) < HOST_HALF_H) return node.id;
+      } else {
+        const r = HIT_RADIUS[node.typeId] ?? HIT_RADIUS['tyr']!;
+        if ((wx - p.x) ** 2 + (wy - p.y) ** 2 < r * r) return node.id;
       }
-      return null;
-    },
-    [],
-  );
+    }
+    return null;
+  }, []);
 
   // ── Mouse event handlers ────────────────────────────────────────────────────
 
@@ -234,21 +221,18 @@ export function TopologyCanvas({
 
   // ── Minimap click-to-pan ────────────────────────────────────────────────────
 
-  const handleMinimapClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const mm = minimapRef.current;
-      if (!mm) return;
-      const rect = mm.getBoundingClientRect();
-      const fx = (e.clientX - rect.left) / rect.width;
-      const fy = (e.clientY - rect.top) / rect.height;
-      camRef.current = {
-        ...camRef.current,
-        x: fx * CANVAS.WORLD_W - CANVAS.WORLD_W / 2,
-        y: fy * CANVAS.WORLD_H - CANVAS.WORLD_H / 2,
-      };
-    },
-    [],
-  );
+  const handleMinimapClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const mm = minimapRef.current;
+    if (!mm) return;
+    const rect = mm.getBoundingClientRect();
+    const fx = (e.clientX - rect.left) / rect.width;
+    const fy = (e.clientY - rect.top) / rect.height;
+    camRef.current = {
+      ...camRef.current,
+      x: fx * CANVAS.WORLD_W - CANVAS.WORLD_W / 2,
+      y: fy * CANVAS.WORLD_H - CANVAS.WORLD_H / 2,
+    };
+  }, []);
 
   // ── Camera controls ─────────────────────────────────────────────────────────
 
@@ -369,10 +353,7 @@ export function TopologyCanvas({
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div
-      className={['topology-canvas-wrapper', className].filter(Boolean).join(' ')}
-      style={style}
-    >
+    <div className={['topology-canvas-wrapper', className].filter(Boolean).join(' ')} style={style}>
       <canvas
         ref={canvasRef}
         data-testid="topology-canvas"
@@ -387,28 +368,14 @@ export function TopologyCanvas({
       />
 
       {/* Camera controls — top-right overlay */}
-      <div
-        data-testid="camera-controls"
-        className="camera-controls"
-      >
-        <button
-          aria-label="Zoom in"
-          onClick={zoomIn}
-          className="camera-btn"
-        >
+      <div data-testid="camera-controls" className="camera-controls">
+        <button aria-label="Zoom in" onClick={zoomIn} className="camera-btn">
           +
         </button>
-        <span
-          data-testid="zoom-display"
-          className="zoom-display"
-        >
+        <span data-testid="zoom-display" className="zoom-display">
           {zoomPct}%
         </span>
-        <button
-          aria-label="Zoom out"
-          onClick={zoomOut}
-          className="camera-btn"
-        >
+        <button aria-label="Zoom out" onClick={zoomOut} className="camera-btn">
           −
         </button>
         <div className="camera-divider" />
@@ -424,10 +391,7 @@ export function TopologyCanvas({
 
       {/* Minimap — bottom-right overlay */}
       {showMinimap && (
-        <div
-          data-testid="minimap-panel"
-          className="minimap-panel"
-        >
+        <div data-testid="minimap-panel" className="minimap-panel">
           <canvas
             ref={minimapRef}
             width={CANVAS.MINIMAP_W}

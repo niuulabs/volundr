@@ -6,8 +6,9 @@
     "showcase": { "enabled": true, "order": 2 },
     "mimir": { "enabled": true, "order": 3 },
     "observatory": { "enabled": true, "order": 4 },
-    "volundr": { "enabled": true, "order": 5 },
-    "ui-showcase": { "enabled": true, "order": 6 }
+    "ravn": { "enabled": true, "order": 5 },
+    "volundr": { "enabled": true, "order": 6 },
+    "ui-showcase": { "enabled": true, "order": 7 }
   },
   "services": {
     "hello": { "mode": "mock" },
@@ -15,6 +16,7 @@
     "observatory.registry": { "mode": "mock" },
     "observatory.topology": { "mode": "mock" },
     "observatory.events": { "mode": "mock" },
+    "ravn": { "mode": "mock" },
     "volundr": { "mode": "mock" }
   }
 }

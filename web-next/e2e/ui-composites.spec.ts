@@ -39,36 +39,45 @@ test.describe('UI Composites showcase', () => {
     const section = page.getByTestId('section-deploy-badge');
     const kinds = ['k8s', 'systemd', 'pi', 'mobile', 'ephemeral'];
     for (const kind of kinds) {
-      await expect(section.getByLabelText(kind)).toBeVisible();
+      // DeployBadge and its inner StateDot both carry aria-label; take the first (outer badge)
+      await expect(section.getByLabel(kind).first()).toBeVisible();
     }
   });
 
   test('LifecycleBadge renders all 7 lifecycle states', async ({ page }) => {
     const section = page.getByTestId('section-lifecycle-badge');
     const states = [
-      'provisioning', 'ready', 'running', 'idle', 'terminating', 'terminated', 'failed',
+      'provisioning',
+      'ready',
+      'running',
+      'idle',
+      'terminating',
+      'terminated',
+      'failed',
     ];
     for (const state of states) {
-      await expect(section.getByLabelText(state)).toBeVisible();
+      // LifecycleBadge and its inner StateDot both carry aria-label; take the first (outer badge)
+      await expect(section.getByLabel(state).first()).toBeVisible();
     }
   });
 
   test('LifecycleBadge "failed" state renders with critical styling', async ({ page }) => {
-    const failedBadge = page.getByLabelText('failed');
+    const section = page.getByTestId('section-lifecycle-badge');
+    const failedBadge = section.getByLabel('failed').first();
     await expect(failedBadge).toHaveClass(/niuu-lifecycle-badge--failed/);
   });
 
   test('LifecycleBadge "running" state has a pulsing dot', async ({ page }) => {
     const section = page.getByTestId('section-lifecycle-badge');
-    const runningBadge = section.getByLabelText('running');
+    const runningBadge = section.getByLabel('running').first();
     const pulsingDot = runningBadge.locator('.niuu-state-dot--pulse');
     await expect(pulsingDot).toBeVisible();
   });
 
   test('keyboard accessibility: tab reaches the showcase content', async ({ page }) => {
     await page.keyboard.press('Tab');
-    // The page should be keyboard-navigable — focus moves into the content area
-    const focused = page.locator(':focus');
-    await expect(focused).toBeVisible();
+    // The page should be keyboard-navigable — focus moves to some interactive element
+    const focused = page.locator('button:focus, a:focus, input:focus, [tabindex]:focus');
+    await expect(focused.first()).toBeVisible();
   });
 });
