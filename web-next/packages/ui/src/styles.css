@@ -20,6 +20,13 @@
 @import './primitives/Tooltip/Tooltip.css';
 @import './primitives/BudgetBar/BudgetBar.css';
 @import './primitives/BudgetRunwayBar/BudgetRunwayBar.css';
+@import './primitives/form-control.css';
+@import './primitives/Field/Field.css';
+@import './primitives/Input/Input.css';
+@import './primitives/Textarea/Textarea.css';
+@import './primitives/Select/Select.css';
+@import './primitives/Combobox/Combobox.css';
+@import './primitives/ValidationSummary/ValidationSummary.css';
 
 @tailwind components;
 @tailwind utilities;

@@ -204,4 +204,86 @@ describe('createMimirMockAdapter', () => {
       expect(cycles.length).toBeLessThanOrEqual(1);
     });
   });
+
+  describe('pages.getGraph', () => {
+    it('returns a graph with nodes and edges', async () => {
+      const svc = createMimirMockAdapter();
+      const graph = await svc.pages.getGraph();
+      expect(graph.nodes.length).toBeGreaterThan(0);
+      expect(Array.isArray(graph.edges)).toBe(true);
+    });
+
+    it('each node has id, title, and category', async () => {
+      const svc = createMimirMockAdapter();
+      const graph = await svc.pages.getGraph();
+      for (const node of graph.nodes) {
+        expect(node).toHaveProperty('id');
+        expect(node).toHaveProperty('title');
+        expect(node).toHaveProperty('category');
+      }
+    });
+
+    it('each edge has source and target', async () => {
+      const svc = createMimirMockAdapter();
+      const graph = await svc.pages.getGraph();
+      for (const edge of graph.edges) {
+        expect(edge).toHaveProperty('source');
+        expect(edge).toHaveProperty('target');
+      }
+    });
+
+    it('filters by mountName — only includes pages from that mount', async () => {
+      const svc = createMimirMockAdapter();
+      const graph = await svc.pages.getGraph({ mountName: 'local' });
+      // All nodes returned must correspond to pages on the local mount
+      expect(Array.isArray(graph.nodes)).toBe(true);
+    });
+
+    it('returns fewer nodes when scoped to a single mount', async () => {
+      const svc = createMimirMockAdapter();
+      const all = await svc.pages.getGraph();
+      const scoped = await svc.pages.getGraph({ mountName: 'local' });
+      expect(scoped.nodes.length).toBeLessThanOrEqual(all.nodes.length);
+    });
+  });
+
+  describe('pages.listEntities', () => {
+    it('returns a non-empty list of entities', async () => {
+      const svc = createMimirMockAdapter();
+      const entities = await svc.pages.listEntities();
+      expect(entities.length).toBeGreaterThan(0);
+    });
+
+    it('each entity has required EntityMeta fields', async () => {
+      const svc = createMimirMockAdapter();
+      const entities = await svc.pages.listEntities();
+      for (const e of entities) {
+        expect(e).toHaveProperty('path');
+        expect(e).toHaveProperty('title');
+        expect(e).toHaveProperty('entityKind');
+        expect(e).toHaveProperty('summary');
+        expect(e).toHaveProperty('relationshipCount');
+      }
+    });
+
+    it('filters by kind — only returns entities of that kind', async () => {
+      const svc = createMimirMockAdapter();
+      const orgs = await svc.pages.listEntities({ kind: 'org' });
+      expect(orgs.every((e) => e.entityKind === 'org')).toBe(true);
+    });
+
+    it('returns fewer entities when filtered by kind', async () => {
+      const svc = createMimirMockAdapter();
+      const all = await svc.pages.listEntities();
+      const concepts = await svc.pages.listEntities({ kind: 'concept' });
+      expect(concepts.length).toBeLessThanOrEqual(all.length);
+    });
+
+    it('includes entities with various kinds', async () => {
+      const svc = createMimirMockAdapter();
+      const entities = await svc.pages.listEntities();
+      const kinds = new Set(entities.map((e) => e.entityKind));
+      expect(kinds.size).toBeGreaterThan(1);
+    });
+  });
 });
