@@ -35,6 +35,10 @@ export function composeRouter(
     notFoundComponent: NotFoundPage,
   });
 
+  // System plugins (e.g. login) provide routes but should not be the default
+  // redirect destination.
+  const navPlugins = enabled.filter((p) => !p.system);
+
   // Index route: redirect to the stored/default plugin path
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -42,7 +46,9 @@ export function composeRouter(
     beforeLoad: () => {
       const storedId = typeof window !== 'undefined' ? localStorage.getItem('niuu.active') : null;
       const targetId =
-        storedId && enabled.some((p) => p.id === storedId) ? storedId : (enabled[0]?.id ?? null);
+        storedId && navPlugins.some((p) => p.id === storedId)
+          ? storedId
+          : (navPlugins[0]?.id ?? null);
       if (targetId) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         throw redirect({ to: `/${targetId}` as any });
