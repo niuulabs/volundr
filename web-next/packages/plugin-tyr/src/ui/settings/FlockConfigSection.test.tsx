@@ -37,48 +37,40 @@ describe('FlockConfigSection', () => {
 
   it('shows section heading', async () => {
     render(<FlockConfigSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByText('Flock Config')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Flock Config')).toBeInTheDocument());
   });
 
   it('shows error state when service throws', async () => {
-    const failing = { getFlockConfig: async () => { throw new Error('flock error'); } };
+    const failing = {
+      getFlockConfig: async () => {
+        throw new Error('flock error');
+      },
+    };
     render(<FlockConfigSection />, { wrapper: wrap({ 'tyr.settings': failing }) });
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     expect(screen.getByText('flock error')).toBeInTheDocument();
   });
 
   it('shows validation error when flockName is empty', async () => {
     render(<FlockConfigSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByLabelText(/flock name/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByLabelText(/flock name/i)).toBeInTheDocument());
 
     const input = screen.getByLabelText(/flock name/i);
     fireEvent.change(input, { target: { value: '' } });
     fireEvent.submit(screen.getByRole('form', { name: /flock configuration form/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/required/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/required/i)).toBeInTheDocument());
   });
 
   it('shows validation error when defaultBaseBranch is empty', async () => {
     render(<FlockConfigSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByLabelText(/default base branch/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByLabelText(/default base branch/i)).toBeInTheDocument());
 
     const input = screen.getByLabelText(/default base branch/i);
     fireEvent.change(input, { target: { value: '' } });
     fireEvent.submit(screen.getByRole('form', { name: /flock configuration form/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/required/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/required/i)).toBeInTheDocument());
   });
 
   it('shows "Saved" after successful submit', async () => {
@@ -88,15 +80,11 @@ describe('FlockConfigSection', () => {
     );
 
     fireEvent.submit(screen.getByRole('form', { name: /flock configuration form/i }));
-    await waitFor(() =>
-      expect(screen.getByText('Saved')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
   });
 
   it('shows max active sagas field', async () => {
     render(<FlockConfigSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByLabelText(/max active sagas/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByLabelText(/max active sagas/i)).toBeInTheDocument());
   });
 });

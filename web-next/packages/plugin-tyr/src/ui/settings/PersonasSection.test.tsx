@@ -58,18 +58,14 @@ describe('PersonasSection', () => {
     render(<PersonasSection />, {
       wrapper: wrap({ 'ravn.personas': makeMockPersonaStore() }),
     });
-    await waitFor(() =>
-      expect(screen.getByText('Personas')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Personas')).toBeInTheDocument());
   });
 
   it('shows persona names after loading', async () => {
     render(<PersonasSection />, {
       wrapper: wrap({ 'ravn.personas': makeMockPersonaStore() }),
     });
-    await waitFor(() =>
-      expect(screen.getByText('coder')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('coder')).toBeInTheDocument());
     expect(screen.getByText('custom-agent')).toBeInTheDocument();
   });
 
@@ -77,50 +73,40 @@ describe('PersonasSection', () => {
     render(<PersonasSection />, {
       wrapper: wrap({ 'ravn.personas': makeMockPersonaStore() }),
     });
-    await waitFor(() =>
-      expect(screen.getByText('builtin')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('builtin')).toBeInTheDocument());
   });
 
   it('marks overridden persona with label', async () => {
     render(<PersonasSection />, {
       wrapper: wrap({ 'ravn.personas': makeMockPersonaStore() }),
     });
-    await waitFor(() =>
-      expect(screen.getByText('overridden')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('overridden')).toBeInTheDocument());
   });
 
   it('shows persona count', async () => {
     render(<PersonasSection />, {
       wrapper: wrap({ 'ravn.personas': makeMockPersonaStore() }),
     });
-    await waitFor(() =>
-      expect(screen.getByText('2 personas')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('2 personas')).toBeInTheDocument());
   });
 
   it('shows YAML when persona is selected', async () => {
     render(<PersonasSection />, {
       wrapper: wrap({ 'ravn.personas': makeMockPersonaStore('name: coder\nmodel: sonnet\n') }),
     });
-    await waitFor(() =>
-      expect(screen.getByText('coder')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('coder')).toBeInTheDocument());
     fireEvent.click(screen.getByText('coder'));
-    await waitFor(() =>
-      expect(screen.getByText(/name: coder/)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/name: coder/)).toBeInTheDocument());
   });
 
   it('shows error state when service throws', async () => {
     const failing = {
-      listPersonas: async () => { throw new Error('ravn unavailable'); },
+      listPersonas: async () => {
+        throw new Error('ravn unavailable');
+      },
     };
     render(<PersonasSection />, { wrapper: wrap({ 'ravn.personas': failing }) });
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     expect(screen.getByText('ravn unavailable')).toBeInTheDocument();
   });
 
@@ -140,9 +126,7 @@ describe('PersonasSection', () => {
     render(<PersonasSection />, {
       wrapper: wrap({ 'ravn.personas': makeMockPersonaStore() }),
     });
-    await waitFor(() =>
-      expect(screen.getByText('coder')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('coder')).toBeInTheDocument());
     fireEvent.click(screen.getByText('coder'));
     fireEvent.click(screen.getByRole('tab', { name: 'Custom' }));
 
@@ -157,8 +141,6 @@ describe('PersonasSection', () => {
   it('shows empty state when no personas match', async () => {
     const emptyStore = { listPersonas: async () => [] as TyrPersonaSummary[] };
     render(<PersonasSection />, { wrapper: wrap({ 'ravn.personas': emptyStore }) });
-    await waitFor(() =>
-      expect(screen.getByText('No personas found.')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('No personas found.')).toBeInTheDocument());
   });
 });

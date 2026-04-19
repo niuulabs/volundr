@@ -351,11 +351,16 @@ export function buildTyrHttpAdapter(client: ApiClient): ITyrService {
     },
 
     async spawnPlanSession(spec: string, repo: string) {
-      const raw = await client.post<{ session_id: string; chat_endpoint: string | null }>(
-        '/sagas/plan',
-        { spec, repo },
-      );
-      return { sessionId: raw.session_id, chatEndpoint: raw.chat_endpoint } satisfies PlanSession;
+      const raw = await client.post<{
+        session_id: string;
+        chat_endpoint: string | null;
+        questions?: { id: string; question: string; hint?: string }[];
+      }>('/sagas/plan', { spec, repo });
+      return {
+        sessionId: raw.session_id,
+        chatEndpoint: raw.chat_endpoint,
+        questions: raw.questions ?? [],
+      } satisfies PlanSession;
     },
 
     async extractStructure(text: string) {
@@ -652,11 +657,14 @@ export function buildTyrSettingsHttpAdapter(client: ApiClient): ITyrSettingsServ
     async updateFlockConfig(patch) {
       const body: Record<string, unknown> = {};
       if (patch.flockName !== undefined) body['flock_name'] = patch.flockName;
-      if (patch.defaultBaseBranch !== undefined) body['default_base_branch'] = patch.defaultBaseBranch;
-      if (patch.defaultTrackerType !== undefined) body['default_tracker_type'] = patch.defaultTrackerType;
+      if (patch.defaultBaseBranch !== undefined)
+        body['default_base_branch'] = patch.defaultBaseBranch;
+      if (patch.defaultTrackerType !== undefined)
+        body['default_tracker_type'] = patch.defaultTrackerType;
       if (patch.defaultRepos !== undefined) body['default_repos'] = patch.defaultRepos;
       if (patch.maxActiveSagas !== undefined) body['max_active_sagas'] = patch.maxActiveSagas;
-      if (patch.autoCreateMilestones !== undefined) body['auto_create_milestones'] = patch.autoCreateMilestones;
+      if (patch.autoCreateMilestones !== undefined)
+        body['auto_create_milestones'] = patch.autoCreateMilestones;
       const raw = await client.patch<RawFlockConfig>('/settings/flock', body);
       return toFlockConfig(raw);
     },
@@ -668,8 +676,10 @@ export function buildTyrSettingsHttpAdapter(client: ApiClient): ITyrSettingsServ
 
     async updateDispatchDefaults(patch) {
       const body: Record<string, unknown> = {};
-      if (patch.confidenceThreshold !== undefined) body['confidence_threshold'] = patch.confidenceThreshold;
-      if (patch.maxConcurrentRaids !== undefined) body['max_concurrent_raids'] = patch.maxConcurrentRaids;
+      if (patch.confidenceThreshold !== undefined)
+        body['confidence_threshold'] = patch.confidenceThreshold;
+      if (patch.maxConcurrentRaids !== undefined)
+        body['max_concurrent_raids'] = patch.maxConcurrentRaids;
       if (patch.autoContinue !== undefined) body['auto_continue'] = patch.autoContinue;
       if (patch.batchSize !== undefined) body['batch_size'] = patch.batchSize;
       if (patch.retryPolicy !== undefined) {
@@ -691,11 +701,13 @@ export function buildTyrSettingsHttpAdapter(client: ApiClient): ITyrSettingsServ
     async updateNotificationSettings(patch) {
       const body: Record<string, unknown> = {};
       if (patch.channel !== undefined) body['channel'] = patch.channel;
-      if (patch.onRaidPendingApproval !== undefined) body['on_raid_pending_approval'] = patch.onRaidPendingApproval;
+      if (patch.onRaidPendingApproval !== undefined)
+        body['on_raid_pending_approval'] = patch.onRaidPendingApproval;
       if (patch.onRaidMerged !== undefined) body['on_raid_merged'] = patch.onRaidMerged;
       if (patch.onRaidFailed !== undefined) body['on_raid_failed'] = patch.onRaidFailed;
       if (patch.onSagaComplete !== undefined) body['on_saga_complete'] = patch.onSagaComplete;
-      if (patch.onDispatcherError !== undefined) body['on_dispatcher_error'] = patch.onDispatcherError;
+      if (patch.onDispatcherError !== undefined)
+        body['on_dispatcher_error'] = patch.onDispatcherError;
       if (patch.webhookUrl !== undefined) body['webhook_url'] = patch.webhookUrl;
       const raw = await client.patch<RawNotificationSettings>('/settings/notifications', body);
       return toNotificationSettings(raw);

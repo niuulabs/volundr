@@ -36,65 +36,51 @@ describe('DispatchDefaultsSection', () => {
 
   it('shows error state when service throws', async () => {
     const failing = {
-      getDispatchDefaults: async () => { throw new Error('service unavailable'); },
+      getDispatchDefaults: async () => {
+        throw new Error('service unavailable');
+      },
     };
     render(<DispatchDefaultsSection />, { wrapper: wrap({ 'tyr.settings': failing }) });
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     expect(screen.getByText('service unavailable')).toBeInTheDocument();
   });
 
   it('shows section heading', async () => {
     render(<DispatchDefaultsSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByText('Dispatch Defaults')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Dispatch Defaults')).toBeInTheDocument());
   });
 
   it('shows validation error for out-of-range confidence threshold', async () => {
     render(<DispatchDefaultsSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByLabelText(/confidence threshold/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByLabelText(/confidence threshold/i)).toBeInTheDocument());
 
     const input = screen.getByLabelText(/confidence threshold/i);
     fireEvent.change(input, { target: { value: '150' } });
     fireEvent.submit(screen.getByRole('form', { name: /dispatch defaults form/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/between 0 and 100/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/between 0 and 100/i)).toBeInTheDocument());
   });
 
   it('shows validation error for zero max concurrent raids', async () => {
     render(<DispatchDefaultsSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByLabelText(/max concurrent raids/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByLabelText(/max concurrent raids/i)).toBeInTheDocument());
 
     const input = screen.getByLabelText(/max concurrent raids/i);
     fireEvent.change(input, { target: { value: '0' } });
     fireEvent.submit(screen.getByRole('form', { name: /dispatch defaults form/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/at least 1/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/at least 1/i)).toBeInTheDocument());
   });
 
   it('shows validation error for zero batch size', async () => {
     render(<DispatchDefaultsSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByLabelText(/batch size/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByLabelText(/batch size/i)).toBeInTheDocument());
 
     const input = screen.getByLabelText(/batch size/i);
     fireEvent.change(input, { target: { value: '0' } });
     fireEvent.submit(screen.getByRole('form', { name: /dispatch defaults form/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/at least 1/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/at least 1/i)).toBeInTheDocument());
   });
 
   it('shows "Saved" confirmation after successful submission', async () => {
@@ -104,47 +90,35 @@ describe('DispatchDefaultsSection', () => {
     );
 
     fireEvent.submit(screen.getByRole('form', { name: /dispatch defaults form/i }));
-    await waitFor(() =>
-      expect(screen.getByText('Saved')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
   });
 
   it('renders retry policy section', async () => {
     render(<DispatchDefaultsSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByText('Retry Policy')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Retry Policy')).toBeInTheDocument());
     expect(screen.getByLabelText(/max retries per raid/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/retry delay/i)).toBeInTheDocument();
   });
 
   it('shows negative retry delay error', async () => {
     render(<DispatchDefaultsSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByLabelText(/retry delay/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByLabelText(/retry delay/i)).toBeInTheDocument());
 
     const input = screen.getByLabelText(/retry delay/i);
     fireEvent.change(input, { target: { value: '-5' } });
     fireEvent.submit(screen.getByRole('form', { name: /dispatch defaults form/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/cannot be negative/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/cannot be negative/i)).toBeInTheDocument());
   });
 
   it('shows negative max retries error', async () => {
     render(<DispatchDefaultsSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByLabelText(/max retries per raid/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByLabelText(/max retries per raid/i)).toBeInTheDocument());
 
     const input = screen.getByLabelText(/max retries per raid/i);
     fireEvent.change(input, { target: { value: '-1' } });
     fireEvent.submit(screen.getByRole('form', { name: /dispatch defaults form/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/cannot be negative/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/cannot be negative/i)).toBeInTheDocument());
   });
 });

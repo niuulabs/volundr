@@ -169,7 +169,9 @@ export function AuditLogSection() {
         )}
 
         {entries?.length === 0 && !isLoading && (
-          <p className="niuu-text-sm niuu-text-text-muted niuu-p-4">No entries match the current filter.</p>
+          <p className="niuu-text-sm niuu-text-text-muted niuu-p-4">
+            No entries match the current filter.
+          </p>
         )}
 
         {entries && entries.length > 0 && (

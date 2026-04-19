@@ -487,15 +487,140 @@ export function createMockTyrService(): ITyrService {
     },
 
     async decompose(_spec: string, _repo: string) {
-      return [];
+      // Small delay so the raiding step is visible in E2E tests
+      await new Promise<void>((r) => setTimeout(r, 500));
+      return [
+        {
+          id: 'phase-mock-1',
+          sagaId: '',
+          trackerId: '',
+          number: 1,
+          name: 'Phase 1: Foundation',
+          status: 'pending' as const,
+          confidence: 82,
+          raids: [
+            {
+              id: 'raid-mock-1',
+              phaseId: 'phase-mock-1',
+              trackerId: '',
+              name: 'Scaffold core domain models',
+              description: 'Define shared domain types and port interfaces.',
+              acceptanceCriteria: ['All types exported from index.ts', 'No circular imports'],
+              declaredFiles: ['src/domain/models.ts', 'src/ports/index.ts'],
+              estimateHours: 4,
+              status: 'pending' as const,
+              confidence: 85,
+              sessionId: null,
+              reviewerSessionId: null,
+              reviewRound: 0,
+              branch: null,
+              chronicleSummary: null,
+              retryCount: 0,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ],
+        },
+        {
+          id: 'phase-mock-2',
+          sagaId: '',
+          trackerId: '',
+          number: 2,
+          name: 'Phase 2: API layer',
+          status: 'pending' as const,
+          confidence: 75,
+          raids: [
+            {
+              id: 'raid-mock-2',
+              phaseId: 'phase-mock-2',
+              trackerId: '',
+              name: 'Implement HTTP adapters',
+              description: 'Build the REST API adapters for all service ports.',
+              acceptanceCriteria: ['All endpoints covered', 'Snake_case ↔ camelCase transform'],
+              declaredFiles: ['src/adapters/http.ts'],
+              estimateHours: 8,
+              status: 'pending' as const,
+              confidence: 78,
+              sessionId: null,
+              reviewerSessionId: null,
+              reviewRound: 0,
+              branch: null,
+              chronicleSummary: null,
+              retryCount: 0,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      ];
     },
 
     async spawnPlanSession(_spec: string, _repo: string): Promise<PlanSession> {
-      return { sessionId: `plan-${Date.now()}`, chatEndpoint: null };
+      return {
+        sessionId: `plan-${Date.now()}`,
+        chatEndpoint: null,
+        questions: [
+          {
+            id: 'q1',
+            question: 'Which target repositories should this saga operate on?',
+            hint: 'e.g. niuulabs/volundr, niuulabs/tyr',
+          },
+          {
+            id: 'q2',
+            question: 'What is the base branch agents should branch off from?',
+            hint: 'e.g. main, dev, feat/...',
+          },
+          {
+            id: 'q3',
+            question:
+              'Are there any acceptance criteria or constraints you want enforced across all raids?',
+            hint: 'e.g. all endpoints must have OpenAPI docs, no breaking API changes',
+          },
+          {
+            id: 'q4',
+            question:
+              'What is the desired confidence threshold before the dispatcher auto-continues?',
+            hint: 'e.g. 80 — raids below this will pause for operator approval',
+          },
+        ],
+      };
     },
 
     async extractStructure(_text: string): Promise<ExtractedStructure> {
-      return { found: false, structure: null };
+      return {
+        found: true,
+        structure: {
+          name: 'New Saga',
+          phases: [
+            {
+              name: 'Phase 1: Foundation',
+              raids: [
+                {
+                  name: 'Scaffold core domain models',
+                  description: 'Define shared domain types and port interfaces.',
+                  acceptanceCriteria: ['All types exported from index.ts', 'No circular imports'],
+                  declaredFiles: ['src/domain/models.ts', 'src/ports/index.ts'],
+                  estimateHours: 4,
+                  confidence: 85,
+                },
+              ],
+            },
+            {
+              name: 'Phase 2: API layer',
+              raids: [
+                {
+                  name: 'Implement HTTP adapters',
+                  description: 'Build the REST API adapters for all service ports.',
+                  acceptanceCriteria: ['All endpoints covered', 'Snake_case ↔ camelCase transform'],
+                  declaredFiles: ['src/adapters/http.ts'],
+                  estimateHours: 8,
+                  confidence: 78,
+                },
+              ],
+            },
+          ],
+        },
+      };
     },
   };
 }
@@ -653,7 +778,12 @@ export function createMockTyrSettingsService(): ITyrSettingsService {
       const retryPolicy = patch.retryPolicy
         ? { ...dispatchDefaults.retryPolicy, ...patch.retryPolicy }
         : dispatchDefaults.retryPolicy;
-      dispatchDefaults = { ...dispatchDefaults, ...patch, retryPolicy, updatedAt: new Date().toISOString() };
+      dispatchDefaults = {
+        ...dispatchDefaults,
+        ...patch,
+        retryPolicy,
+        updatedAt: new Date().toISOString(),
+      };
       return { ...dispatchDefaults, retryPolicy: { ...dispatchDefaults.retryPolicy } };
     },
 
@@ -662,7 +792,11 @@ export function createMockTyrSettingsService(): ITyrSettingsService {
     },
 
     async updateNotificationSettings(patch) {
-      notificationSettings = { ...notificationSettings, ...patch, updatedAt: new Date().toISOString() };
+      notificationSettings = {
+        ...notificationSettings,
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      };
       return { ...notificationSettings };
     },
   };
