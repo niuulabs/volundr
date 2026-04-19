@@ -1,6 +1,7 @@
 import { createRoute } from '@tanstack/react-router';
 import { definePlugin } from '@niuulabs/plugin-sdk';
 import { VolundrPage } from './ui/VolundrPage';
+import { SessionsPage } from './ui/SessionsPage';
 import { VolundrSessionRoute, VolundrArchivedRoute } from './ui/routes';
 import { TemplatesPage } from './ui/TemplatesPage';
 import { ClustersPage } from './ui/ClustersPage';
@@ -16,6 +17,11 @@ export const volundrPlugin = definePlugin({
       getParentRoute: () => rootRoute,
       path: '/volundr',
       component: VolundrPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/volundr/sessions',
+      component: SessionsPage,
     }),
     createRoute({
       getParentRoute: () => rootRoute,
@@ -72,10 +78,16 @@ export { FileTree } from './ui/FileTree/FileTree';
 export type { FileTreeProps } from './ui/FileTree/FileTree';
 export { FileViewer } from './ui/FileTree/FileViewer';
 export type { FileViewerProps } from './ui/FileTree/FileViewer';
+export { SessionDetailPage } from './ui/SessionDetailPage';
+export type { SessionDetailPageProps, SessionTab } from './ui/SessionDetailPage';
+export { SessionsPage } from './ui/SessionsPage';
 
 // Domain types
 export type { Session, SessionState, SessionResources, SessionEvent } from './domain/session';
 export { canTransition, transitionSession } from './domain/session';
+export { toLifecycleState } from './ui/utils/toLifecycleState';
+export type { ExecEntry, ExecStatus } from './domain/exec';
+export { appendExecEntry, updateExecEntry } from './domain/exec';
 export type { PodSpec, Mount, MountSource, ResourceSpec, MountKind } from './domain/pod';
 export type { Template } from './domain/template';
 export type { Cluster, ClusterNode, ClusterCapacity, NodeStatus } from './domain/cluster';

@@ -8,7 +8,8 @@
     "observatory": { "enabled": true, "order": 4 },
     "ravn": { "enabled": true, "order": 5 },
     "volundr": { "enabled": true, "order": 6 },
-    "ui-showcase": { "enabled": true, "order": 7 }
+    "ui-showcase": { "enabled": true, "order": 7 },
+    "tyr": { "enabled": true, "order": 8 }
   },
   "services": {
     "hello": { "mode": "mock" },
@@ -17,6 +18,7 @@
     "observatory.topology": { "mode": "mock" },
     "observatory.events": { "mode": "mock" },
     "ravn": { "mode": "mock" },
-    "volundr": { "mode": "mock" }
+    "volundr": { "mode": "mock" },
+    "tyr": { "mode": "mock" }
   }
 }
