@@ -25,6 +25,13 @@ describe('niuuConfigSchema', () => {
     expect(parsed.services.tyr?.baseUrl).toBe('https://api.niuu.world/tyr');
   });
 
+  it('accepts a relative baseUrl for same-origin deployments', () => {
+    const parsed = niuuConfigSchema.parse({
+      services: { hello: { baseUrl: '/api/v1/hello', mode: 'http' } },
+    });
+    expect(parsed.services.hello?.baseUrl).toBe('/api/v1/hello');
+  });
+
   it('rejects an invalid theme', () => {
     expect(() => niuuConfigSchema.parse({ theme: 'ultraviolet' })).toThrow();
   });
