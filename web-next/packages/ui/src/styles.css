@@ -18,6 +18,8 @@
 @import './primitives/StatusBadge/StatusBadge.css';
 @import './primitives/Toast/Toast.css';
 @import './primitives/Tooltip/Tooltip.css';
+@import './primitives/BudgetBar/BudgetBar.css';
+@import './primitives/BudgetRunwayBar/BudgetRunwayBar.css';
 
 @tailwind components;
 @tailwind utilities;

@@ -17,4 +17,7 @@ export * from './data/FilterBar';
 export * from './data/KpiStrip';
 export * from './data/states';
 export * from './primitives/ShapeSvg';
+export * from './primitives/Sparkline';
+export * from './primitives/BudgetBar';
+export * from './primitives/BudgetRunwayBar';
 export { cn } from './utils/cn';

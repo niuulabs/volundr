@@ -63,4 +63,36 @@ test.describe('status composites showcase', () => {
     const focused = page.locator(':focus');
     await expect(focused).toBeVisible();
   });
+
+  test('Sparkline — renders grid with 3 rows', async ({ page }) => {
+    const grid = page.getByTestId('sparkline-grid');
+    await expect(grid).toBeVisible();
+    const rows = grid.locator('[aria-hidden="true"]');
+    await expect(rows).toHaveCount(3);
+  });
+
+  test('Sparkline — seeded sparkline renders an svg', async ({ page }) => {
+    const grid = page.getByTestId('sparkline-grid');
+    const svgs = grid.locator('svg');
+    await expect(svgs.first()).toBeVisible();
+  });
+
+  test('BudgetBar — renders bars for all percentages', async ({ page }) => {
+    const grid = page.getByTestId('budget-bar-grid');
+    await expect(grid).toBeVisible();
+    const meters = grid.locator('[role="meter"]');
+    await expect(meters).toHaveCount(6);
+  });
+
+  test('BudgetBar — renders dollar labels', async ({ page }) => {
+    const grid = page.getByTestId('budget-bar-grid');
+    await expect(grid.getByText('$100.00').first()).toBeVisible();
+  });
+
+  test('BudgetRunwayBar — renders three runway bars', async ({ page }) => {
+    const grid = page.getByTestId('budget-runway-grid');
+    await expect(grid).toBeVisible();
+    const meters = grid.locator('[role="meter"]');
+    await expect(meters).toHaveCount(3);
+  });
 });
