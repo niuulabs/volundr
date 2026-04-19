@@ -42,10 +42,7 @@ export function MetricsTab({ metrics }: MetricsTabProps) {
   const latestGpu = latest ? `${latest.gpu.toFixed(2)}` : '—';
 
   return (
-    <div
-      className="niuu-flex niuu-flex-col niuu-gap-4 niuu-p-4"
-      data-testid="metrics-tab"
-    >
+    <div className="niuu-flex niuu-flex-col niuu-gap-4 niuu-p-4" data-testid="metrics-tab">
       {points.length === 0 && (
         <p className="niuu-text-sm niuu-text-text-muted" data-testid="metrics-waiting">
           Waiting for metrics…

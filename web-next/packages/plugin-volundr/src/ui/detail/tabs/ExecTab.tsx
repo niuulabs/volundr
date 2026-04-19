@@ -104,9 +104,7 @@ export function ExecTab({ exec }: ExecTabProps) {
             No commands run yet.
           </p>
         ) : (
-          [...exec.history].reverse().map((entry) => (
-            <ExecEntryRow key={entry.id} entry={entry} />
-          ))
+          [...exec.history].reverse().map((entry) => <ExecEntryRow key={entry.id} entry={entry} />)
         )}
       </div>
     </div>

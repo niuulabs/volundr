@@ -93,10 +93,7 @@ export function SessionDetailPage({
   }
 
   return (
-    <div
-      className="niuu-flex niuu-h-full niuu-flex-col"
-      data-testid="session-detail-page"
-    >
+    <div className="niuu-flex niuu-h-full niuu-flex-col" data-testid="session-detail-page">
       {/* Header */}
       <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2">
         <span
@@ -145,11 +142,7 @@ export function SessionDetailPage({
       {/* Tab panels */}
       <div className="niuu-min-h-0 niuu-flex-1 niuu-overflow-auto">
         {/* Overview */}
-        <div
-          role="tabpanel"
-          aria-labelledby="tab-overview"
-          hidden={activeTab !== 'overview'}
-        >
+        <div role="tabpanel" aria-labelledby="tab-overview" hidden={activeTab !== 'overview'}>
           {activeTab === 'overview' && sessionQuery.isLoading && (
             <LoadingState label="Loading session…" />
           )}
@@ -157,9 +150,7 @@ export function SessionDetailPage({
             <ErrorState
               title="Failed to load session"
               message={
-                sessionQuery.error instanceof Error
-                  ? sessionQuery.error.message
-                  : 'Unknown error'
+                sessionQuery.error instanceof Error ? sessionQuery.error.message : 'Unknown error'
               }
             />
           )}
@@ -246,11 +237,7 @@ export function SessionDetailPage({
         </div>
 
         {/* Events */}
-        <div
-          role="tabpanel"
-          aria-labelledby="tab-events"
-          hidden={activeTab !== 'events'}
-        >
+        <div role="tabpanel" aria-labelledby="tab-events" hidden={activeTab !== 'events'}>
           {activeTab === 'events' && sessionQuery.isLoading && (
             <LoadingState label="Loading events…" />
           )}
@@ -258,11 +245,7 @@ export function SessionDetailPage({
         </div>
 
         {/* Metrics */}
-        <div
-          role="tabpanel"
-          aria-labelledby="tab-metrics"
-          hidden={activeTab !== 'metrics'}
-        >
+        <div role="tabpanel" aria-labelledby="tab-metrics" hidden={activeTab !== 'metrics'}>
           {activeTab === 'metrics' && <MetricsTab metrics={metrics} />}
         </div>
       </div>

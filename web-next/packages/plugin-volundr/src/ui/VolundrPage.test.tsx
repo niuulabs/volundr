@@ -3,7 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { VolundrPage } from './VolundrPage';
-import { createMockVolundrService, createMockClusterAdapter, createMockSessionStore } from '../adapters/mock';
+import {
+  createMockVolundrService,
+  createMockClusterAdapter,
+  createMockSessionStore,
+} from '../adapters/mock';
 
 // Mock TanStack Router navigate
 vi.mock('@tanstack/react-router', () => ({
@@ -55,9 +59,7 @@ describe('VolundrPage (Overview)', () => {
 
   it('renders an active sessions section', async () => {
     wrap();
-    await waitFor(() =>
-      expect(screen.getByText('Active sessions')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Active sessions')).toBeInTheDocument());
   });
 
   it('shows "no active sessions" when no running/idle sessions exist', async () => {
@@ -67,9 +69,7 @@ describe('VolundrPage (Overview)', () => {
       listSessions: vi.fn().mockResolvedValue([]),
     };
     wrap(createMockVolundrService(), createMockClusterAdapter(), emptyStore);
-    await waitFor(() =>
-      expect(screen.getByTestId('no-active-sessions')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('no-active-sessions')).toBeInTheDocument());
   });
 
   it('shows loading state before stats resolve', () => {
@@ -84,15 +84,11 @@ describe('VolundrPage (Overview)', () => {
 
   it('shows stats footer with token counts', async () => {
     wrap();
-    await waitFor(() =>
-      expect(screen.getByText(/Tokens today/)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/Tokens today/)).toBeInTheDocument());
   });
 
   it('shows cluster health grid', async () => {
     wrap();
-    await waitFor(() =>
-      expect(screen.getByText('Cluster health')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Cluster health')).toBeInTheDocument());
   });
 });

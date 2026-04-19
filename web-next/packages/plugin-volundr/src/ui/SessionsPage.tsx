@@ -34,9 +34,7 @@ function lifecycleBadgeState(
 
 type SessionRow = Session & { id: string };
 
-function buildColumns(
-  onView: (id: string) => void,
-): TableColumn<SessionRow>[] {
+function buildColumns(onView: (id: string) => void): TableColumn<SessionRow>[] {
   return [
     {
       key: 'id',
@@ -48,9 +46,7 @@ function buildColumns(
     {
       key: 'persona',
       header: 'Persona',
-      render: (s) => (
-        <span className="niuu-text-sm niuu-text-text-secondary">{s.personaName}</span>
-      ),
+      render: (s) => <span className="niuu-text-sm niuu-text-text-secondary">{s.personaName}</span>,
     },
     {
       key: 'cluster',
@@ -156,9 +152,7 @@ export function SessionsPage() {
           <ErrorState
             title="Failed to load sessions"
             message={
-              sessionsQuery.error instanceof Error
-                ? sessionsQuery.error.message
-                : 'Unknown error'
+              sessionsQuery.error instanceof Error ? sessionsQuery.error.message : 'Unknown error'
             }
           />
         )}
