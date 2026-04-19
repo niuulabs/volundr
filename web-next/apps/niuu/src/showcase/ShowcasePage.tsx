@@ -42,7 +42,7 @@ type DataMode = 'data' | 'loading' | 'empty' | 'error';
 export function ShowcasePage() {
   const [filters, setFilters] = useState<FilterState>({ q: '' });
   const [activeOnly, setActiveOnly] = useState(false);
-  const [sortKey, setSortKey] = useState<string>('');
+  const [sortKey, setSortKey] = useState<string>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [expandedId, setExpandedId] = useState<string | number | null>(null);
