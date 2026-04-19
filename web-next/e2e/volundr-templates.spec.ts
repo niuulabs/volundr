@@ -185,7 +185,8 @@ test('/volundr/history — filter by outcome (failed)', async ({ page }) => {
   await expect(initialRows).toBeGreaterThan(1);
 
   await page.getByRole('button', { name: 'failed' }).click();
-  await expect(page.getByTestId('history-row')).toHaveCount(1, { timeout: 5_000 });
+  // New ds-4 (active/failed) + historical ds-3 (failed) = 2
+  await expect(page.getByTestId('history-row')).toHaveCount(2, { timeout: 5_000 });
 });
 
 test('/volundr/history — clicking All restores all rows', async ({ page }) => {
@@ -194,7 +195,8 @@ test('/volundr/history — clicking All restores all rows', async ({ page }) => 
   const total = await page.getByTestId('history-row').count();
 
   await page.getByRole('button', { name: 'failed' }).click();
-  await expect(page.getByTestId('history-row')).toHaveCount(1, { timeout: 5_000 });
+  // New ds-4 (active/failed) + historical ds-3 (failed) = 2
+  await expect(page.getByTestId('history-row')).toHaveCount(2, { timeout: 5_000 });
 
   await page.getByRole('button', { name: 'All' }).click();
   await expect(page.getByTestId('history-row')).toHaveCount(total, { timeout: 5_000 });
