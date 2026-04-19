@@ -374,4 +374,116 @@ describe('buildMimirHttpAdapter', () => {
       });
     });
   });
+
+  describe('mounts.getRecentWrites', () => {
+    it('calls GET /mounts/recent-writes with default limit', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).mounts.getRecentWrites();
+      expect(client.get).toHaveBeenCalledWith('/mounts/recent-writes?limit=20');
+    });
+
+    it('calls GET /mounts/recent-writes with custom limit', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).mounts.getRecentWrites(5);
+      expect(client.get).toHaveBeenCalledWith('/mounts/recent-writes?limit=5');
+    });
+
+    it('maps raw recent-write fields to domain RecentWrite', async () => {
+      const raw = [
+        {
+          id: 'ev-001',
+          timestamp: '2026-04-19T09:02:00Z',
+          mount: 'shared',
+          page: '/arch/overview',
+          ravn: 'ravn-fjolnir',
+          kind: 'write',
+          message: 'updated key-facts zone',
+        },
+      ];
+      const client = makeClient({ get: vi.fn().mockResolvedValue(raw) });
+      const writes = await buildMimirHttpAdapter(client).mounts.getRecentWrites();
+      expect(writes[0]).toMatchObject({
+        id: 'ev-001',
+        mount: 'shared',
+        page: '/arch/overview',
+        ravn: 'ravn-fjolnir',
+        kind: 'write',
+      });
+    });
+  });
+
+  describe('pages.listSources', () => {
+    it('calls GET /sources without query string when no options', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).pages.listSources();
+      expect(client.get).toHaveBeenCalledWith('/sources');
+    });
+
+    it('appends origin_type and mount params when provided', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).pages.listSources({ originType: 'web', mountName: 'local' });
+      const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(call).toContain('origin_type=web');
+      expect(call).toContain('mount=local');
+    });
+
+    it('maps raw source fields to domain Source', async () => {
+      const raw = [
+        {
+          id: 'src-001',
+          title: 'Arch wiki',
+          origin_type: 'web',
+          origin_url: 'https://wiki.niuu.world/arch',
+          ingested_at: '2026-04-10T08:00:00Z',
+          ingest_agent: 'ravn-fjolnir',
+          compiled_into: ['/arch/overview'],
+          content: 'The Niuu platform uses hexagonal architecture.',
+        },
+      ];
+      const client = makeClient({ get: vi.fn().mockResolvedValue(raw) });
+      const sources = await buildMimirHttpAdapter(client).pages.listSources();
+      expect(sources[0]).toMatchObject({
+        id: 'src-001',
+        title: 'Arch wiki',
+        originType: 'web',
+        originUrl: 'https://wiki.niuu.world/arch',
+        ingestedAt: '2026-04-10T08:00:00Z',
+        ingestAgent: 'ravn-fjolnir',
+        compiledInto: ['/arch/overview'],
+      });
+    });
+  });
+
+  describe('pages.getPageSources', () => {
+    it('calls GET /sources/page with encoded path', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).pages.getPageSources('/arch/overview');
+      const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(call).toContain('/sources/page');
+      expect(call).toContain('path=%2Farch%2Foverview');
+    });
+
+    it('maps raw source fields for page sources', async () => {
+      const raw = [
+        {
+          id: 'src-002',
+          title: 'ADR-001',
+          origin_type: 'file',
+          origin_path: '/docs/adr/001.md',
+          ingested_at: '2026-04-11T10:30:00Z',
+          ingest_agent: 'ravn-fjolnir',
+          compiled_into: ['/arch/overview'],
+          content: 'We adopt hexagonal architecture.',
+        },
+      ];
+      const client = makeClient({ get: vi.fn().mockResolvedValue(raw) });
+      const sources = await buildMimirHttpAdapter(client).pages.getPageSources('/arch/overview');
+      expect(sources[0]).toMatchObject({
+        id: 'src-002',
+        originType: 'file',
+        originPath: '/docs/adr/001.md',
+        ingestAgent: 'ravn-fjolnir',
+      });
+    });
+  });
 });
