@@ -11,22 +11,9 @@ import {
   Rune,
 } from '@niuulabs/ui';
 import type { Raid } from '../domain/saga';
-import type { PipeCellStatus } from '@niuulabs/ui';
 import { useSaga } from './useSaga';
 import { usePhases } from './usePhases';
-
-function phaseStatusToCell(status: 'pending' | 'active' | 'gated' | 'complete'): PipeCellStatus {
-  switch (status) {
-    case 'complete':
-      return 'ok';
-    case 'active':
-      return 'run';
-    case 'gated':
-      return 'gate';
-    case 'pending':
-      return 'pend';
-  }
-}
+import { phaseStatusToCell } from './mappers';
 
 interface RaidPanelProps {
   raid: Raid;
@@ -223,17 +210,7 @@ export function SagaDetailPage({ sagaId }: SagaDetailPageProps) {
                 <h3 className="niuu-m-0 niuu-text-base niuu-font-semibold niuu-text-text-primary">
                   {phase.name}
                 </h3>
-                <StatusBadge
-                  status={
-                    phase.status === 'active'
-                      ? 'active'
-                      : phase.status === 'complete'
-                        ? 'complete'
-                        : phase.status === 'gated'
-                          ? 'gated'
-                          : 'pending'
-                  }
-                />
+                <StatusBadge status={phase.status} />
                 <ConfidenceBadge value={phase.confidence / 100} />
               </div>
 

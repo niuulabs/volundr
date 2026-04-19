@@ -30,6 +30,7 @@ export function DashboardPage() {
   });
 
   const allRaids = phaseQueries.flatMap((q) => q.data ?? []).flatMap((p) => p.raids);
+  const failedRaids = allRaids.filter((r) => r.status === 'failed');
   const runningRaids = allRaids.filter((r) => r.status === 'running').length;
   const blockedRaids = allRaids.filter(
     (r) => r.status === 'failed' || r.status === 'escalated',
@@ -184,25 +185,23 @@ export function DashboardPage() {
         </section>
       )}
 
-      {allRaids.filter((r) => r.status === 'failed').length > 0 && (
+      {failedRaids.length > 0 && (
         <section aria-label="Failed raids">
           <h3 className="niuu-text-sm niuu-font-semibold niuu-text-text-secondary niuu-mb-3 niuu-uppercase niuu-tracking-wide">
             Failed Raids
           </h3>
           <ul className="niuu-list-none niuu-p-0 niuu-m-0 niuu-space-y-2">
-            {allRaids
-              .filter((r) => r.status === 'failed')
-              .map((raid) => (
-                <li
-                  key={raid.id}
-                  className="niuu-p-3 niuu-rounded-md niuu-bg-bg-secondary niuu-border niuu-border-border"
-                >
-                  <div className="niuu-flex niuu-items-center niuu-gap-2">
-                    <StatusBadge status="failed" />
-                    <span className="niuu-text-sm niuu-text-text-primary">{raid.name}</span>
-                  </div>
-                </li>
-              ))}
+            {failedRaids.map((raid) => (
+              <li
+                key={raid.id}
+                className="niuu-p-3 niuu-rounded-md niuu-bg-bg-secondary niuu-border niuu-border-border"
+              >
+                <div className="niuu-flex niuu-items-center niuu-gap-2">
+                  <StatusBadge status="failed" />
+                  <span className="niuu-text-sm niuu-text-text-primary">{raid.name}</span>
+                </div>
+              </li>
+            ))}
           </ul>
         </section>
       )}

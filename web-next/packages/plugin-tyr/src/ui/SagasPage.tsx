@@ -10,23 +10,10 @@ import {
   Rune,
 } from '@niuulabs/ui';
 import type { SagaStatus } from '../domain/saga';
-import type { PipeCellStatus } from '@niuulabs/ui';
 import { useSagas } from './useSagas';
+import { phaseStatusToCell } from './mappers';
 
 type StatusFilter = SagaStatus | 'all';
-
-function phaseStatusToCell(status: 'pending' | 'active' | 'gated' | 'complete'): PipeCellStatus {
-  switch (status) {
-    case 'complete':
-      return 'ok';
-    case 'active':
-      return 'run';
-    case 'gated':
-      return 'gate';
-    case 'pending':
-      return 'pend';
-  }
-}
 
 const STATUS_TABS: { label: string; value: StatusFilter }[] = [
   { label: 'All', value: 'all' },
