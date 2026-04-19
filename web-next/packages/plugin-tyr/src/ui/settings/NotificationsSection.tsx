@@ -1,14 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { Field, Input, Select, ValidationSummary } from '@niuulabs/ui';
-import { StateDot } from '@niuulabs/ui';
+import { Field, Input, Select, ValidationSummary, StateDot, type ValidationError } from '@niuulabs/ui';
 import type { NotificationChannel, NotificationSettings } from '../../ports';
 import { useNotificationSettings, useUpdateNotificationSettings } from './useSettings';
-
-interface ValidationError {
-  id: string;
-  label: string;
-  message: string;
-}
 
 const CHANNEL_OPTIONS: { value: NotificationChannel; label: string }[] = [
   { value: 'none', label: 'None (disabled)' },
@@ -59,7 +52,8 @@ function ToggleRow({ id, name, label, defaultChecked }: ToggleRowProps) {
 export function NotificationsSection() {
   const { data: settings, isLoading, isError, error } = useNotificationSettings();
   const { mutateAsync: update, isPending: isSaving } = useUpdateNotificationSettings();
-  const [channel, setChannel] = useState<NotificationChannel>(settings?.channel ?? 'telegram');
+  const [channelOverride, setChannelOverride] = useState<NotificationChannel | null>(null);
+  const effectiveChannel = channelOverride ?? settings?.channel ?? 'telegram';
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [saved, setSaved] = useState(false);
 
@@ -68,7 +62,7 @@ export function NotificationsSection() {
     const form = e.currentTarget;
     const data = new FormData(form);
 
-    const selectedChannel = (data.get('channel') ?? channel) as NotificationChannel;
+    const selectedChannel = effectiveChannel;
     const webhookUrl = String(data.get('webhookUrl') ?? '');
 
     const validationErrors = validate(selectedChannel, webhookUrl);
@@ -110,8 +104,6 @@ export function NotificationsSection() {
     );
   }
 
-  const effectiveChannel = settings?.channel ?? 'telegram';
-
   return (
     <section aria-label="Notification settings">
       <h3 className="niuu-text-base niuu-font-semibold niuu-text-text-primary niuu-mb-1">
@@ -133,12 +125,12 @@ export function NotificationsSection() {
           <Select
             options={CHANNEL_OPTIONS}
             defaultValue={effectiveChannel}
-            onValueChange={(val) => setChannel(val as NotificationChannel)}
+            onValueChange={(val) => setChannelOverride(val as NotificationChannel)}
             name="channel"
           />
         </Field>
 
-        {(channel === 'webhook' || effectiveChannel === 'webhook') && (
+        {effectiveChannel === 'webhook' && (
           <Field id="notif-webhook-url" label="Webhook URL" required>
             <Input
               name="webhookUrl"

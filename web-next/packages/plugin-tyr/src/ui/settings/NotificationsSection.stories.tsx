@@ -1,22 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ServicesProvider } from '@niuulabs/plugin-sdk';
-import type { ReactNode } from 'react';
 import { createMockTyrSettingsService } from '../../adapters/mock';
+import { buildWrapper } from './storyWrappers';
 import { NotificationsSection } from './NotificationsSection';
-
-function buildWrapper(service: Record<string, unknown>) {
-  return function Wrapper({ children }: { children: ReactNode }) {
-    const qc = new QueryClient({
-      defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: 0 } },
-    });
-    return (
-      <QueryClientProvider client={qc}>
-        <ServicesProvider services={service}>{children}</ServicesProvider>
-      </QueryClientProvider>
-    );
-  };
-}
 
 const meta: Meta<typeof NotificationsSection> = {
   title: 'Plugins / Tyr / Settings / NotificationsSection',

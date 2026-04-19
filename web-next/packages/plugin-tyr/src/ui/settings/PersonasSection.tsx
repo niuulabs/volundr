@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StateDot } from '@niuulabs/ui';
+import { StateDot, cn } from '@niuulabs/ui';
 import type { TyrPersonaSummary } from '../../ports';
 import { usePersonasBrowser, usePersonaYaml } from './usePersonasBrowser';
 
@@ -13,13 +13,13 @@ function PersonaRow({ persona, selected, onSelect }: PersonaRowProps) {
   return (
     <button
       type="button"
-      className={[
+      className={cn(
         'niuu-w-full niuu-text-left niuu-px-3 niuu-py-2 niuu-rounded-md niuu-transition-colors',
         'niuu-flex niuu-items-center niuu-gap-3 niuu-border niuu-border-transparent',
         selected
           ? 'niuu-bg-bg-elevated niuu-border-border'
           : 'hover:niuu-bg-bg-secondary niuu-text-text-primary',
-      ].join(' ')}
+      )}
       onClick={() => onSelect(persona.name)}
       aria-pressed={selected}
     >
@@ -108,12 +108,12 @@ export function PersonasSection() {
             type="button"
             role="tab"
             aria-selected={filter === tab.value}
-            className={[
+            className={cn(
               'niuu-px-3 niuu-py-1 niuu-rounded-md niuu-text-sm niuu-transition-colors',
               filter === tab.value
                 ? 'niuu-bg-bg-elevated niuu-text-text-primary'
                 : 'niuu-text-text-secondary hover:niuu-text-text-primary',
-            ].join(' ')}
+            )}
             onClick={() => {
               setFilter(tab.value);
               setSelected(null);

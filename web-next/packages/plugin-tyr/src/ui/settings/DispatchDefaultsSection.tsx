@@ -1,14 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { Field, Input, ValidationSummary } from '@niuulabs/ui';
-import { StateDot } from '@niuulabs/ui';
+import { Field, Input, ValidationSummary, StateDot, type ValidationError } from '@niuulabs/ui';
 import type { DispatchDefaults } from '../../ports';
 import { useDispatchDefaults, useUpdateDispatchDefaults } from './useSettings';
-
-interface ValidationError {
-  id: string;
-  label: string;
-  message: string;
-}
 
 function validate(values: {
   confidenceThreshold: number;

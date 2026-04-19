@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StateDot } from '@niuulabs/ui';
+import { StateDot, cn } from '@niuulabs/ui';
 import type { AuditEntryKind } from '../../ports';
 import { useAuditLog } from './useAuditLog';
 
@@ -58,13 +58,13 @@ function formatDate(iso: string): string {
 }
 
 function kindBadgeClass(kind: AuditEntryKind): string {
-  if (kind.startsWith('raid.failed') || kind.startsWith('raid.escalated')) {
+  if (kind === 'raid.failed' || kind === 'raid.escalated') {
     return 'niuu-text-critical niuu-bg-critical/10';
   }
-  if (kind.startsWith('raid.merged') || kind.startsWith('saga.completed')) {
+  if (kind === 'raid.merged' || kind === 'saga.completed') {
     return 'niuu-text-accent-emerald niuu-bg-accent-emerald/10';
   }
-  if (kind.startsWith('dispatcher.started') || kind.startsWith('raid.dispatched')) {
+  if (kind === 'dispatcher.started' || kind === 'raid.dispatched') {
     return 'niuu-text-accent-cyan niuu-bg-accent-cyan/10';
   }
   return 'niuu-text-text-secondary niuu-bg-bg-elevated';
@@ -119,12 +119,12 @@ export function AuditLogSection() {
                     type="button"
                     aria-pressed={activeKinds.includes(kind)}
                     onClick={() => toggleKind(kind)}
-                    className={[
+                    className={cn(
                       'niuu-px-2 niuu-py-0.5 niuu-rounded-full niuu-text-xs niuu-transition-colors niuu-border',
                       activeKinds.includes(kind)
                         ? 'niuu-border-brand niuu-bg-brand/10 niuu-text-brand'
                         : 'niuu-border-border niuu-text-text-secondary hover:niuu-border-border-subtle',
-                    ].join(' ')}
+                    )}
                   >
                     {KIND_LABELS[kind]}
                   </button>

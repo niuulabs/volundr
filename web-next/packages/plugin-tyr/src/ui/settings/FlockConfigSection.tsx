@@ -1,14 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { Field, Input, ValidationSummary } from '@niuulabs/ui';
-import { StateDot } from '@niuulabs/ui';
+import { Field, Input, ValidationSummary, StateDot, type ValidationError } from '@niuulabs/ui';
 import type { FlockConfig } from '../../ports';
 import { useFlockConfig, useUpdateFlockConfig } from './useSettings';
-
-interface ValidationError {
-  id: string;
-  label: string;
-  message: string;
-}
 
 function validate(values: Partial<FlockConfig>): ValidationError[] {
   const errors: ValidationError[] = [];

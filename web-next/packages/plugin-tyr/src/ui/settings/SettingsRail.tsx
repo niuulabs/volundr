@@ -1,4 +1,5 @@
 import { useRouterState, useRouter } from '@tanstack/react-router';
+import { cn } from '@niuulabs/ui';
 
 interface NavItem {
   id: string;
@@ -34,12 +35,12 @@ export function SettingsRail() {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               void router.navigate({ to: item.path as any });
             }}
-            className={[
+            className={cn(
               'niuu-w-full niuu-text-left niuu-px-3 niuu-py-1.5 niuu-rounded-md niuu-text-sm niuu-transition-colors',
               isActive
                 ? 'niuu-bg-bg-elevated niuu-text-text-primary niuu-font-medium'
                 : 'niuu-text-text-secondary hover:niuu-text-text-primary hover:niuu-bg-bg-secondary',
-            ].join(' ')}
+            )}
             aria-current={isActive ? 'page' : undefined}
           >
             {item.label}

@@ -1,3 +1,4 @@
+import { useRouter } from '@tanstack/react-router';
 import { PersonasSection } from './PersonasSection';
 import { FlockConfigSection } from './FlockConfigSection';
 import { DispatchDefaultsSection } from './DispatchDefaultsSection';
@@ -21,6 +22,8 @@ export function SettingsPage({ section }: SettingsPageProps) {
 }
 
 export function SettingsIndexPage() {
+  const router = useRouter();
+
   return (
     <div className="niuu-p-6 niuu-max-w-[720px]">
       <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary niuu-mb-2">
@@ -58,17 +61,18 @@ export function SettingsIndexPage() {
             description: 'Immutable record of settings changes and dispatch events',
           },
         ].map((item) => (
-          <a
+          <button
             key={item.id}
-            href={`/tyr/settings/${item.id}`}
-            className="niuu-block niuu-p-4 niuu-border niuu-border-border niuu-rounded-md hover:niuu-bg-bg-secondary niuu-transition-colors niuu-no-underline"
+            type="button"
+            onClick={() => void router.navigate({ to: `/tyr/settings/${item.id}` as any })}
+            className="niuu-block niuu-w-full niuu-text-left niuu-p-4 niuu-border niuu-border-border niuu-rounded-md hover:niuu-bg-bg-secondary niuu-transition-colors"
             role="listitem"
           >
             <p className="niuu-text-sm niuu-font-medium niuu-text-text-primary niuu-mb-1">
               {item.label}
             </p>
             <p className="niuu-text-xs niuu-text-text-secondary">{item.description}</p>
-          </a>
+          </button>
         ))}
       </div>
     </div>
