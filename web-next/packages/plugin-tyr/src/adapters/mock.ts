@@ -487,6 +487,8 @@ export function createMockTyrService(): ITyrService {
     },
 
     async decompose(_spec: string, _repo: string) {
+      // Small delay so the raiding step is visible in E2E tests
+      await new Promise<void>((r) => setTimeout(r, 500));
       return [
         {
           id: 'phase-mock-1',
