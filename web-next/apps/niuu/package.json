@@ -1,0 +1,32 @@
+{
+  "name": "@niuulabs/niuu",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@niuulabs/design-tokens": "workspace:*",
+    "@niuulabs/plugin-hello": "workspace:*",
+    "@niuulabs/plugin-sdk": "workspace:*",
+    "@niuulabs/query": "workspace:*",
+    "@niuulabs/shell": "workspace:*",
+    "@niuulabs/ui": "workspace:*",
+    "@tanstack/react-query": "^5.62.0",
+    "@tanstack/react-query-devtools": "^5.62.0",
+    "@tanstack/react-router": "^1.95.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.0"
+  }
+}

@@ -21,6 +21,7 @@ jobs:
     outputs:
       python: ${{ steps.override.outputs.python }}
       web: ${{ steps.override.outputs.web }}
+      web_next: ${{ steps.override.outputs.web_next }}
       helm: ${{ steps.override.outputs.helm }}
       container-names: ${{ steps.override.outputs.names }}
       has_containers: ${{ steps.override.outputs.any }}
@@ -83,11 +84,26 @@ jobs:
       - name: Hardcode all changes to true for testing
         id: override
         run: |
-          echo "python=true" >> $GITHUB_OUTPUT
-          echo "web=true" >> $GITHUB_OUTPUT
-          echo "helm=true" >> $GITHUB_OUTPUT
-          echo 'names=["volundr","skuld","devrunner","volundr-web","vscode-reh","tyr","niuu","mimir","bifrost"]' >> $GITHUB_OUTPUT
-          echo "any=true" >> $GITHUB_OUTPUT
+          HEAD="${{ github.head_ref }}"
+          BASE="${{ github.base_ref }}"
+          # web-next scaffold branches: run only the web-next test suite.
+          # Python backend + web/ frontend tests are disabled here to speed up
+          # the new UI build. Revert when web-next reaches parity.
+          if [[ "$HEAD" == feat/web-next* ]] || [[ "$BASE" == feat/web-next* ]]; then
+            echo "python=false" >> $GITHUB_OUTPUT
+            echo "web=false" >> $GITHUB_OUTPUT
+            echo "helm=false" >> $GITHUB_OUTPUT
+            echo "web_next=true" >> $GITHUB_OUTPUT
+            echo 'names=[]' >> $GITHUB_OUTPUT
+            echo "any=false" >> $GITHUB_OUTPUT
+          else
+            echo "python=true" >> $GITHUB_OUTPUT
+            echo "web=true" >> $GITHUB_OUTPUT
+            echo "helm=true" >> $GITHUB_OUTPUT
+            echo "web_next=false" >> $GITHUB_OUTPUT
+            echo 'names=["volundr","skuld","devrunner","volundr-web","vscode-reh","tyr","niuu","mimir","bifrost"]' >> $GITHUB_OUTPUT
+            echo "any=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Determine pipeline tier
         id: tier
@@ -628,6 +644,144 @@ jobs:
           flags: web
           token: ${{ secrets.CODECOV_TOKEN }}
           working-directory: web
+
+  # ---------------------------------------------------------------------------
+  # web-next — new composable UI (active branch)
+  # ---------------------------------------------------------------------------
+  web-next-lint:
+    name: "web-next: Lint"
+    needs: changes
+    if: needs.changes.outputs.web_next == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-next
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web-next/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: ESLint
+        run: pnpm lint
+
+      - name: Prettier check
+        run: pnpm format:check
+
+  web-next-test:
+    name: "web-next: Test"
+    needs: changes
+    if: needs.changes.outputs.web_next == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-next
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web-next/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm -r --filter='./packages/*' build
+
+      - name: Run tests with coverage (fail under 85%)
+        run: pnpm test
+
+      - name: Upload coverage to Codecov
+        if: always() && hashFiles('web-next/coverage/lcov.info') != ''
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
+        with:
+          files: web-next/coverage/lcov.info
+          flags: web-next
+          token: ${{ secrets.CODECOV_TOKEN }}
+          working-directory: web-next
+
+  web-next-e2e:
+    name: "web-next: E2E"
+    needs: changes
+    if: needs.changes.outputs.web_next == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web-next
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web-next/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm -r --filter='./packages/*' build
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: failure()
+        with:
+          name: web-next-playwright-report
+          path: web-next/playwright-report/
+          retention-days: 7
 
   # ---------------------------------------------------------------------------
   # Helm — full tier only

@@ -1,0 +1,9 @@
+{
+  "theme": "ice",
+  "plugins": {
+    "hello": { "enabled": true, "order": 1 }
+  },
+  "services": {
+    "hello": { "mode": "mock" }
+  }
+}
