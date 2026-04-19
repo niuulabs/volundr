@@ -89,6 +89,9 @@
   --color-gate-bg: color-mix(in srgb, #a855f7 15%, transparent);
   --color-gate-bo: color-mix(in srgb, #a855f7 35%, transparent);
 
+  /* ── Semantic indicators ─────────────────────────────── */
+  --color-delta-up: #10b981;
+
   /* ── Semantic status ─────────────────────────────────── */
   --status-healthy: var(--brand-200);
   --status-running: var(--brand-300);

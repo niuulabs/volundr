@@ -7,4 +7,8 @@ export * from './primitives/StatusBadge';
 export * from './primitives/ConfidenceBar';
 export * from './primitives/ConfidenceBadge';
 export * from './primitives/Pipe';
+export * from './data/Table';
+export * from './data/FilterBar';
+export * from './data/KpiStrip';
+export * from './data/states';
 export { cn } from './utils/cn';
