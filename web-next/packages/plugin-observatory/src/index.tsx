@@ -22,7 +22,11 @@ export const observatoryPlugin = definePlugin({
   ],
 });
 
-export { createMockRegistryRepository, createMockTopologyStream, createMockEventStream } from './adapters/mock';
+export {
+  createMockRegistryRepository,
+  createMockTopologyStream,
+  createMockEventStream,
+} from './adapters/mock';
 export type { IRegistryRepository, ILiveTopologyStream, IEventStream } from './ports';
 export type {
   EntityType,
