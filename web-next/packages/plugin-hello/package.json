@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@niuulabs/plugin-sdk": "workspace:*",
+    "@niuulabs/query": "workspace:*",
     "@niuulabs/ui": "workspace:*"
   },
   "devDependencies": {

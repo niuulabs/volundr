@@ -1,5 +1,15 @@
 import { QueryClient, type QueryClientConfig } from '@tanstack/react-query';
 
+export {
+  createApiClient,
+  setTokenProvider,
+  getAccessToken,
+  ApiClientError,
+  type ApiClient,
+  type ApiError,
+  type TokenProvider,
+} from './client';
+
 export function createQueryClient(overrides: QueryClientConfig = {}): QueryClient {
   return new QueryClient({
     ...overrides,

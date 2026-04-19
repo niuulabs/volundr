@@ -18,6 +18,7 @@ export default defineConfig({
         '**/*.test.{ts,tsx}',
         '**/index.{ts,tsx}',
         '**/ports.ts',
+        '**/ports/*.ts',
         '**/*.d.ts',
       ],
       thresholds: {

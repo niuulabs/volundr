@@ -10,4 +10,5 @@ export const helloPlugin = definePlugin({
 });
 
 export { createMockHelloService } from './adapters/mock';
+export { createHttpHelloService } from './adapters/http';
 export type { IHelloService, Greeting } from './ports';
