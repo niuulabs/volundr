@@ -43,17 +43,17 @@ export function AmbientLattice() {
     >
       <defs>
         <radialGradient id="lat-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.08" />
-          <stop offset="60%" stopColor="#38bdf8" stopOpacity="0.02" />
-          <stop offset="100%" stopColor="#09090b" stopOpacity="0" />
+          <stop offset="0%" className="ambient-stop-brand" stopOpacity="0.08" />
+          <stop offset="60%" className="ambient-stop-brand" stopOpacity="0.02" />
+          <stop offset="100%" className="ambient-stop-bg" stopOpacity="0" />
         </radialGradient>
       </defs>
       <rect width="800" height="600" fill="url(#lat-glow)" />
 
       <g
         transform="translate(400 300)"
-        stroke="rgba(186,230,253,0.14)"
         fill="none"
+        className="lattice-rings-group"
         data-testid="lattice-main"
       >
         {/* Concentric rings */}
@@ -87,8 +87,7 @@ export function AmbientLattice() {
               textAnchor="middle"
               fontFamily="JetBrainsMono NF, monospace"
               fontSize="12"
-              fill="rgba(186,230,253,0.3)"
-              stroke="none"
+              className="lattice-rune-text"
             >
               {rune}
             </text>

@@ -5,6 +5,7 @@ import { LogoStars } from './LogoStars';
 import { LogoRuneRing } from './LogoRuneRing';
 import { LogoFlokk } from './LogoFlokk';
 import { LogoStack } from './LogoStack';
+import './Logos.stories.css';
 
 const LOGOS = [LogoKnot, LogoTree, LogoStars, LogoRuneRing, LogoFlokk, LogoStack] as const;
 const LOGO_NAMES = ['Knot', 'Tree', 'Stars', 'RuneRing', 'Flokk', 'Stack'] as const;
@@ -17,33 +18,11 @@ interface LogoGalleryProps {
 
 function LogoGallery({ size = 56, stroke = 1.6, glow = false }: LogoGalleryProps) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        gap: '2rem',
-        flexWrap: 'wrap',
-        padding: '2rem',
-        background: 'var(--color-bg-primary, #09090b)',
-        color: 'var(--brand-400, #38bdf8)',
-        alignItems: 'center',
-        minHeight: '100vh',
-      }}
-    >
+    <div className="logos-gallery">
       {LOGOS.map((Logo, i) => (
-        <div
-          key={i}
-          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}
-        >
+        <div key={i} className="logos-gallery__item">
           <Logo size={size} stroke={stroke} glow={glow} />
-          <span
-            style={{
-              fontSize: '11px',
-              fontFamily: 'monospace',
-              color: 'var(--color-text-muted, #71717a)',
-            }}
-          >
-            {LOGO_NAMES[i]}
-          </span>
+          <span className="logos-gallery__label">{LOGO_NAMES[i]}</span>
         </div>
       ))}
     </div>

@@ -42,8 +42,8 @@ export function AmbientConstellation() {
     >
       <defs>
         <radialGradient id="const-glow" cx="50%" cy="40%" r="60%">
-          <stop offset="0%" stopColor="#1e3a5f" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#09090b" stopOpacity="0" />
+          <stop offset="0%" className="ambient-stop-mid" stopOpacity="0.3" />
+          <stop offset="100%" className="ambient-stop-bg" stopOpacity="0" />
         </radialGradient>
       </defs>
       <rect width="100" height="100" fill="url(#const-glow)" />
@@ -53,7 +53,7 @@ export function AmbientConstellation() {
           cx={s.x}
           cy={s.y}
           r={s.r}
-          fill="#bae6fd"
+          className="constellation-star"
           opacity={reduced ? 0.5 : undefined}
         >
           {!reduced && (

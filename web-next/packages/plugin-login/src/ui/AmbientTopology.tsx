@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useReducedMotion } from './useReducedMotion';
 import './ambient.css';
 
 const NODE_COUNT = 28;
@@ -30,9 +31,12 @@ function seedNodes(w: number, h: number): Node[] {
  * Topology ambient — a slow-moving node graph with faint ice-blue edges.
  *
  * Animation pauses when `prefers-reduced-motion: reduce` is set.
+ * Re-runs the effect when the preference changes at runtime.
  */
 export function AmbientTopology() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const reduced = useReducedMotion();
+  const rafIdRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -41,9 +45,6 @@ export function AmbientTopology() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    let rafId = 0;
     let nodes: Node[] = [];
 
     const resize = () => {
@@ -90,15 +91,10 @@ export function AmbientTopology() {
         ctx.fill();
       }
 
-      rafId = requestAnimationFrame(drawFrame);
+      rafIdRef.current = requestAnimationFrame(drawFrame);
     };
 
-    resize();
-
-    if (!prefersReduced) {
-      drawFrame();
-    } else {
-      // Render a static snapshot without animating
+    const drawStatic = () => {
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       ctx.clearRect(0, 0, w, h);
@@ -108,21 +104,30 @@ export function AmbientTopology() {
         ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
         ctx.fill();
       }
+    };
+
+    resize();
+
+    if (!reduced) {
+      drawFrame();
+    } else {
+      drawStatic();
     }
 
     const onResize = () => {
-      cancelAnimationFrame(rafId);
+      cancelAnimationFrame(rafIdRef.current);
       resize();
-      if (!prefersReduced) drawFrame();
+      if (!reduced) drawFrame();
+      else drawStatic();
     };
 
     window.addEventListener('resize', onResize);
 
     return () => {
-      cancelAnimationFrame(rafId);
+      cancelAnimationFrame(rafIdRef.current);
       window.removeEventListener('resize', onResize);
     };
-  }, []);
+  }, [reduced]);
 
   return (
     <canvas ref={canvasRef} className="login-ambient" aria-hidden data-testid="ambient-topology" />

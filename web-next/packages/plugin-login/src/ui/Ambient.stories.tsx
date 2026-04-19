@@ -3,17 +3,10 @@ import type { AmbientVariant } from './useAmbient';
 import { AmbientTopology } from './AmbientTopology';
 import { AmbientConstellation } from './AmbientConstellation';
 import { AmbientLattice } from './AmbientLattice';
+import './Ambient.stories.css';
 
 // ─── Shared wrapper ───────────────────────────────────────────────────────────
 function AmbientPreview({ variant }: { variant: AmbientVariant }) {
-  const style: React.CSSProperties = {
-    position: 'relative',
-    width: '100%',
-    height: '100vh',
-    background: 'var(--color-bg-primary, #09090b)',
-    overflow: 'hidden',
-  };
-
   const components: Record<AmbientVariant, React.ComponentType> = {
     topology: AmbientTopology,
     constellation: AmbientConstellation,
@@ -22,7 +15,7 @@ function AmbientPreview({ variant }: { variant: AmbientVariant }) {
 
   const Component = components[variant];
   return (
-    <div style={style}>
+    <div className="ambient-preview">
       <Component />
     </div>
   );
