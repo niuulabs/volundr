@@ -61,19 +61,22 @@ describe('createMockPersonaStore', () => {
     const store = createMockPersonaStore();
     const req = {
       name: 'my-custom',
+      role: 'build' as const,
+      letter: 'M',
+      color: 'var(--color-accent-cyan)',
+      summary: 'Custom persona',
+      description: 'Custom description',
       systemPromptTemplate: 'Custom system prompt',
-      allowedTools: ['file'],
+      allowedTools: ['read'],
       forbiddenTools: [],
-      permissionMode: 'read-only',
+      permissionMode: 'default',
       iterationBudget: 10,
       llmPrimaryAlias: 'claude-haiku-4-5',
       llmThinkingEnabled: false,
       llmMaxTokens: 4096,
       producesEventType: 'custom.done',
-      consumesEventTypes: ['custom.requested'],
-      consumesInjects: [],
-      fanInStrategy: 'merge',
-      fanInContributesTo: '',
+      producesSchema: {},
+      consumesEvents: [{ name: 'custom.requested' }],
     };
     const detail = await store.createPersona(req);
     expect(detail.name).toBe('my-custom');
@@ -88,19 +91,23 @@ describe('createMockPersonaStore', () => {
     const store = createMockPersonaStore();
     const req = {
       name: 'coder',
+      role: 'build' as const,
+      letter: 'C',
+      color: 'var(--color-accent-indigo)',
+      summary: 'Updated coder',
+      description: 'Updated description',
       systemPromptTemplate: 'Updated prompt',
-      allowedTools: ['file', 'git', 'terminal'],
-      forbiddenTools: ['cascade'],
-      permissionMode: 'workspace-write',
+      allowedTools: ['read', 'write', 'bash'],
+      forbiddenTools: [],
+      permissionMode: 'default',
       iterationBudget: 50,
       llmPrimaryAlias: 'claude-opus-4-6',
       llmThinkingEnabled: true,
       llmMaxTokens: 16384,
       producesEventType: 'code.changed',
-      consumesEventTypes: ['code.requested'],
-      consumesInjects: [],
-      fanInStrategy: 'any_passes',
-      fanInContributesTo: '',
+      producesSchema: {},
+      consumesEvents: [{ name: 'code.requested' }],
+      fanInStrategy: 'any_passes' as const,
     };
     const detail = await store.updatePersona('coder', req);
     expect(detail.iterationBudget).toBe(50);
@@ -112,19 +119,22 @@ describe('createMockPersonaStore', () => {
     await expect(
       store.updatePersona('ghost', {
         name: 'ghost',
+        role: 'build',
+        letter: 'G',
+        color: '',
+        summary: '',
+        description: '',
         systemPromptTemplate: '',
         allowedTools: [],
         forbiddenTools: [],
-        permissionMode: '',
+        permissionMode: 'default',
         iterationBudget: 0,
         llmPrimaryAlias: '',
         llmThinkingEnabled: false,
         llmMaxTokens: 0,
         producesEventType: '',
-        consumesEventTypes: [],
-        consumesInjects: [],
-        fanInStrategy: 'merge',
-        fanInContributesTo: '',
+        producesSchema: {},
+        consumesEvents: [],
       }),
     ).rejects.toThrow('Persona not found');
   });

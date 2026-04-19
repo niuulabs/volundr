@@ -33,6 +33,9 @@ export * from './primitives/Textarea';
 export * from './primitives/Select';
 export * from './primitives/Combobox';
 export * from './primitives/ValidationSummary';
+export * from './primitives/EventPicker';
+export * from './primitives/ToolPicker';
+export * from './primitives/SchemaEditor';
 export { cn } from './utils/cn';
 
 /* Chat */
