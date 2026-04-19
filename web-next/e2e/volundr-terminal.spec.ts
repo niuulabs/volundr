@@ -45,8 +45,9 @@ test('type a command in terminal and see echoed output', async ({ page }) => {
   await page.keyboard.type('ls');
   await page.keyboard.press('Enter');
 
-  // The mock stream echoes input back. We verify the interaction didn't crash
-  // by confirming the terminal container is still present and attached.
+  // The mock stream echoes input back — xterm renders it to canvas/WebGL.
+  // In headless CI xterm may not render a canvas (no GPU), so we just confirm
+  // the container is still mounted and no uncaught error was thrown.
   await expect(container).toBeVisible({ timeout: 5_000 });
 });
 

@@ -73,6 +73,20 @@ const SEED_CLUSTERS: Cluster[] = [
     runningSessions: 1,
     queuedProvisions: 0,
   },
+  {
+    id: 'cl-brokkr',
+    realm: 'midgard',
+    name: 'Brokkr',
+    capacity: { cpu: 32, memMi: 65_536, gpu: 0 },
+    used: { cpu: 8, memMi: 16_384, gpu: 0 },
+    nodes: [
+      { id: 'n-3', status: 'ready', role: 'worker' },
+      { id: 'n-4', status: 'notready', role: 'worker' },
+      { id: 'n-5', status: 'cordoned', role: 'worker' },
+    ],
+    runningSessions: 2,
+    queuedProvisions: 1,
+  },
 ];
 
 const SEED_DOMAIN_SESSIONS: Session[] = [
@@ -245,6 +259,79 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
       },
     ],
   },
+  {
+    id: 'ds-2',
+    ravnId: 'r1',
+    personaName: 'skald',
+    sagaId: 'saga-auth',
+    templateId: 'tpl-default',
+    clusterId: 'cl-eitri',
+    state: 'terminated',
+    startedAt: '2026-03-01T10:00:00Z',
+    readyAt: '2026-03-01T10:00:30Z',
+    terminatedAt: '2026-03-01T11:00:00Z',
+    resources: {
+      cpuRequest: 1,
+      cpuLimit: 2,
+      cpuUsed: 0,
+      memRequestMi: 512,
+      memLimitMi: 1_024,
+      memUsedMi: 0,
+      gpuCount: 0,
+    },
+    env: {},
+    events: [
+      { ts: '2026-03-01T10:00:00Z', kind: 'ready', body: 'pod ready' },
+      { ts: '2026-03-01T11:00:00Z', kind: 'terminated', body: 'session ended by user' },
+    ],
+  },
+  {
+    id: 'ds-3',
+    ravnId: 'r2',
+    personaName: 'bard',
+    sagaId: 'saga-api',
+    templateId: 'tpl-gpu',
+    clusterId: 'cl-brokkr',
+    state: 'failed',
+    startedAt: '2026-03-10T08:00:00Z',
+    terminatedAt: '2026-03-10T08:05:00Z',
+    resources: {
+      cpuRequest: 2,
+      cpuLimit: 4,
+      cpuUsed: 0,
+      memRequestMi: 2_048,
+      memLimitMi: 4_096,
+      memUsedMi: 0,
+      gpuCount: 1,
+    },
+    env: {},
+    events: [{ ts: '2026-03-10T08:05:00Z', kind: 'failed', body: 'OOMKilled' }],
+  },
+  {
+    id: 'ds-4b',
+    ravnId: 'r2',
+    personaName: 'bard',
+    templateId: 'tpl-default',
+    clusterId: 'cl-eitri',
+    state: 'terminated',
+    startedAt: '2026-04-01T09:00:00Z',
+    readyAt: '2026-04-01T09:00:45Z',
+    terminatedAt: '2026-04-01T17:00:00Z',
+    resources: {
+      cpuRequest: 1,
+      cpuLimit: 2,
+      cpuUsed: 0,
+      memRequestMi: 512,
+      memLimitMi: 1_024,
+      memUsedMi: 0,
+      gpuCount: 0,
+    },
+    env: {},
+    events: [
+      { ts: '2026-04-01T09:00:00Z', kind: 'ready', body: 'pod ready' },
+      { ts: '2026-04-01T17:00:00Z', kind: 'terminated', body: 'idle timeout' },
+    ],
+  },
 ];
 
 const SEED_TEMPLATES: Template[] = [
@@ -271,6 +358,31 @@ const SEED_TEMPLATES: Template[] = [
     },
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'tpl-gpu',
+    name: 'gpu-workload',
+    version: 2,
+    spec: {
+      image: 'ghcr.io/niuulabs/skuld',
+      tag: 'cuda-12',
+      mounts: [],
+      env: { MODEL_PATH: '/models' },
+      envSecretRefs: ['HF_TOKEN'],
+      tools: ['python', 'jupyter'],
+      resources: {
+        cpuRequest: '2',
+        cpuLimit: '4',
+        memRequestMi: 4_096,
+        memLimitMi: 8_192,
+        gpuCount: 1,
+      },
+      ttlSec: 7_200,
+      idleTimeoutSec: 900,
+      clusterAffinity: ['cl-eitri'],
+    },
+    createdAt: '2026-02-01T00:00:00Z',
+    updatedAt: '2026-03-15T00:00:00Z',
   },
 ];
 
@@ -308,8 +420,55 @@ export function createMockVolundrService(): IVolundrService {
 
     subscribeStats: (_callback) => () => {},
 
-    getTemplates: async () => [],
-    getTemplate: async () => null,
+    getTemplates: async () =>
+      SEED_TEMPLATES.map((t) => ({
+        name: t.name,
+        description: '',
+        isDefault: t.id === 'tpl-default',
+        repos: [],
+        setupScripts: [],
+        workspaceLayout: {},
+        cliTool: 'claude',
+        workloadType: 'skuld-claude',
+        model: null,
+        systemPrompt: null,
+        resourceConfig: {
+          cpu: t.spec.resources.cpuRequest,
+          memory: String(t.spec.resources.memRequestMi),
+          gpu: String(t.spec.resources.gpuCount),
+        },
+        mcpServers: [],
+        envVars: t.spec.env,
+        envSecretRefs: t.spec.envSecretRefs,
+        workloadConfig: {},
+        terminalSidecar: { enabled: false, allowedCommands: [] },
+        skills: [],
+        rules: [],
+      })),
+    getTemplate: async (name) => {
+      const t = SEED_TEMPLATES.find((tpl) => tpl.name === name);
+      if (!t) return null;
+      return {
+        name: t.name,
+        description: '',
+        isDefault: t.id === 'tpl-default',
+        repos: [],
+        setupScripts: [],
+        workspaceLayout: {},
+        cliTool: 'claude',
+        workloadType: 'skuld-claude',
+        model: null,
+        systemPrompt: null,
+        resourceConfig: { cpu: t.spec.resources.cpuRequest },
+        mcpServers: [],
+        envVars: t.spec.env,
+        envSecretRefs: t.spec.envSecretRefs,
+        workloadConfig: {},
+        terminalSidecar: { enabled: false, allowedCommands: [] },
+        skills: [],
+        rules: [],
+      };
+    },
     saveTemplate: async (t) => t,
 
     getPresets: async () => [],
@@ -585,29 +744,37 @@ export function createMockSessionStore(): ISessionStore {
 // ---------------------------------------------------------------------------
 
 export function createMockTemplateStore(): ITemplateStore {
-  const templates = [...SEED_TEMPLATES];
+  let templates = [...SEED_TEMPLATES];
   return {
     getTemplate: async (id) => templates.find((t) => t.id === id) ?? null,
     listTemplates: async () => templates,
-    createTemplate: async (name, spec) => ({
-      id: `tpl-${Date.now()}`,
-      name,
-      version: 1,
-      spec,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }),
+    createTemplate: async (name, spec) => {
+      const t: Template = {
+        id: `tpl-${Date.now()}`,
+        name,
+        version: 1,
+        spec,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      templates = [...templates, t];
+      return t;
+    },
     updateTemplate: async (id, spec) => {
       const existing = templates.find((t) => t.id === id);
       if (!existing) throw new Error(`Template not found: ${id}`);
-      return {
+      const updated = {
         ...existing,
         spec,
         version: existing.version + 1,
         updatedAt: new Date().toISOString(),
       };
+      templates = templates.map((t) => (t.id === id ? updated : t));
+      return updated;
     },
-    deleteTemplate: async () => {},
+    deleteTemplate: async (id) => {
+      templates = templates.filter((t) => t.id !== id);
+    },
   };
 }
 

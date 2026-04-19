@@ -3,6 +3,9 @@ import { definePlugin } from '@niuulabs/plugin-sdk';
 import { VolundrPage } from './ui/VolundrPage';
 import { SessionsPage } from './ui/SessionsPage';
 import { VolundrSessionRoute, VolundrArchivedRoute } from './ui/routes';
+import { TemplatesPage } from './ui/TemplatesPage';
+import { ClustersPage } from './ui/ClustersPage';
+import { HistoryPage } from './ui/HistoryPage';
 
 export const volundrPlugin = definePlugin({
   id: 'volundr',
@@ -29,6 +32,21 @@ export const volundrPlugin = definePlugin({
       getParentRoute: () => rootRoute,
       path: '/volundr/session/$sessionId/archived',
       component: VolundrArchivedRoute,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/volundr/templates',
+      component: TemplatesPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/volundr/clusters',
+      component: ClustersPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/volundr/history',
+      component: HistoryPage,
     }),
   ],
 });

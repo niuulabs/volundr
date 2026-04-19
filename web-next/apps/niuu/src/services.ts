@@ -34,14 +34,15 @@ import {
 } from '@niuulabs/plugin-observatory';
 import {
   createMockVolundrService,
+  createMockClusterAdapter,
+  createMockTemplateStore,
+  createMockSessionStore,
   buildVolundrHttpAdapter,
   createMockPtyStream,
   createMockMetricsStream,
   createMockFileSystemPort,
   buildVolundrPtyWsAdapter,
   buildVolundrMetricsSseAdapter,
-  createMockClusterAdapter,
-  createMockSessionStore,
 } from '@niuulabs/plugin-volundr';
 import { createApiClient } from '@niuulabs/query';
 import type { NiuuConfig, ServiceConfig, ServicesMap } from '@niuulabs/plugin-sdk';
@@ -147,6 +148,11 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     ptyStream,
     metricsStream,
     filesystem: createMockFileSystemPort(),
+    // NIU-678 pages (ClustersPage, TemplatesPage, HistoryPage)
+    'volundr.clusters': createMockClusterAdapter(),
+    'volundr.templates': createMockTemplateStore(),
+    'volundr.sessions': createMockSessionStore(),
+    // VolundrPage overview hooks (useVolundrClusters, useSessionStore)
     clusterAdapter: createMockClusterAdapter(),
     sessionStore: createMockSessionStore(),
     'observatory.registry': observatoryRegistry,
