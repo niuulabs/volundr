@@ -21,6 +21,13 @@ import { useDispatcherState } from './useDispatcherState';
 import { useDispatchQueue, type DispatchEntry } from './useDispatchQueue';
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+// TODO: source from DispatcherState once backend exposes maxRetries
+const DEFAULT_MAX_RETRIES = 3;
+
+// ---------------------------------------------------------------------------
 // Filter types
 // ---------------------------------------------------------------------------
 
@@ -68,10 +75,7 @@ function RuleCard({
           Dispatch rules
         </h3>
       </div>
-      <dl
-        className="niuu-grid niuu-gap-x-8 niuu-gap-y-1 niuu-text-xs niuu-text-text-secondary niuu-m-0"
-        style={{ gridTemplateColumns: 'repeat(4, auto)' }}
-      >
+      <dl className="niuu-grid niuu-grid-cols-4 niuu-gap-x-8 niuu-gap-y-1 niuu-text-xs niuu-text-text-secondary niuu-m-0">
         <dt className="niuu-text-text-muted">Confidence threshold</dt>
         <dt className="niuu-text-text-muted">Concurrent cap</dt>
         <dt className="niuu-text-text-muted">Auto-continue</dt>
@@ -81,7 +85,7 @@ function RuleCard({
         <dd className="niuu-m-0 niuu-font-mono niuu-text-text-primary">
           {autoContinue ? 'on' : 'off'}
         </dd>
-        <dd className="niuu-m-0 niuu-font-mono niuu-text-text-primary">3</dd>
+        <dd className="niuu-m-0 niuu-font-mono niuu-text-text-primary">{DEFAULT_MAX_RETRIES}</dd>
       </dl>
     </div>
   );
@@ -172,8 +176,10 @@ function BatchDispatchBar({
       <Tooltip content={canDispatch ? undefined : 'Select only ready raids to dispatch'} side="top">
         <button
           type="button"
-          onClick={onDispatch}
-          disabled={!canDispatch || isDispatching}
+          onClick={() => {
+            if (!canDispatch || isDispatching) return;
+            onDispatch();
+          }}
           className={cn(
             'niuu-rounded-md niuu-px-4 niuu-py-1.5 niuu-text-sm niuu-font-medium niuu-transition-colors',
             canDispatch && !isDispatching
