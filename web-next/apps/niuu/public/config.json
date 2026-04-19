@@ -1,9 +1,13 @@
 {
   "theme": "ice",
   "plugins": {
-    "hello": { "enabled": true, "order": 1 }
+    "hello": { "enabled": true, "order": 1 },
+    "observatory": { "enabled": true, "order": 2 }
   },
   "services": {
-    "hello": { "mode": "mock" }
+    "hello": { "mode": "mock" },
+    "observatory.registry": { "mode": "mock" },
+    "observatory.topology": { "mode": "mock" },
+    "observatory.events": { "mode": "mock" }
   }
 }
