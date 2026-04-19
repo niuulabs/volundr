@@ -232,7 +232,7 @@ const SEED_ISSUES: TrackerIssue[] = [
     labels: ['plugin', 'scaffold'],
     priority: 1,
     url: 'https://linear.app/niuu/issue/NIU-679',
-    milestoneId: null,
+    milestoneId: 'ms-auth',
   },
   {
     id: 'iss-671',

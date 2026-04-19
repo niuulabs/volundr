@@ -199,7 +199,7 @@ describe('createMockTrackerService', () => {
   it('listIssues returns issues for project', async () => {
     const svc = createMockTrackerService();
     const issues = await svc.listIssues('proj-niuu-core');
-    expect(Array.isArray(issues)).toBe(true);
+    expect(issues.length).toBeGreaterThan(0);
   });
 
   it('importProject creates a saga', async () => {
