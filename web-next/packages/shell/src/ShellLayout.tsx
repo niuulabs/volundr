@@ -20,11 +20,14 @@ export function ShellLayout() {
   const { location } = useRouterState({ select: (s) => ({ location: s.location }) });
   const pathname = location.pathname;
 
+  // System plugins (e.g. login) register routes but stay out of the nav rail.
+  const navPlugins = enabled.filter((p) => !p.system);
+
   const activeId = activePluginId(
     pathname,
-    enabled.map((p) => p.id),
+    navPlugins.map((p) => p.id),
   );
-  const active = enabled.find((p) => p.id === activeId) ?? enabled[0] ?? null;
+  const active = navPlugins.find((p) => p.id === activeId) ?? navPlugins[0] ?? null;
 
   // localStorage follows the router — not the other way around
   useEffect(() => {
@@ -49,7 +52,7 @@ export function ShellLayout() {
         <div className="niuu-shell__rail-brand" title="Niuu">
           {brand}
         </div>
-        {enabled.map((p) => (
+        {navPlugins.map((p) => (
           <button
             key={p.id}
             type="button"

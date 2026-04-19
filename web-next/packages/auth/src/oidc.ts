@@ -22,7 +22,7 @@ export function getOidcConfig(config: NiuuConfig): OidcConfig | null {
   return {
     authority: auth.issuer,
     clientId: auth.clientId,
-    redirectUri: window.location.origin,
+    redirectUri: `${window.location.origin}/login/callback`,
     postLogoutRedirectUri: window.location.origin,
     scope: 'openid profile email',
   };

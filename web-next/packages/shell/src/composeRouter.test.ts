@@ -10,12 +10,13 @@ vi.mock('./ShellContext', () => ({
   useShellContext: vi.fn(() => ({ ctx: { tweaks: {}, setTweak: vi.fn() } })),
 }));
 
-const makePlugin = (id: string) =>
+const makePlugin = (id: string, system = false) =>
   definePlugin({
     id,
     rune: 'ᚺ',
     title: id,
     subtitle: id,
+    system,
     render: () => null,
   });
 
@@ -75,5 +76,25 @@ describe('composeRouter', () => {
     });
     // @ts-expect-error accessing internal options for assertion
     expect(router.routesById['__root__']?.options?.notFoundComponent).toBeDefined();
+  });
+
+  it('registers routes for system plugins', () => {
+    const login = makePlugin('login', true);
+    const router = composeRouter([login], {
+      history: createMemoryHistory({ initialEntries: ['/'] }),
+    });
+    const paths = Object.keys(router.routesById);
+    expect(paths).toContain('/login');
+  });
+
+  it('system plugin routes appear in the router even when mixed with regular plugins', () => {
+    const login = makePlugin('login', true);
+    const hello = makePlugin('hello');
+    const router = composeRouter([login, hello], {
+      history: createMemoryHistory({ initialEntries: ['/'] }),
+    });
+    const paths = Object.keys(router.routesById);
+    expect(paths).toContain('/login');
+    expect(paths).toContain('/hello');
   });
 });
