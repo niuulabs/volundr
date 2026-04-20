@@ -7,6 +7,7 @@ import { SessionsView } from './ui/SessionsView';
 import { BudgetView } from './ui/BudgetView';
 import { RavnSubnav } from './ui/RavnSubnav';
 import { RavnTopbar } from './ui/RavnTopbar';
+import { RavnFooter } from './ui/RavnFooter';
 
 export const ravnPlugin = definePlugin({
   id: 'ravn',
@@ -49,6 +50,7 @@ export const ravnPlugin = definePlugin({
   ],
   subnav: () => RavnSubnav(),
   topbarRight: () => RavnTopbar(),
+  footer: () => RavnFooter(),
 });
 
 // Mock adapters

@@ -21,6 +21,31 @@ const pluginB = definePlugin({
   render: () => <div data-testid="beta-content">beta-rendered</div>,
 });
 
+// Plugin with tabs (including count badges), subnav, and footer
+const pluginWithTabs = definePlugin({
+  id: 'tabbed',
+  rune: 'ᛐ',
+  title: 'Tabbed',
+  subtitle: 'tabs test',
+  tabs: [
+    { id: 'one', label: 'One', count: 4 },
+    { id: 'two', label: 'Two', count: 0 },
+    { id: 'three', label: 'Three' },
+  ],
+  render: () => <div data-testid="tabbed-content">tabbed-rendered</div>,
+  subnav: () => <div data-testid="tabbed-subnav">subnav-content</div>,
+  footer: () => <span data-testid="tabbed-footer-chip">api ● connected</span>,
+});
+
+// Plugin without subnav — tests collapse
+const pluginNoSubnav = definePlugin({
+  id: 'flat',
+  rune: 'ᚠ',
+  title: 'Flat',
+  subtitle: 'no subnav',
+  render: () => <div data-testid="flat-content">flat-rendered</div>,
+});
+
 function wrap(
   ui: React.ReactNode,
   pluginOverrides: Record<string, { enabled: boolean; order: number }> = {},
@@ -97,5 +122,72 @@ describe('Shell', () => {
     });
     // localStorage should have been updated from the route, not from a stored value
     expect(localStorage.getItem('niuu.active')).toBe('beta');
+  });
+
+  it('renders tab count badge when count > 0', async () => {
+    wrap(<Shell plugins={[pluginWithTabs]} _testHistory={memHistory('/tabbed')} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('tabbed-content')).toBeInTheDocument();
+    });
+    // Tab "One" has count=4 — badge should be visible
+    const badge = screen.getByTestId('tab-count-one');
+    expect(badge).toBeInTheDocument();
+    expect(badge.textContent).toBe('4');
+  });
+
+  it('does not render tab count badge when count is 0', async () => {
+    wrap(<Shell plugins={[pluginWithTabs]} _testHistory={memHistory('/tabbed')} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('tabbed-content')).toBeInTheDocument();
+    });
+    // Tab "Two" has count=0 — no badge
+    expect(screen.queryByTestId('tab-count-two')).not.toBeInTheDocument();
+  });
+
+  it('does not render tab count badge when count is undefined', async () => {
+    wrap(<Shell plugins={[pluginWithTabs]} _testHistory={memHistory('/tabbed')} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('tabbed-content')).toBeInTheDocument();
+    });
+    // Tab "Three" has no count — no badge
+    expect(screen.queryByTestId('tab-count-three')).not.toBeInTheDocument();
+  });
+
+  it('renders plugin footer status chips', async () => {
+    wrap(<Shell plugins={[pluginWithTabs]} _testHistory={memHistory('/tabbed')} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('tabbed-content')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('footer-status')).toBeInTheDocument();
+    expect(screen.getByTestId('tabbed-footer-chip')).toBeInTheDocument();
+    expect(screen.getByTestId('tabbed-footer-chip').textContent).toContain('api');
+  });
+
+  it('applies no-subnav class when subnav returns null', async () => {
+    wrap(<Shell plugins={[pluginNoSubnav]} _testHistory={memHistory('/flat')} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('flat-content')).toBeInTheDocument();
+    });
+    const shell = document.querySelector('.niuu-shell');
+    expect(shell?.classList.contains('niuu-shell--no-subnav')).toBe(true);
+  });
+
+  it('does not apply no-subnav class when plugin has subnav', async () => {
+    wrap(<Shell plugins={[pluginWithTabs]} _testHistory={memHistory('/tabbed')} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('tabbed-content')).toBeInTheDocument();
+    });
+    const shell = document.querySelector('.niuu-shell');
+    expect(shell?.classList.contains('niuu-shell--no-subnav')).toBe(false);
+  });
+
+  it('renders subnav collapsed element when no subnav content', async () => {
+    wrap(<Shell plugins={[pluginNoSubnav]} _testHistory={memHistory('/flat')} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('flat-content')).toBeInTheDocument();
+    });
+    const subnav = document.querySelector('.niuu-shell__subnav');
+    expect(subnav).toBeInTheDocument();
+    expect(subnav?.classList.contains('niuu-shell__subnav--collapsed')).toBe(true);
   });
 });
