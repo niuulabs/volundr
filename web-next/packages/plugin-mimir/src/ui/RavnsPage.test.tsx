@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
 import { RavnsPage } from './RavnsPage';
 import { createMimirMockAdapter } from '../adapters/mock';
 import type { IMimirService } from '../ports';
@@ -41,7 +41,6 @@ describe('RavnsPage', () => {
   it('shows dream stats for ravns that have dream cycles', async () => {
     wrap(<RavnsPage />);
     await waitFor(() => expect(screen.getAllByTestId('ravn-dream').length).toBeGreaterThan(0));
-    // First ravn has dream cycle — verify stats
     const dream = screen.getAllByTestId('ravn-dream')[0]!;
     expect(dream).toBeInTheDocument();
   });
@@ -54,8 +53,34 @@ describe('RavnsPage', () => {
   it('shows mount chips for each ravn', async () => {
     wrap(<RavnsPage />);
     await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
-    // 'local' mount should be visible
     expect(screen.getAllByText(/local/).length).toBeGreaterThan(0);
+  });
+
+  it('clicking a ravn card shows the profile view', async () => {
+    wrap(<RavnsPage />);
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByTestId('ravn-item')[0]!);
+    await waitFor(() => expect(screen.getByTestId('ravn-profile')).toBeInTheDocument());
+  });
+
+  it('profile view shows a back button that returns to directory', async () => {
+    wrap(<RavnsPage />);
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByTestId('ravn-item')[0]!);
+    await waitFor(() => screen.getByTestId('ravn-profile'));
+    fireEvent.click(screen.getByRole('button', { name: /back to wardens/i }));
+    await waitFor(() =>
+      expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0),
+    );
+  });
+
+  it('profile view shows dream stats for selected ravn', async () => {
+    wrap(<RavnsPage />);
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
+    // Find a ravn with dream stats (first one from mock has a dream cycle)
+    fireEvent.click(screen.getAllByTestId('ravn-item')[0]!);
+    await waitFor(() => screen.getByTestId('ravn-profile'));
+    expect(screen.getByTestId('ravn-dream')).toBeInTheDocument();
   });
 
   it('shows error state when service throws', async () => {

@@ -1,5 +1,6 @@
 import { createRoute } from '@tanstack/react-router';
 import { definePlugin } from '@niuulabs/plugin-sdk';
+import type { PluginCtx } from '@niuulabs/plugin-sdk';
 import { MimirPage } from './ui/MimirPage';
 import { SearchPage } from './ui/SearchPage';
 import { GraphPage } from './ui/GraphPage';
@@ -8,6 +9,8 @@ import { RavnsPage } from './ui/RavnsPage';
 import { RoutingPage } from './ui/RoutingPage';
 import { LintPage } from './ui/LintPage';
 import { DreamsPage } from './ui/DreamsPage';
+import { MimirSubnav } from './ui/MimirSubnav';
+import { MimirTopbar } from './ui/MimirTopbar';
 
 export const mimirPlugin = definePlugin({
   id: 'mimir',
@@ -56,6 +59,8 @@ export const mimirPlugin = definePlugin({
       component: DreamsPage,
     }),
   ],
+  subnav: (ctx: PluginCtx) => <MimirSubnav ctx={ctx} />,
+  topbarRight: (ctx: PluginCtx) => <MimirTopbar ctx={ctx} />,
 });
 
 export { createMimirMockAdapter } from './adapters/mock';

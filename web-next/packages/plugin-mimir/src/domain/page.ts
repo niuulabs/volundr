@@ -61,6 +61,8 @@ export interface PageMeta {
   updatedBy: string;
   sourceIds: string[];
   size: number;
+  /** Whether a human has flagged this page for review. */
+  flagged?: boolean;
   /** Related page slugs — carried through from Page so backlinks can be computed. */
   related?: string[];
 }
@@ -113,6 +115,7 @@ export function toPageMeta(page: Page): PageMeta {
     type: page.type,
     confidence: page.confidence,
     entityType: page.entityType,
+    flagged: page.flagged,
     mounts: page.mounts,
     updatedAt: page.updatedAt,
     updatedBy: page.updatedBy,

@@ -6,8 +6,29 @@ import './GraphPage.css';
 const MAX_HOPS = 4;
 const MIN_HOPS = 1;
 
+// Category color palette (maps to CSS tokens in order)
+const CATEGORY_COLORS = [
+  'var(--color-accent-cyan)',
+  'var(--color-accent-indigo)',
+  'var(--color-accent-emerald)',
+  'var(--color-accent-purple)',
+  'var(--color-accent-amber)',
+  'var(--color-accent-orange)',
+  'var(--color-accent-red)',
+  'var(--color-text-secondary)',
+] as const;
+
+function getCategoryIndex(category: string, categories: string[]): number {
+  const idx = categories.indexOf(category);
+  return (idx < 0 ? 0 : idx) % CATEGORY_COLORS.length;
+}
+
+function getCategoryFill(category: string, categories: string[]): string {
+  return CATEGORY_COLORS[getCategoryIndex(category, categories)] ?? CATEGORY_COLORS[0];
+}
+
 // ---------------------------------------------------------------------------
-// Simple circular SVG layout
+// SVG layout
 // ---------------------------------------------------------------------------
 
 interface NodePosition {
@@ -34,9 +55,10 @@ interface GraphSvgProps {
   graph: MimirGraph;
   focusId: string | null;
   onNodeClick: (id: string) => void;
+  categories: string[];
 }
 
-function GraphSvg({ graph, focusId, onNodeClick }: GraphSvgProps) {
+function GraphSvg({ graph, focusId, onNodeClick, categories }: GraphSvgProps) {
   const positions = layoutCircle(graph.nodes);
   const posMap = new Map(positions.map((p) => [p.node.id, p]));
 
@@ -62,6 +84,9 @@ function GraphSvg({ graph, focusId, onNodeClick }: GraphSvgProps) {
       <g className="graph-page__nodes">
         {positions.map(({ node, x, y }) => {
           const isFocus = node.id === focusId;
+          const fill = isFocus
+            ? 'var(--color-brand, var(--color-accent-cyan))'
+            : getCategoryFill(node.category, categories);
           return (
             <g
               key={node.id}
@@ -77,7 +102,12 @@ function GraphSvg({ graph, focusId, onNodeClick }: GraphSvgProps) {
                 if (e.key === 'Enter' || e.key === ' ') onNodeClick(node.id);
               }}
             >
-              <circle r={isFocus ? 14 : 10} className="graph-page__node-circle" />
+              <circle
+                r={isFocus ? 14 : 10}
+                className="graph-page__node-circle"
+                fill={fill}
+                stroke={isFocus ? fill : 'var(--color-border)'}
+              />
               <text dy={isFocus ? 26 : 22} className="graph-page__node-label">
                 {node.title.length > 20 ? `${node.title.slice(0, 18)}…` : node.title}
               </text>
@@ -90,6 +120,33 @@ function GraphSvg({ graph, focusId, onNodeClick }: GraphSvgProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Legend
+// ---------------------------------------------------------------------------
+
+interface LegendProps {
+  categories: string[];
+}
+
+function GraphLegend({ categories }: LegendProps) {
+  if (categories.length === 0) return null;
+  return (
+    <div className="graph-page__legend" aria-label="Graph legend">
+      <span className="graph-page__legend-title">Categories</span>
+      {categories.map((cat, i) => (
+        <div key={cat} className="graph-page__legend-item">
+          <span
+            className="graph-page__legend-dot"
+            data-color-idx={String(i % CATEGORY_COLORS.length)}
+            aria-hidden
+          />
+          <span className="graph-page__legend-label">{cat}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // GraphPage
 // ---------------------------------------------------------------------------
 
@@ -98,6 +155,9 @@ export function GraphPage() {
     useGraph();
 
   const displayGraph = focusedGraph ?? graph;
+  const categories = displayGraph
+    ? [...new Set(displayGraph.nodes.map((n) => n.category))].filter(Boolean).sort()
+    : [];
 
   return (
     <div className="graph-page">
@@ -174,11 +234,15 @@ export function GraphPage() {
             )}
           </div>
 
-          <GraphSvg
-            graph={displayGraph}
-            focusId={focusId}
-            onNodeClick={(id) => setFocusId(focusId === id ? null : id)}
-          />
+          <div className="graph-page__canvas-wrap">
+            <GraphSvg
+              graph={displayGraph}
+              focusId={focusId}
+              onNodeClick={(id) => setFocusId(focusId === id ? null : id)}
+              categories={categories}
+            />
+            <GraphLegend categories={categories} />
+          </div>
         </>
       )}
     </div>

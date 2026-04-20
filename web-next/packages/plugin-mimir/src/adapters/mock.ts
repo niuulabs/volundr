@@ -138,6 +138,7 @@ const MOCK_PAGES: Page[] = [
     category: 'infra',
     type: 'topic',
     confidence: 'medium',
+    flagged: true,
     mounts: ['platform'],
     updatedAt: '2026-04-10T14:00:00Z',
     updatedBy: 'ravn-fjolnir',

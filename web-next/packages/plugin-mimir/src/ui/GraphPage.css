@@ -137,3 +137,65 @@
   font-family: var(--font-sans);
   pointer-events: none;
 }
+
+/* ── Canvas + legend row ───────────────────────────────────────────────────── */
+
+.graph-page__canvas-wrap {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+/* ── Legend card ───────────────────────────────────────────────────────────── */
+
+.graph-page__legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 140px;
+}
+
+.graph-page__legend-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-muted);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.graph-page__legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.graph-page__legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* 8 category color slots mapped from CSS tokens */
+.graph-page__legend-dot[data-color-idx="0"] { background: var(--color-accent-cyan); }
+.graph-page__legend-dot[data-color-idx="1"] { background: var(--color-accent-indigo); }
+.graph-page__legend-dot[data-color-idx="2"] { background: var(--color-accent-emerald); }
+.graph-page__legend-dot[data-color-idx="3"] { background: var(--color-accent-purple); }
+.graph-page__legend-dot[data-color-idx="4"] { background: var(--color-accent-amber); }
+.graph-page__legend-dot[data-color-idx="5"] { background: var(--color-accent-orange); }
+.graph-page__legend-dot[data-color-idx="6"] { background: var(--color-accent-red); }
+.graph-page__legend-dot[data-color-idx="7"] { background: var(--color-text-secondary); }
+
+.graph-page__legend-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
