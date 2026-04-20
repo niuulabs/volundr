@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Chip, LoadingState, ErrorState } from '@niuulabs/ui';
+import { Chip, LoadingState, ErrorState, Meter } from '@niuulabs/ui';
 import type { Template } from '../domain/template';
 import type { Mount } from '../domain/pod';
 import { useTemplates } from './useTemplates';
-import { CliBadge, Meter } from './atoms';
+import { CliBadge } from './atoms';
 
 // ---------------------------------------------------------------------------
 // Tab types

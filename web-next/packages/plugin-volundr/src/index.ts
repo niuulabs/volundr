@@ -97,7 +97,6 @@ export { ForgePage } from './ui/ForgePage';
 export { CredentialsPage } from './ui/CredentialsPage';
 
 // Atoms
-export { Meter } from './ui/atoms/Meter';
 export { CliBadge } from './ui/atoms/CliBadge';
 export { SourceLabel } from './ui/atoms/SourceLabel';
 export { ClusterChip } from './ui/atoms/ClusterChip';

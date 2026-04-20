@@ -1,5 +1,3 @@
-export { Meter } from './Meter';
-export type { MeterProps } from './Meter';
 export { CliBadge } from './CliBadge';
 export type { CliBadgeProps } from './CliBadge';
 export { SourceLabel } from './SourceLabel';

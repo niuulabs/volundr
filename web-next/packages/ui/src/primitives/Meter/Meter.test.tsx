@@ -44,4 +44,14 @@ describe('Meter', () => {
     render(<Meter used={75} limit={100} critical={0.7} label="test" />);
     expect(screen.getByTestId('meter')).toHaveAttribute('data-level', 'hot');
   });
+
+  it('renders empty state for zero limit', () => {
+    render(<Meter used={50} limit={0} label="Zero" />);
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '0');
+  });
+
+  it('applies custom className', () => {
+    render(<Meter used={50} limit={100} className="custom-class" />);
+    expect(screen.getByTestId('meter')).toHaveClass('custom-class');
+  });
 });

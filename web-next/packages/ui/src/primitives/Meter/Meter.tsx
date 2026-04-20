@@ -1,4 +1,4 @@
-import { cn } from '@niuulabs/ui';
+import { cn } from '../../utils/cn';
 
 export interface MeterProps {
   used: number | null | undefined;

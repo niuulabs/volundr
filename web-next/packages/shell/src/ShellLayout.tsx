@@ -68,7 +68,7 @@ export function ShellLayout() {
 
   return (
     <div
-      className={clsx('niuu-shell', !subnavNode && 'niuu-shell--no-subnav')}
+      className="niuu-shell"
       data-theme={config.theme}
     >
       <aside className="niuu-shell__rail">
@@ -126,6 +126,11 @@ export function ShellLayout() {
                   >
                     {t.rune && <span className="niuu-shell__tab-rune">{t.rune}</span>}
                     {t.label}
+                    {t.count != null && t.count > 0 && (
+                      <span className="niuu-shell__tab-count" data-testid={`tab-count-${t.id}`}>
+                        {t.count}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -147,7 +152,9 @@ export function ShellLayout() {
         </div>
       </header>
 
-      {subnavNode && <nav className="niuu-shell__subnav">{subnavNode}</nav>}
+      <nav className={clsx('niuu-shell__subnav', !subnavNode && 'niuu-shell__subnav--collapsed')}>
+        {subnavNode}
+      </nav>
 
       <main className="niuu-shell__content">
         <Outlet />
@@ -158,6 +165,9 @@ export function ShellLayout() {
           {active && <code>plugin:{active.id}</code>}
           <span className="niuu-shell__footer-sep">·</span>
           <span>niuu.world</span>
+        </div>
+        <div className="niuu-shell__footer-center" data-testid="footer-status">
+          {active?.footer?.(ctx)}
         </div>
         <div className="niuu-shell__footer-right">
           <span>{enabled.length} plugins loaded</span>

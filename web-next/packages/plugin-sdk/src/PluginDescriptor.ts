@@ -15,6 +15,8 @@ export interface PluginTab {
    * Use this to map a tab to the plugin root (e.g. `path: '/tyr'` for dashboard).
    */
   path?: string;
+  /** Optional count badge rendered next to the tab label. */
+  count?: number;
 }
 
 export interface PluginDescriptor {
@@ -41,6 +43,8 @@ export interface PluginDescriptor {
   activeTab?: string;
   /** Callback when a tab is selected. */
   onTab?: (tabId: string) => void;
+  /** Status chips rendered in the shell footer when this plugin is active. */
+  footer?: (ctx: PluginCtx) => ReactNode;
 }
 
 export function definePlugin(descriptor: PluginDescriptor): PluginDescriptor {
