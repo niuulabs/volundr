@@ -383,13 +383,27 @@ const SEED_REGISTRY: Registry = {
 // ── Seed topology ─────────────────────────────────────────────────────────────
 
 const SEED_NODES: TopologyNode[] = [
-  { id: 'realm-asgard', typeId: 'realm', label: 'asgard', parentId: null, status: 'healthy' },
+  {
+    id: 'realm-asgard',
+    typeId: 'realm',
+    label: 'asgard',
+    parentId: null,
+    status: 'healthy',
+    zone: 'asgard',
+    vlan: 90,
+    dns: 'asgard.niuu.world',
+    purpose: 'AI / compute / dev',
+    activity: 'idle',
+  },
   {
     id: 'cluster-valaskjalf',
     typeId: 'cluster',
     label: 'valaskjálf',
     parentId: 'realm-asgard',
     status: 'healthy',
+    zone: 'asgard',
+    purpose: 'DGX Spark cluster',
+    activity: 'idle',
   },
   {
     id: 'cluster-valhalla',
@@ -397,6 +411,9 @@ const SEED_NODES: TopologyNode[] = [
     label: 'valhalla',
     parentId: 'realm-asgard',
     status: 'healthy',
+    zone: 'asgard',
+    purpose: 'AI/ML workloads',
+    activity: 'idle',
   },
   {
     id: 'host-mjolnir',
@@ -404,6 +421,13 @@ const SEED_NODES: TopologyNode[] = [
     label: 'mjölnir',
     parentId: 'realm-asgard',
     status: 'healthy',
+    zone: 'asgard',
+    hw: 'DGX Spark',
+    os: 'Ubuntu 24',
+    cores: 144,
+    ram: '1 TiB',
+    gpu: 'GH200',
+    activity: 'idle',
   },
   {
     id: 'tyr-0',
@@ -411,6 +435,12 @@ const SEED_NODES: TopologyNode[] = [
     label: 'tyr-0',
     parentId: 'cluster-valaskjalf',
     status: 'healthy',
+    zone: 'asgard',
+    cluster: 'valaskjalf',
+    mode: 'active',
+    activeSagas: 3,
+    pendingRaids: 2,
+    activity: 'thinking',
   },
   {
     id: 'bifrost-0',
@@ -418,6 +448,12 @@ const SEED_NODES: TopologyNode[] = [
     label: 'bifröst-0',
     parentId: 'cluster-valaskjalf',
     status: 'healthy',
+    zone: 'asgard',
+    cluster: 'valaskjalf',
+    providers: ['Anthropic', 'OpenAI', 'Google', 'Local'],
+    reqPerMin: 42,
+    cacheHitRate: 0.68,
+    activity: 'idle',
   },
   {
     id: 'volundr-0',
@@ -425,6 +461,11 @@ const SEED_NODES: TopologyNode[] = [
     label: 'völundr-0',
     parentId: 'cluster-valhalla',
     status: 'healthy',
+    zone: 'asgard',
+    cluster: 'valhalla',
+    activeSessions: 5,
+    maxSessions: 20,
+    activity: 'tooling',
   },
   {
     id: 'mimir-0',
@@ -432,6 +473,9 @@ const SEED_NODES: TopologyNode[] = [
     label: 'mímir-0',
     parentId: 'cluster-valaskjalf',
     status: 'healthy',
+    zone: 'asgard',
+    cluster: 'valaskjalf',
+    activity: 'reading',
   },
   {
     id: 'raid-0',
@@ -439,6 +483,11 @@ const SEED_NODES: TopologyNode[] = [
     label: 'raid-omega',
     parentId: 'cluster-valaskjalf',
     status: 'observing',
+    zone: 'asgard',
+    cluster: 'valaskjalf',
+    purpose: 'refactor bifrost rule engine',
+    state: 'working',
+    activity: 'delegating',
   },
   {
     id: 'ravn-huginn',
@@ -446,6 +495,12 @@ const SEED_NODES: TopologyNode[] = [
     label: 'huginn',
     parentId: 'host-mjolnir',
     status: 'healthy',
+    zone: 'asgard',
+    hostId: 'host-mjolnir',
+    persona: 'thought',
+    specialty: 'architecture & design',
+    tokens: 42800,
+    activity: 'thinking',
   },
   {
     id: 'ravn-muninn',
@@ -453,6 +508,12 @@ const SEED_NODES: TopologyNode[] = [
     label: 'muninn',
     parentId: 'host-mjolnir',
     status: 'idle',
+    zone: 'asgard',
+    hostId: 'host-mjolnir',
+    persona: 'memory',
+    specialty: 'history & context',
+    tokens: 18200,
+    activity: 'idle',
   },
 ];
 
@@ -475,43 +536,43 @@ const SEED_TOPOLOGY: Topology = {
   timestamp: '2026-04-19T00:00:00Z',
 };
 
-// ── Seed events ───────────────────────────────────────────────────────────────
+// ── Seed events (web2 format: time, type, subject, body) ─────────────────────
 
 const SEED_EVENTS: ObservatoryEvent[] = [
   {
     id: 'ev-1',
-    timestamp: '2026-04-19T00:00:01Z',
-    severity: 'info',
-    sourceId: 'tyr-0',
-    message: 'raid-omega formed: 2 ravens conscripted',
+    time: '00:00:01',
+    type: 'RAID',
+    subject: 'raid-omega',
+    body: 'tyr dispatched raid · "refactor bifrost rule engine"',
   },
   {
     id: 'ev-2',
-    timestamp: '2026-04-19T00:00:05Z',
-    severity: 'info',
-    sourceId: 'ravn-huginn',
-    message: 'huginn joined raid-omega as coord',
+    time: '00:00:05',
+    type: 'RAVN',
+    subject: 'huginn',
+    body: 'huginn joined raid-omega as coord',
   },
   {
     id: 'ev-3',
-    timestamp: '2026-04-19T00:00:12Z',
-    severity: 'debug',
-    sourceId: 'bifrost-0',
-    message: 'cache hit rate 94% over last 60s',
+    time: '00:00:12',
+    type: 'BIFROST',
+    subject: 'bifröst-0',
+    body: 'cache hit rate 94% over last 60s',
   },
   {
     id: 'ev-4',
-    timestamp: '2026-04-19T00:00:30Z',
-    severity: 'warn',
-    sourceId: 'mimir-0',
-    message: 'write queue depth 412 — nearing threshold',
+    time: '00:00:30',
+    type: 'MIMIR',
+    subject: 'mímir-0',
+    body: 'write queue depth 412 — nearing threshold',
   },
   {
     id: 'ev-5',
-    timestamp: '2026-04-19T00:01:00Z',
-    severity: 'info',
-    sourceId: 'ravn-muninn',
-    message: 'muninn entering idle — no active sagas',
+    time: '00:01:00',
+    type: 'RAVN',
+    subject: 'muninn',
+    body: 'muninn entering idle — no active sagas',
   },
 ];
 

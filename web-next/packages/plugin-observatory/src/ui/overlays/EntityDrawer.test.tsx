@@ -22,6 +22,10 @@ const REALM_NODE: TopologyNode = {
   label: 'asgard',
   parentId: null,
   status: 'healthy',
+  vlan: 90,
+  dns: 'asgard.niuu.world',
+  purpose: 'AI / compute / dev',
+  zone: 'asgard',
 };
 
 const CLUSTER_NODE: TopologyNode = {
@@ -30,6 +34,8 @@ const CLUSTER_NODE: TopologyNode = {
   label: 'valaskjálf',
   parentId: 'realm-asgard',
   status: 'healthy',
+  zone: 'asgard',
+  purpose: 'DGX Spark cluster',
 };
 
 const HOST_NODE: TopologyNode = {
@@ -38,6 +44,10 @@ const HOST_NODE: TopologyNode = {
   label: 'mjölnir',
   parentId: 'realm-asgard',
   status: 'healthy',
+  zone: 'asgard',
+  hw: 'DGX Spark',
+  os: 'Ubuntu 24',
+  cores: 144,
 };
 
 const TYR_NODE: TopologyNode = {
@@ -46,6 +56,11 @@ const TYR_NODE: TopologyNode = {
   label: 'tyr-0',
   parentId: 'cluster-valaskjalf',
   status: 'healthy',
+  zone: 'asgard',
+  mode: 'active',
+  activeSagas: 3,
+  pendingRaids: 2,
+  activity: 'thinking',
 };
 
 const DEGRADED_NODE: TopologyNode = {
@@ -54,6 +69,44 @@ const DEGRADED_NODE: TopologyNode = {
   label: 'my-svc',
   parentId: 'cluster-valaskjalf',
   status: 'degraded',
+  svcType: 'database',
+};
+
+const RAVN_NODE: TopologyNode = {
+  id: 'ravn-huginn',
+  typeId: 'ravn_long',
+  label: 'huginn',
+  parentId: 'host-mjolnir',
+  status: 'healthy',
+  zone: 'asgard',
+  hostId: 'host-mjolnir',
+  persona: 'thought',
+  specialty: 'architecture & design',
+  tokens: 42800,
+  activity: 'thinking',
+};
+
+const BIFROST_NODE: TopologyNode = {
+  id: 'bifrost-0',
+  typeId: 'bifrost',
+  label: 'bifröst-0',
+  parentId: 'cluster-valaskjalf',
+  status: 'healthy',
+  zone: 'asgard',
+  providers: ['Anthropic', 'OpenAI'],
+  reqPerMin: 42,
+  cacheHitRate: 0.68,
+  activity: 'idle',
+};
+
+const VOLUNDR_NODE: TopologyNode = {
+  id: 'volundr-0',
+  typeId: 'volundr',
+  label: 'völundr-0',
+  parentId: 'cluster-valhalla',
+  status: 'healthy',
+  activeSessions: 5,
+  maxSessions: 20,
 };
 
 function renderDrawer(
@@ -82,23 +135,37 @@ function renderDrawer(
 describe('EntityDrawer', () => {
   it('renders nothing visible when node is null (drawer closed)', () => {
     renderDrawer(null);
-    // The Drawer portal should not render any content
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('opens with the node label as the drawer title', () => {
+  it('opens with the node label as the drawer title for realm', () => {
     renderDrawer(REALM_NODE);
     expect(screen.getByRole('dialog', { name: /asgard/i })).toBeInTheDocument();
   });
 
-  it('displays entity type label and rune in the head for realm', () => {
-    renderDrawer(REALM_NODE);
-    expect(screen.getByText('Realm')).toBeInTheDocument();
-    expect(screen.getByText('ᛞ')).toBeInTheDocument();
+  it('opens with the node label as the drawer title for cluster', () => {
+    renderDrawer(CLUSTER_NODE);
+    expect(screen.getByRole('dialog', { name: /valaskjálf/i })).toBeInTheDocument();
   });
 
-  it('shows node status text in the head', () => {
+  it('shows realm eyebrow text', () => {
     renderDrawer(REALM_NODE);
+    expect(screen.getByText(/Realm · VLAN zone/i)).toBeInTheDocument();
+  });
+
+  it('shows cluster eyebrow text', () => {
+    renderDrawer(CLUSTER_NODE);
+    expect(screen.getByText(/Cluster · k8s/i)).toBeInTheDocument();
+  });
+
+  it('shows entity type label and rune in head for tyr', () => {
+    renderDrawer(TYR_NODE);
+    expect(screen.getByText('ᛃ')).toBeInTheDocument();
+    expect(screen.getByText(/Týr/)).toBeInTheDocument();
+  });
+
+  it('shows node status text for tyr', () => {
+    renderDrawer(TYR_NODE);
     expect(screen.getByText('healthy')).toBeInTheDocument();
   });
 
@@ -107,105 +174,111 @@ describe('EntityDrawer', () => {
     expect(screen.getByText('degraded')).toBeInTheDocument();
   });
 
-  it('shows resident list for realm kind when residents exist', () => {
+  it('shows realm vlan chip when vlan is set', () => {
     renderDrawer(REALM_NODE);
-    expect(screen.getByText('Residents')).toBeInTheDocument();
-    // TOPOLOGY has cluster-valaskjalf and cluster-valhalla and host-mjolnir with parentId realm-asgard
-    expect(screen.getByText('valaskjálf')).toBeInTheDocument();
-    expect(screen.getByText('mjölnir')).toBeInTheDocument();
+    expect(screen.getByText('vlan 90')).toBeInTheDocument();
   });
 
-  it('shows resident list for cluster kind', () => {
-    renderDrawer(CLUSTER_NODE);
+  it('shows realm About section with dns', () => {
+    renderDrawer(REALM_NODE);
+    expect(screen.getByText('asgard.niuu.world')).toBeInTheDocument();
+  });
+
+  it('shows realm residents section with children from topology', () => {
+    renderDrawer(REALM_NODE);
+    // TOPOLOGY has cluster-valaskjalf and cluster-valhalla and host-mjolnir with parentId realm-asgard
     expect(screen.getByText('Residents')).toBeInTheDocument();
-    // tyr-0 and bifrost-0 and others have parentId cluster-valaskjalf
+    expect(screen.getByText('valaskjálf')).toBeInTheDocument();
+  });
+
+  it('shows cluster members section', () => {
+    renderDrawer(CLUSTER_NODE);
+    expect(screen.getByText('Members')).toBeInTheDocument();
     expect(screen.getByText('tyr-0')).toBeInTheDocument();
   });
 
-  it('shows resident list for host kind', () => {
+  it('shows host residents section', () => {
     renderDrawer(HOST_NODE);
     expect(screen.getByText('Residents')).toBeInTheDocument();
-    // huginn and muninn have parentId host-mjolnir
     expect(screen.getByText('huginn')).toBeInTheDocument();
   });
 
-  it('does not show residents section when container has no residents', () => {
-    const emptyTopology: Topology = { nodes: [REALM_NODE], edges: [], timestamp: '' };
-    renderDrawer(REALM_NODE, { topology: emptyTopology });
-    expect(screen.queryByText('Residents')).toBeNull();
+  it('shows tyr Properties section', () => {
+    renderDrawer(TYR_NODE);
+    expect(screen.getByText('Properties')).toBeInTheDocument();
+    expect(screen.getByText('active sagas')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
   });
 
-  it('calls onNodeSelect when a resident button is clicked', () => {
+  it('shows tyr mode badge', () => {
+    renderDrawer(TYR_NODE);
+    expect(screen.getByText('active')).toBeInTheDocument();
+  });
+
+  it('shows bifrost Properties with cache hit rate', () => {
+    renderDrawer(BIFROST_NODE);
+    expect(screen.getByText('Properties')).toBeInTheDocument();
+    expect(screen.getByText('68%')).toBeInTheDocument();
+    expect(screen.getByText('Anthropic, OpenAI')).toBeInTheDocument();
+  });
+
+  it('shows volundr Properties with sessions', () => {
+    renderDrawer(VOLUNDR_NODE);
+    expect(screen.getByText('Properties')).toBeInTheDocument();
+    expect(screen.getByText('5 / 20')).toBeInTheDocument();
+  });
+
+  it('shows ravn_long Properties with persona and tokens', () => {
+    renderDrawer(RAVN_NODE);
+    expect(screen.getByText('Properties')).toBeInTheDocument();
+    expect(screen.getByText('thought')).toBeInTheDocument();
+    expect(screen.getByText('42,800')).toBeInTheDocument();
+  });
+
+  it('shows Identity section for entity nodes', () => {
+    renderDrawer(TYR_NODE);
+    expect(screen.getByText('Identity')).toBeInTheDocument();
+    // tyr-0 appears as both the drawer title and the identity id — getAllByText handles both
+    expect(screen.getAllByText('tyr-0').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows Actions section for entity nodes', () => {
+    renderDrawer(TYR_NODE);
+    expect(screen.getByText('Actions')).toBeInTheDocument();
+    expect(screen.getByText('Open chat')).toBeInTheDocument();
+  });
+
+  it('shows activity row when activity is set', () => {
+    renderDrawer(TYR_NODE);
+    expect(screen.getByText('THINKING')).toBeInTheDocument();
+  });
+
+  it('calls onNodeSelect when a resident button is clicked (realm)', () => {
     const onNodeSelect = vi.fn();
     renderDrawer(REALM_NODE, { onNodeSelect });
     const clusterBtn = screen.getByTestId('resident-cluster-valaskjalf');
     fireEvent.click(clusterBtn);
     expect(onNodeSelect).toHaveBeenCalledOnce();
-    expect(onNodeSelect).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'cluster-valaskjalf' }),
-    );
   });
 
-  it('shows Fields section for non-container entity (tyr)', () => {
-    renderDrawer(TYR_NODE);
-    expect(screen.getByText('Fields')).toBeInTheDocument();
-    expect(screen.getByText('Active sagas')).toBeInTheDocument();
+  it('calls onNodeSelect when a member button is clicked (cluster)', () => {
+    const onNodeSelect = vi.fn();
+    renderDrawer(CLUSTER_NODE, { onNodeSelect });
+    const tyrBtn = screen.getByTestId('resident-tyr-0');
+    fireEvent.click(tyrBtn);
+    expect(onNodeSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'tyr-0' }));
   });
 
-  it('does not show Fields for non-container when entity has no fields', () => {
-    const emptyFieldsRegistry: Registry = {
-      ...REGISTRY,
-      types: REGISTRY.types.map((t) => (t.id === 'tyr' ? { ...t, fields: [] } : t)),
-    };
-    renderDrawer(TYR_NODE, { registry: emptyFieldsRegistry });
-    expect(screen.queryByText('Fields')).toBeNull();
-  });
-
-  it('shows required field marker (*) for required fields', () => {
-    renderDrawer(REALM_NODE);
-    // realm is a container; switch to realm type entity for fields test
-    // Instead test tyr which has required: undefined fields but realm has required: true
-    // realm has { key: 'vlan', required: true }
-    // But realm is a container, so Fields section won't show — need to pick a non-container
-    // Ravn_long has required: undefined; use a custom registry
-    const customRegistry: Registry = {
-      ...REGISTRY,
-      types: REGISTRY.types.map((t) =>
-        t.id === 'tyr'
-          ? { ...t, fields: [{ key: 'x', label: 'X Field', type: 'number', required: true }] }
-          : t,
-      ),
-    };
-    renderDrawer(TYR_NODE, { registry: customRegistry });
-    expect(screen.getByLabelText('required')).toBeInTheDocument();
-  });
-
-  it('shows description when entity type has description', () => {
-    renderDrawer(REALM_NODE);
-    expect(screen.getByText(/VLAN-scoped network zone/)).toBeInTheDocument();
-  });
-
-  it('shows typeId as fallback label when entity type not in registry', () => {
-    renderDrawer({
-      id: 'x',
-      typeId: 'unknown-type',
-      label: 'x',
-      parentId: null,
-      status: 'unknown',
-    });
-    expect(screen.getByText('unknown-type')).toBeInTheDocument();
+  it('does not show Residents when realm has no children', () => {
+    const emptyTopology: Topology = { nodes: [REALM_NODE], edges: [], timestamp: '' };
+    renderDrawer(REALM_NODE, { topology: emptyTopology });
+    expect(screen.queryByText('Residents')).toBeNull();
   });
 
   it('calls onClose when drawer close button is clicked', () => {
-    const { onClose } = renderDrawer(REALM_NODE);
+    const { onClose } = renderDrawer(TYR_NODE);
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalledOnce();
-  });
-
-  it('does not throw when onNodeSelect is not provided and resident is clicked', () => {
-    renderDrawer(REALM_NODE);
-    const clusterBtn = screen.getByTestId('resident-cluster-valaskjalf');
-    expect(() => fireEvent.click(clusterBtn)).not.toThrow();
   });
 
   it('handles null topology gracefully (no residents)', () => {
@@ -214,9 +287,8 @@ describe('EntityDrawer', () => {
   });
 
   it('handles null registry gracefully (no rune, fallback label)', () => {
-    renderDrawer(REALM_NODE, { registry: null });
-    // No rune rendered, typeId shown as label
-    expect(screen.getByText('realm')).toBeInTheDocument();
+    renderDrawer(TYR_NODE, { registry: null });
+    expect(screen.getByText('tyr')).toBeInTheDocument();
   });
 
   it('shows all NodeStatus variants without error', () => {
@@ -233,5 +305,16 @@ describe('EntityDrawer', () => {
       expect(screen.getByText(status)).toBeInTheDocument();
       unmount();
     }
+  });
+
+  it('shows typeId as fallback label when entity type not in registry', () => {
+    renderDrawer({
+      id: 'x',
+      typeId: 'unknown-type',
+      label: 'x',
+      parentId: null,
+      status: 'unknown',
+    });
+    expect(screen.getByText('unknown-type')).toBeInTheDocument();
   });
 });

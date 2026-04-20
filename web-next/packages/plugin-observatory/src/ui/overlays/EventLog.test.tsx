@@ -6,31 +6,31 @@ import type { ObservatoryEvent } from '../../domain';
 const EVENTS: ObservatoryEvent[] = [
   {
     id: 'ev-1',
-    timestamp: '2026-04-19T00:00:01Z',
-    severity: 'info',
-    sourceId: 'tyr-0',
-    message: 'raid-omega formed',
+    time: '00:00:01',
+    type: 'TYR',
+    subject: 'tyr-0',
+    body: 'raid-omega formed: 2 ravens conscripted',
   },
   {
     id: 'ev-2',
-    timestamp: '2026-04-19T00:00:05Z',
-    severity: 'warn',
-    sourceId: 'mimir-0',
-    message: 'write queue depth nearing threshold',
+    time: '00:00:05',
+    type: 'MIMIR',
+    subject: 'mimir-0',
+    body: 'write queue depth nearing threshold',
   },
   {
     id: 'ev-3',
-    timestamp: '2026-04-19T00:00:10Z',
-    severity: 'error',
-    sourceId: 'bifrost-0',
-    message: 'inference timeout',
+    time: '00:00:10',
+    type: 'BIFROST',
+    subject: 'bifrost-0',
+    body: 'inference timeout',
   },
   {
     id: 'ev-4',
-    timestamp: '2026-04-19T00:00:15Z',
-    severity: 'debug',
-    sourceId: 'ravn-huginn',
-    message: 'cache hit 94%',
+    time: '00:00:15',
+    type: 'RAVN',
+    subject: 'huginn',
+    body: 'cache hit 94%',
   },
 ];
 
@@ -40,37 +40,37 @@ describe('EventLog', () => {
     expect(screen.getByText('no events')).toBeInTheDocument();
   });
 
-  it('renders all event messages', () => {
+  it('renders all event body text', () => {
     render(<EventLog events={EVENTS} />);
-    expect(screen.getByText('raid-omega formed')).toBeInTheDocument();
+    expect(screen.getByText('raid-omega formed: 2 ravens conscripted')).toBeInTheDocument();
     expect(screen.getByText('inference timeout')).toBeInTheDocument();
   });
 
-  it('renders all event source IDs', () => {
+  it('renders all event subjects', () => {
     render(<EventLog events={EVENTS} />);
     expect(screen.getByText('tyr-0')).toBeInTheDocument();
     expect(screen.getByText('mimir-0')).toBeInTheDocument();
   });
 
-  it('renders truncated timestamps (HH:MM:SS)', () => {
+  it('renders time strings (HH:MM:SS)', () => {
     render(<EventLog events={EVENTS} />);
     expect(screen.getByText('00:00:01')).toBeInTheDocument();
   });
 
-  it('renders severity tags', () => {
+  it('renders event type tags', () => {
     render(<EventLog events={EVENTS} />);
-    expect(screen.getByText('INF')).toBeInTheDocument();
-    expect(screen.getByText('WRN')).toBeInTheDocument();
-    expect(screen.getByText('ERR')).toBeInTheDocument();
-    expect(screen.getByText('DBG')).toBeInTheDocument();
+    expect(screen.getByText('TYR')).toBeInTheDocument();
+    expect(screen.getByText('MIMIR')).toBeInTheDocument();
+    expect(screen.getByText('BIFROST')).toBeInTheDocument();
+    expect(screen.getByText('RAVN')).toBeInTheDocument();
   });
 
-  it('sets data-severity attribute on each entry', () => {
+  it('sets data-type attribute on each entry', () => {
     render(<EventLog events={EVENTS} />);
-    const infoEntry = screen.getByTestId('event-ev-1');
-    expect(infoEntry).toHaveAttribute('data-severity', 'info');
-    const warnEntry = screen.getByTestId('event-ev-2');
-    expect(warnEntry).toHaveAttribute('data-severity', 'warn');
+    const tyrEntry = screen.getByTestId('event-ev-1');
+    expect(tyrEntry).toHaveAttribute('data-type', 'TYR');
+    const mimirEntry = screen.getByTestId('event-ev-2');
+    expect(mimirEntry).toHaveAttribute('data-type', 'MIMIR');
   });
 
   it('accepts custom data-testid', () => {
@@ -88,5 +88,18 @@ describe('EventLog', () => {
   it('does not render "no events" when events are present', () => {
     render(<EventLog events={EVENTS} />);
     expect(screen.queryByText('no events')).toBeNull();
+  });
+
+  it('renders RAID type events', () => {
+    const raidEvent: ObservatoryEvent = {
+      id: 'ev-raid',
+      time: '00:01:00',
+      type: 'RAID',
+      subject: 'raid-omega',
+      body: 'tyr dispatched raid',
+    };
+    render(<EventLog events={[raidEvent]} />);
+    expect(screen.getByText('RAID')).toBeInTheDocument();
+    expect(screen.getByText('raid-omega')).toBeInTheDocument();
   });
 });
