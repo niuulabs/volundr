@@ -1,10 +1,12 @@
 import { createRoute } from '@tanstack/react-router';
 import { definePlugin } from '@niuulabs/plugin-sdk';
+import { ForgePage } from './ui/ForgePage';
 import { VolundrPage } from './ui/VolundrPage';
 import { SessionsPage } from './ui/SessionsPage';
 import { VolundrSessionRoute, VolundrArchivedRoute } from './ui/routes';
 import { TemplatesPage } from './ui/TemplatesPage';
 import { ClustersPage } from './ui/ClustersPage';
+import { CredentialsPage } from './ui/CredentialsPage';
 import { HistoryPage } from './ui/HistoryPage';
 
 export const volundrPlugin = definePlugin({
@@ -16,6 +18,11 @@ export const volundrPlugin = definePlugin({
     createRoute({
       getParentRoute: () => rootRoute,
       path: '/volundr',
+      component: ForgePage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/volundr/overview',
       component: VolundrPage,
     }),
     createRoute({
@@ -42,6 +49,11 @@ export const volundrPlugin = definePlugin({
       getParentRoute: () => rootRoute,
       path: '/volundr/clusters',
       component: ClustersPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/volundr/credentials',
+      component: CredentialsPage,
     }),
     createRoute({
       getParentRoute: () => rootRoute,
@@ -81,6 +93,15 @@ export type { FileViewerProps } from './ui/FileTree/FileViewer';
 export { SessionDetailPage } from './ui/SessionDetailPage';
 export type { SessionDetailPageProps, SessionTab } from './ui/SessionDetailPage';
 export { SessionsPage } from './ui/SessionsPage';
+export { ForgePage } from './ui/ForgePage';
+export { CredentialsPage } from './ui/CredentialsPage';
+
+// Atoms
+export { Meter } from './ui/atoms/Meter';
+export { CliBadge } from './ui/atoms/CliBadge';
+export { SourceLabel } from './ui/atoms/SourceLabel';
+export { ClusterChip } from './ui/atoms/ClusterChip';
+export { ModelChip } from './ui/atoms/ModelChip';
 
 // Domain types
 export type { Session, SessionState, SessionResources, SessionEvent } from './domain/session';

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { SessionDetailPage } from './SessionDetailPage';
@@ -96,136 +96,372 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('SessionDetailPage', () => {
-  it('renders the session id in the header', () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    expect(screen.getByTestId('session-id-label')).toHaveTextContent('ds-1');
-  });
-
-  it('shows the archived badge in readOnly mode', () => {
-    wrap(<SessionDetailPage sessionId="ds-1" readOnly />);
-    expect(screen.getByTestId('session-archived-badge')).toBeInTheDocument();
-  });
-
-  it('does NOT show the archived badge in interactive mode', () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    expect(screen.queryByTestId('session-archived-badge')).not.toBeInTheDocument();
-  });
-
-  it('renders all six tab buttons', () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    expect(screen.getByTestId('tab-overview')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-terminal')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-files')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-exec')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-events')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-metrics')).toBeInTheDocument();
-  });
-
-  it('defaults to the overview tab', () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    expect(screen.getByTestId('tab-overview')).toHaveAttribute('aria-selected', 'true');
-  });
-
-  it('switches to the terminal tab on click', async () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    fireEvent.click(screen.getByTestId('tab-terminal'));
-    expect(screen.getByTestId('tab-terminal')).toHaveAttribute('aria-selected', 'true');
-    await waitFor(() => expect(screen.getByTestId('terminal-container')).toBeInTheDocument());
-  });
-
-  it('switches to the files tab on click', async () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    fireEvent.click(screen.getByTestId('tab-files'));
-    expect(screen.getByTestId('tab-files')).toHaveAttribute('aria-selected', 'true');
-    await waitFor(() => expect(screen.getByTestId('filetree-root')).toBeInTheDocument());
-  });
-
-  it('switches to the exec tab on click', () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    fireEvent.click(screen.getByTestId('tab-exec'));
-    expect(screen.getByTestId('exec-tab')).toBeInTheDocument();
-    expect(screen.getByTestId('exec-empty')).toBeInTheDocument();
-  });
-
-  it('switches to the events tab on click', async () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    fireEvent.click(screen.getByTestId('tab-events'));
-    await waitFor(() => expect(screen.getByTestId('events-tab')).toBeInTheDocument());
-  });
-
-  it('switches to the metrics tab on click', () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    fireEvent.click(screen.getByTestId('tab-metrics'));
-    expect(screen.getByTestId('metrics-tab')).toBeInTheDocument();
-  });
-
-  it('shows overview content with session state after loading', async () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    await waitFor(() => expect(screen.getByTestId('overview-tab')).toBeInTheDocument());
-  });
-
-  it('shows events in the events tab', async () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    fireEvent.click(screen.getByTestId('tab-events'));
-    await waitFor(() => expect(screen.getAllByTestId('event-row').length).toBeGreaterThan(0));
-  });
-
-  it('shows exec input and run button in exec tab', () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    fireEvent.click(screen.getByTestId('tab-exec'));
-    expect(screen.getByTestId('exec-input')).toBeInTheDocument();
-    expect(screen.getByTestId('exec-run-btn')).toBeInTheDocument();
-  });
-
-  it('run button is disabled when input is empty', () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    fireEvent.click(screen.getByTestId('tab-exec'));
-    expect(screen.getByTestId('exec-run-btn')).toBeDisabled();
-  });
-
-  it('run button is enabled when command is typed', () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    fireEvent.click(screen.getByTestId('tab-exec'));
-    fireEvent.change(screen.getByTestId('exec-input'), { target: { value: 'ls -la' } });
-    expect(screen.getByTestId('exec-run-btn')).not.toBeDisabled();
-  });
-
-  it('shows a lifecycle badge for known sessions', async () => {
-    wrap(<SessionDetailPage sessionId="ds-1" />);
-    // The LifecycleBadge renders a span with the state name as text content.
-    await waitFor(() => expect(screen.getByTestId('overview-tab')).toBeInTheDocument());
-    // Badge text 'running' appears in the overview tab header.
-    expect(screen.getAllByText('running').length).toBeGreaterThan(0);
-  });
-
-  it('shows error state when session store rejects', async () => {
-    const failingStore: ISessionStore = {
-      ...createMockSessionStore(),
-      getSession: vi.fn().mockRejectedValue(new Error('store error')),
-    };
-    wrap(<SessionDetailPage sessionId="ds-1" />, { sessionStore: failingStore });
-    await waitFor(() => expect(screen.getByText('Failed to load session')).toBeInTheDocument());
-  });
-});
-
-describe('ExecTab integration', () => {
-  it('appends an exec entry on submit and shows it', async () => {
-    const ptyStream = buildPtyStream({
-      subscribe: vi.fn((_, cb) => {
-        // Simulate immediate output with shell prompt.
-        setTimeout(() => cb('output\r\n$ '), 10);
-        return () => {};
-      }),
-      send: vi.fn(),
+  // ─── Header ─────────────────────────────────────────────
+  describe('header', () => {
+    it('renders the session header with session info after loading', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() =>
+        expect(screen.getByTestId('session-header')).toBeInTheDocument(),
+      );
+      expect(screen.getByTestId('session-name')).toHaveTextContent('skald');
+      expect(screen.getByTestId('session-id-label')).toHaveTextContent('ds-1');
     });
 
-    wrap(<SessionDetailPage sessionId="ds-1" />, { ptyStream });
-    fireEvent.click(screen.getByTestId('tab-exec'));
+    it('shows lifecycle badge in the header', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() =>
+        expect(screen.getByTestId('session-header')).toBeInTheDocument(),
+      );
+      // LifecycleBadge renders the state text "running"
+      expect(screen.getAllByText('running').length).toBeGreaterThan(0);
+    });
 
-    fireEvent.change(screen.getByTestId('exec-input'), { target: { value: 'echo hello' } });
-    fireEvent.click(screen.getByTestId('exec-run-btn'));
+    it('shows the archived badge in readOnly mode', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" readOnly />);
+      await waitFor(() =>
+        expect(screen.getByTestId('session-archived-badge')).toBeInTheDocument(),
+      );
+    });
 
-    await waitFor(() => expect(screen.getByTestId('exec-entry')).toBeInTheDocument());
-    expect(screen.getByText(/echo hello/)).toBeInTheDocument();
+    it('does NOT show the archived badge in interactive mode', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() =>
+        expect(screen.getByTestId('session-header')).toBeInTheDocument(),
+      );
+      expect(screen.queryByTestId('session-archived-badge')).not.toBeInTheDocument();
+    });
+
+    it('renders session stats in the header', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() =>
+        expect(screen.getByTestId('session-stats')).toBeInTheDocument(),
+      );
+      const stats = screen.getAllByTestId('stat');
+      expect(stats.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('renders source label and cluster chip', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() =>
+        expect(screen.getByTestId('source-label')).toBeInTheDocument(),
+      );
+      expect(screen.getByTestId('cluster-chip')).toBeInTheDocument();
+    });
+
+    it('toggles resources row when clicking resources button', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() =>
+        expect(screen.getByTestId('resources-toggle')).toBeInTheDocument(),
+      );
+
+      // Resources row should not be visible initially
+      expect(screen.queryByTestId('resources-row')).not.toBeInTheDocument();
+
+      // Click to show resources
+      fireEvent.click(screen.getByTestId('resources-toggle'));
+      expect(screen.getByTestId('resources-row')).toBeInTheDocument();
+
+      // Click to hide resources
+      fireEvent.click(screen.getByTestId('resources-toggle'));
+      expect(screen.queryByTestId('resources-row')).not.toBeInTheDocument();
+    });
+
+    it('renders meters in the resources row', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() =>
+        expect(screen.getByTestId('resources-toggle')).toBeInTheDocument(),
+      );
+      fireEvent.click(screen.getByTestId('resources-toggle'));
+      const resourcesRow = screen.getByTestId('resources-row');
+      const meters = within(resourcesRow).getAllByTestId('meter');
+      expect(meters.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  // ─── Tab bar ────────────────────────────────────────────
+  describe('tab bar', () => {
+    it('renders all six tab buttons', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      expect(screen.getByTestId('tab-chat')).toBeInTheDocument();
+      expect(screen.getByTestId('tab-terminal')).toBeInTheDocument();
+      expect(screen.getByTestId('tab-diffs')).toBeInTheDocument();
+      expect(screen.getByTestId('tab-files')).toBeInTheDocument();
+      expect(screen.getByTestId('tab-chronicle')).toBeInTheDocument();
+      expect(screen.getByTestId('tab-logs')).toBeInTheDocument();
+    });
+
+    it('defaults to the chat tab', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      expect(screen.getByTestId('tab-chat')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('respects initialTab prop', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" initialTab="terminal" />);
+      expect(screen.getByTestId('tab-terminal')).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByTestId('tab-chat')).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('switches tabs on click', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+
+      fireEvent.click(screen.getByTestId('tab-terminal'));
+      expect(screen.getByTestId('tab-terminal')).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByTestId('tab-chat')).toHaveAttribute('aria-selected', 'false');
+
+      fireEvent.click(screen.getByTestId('tab-diffs'));
+      expect(screen.getByTestId('tab-diffs')).toHaveAttribute('aria-selected', 'true');
+
+      fireEvent.click(screen.getByTestId('tab-chronicle'));
+      expect(screen.getByTestId('tab-chronicle')).toHaveAttribute('aria-selected', 'true');
+
+      fireEvent.click(screen.getByTestId('tab-logs'));
+      expect(screen.getByTestId('tab-logs')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('uses role="tablist" on the tab container', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      expect(screen.getByRole('tablist')).toBeInTheDocument();
+    });
+  });
+
+  // ─── Chat tab ───────────────────────────────────────────
+  describe('chat tab', () => {
+    it('renders the 3-column chat layout', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('chat-tab')).toBeInTheDocument());
+      expect(screen.getByTestId('peer-rail')).toBeInTheDocument();
+      expect(screen.getByTestId('chat-stream')).toBeInTheDocument();
+      expect(screen.getByTestId('mesh-cascade')).toBeInTheDocument();
+    });
+
+    it('renders peer cards in the PeerRail', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('peer-rail')).toBeInTheDocument());
+      const peerCards = screen.getAllByTestId('peer-card');
+      expect(peerCards.length).toBe(3); // human + main ravn + reviewer
+    });
+
+    it('peer cards show name and status', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('peer-rail')).toBeInTheDocument());
+      const peerRail = screen.getByTestId('peer-rail');
+      expect(within(peerRail).getByText('You')).toBeInTheDocument();
+      // 'skald' appears as both displayName and persona in the peer card
+      expect(within(peerRail).getAllByText('skald').length).toBeGreaterThanOrEqual(1);
+      expect(within(peerRail).getByText('Reviewer')).toBeInTheDocument();
+    });
+
+    it('clicking a peer card toggles focus filter', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('peer-rail')).toBeInTheDocument());
+
+      const focusButtons = screen.getAllByTestId('peer-focus-btn');
+      // Click on the first peer (human) to filter
+      fireEvent.click(focusButtons[0]!);
+      // The peer card should now have the active styling (border-brand)
+      const peerCards = screen.getAllByTestId('peer-card');
+      expect(peerCards[0]).toHaveClass('niuu-border-brand');
+
+      // Click again to clear the filter
+      fireEvent.click(focusButtons[0]!);
+      expect(peerCards[0]).not.toHaveClass('niuu-border-brand');
+    });
+
+    it('expanding a peer card shows subscriptions, emits, tools, gateway', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('peer-rail')).toBeInTheDocument());
+
+      // The second peer (main ravn) has expanded=true by default
+      const details = screen.getAllByTestId('peer-details');
+      expect(details.length).toBeGreaterThanOrEqual(1);
+
+      // Check subscription content is visible
+      expect(screen.getByText(/user\.message/)).toBeInTheDocument();
+    });
+
+    it('renders chat messages in the ChatStream', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('chat-stream')).toBeInTheDocument());
+
+      const userTurns = screen.getAllByTestId('chat-turn-user');
+      expect(userTurns.length).toBeGreaterThanOrEqual(1);
+
+      const assistantTurns = screen.getAllByTestId('chat-turn-assistant');
+      expect(assistantTurns.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders tool run blocks', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('chat-stream')).toBeInTheDocument());
+
+      const toolRuns = screen.getAllByTestId('tool-run');
+      expect(toolRuns.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders thinking blocks', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('chat-stream')).toBeInTheDocument());
+
+      const thinkingBlocks = screen.getAllByTestId('thinking-block');
+      expect(thinkingBlocks.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders outcome cards inline', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('chat-stream')).toBeInTheDocument());
+
+      const outcomeCards = screen.getAllByTestId('outcome-card');
+      expect(outcomeCards.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders mesh cascade events', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('mesh-cascade')).toBeInTheDocument());
+
+      const cascadeEvents = screen.getAllByTestId('cascade-event');
+      expect(cascadeEvents.length).toBe(3); // outcome + delegation + notification
+    });
+
+    it('mesh cascade filter buttons work', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('mesh-cascade')).toBeInTheDocument());
+
+      // Click outcomes filter
+      fireEvent.click(screen.getByTestId('cascade-filter-outcome'));
+      const filtered = screen.getAllByTestId('cascade-event');
+      expect(filtered.length).toBe(1); // only the outcome event
+
+      // Click all filter
+      fireEvent.click(screen.getByTestId('cascade-filter-all'));
+      const all = screen.getAllByTestId('cascade-event');
+      expect(all.length).toBe(3);
+    });
+
+    it('mesh cascade shows delegation events when filtered', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('mesh-cascade')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('cascade-filter-mesh_message'));
+      const delegations = screen.getAllByTestId('cascade-event');
+      expect(delegations.length).toBe(1);
+    });
+
+    it('mesh cascade shows notification events when filtered', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('mesh-cascade')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('cascade-filter-notification'));
+      const notifications = screen.getAllByTestId('cascade-event');
+      expect(notifications.length).toBe(1);
+    });
+  });
+
+  // ─── Terminal tab ───────────────────────────────────────
+  describe('terminal tab', () => {
+    it('switches to the terminal tab on click', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      fireEvent.click(screen.getByTestId('tab-terminal'));
+      expect(screen.getByTestId('tab-terminal')).toHaveAttribute('aria-selected', 'true');
+      await waitFor(() =>
+        expect(screen.getByTestId('terminal-container')).toBeInTheDocument(),
+      );
+    });
+  });
+
+  // ─── Diffs tab ──────────────────────────────────────────
+  describe('diffs tab', () => {
+    it('shows diffs placeholder', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      fireEvent.click(screen.getByTestId('tab-diffs'));
+      expect(screen.getByTestId('placeholder-diffs')).toBeInTheDocument();
+    });
+  });
+
+  // ─── Files tab ──────────────────────────────────────────
+  describe('files tab', () => {
+    it('switches to the files tab on click', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      fireEvent.click(screen.getByTestId('tab-files'));
+      expect(screen.getByTestId('tab-files')).toHaveAttribute('aria-selected', 'true');
+      await waitFor(() =>
+        expect(screen.getByTestId('filetree-root')).toBeInTheDocument(),
+      );
+    });
+  });
+
+  // ─── Chronicle tab ─────────────────────────────────────
+  describe('chronicle tab', () => {
+    it('shows chronicle placeholder', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      fireEvent.click(screen.getByTestId('tab-chronicle'));
+      expect(screen.getByTestId('placeholder-chronicle')).toBeInTheDocument();
+    });
+  });
+
+  // ─── Logs tab ──────────────────────────────────────────
+  describe('logs tab', () => {
+    it('shows logs placeholder', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      fireEvent.click(screen.getByTestId('tab-logs'));
+      expect(screen.getByTestId('placeholder-logs')).toBeInTheDocument();
+    });
+  });
+
+  // ─── Loading / Error states ────────────────────────────
+  describe('loading and error states', () => {
+    it('shows loading state when session is loading', () => {
+      const slowStore: ISessionStore = {
+        ...createMockSessionStore(),
+        getSession: vi.fn(() => new Promise(() => {})), // never resolves
+      };
+      wrap(<SessionDetailPage sessionId="ds-1" />, { sessionStore: slowStore });
+      expect(screen.getByText(/Loading session/)).toBeInTheDocument();
+    });
+
+    it('shows error state when session store rejects', async () => {
+      const failingStore: ISessionStore = {
+        ...createMockSessionStore(),
+        getSession: vi.fn().mockRejectedValue(new Error('store error')),
+      };
+      wrap(<SessionDetailPage sessionId="ds-1" />, { sessionStore: failingStore });
+      await waitFor(() =>
+        expect(screen.getByText('Failed to load session')).toBeInTheDocument(),
+      );
+    });
+
+    it('shows error message from the store error', async () => {
+      const failingStore: ISessionStore = {
+        ...createMockSessionStore(),
+        getSession: vi.fn().mockRejectedValue(new Error('connection lost')),
+      };
+      wrap(<SessionDetailPage sessionId="ds-1" />, { sessionStore: failingStore });
+      await waitFor(() =>
+        expect(screen.getByText('connection lost')).toBeInTheDocument(),
+      );
+    });
+  });
+
+  // ─── Edge cases ────────────────────────────────────────
+  describe('edge cases', () => {
+    it('renders with unknown session id', () => {
+      wrap(<SessionDetailPage sessionId="unknown-session" />);
+      expect(screen.getByTestId('session-detail-page')).toBeInTheDocument();
+      expect(screen.getByTestId('tab-chat')).toBeInTheDocument();
+    });
+
+    it('all tabs use proper ARIA attributes', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      const tabs = screen.getAllByRole('tab');
+      expect(tabs).toHaveLength(6);
+      tabs.forEach((tab) => {
+        expect(tab).toHaveAttribute('aria-selected');
+      });
+    });
+
+    it('renders tab panels with role="tabpanel"', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      const panels = screen.getAllByRole('tabpanel', { hidden: true });
+      expect(panels.length).toBe(6);
+    });
   });
 });
