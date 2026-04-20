@@ -77,11 +77,31 @@
   --brand-900: #0c4a6e;
   --color-brand: var(--brand-500);
 
+  /* ── Brand aliases (color-brand-N → brand-N) ────────────
+   * web2 Tyr styles use `--color-brand-N`; web-next uses `--brand-N`.
+   * These aliases let web2 references resolve without renaming.
+   * ────────────────────────────────────────────────────── */
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+
   /* ── Critical (reserved — red only) ───────────────────── */
   --color-critical: #ef4444;
   --color-critical-fg: #fca5a5;
   --color-critical-bg: color-mix(in srgb, #ef4444 15%, transparent);
   --color-critical-bo: color-mix(in srgb, #ef4444 35%, transparent);
+
+  /* ── Danger (alias → critical) ──────────────────────────
+   * web2 registry uses `--color-danger` for invalid drop states.
+   * Maps to `--color-critical` in web-next.
+   * ────────────────────────────────────────────────────── */
+  --color-danger: var(--color-critical);
 
   /* ── Gate (violet — approval / gated states) ──────────── */
   --color-gate: #a855f7;
@@ -108,6 +128,19 @@
   --status-idle: var(--color-text-muted);
   --status-archived: var(--color-text-muted);
   --status-gated: var(--color-gate);
+
+  /* ── Status direct-hue tokens ──────────────────────────
+   * Fixed colors for inline status indicators (Mimir chips, dots,
+   * feed labels). These do NOT flex with the brand theme — they
+   * must stay distinguishable regardless of the active ramp.
+   * ────────────────────────────────────────────────────── */
+  --status-emerald: #10b981;
+  --status-green: #22c55e;
+  --status-amber: #f59e0b;
+  --status-orange: #f97316;
+  --status-red: #ef4444;
+  --status-cyan: #06b6d4;
+  --status-purple: #a855f7;
 
   /* ── State tokens (ravn/budget components) ───────────── */
   --state-ok: #10b981;
@@ -169,6 +202,14 @@
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease;
   --transition-slow: 300ms ease;
+
+  /* ── Ice utility tokens ────────────────────────────────
+   * Semi-transparent panel backgrounds and glow effects used
+   * across Observatory, Mimir, Ravn, and Tyr overlays.
+   * ────────────────────────────────────────────────────── */
+  --ice-panel: color-mix(in srgb, var(--color-bg-secondary) 72%, transparent);
+  --ice-panel-solid: var(--color-bg-secondary);
+  --ice-glow: 0 0 14px color-mix(in srgb, var(--brand-300) 25%, transparent);
 }
 
 /* ── Theme overrides ──────────────────────────────────── */

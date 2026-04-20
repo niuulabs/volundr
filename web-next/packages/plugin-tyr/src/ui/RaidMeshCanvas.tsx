@@ -20,7 +20,7 @@ const HOVER_RING_STROKE = 'rgba(186,230,253,0.4)';
 const PULSE_RADIUS = 2.5;
 const PULSE_MAX = 18;
 const PULSE_SPAWN_MS = 260;
-const PULSE_SPEED_MIN = 0.010;
+const PULSE_SPEED_MIN = 0.01;
 const PULSE_SPEED_RANGE = 0.012;
 const PULSE_ALPHA_FACTOR = 1.4;
 const HIT_RADIUS_RAVEN = 14;
@@ -189,7 +189,13 @@ export function RaidMeshCanvas({
         const cx = (W * (col + 1)) / (cols + 1);
         const cy = (H * (row + 1)) / (rows + 1);
 
-        const clusterNode: ClusterNode = { kind: 'cluster', cluster, x: cx, y: cy, r: CLUSTER_RADIUS };
+        const clusterNode: ClusterNode = {
+          kind: 'cluster',
+          cluster,
+          x: cx,
+          y: cy,
+          r: CLUSTER_RADIUS,
+        };
         nodes.push(clusterNode);
 
         cluster.ravens.forEach((persona, k) => {
@@ -320,10 +326,10 @@ export function RaidMeshCanvas({
       clearInterval(spawnInterval);
       ro.disconnect();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleClusters.map((c) => c.id).join(',')]);
 
-  function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
+  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -347,7 +353,12 @@ export function RaidMeshCanvas({
 
   return (
     <div
-      style={{ position: 'relative', width: '100%', height: '100%', cursor: hover ? 'pointer' : 'default' }}
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        cursor: hover ? 'pointer' : 'default',
+      }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}
