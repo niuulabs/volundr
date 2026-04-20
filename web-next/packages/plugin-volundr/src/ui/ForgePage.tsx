@@ -1,10 +1,10 @@
 import { useNavigate } from '@tanstack/react-router';
-import { KpiStrip, KpiCard, StateDot, LoadingState, Meter, relTime } from '@niuulabs/ui';
+import { KpiStrip, KpiCard, StateDot, LoadingState, Meter, relTime, Sparkline } from '@niuulabs/ui';
 import { useVolundrStats } from './useVolundrSessions';
 import { useVolundrClusters } from './hooks/useVolundrClusters';
 import { useSessionList } from './hooks/useSessionStore';
 import { useTemplates } from './useTemplates';
-import { MiniBar, Sparkline, ConnectionTypeBadge } from './atoms';
+import { MiniBar, ConnectionTypeBadge } from './atoms';
 import { tokens, money } from './utils/formatters';
 import type { Session } from '../domain/session';
 import type { Cluster } from '../domain/cluster';
@@ -249,7 +249,10 @@ export function ForgePage() {
                 sparklines?.activePods ? (
                   <Sparkline
                     values={sparklines.activePods}
-                    data-testid="sparkline-active-pods"
+                    width={48}
+                    height={16}
+                    fill={false}
+                    className="niuu-opacity-50"
                   />
                 ) : undefined
               }
@@ -263,7 +266,10 @@ export function ForgePage() {
                 sparklines?.tokensToday ? (
                   <Sparkline
                     values={sparklines.tokensToday}
-                    data-testid="sparkline-tokens"
+                    width={48}
+                    height={16}
+                    fill={false}
+                    className="niuu-opacity-50"
                   />
                 ) : undefined
               }
@@ -277,7 +283,10 @@ export function ForgePage() {
                 sparklines?.costToday ? (
                   <Sparkline
                     values={sparklines.costToday}
-                    data-testid="sparkline-cost"
+                    width={48}
+                    height={16}
+                    fill={false}
+                    className="niuu-opacity-50"
                   />
                 ) : undefined
               }
@@ -289,7 +298,13 @@ export function ForgePage() {
               deltaTrend="neutral"
               sparkline={
                 sparklines?.gpus ? (
-                  <Sparkline values={sparklines.gpus} data-testid="sparkline-gpus" />
+                  <Sparkline
+                    values={sparklines.gpus}
+                    width={48}
+                    height={16}
+                    fill={false}
+                    className="niuu-opacity-50"
+                  />
                 ) : undefined
               }
             />

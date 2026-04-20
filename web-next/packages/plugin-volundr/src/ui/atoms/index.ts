@@ -8,7 +8,5 @@ export { ModelChip } from './ModelChip';
 export type { ModelChipProps, ModelData } from './ModelChip';
 export { MiniBar } from './MiniBar';
 export type { MiniBarProps } from './MiniBar';
-export { Sparkline } from './Sparkline';
-export type { SparklineProps } from './Sparkline';
 export { ConnectionTypeBadge } from './ConnectionTypeBadge';
 export type { ConnectionTypeBadgeProps } from './ConnectionTypeBadge';
