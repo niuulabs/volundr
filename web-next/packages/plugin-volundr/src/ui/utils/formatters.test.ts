@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { money, tokens, relTime } from './formatters';
+import { describe, it, expect } from 'vitest';
+import { money, tokens } from './formatters';
 
 describe('money', () => {
   it('formats cents to dollars', () => {
@@ -31,36 +31,3 @@ describe('tokens', () => {
   });
 });
 
-describe('relTime', () => {
-  it('returns — for falsy input', () => {
-    expect(relTime(0)).toBe('—');
-  });
-
-  it('formats seconds ago', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(10_000);
-    expect(relTime(5_000)).toBe('5s ago');
-    vi.useRealTimers();
-  });
-
-  it('formats minutes ago', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(300_000);
-    expect(relTime(0 + 1)).toBe('4m ago');
-    vi.useRealTimers();
-  });
-
-  it('formats hours ago', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(7_200_000);
-    expect(relTime(1)).toBe('1h ago');
-    vi.useRealTimers();
-  });
-
-  it('formats days ago', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(172_800_000);
-    expect(relTime(1)).toBe('1d ago');
-    vi.useRealTimers();
-  });
-});

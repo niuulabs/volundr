@@ -107,20 +107,28 @@ export function ShellLayout() {
           </div>
           {active?.tabs && (
             <div className="niuu-shell__tabs">
-              {active.tabs.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  className={clsx(
-                    'niuu-shell__tab',
-                    active.activeTab === t.id && 'niuu-shell__tab--active',
-                  )}
-                  onClick={() => active.onTab?.(t.id)}
-                >
-                  {t.rune && <span className="niuu-shell__tab-rune">{t.rune}</span>}
-                  {t.label}
-                </button>
-              ))}
+              {active.tabs.map((t) => {
+                const tabPath = t.path ?? `/${active.id}/${t.id}`;
+                const isActive =
+                  active.activeTab != null
+                    ? active.activeTab === t.id
+                    : pathname === tabPath || pathname.startsWith(tabPath + '/');
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={clsx('niuu-shell__tab', isActive && 'niuu-shell__tab--active')}
+                    onClick={() => {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      router.navigate({ to: tabPath as any });
+                      active.onTab?.(t.id);
+                    }}
+                  >
+                    {t.rune && <span className="niuu-shell__tab-rune">{t.rune}</span>}
+                    {t.label}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useService } from '@niuulabs/plugin-sdk';
 import {
-  Table,
-  type TableColumn,
   StateDot,
   StatusBadge,
   ConfidenceBar,
@@ -24,7 +22,6 @@ import { useDispatchQueue, type DispatchEntry } from './useDispatchQueue';
 // Constants
 // ---------------------------------------------------------------------------
 
-// TODO: source from DispatcherState once backend exposes maxRetries
 const DEFAULT_MAX_RETRIES = 3;
 
 // ---------------------------------------------------------------------------
@@ -53,43 +50,35 @@ interface EnrichedEntry extends DispatchEntry {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// Gate chips
 // ---------------------------------------------------------------------------
 
-function RuleCard({
-  threshold,
-  maxConcurrentRaids,
-  autoContinue,
-}: {
-  threshold: number;
-  maxConcurrentRaids: number;
-  autoContinue: boolean;
-}) {
+const GATE_LABELS: Record<string, string> = {
+  raven_resolution: 'no raven',
+  confidence: 'low conf',
+  upstream_blocked: 'upstream',
+  cluster_healthy: 'cluster',
+};
+
+function GateChips({ gates }: { gates: FeasibilityGate[] }) {
+  const failing = gates.filter((g) => !g.passed);
+  if (failing.length === 0) return null;
   return (
-    <div
-      className="niuu-rounded-lg niuu-border niuu-border-border niuu-bg-bg-secondary niuu-p-4 niuu-mb-4"
-      aria-label="Dispatch rules"
-    >
-      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-mb-3">
-        <h3 className="niuu-m-0 niuu-text-sm niuu-font-semibold niuu-text-text-primary">
-          Dispatch rules
-        </h3>
-      </div>
-      <dl className="niuu-grid niuu-grid-cols-4 niuu-gap-x-8 niuu-gap-y-1 niuu-text-xs niuu-text-text-secondary niuu-m-0">
-        <dt className="niuu-text-text-muted">Confidence threshold</dt>
-        <dt className="niuu-text-text-muted">Concurrent cap</dt>
-        <dt className="niuu-text-text-muted">Auto-continue</dt>
-        <dt className="niuu-text-text-muted">Retries</dt>
-        <dd className="niuu-m-0 niuu-font-mono niuu-text-text-primary">{threshold}%</dd>
-        <dd className="niuu-m-0 niuu-font-mono niuu-text-text-primary">{maxConcurrentRaids}</dd>
-        <dd className="niuu-m-0 niuu-font-mono niuu-text-text-primary">
-          {autoContinue ? 'on' : 'off'}
-        </dd>
-        <dd className="niuu-m-0 niuu-font-mono niuu-text-text-primary">{DEFAULT_MAX_RETRIES}</dd>
-      </dl>
+    <div className="niuu-flex niuu-flex-wrap niuu-gap-1">
+      {failing.map((gate) => (
+        <Tooltip key={gate.name} content={gate.reason} side="top">
+          <span className="niuu-inline-flex niuu-items-center niuu-gap-1 niuu-rounded-full niuu-border niuu-border-critical-bo niuu-bg-critical-bg niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-text-critical niuu-cursor-default">
+            {GATE_LABELS[gate.name] ?? gate.name}
+          </span>
+        </Tooltip>
+      ))}
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Segmented filter
+// ---------------------------------------------------------------------------
 
 function SegmentedFilter({
   value,
@@ -127,40 +116,24 @@ function SegmentedFilter({
   );
 }
 
-function GateChips({ gates }: { gates: FeasibilityGate[] }) {
-  const failing = gates.filter((g) => !g.passed);
-  if (failing.length === 0) return null;
-
-  return (
-    <div className="niuu-flex niuu-flex-wrap niuu-gap-1">
-      {failing.map((gate) => (
-        <Tooltip key={gate.name} content={gate.reason} side="top">
-          <span className="niuu-inline-flex niuu-items-center niuu-gap-1 niuu-rounded-full niuu-border niuu-border-critical-bo niuu-bg-critical-bg niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-text-critical niuu-cursor-default">
-            {GATE_LABELS[gate.name]}
-          </span>
-        </Tooltip>
-      ))}
-    </div>
-  );
-}
-
-const GATE_LABELS: Record<string, string> = {
-  raven_resolution: 'no raven',
-  confidence: 'low conf',
-  upstream_blocked: 'upstream',
-  cluster_healthy: 'cluster',
-};
+// ---------------------------------------------------------------------------
+// Batch dispatch bar
+// ---------------------------------------------------------------------------
 
 function BatchDispatchBar({
   selectedCount,
   canDispatch,
   onDispatch,
   isDispatching,
+  onApplyWorkflow,
+  onOverrideThreshold,
 }: {
   selectedCount: number;
   canDispatch: boolean;
   onDispatch: () => void;
   isDispatching: boolean;
+  onApplyWorkflow?: () => void;
+  onOverrideThreshold?: () => void;
 }) {
   if (selectedCount === 0) return null;
 
@@ -170,9 +143,27 @@ function BatchDispatchBar({
       role="status"
       aria-live="polite"
     >
-      <span className="niuu-text-sm niuu-text-text-secondary">
+      <span className="niuu-text-sm niuu-font-medium niuu-text-text-primary">
         {selectedCount} raid{selectedCount !== 1 ? 's' : ''} selected
       </span>
+      {onApplyWorkflow && (
+        <button
+          type="button"
+          onClick={onApplyWorkflow}
+          className="niuu-px-3 niuu-py-1.5 niuu-text-xs niuu-border niuu-border-border niuu-rounded-md niuu-text-text-secondary hover:niuu-text-text-primary niuu-bg-transparent niuu-transition-colors"
+        >
+          Apply workflow
+        </button>
+      )}
+      {onOverrideThreshold && (
+        <button
+          type="button"
+          onClick={onOverrideThreshold}
+          className="niuu-px-3 niuu-py-1.5 niuu-text-xs niuu-border niuu-border-border niuu-rounded-md niuu-text-text-secondary hover:niuu-text-text-primary niuu-bg-transparent niuu-transition-colors"
+        >
+          Override threshold
+        </button>
+      )}
       <Tooltip content={canDispatch ? undefined : 'Select only ready raids to dispatch'} side="top">
         <button
           type="button"
@@ -188,9 +179,153 @@ function BatchDispatchBar({
           )}
           aria-disabled={!canDispatch || isDispatching}
         >
-          {isDispatching ? 'Dispatching…' : 'Dispatch'}
+          {isDispatching ? 'Dispatching…' : 'Dispatch now'}
         </button>
       </Tooltip>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Saga group header
+// ---------------------------------------------------------------------------
+
+function SagaGroupHeader({
+  sagaName,
+  trackerId,
+  featureBranch,
+}: {
+  sagaName: string;
+  trackerId: string;
+  featureBranch: string;
+}) {
+  return (
+    <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-px-4 niuu-py-2 niuu-bg-bg-tertiary niuu-border-b niuu-border-border-subtle niuu-sticky niuu-top-0 niuu-z-10">
+      <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-rounded">
+        {trackerId}
+      </span>
+      <span className="niuu-text-sm niuu-font-medium niuu-text-text-primary">{sagaName}</span>
+      <span className="niuu-text-xs niuu-font-mono niuu-text-text-faint niuu-ml-auto">
+        {featureBranch}
+      </span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Raid row (within saga group)
+// ---------------------------------------------------------------------------
+
+function RaidRow({
+  entry,
+  isSelected,
+  onToggle,
+}: {
+  entry: EnrichedEntry;
+  isSelected: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        'niuu-flex niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-2.5 niuu-border-b niuu-border-border-subtle',
+        isSelected ? 'niuu-bg-bg-secondary' : 'hover:niuu-bg-bg-secondary',
+      )}
+    >
+      <input
+        type="checkbox"
+        checked={isSelected}
+        onChange={onToggle}
+        className="niuu-rounded niuu-border-border"
+        aria-label="Select row"
+      />
+      <div className="niuu-flex-1 niuu-min-w-0">
+        <div className="niuu-text-sm niuu-text-text-primary niuu-truncate">{entry.raid.name}</div>
+        <div className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-mt-0.5">
+          {entry.raid.trackerId}
+          {entry.raid.estimateHours != null && ` · ~${entry.raid.estimateHours}h`}
+        </div>
+      </div>
+      <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-shrink-0">
+        <StatusBadge
+          status={entry.effectiveStatus as Parameters<typeof StatusBadge>[0]['status']}
+          pulse={entry.effectiveStatus === 'running'}
+        />
+        {entry.feasibility.feasible ? (
+          <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-rounded">
+            ready
+          </span>
+        ) : (
+          <GateChips gates={entry.feasibility.gates} />
+        )}
+        <div className="niuu-flex niuu-items-center niuu-gap-1.5 niuu-w-[80px]">
+          <ConfidenceBar
+            level={
+              entry.raid.confidence >= 80
+                ? 'high'
+                : entry.raid.confidence >= 50
+                  ? 'medium'
+                  : 'low'
+            }
+          />
+          <span className="niuu-text-xs niuu-font-mono niuu-text-text-secondary">
+            {entry.raid.confidence}%
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Right panel: dispatch rules + recent dispatches
+// ---------------------------------------------------------------------------
+
+function DispatchRulesPanel({
+  threshold,
+  maxConcurrentRaids,
+  autoContinue,
+}: {
+  threshold: number;
+  maxConcurrentRaids: number;
+  autoContinue: boolean;
+}) {
+  const rules = [
+    { label: 'Confidence threshold', value: `${threshold}%` },
+    { label: 'Concurrent cap', value: String(maxConcurrentRaids) },
+    { label: 'Auto-continue', value: autoContinue ? 'on' : 'off' },
+    { label: 'Retries', value: String(DEFAULT_MAX_RETRIES) },
+    { label: 'Quiet hours', value: 'none' },
+    { label: 'Escalation', value: 'notify' },
+  ];
+
+  return (
+    <div className="niuu-p-4 niuu-flex niuu-flex-col niuu-gap-4">
+      {/* Dispatch rules card */}
+      <div
+        className="niuu-rounded-lg niuu-border niuu-border-border niuu-bg-bg-secondary niuu-p-4"
+        aria-label="Dispatch rules"
+      >
+        <h3 className="niuu-m-0 niuu-mb-3 niuu-text-sm niuu-font-semibold niuu-text-text-primary">
+          Dispatch rules
+        </h3>
+        <dl className="niuu-grid niuu-grid-cols-2 niuu-gap-x-4 niuu-gap-y-2 niuu-text-xs niuu-m-0">
+          {rules.map((r) => (
+            <div key={r.label}>
+              <dt className="niuu-text-text-muted niuu-mb-0.5">{r.label}</dt>
+              <dd className="niuu-m-0 niuu-font-mono niuu-text-text-primary">{r.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      {/* Recent dispatches card */}
+      <div className="niuu-rounded-lg niuu-border niuu-border-border niuu-bg-bg-secondary niuu-p-4">
+        <h3 className="niuu-m-0 niuu-mb-3 niuu-text-sm niuu-font-semibold niuu-text-text-primary">
+          Recent dispatches
+        </h3>
+        <p className="niuu-m-0 niuu-text-xs niuu-text-text-muted">No recent dispatches.</p>
+      </div>
     </div>
   );
 }
@@ -206,7 +341,7 @@ export function DispatchView() {
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [optimisticQueued, setOptimisticQueued] = useState<Set<string>>(new Set());
   const [isDispatching, setIsDispatching] = useState(false);
 
@@ -282,13 +417,31 @@ export function DispatchView() {
     return { all: ready + blocked + queue, ready, blocked, queue };
   }, [enriched]);
 
-  // Determine if all selected raids are feasible
+  // Group filtered entries by sagaId
+  const groupedBySaga = useMemo(() => {
+    const map = new Map<string, { sagaName: string; trackerId: string; featureBranch: string; entries: EnrichedEntry[] }>();
+    for (const entry of filtered) {
+      const existing = map.get(entry.saga.id);
+      if (existing) {
+        existing.entries.push(entry);
+      } else {
+        map.set(entry.saga.id, {
+          sagaName: entry.saga.name,
+          trackerId: entry.saga.trackerId,
+          featureBranch: entry.saga.featureBranch,
+          entries: [entry],
+        });
+      }
+    }
+    return Array.from(map.entries());
+  }, [filtered]);
+
   const selectedEntries = filtered.filter((e) => selectedIds.has(e.raid.id));
   const allSelectedFeasible =
     selectedEntries.length > 0 && selectedEntries.every((e) => e.feasibility.feasible);
 
   async function handleDispatch() {
-    const ids = Array.from(selectedIds) as string[];
+    const ids = Array.from(selectedIds);
     setIsDispatching(true);
     setOptimisticQueued((prev) => new Set([...prev, ...ids]));
     setSelectedIds(new Set());
@@ -296,7 +449,6 @@ export function DispatchView() {
     try {
       await dispatchBus.dispatchBatch(ids);
     } catch {
-      // Roll back optimistic update on failure
       setOptimisticQueued((prev) => {
         const next = new Set(prev);
         ids.forEach((id) => next.delete(id));
@@ -307,62 +459,14 @@ export function DispatchView() {
     }
   }
 
-  // Table row shape — needs an `id` field
-  type Row = EnrichedEntry & { id: string };
-  const rows: Row[] = filtered.map((e) => ({ ...e, id: e.raid.id }));
-
-  const columns: TableColumn<Row>[] = [
-    {
-      key: 'raid',
-      header: 'Raid',
-      render: (row) => (
-        <div>
-          <div className="niuu-text-sm niuu-text-text-primary">{row.raid.name}</div>
-          <div className="niuu-text-xs niuu-text-text-muted niuu-mt-0.5">
-            {row.saga.name} · {row.phase.name}
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      width: '110px',
-      render: (row) => (
-        <StatusBadge
-          status={row.effectiveStatus as Parameters<typeof StatusBadge>[0]['status']}
-          pulse={row.effectiveStatus === 'running'}
-        />
-      ),
-    },
-    {
-      key: 'confidence',
-      header: 'Confidence',
-      width: '130px',
-      render: (row) => {
-        const level =
-          row.raid.confidence >= 80 ? 'high' : row.raid.confidence >= 50 ? 'medium' : 'low';
-        return (
-          <div className="niuu-flex niuu-items-center niuu-gap-2">
-            <ConfidenceBar level={level} />
-            <span className="niuu-text-xs niuu-font-mono niuu-text-text-secondary">
-              {row.raid.confidence}%
-            </span>
-          </div>
-        );
-      },
-    },
-    {
-      key: 'gates',
-      header: 'Feasibility',
-      render: (row) =>
-        row.feasibility.feasible ? (
-          <span className="niuu-text-xs niuu-text-text-muted">ready</span>
-        ) : (
-          <GateChips gates={row.feasibility.gates} />
-        ),
-    },
-  ];
+  function toggleId(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const isLoading = dispatcherQuery.isLoading || queueQuery.isLoading;
   const isError = dispatcherQuery.isError || queueQuery.isError;
@@ -387,59 +491,105 @@ export function DispatchView() {
 
   return (
     <TooltipProvider>
-      <div className="niuu-p-6">
-        {/* Rule summary card */}
-        {dispatcherState && (
-          <RuleCard
-            threshold={dispatcherState.threshold}
-            maxConcurrentRaids={dispatcherState.maxConcurrentRaids}
-            autoContinue={dispatcherState.autoContinue}
-          />
-        )}
+      <div className="niuu-flex niuu-h-full niuu-overflow-hidden">
+        {/* ── Left: queue ─────────────────────────────── */}
+        <div className="niuu-flex niuu-flex-col niuu-flex-1 niuu-overflow-hidden">
+          {/* Header */}
+          <div className="niuu-px-4 niuu-py-3 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary">
+            <div className="niuu-text-xs niuu-uppercase niuu-tracking-wide niuu-text-text-muted niuu-mb-1">
+              Dispatch queue
+            </div>
+            <div className="niuu-flex niuu-items-baseline niuu-justify-between">
+              <h2 className="niuu-m-0 niuu-text-lg niuu-font-semibold niuu-text-text-primary">
+                {counts.all} raids · {counts.ready} ready
+              </h2>
+              <div className="niuu-flex niuu-gap-2">
+                {dispatcherState && (
+                  <>
+                    <span className="niuu-text-xs niuu-font-mono niuu-bg-bg-elevated niuu-px-2 niuu-py-1 niuu-rounded niuu-text-text-secondary">
+                      threshold{' '}
+                      <strong className="niuu-text-brand">{dispatcherState.threshold}%</strong>
+                    </span>
+                    <span className="niuu-text-xs niuu-font-mono niuu-bg-bg-elevated niuu-px-2 niuu-py-1 niuu-rounded niuu-text-text-secondary">
+                      concurrent <strong>{dispatcherState.maxConcurrentRaids}</strong>
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
 
-        {/* Controls */}
-        <div className="niuu-flex niuu-items-center niuu-justify-between niuu-mb-4 niuu-gap-4 niuu-flex-wrap">
-          <SegmentedFilter
-            value={statusFilter}
-            onChange={(v) => {
-              setStatusFilter(v);
-              setSelectedIds(new Set());
-            }}
-            counts={counts}
-          />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search raids…"
-            aria-label="Search raids"
-            className="niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-tertiary niuu-px-3 niuu-py-1.5 niuu-text-sm niuu-text-text-primary niuu-outline-none focus:niuu-border-brand"
-          />
+          {/* Controls */}
+          <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-2 niuu-border-b niuu-border-border-subtle niuu-flex-wrap">
+            <SegmentedFilter
+              value={statusFilter}
+              onChange={(v) => {
+                setStatusFilter(v);
+                setSelectedIds(new Set());
+              }}
+              counts={counts}
+            />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search raids…"
+              aria-label="Search raids"
+              className="niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-tertiary niuu-px-3 niuu-py-1.5 niuu-text-xs niuu-text-text-primary niuu-outline-none focus:niuu-border-brand niuu-ml-auto"
+            />
+          </div>
+
+          {/* Grouped queue */}
+          <div className="niuu-flex-1 niuu-overflow-y-auto" role="list" aria-label="Dispatch queue">
+            {groupedBySaga.length === 0 ? (
+              <div className="niuu-py-12 niuu-text-center niuu-text-sm niuu-text-text-muted">
+                No raids match the current filter.
+              </div>
+            ) : (
+              groupedBySaga.map(([sagaId, group]) => (
+                <div key={sagaId} role="listitem">
+                  <SagaGroupHeader
+                    sagaName={group.sagaName}
+                    trackerId={group.trackerId}
+                    featureBranch={group.featureBranch}
+                  />
+                  {group.entries.map((entry) => (
+                    <RaidRow
+                      key={entry.raid.id}
+                      entry={entry}
+                      isSelected={selectedIds.has(entry.raid.id)}
+                      onToggle={() => toggleId(entry.raid.id)}
+                    />
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
-        {/* Table */}
-        <Table
-          columns={columns}
-          rows={rows}
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-          aria-label="Dispatch queue"
-        />
-
-        {filtered.length === 0 && (
-          <div className="niuu-py-12 niuu-text-center niuu-text-sm niuu-text-text-muted">
-            No raids match the current filter.
-          </div>
-        )}
-
-        {/* Batch dispatch bar */}
-        <BatchDispatchBar
-          selectedCount={selectedIds.size}
-          canDispatch={allSelectedFeasible}
-          onDispatch={handleDispatch}
-          isDispatching={isDispatching}
-        />
+        {/* ── Right: rules panel ──────────────────────── */}
+        <div
+          className="niuu-border-l niuu-border-border-subtle niuu-overflow-y-auto niuu-bg-bg-primary"
+          style={{ width: 280, flexShrink: 0 }}
+          aria-label="Dispatch rules panel"
+        >
+          {dispatcherState ? (
+            <DispatchRulesPanel
+              threshold={dispatcherState.threshold}
+              maxConcurrentRaids={dispatcherState.maxConcurrentRaids}
+              autoContinue={dispatcherState.autoContinue}
+            />
+          ) : null}
+        </div>
       </div>
+
+      {/* Batch dispatch bar */}
+      <BatchDispatchBar
+        selectedCount={selectedIds.size}
+        canDispatch={allSelectedFeasible}
+        onDispatch={handleDispatch}
+        isDispatching={isDispatching}
+      />
     </TooltipProvider>
   );
 }

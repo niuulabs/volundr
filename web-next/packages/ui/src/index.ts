@@ -37,6 +37,7 @@ export * from './primitives/EventPicker';
 export * from './primitives/ToolPicker';
 export * from './primitives/SchemaEditor';
 export { cn } from './utils/cn';
+export { relTime } from './utils/relTime';
 
 /* Chat */
 export * from './chat';

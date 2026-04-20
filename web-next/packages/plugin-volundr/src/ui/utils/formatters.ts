@@ -12,12 +12,3 @@ export function tokens(n: number): string {
   return `${n}`;
 }
 
-/** Format timestamp to "3m ago" style relative time */
-export function relTime(ts: number): string {
-  if (!ts) return '—';
-  const d = Math.max(0, Date.now() - ts);
-  if (d < 60_000) return `${Math.floor(d / 1000)}s ago`;
-  if (d < 3_600_000) return `${Math.floor(d / 60_000)}m ago`;
-  if (d < 86_400_000) return `${Math.floor(d / 3_600_000)}h ago`;
-  return `${Math.floor(d / 86_400_000)}d ago`;
-}

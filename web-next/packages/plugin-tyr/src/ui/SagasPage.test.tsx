@@ -12,6 +12,7 @@ import type { Saga } from '../domain/saga';
 const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
+  useParams: () => ({}),
 }));
 
 // ---------------------------------------------------------------------------
@@ -53,7 +54,7 @@ function makeSaga(overrides: Partial<Saga> = {}): Saga {
 describe('SagasPage', () => {
   it('renders the sagas heading', async () => {
     render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
-    await waitFor(() => expect(screen.getByText(/Tyr · Sagas/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Sagas')).toBeInTheDocument());
   });
 
   it('renders the Tyr rune', async () => {

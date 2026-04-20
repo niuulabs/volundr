@@ -1,11 +1,11 @@
 import { useNavigate } from '@tanstack/react-router';
-import { KpiStrip, KpiCard, StateDot, LoadingState } from '@niuulabs/ui';
+import { KpiStrip, KpiCard, StateDot, LoadingState, relTime } from '@niuulabs/ui';
 import { useVolundrStats } from './useVolundrSessions';
 import { useVolundrClusters } from './hooks/useVolundrClusters';
 import { useSessionList } from './hooks/useSessionStore';
 import { useTemplates } from './useTemplates';
 import { Meter, MiniBar } from './atoms';
-import { tokens, relTime } from './utils/formatters';
+import { tokens } from './utils/formatters';
 import type { Session } from '../domain/session';
 import type { Cluster } from '../domain/cluster';
 import type { Template } from '../domain/template';
