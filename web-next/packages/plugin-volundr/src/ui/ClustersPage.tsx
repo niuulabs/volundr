@@ -1,7 +1,7 @@
-import { StateDot, LoadingState, ErrorState } from '@niuulabs/ui';
+import { StateDot, LoadingState, ErrorState, Meter } from '@niuulabs/ui';
 import type { Cluster, ClusterNode, NodeStatus } from '../domain/cluster';
 import { useClusters } from './useClusters';
-import { Meter, ClusterChip, MiniBar } from './atoms';
+import { ClusterChip, MiniBar } from './atoms';
 
 // ---------------------------------------------------------------------------
 // Helpers

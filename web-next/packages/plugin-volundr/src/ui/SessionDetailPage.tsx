@@ -6,12 +6,12 @@ import {
   LoadingState,
   ErrorState,
   cn,
+  Meter,
   MeshSidebar,
   MeshEventCard,
   resolveParticipantColor,
 } from '@niuulabs/ui';
 import type { MeshEvent, MeshEventType, RoomParticipant } from '@niuulabs/ui';
-import { Meter } from './atoms/Meter';
 import { SourceLabel } from './atoms/SourceLabel';
 import { ClusterChip } from './atoms/ClusterChip';
 import { Terminal } from './Terminal/Terminal';

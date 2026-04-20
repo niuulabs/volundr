@@ -3,7 +3,6 @@ import { definePlugin } from '@niuulabs/plugin-sdk';
 import { TyrPage } from './ui/TyrPage';
 import { WorkflowBuilderPage } from './ui/WorkflowBuilderPage';
 import { SagasPage } from './ui/SagasPage';
-import { SagaDetailRoute } from './ui/SagaDetailPage';
 import { DispatchView } from './ui/DispatchView';
 import { SettingsPage, SettingsIndexPage } from './ui/settings/SettingsPage';
 import { SettingsRail } from './ui/settings/SettingsRail';
