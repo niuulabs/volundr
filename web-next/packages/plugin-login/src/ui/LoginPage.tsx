@@ -5,6 +5,8 @@ import { AmbientConstellation } from './AmbientConstellation';
 import { AmbientLattice } from './AmbientLattice';
 import { LogoKnot } from './LogoKnot';
 import { useAmbient, type AmbientVariant } from './useAmbient';
+import { GithubIcon } from './icons/GithubIcon';
+import { GoogleIcon } from './icons/GoogleIcon';
 import './LoginPage.css';
 
 interface LoginPageProps {
@@ -41,11 +43,20 @@ function LockIcon() {
   );
 }
 
+const buildVersion = (import.meta.env['VITE_BUILD_VERSION'] as string | undefined) ?? '';
+const buildRealm = (import.meta.env['VITE_BUILD_REALM'] as string | undefined) ?? '';
+
+function buildBannerText(): string {
+  if (!buildVersion) return 'niuu';
+  if (!buildRealm) return `niuu · build ${buildVersion}`;
+  return `niuu · build ${buildVersion} · ${buildRealm}`;
+}
+
 /**
  * Full-viewport login page.
  *
- * Shows the niuu knot rune, wordmark, and a single "Sign in" button that
- * kicks off the configured OIDC flow via `useAuth().login()`.
+ * Shows the niuu knot rune, wordmark, and sign-in buttons that
+ * kick off the configured OIDC flow via `useAuth().login()`.
  *
  * Uses `position: fixed` to overlay the Shell layout when rendered inside it.
  */
@@ -70,9 +81,9 @@ export function LoginPage({
     <div className="login-page" data-testid="login-page">
       <AmbientComponent />
 
-      <div className="login-page__build login-page__mono">
+      <div className="login-page__build login-page__mono" data-testid="build-banner">
         <span className="login-page__build-dot" aria-hidden />
-        niuu
+        {buildBannerText()}
       </div>
 
       <main className="login-page__card">
@@ -110,8 +121,39 @@ export function LoginPage({
             data-testid="sign-in-btn"
           >
             {loading ? <span className="login-page__spinner" aria-hidden /> : <LockIcon />}
-            <span>{loading ? 'redirecting…' : 'Sign in'}</span>
+            <span>{loading ? 'redirecting…' : 'Continue with passkey'}</span>
+            {!loading && <span className="login-page__kbd login-page__mono" aria-hidden>↵</span>}
           </button>
+
+          <div className="login-page__oauth-row" data-testid="oauth-row">
+            <button
+              className="login-page__btn login-page__btn--ghost"
+              onClick={loading ? undefined : login}
+              disabled={loading}
+              aria-label="Sign in with GitHub"
+              data-testid="github-btn"
+            >
+              <GithubIcon />
+              <span>GitHub</span>
+            </button>
+            <button
+              className="login-page__btn login-page__btn--ghost"
+              onClick={loading ? undefined : login}
+              disabled={loading}
+              aria-label="Sign in with Google"
+              data-testid="google-btn"
+            >
+              <GoogleIcon />
+              <span>Google</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="login-page__foot login-page__mono" data-testid="request-access-footer">
+          <span className="login-page__foot-dim">no account?</span>
+          <a href="#" className="login-page__link" data-testid="request-access-link">
+            request access
+          </a>
         </div>
       </main>
     </div>

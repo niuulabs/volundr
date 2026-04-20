@@ -36,16 +36,47 @@ describe('LoginPage', () => {
     expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
   });
 
-  it('renders the sign-in button', () => {
+  it('renders the passkey sign-in button', () => {
     wrap(baseAuth);
     expect(screen.getByTestId('sign-in-btn')).toBeInTheDocument();
     expect(screen.getByTestId('sign-in-btn')).not.toBeDisabled();
   });
 
-  it('calls login() when the sign-in button is clicked', () => {
+  it('renders the GitHub button', () => {
+    wrap(baseAuth);
+    expect(screen.getByTestId('github-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('github-btn')).not.toBeDisabled();
+  });
+
+  it('renders the Google button', () => {
+    wrap(baseAuth);
+    expect(screen.getByTestId('google-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('google-btn')).not.toBeDisabled();
+  });
+
+  it('renders the OAuth row', () => {
+    wrap(baseAuth);
+    expect(screen.getByTestId('oauth-row')).toBeInTheDocument();
+  });
+
+  it('calls login() when the passkey button is clicked', () => {
     const login = vi.fn();
     wrap({ ...baseAuth, login });
     fireEvent.click(screen.getByTestId('sign-in-btn'));
+    expect(login).toHaveBeenCalledOnce();
+  });
+
+  it('calls login() when the GitHub button is clicked', () => {
+    const login = vi.fn();
+    wrap({ ...baseAuth, login });
+    fireEvent.click(screen.getByTestId('github-btn'));
+    expect(login).toHaveBeenCalledOnce();
+  });
+
+  it('calls login() when the Google button is clicked', () => {
+    const login = vi.fn();
+    wrap({ ...baseAuth, login });
+    fireEvent.click(screen.getByTestId('google-btn'));
     expect(login).toHaveBeenCalledOnce();
   });
 
@@ -54,17 +85,32 @@ describe('LoginPage', () => {
     expect(screen.getByTestId('sign-in-btn')).toBeDisabled();
   });
 
+  it('disables the GitHub button when loading', () => {
+    wrap({ ...baseAuth, loading: true });
+    expect(screen.getByTestId('github-btn')).toBeDisabled();
+  });
+
+  it('disables the Google button when loading', () => {
+    wrap({ ...baseAuth, loading: true });
+    expect(screen.getByTestId('google-btn')).toBeDisabled();
+  });
+
   it('shows "redirecting…" text when loading', () => {
     wrap({ ...baseAuth, loading: true });
     expect(screen.getByText('redirecting…')).toBeInTheDocument();
   });
 
-  it('shows "Sign in" text when not loading', () => {
+  it('shows "Continue with passkey" text when not loading', () => {
     wrap(baseAuth);
-    expect(screen.getByText('Sign in')).toBeInTheDocument();
+    expect(screen.getByText('Continue with passkey')).toBeInTheDocument();
   });
 
-  it('does not call login() when button is clicked while loading', () => {
+  it('shows the keyboard hint badge when not loading', () => {
+    wrap(baseAuth);
+    expect(screen.getByText('↵')).toBeInTheDocument();
+  });
+
+  it('does not call login() when passkey button is clicked while loading', () => {
     const login = vi.fn();
     wrap({ ...baseAuth, loading: true, login });
     fireEvent.click(screen.getByTestId('sign-in-btn'));
@@ -110,7 +156,24 @@ describe('LoginPage', () => {
 
   it('shows the build banner', () => {
     wrap(baseAuth);
-    expect(screen.getByText(/niuu/)).toBeInTheDocument();
+    expect(screen.getByTestId('build-banner')).toBeInTheDocument();
+  });
+
+  it('shows "no account?" text in footer', () => {
+    wrap(baseAuth);
+    expect(screen.getByText('no account?')).toBeInTheDocument();
+  });
+
+  it('shows "request access" link in footer', () => {
+    wrap(baseAuth);
+    const link = screen.getByTestId('request-access-link');
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', '#');
+  });
+
+  it('renders the footer element', () => {
+    wrap(baseAuth);
+    expect(screen.getByTestId('request-access-footer')).toBeInTheDocument();
   });
 
   it('renders the logo SVG', () => {
