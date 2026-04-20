@@ -68,4 +68,5 @@ class TestDemoScript:
             capture_output=True,
             text=True,
         )
-        assert result.stdout == "Hello, Niuu!\nReversed: uuiN\nFibonacci(7): [0, 1, 1, 2, 3, 5, 8]\n"
+        expected = "Hello, Niuu!\nReversed: uuiN\nFibonacci(7): [0, 1, 1, 2, 3, 5, 8]\n"
+        assert result.stdout == expected
