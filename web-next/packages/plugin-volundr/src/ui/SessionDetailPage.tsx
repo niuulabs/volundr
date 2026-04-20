@@ -1,8 +1,16 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useService } from '@niuulabs/plugin-sdk';
 import { useQuery } from '@tanstack/react-query';
-import { LifecycleBadge, LoadingState, ErrorState, cn } from '@niuulabs/ui';
-import type { ParticipantMeta, MeshEvent, MeshEventType } from '@niuulabs/ui';
+import {
+  LifecycleBadge,
+  LoadingState,
+  ErrorState,
+  cn,
+  MeshSidebar,
+  MeshEventCard,
+  resolveParticipantColor,
+} from '@niuulabs/ui';
+import type { MeshEvent, MeshEventType, RoomParticipant } from '@niuulabs/ui';
 import { Meter } from './atoms/Meter';
 import { SourceLabel } from './atoms/SourceLabel';
 import { ClusterChip } from './atoms/ClusterChip';
@@ -11,6 +19,8 @@ import { FileTree } from './FileTree/FileTree';
 import { FileViewer } from './FileTree/FileViewer';
 import { useSessionDetail } from './hooks/useSessionStore';
 import { toLifecycleState } from './utils/toLifecycleState';
+import { buildMockRoom, buildMockTurns, groupTurns } from '../testing/mockChatData';
+import type { ChatTurn, PeerMeta, MockRoom, TurnGroup } from '../testing/mockChatData';
 import type { IPtyStream } from '../ports/IPtyStream';
 import type { IFileSystemPort, FileTreeNode } from '../ports/IFileSystemPort';
 import type { Session } from '../domain/session';
@@ -39,265 +49,8 @@ export interface SessionDetailPageProps {
 }
 
 // ---------------------------------------------------------------------------
-// Peer color utility (deterministic per peerId, brand-family)
+// Helpers
 // ---------------------------------------------------------------------------
-
-function peerHash(id: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-function peerColor(peerId: string | undefined): string {
-  if (!peerId || peerId === 'human') return 'var(--color-text-primary)';
-  const h = peerHash(peerId);
-  const dL = ((h & 0xff) / 255) * 0.24 - 0.12;
-  const dC = (((h >> 8) & 0xff) / 255) * 0.06 - 0.03;
-  const L = Math.min(0.92, Math.max(0.58, 0.78 + dL)).toFixed(3);
-  const C = Math.min(0.15, Math.max(0.06, 0.12 + dC)).toFixed(3);
-  return `oklch(${L} ${C} 230)`;
-}
-
-// ---------------------------------------------------------------------------
-// Mock data builders (chat tab uses mock room data in design mode)
-// ---------------------------------------------------------------------------
-
-interface PeerMeta extends ParticipantMeta {
-  glyph: string;
-  expanded?: boolean;
-  gateway?: string;
-}
-
-interface ChatTurn {
-  id: string;
-  role: 'user' | 'assistant' | 'thinking' | 'tool';
-  peerId: string;
-  content: string;
-  tool?: string;
-  args?: string;
-  output?: string;
-  status?: 'ok' | 'err' | 'run';
-  dur?: string;
-  tokens?: number;
-  ms?: number;
-  ts: number;
-  outcome?: OutcomeData;
-  directedTo?: string[];
-}
-
-interface OutcomeData {
-  verdict: string;
-  eventType: string;
-  summary: string;
-  fields?: Record<string, unknown>;
-  findings?: Array<{ severity: string; loc: string; msg: string }>;
-}
-
-interface MockRoom {
-  roomId: string;
-  participants: PeerMeta[];
-  byId: Record<string, PeerMeta>;
-  meshEvents: MeshEvent[];
-}
-
-type TurnGroup =
-  | { kind: 'single'; turn: ChatTurn }
-  | { kind: 'thinking'; turn: ChatTurn }
-  | { kind: 'toolrun'; turns: ChatTurn[] };
-
-function buildMockRoom(session: Session): MockRoom {
-  const now = Date.now();
-  const participants: PeerMeta[] = [
-    {
-      peerId: 'human',
-      persona: 'human',
-      displayName: 'You',
-      glyph: 'H',
-      status: 'idle',
-      subscribesTo: [],
-      emits: ['user.message'],
-      tools: [],
-    },
-    {
-      peerId: `ravn-${session.ravnId}`,
-      persona: session.personaName,
-      displayName: session.personaName,
-      glyph: session.personaName[0]?.toUpperCase() ?? 'R',
-      status: session.state === 'running' ? 'busy' : 'idle',
-      subscribesTo: ['user.message', 'code.changed', 'test.result'],
-      emits: ['code.changed', 'outcome.review'],
-      tools: ['read_file', 'write_file', 'run_command', 'search_files'],
-      gateway: 'bifrost://anthropic/claude-sonnet',
-      expanded: true,
-    },
-    {
-      peerId: 'reviewer-1',
-      persona: 'reviewer',
-      displayName: 'Reviewer',
-      glyph: 'V',
-      status: 'idle',
-      subscribesTo: ['code.changed', 'outcome.review'],
-      emits: ['outcome.review'],
-      tools: ['read_file', 'search_files'],
-      gateway: 'bifrost://anthropic/claude-haiku',
-    },
-  ];
-
-  const byId: Record<string, PeerMeta> = {};
-  for (const p of participants) {
-    byId[p.peerId] = p;
-  }
-
-  const meshEvents: MeshEvent[] = [
-    {
-      id: 'me-1',
-      type: 'outcome',
-      timestamp: new Date(now - 300_000),
-      participantId: 'reviewer-1',
-      participant: { color: peerColor('reviewer-1') },
-      persona: 'reviewer',
-      eventType: 'code.review',
-      verdict: 'pass',
-      summary: 'Code review passed - clean implementation',
-    },
-    {
-      id: 'me-2',
-      type: 'mesh_message',
-      timestamp: new Date(now - 200_000),
-      participantId: `ravn-${session.ravnId}`,
-      participant: { color: peerColor(`ravn-${session.ravnId}`) },
-      fromPersona: session.personaName,
-      eventType: 'code.changed',
-      preview: 'Updated auth handler with new validation logic',
-    },
-    {
-      id: 'me-3',
-      type: 'notification',
-      timestamp: new Date(now - 100_000),
-      participantId: `ravn-${session.ravnId}`,
-      participant: { color: peerColor(`ravn-${session.ravnId}`) },
-      persona: session.personaName,
-      notificationType: 'build.complete',
-      summary: 'Build completed successfully',
-      urgency: 1,
-      recommendation: 'Ready for review',
-    },
-  ];
-
-  return { roomId: `room-${session.id}`, participants, byId, meshEvents };
-}
-
-function buildMockTurns(_session: Session, room: MockRoom): ChatTurn[] {
-  const now = Date.now();
-  const mainPeer = room.participants[1]!;
-  return [
-    {
-      id: 't-1',
-      role: 'user',
-      peerId: 'human',
-      content: 'Implement the authentication handler with JWT validation',
-      ts: now - 600_000,
-    },
-    {
-      id: 't-2',
-      role: 'thinking',
-      peerId: mainPeer.peerId,
-      content: 'I need to create a JWT validation handler. Let me check the existing auth setup first.',
-      ms: 1200,
-      ts: now - 590_000,
-    },
-    {
-      id: 't-3',
-      role: 'tool',
-      peerId: mainPeer.peerId,
-      content: '',
-      tool: 'read_file',
-      args: 'src/auth/handler.ts',
-      output: 'export class AuthHandler { ... }',
-      status: 'ok',
-      dur: '45ms',
-      ts: now - 580_000,
-    },
-    {
-      id: 't-4',
-      role: 'tool',
-      peerId: mainPeer.peerId,
-      content: '',
-      tool: 'write_file',
-      args: 'src/auth/jwt.ts',
-      status: 'ok',
-      dur: '12ms',
-      ts: now - 570_000,
-    },
-    {
-      id: 't-5',
-      role: 'assistant',
-      peerId: mainPeer.peerId,
-      content: 'I\'ve implemented the JWT validation handler. It validates tokens using RS256 and checks expiry, issuer, and audience claims.',
-      tokens: 847,
-      ms: 3200,
-      ts: now - 560_000,
-    },
-    {
-      id: 't-6',
-      role: 'user',
-      peerId: 'human',
-      content: 'Run the tests to make sure everything passes',
-      ts: now - 400_000,
-    },
-    {
-      id: 't-7',
-      role: 'tool',
-      peerId: mainPeer.peerId,
-      content: '',
-      tool: 'run_command',
-      args: 'npm test',
-      output: 'PASS src/auth/jwt.test.ts\n  14 passing (1.2s)',
-      status: 'ok',
-      dur: '1.2s',
-      ts: now - 390_000,
-    },
-    {
-      id: 't-8',
-      role: 'assistant',
-      peerId: mainPeer.peerId,
-      content: 'All 14 tests pass. The JWT validation is working correctly.',
-      tokens: 156,
-      ms: 890,
-      ts: now - 380_000,
-      outcome: {
-        verdict: 'pass',
-        eventType: 'test.result',
-        summary: 'All tests passing',
-      },
-    },
-  ];
-}
-
-function groupTurns(turns: ChatTurn[]): TurnGroup[] {
-  const out: TurnGroup[] = [];
-  let bucket: { kind: 'toolrun'; peerId: string; turns: ChatTurn[] } | null = null;
-  for (const t of turns) {
-    if (t.role === 'tool') {
-      if (!bucket || bucket.peerId !== t.peerId) {
-        bucket = { kind: 'toolrun', peerId: t.peerId, turns: [] };
-        out.push(bucket);
-      }
-      bucket.turns.push(t);
-    } else {
-      bucket = null;
-      if (t.role === 'thinking') {
-        out.push({ kind: 'thinking', turn: t });
-      } else {
-        out.push({ kind: 'single', turn: t });
-      }
-    }
-  }
-  return out;
-}
 
 function truncate(s: string | undefined, n: number): string {
   if (!s) return '';
@@ -454,170 +207,13 @@ function SessionHeader({
 }
 
 // ---------------------------------------------------------------------------
-// PeerRail (left column of chat)
-// ---------------------------------------------------------------------------
-
-function PeerCard({
-  peer,
-  active,
-  onToggle,
-}: {
-  peer: PeerMeta;
-  active: boolean;
-  onToggle: () => void;
-}) {
-  const [open, setOpen] = useState(peer.expanded ?? false);
-  const color = peerColor(peer.peerId);
-
-  return (
-    <div
-      className={cn(
-        'niuu-rounded-md niuu-border niuu-p-2',
-        active ? 'niuu-border-brand niuu-bg-bg-tertiary' : 'niuu-border-border-subtle',
-      )}
-      data-testid="peer-card"
-    >
-      <button
-        className="niuu-flex niuu-w-full niuu-items-center niuu-gap-2 niuu-text-left"
-        onClick={onToggle}
-        data-testid="peer-focus-btn"
-      >
-        <span
-          className="niuu-flex niuu-h-6 niuu-w-6 niuu-items-center niuu-justify-center niuu-rounded-full niuu-font-mono niuu-text-xs"
-          style={{ backgroundColor: color, color: '#000' }}
-          data-testid="peer-avatar"
-        >
-          {peer.glyph}
-        </span>
-        <span className="niuu-flex niuu-flex-col">
-          <span className="niuu-font-mono niuu-text-xs niuu-text-text-primary" style={{ color }}>
-            {peer.displayName}
-          </span>
-          <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
-            {peer.persona} · {peer.status ?? 'idle'}
-          </span>
-        </span>
-      </button>
-
-      <button
-        className="niuu-mt-1 niuu-w-full niuu-text-left niuu-font-mono niuu-text-[10px] niuu-text-text-muted hover:niuu-text-text-secondary"
-        onClick={() => setOpen((v) => !v)}
-        data-testid="peer-expand-btn"
-      >
-        {open ? '\u25BC details' : '\u25B6 details'}
-      </button>
-
-      {open && (
-        <div className="niuu-mt-2 niuu-flex niuu-flex-col niuu-gap-2" data-testid="peer-details">
-          {peer.subscribesTo && peer.subscribesTo.length > 0 && (
-            <div>
-              <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-wider niuu-text-text-muted">
-                subscribes
-              </span>
-              <div className="niuu-mt-0.5 niuu-flex niuu-flex-wrap niuu-gap-1">
-                {peer.subscribesTo.map((s) => (
-                  <span
-                    key={s}
-                    className="niuu-font-mono niuu-text-[10px] niuu-text-text-secondary"
-                  >
-                    \u2193 {s}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {peer.emits && peer.emits.length > 0 && (
-            <div>
-              <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-wider niuu-text-text-muted">
-                emits
-              </span>
-              <div className="niuu-mt-0.5 niuu-flex niuu-flex-wrap niuu-gap-1">
-                {peer.emits.map((e) => (
-                  <span key={e} className="niuu-font-mono niuu-text-[10px] niuu-text-brand">
-                    \u2191 {e}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {peer.tools && peer.tools.length > 0 && (
-            <div>
-              <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-wider niuu-text-text-muted">
-                tools
-              </span>
-              <div className="niuu-mt-0.5 niuu-flex niuu-flex-wrap niuu-gap-1">
-                {peer.tools.map((t) => (
-                  <span
-                    key={t}
-                    className="niuu-rounded niuu-bg-bg-elevated niuu-px-1 niuu-font-mono niuu-text-[10px] niuu-text-text-secondary"
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {peer.gateway && (
-            <div>
-              <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-wider niuu-text-text-muted">
-                gateway
-              </span>
-              <div className="niuu-mt-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
-                {peer.gateway}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PeerRail({
-  room,
-  focusPeer,
-  setFocusPeer,
-}: {
-  room: MockRoom;
-  focusPeer: string | null;
-  setFocusPeer: (id: string | null) => void;
-}) {
-  return (
-    <div
-      className="niuu-flex niuu-w-56 niuu-flex-col niuu-gap-2 niuu-overflow-y-auto niuu-border-r niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-3"
-      data-testid="peer-rail"
-    >
-      <div className="niuu-flex niuu-items-center niuu-justify-between">
-        <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-wider niuu-text-text-muted">
-          participants
-        </span>
-        <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
-          {room.participants.length}
-        </span>
-      </div>
-      {room.participants.map((p) => (
-        <PeerCard
-          key={p.peerId}
-          peer={p}
-          active={focusPeer === p.peerId}
-          onToggle={() => setFocusPeer(focusPeer === p.peerId ? null : p.peerId)}
-        />
-      ))}
-      <div className="niuu-mt-auto niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
-        room · {room.roomId}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // ChatStream (center column of chat)
 // ---------------------------------------------------------------------------
 
 function ThinkingBlock({ turn, peer }: { turn: ChatTurn; peer: PeerMeta | undefined }) {
   const [open, setOpen] = useState(false);
   const firstLine = (turn.content || '').split('\n')[0] ?? '';
-  const color = peerColor(peer?.peerId);
+  const color = resolveParticipantColor(peer?.peerId ?? '');
 
   return (
     <div className="niuu-my-1" data-testid="thinking-block">
@@ -655,7 +251,7 @@ function ToolRunBlock({
 }) {
   const [open, setOpen] = useState(false);
   const peer = room.byId[turns[0]?.peerId ?? ''];
-  const color = peerColor(peer?.peerId);
+  const color = resolveParticipantColor(peer?.peerId ?? '');
   const errCount = turns.filter((t) => t.status === 'err').length;
   const okCount = turns.filter((t) => t.status === 'ok').length;
   const headline = turns[turns.length - 1]!;
@@ -715,7 +311,7 @@ function ToolRunBlock({
 
 function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
   const peer = room.byId[turn.peerId];
-  const color = peerColor(peer?.peerId);
+  const color = resolveParticipantColor(peer?.peerId ?? '');
 
   if (turn.role === 'user') {
     return (
@@ -724,9 +320,9 @@ function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
         <div className="niuu-flex-1">
           {turn.directedTo && turn.directedTo.length > 0 && (
             <div className="niuu-mb-1 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
-              directed \u2192{' '}
+              directed {'\u2192'}{' '}
               {turn.directedTo.map((id) => (
-                <span key={id} style={{ color: peerColor(id) }}>
+                <span key={id} style={{ color: resolveParticipantColor(id) }}>
                   {room.byId[id]?.displayName ?? id}
                 </span>
               ))}
@@ -753,17 +349,17 @@ function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
       <div className="niuu-flex-1">
         <div className="niuu-mb-1 niuu-flex niuu-items-center niuu-gap-2 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
           <span style={{ color }}>{peer?.displayName ?? turn.peerId}</span>
-          <span>\u00b7</span>
+          <span>{'\u00b7'}</span>
           <span>{peer?.persona ?? ''}</span>
           {turn.tokens && (
             <>
-              <span>\u00b7</span>
+              <span>{'\u00b7'}</span>
               <span>{turn.tokens}t</span>
             </>
           )}
           {turn.ms && (
             <>
-              <span>\u00b7</span>
+              <span>{'\u00b7'}</span>
               <span>{turn.ms}ms</span>
             </>
           )}
@@ -852,119 +448,11 @@ function ChatStream({
 
 type CascadeFilterType = 'all' | MeshEventType;
 
-function CascadeEvent({ event, room }: { event: MeshEvent; room: MockRoom }) {
-  const ts = new Date(event.timestamp);
-  const tsLabel = `${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')}`;
-  const participantPeer = room.byId[event.participantId];
-  const dotColor = peerColor(participantPeer?.peerId);
-
-  if (event.type === 'outcome') {
-    const verdictClass =
-      event.verdict === 'pass' || event.verdict === 'approve'
-        ? 'niuu-text-state-ok'
-        : event.verdict === 'fail' || event.verdict === 'escalate'
-          ? 'niuu-text-critical'
-          : 'niuu-text-state-warn';
-    return (
-      <div
-        className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-2"
-        data-testid="cascade-event"
-      >
-        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-xs">
-          <span className="niuu-font-mono niuu-text-text-muted">outcome</span>
-          <span className="niuu-font-mono niuu-text-text-muted">{tsLabel}</span>
-        </div>
-        <div className="niuu-mt-1 niuu-flex niuu-items-center niuu-gap-1">
-          <span
-            className="niuu-inline-block niuu-h-2 niuu-w-2 niuu-rounded-full"
-            style={{ backgroundColor: dotColor }}
-          />
-          <span className="niuu-font-mono niuu-text-xs">
-            {participantPeer?.displayName ?? event.participantId}
-          </span>
-          <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
-            {event.eventType}
-          </span>
-        </div>
-        {event.verdict && (
-          <div className={cn('niuu-mt-1 niuu-font-mono niuu-text-xs niuu-font-medium', verdictClass)}>
-            {event.verdict}
-          </div>
-        )}
-        {event.summary && (
-          <div className="niuu-mt-1 niuu-text-xs niuu-text-text-secondary">{event.summary}</div>
-        )}
-      </div>
-    );
-  }
-
-  if (event.type === 'mesh_message') {
-    return (
-      <div
-        className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-2"
-        data-testid="cascade-event"
-      >
-        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-xs">
-          <span className="niuu-font-mono niuu-text-text-muted">delegation</span>
-          <span className="niuu-font-mono niuu-text-text-muted">{tsLabel}</span>
-        </div>
-        <div className="niuu-mt-1 niuu-flex niuu-items-center niuu-gap-1">
-          <span
-            className="niuu-inline-block niuu-h-2 niuu-w-2 niuu-rounded-full"
-            style={{ backgroundColor: dotColor }}
-          />
-          <span className="niuu-font-mono niuu-text-xs">{event.fromPersona}</span>
-          <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
-            {event.eventType}
-          </span>
-        </div>
-        {event.preview && (
-          <div className="niuu-mt-1 niuu-text-xs niuu-text-text-muted">{event.preview}</div>
-        )}
-      </div>
-    );
-  }
-
-  // notification
-  const urgencyLabel = event.urgency >= 3 ? 'urgent' : event.urgency >= 2 ? 'help' : 'note';
-  return (
-    <div
-      className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-2"
-      data-testid="cascade-event"
-    >
-      <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-xs">
-        <span className="niuu-font-mono niuu-text-text-muted">{urgencyLabel}</span>
-        <span className="niuu-font-mono niuu-text-text-muted">{tsLabel}</span>
-      </div>
-      <div className="niuu-mt-1 niuu-flex niuu-items-center niuu-gap-1">
-        <span
-          className="niuu-inline-block niuu-h-2 niuu-w-2 niuu-rounded-full"
-          style={{ backgroundColor: dotColor }}
-        />
-        <span className="niuu-font-mono niuu-text-xs">
-          {participantPeer?.displayName ?? event.participantId}
-        </span>
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
-          {event.notificationType}
-        </span>
-      </div>
-      <div className="niuu-mt-1 niuu-text-xs niuu-text-text-secondary">{event.summary}</div>
-      {event.recommendation && (
-        <div className="niuu-mt-1 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
-          \u2192 {event.recommendation}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function MeshCascade({
-  room,
   events,
   filter,
   setFilter,
 }: {
-  room: MockRoom;
   events: MeshEvent[];
   filter: CascadeFilterType;
   setFilter: (f: CascadeFilterType) => void;
@@ -1012,7 +500,9 @@ function MeshCascade({
 
       <div className="niuu-flex niuu-flex-1 niuu-flex-col niuu-gap-2 niuu-overflow-y-auto niuu-px-3 niuu-pb-3">
         {filtered.map((e) => (
-          <CascadeEvent key={e.id} event={e} room={room} />
+          <div key={e.id} data-testid="cascade-event">
+            <MeshEventCard event={e} />
+          </div>
         ))}
         {filtered.length === 0 && (
           <div className="niuu-py-4 niuu-text-center niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
@@ -1029,11 +519,26 @@ function MeshCascade({
 // ---------------------------------------------------------------------------
 
 function ChatTab({ session }: { session: Session }) {
-  const room = useMemo(() => buildMockRoom(session), [session]);
-  const turns = useMemo(() => buildMockTurns(session, room), [session, room]);
+  const room = useMemo(
+    () => (import.meta.env.DEV ? buildMockRoom(session) : null),
+    [session],
+  );
+  const turns = useMemo(
+    () => (room ? buildMockTurns(session, room) : []),
+    [session, room],
+  );
   const grouped = useMemo(() => groupTurns(turns), [turns]);
   const [focusPeer, setFocusPeer] = useState<string | null>(null);
   const [cascadeFilter, setCascadeFilter] = useState<CascadeFilterType>('all');
+
+  const participantMap = useMemo(() => {
+    const map = new Map<string, RoomParticipant>();
+    if (!room) return map as ReadonlyMap<string, RoomParticipant>;
+    for (const p of room.participants) {
+      map.set(p.peerId, p);
+    }
+    return map as ReadonlyMap<string, RoomParticipant>;
+  }, [room]);
 
   const filteredGroups = useMemo(() => {
     if (!focusPeer) return grouped;
@@ -1048,12 +553,23 @@ function ChatTab({ session }: { session: Session }) {
       .filter((g): g is TurnGroup => g !== null);
   }, [grouped, focusPeer]);
 
+  if (!room) {
+    return (
+      <div className="niuu-flex niuu-h-full niuu-items-center niuu-justify-center niuu-font-mono niuu-text-sm niuu-text-text-muted">
+        Chat {'\u2014'} requires live connection
+      </div>
+    );
+  }
+
   return (
     <div className="niuu-flex niuu-h-full" data-testid="chat-tab">
-      <PeerRail room={room} focusPeer={focusPeer} setFocusPeer={setFocusPeer} />
+      <MeshSidebar
+        participants={participantMap}
+        selectedPeerId={focusPeer}
+        onSelectPeer={(id) => setFocusPeer(focusPeer === id ? null : id)}
+      />
       <ChatStream groups={filteredGroups} room={room} />
       <MeshCascade
-        room={room}
         events={room.meshEvents}
         filter={cascadeFilter}
         setFilter={setCascadeFilter}
@@ -1072,7 +588,7 @@ function PlaceholderTab({ label }: { label: string }) {
       className="niuu-flex niuu-h-full niuu-items-center niuu-justify-center niuu-font-mono niuu-text-sm niuu-text-text-muted"
       data-testid={`placeholder-${label.toLowerCase()}`}
     >
-      {label} tab \u2014 coming soon
+      {label} tab {'\u2014'} coming soon
     </div>
   );
 }
@@ -1229,7 +745,7 @@ export function SessionDetailPage({
                     className="niuu-p-3 niuu-text-xs niuu-text-text-muted"
                     data-testid="filetree-loading"
                   >
-                    loading files\u2026
+                    loading files{'\u2026'}
                   </p>
                 )}
                 {treeQuery.isError && (

@@ -1,42 +1,14 @@
 import { useNavigate } from '@tanstack/react-router';
-import { KpiStrip, KpiCard, StateDot, Sparkline, LoadingState, ErrorState } from '@niuulabs/ui';
+import { KpiStrip, KpiCard, StateDot, LoadingState } from '@niuulabs/ui';
 import { useVolundrStats } from './useVolundrSessions';
 import { useVolundrClusters } from './hooks/useVolundrClusters';
 import { useSessionList } from './hooks/useSessionStore';
 import { useTemplates } from './useTemplates';
-import { Meter, CliBadge, SourceLabel } from './atoms';
-import { money, tokens, relTime } from './utils/formatters';
+import { Meter, MiniBar } from './atoms';
+import { tokens, relTime } from './utils/formatters';
 import type { Session } from '../domain/session';
 import type { Cluster } from '../domain/cluster';
 import type { Template } from '../domain/template';
-
-// ---------------------------------------------------------------------------
-// Metric tile
-// ---------------------------------------------------------------------------
-
-function MetricTile({
-  label,
-  value,
-  sub,
-  children,
-}: {
-  label: string;
-  value: string | number;
-  sub: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div
-      className="niuu-flex niuu-flex-col niuu-gap-1 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
-      data-testid="metric-tile"
-    >
-      <span className="niuu-text-xs niuu-text-text-muted">{label}</span>
-      <span className="niuu-font-mono niuu-text-lg niuu-font-semibold niuu-text-text-primary">{value}</span>
-      <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">{sub}</span>
-      {children}
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // In-flight pod row
@@ -100,10 +72,10 @@ function ClusterLoadRow({ cluster }: { cluster: Cluster }) {
         <div className="niuu-text-xs niuu-text-text-muted">{cluster.runningSessions} pod{cluster.runningSessions !== 1 ? 's' : ''}</div>
       </div>
       <div className="niuu-flex niuu-gap-2 niuu-w-48">
-        <MiniBar pct={cpuPct} label="cpu" />
-        <MiniBar pct={memPct} label="mem" />
+        <MiniBar value={cpuPct} label="cpu" />
+        <MiniBar value={memPct} label="mem" />
         {cluster.capacity.gpu > 0 ? (
-          <MiniBar pct={gpuPct} label="gpu" />
+          <MiniBar value={gpuPct} label="gpu" />
         ) : (
           <div className="niuu-flex niuu-flex-col niuu-gap-0.5 niuu-flex-1">
             <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint">gpu</span>
@@ -117,17 +89,6 @@ function ClusterLoadRow({ cluster }: { cluster: Cluster }) {
   );
 }
 
-function MiniBar({ pct, label }: { pct: number; label: string }) {
-  const color = pct > 0.85 ? 'niuu-bg-critical' : pct > 0.6 ? 'niuu-bg-state-warn' : 'niuu-bg-brand';
-  return (
-    <div className="niuu-flex niuu-flex-col niuu-gap-0.5 niuu-flex-1">
-      <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint">{label}</span>
-      <div className="niuu-h-1 niuu-rounded-full niuu-bg-bg-elevated" role="progressbar" aria-valuenow={Math.round(pct * 100)} aria-valuemax={100} aria-label={label}>
-        <div className={`niuu-h-full niuu-rounded-full ${color}`} style={{ width: `${(pct * 100).toFixed(0)}%` }} />
-      </div>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Quick launch card
@@ -191,32 +152,36 @@ export function ForgePage() {
   return (
     <div className="niuu-flex niuu-flex-col niuu-gap-6 niuu-p-6" data-testid="forge-page">
       {/* Metric strip */}
-      <section className="niuu-grid niuu-grid-cols-4 niuu-gap-4" aria-label="Forge metrics">
+      <section aria-label="Forge metrics">
         {isLoading ? (
           <LoadingState label="Loading metrics…" />
         ) : (
-          <>
-            <MetricTile
+          <KpiStrip>
+            <KpiCard
               label="active pods"
               value={activeSessions.length}
-              sub={`${bootingSessions.length} booting · ${erroredSessions.length} error`}
+              delta={`${bootingSessions.length} booting · ${erroredSessions.length} error`}
+              deltaTrend="neutral"
             />
-            <MetricTile
+            <KpiCard
               label="tokens today"
               value={stats.data ? tokens(stats.data.tokensToday) : '—'}
-              sub="burn rate"
+              delta="burn rate"
+              deltaTrend="neutral"
             />
-            <MetricTile
+            <KpiCard
               label="cost today"
               value={stats.data ? `$${stats.data.costToday.toFixed(2)}` : '—'}
-              sub="projected 24h"
+              delta="projected 24h"
+              deltaTrend="neutral"
             />
-            <MetricTile
+            <KpiCard
               label="GPUs"
               value={`${totalGpuUsed}/${totalGpuCap}`}
-              sub={`across ${clusters.data?.length ?? 0} clusters`}
+              delta={`across ${clusters.data?.length ?? 0} clusters`}
+              deltaTrend="neutral"
             />
-          </>
+          </KpiStrip>
         )}
       </section>
 

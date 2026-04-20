@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, Field, Input } from '@niuulabs/ui';
+import { Dialog, DialogContent, Field, Input, Select } from '@niuulabs/ui';
 import { useTemplates } from './useTemplates';
 import type { Template } from '../domain/template';
 
@@ -246,16 +246,15 @@ function RuntimeStep({
             />
           </Field>
           <Field label="Permission">
-            <select
-              className="niuu-w-full niuu-rounded niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-px-3 niuu-py-2 niuu-font-mono niuu-text-sm niuu-text-text-primary"
+            <Select
+              options={[
+                { value: 'restricted', label: 'restricted' },
+                { value: 'normal', label: 'normal' },
+                { value: 'yolo', label: 'yolo' },
+              ]}
               value={form.permission}
-              onChange={(e) => update({ permission: e.target.value })}
-              data-testid="permission-select"
-            >
-              <option value="restricted">restricted</option>
-              <option value="normal">normal</option>
-              <option value="yolo">yolo</option>
-            </select>
+              onValueChange={(v) => update({ permission: v })}
+            />
           </Field>
         </div>
         <div className="niuu-flex niuu-flex-col niuu-gap-4">
@@ -404,18 +403,18 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
   // Boot animation
   useEffect(() => {
     if (step !== 'booting') return;
+    let cancelled = false;
     let i = 0;
     const total = BOOT_STEPS.length;
     const tick = () => {
+      if (cancelled) return;
       i++;
       setBootStep((s) => Math.min(s + 1, total - 1));
       setBootProgress((p) => Math.min(1, p + 1 / total));
-      if (i < total - 1) {
-        setTimeout(tick, 900);
-      }
+      if (i < total - 1) setTimeout(tick, 900);
     };
     const timer = setTimeout(tick, 600);
-    return () => clearTimeout(timer);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [step]);
 
   const update = (patch: Partial<WizardForm>) => setForm((f) => ({ ...f, ...patch }));

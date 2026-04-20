@@ -8,3 +8,5 @@ export { ClusterChip } from './ClusterChip';
 export type { ClusterChipProps, ClusterData } from './ClusterChip';
 export { ModelChip } from './ModelChip';
 export type { ModelChipProps, ModelData } from './ModelChip';
+export { MiniBar } from './MiniBar';
+export type { MiniBarProps } from './MiniBar';

@@ -62,14 +62,14 @@ const COLUMNS: TableColumn<StoredCredential>[] = [
           title="copy"
           aria-label="copy"
         >
-          \u2398
+          {'\u2398'}
         </button>
         <button
           className="niuu-rounded niuu-p-1 niuu-text-text-muted hover:niuu-text-critical"
           title="delete"
           aria-label="delete credential"
         >
-          \u2715
+          {'\u2715'}
         </button>
       </div>
     ),

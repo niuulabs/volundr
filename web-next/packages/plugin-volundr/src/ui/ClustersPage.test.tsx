@@ -355,11 +355,11 @@ describe('ClustersPage', () => {
     });
   });
 
-  it('renders progressbar roles for node mini bars', async () => {
+  it('renders node meters as placeholders when no live metrics available', async () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
-      const bars = screen.getAllByRole('progressbar');
-      expect(bars.length).toBeGreaterThan(0);
+      const nodeMeters = screen.getAllByTestId('node-meters');
+      expect(nodeMeters.length).toBeGreaterThan(0);
     });
   });
 

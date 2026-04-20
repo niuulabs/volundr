@@ -1,7 +1,7 @@
 import { StateDot, LoadingState, ErrorState } from '@niuulabs/ui';
 import type { Cluster, ClusterNode, NodeStatus } from '../domain/cluster';
 import { useClusters } from './useClusters';
-import { Meter, ClusterChip } from './atoms';
+import { Meter, ClusterChip, MiniBar } from './atoms';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,41 +70,21 @@ function ResourcePanel({ label, used, total, unit = '' }: ResourcePanelProps) {
 }
 
 // ---------------------------------------------------------------------------
-// MiniBar — small inline utilization bar for node-level metrics
-// ---------------------------------------------------------------------------
-
-function MiniBar({ value, label }: { value: number; label: string }) {
-  const color =
-    value > 0.85 ? 'niuu-bg-critical' : value > 0.6 ? 'niuu-bg-state-warn' : 'niuu-bg-brand';
-  return (
-    <div className="niuu-flex niuu-flex-col niuu-gap-0.5 niuu-flex-1">
-      <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint">{label}</span>
-      <div
-        className="niuu-h-1 niuu-rounded-full niuu-bg-bg-elevated"
-        role="progressbar"
-        aria-valuenow={Math.round(value * 100)}
-        aria-valuemax={100}
-        aria-label={`${label} utilization`}
-      >
-        <div
-          className={`niuu-h-full niuu-rounded-full ${color}`}
-          style={{ width: `${(value * 100).toFixed(0)}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // NodeCard — a node tile with status dot + mini bars
 // ---------------------------------------------------------------------------
 
-function NodeCard({ node, clusterId }: { node: ClusterNode; clusterId: string }) {
-  // Simulated per-node utilization — in production these would come from metrics.
-  // Using a deterministic seed from node id for consistent rendering.
-  const seed = node.id.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  const cpuPct = node.status === 'ready' ? ((seed % 60) + 10) / 100 : 0;
-  const memPct = node.status === 'ready' ? (((seed * 7) % 60) + 10) / 100 : 0;
+function NodeCard({
+  node,
+  clusterId,
+  cpuPct,
+  memPct,
+}: {
+  node: ClusterNode;
+  clusterId: string;
+  cpuPct?: number;
+  memPct?: number;
+}) {
+  const hasMiniMetrics = node.status === 'ready' && cpuPct != null && memPct != null;
 
   return (
     <div
@@ -118,12 +98,17 @@ function NodeCard({ node, clusterId }: { node: ClusterNode; clusterId: string })
         </span>
         <span className="niuu-ml-auto niuu-text-text-faint">{node.role}</span>
       </div>
-      {node.status === 'ready' && (
+      {hasMiniMetrics ? (
         <div className="niuu-flex niuu-gap-2" data-testid="node-meters">
           <MiniBar value={cpuPct} label="cpu" />
           <MiniBar value={memPct} label="mem" />
         </div>
-      )}
+      ) : node.status === 'ready' ? (
+        <div className="niuu-flex niuu-gap-2 niuu-font-mono niuu-text-[10px] niuu-text-text-faint" data-testid="node-meters">
+          <span>cpu —</span>
+          <span>mem —</span>
+        </div>
+      ) : null}
       <span className="niuu-text-xs niuu-text-text-muted">{nodeStatusLabel(node.status)}</span>
     </div>
   );

@@ -229,54 +229,43 @@ describe('SessionDetailPage', () => {
     it('renders the 3-column chat layout', async () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
       await waitFor(() => expect(screen.getByTestId('chat-tab')).toBeInTheDocument());
-      expect(screen.getByTestId('peer-rail')).toBeInTheDocument();
+      expect(screen.getByTestId('mesh-sidebar')).toBeInTheDocument();
       expect(screen.getByTestId('chat-stream')).toBeInTheDocument();
       expect(screen.getByTestId('mesh-cascade')).toBeInTheDocument();
     });
 
-    it('renders peer cards in the PeerRail', async () => {
+    it('renders ravn peer cards in the MeshSidebar', async () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
-      await waitFor(() => expect(screen.getByTestId('peer-rail')).toBeInTheDocument());
-      const peerCards = screen.getAllByTestId('peer-card');
-      expect(peerCards.length).toBe(3); // human + main ravn + reviewer
+      await waitFor(() => expect(screen.getByTestId('mesh-sidebar')).toBeInTheDocument());
+      const sidebar = screen.getByTestId('mesh-sidebar');
+      // MeshSidebar filters by participantType === 'ravn', so only ravn + reviewer (2)
+      const peerCards = within(sidebar).getAllByTestId(/^peer-card-/);
+      expect(peerCards.length).toBe(2);
     });
 
-    it('peer cards show name and status', async () => {
+    it('peer cards show persona and status', async () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
-      await waitFor(() => expect(screen.getByTestId('peer-rail')).toBeInTheDocument());
-      const peerRail = screen.getByTestId('peer-rail');
-      expect(within(peerRail).getByText('You')).toBeInTheDocument();
-      // 'skald' appears as both displayName and persona in the peer card
-      expect(within(peerRail).getAllByText('skald').length).toBeGreaterThanOrEqual(1);
-      expect(within(peerRail).getByText('Reviewer')).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByTestId('mesh-sidebar')).toBeInTheDocument());
+      const sidebar = screen.getByTestId('mesh-sidebar');
+      // skald appears as displayName (persona) in the ravn peer card
+      expect(within(sidebar).getByText(/skald/)).toBeInTheDocument();
+      expect(within(sidebar).getByText(/Reviewer/)).toBeInTheDocument();
     });
 
     it('clicking a peer card toggles focus filter', async () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
-      await waitFor(() => expect(screen.getByTestId('peer-rail')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId('mesh-sidebar')).toBeInTheDocument());
 
-      const focusButtons = screen.getAllByTestId('peer-focus-btn');
-      // Click on the first peer (human) to filter
-      fireEvent.click(focusButtons[0]!);
-      // The peer card should now have the active styling (border-brand)
-      const peerCards = screen.getAllByTestId('peer-card');
-      expect(peerCards[0]).toHaveClass('niuu-border-brand');
+      const sidebar = screen.getByTestId('mesh-sidebar');
+      const peerCards = within(sidebar).getAllByTestId(/^peer-card-/);
 
-      // Click again to clear the filter
-      fireEvent.click(focusButtons[0]!);
-      expect(peerCards[0]).not.toHaveClass('niuu-border-brand');
-    });
+      // Click on the first ravn peer to select
+      fireEvent.click(peerCards[0]!);
+      expect(peerCards[0]).toHaveClass('niuu-chat-peer-card--selected');
 
-    it('expanding a peer card shows subscriptions, emits, tools, gateway', async () => {
-      wrap(<SessionDetailPage sessionId="ds-1" />);
-      await waitFor(() => expect(screen.getByTestId('peer-rail')).toBeInTheDocument());
-
-      // The second peer (main ravn) has expanded=true by default
-      const details = screen.getAllByTestId('peer-details');
-      expect(details.length).toBeGreaterThanOrEqual(1);
-
-      // Check subscription content is visible
-      expect(screen.getByText(/user\.message/)).toBeInTheDocument();
+      // Click again to deselect
+      fireEvent.click(peerCards[0]!);
+      expect(peerCards[0]).not.toHaveClass('niuu-chat-peer-card--selected');
     });
 
     it('renders chat messages in the ChatStream', async () => {
