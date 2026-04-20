@@ -22,41 +22,37 @@ describe('ConnectionLegend', () => {
     expect(screen.getByRole('list', { name: /connection types/i })).toBeInTheDocument();
   });
 
-  it('renders label text for each edge kind', () => {
+  it('renders web2-matching label text for each edge kind', () => {
     render(<ConnectionLegend />);
-    expect(screen.getByText('Direct')).toBeInTheDocument();
-    expect(screen.getByText('Active')).toBeInTheDocument();
-    expect(screen.getByText('Async')).toBeInTheDocument();
-    expect(screen.getByText('Cache')).toBeInTheDocument();
-    expect(screen.getByText('Coord')).toBeInTheDocument();
+    expect(screen.getByText('Týr → Völundr')).toBeInTheDocument();
+    expect(screen.getByText('Týr ⇝ raid coord')).toBeInTheDocument();
+    expect(screen.getByText('Bifröst → ext. model')).toBeInTheDocument();
+    expect(screen.getByText('ravn → Mímir')).toBeInTheDocument();
+    expect(screen.getByText('raid cohesion')).toBeInTheDocument();
   });
 
-  it('renders description text for each edge kind', () => {
-    render(<ConnectionLegend />);
-    expect(screen.getByText('coordinator link')).toBeInTheDocument();
-    expect(screen.getByText('raid dispatch')).toBeInTheDocument();
-    expect(screen.getByText('memory access')).toBeInTheDocument();
-    expect(screen.getByText('weak reference')).toBeInTheDocument();
-    expect(screen.getByText('inter-raven')).toBeInTheDocument();
-  });
-
-  it('renders an SVG line for each edge kind', () => {
+  it('renders an SVG swatch for each edge kind', () => {
     const { container } = render(<ConnectionLegend />);
     const svgs = container.querySelectorAll('svg.obs-conn-legend__line-svg');
     expect(svgs).toHaveLength(5);
   });
 
-  it('renders SVG lines with correct markup for each kind', () => {
+  it('renders SVG markup correctly for animated kind', () => {
     render(<ConnectionLegend />);
-    // solid: plain line
-    const solidItem = screen.getByTestId('legend-solid');
-    expect(solidItem.querySelector('line')).toBeInTheDocument();
-    // dashed-anim: line with animate child
     const animItem = screen.getByTestId('legend-dashed-anim');
     expect(animItem.querySelector('animate')).toBeInTheDocument();
-    // raid: line + circle
+  });
+
+  it('renders raid kind with circles', () => {
+    render(<ConnectionLegend />);
     const raidItem = screen.getByTestId('legend-raid');
     expect(raidItem.querySelector('circle')).toBeInTheDocument();
     expect(raidItem.querySelector('g')).toBeInTheDocument();
+  });
+
+  it('renders solid kind with a plain line', () => {
+    render(<ConnectionLegend />);
+    const solidItem = screen.getByTestId('legend-solid');
+    expect(solidItem.querySelector('line')).toBeInTheDocument();
   });
 });

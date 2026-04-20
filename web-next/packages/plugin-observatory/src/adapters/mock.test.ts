@@ -77,7 +77,7 @@ describe('createMockTopologyStream', () => {
     expect(typeIds.has('raid')).toBe(true);
   });
 
-  it('every node has required fields', () => {
+  it('every node has required base fields', () => {
     const stream = createMockTopologyStream();
     const { nodes } = stream.getSnapshot()!;
     for (const node of nodes) {
@@ -86,6 +86,63 @@ describe('createMockTopologyStream', () => {
       expect(node.label).toBeTruthy();
       expect(node.status).toBeTruthy();
     }
+  });
+
+  it('tyr node has kind-specific fields', () => {
+    const stream = createMockTopologyStream();
+    const { nodes } = stream.getSnapshot()!;
+    const tyr = nodes.find((n) => n.typeId === 'tyr');
+    expect(tyr).toBeDefined();
+    expect(tyr!.mode).toBe('active');
+    expect(tyr!.activeSagas).toBeGreaterThanOrEqual(0);
+    expect(tyr!.pendingRaids).toBeGreaterThanOrEqual(0);
+  });
+
+  it('bifrost node has kind-specific fields', () => {
+    const stream = createMockTopologyStream();
+    const { nodes } = stream.getSnapshot()!;
+    const bifrost = nodes.find((n) => n.typeId === 'bifrost');
+    expect(bifrost).toBeDefined();
+    expect(Array.isArray(bifrost!.providers)).toBe(true);
+    expect(typeof bifrost!.reqPerMin).toBe('number');
+    expect(typeof bifrost!.cacheHitRate).toBe('number');
+  });
+
+  it('volundr node has kind-specific fields', () => {
+    const stream = createMockTopologyStream();
+    const { nodes } = stream.getSnapshot()!;
+    const volundr = nodes.find((n) => n.typeId === 'volundr');
+    expect(volundr).toBeDefined();
+    expect(typeof volundr!.activeSessions).toBe('number');
+    expect(typeof volundr!.maxSessions).toBe('number');
+  });
+
+  it('ravn_long node has kind-specific fields', () => {
+    const stream = createMockTopologyStream();
+    const { nodes } = stream.getSnapshot()!;
+    const ravn = nodes.find((n) => n.typeId === 'ravn_long');
+    expect(ravn).toBeDefined();
+    expect(ravn!.persona).toBeTruthy();
+    expect(ravn!.specialty).toBeTruthy();
+    expect(typeof ravn!.tokens).toBe('number');
+  });
+
+  it('host node has kind-specific fields', () => {
+    const stream = createMockTopologyStream();
+    const { nodes } = stream.getSnapshot()!;
+    const host = nodes.find((n) => n.typeId === 'host');
+    expect(host).toBeDefined();
+    expect(host!.hw).toBeTruthy();
+    expect(host!.os).toBeTruthy();
+  });
+
+  it('realm node has vlan and dns fields', () => {
+    const stream = createMockTopologyStream();
+    const { nodes } = stream.getSnapshot()!;
+    const realm = nodes.find((n) => n.typeId === 'realm');
+    expect(realm).toBeDefined();
+    expect(typeof realm!.vlan).toBe('number');
+    expect(realm!.dns).toBeTruthy();
   });
 
   it('subscribe immediately calls listener with current snapshot', () => {
@@ -103,7 +160,6 @@ describe('createMockTopologyStream', () => {
     expect(listener).toHaveBeenCalledOnce();
     unsub();
     // After unsubscribe, listener count should be 0
-    // Subscribing a new listener to confirm the old one is gone
     const listener2 = vi.fn();
     stream.subscribe(listener2);
     expect(listener).toHaveBeenCalledOnce(); // still only once
@@ -120,14 +176,15 @@ describe('createMockEventStream', () => {
     expect(received[0]).toBe('ev-1');
   });
 
-  it('every event has required fields', () => {
+  it('every event has required fields (web2 format)', () => {
     const eventStream = createMockEventStream();
     eventStream.subscribe((ev) => {
       expect(ev.id).toBeTruthy();
-      expect(ev.timestamp).toBeTruthy();
-      expect(ev.sourceId).toBeTruthy();
-      expect(ev.message).toBeTruthy();
-      expect(['debug', 'info', 'warn', 'error']).toContain(ev.severity);
+      expect(ev.time).toBeTruthy();
+      expect(ev.type).toBeTruthy();
+      expect(ev.subject).toBeTruthy();
+      expect(ev.body).toBeTruthy();
+      expect(['RAID', 'RAVN', 'TYR', 'MIMIR', 'BIFROST']).toContain(ev.type);
     });
   });
 
@@ -137,12 +194,12 @@ describe('createMockEventStream', () => {
     expect(() => unsub()).not.toThrow();
   });
 
-  it('includes events of varying severity', () => {
+  it('includes events of varying types', () => {
     const eventStream = createMockEventStream();
-    const severities = new Set<string>();
-    eventStream.subscribe((ev) => severities.add(ev.severity));
-    expect(severities.has('info')).toBe(true);
-    expect(severities.has('warn')).toBe(true);
-    expect(severities.has('debug')).toBe(true);
+    const types = new Set<string>();
+    eventStream.subscribe((ev) => types.add(ev.type));
+    expect(types.has('RAVN')).toBe(true);
+    expect(types.has('BIFROST')).toBe(true);
+    expect(types.has('MIMIR')).toBe(true);
   });
 });
