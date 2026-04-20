@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from niuu.utils.greeting import greet
+
 
 def greeting(name: str) -> str:
-    """Return a greeting for the given name."""
-    return f"Hello, {name}!"
+    return greet(name)
 
 
 def reverse(text: str) -> str:
