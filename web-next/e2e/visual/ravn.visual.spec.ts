@@ -7,11 +7,6 @@
 
 import { test, expect } from '@playwright/test';
 
-test.use({
-  viewport: { width: 1440, height: 900 },
-  colorScheme: 'dark',
-});
-
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/ravn');
@@ -66,4 +61,12 @@ test('ravn budget matches web2', async ({ page }) => {
   await page.getByRole('tab', { name: 'Budget' }).click();
   await page.waitForTimeout(400);
   await expect(page).toHaveScreenshot('ravn-budget.png');
+});
+
+// ── Personas ───────────────────────────────────────────────────────────────────
+
+test('ravn personas matches web2', async ({ page }) => {
+  await page.getByTestId('ravn-tab-personas').click();
+  await page.waitForSelector('[data-testid="personas-page"]', { timeout: 5_000 });
+  await expect(page).toHaveScreenshot('ravn-personas.png');
 });

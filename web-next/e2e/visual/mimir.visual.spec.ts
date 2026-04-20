@@ -7,11 +7,6 @@
 
 import { test, expect } from '@playwright/test';
 
-test.use({
-  viewport: { width: 1440, height: 900 },
-  colorScheme: 'dark',
-});
-
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
 });
@@ -81,4 +76,36 @@ test('mimir entities matches web2', async ({ page }) => {
   await page.goto('/mimir/entities');
   await page.waitForLoadState('networkidle');
   await expect(page).toHaveScreenshot('mimir-entities.png');
+});
+
+// ── Ravns (Wardens) ───────────────────────────────────────────────────────────
+
+test('mimir ravns matches web2', async ({ page }) => {
+  await page.goto('/mimir/ravns');
+  await page.waitForLoadState('networkidle');
+  await expect(page).toHaveScreenshot('mimir-ravns.png');
+});
+
+// ── Lint ──────────────────────────────────────────────────────────────────────
+
+test('mimir lint matches web2', async ({ page }) => {
+  await page.goto('/mimir/lint');
+  await page.waitForLoadState('networkidle');
+  await expect(page).toHaveScreenshot('mimir-lint.png');
+});
+
+// ── Routing (ingest rules in web2) ────────────────────────────────────────────
+
+test('mimir routing matches web2', async ({ page }) => {
+  await page.goto('/mimir/routing');
+  await page.waitForLoadState('networkidle');
+  await expect(page).toHaveScreenshot('mimir-routing.png');
+});
+
+// ── Dreams (log / dream-cycle history in web2) ────────────────────────────────
+
+test('mimir dreams matches web2', async ({ page }) => {
+  await page.goto('/mimir/dreams');
+  await page.waitForLoadState('networkidle');
+  await expect(page).toHaveScreenshot('mimir-dreams.png');
 });

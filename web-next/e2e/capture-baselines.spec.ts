@@ -1,5 +1,5 @@
 /**
- * capture-baselines.ts — one-time script to screenshot every view in the web2
+ * capture-baselines.spec.ts — one-time script to screenshot every view in the web2
  * prototypes and save them as committed references under
  * `e2e/__screenshots__/web2/{plugin}/{view}.png`.
  *
@@ -12,8 +12,8 @@
  * against the originals in the Playwright HTML report (`e2e/visual/` specs load
  * these paths as their "expected" reference in failure diffs).
  *
- * This file is intentionally NOT named *.spec.ts so it is excluded from the
- * standard `pnpm test:e2e` run. Run it explicitly via `pnpm capture-baselines`.
+ * This file is excluded from the standard `pnpm test:e2e` run via testIgnore in
+ * playwright.config.ts. Run it explicitly via `pnpm capture-baselines`.
  */
 
 import { test, type Page } from '@playwright/test';
@@ -56,11 +56,12 @@ async function clickTab(page: Page, label: string): Promise<void> {
   await page.waitForTimeout(400);
 }
 
+// Single viewport/colorScheme applies to all describe blocks below.
+test.use({ viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
+
 // ── Observatory ────────────────────────────────────────────────────────────────
 
 test.describe('capture web2 baselines — observatory', () => {
-  test.use({ viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
-
   test('canvas view', async ({ page }) => {
     await page.goto(fileUrl('flokk_observatory/design/Flokk Observatory.html'));
     await waitForReady(page);
@@ -99,8 +100,6 @@ test.describe('capture web2 baselines — observatory', () => {
 // ── Ravn ───────────────────────────────────────────────────────────────────────
 
 test.describe('capture web2 baselines — ravn', () => {
-  test.use({ viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
-
   test('overview', async ({ page }) => {
     await page.goto(fileUrl('ravn/design/Ravn.html'));
     await waitForReady(page);
@@ -140,8 +139,6 @@ test.describe('capture web2 baselines — ravn', () => {
 // ── Tyr ────────────────────────────────────────────────────────────────────────
 
 test.describe('capture web2 baselines — tyr', () => {
-  test.use({ viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
-
   test('dashboard', async ({ page }) => {
     await page.goto(fileUrl('tyr/design/Tyr Saga Coordinator.html'));
     await waitForReady(page);
@@ -189,8 +186,6 @@ test.describe('capture web2 baselines — tyr', () => {
 // ── Mimir ──────────────────────────────────────────────────────────────────────
 
 test.describe('capture web2 baselines — mimir', () => {
-  test.use({ viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
-
   test('home', async ({ page }) => {
     await page.goto(fileUrl('mimir/design/Flokk Mimir.html'));
     await waitForReady(page);
@@ -221,6 +216,14 @@ test.describe('capture web2 baselines — mimir', () => {
     await page.screenshot({ path: outPath('mimir', 'graph'), fullPage: true });
   });
 
+  test('ravns', async ({ page }) => {
+    await page.goto(fileUrl('mimir/design/Flokk Mimir.html'));
+    await waitForReady(page);
+    await page.getByRole('button', { name: /Ravns|Wardens/i }).first().click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: outPath('mimir', 'ravns'), fullPage: true });
+  });
+
   test('lint', async ({ page }) => {
     await page.goto(fileUrl('mimir/design/Flokk Mimir.html'));
     await waitForReady(page);
@@ -249,8 +252,6 @@ test.describe('capture web2 baselines — mimir', () => {
 // ── Volundr ────────────────────────────────────────────────────────────────────
 
 test.describe('capture web2 baselines — volundr', () => {
-  test.use({ viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
-
   test('forge overview', async ({ page }) => {
     await page.goto(fileUrl('volundr/design/Volundr.html'));
     await waitForReady(page);
@@ -285,8 +286,6 @@ test.describe('capture web2 baselines — volundr', () => {
 // ── Login ──────────────────────────────────────────────────────────────────────
 
 test.describe('capture web2 baselines — login', () => {
-  test.use({ viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
-
   test('login page', async ({ page }) => {
     await page.goto(fileUrl('niuu_login/design/Niuu Login.html'));
     await waitForReady(page);

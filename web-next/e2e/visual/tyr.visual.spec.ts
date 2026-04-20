@@ -4,11 +4,6 @@
 
 import { test, expect } from '@playwright/test';
 
-test.use({
-  viewport: { width: 1440, height: 900 },
-  colorScheme: 'dark',
-});
-
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
 });
@@ -53,6 +48,15 @@ test('tyr workflows matches web2', async ({ page }) => {
   await page.goto('/tyr/workflows');
   await page.waitForLoadState('networkidle');
   await expect(page).toHaveScreenshot('tyr-workflows.png');
+});
+
+// ── Plan ──────────────────────────────────────────────────────────────────────
+
+test('tyr plan matches web2', async ({ page }) => {
+  await page.goto('/tyr/plan');
+  await page.waitForLoadState('networkidle');
+  await page.waitForSelector('text=Describe your goal', { timeout: 10_000 });
+  await expect(page).toHaveScreenshot('tyr-plan.png');
 });
 
 // ── Settings ──────────────────────────────────────────────────────────────────
