@@ -31,10 +31,11 @@ describe('BudgetView', () => {
     });
   });
 
-  it('renders three attention columns', async () => {
+  it('renders four attention columns', async () => {
     render(<BudgetView />, { wrapper: wrap(services) });
     await waitFor(() => {
       expect(screen.getByLabelText(/budget attention/i)).toBeInTheDocument();
+      expect(screen.getByLabelText('Over cap')).toBeInTheDocument();
       expect(screen.getByLabelText('Burning fast')).toBeInTheDocument();
       expect(screen.getByLabelText('Near cap')).toBeInTheDocument();
       expect(screen.getByLabelText('Idle')).toBeInTheDocument();
@@ -70,10 +71,33 @@ describe('BudgetView', () => {
     const table = screen.getByLabelText(/fleet budget table/i);
     expect(table).toBeInTheDocument();
     expect(table.querySelector('th:first-child')).toHaveTextContent('ravn');
-    // Multiple 'spent'/'cap' exist in hero card + table; check the table specifically
     const headers = table.querySelectorAll('th');
     const headerTexts = Array.from(headers).map((h) => h.textContent);
     expect(headerTexts).toContain('spent');
     expect(headerTexts).toContain('cap');
+  });
+
+  it('shows top drivers section after budgets load', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(
+      () => expect(screen.getByTestId('top-drivers')).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+  });
+
+  it('top drivers list has driver rows', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(
+      () => expect(screen.getAllByTestId('driver-row').length).toBeGreaterThan(0),
+      { timeout: 3000 },
+    );
+  });
+
+  it('shows recommended changes when ravens need attention', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(
+      () => expect(screen.getByTestId('recommended-changes')).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
   });
 });

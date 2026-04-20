@@ -1,90 +1,16 @@
-import { useState, useCallback } from 'react';
-import { Rune } from '@niuulabs/ui';
+/**
+ * RavnPage — overview route component at /ravn.
+ *
+ * Tabs are rendered by the shell topbar via PluginDescriptor.tabs.
+ * This component is the page for the "Overview" tab.
+ */
+
 import { OverviewPage } from './OverviewPage';
-import { RavensPage } from './RavensPage';
-import { PersonasPage } from './PersonasPage';
-import { SessionsView } from './SessionsView';
-import { TriggersView } from './TriggersView';
-import { EventsView } from './EventsView';
-import { BudgetView } from './BudgetView';
-import { LogView } from './LogView';
-import { loadStorage, saveStorage } from './storage';
-import './RavnPage.css';
-import './ravn-views.css';
-
-export type RavnTab =
-  | 'overview'
-  | 'ravens'
-  | 'personas'
-  | 'sessions'
-  | 'triggers'
-  | 'events'
-  | 'budget'
-  | 'log';
-
-const TAB_STORAGE_KEY = 'ravn.tab';
-
-const TABS: { id: RavnTab; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'ravens', label: 'Ravens' },
-  { id: 'personas', label: 'Personas' },
-  { id: 'sessions', label: 'Sessions' },
-  { id: 'triggers', label: 'Triggers' },
-  { id: 'events', label: 'Events' },
-  { id: 'budget', label: 'Budget' },
-  { id: 'log', label: 'Log' },
-];
 
 export function RavnPage() {
-  const [activeTab, setActiveTab] = useState<RavnTab>(() =>
-    loadStorage<RavnTab>(TAB_STORAGE_KEY, 'overview'),
-  );
-
-  const handleTabChange = useCallback((tab: RavnTab) => {
-    setActiveTab(tab);
-    saveStorage(TAB_STORAGE_KEY, tab);
-  }, []);
-
   return (
-    <div data-testid="ravn-page" className="rv-page">
-      <header className="rv-page__header">
-        <Rune glyph="ᚱ" size={24} />
-        <h2 className="rv-page__title">Ravn · the flock</h2>
-
-        <nav role="tablist" aria-label="Ravn navigation" className="rv-page__tabs">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              aria-controls={`ravn-panel-${tab.id}`}
-              id={`ravn-tab-${tab.id}`}
-              onClick={() => handleTabChange(tab.id)}
-              data-testid={`ravn-tab-${tab.id}`}
-              className="rv-page-tab"
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </header>
-
-      <main
-        id={`ravn-panel-${activeTab}`}
-        role="tabpanel"
-        aria-labelledby={`ravn-tab-${activeTab}`}
-        className="rv-page__panel"
-      >
-        {activeTab === 'overview' && <OverviewPage />}
-        {activeTab === 'ravens' && <RavensPage />}
-        {activeTab === 'personas' && <PersonasPage />}
-        {activeTab === 'sessions' && <SessionsView />}
-        {activeTab === 'triggers' && <TriggersView />}
-        {activeTab === 'events' && <EventsView />}
-        {activeTab === 'budget' && <BudgetView />}
-        {activeTab === 'log' && <LogView />}
-      </main>
+    <div data-testid="ravn-page">
+      <OverviewPage />
     </div>
   );
 }

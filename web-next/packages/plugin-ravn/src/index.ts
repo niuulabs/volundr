@@ -1,19 +1,54 @@
 import { createRoute } from '@tanstack/react-router';
 import { definePlugin } from '@niuulabs/plugin-sdk';
 import { RavnPage } from './ui/RavnPage';
+import { RavensPage } from './ui/RavensPage';
+import { PersonasPage } from './ui/PersonasPage';
+import { SessionsView } from './ui/SessionsView';
+import { BudgetView } from './ui/BudgetView';
+import { RavnSubnav } from './ui/RavnSubnav';
+import { RavnTopbar } from './ui/RavnTopbar';
 
 export const ravnPlugin = definePlugin({
   id: 'ravn',
   rune: 'ᚱ',
   title: 'Ravn',
   subtitle: 'personas · ravens · sessions',
+  tabs: [
+    { id: 'overview', label: 'Overview', path: '/ravn' },
+    { id: 'ravens', label: 'Ravens', path: '/ravn/ravens' },
+    { id: 'personas', label: 'Personas', path: '/ravn/personas' },
+    { id: 'sessions', label: 'Sessions', path: '/ravn/sessions' },
+    { id: 'budget', label: 'Budget', path: '/ravn/budget' },
+  ],
   routes: (rootRoute) => [
     createRoute({
       getParentRoute: () => rootRoute,
       path: '/ravn',
       component: RavnPage,
     }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/ravn/ravens',
+      component: RavensPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/ravn/personas',
+      component: PersonasPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/ravn/sessions',
+      component: SessionsView,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/ravn/budget',
+      component: BudgetView,
+    }),
   ],
+  subnav: () => RavnSubnav(),
+  topbarRight: () => RavnTopbar(),
 });
 
 // Mock adapters

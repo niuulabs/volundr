@@ -1,11 +1,13 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Rune } from '@niuulabs/ui';
 import type { PersonaCreateRequest } from '../ports';
-import { PersonaList } from './PersonaList';
 import { PersonaForm } from './PersonaForm';
 import { PersonaYaml } from './PersonaYaml';
 import { PersonaSubs } from './PersonaSubs';
 import { usePersona, useUpdatePersona } from './usePersona';
+import { loadStorage, saveStorage } from './storage';
+
+const PERSONA_STORAGE_KEY = 'ravn.persona';
 
 type TabId = 'form' | 'yaml' | 'subs';
 
@@ -73,37 +75,32 @@ function PersonaDetailPane({ name, activeTab, onTabChange }: PersonaDetailPanePr
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export function PersonasPage() {
-  const [selectedName, setSelectedName] = useState<string | null>(null);
+  const [selectedName, setSelectedName] = useState<string | null>(() =>
+    loadStorage<string | null>(PERSONA_STORAGE_KEY, null),
+  );
   const [activeTab, setActiveTab] = useState<TabId>('form');
 
-  const handleSelect = useCallback((name: string) => {
-    setSelectedName(name);
-    setActiveTab('form');
+  useEffect(() => {
+    const handleSelect = (e: Event) => {
+      const name = (e as CustomEvent<string>).detail;
+      saveStorage(PERSONA_STORAGE_KEY, name);
+      setSelectedName(name);
+      setActiveTab('form');
+    };
+    window.addEventListener('ravn:persona-selected', handleSelect);
+    return () => window.removeEventListener('ravn:persona-selected', handleSelect);
   }, []);
 
   return (
-    <div className="niuu-flex niuu-h-full niuu-overflow-hidden" data-testid="personas-page">
-      {/* Left panel — persona list */}
-      <div className="niuu-w-56 niuu-shrink-0 niuu-border-r niuu-border-border niuu-overflow-hidden niuu-flex niuu-flex-col niuu-bg-bg-secondary">
-        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-px-3 niuu-py-3 niuu-border-b niuu-border-border-subtle niuu-shrink-0">
-          <Rune glyph="ᚱ" size={16} />
-          <span className="niuu-text-xs niuu-font-mono niuu-text-text-secondary">
-            ravn · personas · ravens · sessions
-          </span>
-        </div>
-        <div className="niuu-flex-1 niuu-overflow-y-auto">
-          <PersonaList selectedName={selectedName} onSelect={handleSelect} />
-        </div>
-      </div>
-
-      {/* Right panel — detail pane */}
-      <div className="niuu-flex-1 niuu-overflow-hidden niuu-bg-bg-primary">
-        {selectedName ? (
-          <PersonaDetailPane name={selectedName} activeTab={activeTab} onTabChange={setActiveTab} />
-        ) : (
-          <EmptyState />
-        )}
-      </div>
+    <div
+      className="niuu-flex niuu-flex-col niuu-h-full niuu-overflow-hidden niuu-bg-bg-primary"
+      data-testid="personas-page"
+    >
+      {selectedName ? (
+        <PersonaDetailPane name={selectedName} activeTab={activeTab} onTabChange={setActiveTab} />
+      ) : (
+        <EmptyState />
+      )}
     </div>
   );
 }

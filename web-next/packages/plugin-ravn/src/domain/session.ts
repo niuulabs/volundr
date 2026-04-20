@@ -26,6 +26,12 @@ export const sessionSchema = z.object({
   model: z.string().min(1),
   /** ISO-8601 UTC creation timestamp. */
   createdAt: z.string().datetime(),
+  /** Human-readable title for this session. */
+  title: z.string().optional(),
+  /** Number of messages in this session. */
+  messageCount: z.number().int().nonnegative().optional(),
+  /** Total cost of this session in USD. */
+  costUsd: z.number().nonnegative().optional(),
 });
 
 export type Session = z.infer<typeof sessionSchema>;

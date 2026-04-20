@@ -9,6 +9,7 @@ import {
   createMockSessionStream,
   createMockBudgetStream,
 } from '../adapters/mock';
+import type { Ravn } from '../domain/ravn';
 
 function makeServices(overrides?: Record<string, unknown>) {
   return {
@@ -38,14 +39,26 @@ describe('OverviewPage', () => {
     expect(screen.getByTestId('overview-loading')).toBeInTheDocument();
   });
 
-  it('renders the KPI strip after loading', async () => {
+  it('renders after loading', async () => {
     render(<OverviewPage />, { wrapper: wrap() });
     await waitFor(() => expect(screen.getByTestId('overview-page')).toBeInTheDocument());
-    // KPI cards
-    expect(screen.getByTestId('kpi-total')).toBeInTheDocument();
-    expect(screen.getByTestId('kpi-active')).toBeInTheDocument();
-    expect(screen.getByTestId('kpi-suspended')).toBeInTheDocument();
+  });
+
+  it('renders 4 KPI cards', async () => {
+    render(<OverviewPage />, { wrapper: wrap() });
+    await waitFor(() => expect(screen.getByTestId('overview-page')).toBeInTheDocument());
+    expect(screen.getByTestId('kpi-ravens')).toBeInTheDocument();
+    expect(screen.getByTestId('kpi-sessions')).toBeInTheDocument();
+    expect(screen.getByTestId('kpi-spend')).toBeInTheDocument();
     expect(screen.getByTestId('kpi-triggers')).toBeInTheDocument();
+  });
+
+  it('shows raven total count', async () => {
+    render(<OverviewPage />, { wrapper: wrap() });
+    await waitFor(() => expect(screen.getByTestId('kpi-ravens')).toBeInTheDocument());
+    // Mock has 6 ravens
+    const ravensKpi = screen.getByTestId('kpi-ravens');
+    expect(ravensKpi.textContent).toContain('6');
   });
 
   it('renders the active ravens list', async () => {
@@ -65,9 +78,17 @@ describe('OverviewPage', () => {
     await waitFor(() => expect(screen.getByTestId('top-spenders-list')).toBeInTheDocument());
   });
 
-  it('renders the log tail section', async () => {
+  it('renders location bars section when ravens have locations', async () => {
     render(<OverviewPage />, { wrapper: wrap() });
-    await waitFor(() => expect(screen.getByTestId('log-tail')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('location-bars')).toBeInTheDocument());
+  });
+
+  it('shows location rows for each unique location', async () => {
+    render(<OverviewPage />, { wrapper: wrap() });
+    await waitFor(() => expect(screen.getByTestId('location-bars')).toBeInTheDocument());
+    const rows = screen.getAllByTestId('location-row');
+    // Mock has 3 locations: eu-west-1, us-east-1, ap-southeast-1
+    expect(rows.length).toBe(3);
   });
 
   it('shows error state when ravens service fails', async () => {
@@ -80,22 +101,34 @@ describe('OverviewPage', () => {
   });
 
   it('shows "No active ravens" when all ravens are idle', async () => {
+    const idleRavn: Ravn = {
+      id: 'aaaaaaaa-0000-4000-8000-000000000001',
+      personaName: 'idle-ravn',
+      status: 'idle',
+      model: 'claude-sonnet-4-6',
+      createdAt: '2026-04-15T09:00:00Z',
+    };
     const noActive = {
-      listRavens: () =>
-        Promise.resolve([
-          {
-            id: 'id-1',
-            personaName: 'idle-ravn',
-            status: 'idle' as const,
-            model: 'claude-sonnet-4-6',
-            createdAt: '2026-04-15T09:00:00Z',
-          },
-        ]),
-      getRaven: () => Promise.resolve(null),
+      listRavens: () => Promise.resolve([idleRavn]),
+      getRaven: (_id: string) => Promise.resolve(idleRavn),
     };
     render(<OverviewPage />, {
       wrapper: wrap(makeServices({ 'ravn.ravens': noActive })),
     });
     await waitFor(() => expect(screen.getByText(/no active ravens/i)).toBeInTheDocument());
+  });
+
+  it('shows open session count in KPI', async () => {
+    render(<OverviewPage />, { wrapper: wrap() });
+    await waitFor(() => expect(screen.getByTestId('kpi-sessions')).toBeInTheDocument());
+    // 3 running sessions in mock data
+    const sessionsKpi = screen.getByTestId('kpi-sessions');
+    expect(sessionsKpi.textContent).toContain('3');
+  });
+
+  it('shows spend KPI', async () => {
+    render(<OverviewPage />, { wrapper: wrap() });
+    await waitFor(() => expect(screen.getByTestId('kpi-spend')).toBeInTheDocument());
+    expect(screen.getByTestId('kpi-spend').textContent).toContain('$');
   });
 });

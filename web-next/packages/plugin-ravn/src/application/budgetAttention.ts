@@ -13,11 +13,12 @@ const BURNING_THRESHOLD = 0.9;
 /** Ratio below which a ravn is classified as "idle". */
 const IDLE_THRESHOLD = 0.1;
 
-export type BudgetAttention = 'burning-fast' | 'near-cap' | 'idle' | 'normal';
+export type BudgetAttention = 'over-cap' | 'burning-fast' | 'near-cap' | 'idle' | 'normal';
 
 /**
  * Classify a single ravn's budget into an attention bucket.
  *
+ * - `over-cap`     — spending ratio > 100 % (exceeded cap)
  * - `burning-fast` — spending ratio ≥ 90 % (critical)
  * - `near-cap`     — spending ratio ≥ warnAt (warn threshold) but < 90 %
  * - `idle`         — spending ratio < 10 %
@@ -26,6 +27,7 @@ export type BudgetAttention = 'burning-fast' | 'near-cap' | 'idle' | 'normal';
 export function classifyBudget(budget: BudgetState): BudgetAttention {
   if (budget.capUsd === 0) return 'idle';
   const ratio = budget.spentUsd / budget.capUsd;
+  if (ratio > 1) return 'over-cap';
   if (ratio >= BURNING_THRESHOLD) return 'burning-fast';
   if (ratio >= budget.warnAt) return 'near-cap';
   if (ratio < IDLE_THRESHOLD) return 'idle';
