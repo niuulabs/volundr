@@ -104,3 +104,13 @@
   font-size: var(--text-xs);
   font-family: var(--font-mono);
 }
+
+/* ── Highlight mark ────────────────────────────────────────────────────────── */
+
+.search-page__highlight {
+  background: color-mix(in srgb, var(--color-accent-amber) 25%, transparent);
+  color: var(--color-accent-amber);
+  border-radius: 2px;
+  padding: 0 1px;
+  font-style: normal;
+}

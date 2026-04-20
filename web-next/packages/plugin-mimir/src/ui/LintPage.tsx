@@ -1,12 +1,16 @@
-import { useState } from 'react';
-import { StateDot, Chip } from '@niuulabs/ui';
-import { useLint } from '../application/useLint';
-import { useRavns } from '../application/useRavns';
-import { LintBadge } from './LintBadge';
-import type { LintIssue, IssueSeverity, LintRule } from '../domain/lint';
-import './LintPage.css';
+/**
+ * LintPage — 2-column lint view (matches web2 prototype mm-lint-wrap layout).
+ *
+ * LEFT (220px): checks sidebar — All + per-rule rows with severity dot, id, name, count
+ * RIGHT (1fr):  issues list filtered by selected check + bulk actions
+ */
 
-const SEVERITY_ORDER: IssueSeverity[] = ['error', 'warn', 'info'];
+import { useState } from 'react';
+import { StateDot } from '@niuulabs/ui';
+import { useLint } from '../application/useLint';
+import { LintBadge } from './LintBadge';
+import type { LintRule, IssueSeverity } from '../domain/lint';
+import './LintPage.css';
 
 const RULE_DESCRIPTIONS: Record<LintRule, string> = {
   L01: 'Contradiction between pages',
@@ -17,107 +21,11 @@ const RULE_DESCRIPTIONS: Record<LintRule, string> = {
   L12: 'Invalid frontmatter',
 };
 
-interface IssueSeverityFilterProps {
-  active: IssueSeverity | null;
-  onChange: (s: IssueSeverity | null) => void;
-}
-
-function SeverityFilter({ active, onChange }: IssueSeverityFilterProps) {
-  return (
-    <div className="lint-page__severity-filter" role="group" aria-label="Filter by severity">
-      <button
-        className={['lint-page__filter-btn', active == null ? 'lint-page__filter-btn--active' : '']
-          .filter(Boolean)
-          .join(' ')}
-        onClick={() => onChange(null)}
-        aria-pressed={active == null}
-      >
-        All
-      </button>
-      {SEVERITY_ORDER.map((s) => (
-        <button
-          key={s}
-          className={[
-            'lint-page__filter-btn',
-            `lint-page__filter-btn--${s}`,
-            active === s ? 'lint-page__filter-btn--active' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          onClick={() => onChange(active === s ? null : s)}
-          aria-pressed={active === s}
-          data-severity={s}
-        >
-          {s}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-interface IssueRowProps {
-  issue: LintIssue;
-  selected: boolean;
-  onToggle: () => void;
-  onAutoFix: () => void;
-  isFixing: boolean;
-}
-
-function IssueRow({ issue, selected, onToggle, onAutoFix, isFixing }: IssueRowProps) {
-  return (
-    <li
-      className={[
-        'lint-page__issue',
-        `lint-page__issue--${issue.severity}`,
-        selected ? 'lint-page__issue--selected' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      data-testid="lint-issue"
-    >
-      <input
-        type="checkbox"
-        className="lint-page__issue-check"
-        checked={selected}
-        onChange={onToggle}
-        aria-label={`Select issue ${issue.id}`}
-      />
-      <div className="lint-page__issue-body">
-        <div className="lint-page__issue-header">
-          <Chip
-            tone={
-              issue.severity === 'error'
-                ? 'default'
-                : issue.severity === 'warn'
-                  ? 'default'
-                  : 'muted'
-            }
-          >
-            {issue.severity}
-          </Chip>
-          <code className="lint-page__issue-rule" title={RULE_DESCRIPTIONS[issue.rule]}>
-            {issue.rule}
-          </code>
-          <span className="lint-page__issue-page">{issue.page}</span>
-          <Chip tone="muted">{issue.mount}</Chip>
-          {issue.assignee && <span className="lint-page__issue-assignee">{issue.assignee}</span>}
-        </div>
-        <p className="lint-page__issue-message">{issue.message}</p>
-      </div>
-      {issue.autoFix && (
-        <button
-          className="lint-page__fix-btn"
-          onClick={onAutoFix}
-          disabled={isFixing}
-          aria-label={`Auto-fix issue ${issue.id}`}
-          data-testid="autofix-btn"
-        >
-          {isFixing ? '…' : 'Fix'}
-        </button>
-      )}
-    </li>
-  );
-}
+const SEVERITY_DOT: Record<IssueSeverity, 'failed' | 'attention' | 'observing'> = {
+  error: 'failed',
+  warn: 'attention',
+  info: 'observing',
+};
 
 export function LintPage() {
   const {
@@ -127,172 +35,186 @@ export function LintPage() {
     isError,
     error,
     runAutoFix,
-    reassignIssues,
     isFixing,
-    isReassigning,
   } = useLint();
-  const { data: ravns } = useRavns();
-  const ravnIds = ravns?.map((r) => r.ravnId) ?? [];
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [severityFilter, setSeverityFilter] = useState<IssueSeverity | null>(null);
-  const [assignTarget, setAssignTarget] = useState('');
+  const [selectedRule, setSelectedRule] = useState<LintRule | null>(null);
 
-  const filtered = severityFilter ? issues.filter((i) => i.severity === severityFilter) : issues;
+  // Aggregate counts per rule
+  const countByRule = issues.reduce<Record<string, number>>((acc, issue) => {
+    acc[issue.rule] = (acc[issue.rule] ?? 0) + 1;
+    return acc;
+  }, {});
 
+  const rules = Object.keys(RULE_DESCRIPTIONS) as LintRule[];
+  const filtered = selectedRule ? issues.filter((i) => i.rule === selectedRule) : issues;
   const autoFixableIds = filtered.filter((i) => i.autoFix).map((i) => i.id);
+  const totalLint = summary.error + summary.warn + summary.info;
 
-  function toggleSelect(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  if (isLoading) {
+    return (
+      <div className="lint-page lint-page--loading">
+        <StateDot state="processing" pulse />
+        <span>loading lint report…</span>
+      </div>
+    );
   }
 
-  function toggleSelectAll() {
-    if (selectedIds.size === filtered.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filtered.map((i) => i.id)));
-    }
-  }
-
-  function handleBulkFix() {
-    const fixable = [...selectedIds].filter((id) => {
-      const issue = issues.find((i) => i.id === id);
-      return issue?.autoFix;
-    });
-    if (fixable.length > 0) {
-      runAutoFix(fixable);
-      setSelectedIds(new Set());
-    }
-  }
-
-  function handleBulkAssign() {
-    if (selectedIds.size > 0 && assignTarget) {
-      reassignIssues([...selectedIds], assignTarget);
-      setSelectedIds(new Set());
-    }
+  if (isError) {
+    return (
+      <div className="lint-page lint-page--error">
+        <StateDot state="failed" />
+        <span>{error instanceof Error ? error.message : 'lint load failed'}</span>
+      </div>
+    );
   }
 
   return (
     <div className="lint-page">
-      <h2 className="lint-page__title">Lint</h2>
-
-      {isLoading && (
-        <div className="lint-page__status">
-          <StateDot state="processing" pulse />
-          <span>loading lint report…</span>
+      {/* ── KPI strip ───────────────────────────────────────────── */}
+      <div className="lint-page__kpi-strip">
+        <div className="lint-page__kpi lint-page__kpi--warn">
+          <span className="lint-page__kpi-lbl">total issues</span>
+          <span className="lint-page__kpi-val">{totalLint}</span>
         </div>
-      )}
-
-      {isError && (
-        <div className="lint-page__status">
-          <StateDot state="failed" />
-          <span>{error instanceof Error ? error.message : 'lint load failed'}</span>
+        <div className="lint-page__kpi">
+          <span className="lint-page__kpi-lbl">errors</span>
+          <span
+            className={`lint-page__kpi-val${summary.error > 0 ? ' lint-page__kpi-val--err' : ''}`}
+          >
+            {summary.error}
+          </span>
         </div>
-      )}
+        <div className="lint-page__kpi">
+          <span className="lint-page__kpi-lbl">warnings</span>
+          <span className="lint-page__kpi-val lint-page__kpi-val--warn">{summary.warn}</span>
+        </div>
+        <div className="lint-page__kpi lint-page__kpi--accent">
+          <span className="lint-page__kpi-lbl">auto-fixable</span>
+          <span className="lint-page__kpi-val">{autoFixableIds.length}</span>
+        </div>
+      </div>
 
-      {!isLoading && !isError && (
-        <>
-          <div className="lint-page__header">
-            <LintBadge summary={summary} />
-            {autoFixableIds.length > 0 && (
+      {/* ── 2-column layout ─────────────────────────────────────── */}
+      <div className="lint-page__wrap">
+        {/* LEFT: checks sidebar */}
+        <aside className="lint-page__sidebar" aria-label="Lint checks">
+          <h4 className="lint-page__sidebar-title">Lint checks</h4>
+          <button
+            type="button"
+            className={`lint-page__check-row${selectedRule === null ? ' lint-page__check-row--active' : ''}`}
+            onClick={() => setSelectedRule(null)}
+            aria-pressed={selectedRule === null}
+          >
+            <span className="lint-page__check-id">All</span>
+            <span className="lint-page__check-name">every issue</span>
+            <span className="lint-page__check-count">{totalLint}</span>
+          </button>
+          {rules.map((rule) => {
+            const count = countByRule[rule] ?? 0;
+            const sev: IssueSeverity = summary.error > 0 && rule === 'L01' ? 'error' : 'warn';
+            return (
               <button
-                className="lint-page__btn lint-page__btn--fix"
-                onClick={() => runAutoFix()}
-                disabled={isFixing}
-                aria-label="Fix all auto-fixable issues"
-                data-testid="fix-all-btn"
+                key={rule}
+                type="button"
+                className={`lint-page__check-row${selectedRule === rule ? ' lint-page__check-row--active' : ''}`}
+                onClick={() => setSelectedRule(selectedRule === rule ? null : rule)}
+                aria-pressed={selectedRule === rule}
+                data-testid="check-row"
               >
-                {isFixing ? 'fixing…' : `Fix all auto-fixable (${autoFixableIds.length})`}
+                <div className="lint-page__check-id-cell">
+                  <StateDot state={SEVERITY_DOT[sev]} size={6} />
+                  <span className="lint-page__check-id">{rule}</span>
+                </div>
+                <div className="lint-page__check-desc-cell">
+                  <span className="lint-page__check-name">{RULE_DESCRIPTIONS[rule]}</span>
+                </div>
+                <span
+                  className={`lint-page__check-count${count === 0 ? ' lint-page__check-count--zero' : ''}`}
+                >
+                  {count}
+                </span>
               </button>
-            )}
-          </div>
+            );
+          })}
+        </aside>
 
-          <SeverityFilter active={severityFilter} onChange={setSeverityFilter} />
-
-          {/* Bulk actions bar */}
-          {selectedIds.size > 0 && (
-            <div className="lint-page__bulk-bar" data-testid="bulk-bar">
-              <span className="lint-page__bulk-count">{selectedIds.size} selected</span>
-              <button
-                className="lint-page__btn"
-                onClick={handleBulkFix}
-                disabled={isFixing}
-                aria-label="Fix selected issues"
-                data-testid="bulk-fix-btn"
-              >
-                Fix selected
-              </button>
-              <select
-                className="lint-page__assignee-select"
-                value={assignTarget}
-                onChange={(e) => setAssignTarget(e.target.value)}
-                aria-label="Assign to ravn"
-                data-testid="assignee-select"
-              >
-                <option value="">Assign to…</option>
-                {ravnIds.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="lint-page__btn"
-                onClick={handleBulkAssign}
-                disabled={!assignTarget || isReassigning}
-                aria-label="Apply assignment"
-                data-testid="bulk-assign-btn"
-              >
-                {isReassigning ? 'assigning…' : 'Assign'}
-              </button>
+        {/* RIGHT: issues list */}
+        <div className="lint-page__issues-panel">
+          <div className="lint-page__issues-header">
+            <div>
+              <LintBadge summary={summary} />
+              <span className="lint-page__issues-rule-label">
+                {selectedRule
+                  ? `${selectedRule} — ${RULE_DESCRIPTIONS[selectedRule]}`
+                  : 'All lint issues'}
+              </span>
+              <span className="lint-page__issues-count">· {filtered.length}</span>
             </div>
-          )}
+            <div className="lint-page__issues-actions">
+              <button
+                type="button"
+                className="lint-page__btn"
+                aria-label="Run lint"
+              >
+                Run lint
+              </button>
+              {autoFixableIds.length > 0 && (
+                <button
+                  type="button"
+                  className="lint-page__btn lint-page__btn--fix"
+                  onClick={() => runAutoFix()}
+                  disabled={isFixing}
+                  aria-label="Fix all auto-fixable issues"
+                  data-testid="fix-all-btn"
+                >
+                  {isFixing ? 'fixing…' : `Auto-fix (${autoFixableIds.length})`}
+                </button>
+              )}
+            </div>
+          </div>
 
           {filtered.length === 0 && (
             <p className="lint-page__empty">
-              {severityFilter ? `No ${severityFilter} issues found.` : 'No issues found. ✓'}
+              {selectedRule ? `No issues for ${selectedRule}.` : 'No issues found. ✓'}
             </p>
           )}
 
-          {filtered.length > 0 && (
-            <>
-              <div className="lint-page__select-all">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.size === filtered.length && filtered.length > 0}
-                  onChange={toggleSelectAll}
-                  aria-label="Select all visible issues"
-                  data-testid="select-all-checkbox"
-                />
-                <span className="lint-page__select-all-label">
-                  {filtered.length} {filtered.length === 1 ? 'issue' : 'issues'}
-                </span>
-              </div>
-
-              <ul className="lint-page__issues" aria-label="Lint issues">
-                {filtered.map((issue) => (
-                  <IssueRow
-                    key={issue.id}
-                    issue={issue}
-                    selected={selectedIds.has(issue.id)}
-                    onToggle={() => toggleSelect(issue.id)}
-                    onAutoFix={() => runAutoFix([issue.id])}
-                    isFixing={isFixing}
-                  />
-                ))}
-              </ul>
-            </>
-          )}
-        </>
-      )}
+          <ul className="lint-page__list" aria-label="Lint issues">
+            {filtered.map((issue, i) => (
+              <li
+                key={`${issue.rule}-${i}`}
+                className={`lint-page__issue lint-page__issue--${issue.severity}`}
+                data-testid="lint-issue"
+              >
+                <div className="lint-page__issue-id-cell">
+                  <code className="lint-page__issue-rule">{issue.rule}</code>
+                  <StateDot state={SEVERITY_DOT[issue.severity]} size={6} />
+                </div>
+                <div className="lint-page__issue-body">
+                  <div className="lint-page__issue-page">{issue.page}</div>
+                  <div className="lint-page__issue-message">{issue.message}</div>
+                </div>
+                <div className="lint-page__issue-actions">
+                  {issue.autoFix && (
+                    <button
+                      type="button"
+                      className="lint-page__btn"
+                      onClick={() => runAutoFix([issue.id])}
+                      disabled={isFixing}
+                      aria-label={`Auto-fix issue ${issue.id}`}
+                      data-testid="autofix-btn"
+                    >
+                      {isFixing ? '…' : 'Fix'}
+                    </button>
+                  )}
+                  <span className="lint-page__issue-mount">{issue.mount}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }

@@ -8,14 +8,16 @@ import { renderWithMimir } from '../testing/renderWithMimir';
 const wrap = renderWithMimir;
 
 describe('LintPage', () => {
-  it('renders the page title', () => {
-    wrap(<LintPage />);
-    expect(screen.getByRole('heading', { name: /lint/i })).toBeInTheDocument();
-  });
-
   it('shows loading state initially', () => {
     wrap(<LintPage />);
     expect(screen.getByText(/loading lint report/)).toBeInTheDocument();
+  });
+
+  it('renders the checks sidebar heading after load', async () => {
+    wrap(<LintPage />);
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /lint checks/i })).toBeInTheDocument(),
+    );
   });
 
   it('renders lint issues after load', async () => {
@@ -33,25 +35,34 @@ describe('LintPage', () => {
     await waitFor(() => expect(screen.getByTestId('fix-all-btn')).toBeInTheDocument());
   });
 
-  it('renders severity filter buttons', async () => {
+  it('renders check rows for each rule in the sidebar', async () => {
     wrap(<LintPage />);
-    const filterGroup = await waitFor(() =>
-      screen.getByRole('group', { name: /filter by severity/i }),
+    await waitFor(() =>
+      expect(screen.getAllByTestId('check-row').length).toBeGreaterThan(0),
     );
-    expect(filterGroup).toBeInTheDocument();
-    expect(filterGroup.querySelector('[data-severity="error"]')).toBeInTheDocument();
-    expect(filterGroup.querySelector('[data-severity="warn"]')).toBeInTheDocument();
-    expect(filterGroup.querySelector('[data-severity="info"]')).toBeInTheDocument();
   });
 
-  it('clicking a severity filter shows only matching issues', async () => {
+  it('clicking a check row filters issues to that rule', async () => {
     wrap(<LintPage />);
     await waitFor(() => expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0));
     const allCount = screen.getAllByTestId('lint-issue').length;
-    fireEvent.click(screen.getByRole('button', { name: /error/i }));
+    const checkRows = screen.getAllByTestId('check-row');
+    fireEvent.click(checkRows[0]!);
     await waitFor(() => {
-      const errorCount = screen.queryAllByTestId('lint-issue').length;
-      expect(errorCount).toBeLessThanOrEqual(allCount);
+      const filteredCount = screen.queryAllByTestId('lint-issue').length;
+      expect(filteredCount).toBeLessThanOrEqual(allCount);
+    });
+  });
+
+  it('clicking the same check row again deselects it (shows all)', async () => {
+    wrap(<LintPage />);
+    await waitFor(() => expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0));
+    const allCount = screen.getAllByTestId('lint-issue').length;
+    const checkRows = screen.getAllByTestId('check-row');
+    fireEvent.click(checkRows[0]!);
+    fireEvent.click(checkRows[0]!);
+    await waitFor(() => {
+      expect(screen.getAllByTestId('lint-issue').length).toBe(allCount);
     });
   });
 
@@ -97,50 +108,6 @@ describe('LintPage', () => {
     await waitFor(() => expect(calledWith).toBeUndefined());
   });
 
-  it('selecting an issue shows the bulk action bar', async () => {
-    wrap(<LintPage />);
-    await waitFor(() => expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0));
-    const checkbox = screen
-      .getAllByRole('checkbox')
-      .find((c) => c.getAttribute('aria-label')?.startsWith('Select issue'));
-    fireEvent.click(checkbox!);
-    expect(screen.getByTestId('bulk-bar')).toBeInTheDocument();
-  });
-
-  it('select-all checkbox selects all visible issues', async () => {
-    wrap(<LintPage />);
-    await waitFor(() => expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByTestId('select-all-checkbox'));
-    expect(screen.getByTestId('bulk-bar')).toBeInTheDocument();
-  });
-
-  it('bulk assign updates assignee on selected issues', async () => {
-    let assignCalled = false;
-    const spy: IMimirService = {
-      ...createMimirMockAdapter(),
-      lint: {
-        ...createMimirMockAdapter().lint,
-        reassignIssues: async (ids, assignee) => {
-          assignCalled = true;
-          expect(ids.length).toBeGreaterThan(0);
-          expect(assignee).toBe('ravn-fjolnir');
-          return { issues: [], pagesChecked: 3, summary: { error: 0, warn: 0, info: 0 } };
-        },
-      },
-    };
-    wrap(<LintPage />, spy);
-    await waitFor(() => expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0));
-    // Select all
-    fireEvent.click(screen.getByTestId('select-all-checkbox'));
-    // Pick assignee
-    fireEvent.change(screen.getByTestId('assignee-select'), {
-      target: { value: 'ravn-fjolnir' },
-    });
-    // Assign
-    fireEvent.click(screen.getByTestId('bulk-assign-btn'));
-    await waitFor(() => expect(assignCalled).toBe(true));
-  });
-
   it('shows error state when service throws', async () => {
     const failing: IMimirService = {
       ...createMimirMockAdapter(),
@@ -155,7 +122,7 @@ describe('LintPage', () => {
     await waitFor(() => expect(screen.getByText('lint service down')).toBeInTheDocument());
   });
 
-  it('shows "No issues" when lint report is empty', async () => {
+  it('shows "No issues found" when lint report is empty', async () => {
     const empty: IMimirService = {
       ...createMimirMockAdapter(),
       lint: {
@@ -169,5 +136,15 @@ describe('LintPage', () => {
     };
     wrap(<LintPage />, empty);
     await waitFor(() => expect(screen.getByText(/no issues found/i)).toBeInTheDocument());
+  });
+
+  it('KPI strip shows total issues', async () => {
+    wrap(<LintPage />);
+    await waitFor(() => expect(screen.getByText('total issues')).toBeInTheDocument());
+  });
+
+  it('KPI strip shows auto-fixable count', async () => {
+    wrap(<LintPage />);
+    await waitFor(() => expect(screen.getByText('auto-fixable')).toBeInTheDocument());
   });
 });
