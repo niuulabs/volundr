@@ -26,6 +26,7 @@ jobs:
     outputs:
       python: ${{ steps.filter.outputs.python }}
       web: ${{ steps.filter.outputs.web }}
+      web_next: ${{ steps.filter.outputs.web_next }}
       helm: ${{ steps.filter.outputs.helm }}
       container-names: ${{ steps.filter.outputs.names }}
       has_containers: ${{ steps.filter.outputs.any }}
@@ -56,9 +57,10 @@ jobs:
           flag()  { if match "$2"; then echo "$1=true"; else echo "$1=false"; fi; }
 
           # Areas
-          flag python '^(src|tests)/|^pyproject\.toml$|^uv\.lock$' >> "$GITHUB_OUTPUT"
-          flag web    '^web/'                                      >> "$GITHUB_OUTPUT"
-          flag helm   '^charts/'                                   >> "$GITHUB_OUTPUT"
+          flag python   '^(src|tests)/|^pyproject\.toml$|^uv\.lock$' >> "$GITHUB_OUTPUT"
+          flag web      '^web/'                                      >> "$GITHUB_OUTPUT"
+          flag web_next '^web-next/'                                 >> "$GITHUB_OUTPUT"
+          flag helm     '^charts/'                                   >> "$GITHUB_OUTPUT"
 
           # Per-container triggers: dockerfile in containers/<name>/ OR the
           # source tree the image bakes in. Python containers depend on src/
@@ -353,6 +355,16 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     uses: ./.github/workflows/reusable-web-lint-test.yaml
+    secrets: inherit
+
+  # ---------------------------------------------------------------------------
+  # web-next — composable plugin UI. Delegated to reusable workflow.
+  # ---------------------------------------------------------------------------
+  web-next:
+    name: web-next
+    needs: changes
+    if: needs.changes.outputs.web_next == 'true'
+    uses: ./.github/workflows/reusable-web-next-lint-test.yaml
     secrets: inherit
 
   # ---------------------------------------------------------------------------
