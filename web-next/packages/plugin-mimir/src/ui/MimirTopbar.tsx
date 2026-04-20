@@ -5,7 +5,6 @@
  */
 
 import type { PluginCtx } from '@niuulabs/plugin-sdk';
-import { useMimirMounts } from './useMimirMounts';
 import { useMimirPages } from './useMimirPages';
 import { useLint } from '../application/useLint';
 import { useRavns } from '../application/useRavns';
@@ -18,7 +17,6 @@ interface MimirTopbarProps {
 export function MimirTopbar({ ctx }: MimirTopbarProps) {
   const activeMount = (ctx.tweaks.activeMount as string | undefined) ?? 'all';
 
-  const { data: mounts = [] } = useMimirMounts();
   const { data: pages = [] } = useMimirPages();
   const { summary: lintSummary } = useLint();
   const { data: ravns = [] } = useRavns();
@@ -33,9 +31,6 @@ export function MimirTopbar({ ctx }: MimirTopbarProps) {
       ? ravns.length
       : ravns.filter((r) => r.mountNames.includes(activeMount)).length;
   const lintCount = lintSummary.error + lintSummary.warn + lintSummary.info;
-
-  // Suppress unused mounts warning — used in dependency for derived counts above
-  void mounts;
 
   return (
     <div className="mm-topbar-stats" aria-label="Mímir stats">

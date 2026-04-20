@@ -1,16 +1,10 @@
 import { useState } from 'react';
 import { StateDot, Chip, RavnAvatar } from '@niuulabs/ui';
 import { useRavns } from '../application/useRavns';
-import type { RavnBinding, RavnState } from '../domain/ravn-binding';
-import type { DotState } from '@niuulabs/ui';
+import type { RavnBinding } from '../domain/ravn-binding';
+import { RAVN_DOT_STATE } from './mimir.constants';
 import { formatDuration, formatTimestamp } from './format';
 import './RavnsPage.css';
-
-const STATE_DOT: Record<RavnState, DotState> = {
-  active: 'healthy',
-  idle: 'idle',
-  offline: 'failed',
-};
 
 // ---------------------------------------------------------------------------
 // Directory card
@@ -38,7 +32,7 @@ function RavnCard({ ravn, onClick }: RavnCardProps) {
         <RavnAvatar
           role={ravn.role}
           rune={ravn.ravnRune}
-          state={STATE_DOT[ravn.state]}
+          state={RAVN_DOT_STATE[ravn.state]}
           pulse={ravn.state === 'active'}
           size={36}
         />
@@ -110,7 +104,7 @@ function RavnProfile({ ravn, onBack }: RavnProfileProps) {
         <RavnAvatar
           role={ravn.role}
           rune={ravn.ravnRune}
-          state={STATE_DOT[ravn.state]}
+          state={RAVN_DOT_STATE[ravn.state]}
           pulse={ravn.state === 'active'}
           size={48}
         />

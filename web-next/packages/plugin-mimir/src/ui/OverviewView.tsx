@@ -13,26 +13,12 @@ import { useMimirMounts } from './useMimirMounts';
 import { useMimirRecentWrites } from './useMimirSources';
 import { useRavns } from '../application/useRavns';
 import { MountChip } from './components/MountChip';
-import type { DotState } from '@niuulabs/ui';
-import type { RavnState } from '../domain/ravn-binding';
-import type { MountStatus } from '@niuulabs/domain';
+import { RAVN_DOT_STATE, MOUNT_DOT_STATE } from './mimir.constants';
 import './mimir-views.css';
 
 const FEED_LIMIT = 20;
 const TIMESTAMP_HOUR_START = 11;
 const TIMESTAMP_HOUR_END = 16;
-
-const RAVN_DOT_STATE: Record<RavnState, DotState> = {
-  active: 'healthy',
-  idle: 'idle',
-  offline: 'failed',
-};
-
-const MOUNT_DOT_STATE: Record<MountStatus, DotState> = {
-  healthy: 'healthy',
-  degraded: 'observing',
-  down: 'failed',
-};
 
 function formatTimestamp(iso: string): string {
   return iso.slice(TIMESTAMP_HOUR_START, TIMESTAMP_HOUR_END);
@@ -150,7 +136,7 @@ export function OverviewView() {
           {/* Wardens section */}
           {ravns.length > 0 && (
             <>
-              <div className="mm-overview__section-head" style={{ marginTop: 'var(--space-6)' }}>
+              <div className="mm-overview__section-head mm-overview__section-head--wardens">
                 <h3>Wardens</h3>
                 <span className="mm-overview__section-meta">
                   ravns bound here · read / write fan-out

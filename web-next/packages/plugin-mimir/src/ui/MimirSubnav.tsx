@@ -4,7 +4,7 @@
  * Sections:
  *   1. Mount picker — "all mounts" + per-mount rows with status dots
  *   2. Navigation items — Overview / Pages / Search / Graph / Wardens / Routing / Lint / Dreams
- *   3. Quick filters — Errors / Low confidence
+ *   3. Quick filters — Errors / Flagged / Low confidence
  *   4. Wardens roster — top-6 ravns with initials + state dot
  */
 
@@ -15,22 +15,8 @@ import { useMimirMounts } from './useMimirMounts';
 import { useMimirPages } from './useMimirPages';
 import { useLint } from '../application/useLint';
 import { useRavns } from '../application/useRavns';
-import type { DotState } from '@niuulabs/ui';
-import type { RavnState } from '../domain/ravn-binding';
-import type { MountStatus } from '@niuulabs/domain';
+import { RAVN_DOT_STATE, MOUNT_DOT_STATE } from './mimir.constants';
 import './MimirSubnav.css';
-
-const RAVN_DOT_STATE: Record<RavnState, DotState> = {
-  active: 'healthy',
-  idle: 'idle',
-  offline: 'failed',
-};
-
-const MOUNT_DOT_STATE: Record<MountStatus, DotState> = {
-  healthy: 'healthy',
-  degraded: 'observing',
-  down: 'failed',
-};
 
 interface NavItem {
   id: string;
@@ -60,6 +46,7 @@ export function MimirSubnav({ ctx }: MimirSubnavProps) {
   const totalPages = pages.length;
   const lintCount = lintSummary.error + lintSummary.warn + lintSummary.info;
   const errorCount = lintSummary.error;
+  const flaggedCount = pages.filter((p) => p.flagged).length;
   const lowConfidenceCount = pages.filter((p) => p.confidence === 'low').length;
 
   const navItems: NavItem[] = [
@@ -162,6 +149,18 @@ export function MimirSubnav({ ctx }: MimirSubnavProps) {
           </span>
           <span className="mm-subnav-btn__label">Errors</span>
           <span className="mm-subnav-btn__count mm-subnav-btn__count--red">{errorCount}</span>
+        </button>
+        <button
+          type="button"
+          className="mm-subnav-btn"
+          onClick={() => navigate({ to: '/mimir/pages' })}
+          aria-label={`${flaggedCount} flagged pages`}
+        >
+          <span className="mm-subnav-btn__glyph mm-subnav-btn__glyph--warn" aria-hidden>
+            ●
+          </span>
+          <span className="mm-subnav-btn__label">Flagged</span>
+          <span className="mm-subnav-btn__count">{flaggedCount}</span>
         </button>
         <button
           type="button"

@@ -40,9 +40,21 @@ export function LintPage() {
 
   const [selectedRule, setSelectedRule] = useState<LintRule | null>(null);
 
-  // Aggregate counts per rule
+  // Aggregate counts and max severity per rule
   const countByRule = issues.reduce<Record<string, number>>((acc, issue) => {
     acc[issue.rule] = (acc[issue.rule] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const severityByRule = issues.reduce<Record<string, IssueSeverity>>((acc, issue) => {
+    const cur = acc[issue.rule];
+    if (
+      !cur ||
+      (issue.severity === 'error' && cur !== 'error') ||
+      (issue.severity === 'warn' && cur === 'info')
+    ) {
+      acc[issue.rule] = issue.severity;
+    }
     return acc;
   }, {});
 
@@ -112,7 +124,7 @@ export function LintPage() {
           </button>
           {rules.map((rule) => {
             const count = countByRule[rule] ?? 0;
-            const sev: IssueSeverity = summary.error > 0 && rule === 'L01' ? 'error' : 'warn';
+            const sev: IssueSeverity = severityByRule[rule] ?? 'info';
             return (
               <button
                 key={rule}

@@ -134,6 +134,10 @@
   color: var(--color-critical, var(--color-accent-red));
 }
 
+.mm-subnav-btn__glyph--warn {
+  color: var(--color-accent-amber);
+}
+
 .mm-subnav-btn__glyph--dim {
   color: var(--color-text-muted);
 }

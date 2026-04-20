@@ -18,8 +18,6 @@ const CATEGORY_COLORS = [
   'var(--color-text-secondary)',
 ] as const;
 
-const CATEGORY_COLOR_INDICES = [0, 1, 2, 3, 4, 5, 6, 7] as const;
-
 function getCategoryIndex(category: string, categories: string[]): number {
   const idx = categories.indexOf(category);
   return (idx < 0 ? 0 : idx) % CATEGORY_COLORS.length;
@@ -138,7 +136,7 @@ function GraphLegend({ categories }: LegendProps) {
         <div key={cat} className="graph-page__legend-item">
           <span
             className="graph-page__legend-dot"
-            data-color-idx={String(CATEGORY_COLOR_INDICES[i % CATEGORY_COLORS.length])}
+            data-color-idx={String(i % CATEGORY_COLORS.length)}
             aria-hidden
           />
           <span className="graph-page__legend-label">{cat}</span>
