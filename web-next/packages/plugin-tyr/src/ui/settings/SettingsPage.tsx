@@ -59,22 +59,22 @@ export function SettingsIndexPage() {
         Configure your Tyr deployment. Select a section from the left to get started.
       </p>
 
-      <div className="niuu-grid niuu-grid-cols-2 niuu-gap-3" role="list">
+      <ul className="niuu-grid niuu-grid-cols-2 niuu-gap-3 niuu-list-none niuu-p-0 niuu-m-0">
         {SECTION_ITEMS.map((item) => (
-          <Link
-            key={item.id}
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            to={`/tyr/settings/${item.id}` as any}
-            role="listitem"
-            className="niuu-block niuu-w-full niuu-text-left niuu-p-4 niuu-border niuu-border-border niuu-rounded-md hover:niuu-bg-bg-secondary niuu-transition-colors niuu-no-underline"
-          >
-            <p className="niuu-text-sm niuu-font-medium niuu-text-text-primary niuu-mb-1">
-              {item.label}
-            </p>
-            <p className="niuu-text-xs niuu-text-text-secondary">{item.description}</p>
-          </Link>
+          <li key={item.id}>
+            <Link
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              to={`/tyr/settings/${item.id}` as any}
+              className="niuu-block niuu-w-full niuu-text-left niuu-p-4 niuu-border niuu-border-border niuu-rounded-md hover:niuu-bg-bg-secondary niuu-transition-colors niuu-no-underline"
+            >
+              <p className="niuu-text-sm niuu-font-medium niuu-text-text-primary niuu-mb-1">
+                {item.label}
+              </p>
+              <p className="niuu-text-xs niuu-text-text-secondary">{item.description}</p>
+            </Link>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
