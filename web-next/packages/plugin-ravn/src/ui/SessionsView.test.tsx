@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { SessionsView } from './SessionsView';
 import { createMockSessionStream, createMockRavenStream } from '../adapters/mock';
 import { wrapWithServices } from '../testing/wrapWithRavn';
@@ -11,6 +11,10 @@ const services = {
   'ravn.ravens': createMockRavenStream(),
 };
 
+beforeEach(() => {
+  localStorage.clear();
+});
+
 describe('SessionsView', () => {
   it('shows loading state initially', () => {
     render(<SessionsView />, { wrapper: wrap(services) });
@@ -19,26 +23,34 @@ describe('SessionsView', () => {
 
   it('shows session list after loading', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() => expect(screen.getByText('coding-agent')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getAllByText('coding-agent').length).toBeGreaterThan(0),
+    );
   });
 
   it('shows session count', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() => expect(screen.getByText('6')).toBeInTheDocument());
+    await waitFor(() => {
+      // '6' appears in both the list-count badge and sidebar msg-count
+      expect(screen.getAllByText('6').length).toBeGreaterThan(0);
+    });
   });
 
   it('renders all sessions', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
     await waitFor(() => {
-      expect(screen.getByText('coding-agent')).toBeInTheDocument();
-      expect(screen.getByText('reviewer')).toBeInTheDocument();
+      const buttons = screen.getAllByRole('button', { name: /session/ });
+      const names = buttons.map((b) => b.textContent ?? '');
+      expect(names.some((n) => n.includes('coding-agent'))).toBe(true);
+      expect(names.some((n) => n.includes('reviewer'))).toBe(true);
     });
   });
 
   it('loads transcript when session is selected', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() => expect(screen.getByText('coding-agent')).toBeInTheDocument());
-    // First session should be auto-selected and transcript loaded
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /session/ }).length).toBeGreaterThan(0),
+    );
     await waitFor(() => expect(screen.getByRole('log')).toBeInTheDocument(), { timeout: 3000 });
   });
 
@@ -69,5 +81,77 @@ describe('SessionsView', () => {
     const items = screen.getAllByRole('button', { name: /session/ });
     fireEvent.click(items[1]!);
     expect(items[1]).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('shows context sidebar when a session is selected', async () => {
+    render(<SessionsView />, { wrapper: wrap(services) });
+    await waitFor(() =>
+      expect(screen.getByTestId('session-context-sidebar')).toBeInTheDocument(),
+    );
+  });
+
+  it('sidebar shows summary section', async () => {
+    render(<SessionsView />, { wrapper: wrap(services) });
+    await waitFor(() => expect(screen.getByTestId('ctx-summary')).toBeInTheDocument());
+  });
+
+  it('sidebar shows timeline section', async () => {
+    render(<SessionsView />, { wrapper: wrap(services) });
+    await waitFor(() => expect(screen.getByTestId('ctx-timeline')).toBeInTheDocument());
+  });
+
+  it('sidebar shows stats section with message count', async () => {
+    render(<SessionsView />, { wrapper: wrap(services) });
+    await waitFor(() => {
+      expect(screen.getByTestId('ctx-stats')).toBeInTheDocument();
+      expect(screen.getByTestId('ctx-msg-count')).toBeInTheDocument();
+    });
+  });
+
+  it('sidebar shows raven card', async () => {
+    render(<SessionsView />, { wrapper: wrap(services) });
+    await waitFor(() => expect(screen.getByTestId('ctx-raven')).toBeInTheDocument());
+  });
+
+  it('responds to ravn:session-selected event', async () => {
+    render(<SessionsView />, { wrapper: wrap(services) });
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /session/ }).length).toBeGreaterThan(0),
+    );
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('ravn:session-selected', {
+          detail: '10000001-0000-4000-8000-000000000002',
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      // reviewer session should be selected (ID ends in 002)
+      const items = screen.getAllByRole('button', { name: /session/ });
+      const reviewerItem = items.find((el) => el.textContent?.includes('reviewer'));
+      expect(reviewerItem).toHaveAttribute('aria-pressed', 'true');
+    });
+  });
+
+  it('persists session selection to localStorage', async () => {
+    render(<SessionsView />, { wrapper: wrap(services) });
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /session/ }).length).toBeGreaterThan(0),
+    );
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('ravn:session-selected', {
+          detail: '10000001-0000-4000-8000-000000000003',
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      const stored = localStorage.getItem('ravn.session');
+      expect(stored).toBe('"10000001-0000-4000-8000-000000000003"');
+    });
   });
 });

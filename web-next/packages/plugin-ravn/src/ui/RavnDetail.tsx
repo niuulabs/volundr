@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { BudgetBar, StateDot } from '@niuulabs/ui';
 import type { Ravn } from '../domain/ravn';
 import type { BudgetState } from '@niuulabs/domain';
@@ -10,67 +10,11 @@ import { ravnStatusToDotState } from './grouping';
 import { loadStorage, saveStorage } from './storage';
 import './RavnDetail.css';
 
-const SECTIONS_STORAGE_KEY = 'ravn.detail.sections.collapsed';
+const TAB_STORAGE_KEY = 'ravn.detail.tab';
 
-const INITIALLY_EXPANDED_SECTIONS: SectionId[] = ['overview'];
+type TabId = 'overview' | 'triggers' | 'activity' | 'sessions' | 'connectivity';
 
-type SectionId = 'overview' | 'triggers' | 'activity' | 'sessions' | 'connectivity' | 'delete';
-
-const SECTION_LABELS: Record<SectionId, string> = {
-  overview: 'Overview',
-  triggers: 'Triggers',
-  activity: 'Activity',
-  sessions: 'Sessions',
-  connectivity: 'Connectivity',
-  delete: 'Delete / Suspend',
-};
-
-const ALL_SECTIONS: SectionId[] = [
-  'overview',
-  'triggers',
-  'activity',
-  'sessions',
-  'connectivity',
-  'delete',
-];
-
-interface CollapsibleSectionProps {
-  id: SectionId;
-  label: string;
-  collapsed: boolean;
-  onToggle: (id: SectionId) => void;
-  children: React.ReactNode;
-}
-
-function CollapsibleSection({ id, label, collapsed, onToggle, children }: CollapsibleSectionProps) {
-  return (
-    <div data-testid={`ravn-detail-section-${id}`} className="rv-section">
-      <button
-        type="button"
-        aria-expanded={!collapsed}
-        aria-controls={`section-body-${id}`}
-        onClick={() => onToggle(id)}
-        className="rv-section__toggle"
-        data-testid={`section-toggle-${id}`}
-      >
-        <span>{label}</span>
-        <span aria-hidden="true" className="rv-section__chevron">
-          ▾
-        </span>
-      </button>
-
-      {!collapsed && (
-        <div
-          id={`section-body-${id}`}
-          className="rv-section__body"
-          data-testid={`section-body-${id}`}
-        >
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
+// ── Section components ──────────────────────────────────────────────────────
 
 interface OverviewSectionProps {
   ravn: Ravn;
@@ -101,6 +45,13 @@ function OverviewSection({ ravn, budget }: OverviewSectionProps) {
 
         <dt>Since</dt>
         <dd className="rv-overview-dd--since">{uptimeSince}</dd>
+
+        {ravn.location && (
+          <>
+            <dt>Location</dt>
+            <dd className="rv-overview-dd--model">{ravn.location}</dd>
+          </>
+        )}
       </dl>
 
       {budget && (
@@ -119,6 +70,22 @@ function OverviewSection({ ravn, budget }: OverviewSectionProps) {
           />
         </div>
       )}
+
+      {/* Danger zone */}
+      <div className="rv-delete-actions" data-testid="danger-zone">
+        <button
+          type="button"
+          className="rv-suspend-btn"
+          data-testid="suspend-btn"
+          disabled={ravn.status === 'suspended'}
+        >
+          {ravn.status === 'suspended' ? 'Already suspended' : 'Suspend ravn'}
+        </button>
+
+        <button type="button" className="rv-delete-btn" data-testid="delete-btn">
+          Delete ravn
+        </button>
+      </div>
     </div>
   );
 }
@@ -239,28 +206,7 @@ function ConnectivitySection({ ravn }: ConnectivitySectionProps) {
   );
 }
 
-interface DeleteSectionProps {
-  ravn: Ravn;
-}
-
-function DeleteSection({ ravn }: DeleteSectionProps) {
-  return (
-    <div className="rv-delete-actions" data-testid="delete-section-body">
-      <button
-        type="button"
-        className="rv-suspend-btn"
-        data-testid="suspend-btn"
-        disabled={ravn.status === 'suspended'}
-      >
-        {ravn.status === 'suspended' ? 'Already suspended' : 'Suspend ravn'}
-      </button>
-
-      <button type="button" className="rv-delete-btn" data-testid="delete-btn">
-        Delete ravn
-      </button>
-    </div>
-  );
-}
+// ── Main component ──────────────────────────────────────────────────────────
 
 export interface RavnDetailProps {
   ravn: Ravn;
@@ -269,26 +215,30 @@ export interface RavnDetailProps {
 }
 
 export function RavnDetail({ ravn, onClose }: RavnDetailProps) {
-  const [collapsed, setCollapsed] = useState<Set<SectionId>>(() => {
-    const stored = loadStorage<SectionId[]>(SECTIONS_STORAGE_KEY, []);
-    if (stored.length > 0) return new Set(stored);
-    return new Set(ALL_SECTIONS.filter((s) => !INITIALLY_EXPANDED_SECTIONS.includes(s)));
-  });
+  const [activeTab, setActiveTab] = useState<TabId>(() =>
+    loadStorage<TabId>(TAB_STORAGE_KEY, 'overview'),
+  );
 
   const { data: budget } = useRavnBudget(ravn.id);
+  const { data: triggers } = useTriggers();
+  const { data: sessions } = useSessions();
 
-  const handleToggle = useCallback((id: SectionId) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      saveStorage(SECTIONS_STORAGE_KEY, Array.from(next));
-      return next;
-    });
-  }, []);
+  const triggerCount = triggers?.filter((t) => t.personaName === ravn.personaName).length ?? 0;
+  const sessionCount = sessions?.filter((s) => s.ravnId === ravn.id).length ?? 0;
+  const activityCount = sessionCount;
+
+  const handleTabChange = (id: TabId) => {
+    saveStorage(TAB_STORAGE_KEY, id);
+    setActiveTab(id);
+  };
+
+  const tabs: Array<{ id: TabId; label: string; count?: number }> = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'triggers', label: 'Triggers', count: triggerCount },
+    { id: 'activity', label: 'Activity', count: activityCount },
+    { id: 'sessions', label: 'Sessions', count: sessionCount },
+    { id: 'connectivity', label: 'Connectivity' },
+  ];
 
   return (
     <div data-testid="ravn-detail" className="rv-detail">
@@ -313,23 +263,34 @@ export function RavnDetail({ ravn, onClose }: RavnDetailProps) {
         )}
       </div>
 
-      {/* Sections */}
-      {ALL_SECTIONS.map((id) => (
-        <CollapsibleSection
-          key={id}
-          id={id}
-          label={SECTION_LABELS[id]}
-          collapsed={collapsed.has(id)}
-          onToggle={handleToggle}
-        >
-          {id === 'overview' && <OverviewSection ravn={ravn} budget={budget} />}
-          {id === 'triggers' && <TriggersSection ravnPersonaName={ravn.personaName} />}
-          {id === 'activity' && <ActivitySection ravnId={ravn.id} />}
-          {id === 'sessions' && <SessionsSection ravnId={ravn.id} />}
-          {id === 'connectivity' && <ConnectivitySection ravn={ravn} />}
-          {id === 'delete' && <DeleteSection ravn={ravn} />}
-        </CollapsibleSection>
-      ))}
+      {/* Tab nav */}
+      <nav className="rv-sectabs" aria-label="Ravn detail sections" data-testid="ravn-sectabs">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            onClick={() => handleTabChange(tab.id)}
+            className={`rv-sectab${activeTab === tab.id ? ' rv-sectab--active' : ''}`}
+            data-testid={`sectab-${tab.id}`}
+          >
+            {tab.label}
+            {tab.count != null && tab.count > 0 && (
+              <span className="rv-sectabs-n">{tab.count}</span>
+            )}
+          </button>
+        ))}
+      </nav>
+
+      {/* Tab content */}
+      <div className="rv-section__body" data-testid={`section-body-${activeTab}`}>
+        {activeTab === 'overview' && <OverviewSection ravn={ravn} budget={budget} />}
+        {activeTab === 'triggers' && <TriggersSection ravnPersonaName={ravn.personaName} />}
+        {activeTab === 'activity' && <ActivitySection ravnId={ravn.id} />}
+        {activeTab === 'sessions' && <SessionsSection ravnId={ravn.id} />}
+        {activeTab === 'connectivity' && <ConnectivitySection ravn={ravn} />}
+      </div>
     </div>
   );
 }

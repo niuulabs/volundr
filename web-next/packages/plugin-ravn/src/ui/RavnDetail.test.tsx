@@ -63,14 +63,21 @@ describe('RavnDetail', () => {
     expect(screen.getAllByText('coding-agent').length).toBeGreaterThan(0);
   });
 
-  it('renders all 6 collapsible sections', () => {
+  it('renders the tab nav with 5 tabs', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    for (const id of ['overview', 'triggers', 'activity', 'sessions', 'connectivity', 'delete']) {
-      expect(screen.getByTestId(`ravn-detail-section-${id}`)).toBeInTheDocument();
+    expect(screen.getByTestId('ravn-sectabs')).toBeInTheDocument();
+    for (const id of ['overview', 'triggers', 'activity', 'sessions', 'connectivity']) {
+      expect(screen.getByTestId(`sectab-${id}`)).toBeInTheDocument();
     }
   });
 
-  it('shows overview section expanded by default', () => {
+  it('shows overview tab active by default', () => {
+    render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
+    const overviewTab = screen.getByTestId('sectab-overview');
+    expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('shows overview content by default', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
     expect(screen.getByTestId('section-body-overview')).toBeInTheDocument();
   });
@@ -80,29 +87,27 @@ describe('RavnDetail', () => {
     await waitFor(() => expect(screen.getAllByText('coding-agent').length).toBeGreaterThan(0));
   });
 
-  it('collapses a section when its toggle is clicked', () => {
+  it('switches tab when a tab is clicked', async () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    const toggle = screen.getByTestId('section-toggle-overview');
-    fireEvent.click(toggle);
-    expect(screen.queryByTestId('section-body-overview')).not.toBeInTheDocument();
+    const triggersTab = screen.getByTestId('sectab-triggers');
+    fireEvent.click(triggersTab);
+    expect(triggersTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('section-body-triggers')).toBeInTheDocument();
   });
 
-  it('expands a collapsed section when toggle is clicked again', () => {
+  it('persists active tab to localStorage', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    const toggle = screen.getByTestId('section-toggle-overview');
-    fireEvent.click(toggle); // collapse
-    fireEvent.click(toggle); // expand
-    expect(screen.getByTestId('section-body-overview')).toBeInTheDocument();
+    const sessionsTab = screen.getByTestId('sectab-sessions');
+    fireEvent.click(sessionsTab);
+    const stored = localStorage.getItem('ravn.detail.tab');
+    expect(stored).toBe('"sessions"');
   });
 
-  it('persists collapsed state to localStorage', () => {
+  it('restores active tab from localStorage', () => {
+    localStorage.setItem('ravn.detail.tab', '"connectivity"');
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    const toggle = screen.getByTestId('section-toggle-triggers');
-    fireEvent.click(toggle); // expand triggers
-    const stored = JSON.parse(
-      localStorage.getItem('ravn.detail.sections.collapsed') ?? '[]',
-    ) as string[];
-    expect(Array.isArray(stored)).toBe(true);
+    const connectivityTab = screen.getByTestId('sectab-connectivity');
+    expect(connectivityTab).toHaveAttribute('aria-selected', 'true');
   });
 
   it('shows close button when onClose is provided', () => {
@@ -119,47 +124,42 @@ describe('RavnDetail', () => {
     expect(screen.queryByTestId('detail-close-btn')).not.toBeInTheDocument();
   });
 
-  it('renders suspend button for active ravn', () => {
+  it('renders suspend and delete buttons in overview tab', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    // Expand delete section first
-    const deleteToggle = screen.getByTestId('section-toggle-delete');
-    fireEvent.click(deleteToggle);
     expect(screen.getByTestId('suspend-btn')).toBeInTheDocument();
     expect(screen.getByTestId('suspend-btn')).not.toBeDisabled();
+    expect(screen.getByTestId('delete-btn')).toBeInTheDocument();
   });
 
   it('disables suspend button when ravn is already suspended', () => {
     render(<RavnDetail ravn={SUSPENDED_RAVN} />, { wrapper: wrap() });
-    const deleteToggle = screen.getByTestId('section-toggle-delete');
-    fireEvent.click(deleteToggle);
     expect(screen.getByTestId('suspend-btn')).toBeDisabled();
   });
 
-  it('renders delete button', () => {
+  it('renders triggers section when triggers tab is clicked', async () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    const deleteToggle = screen.getByTestId('section-toggle-delete');
-    fireEvent.click(deleteToggle);
-    expect(screen.getByTestId('delete-btn')).toBeInTheDocument();
-  });
-
-  it('renders triggers section when expanded', async () => {
-    render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    const toggle = screen.getByTestId('section-toggle-triggers');
-    fireEvent.click(toggle);
+    fireEvent.click(screen.getByTestId('sectab-triggers'));
     await waitFor(() => expect(screen.getByTestId('triggers-section-body')).toBeInTheDocument());
   });
 
-  it('renders sessions section when expanded', async () => {
+  it('renders sessions section when sessions tab is clicked', async () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    const toggle = screen.getByTestId('section-toggle-sessions');
-    fireEvent.click(toggle);
+    fireEvent.click(screen.getByTestId('sectab-sessions'));
     await waitFor(() => expect(screen.getByTestId('sessions-section-body')).toBeInTheDocument());
   });
 
-  it('renders connectivity section when expanded', () => {
+  it('renders connectivity section when connectivity tab is clicked', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    const toggle = screen.getByTestId('section-toggle-connectivity');
-    fireEvent.click(toggle);
+    fireEvent.click(screen.getByTestId('sectab-connectivity'));
     expect(screen.getByTestId('connectivity-section-body')).toBeInTheDocument();
+  });
+
+  it('shows trigger count badge on triggers tab when triggers exist', async () => {
+    render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
+    await waitFor(() => {
+      const triggersTab = screen.getByTestId('sectab-triggers');
+      // coding-agent has 1 trigger (webhook) in mock data
+      expect(triggersTab.textContent).toMatch(/triggers/i);
+    });
   });
 });

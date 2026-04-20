@@ -6,7 +6,7 @@
  */
 
 import { StateDot } from '@niuulabs/ui';
-import { useTriggers } from './useTriggers';
+import { useTriggers } from './hooks/useTriggers';
 import type { Trigger, TriggerKind } from '../domain/trigger';
 
 const KIND_ORDER: TriggerKind[] = ['cron', 'event', 'webhook', 'manual'];

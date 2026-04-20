@@ -26,6 +26,8 @@ export const ravnSchema = z.object({
   createdAt: z.string().datetime(),
   /** ISO-8601 UTC last-update timestamp. */
   updatedAt: z.string().datetime().optional(),
+  /** Deployment location label (e.g. "eu-west-1", "us-east-1"). */
+  location: z.string().optional(),
 });
 
 export type Ravn = z.infer<typeof ravnSchema>;

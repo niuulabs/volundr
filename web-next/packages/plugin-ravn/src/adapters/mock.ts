@@ -337,6 +337,7 @@ const SEED_RAVENS: Ravn[] = [
     status: 'active',
     model: 'claude-sonnet-4-6',
     createdAt: '2026-04-15T09:12:34Z',
+    location: 'eu-west-1',
   },
   {
     id: 'b7e2c9d1-3a4f-4b8e-a1c6-5d7f8e9a0b2c',
@@ -344,6 +345,7 @@ const SEED_RAVENS: Ravn[] = [
     status: 'active',
     model: 'claude-opus-4-6',
     createdAt: '2026-04-15T08:45:11Z',
+    location: 'us-east-1',
   },
   {
     id: 'c4d5e6f7-1a2b-4c3d-8e9f-0a1b2c3d4e5f',
@@ -351,6 +353,7 @@ const SEED_RAVENS: Ravn[] = [
     status: 'idle',
     model: 'claude-haiku-4-5',
     createdAt: '2026-04-15T08:30:00Z',
+    location: 'eu-west-1',
   },
   {
     id: 'd8e9f0a1-2b3c-4d5e-6f7a-8b9c0d1e2f3a',
@@ -358,6 +361,7 @@ const SEED_RAVENS: Ravn[] = [
     status: 'active',
     model: 'claude-sonnet-4-6',
     createdAt: '2026-04-15T07:55:22Z',
+    location: 'ap-southeast-1',
   },
   {
     id: 'e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b',
@@ -365,6 +369,7 @@ const SEED_RAVENS: Ravn[] = [
     status: 'suspended',
     model: 'claude-opus-4-6',
     createdAt: '2026-04-14T22:10:45Z',
+    location: 'us-east-1',
   },
   {
     id: 'f5a6b7c8-9d0e-4f1a-2b3c-4d5e6f7a8b9c',
@@ -372,6 +377,7 @@ const SEED_RAVENS: Ravn[] = [
     status: 'idle',
     model: 'claude-sonnet-4-6',
     createdAt: '2026-04-14T18:33:07Z',
+    location: 'ap-southeast-1',
   },
 ];
 
@@ -383,6 +389,9 @@ const SEED_SESSIONS: Session[] = [
     status: 'running',
     model: 'claude-sonnet-4-6',
     createdAt: '2026-04-15T09:12:34Z',
+    title: 'Implement login form',
+    messageCount: 6,
+    costUsd: 0.18,
   },
   {
     id: '10000001-0000-4000-8000-000000000002',
@@ -391,6 +400,9 @@ const SEED_SESSIONS: Session[] = [
     status: 'running',
     model: 'claude-opus-4-6',
     createdAt: '2026-04-15T08:45:11Z',
+    title: 'Review PR #142',
+    messageCount: 4,
+    costUsd: 0.42,
   },
   {
     id: '10000001-0000-4000-8000-000000000003',
@@ -399,6 +411,9 @@ const SEED_SESSIONS: Session[] = [
     status: 'idle',
     model: 'claude-haiku-4-5',
     createdAt: '2026-04-15T08:30:00Z',
+    title: 'Security scan — auth module',
+    messageCount: 12,
+    costUsd: 0.07,
   },
   {
     id: '10000001-0000-4000-8000-000000000004',
@@ -407,6 +422,9 @@ const SEED_SESSIONS: Session[] = [
     status: 'running',
     model: 'claude-sonnet-4-6',
     createdAt: '2026-04-15T07:55:22Z',
+    title: 'Run test suite v2.4',
+    messageCount: 8,
+    costUsd: 0.31,
   },
   {
     id: '10000001-0000-4000-8000-000000000005',
@@ -415,6 +433,9 @@ const SEED_SESSIONS: Session[] = [
     status: 'stopped',
     model: 'claude-opus-4-6',
     createdAt: '2026-04-14T22:10:45Z',
+    title: 'Investigate incident #88',
+    messageCount: 23,
+    costUsd: 1.14,
   },
   {
     id: '10000001-0000-4000-8000-000000000006',
@@ -423,6 +444,9 @@ const SEED_SESSIONS: Session[] = [
     status: 'idle',
     model: 'claude-sonnet-4-6',
     createdAt: '2026-04-14T18:33:07Z',
+    title: 'Health audit — 18:00',
+    messageCount: 5,
+    costUsd: 0.09,
   },
 ];
 
