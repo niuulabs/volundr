@@ -7,11 +7,7 @@
  */
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@niuulabs/design-tokens';
-import {
-  ConfigProvider,
-  FeatureCatalogProvider,
-  ServicesProvider,
-} from '@niuulabs/plugin-sdk';
+import { ConfigProvider, FeatureCatalogProvider, ServicesProvider } from '@niuulabs/plugin-sdk';
 import { createQueryClient } from '@niuulabs/query';
 import { Shell } from '@niuulabs/shell';
 import {

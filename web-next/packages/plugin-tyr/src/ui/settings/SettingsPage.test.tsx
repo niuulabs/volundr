@@ -1,7 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children }: { to: string; className?: string; role?: string; children?: unknown }) =>
+    children as unknown as JSX.Element | null,
+}));
 import { SettingsPage, SettingsIndexPage } from './SettingsPage';
 import { createMockTyrSettingsService, createMockAuditLogService } from '../../adapters/mock';
 import type { TyrPersonaSummary } from '../../ports';
