@@ -15,6 +15,14 @@ export const tyrPlugin = definePlugin({
   rune: 'ᛏ',
   title: 'Tyr',
   subtitle: 'sagas · raids · dispatch',
+  tabs: [
+    { id: 'dashboard', label: 'Dashboard', rune: '◈', path: '/tyr' },
+    { id: 'sagas', label: 'Sagas', rune: 'ᛃ', path: '/tyr/sagas' },
+    { id: 'dispatch', label: 'Dispatch', rune: '⇥', path: '/tyr/dispatch' },
+    { id: 'plan', label: 'Plan', rune: '◇', path: '/tyr/plan' },
+    { id: 'workflows', label: 'Workflows', rune: '⚙', path: '/tyr/workflows' },
+    { id: 'settings', label: 'Settings', rune: '⚬', path: '/tyr/settings' },
+  ],
   routes: (rootRoute) => [
     createRoute({
       getParentRoute: () => rootRoute,

@@ -29,8 +29,8 @@ if (!Element.prototype.releasePointerCapture) {
 }
 
 // jsdom doesn't implement HTMLCanvasElement.prototype.getContext.
-// Return a minimal stub so canvas-based components (e.g. AmbientTopology)
-// don't print "Not implemented" warnings during tests.
+// Return a minimal stub so canvas-based components (e.g. AmbientTopology,
+// RaidMeshCanvas) don't print "Not implemented" warnings during tests.
 if (typeof HTMLCanvasElement !== 'undefined') {
   HTMLCanvasElement.prototype.getContext = () =>
     ({
@@ -41,10 +41,16 @@ if (typeof HTMLCanvasElement !== 'undefined') {
       arc: () => {},
       fill: () => {},
       stroke: () => {},
+      fillText: () => {},
       setTransform: () => {},
+      createRadialGradient: () => ({
+        addColorStop: () => {},
+      }),
       strokeStyle: '',
       lineWidth: 0,
       fillStyle: '',
+      font: '',
+      textAlign: 'start' as CanvasTextAlign,
     }) as unknown as CanvasRenderingContext2D;
 }
 

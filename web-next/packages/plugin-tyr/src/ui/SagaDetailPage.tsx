@@ -117,9 +117,11 @@ function RaidPanel({ raid, onClose, onOpenSession }: RaidPanelProps) {
 
 interface SagaDetailPageProps {
   sagaId: string;
+  /** Hide the "← Sagas" back button (used when embedded in a split-panel). */
+  hideBackButton?: boolean;
 }
 
-export function SagaDetailPage({ sagaId }: SagaDetailPageProps) {
+export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPageProps) {
   const navigate = useNavigate();
   const [expandedRaidId, setExpandedRaidId] = useState<string | null>(null);
 
@@ -158,14 +160,16 @@ export function SagaDetailPage({ sagaId }: SagaDetailPageProps) {
   return (
     <div className="niuu-p-6 niuu-space-y-6">
       {/* Back navigation */}
-      <button
-        type="button"
-        onClick={() => void navigate({ to: '/tyr/sagas' })}
-        className="niuu-text-sm niuu-text-text-secondary hover:niuu-text-text-primary niuu-flex niuu-items-center niuu-gap-1"
-        aria-label="Back to sagas"
-      >
-        ← Sagas
-      </button>
+      {!hideBackButton && (
+        <button
+          type="button"
+          onClick={() => void navigate({ to: '/tyr/sagas' })}
+          className="niuu-text-sm niuu-text-text-secondary hover:niuu-text-text-primary niuu-flex niuu-items-center niuu-gap-1"
+          aria-label="Back to sagas"
+        >
+          ← Sagas
+        </button>
+      )}
 
       {/* Saga header */}
       <header className="niuu-space-y-3">

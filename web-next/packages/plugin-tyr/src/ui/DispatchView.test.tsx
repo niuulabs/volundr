@@ -141,16 +141,16 @@ describe('DispatchView', () => {
   it('renders rule summary card after loading', async () => {
     render(<DispatchView />, { wrapper: wrap(makeServices()) });
     await waitFor(() => expect(screen.getByText('Dispatch rules')).toBeInTheDocument());
-    expect(screen.getByText('70%')).toBeInTheDocument();
+    // "70%" may appear in both queue header and rules panel
+    expect(screen.getAllByText('70%').length).toBeGreaterThanOrEqual(1);
     // Multiple "3"s can appear (concurrent cap + retries), use getAllByText
     expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('off')).toBeInTheDocument();
   });
 
-  it('renders the dispatch queue table', async () => {
+  it('renders the dispatch queue list', async () => {
     render(<DispatchView />, { wrapper: wrap(makeServices()) });
-    await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
-    expect(screen.getByText('Test Raid')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Test Raid')).toBeInTheDocument());
     expect(screen.getByText(/Test Saga/)).toBeInTheDocument();
   });
 

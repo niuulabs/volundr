@@ -15,6 +15,7 @@ import type { ITyrService, Phase } from '../ports';
 import type { Saga, RaidStatus } from '../domain/saga';
 import { useSagas } from './useSagas';
 import { useDispatcher } from './useDispatcher';
+import { RaidMeshCanvas } from './RaidMeshCanvas';
 import './DashboardPage.css';
 
 type PipeCell = { status: 'ok' | 'run' | 'warn' | 'crit' | 'gate' | 'pend'; label: string };
@@ -191,9 +192,12 @@ export function DashboardPage() {
         <div className="tyr-flock-viz__cnt">
           {runningRaids} raids active
         </div>
-        <canvas
-          aria-label="Live raid mesh visualization"
-          style={{ width: '100%', height: '100%', background: 'transparent' }}
+        <RaidMeshCanvas
+          sagas={sagas ?? []}
+          phases={phaseQueries.map((q) => q.data ?? [])}
+          onClickSaga={(sagaId) =>
+            void navigate({ to: '/tyr/sagas/$sagaId', params: { sagaId } })
+          }
         />
       </div>
 
