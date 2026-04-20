@@ -385,15 +385,37 @@ test('validation pill shows error when cycle is created', async ({ page }) => {
   const idA = ((await nodeA.getAttribute('data-testid')) ?? '').replace('workflow-node-', '');
   const idB = ((await nodeB.getAttribute('data-testid')) ?? '').replace('workflow-node-', '');
 
-  // Create edge A→B
-  await nodeA.click({ force: true });
-  await page.getByTestId(`connect-btn-${idA}`).click({ force: true });
-  await nodeB.click({ force: true });
+  // The graph canvas uses overflow:hidden — new nodes may be positioned outside the
+  // visible area. Playwright's .click() (even with force:true) cannot click off-screen
+  // SVG elements. Dispatch native mouse events via evaluate to bypass the viewport check.
+  const mousedown = (el: Element) =>
+    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+  const clickEl = (el: Element) =>
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 
-  // Create edge B→A (completes cycle)
-  await nodeB.click({ force: true });
-  await page.getByTestId(`connect-btn-${idB}`).click({ force: true });
-  await nodeA.click({ force: true });
+  // Select nodeA → connect button appears
+  await nodeA.evaluate(mousedown);
+  await page.getByTestId(`connect-btn-${idA}`).waitFor({ state: 'attached', timeout: 2000 });
+
+  // Start connecting from nodeA → connect button hides (connecting mode)
+  await page.getByTestId(`connect-btn-${idA}`).evaluate(clickEl);
+  await page.getByTestId(`connect-btn-${idA}`).waitFor({ state: 'detached', timeout: 2000 });
+
+  // Complete edge A→B: click nodeB while in connecting mode
+  await nodeB.evaluate(mousedown);
+  // Wait for connecting mode to end (connect button reappears for nodeA)
+  await page.getByTestId(`connect-btn-${idA}`).waitFor({ state: 'attached', timeout: 2000 });
+
+  // Select nodeB → its connect button appears
+  await nodeB.evaluate(mousedown);
+  await page.getByTestId(`connect-btn-${idB}`).waitFor({ state: 'attached', timeout: 2000 });
+
+  // Start connecting from nodeB → connect button hides
+  await page.getByTestId(`connect-btn-${idB}`).evaluate(clickEl);
+  await page.getByTestId(`connect-btn-${idB}`).waitFor({ state: 'detached', timeout: 2000 });
+
+  // Complete edge B→A: click nodeA while in connecting mode (creates cycle)
+  await nodeA.evaluate(mousedown);
 
   // Cycle should now be detected
   const pill = page.getByTestId('validation-pill');

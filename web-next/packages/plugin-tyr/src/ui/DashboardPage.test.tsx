@@ -7,11 +7,13 @@ import { createMockTyrService, createMockDispatcherService } from '../adapters/m
 import type { Saga } from '../domain/saga';
 
 // ---------------------------------------------------------------------------
-// Router mock — DashboardPage calls useNavigate() for saga click navigation
+// Router mock — DashboardPage calls useNavigate() and Link for navigation
 // ---------------------------------------------------------------------------
 const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
+  Link: ({ children }: { to: string; className?: string; children?: unknown }) =>
+    children as unknown as JSX.Element | null,
 }));
 
 // ---------------------------------------------------------------------------

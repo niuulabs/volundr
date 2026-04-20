@@ -9,6 +9,7 @@ export interface SelectProps {
   options: SelectOption[];
   placeholder?: string;
   value?: string;
+  defaultValue?: string;
   onValueChange?: (value: string) => void;
   disabled?: boolean;
   name?: string;
@@ -20,6 +21,7 @@ export function Select({
   options,
   placeholder = 'Select…',
   value,
+  defaultValue,
   onValueChange,
   disabled,
   name,
@@ -33,6 +35,7 @@ export function Select({
   return (
     <RadixSelect.Root
       value={value}
+      defaultValue={defaultValue}
       onValueChange={onValueChange}
       disabled={disabled}
       name={name}
