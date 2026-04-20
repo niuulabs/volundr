@@ -68,7 +68,7 @@ export function ShellLayout() {
 
   return (
     <div
-      className={clsx('niuu-shell', !subnavNode && 'niuu-shell--no-subnav')}
+      className="niuu-shell"
       data-theme={config.theme}
     >
       <aside className="niuu-shell__rail">

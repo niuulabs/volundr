@@ -5,33 +5,14 @@
  * the active plugin, so no route check is needed).
  *
  * Chips:
- *   • {activeRavens} active  (kind=ok, dot=●)
- *   • {failedRavens} failed  (kind=err, conditional)
- *   • {openSessions} sessions (kind=dim, icon=◷)
+ *   - {activeRavens} active  (kind=ok, dot=●)
+ *   - {failedRavens} failed  (kind=err, conditional)
+ *   - {openSessions} sessions (kind=dim, icon=◷)
  */
 
+import { TopbarChip } from '@niuulabs/ui';
 import { useRavens } from './hooks/useRavens';
 import { useSessions } from './hooks/useSessions';
-
-interface TopbarChipProps {
-  kind: 'ok' | 'err' | 'dim';
-  icon: string;
-  label: string;
-}
-
-function TopbarChip({ kind, icon, label }: TopbarChipProps) {
-  return (
-    <span
-      className={`niuu-inline-flex niuu-items-center niuu-gap-1 niuu-px-2 niuu-py-0.5 niuu-rounded-full niuu-text-xs niuu-font-mono rv-topbar-chip rv-topbar-chip--${kind}`}
-      data-testid={`topbar-chip-${kind}`}
-    >
-      <span className="rv-topbar-chip__dot" aria-hidden="true">
-        {icon}
-      </span>
-      {label}
-    </span>
-  );
-}
 
 export function RavnTopbar() {
   const { data: ravens } = useRavens();

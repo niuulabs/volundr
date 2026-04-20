@@ -2,35 +2,18 @@
  * TyrTopbar — dispatcher status chips rendered in the shell topbar-right area.
  *
  * Shown when the tyr plugin is active. Displays:
- *   • dispatcher on/off  (kind=ok/dim)
- *   • threshold value     (kind=dim)
- *   • concurrent X/Y      (kind=dim)
+ *   - dispatcher on/off  (kind=ok/dim)
+ *   - threshold value     (kind=dim)
+ *   - concurrent X/Y      (kind=dim)
  *
  * When the user is on a /tyr/settings/* route, the settings breadcrumb
  * is shown instead (via SettingsTopbar).
  */
 
 import { useRouterState } from '@tanstack/react-router';
+import { TopbarChip } from '@niuulabs/ui';
 import { useDispatcherState } from './useDispatcherState';
 import { SettingsTopbar } from './settings/SettingsTopbar';
-
-interface ChipProps {
-  kind: 'ok' | 'err' | 'dim';
-  icon: string;
-  label: string;
-}
-
-function DispatcherChip({ kind, icon, label }: ChipProps) {
-  return (
-    <span
-      className={`niuu-inline-flex niuu-items-center niuu-gap-1 niuu-px-2 niuu-py-0.5 niuu-rounded-full niuu-text-xs niuu-font-mono tyr-topbar-chip tyr-topbar-chip--${kind}`}
-      data-testid={`tyr-chip-${label.replace(/[\s/]/g, '-')}`}
-    >
-      <span aria-hidden="true">{icon}</span>
-      {label}
-    </span>
-  );
-}
 
 function DispatcherStats() {
   const { data: state } = useDispatcherState();
@@ -38,7 +21,7 @@ function DispatcherStats() {
   if (!state) {
     return (
       <div className="niuu-flex niuu-items-center niuu-gap-2" data-testid="tyr-topbar">
-        <DispatcherChip kind="dim" icon="◌" label="dispatcher …" />
+        <TopbarChip kind="dim" icon="◌" label="dispatcher …" testId="tyr-chip-dispatcher-…" />
       </div>
     );
   }
@@ -47,16 +30,18 @@ function DispatcherStats() {
 
   return (
     <div className="niuu-flex niuu-items-center niuu-gap-2" data-testid="tyr-topbar">
-      <DispatcherChip
+      <TopbarChip
         kind={state.running ? 'ok' : 'dim'}
         icon="●"
         label={`dispatcher ${state.running ? 'on' : 'off'}`}
+        testId={`tyr-chip-dispatcher-${state.running ? 'on' : 'off'}`}
       />
-      <DispatcherChip kind="dim" icon="◈" label={`threshold ${thresholdDisplay}`} />
-      <DispatcherChip
+      <TopbarChip kind="dim" icon="◈" label={`threshold ${thresholdDisplay}`} testId={`tyr-chip-threshold-${thresholdDisplay}`} />
+      <TopbarChip
         kind="dim"
         icon="⇥"
         label={`concurrent ${state.maxConcurrentRaids}`}
+        testId={`tyr-chip-concurrent-${state.maxConcurrentRaids}`}
       />
     </div>
   );

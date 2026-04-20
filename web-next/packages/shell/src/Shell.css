@@ -1,6 +1,6 @@
 .niuu-shell {
   display: grid;
-  grid-template-columns: 48px 200px 1fr;
+  grid-template-columns: 48px auto 1fr;
   grid-template-rows: 48px 1fr 28px;
   grid-template-areas:
     'rail topbar topbar'
@@ -10,20 +10,6 @@
   width: 100vw;
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
-  overflow: hidden;
-}
-
-.niuu-shell--no-subnav {
-  grid-template-columns: 48px 0 1fr;
-  grid-template-areas:
-    'rail topbar topbar'
-    'rail content content'
-    'rail footer footer';
-}
-.niuu-shell--no-subnav .niuu-shell__subnav {
-  width: 0;
-  min-width: 0;
-  border-right-color: transparent;
   overflow: hidden;
 }
 
