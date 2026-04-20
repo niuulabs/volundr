@@ -14,6 +14,7 @@ export * from './primitives/Tooltip';
 export * from './primitives/Toast';
 export * from './primitives/ShapeSvg';
 export * from './primitives/Sparkline';
+export * from './primitives/TopbarChip';
 export * from './primitives/BudgetBar';
 export * from './primitives/BudgetRunwayBar';
 export * from './primitives/CommandPalette';
