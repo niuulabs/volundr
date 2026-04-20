@@ -168,6 +168,13 @@ export interface VolundrStats {
   localTokens: number;
   cloudTokens: number;
   costToday: number;
+  /** 24-point sparkline for each KPI — indexed by key. */
+  sparklines?: {
+    activePods?: number[];
+    tokensToday?: number[];
+    costToday?: number[];
+    gpus?: number[];
+  };
 }
 
 // ---------------------------------------------------------------------------
