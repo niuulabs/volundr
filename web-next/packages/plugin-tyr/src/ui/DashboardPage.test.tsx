@@ -147,4 +147,123 @@ describe('DashboardPage', () => {
     fireEvent.click(screen.getByText('View all'));
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/tyr/sagas' });
   });
+
+  // ---------------------------------------------------------------------------
+  // Dispatcher stats bar
+  // ---------------------------------------------------------------------------
+
+  it('renders dispatcher stats bar when state is available', async () => {
+    render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
+    await waitFor(() => expect(screen.getByTestId('tyr-dispatcher-stats')).toBeInTheDocument());
+    const bar = screen.getByTestId('tyr-dispatcher-stats');
+    expect(bar).toHaveTextContent('dispatcher');
+    expect(bar).toHaveTextContent('on');
+    expect(bar).toHaveTextContent('threshold');
+    expect(bar).toHaveTextContent('0.70');
+    expect(bar).toHaveTextContent('concurrent');
+    expect(bar).toHaveTextContent('3');
+  });
+
+  it('does not render dispatcher stats bar while dispatcher is loading', () => {
+    const slowDispatcher = {
+      tyr: createMockTyrService(),
+      'tyr.dispatcher': { getState: () => new Promise(() => undefined) },
+    };
+    render(<DashboardPage />, { wrapper: wrap(slowDispatcher) });
+    expect(screen.queryByTestId('tyr-dispatcher-stats')).not.toBeInTheDocument();
+  });
+
+  it('shows dispatcher off when running is false', async () => {
+    const offDispatcher = {
+      tyr: createMockTyrService(),
+      'tyr.dispatcher': {
+        getState: async () => ({
+          id: 'test',
+          running: false,
+          threshold: 80,
+          maxConcurrentRaids: 5,
+          autoContinue: false,
+          updatedAt: '2026-01-01T00:00:00Z',
+        }),
+      },
+    };
+    render(<DashboardPage />, { wrapper: wrap(offDispatcher) });
+    await waitFor(() => expect(screen.getByTestId('tyr-dispatcher-stats')).toBeInTheDocument());
+    expect(screen.getByTestId('tyr-dispatcher-stats')).toHaveTextContent('off');
+    expect(screen.getByTestId('tyr-dispatcher-stats')).toHaveTextContent('0.80');
+    expect(screen.getByTestId('tyr-dispatcher-stats')).toHaveTextContent('5');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Event feed link buttons
+  // ---------------------------------------------------------------------------
+
+  it('renders link buttons for every event feed row', async () => {
+    render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
+    await waitFor(() => expect(screen.getByText('Event feed')).toBeInTheDocument());
+    const linkButtons = screen.getAllByRole('button', { name: /↗|Open|No linked/ });
+    // 6 feed rows → 6 link buttons
+    expect(linkButtons.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it('feed link buttons are disabled when no saga matches the subject', async () => {
+    render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
+    await waitFor(() => expect(screen.getByText('Event feed')).toBeInTheDocument());
+    // Seed sagas have trackerIds NIU-500, NIU-520, NIU-600 — none match feed subjects
+    const disabledButtons = screen
+      .getAllByTitle('No linked saga')
+      .filter((el) => el.tagName === 'BUTTON');
+    expect(disabledButtons.length).toBe(6);
+    disabledButtons.forEach((btn) => expect(btn).toBeDisabled());
+  });
+
+  it('feed link button navigates to the matched saga', async () => {
+    mockNavigate.mockClear();
+    const sagaId = 'saga-with-niu-214';
+    const matchingSvc = {
+      tyr: {
+        getSagas: async (): Promise<Saga[]> => [
+          {
+            id: sagaId,
+            trackerId: 'NIU-214',
+            trackerType: 'linear',
+            slug: 'niu-214',
+            name: 'NIU-214 Saga',
+            repos: [],
+            featureBranch: 'feat/niu-214',
+            status: 'active',
+            confidence: 80,
+            createdAt: '2026-01-01T00:00:00Z',
+            phaseSummary: { total: 1, completed: 0 },
+          },
+        ],
+        getPhases: async () => [],
+      },
+      'tyr.dispatcher': createMockDispatcherService(),
+    };
+    render(<DashboardPage />, { wrapper: wrap(matchingSvc) });
+    await waitFor(() => expect(screen.getByText('Event feed')).toBeInTheDocument());
+
+    // NIU-214 matches subjects "NIU-214.2" and "NIU-214.3"
+    const enabledButtons = screen.getAllByTitle('Open NIU-214');
+    expect(enabledButtons.length).toBe(2);
+    expect(enabledButtons[0]).not.toBeDisabled();
+
+    fireEvent.click(enabledButtons[0]!);
+    expect(mockNavigate).toHaveBeenCalledWith({
+      to: '/tyr/sagas/$sagaId',
+      params: { sagaId },
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Toast on View all
+  // ---------------------------------------------------------------------------
+
+  it('View all button shows toast notification', async () => {
+    render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
+    await waitFor(() => expect(screen.getByText('View all')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('View all'));
+    await waitFor(() => expect(screen.getByText('Navigating to Sagas')).toBeInTheDocument());
+  });
 });
