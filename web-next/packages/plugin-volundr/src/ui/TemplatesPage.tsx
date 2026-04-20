@@ -1,147 +1,413 @@
-import { useState, useCallback } from 'react';
-import {
-  StateDot,
-  Drawer,
-  DrawerContent,
-  Field,
-  Input,
-  Textarea,
-  ValidationSummary,
-} from '@niuulabs/ui';
-import type { ValidationError } from '@niuulabs/ui';
+import { useState } from 'react';
+import { Chip, LoadingState, ErrorState } from '@niuulabs/ui';
 import type { Template } from '../domain/template';
-import type { PodSpec } from '../domain/pod';
-import { cloneName, buildCloneSpec } from '../application/templateUtils';
-import { useTemplates, useCreateTemplate, useUpdateTemplate } from './useTemplates';
-import { TemplateCard } from './TemplateCard';
-import './TemplatesPage.css';
+import type { Mount } from '../domain/pod';
+import { useTemplates } from './useTemplates';
+import { CliBadge, Meter } from './atoms';
 
 // ---------------------------------------------------------------------------
-// Editor form state
+// Tab types
 // ---------------------------------------------------------------------------
 
-interface FormValues {
-  name: string;
-  image: string;
-  tag: string;
-  cpuRequest: string;
-  cpuLimit: string;
-  memRequestMi: string;
-  memLimitMi: string;
-  gpuCount: string;
-  ttlSec: string;
-  idleTimeoutSec: string;
-  envJson: string;
-  envSecretRefs: string;
-  tools: string;
-  clusterAffinity: string;
-  tolerations: string;
+const TABS = ['overview', 'workspace', 'runtime', 'mcp', 'skills', 'rules'] as const;
+type TabId = (typeof TABS)[number];
+
+// ---------------------------------------------------------------------------
+// Helper: key-value row
+// ---------------------------------------------------------------------------
+
+function KV({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="niuu-flex niuu-items-baseline niuu-gap-3 niuu-py-1">
+      <span className="niuu-w-24 niuu-shrink-0 niuu-font-mono niuu-text-xs niuu-text-text-muted">
+        {label}
+      </span>
+      <span className="niuu-text-sm niuu-text-text-primary">{children}</span>
+    </div>
+  );
 }
 
-function specToForm(name: string, spec: PodSpec): FormValues {
-  return {
-    name,
-    image: spec.image,
-    tag: spec.tag,
-    cpuRequest: spec.resources.cpuRequest,
-    cpuLimit: spec.resources.cpuLimit,
-    memRequestMi: String(spec.resources.memRequestMi),
-    memLimitMi: String(spec.resources.memLimitMi),
-    gpuCount: String(spec.resources.gpuCount),
-    ttlSec: String(spec.ttlSec),
-    idleTimeoutSec: String(spec.idleTimeoutSec),
-    envJson: Object.keys(spec.env).length > 0 ? JSON.stringify(spec.env, null, 2) : '',
-    envSecretRefs: spec.envSecretRefs.join(', '),
-    tools: spec.tools.join(', '),
-    clusterAffinity: (spec.clusterAffinity ?? []).join(', '),
-    tolerations: (spec.tolerations ?? []).join(', '),
-  };
+// ---------------------------------------------------------------------------
+// Helper: detail card
+// ---------------------------------------------------------------------------
+
+function DetailCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section
+      className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
+      data-testid="detail-card"
+    >
+      <h4 className="niuu-text-xs niuu-font-semibold niuu-uppercase niuu-tracking-wider niuu-text-text-muted">
+        {title}
+      </h4>
+      <div className="niuu-flex niuu-flex-col">{children}</div>
+    </section>
+  );
 }
 
-function blankForm(): FormValues {
-  return {
-    name: '',
-    image: 'ghcr.io/niuulabs/skuld',
-    tag: 'latest',
-    cpuRequest: '1',
-    cpuLimit: '2',
-    memRequestMi: '512',
-    memLimitMi: '1024',
-    gpuCount: '0',
-    ttlSec: '3600',
-    idleTimeoutSec: '600',
-    envJson: '',
-    envSecretRefs: '',
-    tools: '',
-    clusterAffinity: '',
-    tolerations: '',
-  };
+// ---------------------------------------------------------------------------
+// Template list card (left side / grid)
+// ---------------------------------------------------------------------------
+
+function TemplateListCard({
+  template,
+  isSelected,
+  onSelect,
+}: {
+  template: Template;
+  isSelected: boolean;
+  onSelect: (t: Template) => void;
+}) {
+  const { spec } = template;
+  return (
+    <button
+      type="button"
+      className={`niuu-flex niuu-w-full niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-p-4 niuu-text-left niuu-transition-colors ${
+        isSelected
+          ? 'niuu-border-brand niuu-bg-bg-secondary'
+          : 'niuu-border-border-subtle niuu-bg-bg-secondary hover:niuu-border-border'
+      }`}
+      onClick={() => onSelect(template)}
+      data-testid="template-card"
+      aria-pressed={isSelected}
+    >
+      <div className="niuu-flex niuu-items-center niuu-gap-2">
+        <span className="niuu-font-mono niuu-text-sm niuu-font-medium niuu-text-text-primary">
+          {template.name}
+        </span>
+        {template.name === 'default' && (
+          <span className="niuu-rounded niuu-bg-brand niuu-px-1.5 niuu-py-0.5 niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-text-bg-primary">
+            default
+          </span>
+        )}
+        <span className="niuu-ml-auto niuu-font-mono niuu-text-xs niuu-text-text-faint">
+          v{template.version}
+        </span>
+      </div>
+      <div className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
+        {spec.image}:{spec.tag}
+      </div>
+      <div className="niuu-flex niuu-flex-wrap niuu-gap-1.5">
+        <Chip tone="default">
+          {spec.resources.cpuRequest}c &middot; {spec.resources.memRequestMi}Mi
+        </Chip>
+        {spec.resources.gpuCount > 0 && (
+          <Chip tone="brand">GPU &times;{spec.resources.gpuCount}</Chip>
+        )}
+      </div>
+    </button>
+  );
 }
 
-function csvToArray(s: string): string[] {
-  return s
-    .split(',')
-    .map((v) => v.trim())
-    .filter(Boolean);
+// ---------------------------------------------------------------------------
+// Tab: Overview
+// ---------------------------------------------------------------------------
+
+function TplOverview({ template }: { template: Template }) {
+  const { spec } = template;
+  return (
+    <div
+      className="niuu-grid niuu-grid-cols-1 niuu-gap-4 sm:niuu-grid-cols-2"
+      data-testid="tab-overview"
+    >
+      <DetailCard title="Identity">
+        <KV label="name">
+          <span className="niuu-font-mono">{template.name}</span>
+        </KV>
+        <KV label="version">
+          <span className="niuu-font-mono">v{template.version}</span>
+        </KV>
+        <KV label="image">
+          <span className="niuu-font-mono">
+            {spec.image}:{spec.tag}
+          </span>
+        </KV>
+      </DetailCard>
+
+      <DetailCard title="Resources">
+        <KV label="cpu">
+          <span className="niuu-font-mono">
+            {spec.resources.cpuRequest}&ndash;{spec.resources.cpuLimit} cores
+          </span>
+        </KV>
+        <KV label="mem">
+          <span className="niuu-font-mono">
+            {spec.resources.memRequestMi}&ndash;{spec.resources.memLimitMi} Mi
+          </span>
+        </KV>
+        <KV label="gpu">
+          <span className="niuu-font-mono">
+            {spec.resources.gpuCount > 0 ? `${spec.resources.gpuCount} gpu` : '\u2014'}
+          </span>
+        </KV>
+      </DetailCard>
+
+      <DetailCard title="Workspace">
+        {spec.mounts.length === 0 ? (
+          <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+            blank &middot; no sources
+          </span>
+        ) : (
+          spec.mounts.map((m) => (
+            <div key={m.name} className="niuu-flex niuu-items-center niuu-gap-1.5 niuu-py-0.5">
+              <span className="niuu-text-text-muted" aria-hidden>
+                {m.source.kind === 'git' ? '\u276F' : '\u2302'}
+              </span>
+              <span className="niuu-font-mono niuu-text-xs niuu-text-text-secondary">{m.name}</span>
+            </div>
+          ))
+        )}
+      </DetailCard>
+
+      <DetailCard title="Extensions">
+        <KV label="tools">
+          <span className="niuu-font-mono">{spec.tools.length > 0 ? spec.tools.join(' \u00b7 ') : '\u2014'}</span>
+        </KV>
+        <KV label="env vars">
+          <span className="niuu-font-mono">{Object.keys(spec.env).length}</span>
+        </KV>
+        <KV label="secrets">
+          <span className="niuu-font-mono">{spec.envSecretRefs.length}</span>
+        </KV>
+      </DetailCard>
+    </div>
+  );
 }
 
-function formToSpec(values: FormValues): PodSpec {
-  let env: Record<string, string> = {};
-  if (values.envJson.trim()) {
-    try {
-      env = JSON.parse(values.envJson) as Record<string, string>;
-    } catch {
-      env = {};
-    }
+// ---------------------------------------------------------------------------
+// Tab: Workspace
+// ---------------------------------------------------------------------------
+
+function mountDescription(m: Mount): string {
+  switch (m.source.kind) {
+    case 'git':
+      return `@${m.source.branch} \u00b7 shallow clone`;
+    case 'pvc':
+      return `pvc:${m.source.name} \u00b7 persistent`;
+    case 'secret':
+      return `secret:${m.source.name}`;
+    case 'configmap':
+      return `configmap:${m.source.name}`;
   }
-
-  return {
-    image: values.image,
-    tag: values.tag,
-    mounts: [],
-    env,
-    envSecretRefs: csvToArray(values.envSecretRefs),
-    tools: csvToArray(values.tools),
-    resources: {
-      cpuRequest: values.cpuRequest,
-      cpuLimit: values.cpuLimit,
-      memRequestMi: Number(values.memRequestMi),
-      memLimitMi: Number(values.memLimitMi),
-      gpuCount: Number(values.gpuCount),
-    },
-    ttlSec: Number(values.ttlSec),
-    idleTimeoutSec: Number(values.idleTimeoutSec),
-    clusterAffinity: csvToArray(values.clusterAffinity),
-    tolerations: csvToArray(values.tolerations),
-  };
 }
 
-function validate(values: FormValues): ValidationError[] {
-  const errors: ValidationError[] = [];
-  if (!values.name.trim()) errors.push({ id: 'name', label: 'Name', message: 'Name is required' });
-  if (!values.image.trim())
-    errors.push({ id: 'image', label: 'Image', message: 'Image is required' });
-  if (!values.tag.trim()) errors.push({ id: 'tag', label: 'Tag', message: 'Tag is required' });
-  if (Number.isNaN(Number(values.memRequestMi)) || Number(values.memRequestMi) <= 0)
-    errors.push({
-      id: 'memRequestMi',
-      label: 'Mem Request',
-      message: 'Memory request must be a positive number',
-    });
-  if (Number.isNaN(Number(values.ttlSec)) || Number(values.ttlSec) <= 0)
-    errors.push({ id: 'ttlSec', label: 'TTL', message: 'TTL must be a positive number' });
-  if (values.envJson.trim()) {
-    try {
-      JSON.parse(values.envJson);
-    } catch {
-      errors.push({
-        id: 'envJson',
-        label: 'Env vars',
-        message: 'Environment variables must be valid JSON',
-      });
-    }
-  }
-  return errors;
+function TplWorkspace({ template }: { template: Template }) {
+  const { spec } = template;
+  return (
+    <div className="niuu-flex niuu-flex-col niuu-gap-4" data-testid="tab-workspace">
+      <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">Workspace sources</h3>
+      <div className="niuu-flex niuu-flex-col niuu-gap-2">
+        {spec.mounts.length === 0 ? (
+          <p className="niuu-font-mono niuu-text-sm niuu-text-text-faint">
+            no workspace sources &mdash; pod boots with empty /workspace
+          </p>
+        ) : (
+          spec.mounts.map((m) => (
+            <div
+              key={m.name}
+              className="niuu-flex niuu-items-center niuu-gap-3 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-3"
+            >
+              <span className="niuu-text-text-muted" aria-hidden>
+                {m.source.kind === 'git' ? '\u276F' : '\u2302'}
+              </span>
+              <span className="niuu-font-mono niuu-text-sm niuu-text-text-primary">{m.name}</span>
+              <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
+                {mountDescription(m)}
+              </span>
+              <span className="niuu-ml-auto niuu-font-mono niuu-text-xs niuu-text-text-faint">
+                {m.readOnly ? 'read-only' : 'read-write'}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tab: Runtime
+// ---------------------------------------------------------------------------
+
+function TplRuntime({ template }: { template: Template }) {
+  const { spec } = template;
+  return (
+    <div
+      className="niuu-grid niuu-grid-cols-1 niuu-gap-4 sm:niuu-grid-cols-2"
+      data-testid="tab-runtime"
+    >
+      <DetailCard title="Container image">
+        <KV label="image">
+          <span className="niuu-font-mono">{spec.image}</span>
+        </KV>
+        <KV label="tag">
+          <span className="niuu-font-mono">{spec.tag}</span>
+        </KV>
+      </DetailCard>
+
+      <DetailCard title="Lifecycle">
+        <KV label="TTL">
+          <span className="niuu-font-mono">{Math.round(spec.ttlSec / 60)}m</span>
+        </KV>
+        <KV label="idle timeout">
+          <span className="niuu-font-mono">{Math.round(spec.idleTimeoutSec / 60)}m</span>
+        </KV>
+      </DetailCard>
+
+      <DetailCard title="Resource limits">
+        <Meter
+          used={Number(spec.resources.cpuRequest)}
+          limit={Number(spec.resources.cpuLimit)}
+          label="CPU"
+          unit="c"
+        />
+        <Meter
+          used={spec.resources.memRequestMi}
+          limit={spec.resources.memLimitMi}
+          label="Mem"
+          unit="Mi"
+        />
+        {spec.resources.gpuCount > 0 && (
+          <KV label="gpu">
+            <span className="niuu-font-mono">{spec.resources.gpuCount}</span>
+          </KV>
+        )}
+      </DetailCard>
+
+      <DetailCard title="Environment">
+        {Object.keys(spec.env).length === 0 && spec.envSecretRefs.length === 0 ? (
+          <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+            no env vars configured
+          </span>
+        ) : (
+          <>
+            {Object.entries(spec.env).map(([k, v]) => (
+              <KV key={k} label={k}>
+                <span className="niuu-font-mono">{v}</span>
+              </KV>
+            ))}
+            {spec.envSecretRefs.map((ref) => (
+              <KV key={ref} label={ref}>
+                <span className="niuu-font-mono niuu-text-text-faint">***</span>
+              </KV>
+            ))}
+          </>
+        )}
+      </DetailCard>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tab: MCP
+// ---------------------------------------------------------------------------
+
+function TplMcp({ template }: { template: Template }) {
+  const { spec } = template;
+  // MCP servers aren't modeled in PodSpec yet, show tools as proxy
+  const hasTools = spec.tools.length > 0;
+  return (
+    <div className="niuu-flex niuu-flex-col niuu-gap-4" data-testid="tab-mcp">
+      <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">MCP servers</h3>
+      {!hasTools ? (
+        <p className="niuu-font-mono niuu-text-sm niuu-text-text-faint">
+          no MCP servers enabled
+        </p>
+      ) : (
+        <div className="niuu-flex niuu-flex-col niuu-gap-2">
+          {spec.tools.map((tool) => (
+            <div
+              key={tool}
+              className="niuu-flex niuu-items-center niuu-gap-3 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-3"
+            >
+              <span className="niuu-h-2 niuu-w-2 niuu-rounded-full niuu-bg-brand" aria-hidden />
+              <span className="niuu-font-mono niuu-text-sm niuu-text-text-primary">{tool}</span>
+              <span className="niuu-text-xs niuu-text-text-muted">tool server</span>
+              <span className="niuu-ml-auto niuu-font-mono niuu-text-xs niuu-text-text-faint">
+                stdio
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tab: Skills
+// ---------------------------------------------------------------------------
+
+function TplSkills({ template }: { template: Template }) {
+  const { spec } = template;
+  const count = spec.tools.length;
+  return (
+    <div className="niuu-flex niuu-flex-col niuu-gap-4" data-testid="tab-skills">
+      <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">
+        Skills ({count})
+      </h3>
+      {count === 0 ? (
+        <p className="niuu-font-mono niuu-text-sm niuu-text-text-faint">no skills defined</p>
+      ) : (
+        <div className="niuu-flex niuu-flex-wrap niuu-gap-2">
+          {spec.tools.map((tool) => (
+            <Chip key={tool} tone="muted">
+              {tool}
+            </Chip>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tab: Rules
+// ---------------------------------------------------------------------------
+
+function TplRules({ template }: { template: Template }) {
+  const hasAffinity = (template.spec.clusterAffinity ?? []).length > 0;
+  const hasTolerations = (template.spec.tolerations ?? []).length > 0;
+  const hasRules = hasAffinity || hasTolerations;
+  return (
+    <div className="niuu-flex niuu-flex-col niuu-gap-4" data-testid="tab-rules">
+      <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">
+        Rules & constraints
+      </h3>
+      {!hasRules ? (
+        <p className="niuu-font-mono niuu-text-sm niuu-text-text-faint">
+          no rules or constraints defined
+        </p>
+      ) : (
+        <div className="niuu-grid niuu-grid-cols-1 niuu-gap-4 sm:niuu-grid-cols-2">
+          {hasAffinity && (
+            <DetailCard title="Cluster affinity">
+              {template.spec.clusterAffinity!.map((c) => (
+                <div
+                  key={c}
+                  className="niuu-flex niuu-items-center niuu-gap-2 niuu-py-0.5"
+                >
+                  <Chip tone="muted">{c}</Chip>
+                </div>
+              ))}
+            </DetailCard>
+          )}
+          {hasTolerations && (
+            <DetailCard title="Tolerations">
+              {template.spec.tolerations!.map((t) => (
+                <div
+                  key={t}
+                  className="niuu-flex niuu-items-center niuu-gap-2 niuu-py-0.5"
+                >
+                  <Chip tone="muted">{t}</Chip>
+                </div>
+              ))}
+            </DetailCard>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -150,302 +416,122 @@ function validate(values: FormValues): ValidationError[] {
 
 export function TemplatesPage() {
   const templates = useTemplates();
-  const createMutation = useCreateTemplate();
-  const updateMutation = useUpdateTemplate();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [tab, setTab] = useState<TabId>('overview');
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormValues>(blankForm);
-  const [errors, setErrors] = useState<ValidationError[]>([]);
-  const [cloningId, setCloningId] = useState<string | null>(null);
+  const selectedTemplate =
+    templates.data?.find((t) => t.id === selectedId) ?? templates.data?.[0] ?? null;
 
-  const openEditor = useCallback((template: Template) => {
-    setEditingId(template.id);
-    setForm(specToForm(template.name, template.spec));
-    setErrors([]);
-    setDrawerOpen(true);
-  }, []);
-
-  const openNew = useCallback(() => {
-    setEditingId(null);
-    setForm(blankForm());
-    setErrors([]);
-    setDrawerOpen(true);
-  }, []);
-
-  const handleClone = useCallback(
-    (template: Template) => {
-      setCloningId(template.id);
-      const spec = buildCloneSpec(template);
-      createMutation.mutate(
-        { name: cloneName(template.name), spec },
-        { onSettled: () => setCloningId(null) },
-      );
-    },
-    [createMutation],
-  );
-
-  const handleSave = useCallback(() => {
-    const errs = validate(form);
-    if (errs.length > 0) {
-      setErrors(errs);
-      return;
-    }
-    const spec = formToSpec(form);
-
-    if (editingId !== null) {
-      updateMutation.mutate({ id: editingId, spec }, { onSuccess: () => setDrawerOpen(false) });
-    } else {
-      createMutation.mutate({ name: form.name, spec }, { onSuccess: () => setDrawerOpen(false) });
-    }
-  }, [form, editingId, updateMutation, createMutation]);
-
-  const isSaving = createMutation.isPending || updateMutation.isPending;
+  function handleSelect(t: Template) {
+    setSelectedId(t.id);
+    setTab('overview');
+  }
 
   return (
-    <div className="tpl-page">
-      <div className="tpl-page__header">
-        <h2 className="tpl-page__title">Templates</h2>
-        <button className="tpl-page__new-btn" onClick={openNew} aria-label="New template">
-          + New Template
-        </button>
+    <div className="niuu-flex niuu-flex-col niuu-gap-6 niuu-p-6" data-testid="templates-page">
+      {/* Header */}
+      <div>
+        <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">Templates</h2>
+        <p className="niuu-text-sm niuu-text-text-muted">
+          Reusable pod templates &mdash; define image, resources, env, and tool allowlists once;
+          start sessions from a template.
+        </p>
       </div>
 
-      <p className="tpl-page__subtitle">
-        Reusable pod templates — define image, resources, env, and tool allowlists once; start
-        sessions from a template.
-      </p>
+      {/* Loading */}
+      {templates.isLoading && <LoadingState label="loading templates\u2026" />}
 
-      {templates.isLoading && (
-        <div className="tpl-page__status">
-          <StateDot state="processing" pulse />
-          <span>loading templates…</span>
-        </div>
-      )}
-
+      {/* Error */}
       {templates.isError && (
-        <div className="tpl-page__status">
-          <StateDot state="failed" />
-          <span>
-            {templates.error instanceof Error
-              ? templates.error.message
-              : 'failed to load templates'}
-          </span>
+        <ErrorState
+          title="Failed to load templates"
+          message={
+            templates.error instanceof Error ? templates.error.message : 'failed to load templates'
+          }
+        />
+      )}
+
+      {/* Empty */}
+      {templates.data && templates.data.length === 0 && (
+        <p className="niuu-text-sm niuu-text-text-muted" data-testid="empty-state">
+          No templates yet &mdash; create one to get started.
+        </p>
+      )}
+
+      {/* Template list + detail */}
+      {templates.data && templates.data.length > 0 && (
+        <div className="niuu-flex niuu-flex-col niuu-gap-6 lg:niuu-flex-row">
+          {/* Sidebar: template list */}
+          <div
+            className="niuu-flex niuu-shrink-0 niuu-flex-col niuu-gap-2 lg:niuu-w-64"
+            role="list"
+            aria-label="Pod templates"
+          >
+            {templates.data.map((t) => (
+              <div key={t.id} role="listitem">
+                <TemplateListCard
+                  template={t}
+                  isSelected={selectedTemplate?.id === t.id}
+                  onSelect={handleSelect}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Detail panel */}
+          {selectedTemplate && (
+            <div className="niuu-flex niuu-min-w-0 niuu-flex-1 niuu-flex-col niuu-gap-4">
+              {/* Template header */}
+              <header className="niuu-flex niuu-flex-col niuu-gap-2">
+                <div className="niuu-flex niuu-items-center niuu-gap-2">
+                  <CliBadge cli="claude" />
+                  <h3 className="niuu-font-mono niuu-text-base niuu-font-medium niuu-text-text-primary">
+                    {selectedTemplate.name}
+                  </h3>
+                  {selectedTemplate.name === 'default' && (
+                    <span className="niuu-rounded niuu-bg-brand niuu-px-1.5 niuu-py-0.5 niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-text-bg-primary">
+                      default
+                    </span>
+                  )}
+                </div>
+                <p className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
+                  {selectedTemplate.spec.image}:{selectedTemplate.spec.tag}
+                </p>
+              </header>
+
+              {/* Tabs */}
+              <nav className="niuu-flex niuu-gap-1 niuu-border-b niuu-border-border-subtle" aria-label="Template detail tabs">
+                {TABS.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === t}
+                    className={`niuu-px-3 niuu-py-2 niuu-text-sm niuu-font-medium niuu-transition-colors ${
+                      tab === t
+                        ? 'niuu-border-b-2 niuu-border-brand niuu-text-text-primary'
+                        : 'niuu-text-text-muted hover:niuu-text-text-secondary'
+                    }`}
+                    onClick={() => setTab(t)}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </nav>
+
+              {/* Tab content */}
+              <div>
+                {tab === 'overview' && <TplOverview template={selectedTemplate} />}
+                {tab === 'workspace' && <TplWorkspace template={selectedTemplate} />}
+                {tab === 'runtime' && <TplRuntime template={selectedTemplate} />}
+                {tab === 'mcp' && <TplMcp template={selectedTemplate} />}
+                {tab === 'skills' && <TplSkills template={selectedTemplate} />}
+                {tab === 'rules' && <TplRules template={selectedTemplate} />}
+              </div>
+            </div>
+          )}
         </div>
       )}
-
-      {templates.data && templates.data.length === 0 && (
-        <p className="tpl-page__empty">No templates yet — create one to get started.</p>
-      )}
-
-      {templates.data && templates.data.length > 0 && (
-        <ul className="tpl-page__list" aria-label="Pod templates">
-          {templates.data.map((t) => (
-            <li key={t.id}>
-              <TemplateCard
-                template={t}
-                onEdit={openEditor}
-                onClone={handleClone}
-                isCloning={cloningId === t.id}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* ------------------------------------------------------------------ */}
-      {/* Template editor drawer                                              */}
-      {/* ------------------------------------------------------------------ */}
-      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <DrawerContent
-          title={editingId !== null ? 'Edit Template' : 'New Template'}
-          description="Configure image, resources, env vars, and scheduling options."
-          side="right"
-          width={480}
-        >
-          <div className="tpl-editor">
-            {errors.length > 0 && <ValidationSummary errors={errors} />}
-
-            <section className="tpl-editor__section">
-              <h3 className="tpl-editor__section-title">Identity</h3>
-              <Field label="Name" required error={errors.find((e) => e.id === 'name')?.message}>
-                <Input
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. default"
-                  disabled={editingId !== null}
-                />
-              </Field>
-            </section>
-
-            <section className="tpl-editor__section">
-              <h3 className="tpl-editor__section-title">Container</h3>
-              <Field label="Image" required error={errors.find((e) => e.id === 'image')?.message}>
-                <Input
-                  value={form.image}
-                  onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
-                  placeholder="ghcr.io/niuulabs/skuld"
-                />
-              </Field>
-              <Field label="Tag" required error={errors.find((e) => e.id === 'tag')?.message}>
-                <Input
-                  value={form.tag}
-                  onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))}
-                  placeholder="latest"
-                />
-              </Field>
-            </section>
-
-            <section className="tpl-editor__section">
-              <h3 className="tpl-editor__section-title">Resources</h3>
-              <div className="tpl-editor__row">
-                <Field label="CPU Request">
-                  <Input
-                    value={form.cpuRequest}
-                    onChange={(e) => setForm((f) => ({ ...f, cpuRequest: e.target.value }))}
-                    placeholder="1"
-                  />
-                </Field>
-                <Field label="CPU Limit">
-                  <Input
-                    value={form.cpuLimit}
-                    onChange={(e) => setForm((f) => ({ ...f, cpuLimit: e.target.value }))}
-                    placeholder="2"
-                  />
-                </Field>
-              </div>
-              <div className="tpl-editor__row">
-                <Field
-                  label="Mem Request (Mi)"
-                  error={errors.find((e) => e.id === 'memRequestMi')?.message}
-                >
-                  <Input
-                    type="number"
-                    value={form.memRequestMi}
-                    onChange={(e) => setForm((f) => ({ ...f, memRequestMi: e.target.value }))}
-                    placeholder="512"
-                  />
-                </Field>
-                <Field label="Mem Limit (Mi)">
-                  <Input
-                    type="number"
-                    value={form.memLimitMi}
-                    onChange={(e) => setForm((f) => ({ ...f, memLimitMi: e.target.value }))}
-                    placeholder="1024"
-                  />
-                </Field>
-              </div>
-              <Field label="GPU Count">
-                <Input
-                  type="number"
-                  value={form.gpuCount}
-                  onChange={(e) => setForm((f) => ({ ...f, gpuCount: e.target.value }))}
-                  placeholder="0"
-                />
-              </Field>
-            </section>
-
-            <section className="tpl-editor__section">
-              <h3 className="tpl-editor__section-title">Timing</h3>
-              <div className="tpl-editor__row">
-                <Field label="TTL (seconds)" error={errors.find((e) => e.id === 'ttlSec')?.message}>
-                  <Input
-                    type="number"
-                    value={form.ttlSec}
-                    onChange={(e) => setForm((f) => ({ ...f, ttlSec: e.target.value }))}
-                    placeholder="3600"
-                  />
-                </Field>
-                <Field label="Idle Timeout (seconds)">
-                  <Input
-                    type="number"
-                    value={form.idleTimeoutSec}
-                    onChange={(e) => setForm((f) => ({ ...f, idleTimeoutSec: e.target.value }))}
-                    placeholder="600"
-                  />
-                </Field>
-              </div>
-            </section>
-
-            <section className="tpl-editor__section">
-              <h3 className="tpl-editor__section-title">Environment</h3>
-              <Field
-                label="Env vars (JSON)"
-                hint='e.g. {"API_URL": "https://api.niuu.world"}'
-                error={errors.find((e) => e.id === 'envJson')?.message}
-              >
-                <Textarea
-                  value={form.envJson}
-                  onChange={(e) => setForm((f) => ({ ...f, envJson: e.target.value }))}
-                  rows={4}
-                  placeholder="{}"
-                />
-              </Field>
-              <Field
-                label="Secret refs"
-                hint="Comma-separated env key names to treat as secret refs"
-              >
-                <Input
-                  value={form.envSecretRefs}
-                  onChange={(e) => setForm((f) => ({ ...f, envSecretRefs: e.target.value }))}
-                  placeholder="TOKEN, API_KEY"
-                />
-              </Field>
-            </section>
-
-            <section className="tpl-editor__section">
-              <h3 className="tpl-editor__section-title">Tools</h3>
-              <Field label="Tool allowlist" hint="Comma-separated tool IDs from Ravn's registry">
-                <Input
-                  value={form.tools}
-                  onChange={(e) => setForm((f) => ({ ...f, tools: e.target.value }))}
-                  placeholder="bash, python, git"
-                />
-              </Field>
-            </section>
-
-            <section className="tpl-editor__section">
-              <h3 className="tpl-editor__section-title">Scheduling</h3>
-              <Field
-                label="Cluster affinity"
-                hint="Comma-separated cluster IDs this template prefers"
-              >
-                <Input
-                  value={form.clusterAffinity}
-                  onChange={(e) => setForm((f) => ({ ...f, clusterAffinity: e.target.value }))}
-                  placeholder="cl-eitri, cl-brokkr"
-                />
-              </Field>
-              <Field label="Taint tolerations" hint="Comma-separated taint keys to tolerate">
-                <Input
-                  value={form.tolerations}
-                  onChange={(e) => setForm((f) => ({ ...f, tolerations: e.target.value }))}
-                  placeholder="gpu-only, spot"
-                />
-              </Field>
-            </section>
-
-            <div className="tpl-editor__footer">
-              <button
-                className="tpl-editor__cancel"
-                onClick={() => setDrawerOpen(false)}
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                className="tpl-editor__save"
-                onClick={handleSave}
-                disabled={isSaving}
-                type="button"
-                aria-label="Save template"
-              >
-                {isSaving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </DrawerContent>
-      </Drawer>
     </div>
   );
 }
