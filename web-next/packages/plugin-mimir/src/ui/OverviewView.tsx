@@ -3,11 +3,16 @@
  *
  * Layout (matches web2 home.jsx prototype):
  *   KPI strip — aggregate pages / sources / wardens / lint / last write
- *   mm-home-cols (1.2fr 1fr, border-right separator):
+ *   2-col grid (1.2fr 1fr, border-right separator):
  *     LEFT:  mount cards grid (minmax 300px) + wardens ravn cards
  *     RIGHT: activity feed (time / kind / mount / message)
+ *
+ * Mount cards are expandable — clicking reveals host detail, role,
+ * categories with count badges, and a 5-item recent activity excerpt.
+ * Warden cards show bio text and a pages-touched / last-dream metrics row.
  */
 
+import { useState } from 'react';
 import { KpiStrip, KpiCard, StateDot, RavnAvatar } from '@niuulabs/ui';
 import { useMimirMounts } from './useMimirMounts';
 import { useMimirRecentWrites } from './useMimirSources';
@@ -17,6 +22,7 @@ import { RAVN_DOT_STATE, MOUNT_DOT_STATE } from './mimir.constants';
 import './mimir-views.css';
 
 const FEED_LIMIT = 20;
+const MOUNT_ACTIVITY_LIMIT = 5;
 const TIMESTAMP_HOUR_START = 11;
 const TIMESTAMP_HOUR_END = 16;
 
@@ -33,7 +39,18 @@ function formatLastWrite(iso: string): string {
   return `${Math.round(diffH / 24)}d ago`;
 }
 
+function formatLastDream(iso: string | null | undefined): string {
+  if (!iso) return 'never';
+  const d = new Date(iso);
+  const now = new Date();
+  const diffH = Math.round((now.getTime() - d.getTime()) / 3_600_000);
+  if (diffH < 1) return '< 1h ago';
+  if (diffH < 24) return `${diffH}h ago`;
+  return `${Math.round(diffH / 24)}d ago`;
+}
+
 export function OverviewView() {
+  const [expandedMount, setExpandedMount] = useState<string | null>(null);
   const { data: mounts, isLoading: mountsLoading, error: mountsError } = useMimirMounts();
   const { data: feed } = useMimirRecentWrites(FEED_LIMIT);
   const { data: ravns = [] } = useRavns();
@@ -47,10 +64,10 @@ export function OverviewView() {
 
   if (mountsLoading) {
     return (
-      <div className="mm-overview">
-        <div className="mm-status-row">
+      <div className="niuu-p-6">
+        <div className="niuu-flex niuu-items-center niuu-gap-2">
           <StateDot state="processing" pulse />
-          <span className="mm-status-text">loading…</span>
+          <span className="niuu-text-sm niuu-text-text-secondary">loading…</span>
         </div>
       </div>
     );
@@ -58,7 +75,7 @@ export function OverviewView() {
 
   if (mountsError) {
     return (
-      <div className="mm-overview">
+      <div className="niuu-p-6">
         <div className="mm-error-banner">
           {mountsError instanceof Error ? mountsError.message : String(mountsError)}
         </div>
@@ -67,7 +84,7 @@ export function OverviewView() {
   }
 
   return (
-    <div className="mm-overview">
+    <div className="niuu-p-6 niuu-flex niuu-flex-col niuu-gap-6">
       {/* ── KPI strip ─────────────────────────────────────────────── */}
       <KpiStrip>
         <KpiCard label="pages" value={totalPages.toLocaleString()} />
@@ -87,95 +104,219 @@ export function OverviewView() {
       </KpiStrip>
 
       {/* ── 2-column home layout ──────────────────────────────────── */}
-      <div className="mm-home-cols">
+      <div className="niuu-grid niuu-border niuu-border-border-subtle niuu-rounded-lg niuu-overflow-hidden niuu-grid-cols-[1.2fr_1fr]">
         {/* LEFT column: mount grid + wardens */}
-        <div className="mm-home-col mm-home-col--left">
-          <div className="mm-overview__section-head">
-            <h3>Mounts</h3>
-            <span className="mm-overview__section-meta">
+        <div className="niuu-p-5 niuu-overflow-y-auto niuu-border-r niuu-border-border-subtle">
+          {/* ── Mounts section head ────────────────────────────────── */}
+          <div className="niuu-flex niuu-items-baseline niuu-gap-3 niuu-mb-4">
+            <h3 className="niuu-m-0 niuu-text-base niuu-text-text-primary">Mounts</h3>
+            <span className="niuu-text-xs niuu-text-text-muted">
               {mounts?.length ?? 0} instance{(mounts?.length ?? 0) !== 1 ? 's' : ''} connected ·
-              click to focus
+              click to expand
             </span>
           </div>
-          <div className="mm-mount-grid">
-            {mounts?.map((mount) => (
-              <article
-                key={mount.name}
-                className="mm-mount-card"
-                aria-label={`mount ${mount.name}`}
-              >
-                <div className="mm-mount-card__head">
-                  <StateDot state={MOUNT_DOT_STATE[mount.status]} />
-                  <span className="mm-mount-card__name">{mount.name}</span>
-                  <MountChip name={mount.name} role={mount.role} />
-                </div>
-                <div className="mm-mount-card__host">{mount.host}</div>
-                <div className="mm-mount-card__desc">{mount.desc}</div>
-                <div className="mm-mount-card__metrics">
-                  <span className="mm-metric">
-                    <strong>{mount.pages}</strong> pages
-                  </span>
-                  <span className="mm-metric">
-                    <strong>{mount.sources}</strong> sources
-                  </span>
-                  <span className={`mm-metric${mount.lintIssues > 10 ? ' mm-metric--warn' : ''}`}>
-                    <strong>{mount.lintIssues}</strong> lint
-                  </span>
-                  <span className="mm-metric">
-                    <strong>{(mount.sizeKb / 1024).toFixed(1)}</strong> MB
-                  </span>
-                </div>
-                {mount.categories && (
-                  <div className="mm-mount-card__categories">
-                    scope:{' '}
-                    <span className="mm-mount-card__categories-val">
-                      {mount.categories.join(', ')}
+
+          {/* ── Mount cards grid ───────────────────────────────────── */}
+          <div className="niuu-grid niuu-gap-4 niuu-grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
+            {mounts?.map((mount) => {
+              const isExpanded = expandedMount === mount.name;
+              const mountFeed =
+                feed
+                  ?.filter((e) => e.mount === mount.name)
+                  .slice(0, MOUNT_ACTIVITY_LIMIT) ?? [];
+
+              return (
+                <article
+                  key={mount.name}
+                  className="niuu-bg-bg-secondary niuu-border niuu-border-border-subtle niuu-rounded-lg niuu-p-4 niuu-cursor-pointer"
+                  aria-label={`mount ${mount.name}`}
+                  aria-expanded={isExpanded}
+                  onClick={() => setExpandedMount(isExpanded ? null : mount.name)}
+                >
+                  {/* Card head */}
+                  <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-mb-2">
+                    <StateDot state={MOUNT_DOT_STATE[mount.status]} />
+                    <span className="niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-flex-1">
+                      {mount.name}
+                    </span>
+                    <MountChip name={mount.name} role={mount.role} />
+                  </div>
+                  <div className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-mb-2">
+                    {mount.host}
+                  </div>
+                  <div className="niuu-text-xs niuu-text-text-secondary niuu-mb-3">
+                    {mount.desc}
+                  </div>
+
+                  {/* Metrics row */}
+                  <div className="niuu-flex niuu-gap-3 niuu-flex-wrap">
+                    <span className="niuu-font-mono niuu-text-xs niuu-text-text-secondary">
+                      <strong className="niuu-text-text-primary">{mount.pages}</strong> pages
+                    </span>
+                    <span className="niuu-font-mono niuu-text-xs niuu-text-text-secondary">
+                      <strong className="niuu-text-text-primary">{mount.sources}</strong> sources
+                    </span>
+                    <span className="niuu-font-mono niuu-text-xs niuu-text-text-secondary">
+                      <strong
+                        className={
+                          mount.lintIssues > 10
+                            ? 'niuu-text-status-amber'
+                            : 'niuu-text-text-primary'
+                        }
+                      >
+                        {mount.lintIssues}
+                      </strong>{' '}
+                      lint
+                    </span>
+                    <span className="niuu-font-mono niuu-text-xs niuu-text-text-secondary">
+                      <strong className="niuu-text-text-primary">
+                        {(mount.sizeKb / 1024).toFixed(1)}
+                      </strong>{' '}
+                      MB
                     </span>
                   </div>
-                )}
-              </article>
-            ))}
+
+                  {mount.categories && (
+                    <div className="niuu-mt-2 niuu-text-xs niuu-text-text-muted">
+                      scope:{' '}
+                      <span className="niuu-text-brand-300">{mount.categories.join(', ')}</span>
+                    </div>
+                  )}
+
+                  {/* ── Expanded detail panel ──────────────────────── */}
+                  {isExpanded && (
+                    <div className="niuu-mt-4 niuu-pt-4 niuu-border-t niuu-border-border-subtle">
+                      {/* Config detail grid */}
+                      <div className="niuu-grid niuu-grid-cols-2 niuu-gap-3 niuu-mb-3 niuu-font-mono niuu-text-xs">
+                        <div>
+                          <div className="niuu-text-text-muted">host</div>
+                          <div className="niuu-text-text-primary">{mount.host}</div>
+                        </div>
+                        <div>
+                          <div className="niuu-text-text-muted">role</div>
+                          <div className="niuu-text-text-primary">{mount.role}</div>
+                        </div>
+                        <div>
+                          <div className="niuu-text-text-muted">size</div>
+                          <div className="niuu-text-text-primary">
+                            {(mount.sizeKb / 1024).toFixed(2)} MB
+                          </div>
+                        </div>
+                        {mount.categories && (
+                          <div>
+                            <div className="niuu-text-text-muted">categories</div>
+                            <div className="niuu-flex niuu-flex-wrap niuu-gap-1 niuu-mt-1">
+                              {mount.categories.map((cat) => (
+                                <span
+                                  key={cat}
+                                  className="niuu-bg-bg-tertiary niuu-border niuu-border-border-subtle niuu-rounded-full niuu-px-2 niuu-text-text-secondary"
+                                >
+                                  {cat}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Per-mount recent activity excerpt */}
+                      {mountFeed.length > 0 && (
+                        <div>
+                          <div className="niuu-text-xs niuu-text-text-muted niuu-mb-2">
+                            recent activity
+                          </div>
+                          <div className="niuu-flex niuu-flex-col niuu-gap-1">
+                            {mountFeed.map((entry) => (
+                              <div
+                                key={entry.id}
+                                className="niuu-flex niuu-items-center niuu-gap-2 niuu-font-mono niuu-text-xs"
+                              >
+                                <span className="niuu-text-text-muted">
+                                  {formatTimestamp(entry.timestamp)}
+                                </span>
+                                <span className="niuu-text-text-secondary">{entry.kind}</span>
+                                <span className="niuu-text-text-secondary niuu-truncate">
+                                  {entry.message}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
           </div>
 
-          {/* Wardens section */}
+          {/* ── Wardens section ────────────────────────────────────── */}
           {ravns.length > 0 && (
             <>
-              <div className="mm-overview__section-head mm-overview__section-head--wardens">
-                <h3>Wardens</h3>
-                <span className="mm-overview__section-meta">
+              <div className="niuu-flex niuu-items-baseline niuu-gap-3 niuu-mb-4 niuu-mt-6">
+                <h3 className="niuu-m-0 niuu-text-base niuu-text-text-primary">Wardens</h3>
+                <span className="niuu-text-xs niuu-text-text-muted">
                   ravns bound here · read / write fan-out
                 </span>
               </div>
-              <div className="mm-ravn-grid">
+              <div className="niuu-grid niuu-gap-3 niuu-grid-cols-[repeat(auto-fill,minmax(220px,1fr))]">
                 {ravns.map((ravn) => (
-                  <div key={ravn.ravnId} className="mm-ravn-card">
-                    <div className="mm-ravn-card__head">
+                  <div
+                    key={ravn.ravnId}
+                    className="niuu-bg-bg-secondary niuu-border niuu-border-border-subtle niuu-rounded-lg niuu-p-3 niuu-flex niuu-flex-col niuu-gap-3"
+                  >
+                    {/* Identity row */}
+                    <div className="niuu-flex niuu-items-center niuu-gap-2">
                       <RavnAvatar
                         role={ravn.role}
                         rune={ravn.ravnRune}
                         state={RAVN_DOT_STATE[ravn.state]}
                         size={32}
                       />
-                      <div className="mm-ravn-card__identity">
-                        <div className="mm-ravn-card__name-row">
-                          <span className="mm-ravn-card__name">{ravn.ravnId}</span>
+                      <div className="niuu-flex-1 niuu-min-w-0">
+                        <div className="niuu-flex niuu-items-center niuu-gap-2">
+                          <span className="niuu-font-mono niuu-text-xs niuu-font-semibold niuu-text-text-primary niuu-truncate">
+                            {ravn.ravnId}
+                          </span>
                           <StateDot state={RAVN_DOT_STATE[ravn.state]} size={6} />
                         </div>
-                        <div className="mm-ravn-card__role">{ravn.role}</div>
+                        <div className="niuu-text-xs niuu-text-text-muted">{ravn.role}</div>
                       </div>
                     </div>
-                    <div className="mm-ravn-card__mounts">
+
+                    {/* Bio */}
+                    <p className="niuu-text-xs niuu-text-text-secondary niuu-m-0 niuu-truncate">
+                      {ravn.bio}
+                    </p>
+
+                    {/* Mount bindings */}
+                    <div className="niuu-flex niuu-flex-wrap niuu-gap-1">
                       {ravn.mountNames.map((m) => (
                         <span
                           key={m}
-                          className={`mm-ravn-card__bind-chip${m === ravn.writeMount ? ' mm-ravn-card__bind-chip--write' : ''}`}
+                          className={
+                            m === ravn.writeMount
+                              ? 'niuu-inline-flex niuu-items-center niuu-gap-1 niuu-px-2 niuu-rounded-full niuu-font-mono niuu-text-xs niuu-border niuu-bg-brand/10 niuu-border-brand/25 niuu-text-brand'
+                              : 'niuu-inline-flex niuu-items-center niuu-gap-1 niuu-px-2 niuu-rounded-full niuu-font-mono niuu-text-xs niuu-border niuu-bg-bg-tertiary niuu-border-border-subtle niuu-text-text-secondary'
+                          }
                         >
                           {m}
                           {m === ravn.writeMount && (
-                            <span className="mm-ravn-card__bind-mode">write</span>
+                            <span className="niuu-text-xs niuu-text-text-muted niuu-uppercase">
+                              write
+                            </span>
                           )}
                         </span>
                       ))}
+                    </div>
+
+                    {/* Metrics row: pages-touched + last-dream */}
+                    <div className="niuu-flex niuu-gap-3 niuu-font-mono niuu-text-xs niuu-text-text-muted">
+                      <span>
+                        <strong className="niuu-text-text-primary">{ravn.pagesTouched}</strong>{' '}
+                        pages touched
+                      </span>
+                      <span>last dream {formatLastDream(ravn.lastDream?.timestamp)}</span>
                     </div>
                   </div>
                 ))}
@@ -185,10 +326,10 @@ export function OverviewView() {
         </div>
 
         {/* RIGHT column: activity feed */}
-        <div className="mm-home-col mm-home-col--right">
-          <div className="mm-overview__section-head">
-            <h3>Activity</h3>
-            <span className="mm-overview__section-meta">all mounts · newest first</span>
+        <div className="niuu-p-5 niuu-overflow-y-auto">
+          <div className="niuu-flex niuu-items-baseline niuu-gap-3 niuu-mb-4">
+            <h3 className="niuu-m-0 niuu-text-base niuu-text-text-primary">Activity</h3>
+            <span className="niuu-text-xs niuu-text-text-muted">all mounts · newest first</span>
           </div>
           {feed && feed.length > 0 ? (
             <div className="mm-feed" aria-label="recent writes feed" role="log">
@@ -208,7 +349,7 @@ export function OverviewView() {
               ))}
             </div>
           ) : (
-            <p className="mm-overview__empty">No recent activity.</p>
+            <p className="niuu-text-sm niuu-text-text-muted niuu-m-0">No recent activity.</p>
           )}
         </div>
       </div>
