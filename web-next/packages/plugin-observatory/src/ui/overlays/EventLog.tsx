@@ -1,12 +1,14 @@
 import { useRef, useEffect } from 'react';
-import type { ObservatoryEvent, EventSeverity } from '../../domain';
+import type { ObservatoryEvent, ObservatoryEventType } from '../../domain';
 import './EventLog.css';
 
-const SEVERITY_TAG: Record<EventSeverity, string> = {
-  debug: 'DBG',
-  info: 'INF',
-  warn: 'WRN',
-  error: 'ERR',
+/** Short display tag for each event type (matches web2 column). */
+const TYPE_CLASS: Record<ObservatoryEventType, string> = {
+  RAID: 'obs-event-log__type--raid',
+  RAVN: 'obs-event-log__type--ravn',
+  TYR: 'obs-event-log__type--tyr',
+  MIMIR: 'obs-event-log__type--mimir',
+  BIFROST: 'obs-event-log__type--bifrost',
 };
 
 export interface EventLogProps {
@@ -34,15 +36,15 @@ export function EventLog({ events, 'data-testid': testId }: EventLogProps) {
             <div
               key={ev.id}
               className="obs-event-log__entry"
-              data-severity={ev.severity}
+              data-type={ev.type}
               data-testid={`event-${ev.id}`}
             >
-              <span className="obs-event-log__ts">{ev.timestamp.slice(11, 19)}</span>
-              <span className="obs-event-log__sev" data-sev={ev.severity}>
-                {SEVERITY_TAG[ev.severity]}
+              <span className="obs-event-log__ts">{ev.time}</span>
+              <span className={`obs-event-log__type ${TYPE_CLASS[ev.type] ?? ''}`}>
+                {ev.type}
               </span>
-              <span className="obs-event-log__src">{ev.sourceId}</span>
-              <span className="obs-event-log__msg">{ev.message}</span>
+              <span className="obs-event-log__subject">{ev.subject}</span>
+              <span className="obs-event-log__body">{ev.body}</span>
             </div>
           ))
         )}

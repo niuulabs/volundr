@@ -56,13 +56,88 @@ export type EdgeKind = 'solid' | 'dashed-anim' | 'dashed-long' | 'soft' | 'raid'
 /** Runtime health status of a topology node. */
 export type NodeStatus = 'healthy' | 'degraded' | 'failed' | 'idle' | 'observing' | 'unknown';
 
-/** An instance of an EntityType in the live topology graph. */
+/** Activity state of an agent/entity. */
+export type NodeActivity =
+  | 'idle'
+  | 'thinking'
+  | 'tooling'
+  | 'waiting'
+  | 'delegating'
+  | 'writing'
+  | 'reading';
+
+/**
+ * An instance of an EntityType in the live topology graph.
+ * Base fields are always present; kind-specific fields are optional and
+ * populated according to the node's `typeId`.
+ */
 export interface TopologyNode {
   id: string;
   typeId: string;
   label: string;
   parentId: string | null;
   status: NodeStatus;
+
+  // ── Universal optional fields ────────────────────────────────────────────
+  activity?: NodeActivity;
+  zone?: string;
+  cluster?: string | null;
+  hostId?: string | null;
+  flockId?: string | null;
+
+  // ── tyr ──────────────────────────────────────────────────────────────────
+  mode?: string;
+  activeSagas?: number;
+  pendingRaids?: number;
+
+  // ── bifrost ───────────────────────────────────────────────────────────────
+  providers?: string[];
+  reqPerMin?: number;
+  cacheHitRate?: number;
+
+  // ── volundr ───────────────────────────────────────────────────────────────
+  activeSessions?: number;
+  maxSessions?: number;
+
+  // ── ravn_long ─────────────────────────────────────────────────────────────
+  persona?: string;
+  specialty?: string;
+  tokens?: number;
+
+  // ── host ──────────────────────────────────────────────────────────────────
+  hw?: string;
+  os?: string;
+  cores?: number;
+  ram?: string;
+  gpu?: string | null;
+
+  // ── model ─────────────────────────────────────────────────────────────────
+  provider?: string;
+  location?: string;
+
+  // ── realm ─────────────────────────────────────────────────────────────────
+  vlan?: number;
+  dns?: string;
+  purpose?: string;
+
+  // ── raid ──────────────────────────────────────────────────────────────────
+  state?: string;
+
+  // ── ravn_raid / coord ─────────────────────────────────────────────────────
+  role?: string;
+  confidence?: number;
+
+  // ── valkyrie ──────────────────────────────────────────────────────────────
+  autonomy?: string;
+
+  // ── service ───────────────────────────────────────────────────────────────
+  svcType?: string;
+
+  // ── printer ───────────────────────────────────────────────────────────────
+  model?: string;
+
+  // ── vaettir ───────────────────────────────────────────────────────────────
+  sensors?: string;
 }
 
 /** Typed aliases for the four named domain entities. */
@@ -88,14 +163,19 @@ export interface Topology {
 
 // ── Event log ─────────────────────────────────────────────────────────────────
 
-/** Severity level of an observatory event. */
-export type EventSeverity = 'debug' | 'info' | 'warn' | 'error';
+/** Source subsystem that generated an observatory event (matches web2 type column). */
+export type ObservatoryEventType = 'RAID' | 'RAVN' | 'TYR' | 'MIMIR' | 'BIFROST';
 
-/** A single entry in the observatory event log. */
+/**
+ * A single entry in the observatory event log.
+ * Shaped to match the web2 prototype event format:
+ *   4-column grid — time, type, subject, body.
+ */
 export interface ObservatoryEvent {
   id: string;
-  timestamp: string;
-  severity: EventSeverity;
-  sourceId: string;
-  message: string;
+  /** HH:MM:SS — display time extracted from ISO timestamp at emit time. */
+  time: string;
+  type: ObservatoryEventType;
+  subject: string;
+  body: string;
 }

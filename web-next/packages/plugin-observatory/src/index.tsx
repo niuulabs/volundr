@@ -2,6 +2,8 @@ import { createRoute } from '@tanstack/react-router';
 import { definePlugin } from '@niuulabs/plugin-sdk';
 import { ObservatoryPage } from './ui/ObservatoryPage';
 import { RegistryPage } from './ui/RegistryPage';
+import { ObservatorySubnav } from './ui/ObservatorySubnav';
+import { ObservatoryTopbar } from './ui/ObservatoryTopbar';
 
 export const observatoryPlugin = definePlugin({
   id: 'observatory',
@@ -20,6 +22,8 @@ export const observatoryPlugin = definePlugin({
       component: RegistryPage,
     }),
   ],
+  subnav: () => <ObservatorySubnav />,
+  topbarRight: () => <ObservatoryTopbar />,
 });
 
 export {
@@ -41,6 +45,7 @@ export type {
   Registry,
   EdgeKind,
   NodeStatus,
+  NodeActivity,
   TopologyNode,
   TopologyEdge,
   Topology,
@@ -48,7 +53,7 @@ export type {
   Cluster,
   Host,
   Raid,
-  EventSeverity,
+  ObservatoryEventType,
   ObservatoryEvent,
 } from './domain';
 
@@ -60,3 +65,5 @@ export type { EventLogProps } from './ui/overlays/EventLog';
 export { ConnectionLegend } from './ui/overlays/ConnectionLegend';
 export { Minimap } from './ui/overlays/Minimap';
 export type { MinimapProps } from './ui/overlays/Minimap';
+export { ObservatorySubnav } from './ui/ObservatorySubnav';
+export { ObservatoryTopbar } from './ui/ObservatoryTopbar';

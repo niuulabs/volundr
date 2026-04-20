@@ -9,8 +9,11 @@ import {
   createMockRegistryRepository,
 } from '../adapters/mock';
 import { makeCtxMock } from './TopologyCanvas/test-helpers';
+import { __resetObservatoryStore } from '../application/useObservatoryStore';
 
 beforeEach(() => {
+  // Reset the module-level singleton to prevent state leaking between tests.
+  __resetObservatoryStore();
   HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue(makeCtxMock());
   vi.stubGlobal('requestAnimationFrame', vi.fn().mockReturnValue(0));
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
