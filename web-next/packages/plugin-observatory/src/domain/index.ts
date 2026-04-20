@@ -132,6 +132,12 @@ export interface TopologyNode {
 
   // ── service ───────────────────────────────────────────────────────────────
   svcType?: string;
+
+  // ── printer ───────────────────────────────────────────────────────────────
+  model?: string;
+
+  // ── vaettir ───────────────────────────────────────────────────────────────
+  sensors?: string;
 }
 
 /** Typed aliases for the four named domain entities. */

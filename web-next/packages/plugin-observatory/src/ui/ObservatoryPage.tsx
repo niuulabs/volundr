@@ -42,32 +42,19 @@ export function ObservatoryPage() {
   }
 
   return (
-    <div
-      data-testid="observatory-page"
-      style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column' }}
-    >
+    <div data-testid="observatory-page" className="fixed inset-0 flex flex-col">
       <TopologyCanvas
         topology={topology}
         onNodeClick={handleNodeClick}
         showMinimap={false}
-        style={{ flex: 1, minHeight: 0 }}
+        className="flex-1 min-h-0"
       />
 
       {/* Accessible hidden node list — keyboard / screen-reader alternative to canvas hit-testing */}
       <ul
         data-testid="topology-node-list"
         aria-label="Topology nodes"
-        style={{
-          position: 'absolute',
-          width: 1,
-          height: 1,
-          overflow: 'hidden',
-          clip: 'rect(0,0,0,0)',
-          whiteSpace: 'nowrap',
-          border: 0,
-          padding: 0,
-          margin: 0,
-        }}
+        className="sr-only"
       >
         {topology?.nodes.map((node) => (
           <li key={node.id}>

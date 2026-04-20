@@ -78,10 +78,9 @@ export function ObservatorySubnav() {
     [nodes],
   );
 
-  const activeRaids = useMemo(
-    () => nodes.filter((n) => n.typeId === 'raid').slice(0, 6),
-    [nodes],
-  );
+  const allRaids = useMemo(() => nodes.filter((n) => n.typeId === 'raid'), [nodes]);
+
+  const activeRaids = useMemo(() => allRaids.slice(0, 6), [allRaids]);
 
   return (
     <div className="obs-subnav" data-testid="observatory-subnav">
@@ -175,9 +174,7 @@ export function ObservatorySubnav() {
           <>
             <div className="obs-subnav__label obs-subnav__label--sub">
               Active raids{' '}
-              <span className="obs-subnav__count">
-                {nodes.filter((n) => n.typeId === 'raid').length}
-              </span>
+              <span className="obs-subnav__count">{allRaids.length}</span>
             </div>
             {activeRaids.map((raid) => {
               const color = raidDotColor(raid.state);

@@ -37,21 +37,15 @@ export function ConnectionLegend() {
 
 function EdgeLine({ kind }: { kind: EdgeKind }) {
   const y = 7;
-  const base = {
-    x1: 2,
-    y1: y,
-    x2: 34,
-    y2: y,
-    strokeLinecap: 'round' as const,
-  };
+  const base = { x1: 2, y1: y, x2: 34, y2: y };
 
   if (kind === 'solid') {
-    return <line {...base} stroke="rgba(147,197,253,0.8)" strokeWidth={1.4} />;
+    return <line {...base} className="obs-conn-legend__edge--solid" />;
   }
 
   if (kind === 'dashed-anim') {
     return (
-      <line {...base} stroke="rgba(125,211,252,0.9)" strokeWidth={1.4} strokeDasharray="3 3">
+      <line {...base} className="obs-conn-legend__edge--anim">
         <animate
           attributeName="stroke-dashoffset"
           from="0"
@@ -64,28 +58,19 @@ function EdgeLine({ kind }: { kind: EdgeKind }) {
   }
 
   if (kind === 'dashed-long') {
-    return (
-      <line {...base} stroke="rgba(147,197,253,0.7)" strokeWidth={1.2} strokeDasharray="6 4" />
-    );
+    return <line {...base} className="obs-conn-legend__edge--long" />;
   }
 
   if (kind === 'soft') {
-    return (
-      <line
-        {...base}
-        stroke="rgba(224,242,254,0.55)"
-        strokeWidth={0.9}
-        strokeLinecap="round"
-      />
-    );
+    return <line {...base} className="obs-conn-legend__edge--soft" />;
   }
 
   // raid — dots + line
   return (
     <g>
-      <circle cx={8} cy={y} r={3} fill="rgba(125,211,252,0.9)" />
-      <circle cx={28} cy={y} r={3} fill="rgba(125,211,252,0.9)" />
-      <line x1={11} y1={y} x2={25} y2={y} stroke="rgba(125,211,252,0.6)" strokeWidth={1} />
+      <circle cx={8} cy={y} r={3} className="obs-conn-legend__edge--raid-node" />
+      <circle cx={28} cy={y} r={3} className="obs-conn-legend__edge--raid-node" />
+      <line x1={11} y1={y} x2={25} y2={y} className="obs-conn-legend__edge--raid-line" />
     </g>
   );
 }

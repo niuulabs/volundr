@@ -157,13 +157,13 @@ function KindProperties({ node }: { node: TopologyNode }) {
         {kind === 'printer' && (
           <>
             <dt>model</dt>
-            <dd>Saturn 4 Ultra</dd>
+            <dd>{node.model ?? '—'}</dd>
           </>
         )}
         {kind === 'vaettir' && (
           <>
             <dt>sensors</dt>
-            <dd>mmWave · mic · speaker</dd>
+            <dd>{node.sensors ?? '—'}</dd>
           </>
         )}
         {kind === 'service' && (
@@ -190,11 +190,10 @@ function KindProperties({ node }: { node: TopologyNode }) {
 interface RealmDrawerProps {
   node: TopologyNode;
   topology: Topology | null;
-  onClose: () => void;
   onNodeSelect?: (node: TopologyNode) => void;
 }
 
-function RealmDrawer({ node, topology, onClose, onNodeSelect }: RealmDrawerProps) {
+function RealmDrawer({ node, topology, onNodeSelect }: RealmDrawerProps) {
   const residents = topology ? topology.nodes.filter((n) => n.parentId === node.id) : [];
 
   return (
@@ -272,11 +271,10 @@ function RealmDrawer({ node, topology, onClose, onNodeSelect }: RealmDrawerProps
 interface ClusterDrawerProps {
   node: TopologyNode;
   topology: Topology | null;
-  onClose: () => void;
   onNodeSelect?: (node: TopologyNode) => void;
 }
 
-function ClusterDrawer({ node, topology, onClose, onNodeSelect }: ClusterDrawerProps) {
+function ClusterDrawer({ node, topology, onNodeSelect }: ClusterDrawerProps) {
   const members = topology ? topology.nodes.filter((n) => n.parentId === node.id) : [];
 
   return (
@@ -373,15 +371,10 @@ export function EntityDrawer({
       }}
     >
       {node && isRealm && (
-        <RealmDrawer node={node} topology={topology} onClose={onClose} onNodeSelect={onNodeSelect} />
+        <RealmDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />
       )}
       {node && isCluster && (
-        <ClusterDrawer
-          node={node}
-          topology={topology}
-          onClose={onClose}
-          onNodeSelect={onNodeSelect}
-        />
+        <ClusterDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />
       )}
       {node && !isRealm && !isCluster && (
         <DrawerContent title={node.label} width={360}>
@@ -416,7 +409,7 @@ export function EntityDrawer({
                   {node.activity.toUpperCase()}
                 </span>
                 <span className="obs-entity-drawer__activity-ts">
-                  last tick · {new Date().toISOString().slice(14, 19)}
+                  last tick · {topology?.timestamp.slice(11, 19) ?? '--:--'}
                 </span>
               </div>
             )}

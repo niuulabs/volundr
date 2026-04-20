@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useSyncExternalStore } from 'react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -57,14 +57,11 @@ export function __resetObservatoryStore(): void {
 }
 
 /**
- * React hook that subscribes to the Observatory store and triggers a re-render
- * on every state change.
+ * React hook that subscribes to the Observatory store using useSyncExternalStore,
+ * which is tear-safe in React 19's concurrent renderer.
  */
 export function useObservatoryStore(): [ObservatoryStoreState, ObservatoryStore] {
   const store = getObservatoryStore();
-  const [, setTick] = useState(0);
-
-  useEffect(() => store.subscribe(() => setTick((t) => t + 1)), [store]);
-
-  return [store.read(), store];
+  const state = useSyncExternalStore(store.subscribe, store.read);
+  return [state, store];
 }
