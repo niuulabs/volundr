@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Saga, Phase } from '../domain/saga';
 
 // ---------------------------------------------------------------------------
@@ -25,8 +25,9 @@ const PULSE_SPEED_RANGE = 0.012;
 const PULSE_ALPHA_FACTOR = 1.4;
 const HIT_RADIUS_RAVEN = 14;
 const LABEL_FONT = '500 10px JetBrains Mono, monospace';
-const LABEL_COLOR_PRIMARY = '#e4e4e7';
-const LABEL_COLOR_MUTED = '#71717a';
+// Fallback colors used until CSS custom properties are resolved in setup()
+const LABEL_COLOR_PRIMARY_FALLBACK = '#e4e4e7';
+const LABEL_COLOR_MUTED_FALLBACK = '#71717a';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -99,6 +100,10 @@ export function RaidMeshCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const nodesRef = useRef<MeshNode[]>([]);
   const hoverRef = useRef<HoverState | null>(null);
+  const colorsRef = useRef({
+    labelPrimary: LABEL_COLOR_PRIMARY_FALLBACK,
+    labelMuted: LABEL_COLOR_MUTED_FALLBACK,
+  });
   const [hover, setHover] = useState<HoverState | null>(null);
 
   // Keep hoverRef in sync with state (used inside animation loop)
@@ -106,33 +111,37 @@ export function RaidMeshCanvas({
     hoverRef.current = hover;
   }, [hover]);
 
-  // Build raid clusters from sagas + phases
-  const clusters: RaidCluster[] = [];
-  sagas
-    .filter((s) => s.status !== 'complete')
-    .forEach((s, i) => {
-      const sagaPhases = phases[i] ?? [];
-      sagaPhases.forEach((ph) => {
-        ph.raids
-          .filter((r) => r.status === 'running' || r.status === 'review' || r.status === 'queued')
-          .forEach((r) => {
-            clusters.push({
-              id: `${s.id}/${r.id}`,
-              sagaId: s.id,
-              raidId: r.id,
-              raidName: r.name,
-              phaseName: ph.name,
-              status: r.status,
-              confidence: r.confidence,
-              ravens: ['executor', 'reviewer', 'indexer'].slice(
-                0,
-                r.status === 'running' ? 3 : 2,
-              ),
+  // Build raid clusters from sagas + phases — memoized to avoid per-render churn
+  const clusters = useMemo<RaidCluster[]>(() => {
+    const result: RaidCluster[] = [];
+    sagas
+      .filter((s) => s.status !== 'complete')
+      .forEach((s, i) => {
+        const sagaPhases = phases[i] ?? [];
+        sagaPhases.forEach((ph) => {
+          ph.raids
+            .filter((r) => r.status === 'running' || r.status === 'review' || r.status === 'queued')
+            .forEach((r) => {
+              result.push({
+                id: `${s.id}/${r.id}`,
+                sagaId: s.id,
+                raidId: r.id,
+                raidName: r.name,
+                phaseName: ph.name,
+                status: r.status,
+                confidence: r.confidence,
+                ravens: ['executor', 'reviewer', 'indexer'].slice(
+                  0,
+                  r.status === 'running' ? 3 : 2,
+                ),
+              });
             });
-          });
+        });
       });
-    });
-  const visibleClusters = clusters.slice(0, 6);
+    return result;
+  }, [sagas, phases]);
+
+  const visibleClusters = useMemo(() => clusters.slice(0, 6), [clusters]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -154,6 +163,15 @@ export function RaidMeshCanvas({
       canvas.height = rect.height * dpr;
       const W = rect.width;
       const H = rect.height;
+
+      // Resolve colors from CSS custom properties so they respond to theme changes
+      const style = getComputedStyle(document.documentElement);
+      colorsRef.current = {
+        labelPrimary:
+          style.getPropertyValue('--color-text-primary').trim() || LABEL_COLOR_PRIMARY_FALLBACK,
+        labelMuted:
+          style.getPropertyValue('--color-text-muted').trim() || LABEL_COLOR_MUTED_FALLBACK,
+      };
 
       nodes = [];
       const count = visibleClusters.length;
@@ -286,9 +304,9 @@ export function RaidMeshCanvas({
       ctx.font = LABEL_FONT;
       ctx.textAlign = 'center';
       clusterNodes.forEach((n) => {
-        ctx.fillStyle = LABEL_COLOR_PRIMARY;
+        ctx.fillStyle = colorsRef.current.labelPrimary;
         ctx.fillText(n.cluster.raidName.slice(0, 12), n.x, n.y + 4);
-        ctx.fillStyle = LABEL_COLOR_MUTED;
+        ctx.fillStyle = colorsRef.current.labelMuted;
         ctx.fillText(n.cluster.phaseName.toLowerCase().slice(0, 12), n.x, n.y + 18);
       });
 
@@ -339,50 +357,47 @@ export function RaidMeshCanvas({
         aria-label={ariaLabel}
         style={{ width: '100%', height: '100%', background: 'transparent', display: 'block' }}
       />
-      {hover && hover.node.kind === 'raven' && (
-        <div
-          style={{
-            position: 'absolute',
-            left: hover.x + 12,
-            top: hover.y + 12,
-            background: 'var(--color-bg-elevated)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '4px 8px',
-            pointerEvents: 'none',
-            zIndex: 10,
-          }}
-        >
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)' }}>
+      {hover?.node.kind === 'raven' && (
+        <MeshTooltip x={hover.x} y={hover.y}>
+          <div className="niuu-font-mono niuu-text-xs niuu-font-medium niuu-text-text-primary">
             {hover.node.persona}
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, marginTop: 2, color: 'var(--color-text-muted)' }}>
+          <div className="niuu-font-mono niuu-text-xs niuu-mt-0.5 niuu-text-text-muted">
             {hover.node.cluster.raidName} · {hover.node.cluster.phaseName}
           </div>
-        </div>
+        </MeshTooltip>
       )}
-      {hover && hover.node.kind === 'cluster' && (
-        <div
-          style={{
-            position: 'absolute',
-            left: hover.x + 12,
-            top: hover.y + 12,
-            background: 'var(--color-bg-elevated)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '4px 8px',
-            pointerEvents: 'none',
-            zIndex: 10,
-          }}
-        >
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-primary)' }}>
+      {hover?.node.kind === 'cluster' && (
+        <MeshTooltip x={hover.x} y={hover.y}>
+          <div className="niuu-text-xs niuu-font-medium niuu-text-text-primary">
             {hover.node.cluster.raidName}
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, marginTop: 2, color: 'var(--color-text-muted)' }}>
+          <div className="niuu-font-mono niuu-text-xs niuu-mt-0.5 niuu-text-text-muted">
             {hover.node.cluster.phaseName} · conf {hover.node.cluster.confidence}%
           </div>
-        </div>
+        </MeshTooltip>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MeshTooltip — shared tooltip shell; dynamic position stays inline
+// ---------------------------------------------------------------------------
+
+interface MeshTooltipProps {
+  x: number;
+  y: number;
+  children: React.ReactNode;
+}
+
+function MeshTooltip({ x, y, children }: MeshTooltipProps) {
+  return (
+    <div
+      className="niuu-absolute niuu-bg-bg-elevated niuu-border niuu-border-border niuu-rounded niuu-px-2 niuu-py-1 niuu-pointer-events-none niuu-z-10"
+      style={{ left: x + 12, top: y + 12 }}
+    >
+      {children}
     </div>
   );
 }

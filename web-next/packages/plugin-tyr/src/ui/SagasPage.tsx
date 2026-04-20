@@ -8,6 +8,7 @@ import {
   EmptyState,
   Pipe,
   Rune,
+  relTime,
 } from '@niuulabs/ui';
 import type { SagaStatus } from '../domain/saga';
 import type { Saga } from '../domain/saga';
@@ -19,21 +20,14 @@ import { SagaDetailPage } from './SagaDetailPage';
 // Deterministic saga glyph (hash saga trackerId → Elder Futhark rune)
 // ---------------------------------------------------------------------------
 
-const SAGA_GLYPHS = ['ᚠ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚢ', 'ᛁ', 'ᛃ', 'ᛉ', 'ᛒ', 'ᛖ', 'ᛗ', 'ᛜ', 'ᛟ', 'ᛞ'];
+// Safe Elder Futhark runes — forbidden appropriated symbols (Algiz ᛉ, Othala ᛟ,
+// Tiwaz ᛏ, Sowilo ᛊ, Hagalaz ᚺ/ᚻ) are explicitly excluded per runeMap.ts.
+const SAGA_GLYPHS = ['ᚠ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚢ', 'ᚨ', 'ᛃ', 'ᚦ', 'ᛒ', 'ᛖ', 'ᛗ', 'ᛜ', 'ᚹ', 'ᛞ'];
 
 function sagaGlyph(id: string): string {
   let h = 0;
   for (const c of id) h = ((h * 31 + c.charCodeAt(0)) >>> 0);
   return SAGA_GLYPHS[h % SAGA_GLYPHS.length]!;
-}
-
-function timeAgo(isoDate: string): string {
-  const diff = Date.now() - new Date(isoDate).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +105,7 @@ function SagaListRow({ saga, isSelected, onClick }: SagaListRowProps) {
           </span>
         )}
         <span className="niuu-text-xs niuu-text-text-faint niuu-font-mono niuu-ml-auto">
-          {timeAgo(saga.createdAt)}
+          {relTime(saga.createdAt)}
         </span>
       </div>
 

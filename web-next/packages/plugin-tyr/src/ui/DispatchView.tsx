@@ -324,23 +324,7 @@ function DispatchRulesPanel({
         <h3 className="niuu-m-0 niuu-mb-3 niuu-text-sm niuu-font-semibold niuu-text-text-primary">
           Recent dispatches
         </h3>
-        <div className="niuu-flex niuu-flex-col niuu-gap-2">
-          {[
-            { time: '2m ago', name: 'Auth Rewrite · Phase 1' },
-            { time: '8m ago', name: 'Observatory · Phase 2' },
-            { time: '15m ago', name: 'Ravn Plugin · Phase 1' },
-            { time: '22m ago', name: 'Auth Rewrite · Phase 1' },
-            { time: '31m ago', name: 'Observatory · Phase 1' },
-            { time: '45m ago', name: 'Ravn Plugin · Phase 2' },
-          ].map((d, i) => (
-            <div key={i} className="niuu-flex niuu-items-center niuu-gap-2">
-              <span className="niuu-text-xs niuu-font-mono niuu-text-text-faint niuu-w-12 niuu-shrink-0">
-                {d.time}
-              </span>
-              <span className="niuu-text-xs niuu-text-text-secondary niuu-truncate">{d.name}</span>
-            </div>
-          ))}
-        </div>
+        <p className="niuu-m-0 niuu-text-xs niuu-text-text-muted">No recent dispatches.</p>
       </div>
     </div>
   );

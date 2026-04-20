@@ -42,7 +42,7 @@ export const tyrPlugin = definePlugin({
     createRoute({
       getParentRoute: () => rootRoute,
       path: '/tyr/sagas/$sagaId',
-      component: SagaDetailRoute,
+      component: SagasPage,
     }),
     createRoute({
       getParentRoute: () => rootRoute,
