@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Drawer, DrawerContent, Sparkline, StateDot } from '@niuulabs/ui';
+import { Sparkline, StateDot } from '@niuulabs/ui';
 import type { DotState } from '@niuulabs/ui';
 import type { TopologyNode, Topology, Registry, NodeActivity } from '../../domain';
 import './EntityDrawer.css';
@@ -184,7 +184,7 @@ function KindProperties({ node }: { node: TopologyNode }) {
   );
 }
 
-// ── Realm drawer ──────────────────────────────────────────────────────────────
+// ── Realm drawer body ─────────────────────────────────────────────────────────
 
 interface RealmDrawerProps {
   node: TopologyNode;
@@ -196,7 +196,7 @@ function RealmDrawer({ node, topology, onNodeSelect }: RealmDrawerProps) {
   const residents = topology ? topology.nodes.filter((n) => n.parentId === node.id) : [];
 
   return (
-    <DrawerContent title={node.label} width={360}>
+    <>
       <div className="obs-entity-drawer__head">
         <div className="obs-entity-drawer__identity">
           <span className="obs-entity-drawer__rune" aria-hidden="true">
@@ -257,11 +257,11 @@ function RealmDrawer({ node, topology, onNodeSelect }: RealmDrawerProps) {
           </section>
         )}
       </div>
-    </DrawerContent>
+    </>
   );
 }
 
-// ── Cluster drawer ────────────────────────────────────────────────────────────
+// ── Cluster drawer body ───────────────────────────────────────────────────────
 
 interface ClusterDrawerProps {
   node: TopologyNode;
@@ -273,7 +273,7 @@ function ClusterDrawer({ node, topology, onNodeSelect }: ClusterDrawerProps) {
   const members = topology ? topology.nodes.filter((n) => n.parentId === node.id) : [];
 
   return (
-    <DrawerContent title={node.label} width={360}>
+    <>
       <div className="obs-entity-drawer__head">
         <div className="obs-entity-drawer__identity">
           <span className="obs-entity-drawer__rune" aria-hidden="true">
@@ -325,7 +325,7 @@ function ClusterDrawer({ node, topology, onNodeSelect }: ClusterDrawerProps) {
           </section>
         )}
       </div>
-    </DrawerContent>
+    </>
   );
 }
 
@@ -356,21 +356,30 @@ export function EntityDrawer({
 
   const showSparkline = ['ravn_long', 'bifrost'].includes(node?.typeId ?? '');
 
+  if (!node) return null;
+
   return (
-    <Drawer
-      open={node !== null}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
+    <aside
+      role="dialog"
+      aria-label={node.label}
+      className="obs-entity-drawer__panel"
     >
-      {node && isRealm && (
+      <button
+        className="obs-entity-drawer__close-btn"
+        aria-label="Close"
+        onClick={onClose}
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+
+      {isRealm && (
         <RealmDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />
       )}
-      {node && isCluster && (
+      {isCluster && (
         <ClusterDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />
       )}
-      {node && !isRealm && !isCluster && (
-        <DrawerContent title={node.label} width={360}>
+      {!isRealm && !isCluster && (
+        <>
           {/* HEAD — rune · label · activity · status · timestamp */}
           <div className="obs-entity-drawer__head">
             <div className="obs-entity-drawer__identity">
@@ -550,8 +559,8 @@ export function EntityDrawer({
               </div>
             </section>
           </div>
-        </DrawerContent>
+        </>
       )}
-    </Drawer>
+    </aside>
   );
 }
