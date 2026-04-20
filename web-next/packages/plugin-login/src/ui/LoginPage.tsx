@@ -46,10 +46,10 @@ function LockIcon() {
 const buildVersion = (import.meta.env['VITE_BUILD_VERSION'] as string | undefined) ?? '';
 const buildRealm = (import.meta.env['VITE_BUILD_REALM'] as string | undefined) ?? '';
 
-function buildBannerText(): string {
-  if (!buildVersion) return 'niuu';
-  if (!buildRealm) return `niuu · build ${buildVersion}`;
-  return `niuu · build ${buildVersion} · ${buildRealm}`;
+export function buildBannerText(version = buildVersion, realm = buildRealm): string {
+  if (!version) return 'niuu';
+  if (!realm) return `niuu · build ${version}`;
+  return `niuu · build ${version} · ${realm}`;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AuthContext, type AuthContextValue } from '@niuulabs/auth';
-import { LoginPage } from './LoginPage';
+import { LoginPage, buildBannerText } from './LoginPage';
 
 const baseAuth: AuthContextValue = {
   enabled: true,
@@ -179,5 +179,21 @@ describe('LoginPage', () => {
   it('renders the logo SVG', () => {
     const { container } = wrap(baseAuth);
     expect(container.querySelector('svg')).not.toBeNull();
+  });
+});
+
+describe('buildBannerText', () => {
+  it('returns just niuu when no version', () => {
+    expect(buildBannerText('', '')).toBe('niuu');
+  });
+
+  it('returns version without realm', () => {
+    expect(buildBannerText('2026.04.18-7f3a2c', '')).toBe('niuu · build 2026.04.18-7f3a2c');
+  });
+
+  it('returns version and realm', () => {
+    expect(buildBannerText('2026.04.18-7f3a2c', 'valaskjálf')).toBe(
+      'niuu · build 2026.04.18-7f3a2c · valaskjálf',
+    );
   });
 });
