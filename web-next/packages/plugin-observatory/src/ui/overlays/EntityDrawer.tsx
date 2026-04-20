@@ -67,10 +67,7 @@ function KindProperties({ node }: { node: TopologyNode }) {
           <>
             <dt>mode</dt>
             <dd>
-              <span
-                className="obs-entity-drawer__badge"
-                data-mode={node.mode}
-              >
+              <span className="obs-entity-drawer__badge" data-mode={node.mode}>
                 {node.mode ?? '—'}
               </span>
             </dd>
@@ -87,7 +84,9 @@ function KindProperties({ node }: { node: TopologyNode }) {
             <dt>req/min</dt>
             <dd>{node.reqPerMin ?? 0}</dd>
             <dt>cache hit</dt>
-            <dd>{node.cacheHitRate !== undefined ? `${Math.round(node.cacheHitRate * 100)}%` : '—'}</dd>
+            <dd>
+              {node.cacheHitRate !== undefined ? `${Math.round(node.cacheHitRate * 100)}%` : '—'}
+            </dd>
           </>
         )}
         {kind === 'volundr' && (
@@ -212,9 +211,7 @@ function RealmDrawer({ node, topology, onNodeSelect }: RealmDrawerProps) {
         </div>
       </div>
       <div className="obs-entity-drawer__body">
-        {node.purpose && (
-          <p className="obs-entity-drawer__description">{node.purpose}</p>
-        )}
+        {node.purpose && <p className="obs-entity-drawer__description">{node.purpose}</p>}
         <section className="obs-entity-drawer__section">
           <h4 className="obs-entity-drawer__section-title">About</h4>
           <dl className="obs-entity-drawer__prop-grid">
@@ -245,9 +242,7 @@ function RealmDrawer({ node, topology, onNodeSelect }: RealmDrawerProps) {
                     onClick={() => onNodeSelect?.(resident)}
                     data-testid={`resident-${resident.id}`}
                   >
-                    {resident.activity && (
-                      <ActivityDot activity={resident.activity} />
-                    )}
+                    {resident.activity && <ActivityDot activity={resident.activity} />}
                     <span className="obs-entity-drawer__resident-label">{resident.label}</span>
                     <span className="obs-entity-drawer__resident-kind">{resident.typeId}</span>
                   </button>
@@ -287,7 +282,9 @@ function ClusterDrawer({ node, topology, onNodeSelect }: ClusterDrawerProps) {
           <div className="obs-entity-drawer__meta">
             <span className="obs-entity-drawer__type-label">Cluster · k8s</span>
             {node.parentId && (
-              <span className="obs-entity-drawer__id-chip">realm · {node.zone ?? node.parentId}</span>
+              <span className="obs-entity-drawer__id-chip">
+                realm · {node.zone ?? node.parentId}
+              </span>
             )}
           </div>
         </div>
@@ -295,9 +292,7 @@ function ClusterDrawer({ node, topology, onNodeSelect }: ClusterDrawerProps) {
       <div className="obs-entity-drawer__body">
         <section className="obs-entity-drawer__section">
           <h4 className="obs-entity-drawer__section-title">About</h4>
-          {node.purpose && (
-            <p className="obs-entity-drawer__description">{node.purpose}</p>
-          )}
+          {node.purpose && <p className="obs-entity-drawer__description">{node.purpose}</p>}
           <dl className="obs-entity-drawer__prop-grid">
             {node.zone && (
               <>
@@ -320,9 +315,7 @@ function ClusterDrawer({ node, topology, onNodeSelect }: ClusterDrawerProps) {
                     onClick={() => onNodeSelect?.(member)}
                     data-testid={`resident-${member.id}`}
                   >
-                    {member.activity && (
-                      <ActivityDot activity={member.activity} />
-                    )}
+                    {member.activity && <ActivityDot activity={member.activity} />}
                     <span className="obs-entity-drawer__resident-label">{member.label}</span>
                     <span className="obs-entity-drawer__resident-kind">{member.typeId}</span>
                   </button>
@@ -415,7 +408,9 @@ export function EntityDrawer({
             )}
 
             {entityType?.description && (
-              <p className="obs-entity-drawer__description">{entityType.description.split('.')[0]}.</p>
+              <p className="obs-entity-drawer__description">
+                {entityType.description.split('.')[0]}.
+              </p>
             )}
 
             {/* Identity section */}
@@ -481,10 +476,7 @@ export function EntityDrawer({
                           data-testid={`resident-${resident.id}`}
                         >
                           {residentType && (
-                            <span
-                              className="obs-entity-drawer__resident-rune"
-                              aria-hidden="true"
-                            >
+                            <span className="obs-entity-drawer__resident-rune" aria-hidden="true">
                               {residentType.rune}
                             </span>
                           )}

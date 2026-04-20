@@ -27,7 +27,9 @@ function InflightRow({ session, onClick }: { session: Session; onClick: () => vo
         <StateDot state="processing" pulse />
         <div className="niuu-flex-1">
           <div className="niuu-font-mono niuu-text-sm niuu-text-text-primary">{session.id}</div>
-          <div className="niuu-font-mono niuu-text-xs niuu-text-text-faint">{session.personaName}</div>
+          <div className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+            {session.personaName}
+          </div>
         </div>
         <span className="niuu-text-xs niuu-text-text-muted">booting…</span>
       </button>
@@ -40,14 +42,31 @@ function InflightRow({ session, onClick }: { session: Session; onClick: () => vo
       onClick={onClick}
       data-testid="inflight-row"
     >
-      <StateDot state={session.state === 'idle' ? 'idle' : 'running'} pulse={session.state === 'running'} />
+      <StateDot
+        state={session.state === 'idle' ? 'idle' : 'running'}
+        pulse={session.state === 'running'}
+      />
       <div className="niuu-flex-1 niuu-min-w-0">
-        <div className="niuu-font-mono niuu-text-sm niuu-text-text-primary niuu-truncate">{session.id}</div>
-        <div className="niuu-text-xs niuu-text-text-faint">{session.personaName} · {session.clusterId}</div>
+        <div className="niuu-font-mono niuu-text-sm niuu-text-text-primary niuu-truncate">
+          {session.id}
+        </div>
+        <div className="niuu-text-xs niuu-text-text-faint">
+          {session.personaName} · {session.clusterId}
+        </div>
       </div>
       <div className="niuu-flex niuu-items-center niuu-gap-2">
-        <Meter used={session.resources.cpuUsed} limit={session.resources.cpuLimit} label="cpu" className="niuu-w-16" />
-        <Meter used={session.resources.memUsedMi} limit={session.resources.memLimitMi} label="mem" className="niuu-w-16" />
+        <Meter
+          used={session.resources.cpuUsed}
+          limit={session.resources.cpuLimit}
+          label="cpu"
+          className="niuu-w-16"
+        />
+        <Meter
+          used={session.resources.memUsedMi}
+          limit={session.resources.memLimitMi}
+          label="mem"
+          className="niuu-w-16"
+        />
       </div>
     </button>
   );
@@ -63,13 +82,22 @@ function ClusterLoadRow({ cluster }: { cluster: Cluster }) {
   const gpuPct = cluster.capacity.gpu > 0 ? cluster.used.gpu / cluster.capacity.gpu : 0;
 
   return (
-    <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-py-2" data-testid="cluster-load-row">
+    <div
+      className="niuu-flex niuu-items-center niuu-gap-3 niuu-py-2"
+      data-testid="cluster-load-row"
+    >
       <div className="niuu-flex-1 niuu-min-w-0">
         <div className="niuu-flex niuu-items-center niuu-gap-2">
-          <span className="niuu-font-medium niuu-text-sm niuu-text-text-primary">{cluster.name}</span>
-          <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">· {cluster.realm}</span>
+          <span className="niuu-font-medium niuu-text-sm niuu-text-text-primary">
+            {cluster.name}
+          </span>
+          <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+            · {cluster.realm}
+          </span>
         </div>
-        <div className="niuu-text-xs niuu-text-text-muted">{cluster.runningSessions} pod{cluster.runningSessions !== 1 ? 's' : ''}</div>
+        <div className="niuu-text-xs niuu-text-text-muted">
+          {cluster.runningSessions} pod{cluster.runningSessions !== 1 ? 's' : ''}
+        </div>
       </div>
       <div className="niuu-flex niuu-gap-2 niuu-w-48">
         <MiniBar value={cpuPct} label="cpu" />
@@ -89,7 +117,6 @@ function ClusterLoadRow({ cluster }: { cluster: Cluster }) {
   );
 }
 
-
 // ---------------------------------------------------------------------------
 // Quick launch card
 // ---------------------------------------------------------------------------
@@ -102,9 +129,13 @@ function QuickLaunchCard({ template, onClick }: { template: Template; onClick: (
       data-testid="quick-launch-card"
     >
       <div className="niuu-flex niuu-items-center niuu-gap-2">
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-secondary">{template.name}</span>
+        <span className="niuu-font-mono niuu-text-xs niuu-text-text-secondary">
+          {template.name}
+        </span>
       </div>
-      <div className="niuu-text-xs niuu-text-text-muted niuu-line-clamp-2">{template.spec.image}:{template.spec.tag}</div>
+      <div className="niuu-text-xs niuu-text-text-muted niuu-line-clamp-2">
+        {template.spec.image}:{template.spec.tag}
+      </div>
       <div className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
         {template.spec.resources.cpuRequest}c · {template.spec.resources.memRequestMi}Mi
         {template.spec.resources.gpuCount > 0 && ` · gpu ${template.spec.resources.gpuCount}`}
@@ -129,14 +160,19 @@ export function ForgePage() {
   // Derive categorized sessions
   const allSessions = domainSessions.data ?? [];
   const activeSessions = allSessions.filter((s) => s.state === 'running' || s.state === 'idle');
-  const bootingSessions = allSessions.filter((s) => s.state === 'provisioning' || s.state === 'requested');
+  const bootingSessions = allSessions.filter(
+    (s) => s.state === 'provisioning' || s.state === 'requested',
+  );
   const erroredSessions = allSessions.filter((s) => s.state === 'failed');
   const inflightSessions = [...bootingSessions, ...activeSessions].slice(0, 6);
 
   // Recent sessions sorted by last activity
   const recentSessions = [...allSessions]
     .filter((s) => s.lastActivityAt)
-    .sort((a, b) => new Date(b.lastActivityAt ?? 0).getTime() - new Date(a.lastActivityAt ?? 0).getTime())
+    .sort(
+      (a, b) =>
+        new Date(b.lastActivityAt ?? 0).getTime() - new Date(a.lastActivityAt ?? 0).getTime(),
+    )
     .slice(0, 8);
 
   // Cluster aggregates
@@ -195,7 +231,9 @@ export function ForgePage() {
         >
           <div className="niuu-flex niuu-items-center niuu-justify-between">
             <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">In-flight pods</h2>
-            <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">{inflightSessions.length}</span>
+            <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+              {inflightSessions.length}
+            </span>
           </div>
           {inflightSessions.length === 0 && (
             <p className="niuu-text-xs niuu-text-text-muted">No active pods.</p>
@@ -213,10 +251,14 @@ export function ForgePage() {
         >
           <div className="niuu-flex niuu-items-center niuu-justify-between">
             <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Forge load</h2>
-            <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">{clusters.data?.length ?? 0} clusters</span>
+            <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+              {clusters.data?.length ?? 0} clusters
+            </span>
           </div>
           {clusters.isLoading && <LoadingState label="Loading clusters…" />}
-          {clusters.data?.map((c) => <ClusterLoadRow key={c.id} cluster={c} />)}
+          {clusters.data?.map((c) => (
+            <ClusterLoadRow key={c.id} cluster={c} />
+          ))}
         </section>
 
         {/* Quick launch */}
@@ -227,7 +269,9 @@ export function ForgePage() {
         >
           <div className="niuu-flex niuu-items-center niuu-justify-between">
             <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Quick launch</h2>
-            <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">from a template</span>
+            <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+              from a template
+            </span>
           </div>
           <div className="niuu-grid niuu-grid-cols-2 niuu-gap-2">
             {templates.data?.slice(0, 4).map((t) => (
@@ -248,14 +292,26 @@ export function ForgePage() {
           aria-label="Recent across fleet"
           data-testid="chronicle-tail"
         >
-          <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Recent across fleet</h2>
+          <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">
+            Recent across fleet
+          </h2>
           <ol className="niuu-flex niuu-flex-col niuu-gap-1">
             {recentSessions.map((s) => (
               <li key={s.id} className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-xs">
                 <span className="niuu-font-mono niuu-text-text-faint niuu-w-12 niuu-text-right">
                   {relTime(new Date(s.lastActivityAt ?? s.startedAt).getTime())}
                 </span>
-                <StateDot state={s.state === 'idle' ? 'idle' : s.state === 'running' ? 'running' : s.state === 'failed' ? 'failed' : 'unknown'} />
+                <StateDot
+                  state={
+                    s.state === 'idle'
+                      ? 'idle'
+                      : s.state === 'running'
+                        ? 'running'
+                        : s.state === 'failed'
+                          ? 'failed'
+                          : 'unknown'
+                  }
+                />
                 <span className="niuu-font-mono niuu-text-text-primary">{s.id}</span>
                 <span className="niuu-text-text-faint">·</span>
                 <span className="niuu-text-text-muted niuu-truncate">{s.personaName}</span>

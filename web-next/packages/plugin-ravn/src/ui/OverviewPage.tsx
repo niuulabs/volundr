@@ -97,7 +97,8 @@ export function OverviewPage() {
         <div data-testid="kpi-ravens" className="rv-kpi-item">
           <KpiCard label="Ravens" value={ravnList.length} />
           <p className="rv-kpi-sub">
-            {activeCount} active · {idleCount} idle · {failedCount} failed · {suspendedCount} suspended
+            {activeCount} active · {idleCount} idle · {failedCount} failed · {suspendedCount}{' '}
+            suspended
           </p>
         </div>
         <div data-testid="kpi-sessions" className="rv-kpi-item">
@@ -107,10 +108,17 @@ export function OverviewPage() {
           </p>
         </div>
         <div data-testid="kpi-spend" className="rv-kpi-item">
-          <KpiCard label="Spend today" value={fleetBudgetData ? `$${fleetBudgetData.spentUsd.toFixed(2)}` : '—'} />
+          <KpiCard
+            label="Spend today"
+            value={fleetBudgetData ? `$${fleetBudgetData.spentUsd.toFixed(2)}` : '—'}
+          />
           {fleetBudgetData && (
             <p className="rv-kpi-sub">
-              of ${fleetBudgetData.capUsd.toFixed(2)} · {fleetBudgetData.capUsd > 0 ? Math.round((fleetBudgetData.spentUsd / fleetBudgetData.capUsd) * 100) : 0}%
+              of ${fleetBudgetData.capUsd.toFixed(2)} ·{' '}
+              {fleetBudgetData.capUsd > 0
+                ? Math.round((fleetBudgetData.spentUsd / fleetBudgetData.capUsd) * 100)
+                : 0}
+              %
             </p>
           )}
         </div>
@@ -133,12 +141,12 @@ export function OverviewPage() {
             ) : (
               <ul className="rv-active-list" data-testid="active-ravens-list">
                 {activeRavens.map((r) => (
-                    <li key={r.id} className="rv-active-row" data-testid="active-ravn-row">
-                      <StateDot state="running" pulse size={8} />
-                      <span className="rv-active-row__name">{r.personaName}</span>
-                      <span className="rv-active-row__model">{r.model}</span>
-                    </li>
-                  ))}
+                  <li key={r.id} className="rv-active-row" data-testid="active-ravn-row">
+                    <StateDot state="running" pulse size={8} />
+                    <span className="rv-active-row__name">{r.personaName}</span>
+                    <span className="rv-active-row__model">{r.model}</span>
+                  </li>
+                ))}
               </ul>
             )}
           </section>
@@ -183,7 +191,11 @@ export function OverviewPage() {
                 </span>
               )}
             </div>
-            <Sparkline values={hourlyValues} width={FLEET_SPARKLINE_WIDTH} height={FLEET_SPARKLINE_HEIGHT} />
+            <Sparkline
+              values={hourlyValues}
+              width={FLEET_SPARKLINE_WIDTH}
+              height={FLEET_SPARKLINE_HEIGHT}
+            />
             <div className="rv-fleet-sparkline__axis">
               <span>24h ago</span>
               <span>now</span>

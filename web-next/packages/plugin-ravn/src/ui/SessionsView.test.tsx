@@ -23,9 +23,7 @@ describe('SessionsView', () => {
 
   it('shows session list after loading', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getAllByText('coding-agent').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByText('coding-agent').length).toBeGreaterThan(0));
   });
 
   it('shows session count', async () => {
@@ -85,9 +83,7 @@ describe('SessionsView', () => {
 
   it('shows context sidebar when a session is selected', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByTestId('session-context-sidebar')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('session-context-sidebar')).toBeInTheDocument());
   });
 
   it('sidebar shows summary section', async () => {

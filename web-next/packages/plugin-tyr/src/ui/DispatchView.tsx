@@ -235,11 +235,7 @@ function RaidRow({
         <div className="niuu-flex niuu-items-center niuu-gap-1.5 niuu-w-[80px]">
           <ConfidenceBar
             level={
-              entry.raid.confidence >= 80
-                ? 'high'
-                : entry.raid.confidence >= 50
-                  ? 'medium'
-                  : 'low'
+              entry.raid.confidence >= 80 ? 'high' : entry.raid.confidence >= 50 ? 'medium' : 'low'
             }
           />
           <span className="niuu-text-xs niuu-font-mono niuu-text-text-secondary">
@@ -393,7 +389,10 @@ export function DispatchView() {
 
   // Group filtered entries by sagaId
   const groupedBySaga = useMemo(() => {
-    const map = new Map<string, { sagaName: string; trackerId: string; featureBranch: string; entries: EnrichedEntry[] }>();
+    const map = new Map<
+      string,
+      { sagaName: string; trackerId: string; featureBranch: string; entries: EnrichedEntry[] }
+    >();
     for (const entry of filtered) {
       const existing = map.get(entry.saga.id);
       if (existing) {

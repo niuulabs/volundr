@@ -68,15 +68,9 @@ export function ObservatorySubnav() {
 
   const nodes = useMemo(() => topology?.nodes ?? [], [topology]);
 
-  const realms = useMemo(
-    () => nodes.filter((n) => n.typeId === 'realm'),
-    [nodes],
-  );
+  const realms = useMemo(() => nodes.filter((n) => n.typeId === 'realm'), [nodes]);
 
-  const clusters = useMemo(
-    () => nodes.filter((n) => n.typeId === 'cluster'),
-    [nodes],
-  );
+  const clusters = useMemo(() => nodes.filter((n) => n.typeId === 'cluster'), [nodes]);
 
   const allRaids = useMemo(() => nodes.filter((n) => n.typeId === 'raid'), [nodes]);
 
@@ -87,8 +81,7 @@ export function ObservatorySubnav() {
       {/* Section 1: Entity filter */}
       <div className="obs-subnav__section">
         <div className="obs-subnav__label">
-          Filter{' '}
-          <span className="obs-subnav__label-dot">·</span>
+          Filter <span className="obs-subnav__label-dot">·</span>
         </div>
         {FILTER_ROWS.map((row) => {
           const count = row.count(nodes);
@@ -116,8 +109,7 @@ export function ObservatorySubnav() {
       {/* Section 2: Realms */}
       <div className="obs-subnav__section">
         <div className="obs-subnav__label">
-          Realms{' '}
-          <span className="obs-subnav__count">{realms.length}</span>
+          Realms <span className="obs-subnav__count">{realms.length}</span>
         </div>
         {realms.map((realm) => (
           <button
@@ -146,8 +138,7 @@ export function ObservatorySubnav() {
       {/* Section 3: Clusters + Active raids */}
       <div className="obs-subnav__section">
         <div className="obs-subnav__label">
-          Clusters{' '}
-          <span className="obs-subnav__count">{clusters.length}</span>
+          Clusters <span className="obs-subnav__count">{clusters.length}</span>
         </div>
         {clusters.map((cluster) => (
           <button
@@ -173,8 +164,7 @@ export function ObservatorySubnav() {
         {activeRaids.length > 0 && (
           <>
             <div className="obs-subnav__label obs-subnav__label--sub">
-              Active raids{' '}
-              <span className="obs-subnav__count">{allRaids.length}</span>
+              Active raids <span className="obs-subnav__count">{allRaids.length}</span>
             </div>
             {activeRaids.map((raid) => {
               const color = raidDotColor(raid.state);
@@ -192,9 +182,7 @@ export function ObservatorySubnav() {
                   <span className="obs-subnav__name obs-subnav__name--mono">
                     {raid.purpose ?? raid.label}
                   </span>
-                  <span className="obs-subnav__count">
-                    {raid.state?.slice(0, 4) ?? '—'}
-                  </span>
+                  <span className="obs-subnav__count">{raid.state?.slice(0, 4) ?? '—'}</span>
                 </button>
               );
             })}

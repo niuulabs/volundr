@@ -30,4 +30,3 @@ describe('tokens', () => {
     expect(tokens(2_500_000)).toBe('2.50M');
   });
 });
-

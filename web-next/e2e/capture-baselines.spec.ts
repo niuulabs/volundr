@@ -42,10 +42,13 @@ function fileUrl(relativePath: string): string {
 /** Wait for React + Babel transpilation to complete and first paint to settle. */
 async function waitForReady(page: Page): Promise<void> {
   // Babel-in-browser defers compilation; wait for the root to have children.
-  await page.waitForFunction(() => {
-    const root = document.getElementById('root');
-    return root !== null && root.children.length > 0;
-  }, { timeout: 15_000 });
+  await page.waitForFunction(
+    () => {
+      const root = document.getElementById('root');
+      return root !== null && root.children.length > 0;
+    },
+    { timeout: 15_000 },
+  );
   // Let any rAF-driven animations reach steady state.
   await page.waitForTimeout(600);
 }
@@ -71,7 +74,10 @@ test.describe('capture web2 baselines — observatory', () => {
   test('registry — types tab', async ({ page }) => {
     await page.goto(fileUrl('flokk_observatory/design/Flokk Observatory.html'));
     await waitForReady(page);
-    await page.getByRole('button', { name: /Registry/i }).first().click();
+    await page
+      .getByRole('button', { name: /Registry/i })
+      .first()
+      .click();
     await page.waitForTimeout(400);
     await page.screenshot({ path: outPath('observatory', 'registry-types'), fullPage: true });
   });
@@ -79,9 +85,15 @@ test.describe('capture web2 baselines — observatory', () => {
   test('registry — containment tab', async ({ page }) => {
     await page.goto(fileUrl('flokk_observatory/design/Flokk Observatory.html'));
     await waitForReady(page);
-    await page.getByRole('button', { name: /Registry/i }).first().click();
+    await page
+      .getByRole('button', { name: /Registry/i })
+      .first()
+      .click();
     await page.waitForTimeout(300);
-    await page.getByRole('button', { name: /Containment/i }).first().click();
+    await page
+      .getByRole('button', { name: /Containment/i })
+      .first()
+      .click();
     await page.waitForTimeout(300);
     await page.screenshot({ path: outPath('observatory', 'registry-containment'), fullPage: true });
   });
@@ -89,7 +101,10 @@ test.describe('capture web2 baselines — observatory', () => {
   test('registry — json tab', async ({ page }) => {
     await page.goto(fileUrl('flokk_observatory/design/Flokk Observatory.html'));
     await waitForReady(page);
-    await page.getByRole('button', { name: /Registry/i }).first().click();
+    await page
+      .getByRole('button', { name: /Registry/i })
+      .first()
+      .click();
     await page.waitForTimeout(300);
     await page.getByRole('button', { name: /JSON/i }).first().click();
     await page.waitForTimeout(300);
@@ -177,7 +192,10 @@ test.describe('capture web2 baselines — tyr', () => {
   test('settings', async ({ page }) => {
     await page.goto(fileUrl('tyr/design/Tyr Saga Coordinator.html'));
     await waitForReady(page);
-    await page.getByRole('button', { name: /Settings/i }).first().click();
+    await page
+      .getByRole('button', { name: /Settings/i })
+      .first()
+      .click();
     await page.waitForTimeout(300);
     await page.screenshot({ path: outPath('tyr', 'settings'), fullPage: true });
   });
@@ -203,7 +221,10 @@ test.describe('capture web2 baselines — mimir', () => {
   test('search', async ({ page }) => {
     await page.goto(fileUrl('mimir/design/Flokk Mimir.html'));
     await waitForReady(page);
-    await page.getByRole('button', { name: /Search/i }).first().click();
+    await page
+      .getByRole('button', { name: /Search/i })
+      .first()
+      .click();
     await page.waitForTimeout(300);
     await page.screenshot({ path: outPath('mimir', 'search'), fullPage: true });
   });
@@ -219,7 +240,10 @@ test.describe('capture web2 baselines — mimir', () => {
   test('ravns', async ({ page }) => {
     await page.goto(fileUrl('mimir/design/Flokk Mimir.html'));
     await waitForReady(page);
-    await page.getByRole('button', { name: /Ravns|Wardens/i }).first().click();
+    await page
+      .getByRole('button', { name: /Ravns|Wardens/i })
+      .first()
+      .click();
     await page.waitForTimeout(300);
     await page.screenshot({ path: outPath('mimir', 'ravns'), fullPage: true });
   });
@@ -235,7 +259,10 @@ test.describe('capture web2 baselines — mimir', () => {
   test('ingest', async ({ page }) => {
     await page.goto(fileUrl('mimir/design/Flokk Mimir.html'));
     await waitForReady(page);
-    await page.getByRole('button', { name: /Ingest/i }).first().click();
+    await page
+      .getByRole('button', { name: /Ingest/i })
+      .first()
+      .click();
     await page.waitForTimeout(300);
     await page.screenshot({ path: outPath('mimir', 'ingest'), fullPage: true });
   });
@@ -261,7 +288,10 @@ test.describe('capture web2 baselines — volundr', () => {
   test('templates', async ({ page }) => {
     await page.goto(fileUrl('volundr/design/Volundr.html'));
     await waitForReady(page);
-    await page.getByRole('button', { name: /Templates/i }).first().click();
+    await page
+      .getByRole('button', { name: /Templates/i })
+      .first()
+      .click();
     await page.waitForTimeout(400);
     await page.screenshot({ path: outPath('volundr', 'templates'), fullPage: true });
   });
@@ -269,7 +299,10 @@ test.describe('capture web2 baselines — volundr', () => {
   test('clusters', async ({ page }) => {
     await page.goto(fileUrl('volundr/design/Volundr.html'));
     await waitForReady(page);
-    await page.getByRole('button', { name: /Clusters/i }).first().click();
+    await page
+      .getByRole('button', { name: /Clusters/i })
+      .first()
+      .click();
     await page.waitForTimeout(300);
     await page.screenshot({ path: outPath('volundr', 'clusters'), fullPage: true });
   });
@@ -277,7 +310,10 @@ test.describe('capture web2 baselines — volundr', () => {
   test('sessions', async ({ page }) => {
     await page.goto(fileUrl('volundr/design/Volundr.html'));
     await waitForReady(page);
-    await page.getByRole('button', { name: /Sessions/i }).first().click();
+    await page
+      .getByRole('button', { name: /Sessions/i })
+      .first()
+      .click();
     await page.waitForTimeout(300);
     await page.screenshot({ path: outPath('volundr', 'sessions'), fullPage: true });
   });

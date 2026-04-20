@@ -108,8 +108,13 @@
 }
 
 @keyframes obs-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .obs-entity-drawer__activity-label {
@@ -159,16 +164,16 @@
   color: var(--color-text-secondary);
 }
 
-.obs-entity-drawer__badge[data-mode="active"] {
+.obs-entity-drawer__badge[data-mode='active'] {
   color: var(--brand-200, var(--color-brand));
   border-color: color-mix(in srgb, var(--color-brand) 40%, transparent);
 }
 
-.obs-entity-drawer__badge[data-autonomy="full"] {
+.obs-entity-drawer__badge[data-autonomy='full'] {
   color: var(--brand-200, var(--color-brand));
 }
 
-.obs-entity-drawer__badge[data-autonomy="restricted"] {
+.obs-entity-drawer__badge[data-autonomy='restricted'] {
   color: var(--color-accent-red);
   border-color: color-mix(in srgb, var(--color-accent-red) 30%, transparent);
 }

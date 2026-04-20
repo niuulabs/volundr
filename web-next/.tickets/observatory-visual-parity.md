@@ -18,7 +18,9 @@ The Observatory plugin in web-next is ~40% complete and architecturally divergen
 web2 `app.jsx` renders a subnav with 3 sections. web-next has **no subnav at all**.
 
 ### Section 1: Filter
+
 5 filter rows, each with colored dot + label + count:
+
 - `all` — total entity count — `var(--brand-300)`
 - `agents` — agent count — `var(--brand-200)`
 - `raids` — raid count — `var(--brand-500)`
@@ -28,10 +30,12 @@ web2 `app.jsx` renders a subnav with 3 sections. web-next has **no subnav at all
 Click highlights with `color-mix(in srgb, var(--color-brand) 10%, transparent)`.
 
 ### Section 2: Realms
+
 Each realm row: dot (`var(--brand-300)`) + label + `vlan {N}`.
 Clickable — opens RealmDrawer.
 
 ### Section 3: Clusters + Active Raids
+
 Clusters: dot (`var(--brand-500)`) + label + `⎔`.
 Active raids (capped at 6): dot (color by state) + purpose (mono, truncated) + state abbreviation.
 
@@ -42,9 +46,11 @@ CSS classes: `.subnav-section`, `.subnav-label`, `.subnav-row`, `.subnav-dot`, `
 ## 2. Topbar Stats (MISSING — must add)
 
 web2 `app.jsx` renders `topbarRight` with 3 stat chips:
+
 ```
 realms: {count} | ravens: {count} (accent) | raids: {count} (accent)
 ```
+
 CSS: `.stats`, `.stat`, `.stat-label`, `.stat.emph.accent`.
 
 ---
@@ -55,19 +61,20 @@ web2 entities have rich kind-specific fields. web-next nodes are generic (`id, l
 
 **Required node fields per kind:**
 
-| Kind | Fields |
-|------|--------|
-| `tyr` | `mode`, `activeSagas`, `pendingRaids` |
-| `bifrost` | `providers[]`, `reqPerMin`, `cacheHitRate` |
-| `volundr` | `activeSessions`, `maxSessions` |
-| `ravn_long` | `persona`, `specialty`, `tokens` |
-| `valkyrie` | `specialty`, `autonomy` |
-| `host` | `hw`, `os`, `cores`, `ram`, `gpu` |
-| `model` | `provider`, `location` |
-| `service` | `svcType` |
-| All | `activity` (`idle`/`thinking`/`tooling`/`waiting`/`delegating`/`writing`/`reading`), `zone`, `cluster`, `hostId`, `flockId` |
+| Kind        | Fields                                                                                                                      |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `tyr`       | `mode`, `activeSagas`, `pendingRaids`                                                                                       |
+| `bifrost`   | `providers[]`, `reqPerMin`, `cacheHitRate`                                                                                  |
+| `volundr`   | `activeSessions`, `maxSessions`                                                                                             |
+| `ravn_long` | `persona`, `specialty`, `tokens`                                                                                            |
+| `valkyrie`  | `specialty`, `autonomy`                                                                                                     |
+| `host`      | `hw`, `os`, `cores`, `ram`, `gpu`                                                                                           |
+| `model`     | `provider`, `location`                                                                                                      |
+| `service`   | `svcType`                                                                                                                   |
+| All         | `activity` (`idle`/`thinking`/`tooling`/`waiting`/`delegating`/`writing`/`reading`), `zone`, `cluster`, `hostId`, `flockId` |
 
 **Activity color map:**
+
 ```
 idle: var(--color-text-muted)
 thinking: var(--brand-300)
@@ -85,6 +92,7 @@ reading: var(--brand-300)
 web2 `app.jsx` has 3 drawer variants: EntityDrawer, RealmDrawer, ClusterDrawer.
 
 ### EntityDrawer structure:
+
 ```
 .drawer
   .drawer-head
@@ -104,12 +112,14 @@ web2 `app.jsx` has 3 drawer variants: EntityDrawer, RealmDrawer, ClusterDrawer.
 **Current web-next:** Only shows generic fields from EntityType. Missing all kind-specific property renderers, the coordinator confidence bar, token throughput sparkline, and action buttons.
 
 ### RealmDrawer structure:
+
 ```
 .drawer-head > rune + "Realm · VLAN zone" + name + vlan chip + dns
 .drawer-body > About text + prop-grid (vlan, dns, residents count) + Residents list (subnav-row items, capped at 20)
 ```
 
 ### ClusterDrawer structure:
+
 Similar to RealmDrawer with cluster-specific fields.
 
 ---
@@ -119,6 +129,7 @@ Similar to RealmDrawer with cluster-specific fields.
 web2 `observatory.jsx` has a unified rendering pipeline:
 
 ### Draw order:
+
 1. Background gradient + starfield
 2. Camera transform (pan + zoom)
 3. Zone circles (realms with glow gradient + animated stroke, clusters with dashed stroke)
@@ -131,6 +142,7 @@ web2 `observatory.jsx` has a unified rendering pipeline:
 10. Mimir special (nebula gradient, dual orbit rings, rune orbit)
 
 ### Kind-specific node shapes:
+
 - `tyr`, `volundr`: filled square
 - `bifrost`: 5-pointed star
 - `ravn_long`: diamond
@@ -141,6 +153,7 @@ web2 `observatory.jsx` has a unified rendering pipeline:
 - `service`, `model`: circles
 
 ### World constants:
+
 ```
 WORLD_W = 4200, WORLD_H = 3600
 KIND_R = { ravn_long:9, ravn_raid:6, skuld:7, tyr:11, bifrost:10, mimir:42, volundr:13, model:6, valkyrie:10, printer:8, vaettir:7, beacon:4, service:3, host:8, mimir_sub:18 }
@@ -151,6 +164,7 @@ KIND_R = { ravn_long:9, ravn_raid:6, skuld:7, tyr:11, bifrost:10, mimir:42, volu
 ## 6. Layout Engine (MUST MATCH — physics simulation)
 
 web2 uses zone-based positioning + physics simulation:
+
 - Entities anchored to realm/cluster centers with radial offsets
 - Hosts on realm perimeters (collision-aware, 36 angle attempts)
 - Models positioned relative to Bifrost
@@ -172,6 +186,7 @@ web2 events: `{ id, time, type: 'RAID'|'RAVN'|'TYR'|'MIMIR'|'BIFROST', subject, 
 web-next events: `{ id, timestamp, severity, sourceId, message }`
 
 Must align to web2 shape. Event log renders as:
+
 ```
 .eventlog (position: fixed, bottom, center, pointer-events: none)
   .eventlog-inner (pointer-events: auto)
@@ -184,6 +199,7 @@ Must align to web2 shape. Event log renders as:
 ## 9. Connection Legend (LABEL MISMATCH)
 
 web2 labels:
+
 - solid: "Tyr → Volundr"
 - dashed-anim: "Tyr ⇝ raid coord"
 - dashed-long: "Bifrost → ext. model"
@@ -206,6 +222,7 @@ Must implement proper canvas hit-testing.
 ## 11. Registry Editor (MOSTLY CORRECT)
 
 The RegistryEditor is structurally close to web2. Verify:
+
 - Type grid with ShapeSvg + rune + description
 - Right-side TypeInspector with shape/color/icon selectors
 - Containment tab with drag-drop reparenting

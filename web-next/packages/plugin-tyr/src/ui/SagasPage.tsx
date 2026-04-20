@@ -26,7 +26,7 @@ const SAGA_GLYPHS = ['ᚠ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚢ', 'ᚨ', 'ᛃ', 'ᚦ', '�
 
 function sagaGlyph(id: string): string {
   let h = 0;
-  for (const c of id) h = ((h * 31 + c.charCodeAt(0)) >>> 0);
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return SAGA_GLYPHS[h % SAGA_GLYPHS.length]!;
 }
 
@@ -138,9 +138,7 @@ export function SagasPage() {
   const { data: sagas, isLoading, isError, error } = useSagas();
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
-  const [selectedSagaId, setSelectedSagaId] = useState<string | null>(
-    params.sagaId ?? null,
-  );
+  const [selectedSagaId, setSelectedSagaId] = useState<string | null>(params.sagaId ?? null);
 
   // Auto-select first active saga when none selected
   useEffect(() => {
@@ -285,7 +283,10 @@ export function SagasPage() {
           <SagaDetailPage sagaId={selectedSagaId} hideBackButton />
         ) : (
           <div className="niuu-flex niuu-items-center niuu-justify-center niuu-h-full">
-            <EmptyState title="Select a saga" description="Click a saga on the left to view its details." />
+            <EmptyState
+              title="Select a saga"
+              description="Click a saga on the left to view its details."
+            />
           </div>
         )}
       </div>

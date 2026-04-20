@@ -23,7 +23,14 @@ function wrap(
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ServicesProvider services={{ volundr: service, clusterAdapter, sessionStore, 'volundr.templates': templateStore }}>
+      <ServicesProvider
+        services={{
+          volundr: service,
+          clusterAdapter,
+          sessionStore,
+          'volundr.templates': templateStore,
+        }}
+      >
         <ForgePage />
       </ServicesProvider>
     </QueryClientProvider>,

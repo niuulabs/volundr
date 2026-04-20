@@ -79,25 +79,22 @@ describe('BudgetView', () => {
 
   it('shows top drivers section after budgets load', async () => {
     render(<BudgetView />, { wrapper: wrap(services) });
-    await waitFor(
-      () => expect(screen.getByTestId('top-drivers')).toBeInTheDocument(),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(screen.getByTestId('top-drivers')).toBeInTheDocument(), {
+      timeout: 3000,
+    });
   });
 
   it('top drivers list has driver rows', async () => {
     render(<BudgetView />, { wrapper: wrap(services) });
-    await waitFor(
-      () => expect(screen.getAllByTestId('driver-row').length).toBeGreaterThan(0),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(screen.getAllByTestId('driver-row').length).toBeGreaterThan(0), {
+      timeout: 3000,
+    });
   });
 
   it('shows recommended changes when ravens need attention', async () => {
     render(<BudgetView />, { wrapper: wrap(services) });
-    await waitFor(
-      () => expect(screen.getByTestId('recommended-changes')).toBeInTheDocument(),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(screen.getByTestId('recommended-changes')).toBeInTheDocument(), {
+      timeout: 3000,
+    });
   });
 });

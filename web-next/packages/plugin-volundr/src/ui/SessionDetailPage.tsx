@@ -81,13 +81,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 // SessionHeader
 // ---------------------------------------------------------------------------
 
-function SessionHeader({
-  session,
-  readOnly,
-}: {
-  session: Session;
-  readOnly: boolean;
-}) {
+function SessionHeader({ session, readOnly }: { session: Session; readOnly: boolean }) {
   const [showRes, setShowRes] = useState(false);
   const r = session.resources;
 
@@ -181,13 +175,7 @@ function SessionHeader({
           className="niuu-flex niuu-items-center niuu-gap-4 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2"
           data-testid="resources-row"
         >
-          <Meter
-            used={r.cpuUsed}
-            limit={r.cpuLimit}
-            unit="c"
-            label="cpu"
-            className="niuu-w-32"
-          />
+          <Meter used={r.cpuUsed} limit={r.cpuLimit} unit="c" label="cpu" className="niuu-w-32" />
           <Meter
             used={r.memUsedMi}
             limit={r.memLimitMi}
@@ -229,9 +217,7 @@ function ThinkingBlock({ turn, peer }: { turn: ChatTurn; peer: PeerMeta | undefi
         )}
         <span className="niuu-font-mono niuu-text-text-muted">thinking</span>
         <span className="niuu-font-mono niuu-text-text-muted">{turn.ms}ms</span>
-        {!open && (
-          <span className="niuu-text-text-muted">{truncate(firstLine, 80)}</span>
-        )}
+        {!open && <span className="niuu-text-text-muted">{truncate(firstLine, 80)}</span>}
       </button>
       {open && (
         <pre className="niuu-ml-8 niuu-mt-1 niuu-whitespace-pre-wrap niuu-font-mono niuu-text-xs niuu-text-text-secondary">
@@ -242,13 +228,7 @@ function ThinkingBlock({ turn, peer }: { turn: ChatTurn; peer: PeerMeta | undefi
   );
 }
 
-function ToolRunBlock({
-  turns,
-  room,
-}: {
-  turns: ChatTurn[];
-  room: MockRoom;
-}) {
+function ToolRunBlock({ turns, room }: { turns: ChatTurn[]; room: MockRoom }) {
   const [open, setOpen] = useState(false);
   const peer = room.byId[turns[0]?.peerId ?? ''];
   const color = resolveParticipantColor(peer?.peerId ?? '');
@@ -257,7 +237,10 @@ function ToolRunBlock({
   const headline = turns[turns.length - 1]!;
 
   return (
-    <div className="niuu-my-1 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary" data-testid="tool-run">
+    <div
+      className="niuu-my-1 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary"
+      data-testid="tool-run"
+    >
       <button
         className="niuu-flex niuu-w-full niuu-items-center niuu-gap-2 niuu-px-3 niuu-py-1.5 niuu-text-left niuu-text-xs"
         onClick={() => setOpen((v) => !v)}
@@ -272,9 +255,7 @@ function ToolRunBlock({
           {turns.length} {turns.length === 1 ? 'call' : 'calls'}
         </span>
         <span className="niuu-font-mono niuu-text-text-secondary">{headline.tool}</span>
-        <span className="niuu-font-mono niuu-text-text-muted">
-          {truncate(headline.args, 40)}
-        </span>
+        <span className="niuu-font-mono niuu-text-text-muted">{truncate(headline.args, 40)}</span>
         <div className="niuu-flex-1" />
         {okCount > 0 && (
           <span className="niuu-font-mono niuu-text-[10px] niuu-text-state-ok">{okCount} ok</span>
@@ -286,15 +267,14 @@ function ToolRunBlock({
       {open && (
         <div className="niuu-border-t niuu-border-border-subtle niuu-px-3 niuu-py-2">
           {turns.map((t) => (
-            <div key={t.id} className="niuu-flex niuu-items-start niuu-gap-2 niuu-py-1 niuu-text-xs">
+            <div
+              key={t.id}
+              className="niuu-flex niuu-items-start niuu-gap-2 niuu-py-1 niuu-text-xs"
+            >
               <span className="niuu-font-mono niuu-text-text-secondary">{t.tool}</span>
               <span className="niuu-font-mono niuu-text-text-muted">{t.args}</span>
-              {t.status === 'ok' && (
-                <span className="niuu-font-mono niuu-text-state-ok">ok</span>
-              )}
-              {t.status === 'err' && (
-                <span className="niuu-font-mono niuu-text-critical">err</span>
-              )}
+              {t.status === 'ok' && <span className="niuu-font-mono niuu-text-state-ok">ok</span>}
+              {t.status === 'err' && <span className="niuu-font-mono niuu-text-critical">err</span>}
               <span className="niuu-font-mono niuu-text-text-muted">{t.dur}</span>
               {t.output && (
                 <pre className="niuu-mt-0.5 niuu-whitespace-pre-wrap niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
@@ -399,13 +379,7 @@ function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
   );
 }
 
-function ChatStream({
-  groups,
-  room,
-}: {
-  groups: TurnGroup[];
-  room: MockRoom;
-}) {
+function ChatStream({ groups, room }: { groups: TurnGroup[]; room: MockRoom }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -426,9 +400,7 @@ function ChatStream({
             return <ToolRunBlock key={i} turns={g.turns} room={room} />;
           }
           if (g.kind === 'thinking') {
-            return (
-              <ThinkingBlock key={i} turn={g.turn} peer={room.byId[g.turn.peerId]} />
-            );
+            return <ThinkingBlock key={i} turn={g.turn} peer={room.byId[g.turn.peerId]} />;
           }
           return <ChatTurnComponent key={i} turn={g.turn} room={room} />;
         })}
@@ -519,14 +491,8 @@ function MeshCascade({
 // ---------------------------------------------------------------------------
 
 function ChatTab({ session }: { session: Session }) {
-  const room = useMemo(
-    () => (import.meta.env.DEV ? buildMockRoom(session) : null),
-    [session],
-  );
-  const turns = useMemo(
-    () => (room ? buildMockTurns(session, room) : []),
-    [session, room],
-  );
+  const room = useMemo(() => (import.meta.env.DEV ? buildMockRoom(session) : null), [session]);
+  const turns = useMemo(() => (room ? buildMockTurns(session, room) : []), [session, room]);
   const grouped = useMemo(() => groupTurns(turns), [turns]);
   const [focusPeer, setFocusPeer] = useState<string | null>(null);
   const [cascadeFilter, setCascadeFilter] = useState<CascadeFilterType>('all');
@@ -569,11 +535,7 @@ function ChatTab({ session }: { session: Session }) {
         onSelectPeer={(id) => setFocusPeer(focusPeer === id ? null : id)}
       />
       <ChatStream groups={filteredGroups} room={room} />
-      <MeshCascade
-        events={room.meshEvents}
-        filter={cascadeFilter}
-        setFilter={setCascadeFilter}
-      />
+      <MeshCascade events={room.meshEvents} filter={cascadeFilter} setFilter={setCascadeFilter} />
     </div>
   );
 }

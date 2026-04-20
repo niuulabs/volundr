@@ -161,7 +161,9 @@ function TplOverview({ template }: { template: Template }) {
 
       <DetailCard title="Extensions">
         <KV label="tools">
-          <span className="niuu-font-mono">{spec.tools.length > 0 ? spec.tools.join(' \u00b7 ') : '\u2014'}</span>
+          <span className="niuu-font-mono">
+            {spec.tools.length > 0 ? spec.tools.join(' \u00b7 ') : '\u2014'}
+          </span>
         </KV>
         <KV label="env vars">
           <span className="niuu-font-mono">{Object.keys(spec.env).length}</span>
@@ -310,9 +312,7 @@ function TplMcp({ template }: { template: Template }) {
     <div className="niuu-flex niuu-flex-col niuu-gap-4" data-testid="tab-mcp">
       <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">MCP servers</h3>
       {!hasTools ? (
-        <p className="niuu-font-mono niuu-text-sm niuu-text-text-faint">
-          no MCP servers enabled
-        </p>
+        <p className="niuu-font-mono niuu-text-sm niuu-text-text-faint">no MCP servers enabled</p>
       ) : (
         <div className="niuu-flex niuu-flex-col niuu-gap-2">
           {spec.tools.map((tool) => (
@@ -343,9 +343,7 @@ function TplSkills({ template }: { template: Template }) {
   const count = spec.tools.length;
   return (
     <div className="niuu-flex niuu-flex-col niuu-gap-4" data-testid="tab-skills">
-      <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">
-        Skills ({count})
-      </h3>
+      <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">Skills ({count})</h3>
       {count === 0 ? (
         <p className="niuu-font-mono niuu-text-sm niuu-text-text-faint">no skills defined</p>
       ) : (
@@ -383,10 +381,7 @@ function TplRules({ template }: { template: Template }) {
           {hasAffinity && (
             <DetailCard title="Cluster affinity">
               {template.spec.clusterAffinity!.map((c) => (
-                <div
-                  key={c}
-                  className="niuu-flex niuu-items-center niuu-gap-2 niuu-py-0.5"
-                >
+                <div key={c} className="niuu-flex niuu-items-center niuu-gap-2 niuu-py-0.5">
                   <Chip tone="muted">{c}</Chip>
                 </div>
               ))}
@@ -395,10 +390,7 @@ function TplRules({ template }: { template: Template }) {
           {hasTolerations && (
             <DetailCard title="Tolerations">
               {template.spec.tolerations!.map((t) => (
-                <div
-                  key={t}
-                  className="niuu-flex niuu-items-center niuu-gap-2 niuu-py-0.5"
-                >
+                <div key={t} className="niuu-flex niuu-items-center niuu-gap-2 niuu-py-0.5">
                   <Chip tone="muted">{t}</Chip>
                 </div>
               ))}
@@ -500,7 +492,10 @@ export function TemplatesPage() {
               </header>
 
               {/* Tabs */}
-              <nav className="niuu-flex niuu-gap-1 niuu-border-b niuu-border-border-subtle" aria-label="Template detail tabs">
+              <nav
+                className="niuu-flex niuu-gap-1 niuu-border-b niuu-border-border-subtle"
+                aria-label="Template detail tabs"
+              >
                 {TABS.map((t) => (
                   <button
                     key={t}

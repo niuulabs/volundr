@@ -99,7 +99,11 @@ export function OverviewView() {
           </div>
           <div className="mm-mount-grid">
             {mounts?.map((mount) => (
-              <article key={mount.name} className="mm-mount-card" aria-label={`mount ${mount.name}`}>
+              <article
+                key={mount.name}
+                className="mm-mount-card"
+                aria-label={`mount ${mount.name}`}
+              >
                 <div className="mm-mount-card__head">
                   <StateDot state={MOUNT_DOT_STATE[mount.status]} />
                   <span className="mm-mount-card__name">{mount.name}</span>

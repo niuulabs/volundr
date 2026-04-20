@@ -69,9 +69,7 @@ describe('RavnsPage', () => {
     fireEvent.click(screen.getAllByTestId('ravn-item')[0]!);
     await waitFor(() => screen.getByTestId('ravn-profile'));
     fireEvent.click(screen.getByRole('button', { name: /back to wardens/i }));
-    await waitFor(() =>
-      expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
   });
 
   it('profile view shows dream stats for selected ravn', async () => {
