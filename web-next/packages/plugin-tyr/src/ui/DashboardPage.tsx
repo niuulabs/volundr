@@ -1,26 +1,75 @@
+import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useService } from '@niuulabs/plugin-sdk';
 import {
-  KpiStrip,
-  KpiCard,
   StatusBadge,
   ConfidenceBadge,
   LoadingState,
   ErrorState,
-  EmptyState,
+  Sparkline,
+  Pipe,
   StateDot,
-  Rune,
 } from '@niuulabs/ui';
-import type { ITyrService } from '../ports';
+import type { ITyrService, Phase } from '../ports';
+import type { Saga, RaidStatus } from '../domain/saga';
 import { useSagas } from './useSagas';
 import { useDispatcher } from './useDispatcher';
+import './DashboardPage.css';
+
+type PipeCell = { status: 'ok' | 'run' | 'warn' | 'crit' | 'gate' | 'pend'; label: string };
+
+function raidStatusToCell(s: RaidStatus): PipeCell['status'] {
+  const map: Record<RaidStatus, PipeCell['status']> = {
+    merged: 'ok',
+    running: 'run',
+    review: 'warn',
+    queued: 'warn',
+    pending: 'pend',
+    escalated: 'warn',
+    failed: 'crit',
+  };
+  return map[s] ?? 'pend';
+}
+
+function sagaPipe(phases: Phase[]): PipeCell[] {
+  return phases.flatMap((p) =>
+    p.raids.map((r) => ({ status: raidStatusToCell(r.status), label: r.name })),
+  );
+}
+
+/** Deterministic mock throughput data (24 hours). */
+function mockThroughput(): number[] {
+  return Array.from({ length: 24 }, (_, i) => Math.round(4 + 3 * Math.sin(i / 3) + 2));
+}
+
+/** Deterministic mock confidence trend data (24 hours). */
+function mockConfidence(): number[] {
+  return Array.from({ length: 24 }, (_, i) => 0.6 + 0.3 * Math.sin(i / 5) + 0.02);
+}
+
+/** Mock event feed entries — matches web2 spec. */
+const FEED = [
+  { t: '12s ago', subject: 'NIU-214.2', body: 'coding-agent → code.changed (raid-42aa)', kind: 'run' as const },
+  { t: '18s ago', subject: 'NIU-199.2', body: 'qa-agent → qa.completed verdict=pass', kind: 'ok' as const },
+  { t: '34s ago', subject: 'NIU-183.4', body: 'reviewer → review.completed needs_changes', kind: 'warn' as const },
+  { t: '1m ago', subject: 'NIU-088.1', body: 'saga published: saga.completed', kind: 'ok' as const },
+  { t: '2m ago', subject: 'NIU-148.2', body: 'coding-agent → raid.attempted verdict=fail', kind: 'crit' as const },
+  { t: '2m ago', subject: 'NIU-214.3', body: 'review-arbiter → review.arbitrated pending', kind: 'warn' as const },
+];
+
+function feedKindToState(kind: string) {
+  if (kind === 'ok') return 'merged' as const;
+  if (kind === 'run') return 'running' as const;
+  if (kind === 'crit') return 'failed' as const;
+  return 'review' as const;
+}
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const tyr = useService<ITyrService>('tyr');
   const { data: sagas, isLoading, isError, error } = useSagas();
-  const { data: dispatcher } = useDispatcher();
+  useDispatcher(); // keep the query warm for sub-components
 
   const phaseQueries = useQueries({
     queries: (sagas ?? []).map((s) => ({
@@ -30,181 +79,164 @@ export function DashboardPage() {
   });
 
   const allRaids = phaseQueries.flatMap((q) => q.data ?? []).flatMap((p) => p.raids);
-  const failedRaids = allRaids.filter((r) => r.status === 'failed');
   const runningRaids = allRaids.filter((r) => r.status === 'running').length;
-  const blockedRaids = allRaids.filter(
-    (r) => r.status === 'failed' || r.status === 'escalated',
-  ).length;
+  const reviewRaids = allRaids.filter((r) => r.status === 'review').length;
 
   const activeSagas = (sagas ?? []).filter((s) => s.status === 'active');
-  const completedSagas = (sagas ?? []).filter((s) => s.status === 'complete');
-  const avgConfidence =
-    activeSagas.length > 0
-      ? Math.round(activeSagas.reduce((sum, s) => sum + s.confidence, 0) / activeSagas.length)
-      : 0;
+
+  const throughput = useMemo(mockThroughput, []);
+  const confidence = useMemo(mockConfidence, []);
+  const throughputTotal = throughput.reduce((a, b) => a + b, 0);
+  const latestConfidence = Math.round((confidence.at(-1) ?? 0) * 100);
 
   if (isLoading) return <LoadingState label="Loading dashboard…" />;
   if (isError)
     return <ErrorState message={error instanceof Error ? error.message : 'Failed to load sagas'} />;
 
+  const openSaga = (saga: Saga) =>
+    void navigate({ to: '/tyr/sagas/$sagaId', params: { sagaId: saga.id } });
+
   return (
-    <div className="niuu-p-6 niuu-space-y-6">
-      <header className="niuu-flex niuu-items-center niuu-gap-3">
-        <Rune glyph="ᛏ" size={28} />
-        <h2 className="niuu-m-0 niuu-text-xl niuu-font-semibold niuu-text-text-primary">
-          Tyr · Dashboard
-        </h2>
-        {dispatcher?.running && <StateDot state="healthy" pulse />}
-      </header>
-
-      <KpiStrip aria-label="Tyr KPI metrics">
-        <KpiCard label="Active Sagas" value={activeSagas.length} />
-        <KpiCard label="Running Raids" value={runningRaids} />
-        <KpiCard
-          label="Blocked Raids"
-          value={blockedRaids}
-          deltaTrend={blockedRaids > 0 ? 'down' : 'neutral'}
-        />
-        <KpiCard label="Confidence Avg" value={`${avgConfidence}%`} />
-        <KpiCard label="Dispatcher" value={dispatcher?.running ? 'running' : 'stopped'} />
-      </KpiStrip>
-
-      <div className="niuu-grid niuu-grid-cols-2 niuu-gap-6">
-        <section aria-label="Active sagas">
-          <h3 className="niuu-text-sm niuu-font-semibold niuu-text-text-secondary niuu-mb-3 niuu-uppercase niuu-tracking-wide">
-            Active Sagas
-          </h3>
-          {activeSagas.length === 0 ? (
-            <EmptyState title="No active sagas" description="All sagas are complete or failed." />
-          ) : (
-            <ul className="niuu-list-none niuu-p-0 niuu-m-0 niuu-space-y-2">
-              {activeSagas.map((saga) => (
-                <li key={saga.id}>
-                  <button
-                    type="button"
-                    className="niuu-w-full niuu-text-left niuu-p-3 niuu-rounded-md niuu-bg-bg-secondary niuu-border niuu-border-border niuu-cursor-pointer"
-                    onClick={() =>
-                      void navigate({
-                        to: '/tyr/sagas/$sagaId',
-                        params: { sagaId: saga.id },
-                      })
-                    }
-                    aria-label={`View saga ${saga.name}`}
-                  >
-                    <div className="niuu-flex niuu-items-center niuu-justify-between niuu-gap-2">
-                      <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-min-w-0">
-                        <StatusBadge status="active" />
-                        <span className="niuu-text-sm niuu-font-medium niuu-text-text-primary niuu-truncate">
-                          {saga.name}
-                        </span>
-                      </div>
-                      <ConfidenceBadge value={saga.confidence / 100} />
-                    </div>
-                    <p className="niuu-mt-1 niuu-mb-0 niuu-text-xs niuu-text-text-muted">
-                      {saga.trackerId} · {saga.featureBranch}
-                    </p>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section aria-label="Recent completions">
-          <h3 className="niuu-text-sm niuu-font-semibold niuu-text-text-secondary niuu-mb-3 niuu-uppercase niuu-tracking-wide">
-            Recent Completions
-          </h3>
-          {completedSagas.length === 0 ? (
-            <EmptyState title="No completed sagas" />
-          ) : (
-            <ul className="niuu-list-none niuu-p-0 niuu-m-0 niuu-space-y-2">
-              {completedSagas.map((saga) => (
-                <li
-                  key={saga.id}
-                  className="niuu-p-3 niuu-rounded-md niuu-bg-bg-secondary niuu-border niuu-border-border"
-                >
-                  <div className="niuu-flex niuu-items-center niuu-justify-between niuu-gap-2">
-                    <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-min-w-0">
-                      <StatusBadge status="complete" />
-                      <span className="niuu-text-sm niuu-font-medium niuu-text-text-primary niuu-truncate">
-                        {saga.name}
-                      </span>
-                    </div>
-                    <ConfidenceBadge value={saga.confidence / 100} />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+    <div className="tyr-dash">
+      {/* ── KPI cards (4 columns) ─────────────────── */}
+      <div className="tyr-kpi tyr-kpi--accent">
+        <div className="tyr-kpi__label">Active sagas</div>
+        <div className="tyr-kpi__val">
+          {activeSagas.length}
+          <span className="tyr-kpi__unit">in flight</span>
+        </div>
+        <div className="tyr-kpi__sub">
+          <StateDot state="running" pulse />
+          dispatched this hour: <span>{runningRaids}</span>
+        </div>
       </div>
 
-      {dispatcher && (
-        <section aria-label="Dispatcher summary">
-          <h3 className="niuu-text-sm niuu-font-semibold niuu-text-text-secondary niuu-mb-3 niuu-uppercase niuu-tracking-wide">
-            Dispatcher
-          </h3>
-          <div className="niuu-p-4 niuu-rounded-md niuu-bg-bg-secondary niuu-border niuu-border-border">
-            <div className="niuu-flex niuu-gap-8 niuu-text-sm niuu-flex-wrap">
-              <div>
-                <span className="niuu-text-xs niuu-text-text-muted niuu-uppercase niuu-tracking-wide">
-                  Status
-                </span>
-                <div className="niuu-mt-1 niuu-flex niuu-items-center niuu-gap-1">
-                  <StateDot
-                    state={dispatcher.running ? 'healthy' : 'idle'}
-                    pulse={dispatcher.running}
-                  />
-                  <span className="niuu-font-medium">
-                    {dispatcher.running ? 'Running' : 'Stopped'}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <span className="niuu-text-xs niuu-text-text-muted niuu-uppercase niuu-tracking-wide">
-                  Threshold
-                </span>
-                <div className="niuu-mt-1 niuu-font-semibold">{dispatcher.threshold}%</div>
-              </div>
-              <div>
-                <span className="niuu-text-xs niuu-text-text-muted niuu-uppercase niuu-tracking-wide">
-                  Concurrent Raids
-                </span>
-                <div className="niuu-mt-1 niuu-font-semibold">{dispatcher.maxConcurrentRaids}</div>
-              </div>
-              <div>
-                <span className="niuu-text-xs niuu-text-text-muted niuu-uppercase niuu-tracking-wide">
-                  Auto Continue
-                </span>
-                <div className="niuu-mt-1 niuu-font-semibold">
-                  {dispatcher.autoContinue ? 'Yes' : 'No'}
-                </div>
+      <div className="tyr-kpi">
+        <div className="tyr-kpi__label">Active raids</div>
+        <div className="tyr-kpi__val">
+          {runningRaids}
+          <span className="tyr-kpi__unit">running</span>
+        </div>
+        <Sparkline values={throughput.map((v) => v / Math.max(...throughput))} id="throughput" />
+      </div>
+
+      <div className="tyr-kpi" style={{ cursor: 'pointer' }} onClick={() => void navigate({ to: '/tyr/sagas' as never })}>
+        <div className="tyr-kpi__label">Awaiting review</div>
+        <div className="tyr-kpi__val">{reviewRaids}</div>
+        <div className="tyr-kpi__sub">
+          <span style={{ color: 'var(--brand-300)' }}>
+            {allRaids.filter((r) => r.status === 'escalated').length} escalated
+          </span>
+        </div>
+      </div>
+
+      <div className="tyr-kpi">
+        <div className="tyr-kpi__label">Merged · 24h</div>
+        <div className="tyr-kpi__val">{allRaids.filter((r) => r.status === 'merged').length}</div>
+        <Sparkline values={[2, 3, 3, 4, 5, 6, 7, 9, 10, 11, 11, 12].map((v) => v / 12)} id="merged" />
+      </div>
+
+      {/* ── Saga stream ───────────────────────────── */}
+      <div className="tyr-dash__row-title">
+        <h2>Saga stream</h2>
+        <button className="tyr-btn" type="button" onClick={() => void navigate({ to: '/tyr/sagas' as never })}>
+          View all
+        </button>
+      </div>
+
+      {activeSagas.slice(0, 4).map((saga, i) => {
+        const phases = phaseQueries[i]?.data ?? [];
+        const cells = sagaPipe(phases);
+        return (
+          <div
+            key={saga.id}
+            className="tyr-saga-card tyr-dash__wide"
+            role="button"
+            tabIndex={0}
+            onClick={() => openSaga(saga)}
+            onKeyDown={(e) => e.key === 'Enter' && openSaga(saga)}
+          >
+            <div>
+              <div className="tyr-saga-card__name">{saga.name}</div>
+              <div className="tyr-saga-card__meta">
+                <span>{saga.trackerId}</span>
+                <StatusBadge status={saga.status === 'active' ? 'running' : saga.status === 'complete' ? 'complete' : 'failed'} />
+                <ConfidenceBadge value={saga.confidence / 100} />
+                <span>{saga.repos[0]}</span>
               </div>
             </div>
+            <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--color-text-muted)' }}>
+              {saga.phaseSummary.completed} / {saga.phaseSummary.total}
+            </div>
+            {cells.length > 0 && (
+              <div className="tyr-saga-card__pipe">
+                <Pipe cells={cells} />
+              </div>
+            )}
           </div>
-        </section>
-      )}
+        );
+      })}
 
-      {failedRaids.length > 0 && (
-        <section aria-label="Failed raids">
-          <h3 className="niuu-text-sm niuu-font-semibold niuu-text-text-secondary niuu-mb-3 niuu-uppercase niuu-tracking-wide">
-            Failed Raids
-          </h3>
-          <ul className="niuu-list-none niuu-p-0 niuu-m-0 niuu-space-y-2">
-            {failedRaids.map((raid) => (
-              <li
-                key={raid.id}
-                className="niuu-p-3 niuu-rounded-md niuu-bg-bg-secondary niuu-border niuu-border-border"
-              >
-                <div className="niuu-flex niuu-items-center niuu-gap-2">
-                  <StatusBadge status="failed" />
-                  <span className="niuu-text-sm niuu-text-text-primary">{raid.name}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {/* ── Live flock ────────────────────────────── */}
+      <div className="tyr-dash__row-title">
+        <h2>Live flock</h2>
+        <span className="tyr-eyebrow">sleipnir events · last 5m</span>
+      </div>
+
+      <div className="tyr-flock-viz tyr-dash__wide">
+        <div className="tyr-flock-viz__title">
+          <StateDot state="running" pulse />
+          Raid mesh
+        </div>
+        <div className="tyr-flock-viz__cnt">
+          {runningRaids} raids active
+        </div>
+        <canvas
+          aria-label="Live raid mesh visualization"
+          style={{ width: '100%', height: '100%', background: 'transparent' }}
+        />
+      </div>
+
+      {/* ── Event feed ────────────────────────────── */}
+      <div className="tyr-dash__full">
+        <div className="tyr-sec-head">
+          <span className="tyr-sec-head__title">Event feed</span>
+          <span className="tyr-eyebrow" style={{ fontFamily: 'var(--font-mono)' }}>sleipnir:*</span>
+        </div>
+        <div className="tyr-raid-feed">
+          {FEED.map((f, i) => (
+            <div key={i} className="tyr-feed-row">
+              <StateDot state={feedKindToState(f.kind)} />
+              <span className="tyr-feed-row__time">{f.t}</span>
+              <span>{f.body}</span>
+              <span className="tyr-feed-row__subject">{f.subject}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Throughput ────────────────────────────── */}
+      <div className="tyr-dash__row-title">
+        <h2>Throughput</h2>
+      </div>
+
+      <div className="tyr-kpi tyr-dash__wide">
+        <div className="tyr-kpi__label">Raids completed / hour</div>
+        <div className="tyr-kpi__val" style={{ fontSize: 18, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          {throughputTotal}
+          <span className="tyr-kpi__unit">· 24h</span>
+        </div>
+        <Sparkline values={throughput.map((v) => v / Math.max(...throughput))} id="throughput-full" height={60} />
+      </div>
+
+      <div className="tyr-kpi tyr-dash__wide">
+        <div className="tyr-kpi__label">Saga confidence</div>
+        <div className="tyr-kpi__val" style={{ fontSize: 18 }}>
+          {latestConfidence}%
+          <span className="tyr-kpi__unit">· now</span>
+        </div>
+        <Sparkline values={confidence} id="confidence-full" height={60} />
+      </div>
     </div>
   );
 }

@@ -1,11 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { DashboardPage } from './DashboardPage';
 import { createMockTyrService, createMockDispatcherService } from '../adapters/mock';
 import type { Saga } from '../domain/saga';
-import type { DispatcherState } from '../domain/dispatcher';
 
 // ---------------------------------------------------------------------------
 // Router mock — DashboardPage calls useNavigate() for saga click navigation
@@ -40,16 +39,6 @@ const defaultServices = () => ({
 // ---------------------------------------------------------------------------
 
 describe('DashboardPage', () => {
-  it('renders the dashboard heading', async () => {
-    render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() => expect(screen.getByText(/Tyr · Dashboard/)).toBeInTheDocument());
-  });
-
-  it('renders the Tyr rune', async () => {
-    render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() => expect(screen.getByText('ᛏ', { hidden: true })).toBeInTheDocument());
-  });
-
   it('shows loading state initially', () => {
     const slowSvc = {
       tyr: { getSagas: () => new Promise(() => undefined), getPhases: () => Promise.resolve([]) },
@@ -73,50 +62,55 @@ describe('DashboardPage', () => {
     await waitFor(() => expect(screen.getByText('network error')).toBeInTheDocument());
   });
 
-  it('renders KPI strip with correct labels', async () => {
+  it('renders KPI cards with correct labels', async () => {
     render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    const kpiGroup = await screen.findByRole('group', { name: /KPI/i });
-    expect(within(kpiGroup).getByText('Active Sagas')).toBeInTheDocument();
-    expect(within(kpiGroup).getByText('Running Raids')).toBeInTheDocument();
-    expect(within(kpiGroup).getByText('Blocked Raids')).toBeInTheDocument();
-    expect(within(kpiGroup).getByText('Confidence Avg')).toBeInTheDocument();
-    expect(within(kpiGroup).getByText('Dispatcher')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Active sagas')).toBeInTheDocument());
+    expect(screen.getByText('Active raids')).toBeInTheDocument();
+    expect(screen.getByText('Awaiting review')).toBeInTheDocument();
+    expect(screen.getByText(/Merged/)).toBeInTheDocument();
   });
 
-  it('shows 1 active saga from seed data', async () => {
+  it('renders saga stream section', async () => {
+    render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
+    await waitFor(() => expect(screen.getByText('Saga stream')).toBeInTheDocument());
+    expect(screen.getByText('View all')).toBeInTheDocument();
+  });
+
+  it('shows active saga names from seed data', async () => {
     render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
     await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
   });
 
-  it('shows 1 completed saga from seed data', async () => {
+  it('renders live flock section', async () => {
     render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() => expect(screen.getByText('Plugin Ravn Scaffold')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Live flock')).toBeInTheDocument());
+    expect(screen.getByText('Raid mesh')).toBeInTheDocument();
   });
 
-  it('renders active sagas section', async () => {
+  it('renders event feed section', async () => {
     render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByRole('region', { name: /Active sagas/i })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Event feed')).toBeInTheDocument());
   });
 
-  it('renders recent completions section', async () => {
+  it('renders throughput section with sparklines', async () => {
     render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByRole('region', { name: /Recent completions/i })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Throughput')).toBeInTheDocument());
+    expect(screen.getByText('Raids completed / hour')).toBeInTheDocument();
+    expect(screen.getByText('Saga confidence')).toBeInTheDocument();
   });
 
-  it('renders dispatcher summary when dispatcher data is available', async () => {
+  it('clicking a saga card calls navigate with the saga ID', async () => {
+    mockNavigate.mockClear();
     render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() =>
-      expect(screen.getByRole('region', { name: /Dispatcher summary/i })).toBeInTheDocument(),
-    );
-    expect(screen.getByText('Threshold')).toBeInTheDocument();
-    expect(screen.getByText('70%')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Auth Rewrite').closest('[role="button"]')!);
+    expect(mockNavigate).toHaveBeenCalledWith({
+      to: '/tyr/sagas/$sagaId',
+      params: { sagaId: '00000000-0000-0000-0000-000000000001' },
+    });
   });
 
-  it('shows empty state when no active sagas', async () => {
+  it('shows no saga cards when all sagas are complete', async () => {
     const completeSvc = {
       tyr: {
         getSagas: async (): Promise<Saga[]> => [
@@ -139,41 +133,16 @@ describe('DashboardPage', () => {
       'tyr.dispatcher': createMockDispatcherService(),
     };
     render(<DashboardPage />, { wrapper: wrap(completeSvc) });
-    await waitFor(() => expect(screen.getByText('No active sagas')).toBeInTheDocument());
+    // Saga stream section exists but no saga cards
+    await waitFor(() => expect(screen.getByText('Saga stream')).toBeInTheDocument());
+    expect(screen.queryByText('Done Saga')).not.toBeInTheDocument();
   });
 
-  it('clicking an active saga calls navigate with the saga ID', async () => {
+  it('renders View all button that navigates to sagas page', async () => {
     mockNavigate.mockClear();
     render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /View saga Auth Rewrite/i }));
-    expect(mockNavigate).toHaveBeenCalledWith({
-      to: '/tyr/sagas/$sagaId',
-      params: { sagaId: '00000000-0000-0000-0000-000000000001' },
-    });
-  });
-
-  it('shows dispatcher stopped state when dispatcher is not running', async () => {
-    const stoppedDispatcher = {
-      getState: async (): Promise<DispatcherState> => ({
-        id: '00000000-0000-0000-0000-000000000999',
-        running: false,
-        threshold: 70,
-        maxConcurrentRaids: 3,
-        autoContinue: false,
-        updatedAt: '2026-01-01T00:00:00Z',
-      }),
-    };
-    render(<DashboardPage />, {
-      wrapper: wrap({ tyr: createMockTyrService(), 'tyr.dispatcher': stoppedDispatcher }),
-    });
-    await waitFor(() => expect(screen.getByText('Stopped')).toBeInTheDocument());
-  });
-
-  it('KPI strip shows active count value = 1 for seed data', async () => {
-    render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    const kpiGroup = await screen.findByRole('group', { name: /KPI/i });
-    expect(kpiGroup).toBeInTheDocument();
-    expect(within(kpiGroup).getByText('Active Sagas')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('View all')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('View all'));
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/tyr/sagas' });
   });
 });

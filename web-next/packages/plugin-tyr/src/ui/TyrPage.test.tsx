@@ -31,26 +31,21 @@ const defaultServices = {
 };
 
 describe('TyrPage (DashboardPage alias)', () => {
-  it('renders the Tyr dashboard heading', async () => {
+  it('renders the saga stream section', async () => {
     render(<TyrPage />, { wrapper: wrap(defaultServices) });
-    await waitFor(() => expect(screen.getByText(/Tyr · Dashboard/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Saga stream')).toBeInTheDocument());
   });
 
-  it('renders the Tyr rune glyph', async () => {
+  it('renders KPI cards', async () => {
     render(<TyrPage />, { wrapper: wrap(defaultServices) });
-    await waitFor(() => expect(screen.getByText('ᛏ', { hidden: true })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Active sagas')).toBeInTheDocument());
+    expect(screen.getByText('Active raids')).toBeInTheDocument();
   });
 
-  it('shows active sagas section', async () => {
+  it('renders the live flock and event feed sections', async () => {
     render(<TyrPage />, { wrapper: wrap(defaultServices) });
-    await waitFor(() =>
-      expect(screen.getByRole('region', { name: /Active sagas/i })).toBeInTheDocument(),
-    );
-  });
-
-  it('shows KPI strip', async () => {
-    render(<TyrPage />, { wrapper: wrap(defaultServices) });
-    await waitFor(() => expect(screen.getByRole('group', { name: /KPI/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Live flock')).toBeInTheDocument());
+    expect(screen.getByText('Event feed')).toBeInTheDocument();
   });
 
   it('shows error state when service throws', async () => {

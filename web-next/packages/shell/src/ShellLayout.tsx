@@ -95,17 +95,39 @@ export function ShellLayout() {
       </aside>
 
       <header className="niuu-shell__topbar">
-        <div className="niuu-shell__topbar-title">
-          {active && (
-            <>
-              <h1>{active.title}</h1>
-              <span className="niuu-shell__topbar-subtitle">{active.subtitle}</span>
-            </>
+        <div className="niuu-shell__topbar-left">
+          <div className="niuu-shell__topbar-title">
+            {active && (
+              <>
+                <span className="niuu-shell__rune-mark">{active.rune}</span>
+                <h1>{active.title}</h1>
+                <span className="niuu-shell__topbar-subtitle">{active.subtitle}</span>
+              </>
+            )}
+          </div>
+          {active?.tabs && (
+            <div className="niuu-shell__tabs">
+              {active.tabs.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={clsx(
+                    'niuu-shell__tab',
+                    active.activeTab === t.id && 'niuu-shell__tab--active',
+                  )}
+                  onClick={() => active.onTab?.(t.id)}
+                >
+                  {t.rune && <span className="niuu-shell__tab-rune">{t.rune}</span>}
+                  {t.label}
+                </button>
+              ))}
+            </div>
           )}
         </div>
         <div className="niuu-shell__topbar-right">
           {active?.topbarRight?.(ctx)}
           <LiveBadge />
+          <div className="niuu-shell__topbar-sep" />
           <button
             type="button"
             className="niuu-shell__cp-btn"
@@ -124,12 +146,12 @@ export function ShellLayout() {
       </main>
 
       <footer className="niuu-shell__footer">
-        <div>
+        <div className="niuu-shell__footer-left">
           {active && <code>plugin:{active.id}</code>}
           <span className="niuu-shell__footer-sep">·</span>
           <span>niuu.world</span>
         </div>
-        <div>
+        <div className="niuu-shell__footer-right">
           <span>{enabled.length} plugins loaded</span>
         </div>
       </footer>

@@ -1,4 +1,4 @@
-export { definePlugin, type PluginDescriptor, type PluginCtx } from './PluginDescriptor';
+export { definePlugin, type PluginDescriptor, type PluginCtx, type PluginTab } from './PluginDescriptor';
 export { ServicesProvider, useService, type ServicesMap } from './ServicesProvider';
 export { ConfigProvider, useConfig } from './ConfigProvider';
 export { FeatureCatalogProvider, useFeatureCatalog, type FeatureCatalog } from './FeatureCatalog';

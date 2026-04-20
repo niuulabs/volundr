@@ -6,6 +6,12 @@ export interface PluginCtx {
   setTweak: (key: string, value: unknown) => void;
 }
 
+export interface PluginTab {
+  id: string;
+  label: string;
+  rune?: string;
+}
+
 export interface PluginDescriptor {
   id: string;
   rune: string;
@@ -23,6 +29,13 @@ export interface PluginDescriptor {
   render?: (ctx: PluginCtx) => ReactNode;
   subnav?: (ctx: PluginCtx) => ReactNode;
   topbarRight?: (ctx: PluginCtx) => ReactNode;
+
+  /** Tabs rendered in the topbar next to the plugin title. */
+  tabs?: PluginTab[];
+  /** Currently active tab id. */
+  activeTab?: string;
+  /** Callback when a tab is selected. */
+  onTab?: (tabId: string) => void;
 }
 
 export function definePlugin(descriptor: PluginDescriptor): PluginDescriptor {

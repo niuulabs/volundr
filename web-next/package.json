@@ -34,6 +34,7 @@
     "@niuulabs/plugin-mimir": "workspace:*",
     "@niuulabs/plugin-observatory": "workspace:*",
     "@niuulabs/plugin-ravn": "workspace:*",
+    "@niuulabs/plugin-tyr": "workspace:*",
     "@niuulabs/plugin-volundr": "workspace:*"
   },
   "devDependencies": {
