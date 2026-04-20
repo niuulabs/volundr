@@ -6,8 +6,8 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useSessions, useMessages } from './useSessions';
-import { useRavens } from './useRavens';
+import { useSessions, useMessages } from './hooks/useSessions';
+import { useRavens } from './hooks/useRavens';
 import {
   applyLogFilter,
   EMPTY_LOG_FILTER,

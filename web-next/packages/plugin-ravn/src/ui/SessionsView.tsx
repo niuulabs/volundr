@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { StateDot } from '@niuulabs/ui';
-import { useSessions, useMessages } from './useSessions';
+import { useSessions, useMessages } from './hooks/useSessions';
 import { ActiveCursor } from './ActiveCursor';
 import { MessageRow } from './MessageRow';
 import { loadStorage, saveStorage } from './storage';

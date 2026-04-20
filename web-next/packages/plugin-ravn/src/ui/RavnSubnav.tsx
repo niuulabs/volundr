@@ -11,7 +11,7 @@
 import { useRouterState, useRouter } from '@tanstack/react-router';
 import { PersonaAvatar } from '@niuulabs/ui';
 import { usePersonas } from './usePersonas';
-import { useSessions } from './useSessions';
+import { useSessions } from './hooks/useSessions';
 import { useRavens } from './hooks/useRavens';
 import { PERSONA_ROLE_ORDER } from '../catalog';
 import { loadStorage, saveStorage } from './storage';
@@ -254,11 +254,11 @@ function SessionSubnavItem({
       onClick={() => onSelect(id)}
       aria-current={selected ? 'page' : undefined}
       data-testid={`session-subnav-item-${id}`}
-      style={{ opacity: faded ? 0.5 : 1 }}
       className={[
         'niuu-flex niuu-items-start niuu-gap-2 niuu-w-full niuu-px-3 niuu-py-1.5',
         'niuu-text-left niuu-text-xs niuu-border-0 niuu-rounded-none niuu-cursor-pointer',
         'niuu-transition-colors',
+        faded ? 'niuu-opacity-50' : '',
         selected
           ? 'niuu-bg-bg-tertiary niuu-text-text-primary'
           : 'niuu-bg-transparent niuu-text-text-secondary hover:niuu-bg-bg-secondary hover:niuu-text-text-primary',

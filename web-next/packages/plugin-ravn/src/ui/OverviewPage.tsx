@@ -51,7 +51,8 @@ export function OverviewPage() {
   const ravnIds = ravnList.map((r) => r.id);
   const budgets = useRavnBudgets(ravnIds);
 
-  const activeCount = ravnList.filter((r) => r.status === 'active').length;
+  const activeRavens = ravnList.filter((r) => r.status === 'active');
+  const activeCount = activeRavens.length;
   const idleCount = ravnList.filter((r) => r.status === 'idle').length;
   const failedCount = ravnList.filter((r) => r.status === 'failed').length;
   const suspendedCount = ravnList.filter((r) => r.status === 'suspended').length;
@@ -109,7 +110,7 @@ export function OverviewPage() {
           <KpiCard label="Spend today" value={fleetBudgetData ? `$${fleetBudgetData.spentUsd.toFixed(2)}` : '—'} />
           {fleetBudgetData && (
             <p className="rv-kpi-sub">
-              of ${fleetBudgetData.capUsd.toFixed(2)} · {Math.round((fleetBudgetData.spentUsd / fleetBudgetData.capUsd) * 100)}%
+              of ${fleetBudgetData.capUsd.toFixed(2)} · {fleetBudgetData.capUsd > 0 ? Math.round((fleetBudgetData.spentUsd / fleetBudgetData.capUsd) * 100) : 0}%
             </p>
           )}
         </div>
@@ -127,13 +128,11 @@ export function OverviewPage() {
             <h3 id="active-ravens-heading" className="rv-section-heading">
               Active ravens
             </h3>
-            {ravnList.filter((r) => r.status === 'active').length === 0 ? (
+            {activeRavens.length === 0 ? (
               <p className="rv-empty-text">No active ravens</p>
             ) : (
               <ul className="rv-active-list" data-testid="active-ravens-list">
-                {ravnList
-                  .filter((r) => r.status === 'active')
-                  .map((r) => (
+                {activeRavens.map((r) => (
                     <li key={r.id} className="rv-active-row" data-testid="active-ravn-row">
                       <StateDot state="running" pulse size={8} />
                       <span className="rv-active-row__name">{r.personaName}</span>

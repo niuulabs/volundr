@@ -11,8 +11,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { BudgetBar, StateDot } from '@niuulabs/ui';
-import { useRavens } from './useRavens';
-import { useFleetBudget, useRavnBudget } from './useBudget';
+import { useRavens } from './hooks/useRavens';
+import { useFleetBudget, useRavnBudget } from './hooks/useBudget';
 import {
   classifyBudget,
   budgetRunway,
@@ -41,7 +41,7 @@ const ATTENTION_COLUMNS: Array<{ key: BudgetAttention; label: string }> = [
 function HeroCard({ budget }: { budget: BudgetState }) {
   const runway = budgetRunway(budget);
   const ratio = budgetRatio(budget);
-  const tone = ratio > 1 ? 'crit' : ratio >= 0.9 ? 'crit' : ratio >= budget.warnAt ? 'warn' : 'ok';
+  const tone = ratio >= 0.9 ? 'crit' : ratio >= budget.warnAt ? 'warn' : 'ok';
 
   return (
     <section className="rv-budget-hero" aria-label="fleet budget">
