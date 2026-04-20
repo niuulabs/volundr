@@ -18,6 +18,7 @@ Tyr has 4 critical issues: no visible topbar tab navigation, sagas page lost its
 web2 has prominent tabs in the topbar. These are the primary navigation for the plugin.
 
 **web2 tabs:**
+
 ```
 Dashboard | Sagas | Dispatch | Plan | Workflows | Settings
 ```
@@ -33,7 +34,9 @@ Dashboard | Sagas | Dispatch | Plan | Workflows | Settings
 The dashboard was rebuilt to match web2's 4-column grid layout. Remaining issue:
 
 ### Raid mesh canvas (stub — needs animation)
+
 web2 `pages.jsx` lines 46-154: Full animated canvas with:
+
 - Raid clusters (grouped by saga, positioned in grid)
 - Raven nodes (orbiting cluster centers at 46px radius)
 - Edges between ravens in same raid (soft frost lines)
@@ -50,6 +53,7 @@ web2 `pages.jsx` lines 46-154: Full animated canvas with:
 ## 3. Sagas Page (WRONG LAYOUT — must add split panel)
 
 ### web2 structure:
+
 ```
 .page
   .page-head
@@ -57,7 +61,7 @@ web2 `pages.jsx` lines 46-154: Full animated canvas with:
     input.input (search/filter)
     button "Export" (downloads JSON)
     button.btn-primary "+ New Saga" (opens Plan wizard)
-  
+
   .page-body (2 columns):
     LEFT (.saga-list, 420px):
       {visible.map(saga =>
@@ -69,12 +73,12 @@ web2 `pages.jsx` lines 46-154: Full animated canvas with:
           .saga-pipe: Pipe component (phase/raid status cells)
           .saga-counts: merged/total raids count
       )}
-    
+
     RIGHT (.saga-detail):
       .saga-detail-head:
         saga glyph + name + identifier + StatusBadge + Confidence
         repo link + branch + created time
-      
+
       Phases section:
         {phases.map(phase =>
           .stage-header: name + StatusBadge + Confidence + raid count
@@ -82,19 +86,20 @@ web2 `pages.jsx` lines 46-154: Full animated canvas with:
             .raid-row: StatusDot + identifier + name + PersonaAvatar + StatusBadge + Confidence
           )}
         )}
-      
+
       Workflow card:
         .workflow-card: name + version + description
         .wf-flock: PersonaAvatar per persona in the flock
-      
+
       Stage progress rail:
         .stage-rail: numbered dots (24x24, circular, brand glow on active) + connecting bars
-      
+
       Confidence drift:
         Sparkline + stats (start → now, scope_adherence, tests_passed)
 ```
 
 ### Current web-next:
+
 - **Single list view** (no split panel — detail moved to `/tyr/sagas/$sagaId` route)
 - Missing: saga glyph, inline pipe visualization, merged/total counts
 - SagaDetailPage exists but is a separate route, not inline
@@ -106,6 +111,7 @@ web2 `pages.jsx` lines 46-154: Full animated canvas with:
 ## 4. Dispatch Page (WRONG STRUCTURE — must group by saga)
 
 ### web2 structure:
+
 ```
 .dispatch
   .dispatch-head:
@@ -113,16 +119,16 @@ web2 `pages.jsx` lines 46-154: Full animated canvas with:
     threshold chip + concurrent chip
     bulk action bar (when items selected):
       "{N} selected" + "Apply workflow" + "Override threshold" + "Dispatch now"
-  
+
   .dispatch-body (2 columns):
     LEFT (.dispatch-queue):
       .q-filters: All | Ready | Blocked | Queued (with counts)
-      
+
       {grouped by saga:
         .q-saga-head:
           identifier + saga name + branch
           workflow chip + override badge (if overridden)
-        
+
         {saga.raids.map(raid =>
           .q-item:
             input[checkbox]
@@ -134,7 +140,7 @@ web2 `pages.jsx` lines 46-154: Full animated canvas with:
             wait time ("3m", "12m", etc.)
         )}
       }
-    
+
     RIGHT (.dispatch-side):
       "Dispatch rules" card:
         threshold, max_concurrent, auto_continue, retries, quiet_hours, escalation
@@ -143,6 +149,7 @@ web2 `pages.jsx` lines 46-154: Full animated canvas with:
 ```
 
 ### Current web-next:
+
 - **Flat table** (no saga grouping)
 - Missing: right-side rules panel
 - Missing: bulk action bar
@@ -157,9 +164,11 @@ web2 `pages.jsx` lines 46-154: Full animated canvas with:
 web2 has a 2-column layout for the plan wizard:
 
 ### Left column: Step content (already implemented in web-next)
+
 Steps: prompt → questions → raiding → draft → approved
 
 ### Right column: Guidance rail (MISSING)
+
 ```
 "How Plan works" card:
   Step descriptions with numbered badges
@@ -178,11 +187,13 @@ Steps: prompt → questions → raiding → draft → approved
 ## 6. Workflow Builder (VERIFY — likely close)
 
 web2 `workflow_builder.jsx` has a 3-panel layout:
+
 - Left: Library panel (persona blocks grouped by role, draggable)
 - Center: Canvas (Graph/Pipeline/YAML view toggle)
 - Right: Inspector (node config, members, validation)
 
 web-next has WorkflowBuilder with similar structure. Verify:
+
 - [ ] Library panel shows personas grouped by role
 - [ ] Graph view renders DAG with proper node shapes
 - [ ] Pipeline view shows vertical stages
@@ -196,6 +207,7 @@ web-next has WorkflowBuilder with similar structure. Verify:
 ## 7. Settings (VERIFY — may need sidebar consolidation)
 
 web2 has settings as a single page with a left sidebar rail:
+
 ```
 Settings rail groups:
   Niuu: Workspace, Appearance

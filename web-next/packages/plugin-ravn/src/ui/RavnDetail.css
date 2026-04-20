@@ -59,7 +59,9 @@
   font-size: var(--text-xs);
   font-weight: 500;
   white-space: nowrap;
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .rv-sectab:hover {

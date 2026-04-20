@@ -103,12 +103,7 @@ describe('RaidMeshCanvas', () => {
     const activeSaga = makeSaga({ id: '00000000-0000-0000-0000-000000000002', status: 'active' });
     const phase = makePhase({ sagaId: activeSaga.id });
     // Should render without error — complete saga produces no clusters
-    render(
-      <RaidMeshCanvas
-        sagas={[completeSaga, activeSaga]}
-        phases={[[], [phase]]}
-      />,
-    );
+    render(<RaidMeshCanvas sagas={[completeSaga, activeSaga]} phases={[[], [phase]]} />);
     expect(screen.getByLabelText('Live raid mesh visualization')).toBeInTheDocument();
   });
 

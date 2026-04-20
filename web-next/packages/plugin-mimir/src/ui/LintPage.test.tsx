@@ -37,9 +37,7 @@ describe('LintPage', () => {
 
   it('renders check rows for each rule in the sidebar', async () => {
     wrap(<LintPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('check-row').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('check-row').length).toBeGreaterThan(0));
   });
 
   it('clicking a check row filters issues to that rule', async () => {

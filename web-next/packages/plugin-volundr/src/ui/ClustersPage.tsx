@@ -104,7 +104,10 @@ function NodeCard({
           <MiniBar value={memPct} label="mem" />
         </div>
       ) : node.status === 'ready' ? (
-        <div className="niuu-flex niuu-gap-2 niuu-font-mono niuu-text-[10px] niuu-text-text-faint" data-testid="node-meters">
+        <div
+          className="niuu-flex niuu-gap-2 niuu-font-mono niuu-text-[10px] niuu-text-text-faint"
+          data-testid="node-meters"
+        >
           <span>cpu —</span>
           <span>mem —</span>
         </div>
@@ -166,14 +169,24 @@ function ClusterCard({ cluster }: ClusterCardProps) {
         aria-label="Resource utilization"
         data-testid="resource-meters"
       >
-        <ResourcePanel label="CPU" used={cluster.used.cpu} total={cluster.capacity.cpu} unit="cores" />
+        <ResourcePanel
+          label="CPU"
+          used={cluster.used.cpu}
+          total={cluster.capacity.cpu}
+          unit="cores"
+        />
         <ResourcePanel
           label="Memory"
           used={cluster.used.memMi}
           total={cluster.capacity.memMi}
           unit="Mi"
         />
-        <ResourcePanel label="GPU" used={cluster.used.gpu} total={cluster.capacity.gpu} unit="gpu" />
+        <ResourcePanel
+          label="GPU"
+          used={cluster.used.gpu}
+          total={cluster.capacity.gpu}
+          unit="gpu"
+        />
         <ResourcePanel
           label="Pods"
           used={cluster.runningSessions}
@@ -191,7 +204,9 @@ function ClusterCard({ cluster }: ClusterCardProps) {
           data-testid="pods-panel"
         >
           <div className="niuu-flex niuu-items-center niuu-justify-between">
-            <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Pods on this forge</h3>
+            <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">
+              Pods on this forge
+            </h3>
             <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
               {cluster.runningSessions}
             </span>
@@ -287,7 +302,10 @@ export function ClustersPage() {
 
       {/* Cluster cards */}
       {clusters.data && clusters.data.length > 0 && (
-        <ul className="niuu-flex niuu-flex-col niuu-gap-5 niuu-list-none niuu-p-0" aria-label="Clusters">
+        <ul
+          className="niuu-flex niuu-flex-col niuu-gap-5 niuu-list-none niuu-p-0"
+          aria-label="Clusters"
+        >
           {clusters.data.map((c) => (
             <li key={c.id}>
               <ClusterCard cluster={c} />

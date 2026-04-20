@@ -40,7 +40,11 @@
 
 .lint-page__kpi--accent {
   border-color: color-mix(in srgb, var(--color-brand, var(--color-accent-cyan)) 25%, transparent);
-  background: color-mix(in srgb, var(--color-brand, var(--color-accent-cyan)) 6%, var(--color-bg-secondary));
+  background: color-mix(
+    in srgb,
+    var(--color-brand, var(--color-accent-cyan)) 6%,
+    var(--color-bg-secondary)
+  );
 }
 
 .lint-page__kpi-lbl {
@@ -123,11 +127,19 @@
 }
 
 .lint-page__check-row--active {
-  background: color-mix(in srgb, var(--color-brand, var(--color-accent-cyan)) 10%, var(--color-bg-secondary));
+  background: color-mix(
+    in srgb,
+    var(--color-brand, var(--color-accent-cyan)) 10%,
+    var(--color-bg-secondary)
+  );
 }
 
 .lint-page__check-row--active:hover {
-  background: color-mix(in srgb, var(--color-brand, var(--color-accent-cyan)) 14%, var(--color-bg-secondary));
+  background: color-mix(
+    in srgb,
+    var(--color-brand, var(--color-accent-cyan)) 14%,
+    var(--color-bg-secondary)
+  );
 }
 
 .lint-page__check-id-cell {

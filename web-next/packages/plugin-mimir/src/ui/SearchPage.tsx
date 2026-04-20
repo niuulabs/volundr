@@ -114,9 +114,7 @@ export function SearchPage() {
                   {result.confidence}
                 </Chip>
               </div>
-              <p className="search-page__result-summary">
-                {highlightText(result.summary, query)}
-              </p>
+              <p className="search-page__result-summary">{highlightText(result.summary, query)}</p>
               <span className="search-page__result-path">{result.path}</span>
             </li>
           ))}

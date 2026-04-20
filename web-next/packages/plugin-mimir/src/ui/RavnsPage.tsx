@@ -61,9 +61,7 @@ function RavnCard({ ravn, onClick }: RavnCardProps) {
 
       {ravn.lastDream ? (
         <div className="ravn-card__dream" data-testid="ravn-dream">
-          <span className="ravn-card__dream-time">
-            {formatTimestamp(ravn.lastDream.timestamp)}
-          </span>
+          <span className="ravn-card__dream-time">{formatTimestamp(ravn.lastDream.timestamp)}</span>
           <span className="ravn-card__dream-stat">
             <strong>{ravn.lastDream.pagesUpdated}</strong> pages ·{' '}
             <strong>{ravn.lastDream.entitiesCreated}</strong> entities ·{' '}
@@ -157,9 +155,7 @@ function RavnProfile({ ravn, onBack }: RavnProfileProps) {
               </div>
               <div className="ravn-profile__stat">
                 <span className="ravn-profile__stat-lbl">entities created</span>
-                <strong className="ravn-profile__stat-val">
-                  {ravn.lastDream.entitiesCreated}
-                </strong>
+                <strong className="ravn-profile__stat-val">{ravn.lastDream.entitiesCreated}</strong>
               </div>
               <div className="ravn-profile__stat">
                 <span className="ravn-profile__stat-lbl">lint fixes</span>

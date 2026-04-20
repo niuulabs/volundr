@@ -18,6 +18,7 @@ Mimir is structurally closer to web2 than the other plugins but has subnav gaps,
 web2 `plugin.jsx` renders a rich subnav:
 
 ### Mount picker (top section):
+
 ```
 .subnav-section
   .subnav-label: "mounts"
@@ -34,6 +35,7 @@ web2 `plugin.jsx` renders a rich subnav:
 ```
 
 ### Navigation items (bottom section):
+
 ```
 .subnav-section (flex:1, overflow:auto)
   {NAV_ITEMS.map(n =>
@@ -44,6 +46,7 @@ web2 `plugin.jsx` renders a rich subnav:
 ```
 
 NAV_ITEMS:
+
 ```
 home (Overview), pages (Pages, count=totalPages), search (Search),
 graph (Graph), ravns (Wardens, count=wardenCount), ingest (Ingest),
@@ -51,6 +54,7 @@ lint (Lint, count=lintCount with red color if > 0), log (Log)
 ```
 
 ### Quick filters:
+
 ```
 .subnav-label: "quick"
 button.subnav-row: span.subnav-dot(err) + "Errors" + count
@@ -59,6 +63,7 @@ button.subnav-row: span.subnav-dot(dim) + "Low confidence" + count
 ```
 
 ### Wardens roster:
+
 ```
 .subnav-label: "wardens"
 {ravns.slice(0,6).map(r =>
@@ -76,13 +81,21 @@ button.subnav-row: span.subnav-dot(dim) + "Low confidence" + count
 ## 2. Topbar Stats (MUST MATCH)
 
 web2 topbar right:
+
 ```jsx
 <div className="stats">
   <span className="stat mono">{focusedMount || 'all mounts'}</span>
-  <span className="stat"><span className="stat-label">pages</span><strong>{pages}</strong></span>
-  <span className="stat"><span className="stat-label">wardens</span><strong>{wardens}</strong></span>
-  <span className="stat" style={{color: lintCount > 0 ? 'var(--color-critical-fg)' : undefined}}>
-    <span className="stat-label">lint</span><strong>{lintCount}</strong>
+  <span className="stat">
+    <span className="stat-label">pages</span>
+    <strong>{pages}</strong>
+  </span>
+  <span className="stat">
+    <span className="stat-label">wardens</span>
+    <strong>{wardens}</strong>
+  </span>
+  <span className="stat" style={{ color: lintCount > 0 ? 'var(--color-critical-fg)' : undefined }}>
+    <span className="stat-label">lint</span>
+    <strong>{lintCount}</strong>
   </span>
 </div>
 ```
@@ -92,6 +105,7 @@ web2 topbar right:
 ## 3. Home/Overview Page (VERIFY layout)
 
 web2 `home.jsx` structure:
+
 ```
 KPI strip (5 tiles): pages, sources, wardens, lint issues, last write
 
@@ -115,6 +129,7 @@ KPI strip (5 tiles): pages, sources, wardens, lint issues, last write
 ## 4. Pages View (VERIFY triple-pane)
 
 web2 `pages.jsx` structure:
+
 ```
 LEFT: Pages tree (hierarchical, folders collapse, leaf pages show confidence dot + flag)
 CENTER: Page reader
@@ -135,6 +150,7 @@ RIGHT: Page meta panel
 ## 5. Search View (VERIFY)
 
 web2 `views.jsx` SearchView:
+
 ```
 Search head: query input + mode toggle Seg (fts/semantic/hybrid) + result count
 Results list per result:
@@ -148,6 +164,7 @@ Results list per result:
 ## 6. Graph View (VERIFY)
 
 web2 `views.jsx` GraphView:
+
 - SVG force-directed layout with category-based radial clusters
 - Nodes colored by category, sized by page type
 - Edges: solid (source sharing) + dashed (wikilinks)
@@ -162,9 +179,11 @@ web2 `views.jsx` GraphView:
 web2 has 2 states:
 
 ### Directory (no ravn selected):
+
 Grid of ravn cards: initials glyph + name + state dot + persona + role chip + bio + binding chips + metrics.
 
 ### Profile (ravn selected):
+
 Hero: large initials + name + role + persona + state pill + tools list + bio.
 2-panel grid: Mimir bindings + expertise chips + last dream cycle stats + recent activity.
 Bottom: pages table (pages last written by this ravn).
@@ -174,6 +193,7 @@ Bottom: pages table (pages last written by this ravn).
 ## 8. Lint View (VERIFY layout)
 
 web2: 2-column grid (220px left, 1fr right):
+
 - Left: checks summary (per-check rows with severity dot, id, name, count, autofix badge)
 - Right: issues list filtered by selected check
 
@@ -184,6 +204,7 @@ web2: 2-column grid (220px left, 1fr right):
 ## 9. Ingest View (VERIFY)
 
 web2: 2-column layout:
+
 - Left: ingest form (title, path, content textarea, action buttons)
 - Right: write routing rules table + recent sources
 
@@ -200,9 +221,9 @@ Append-only activity log with columns: time, kind, mount, warden, message.
 - [ ] Subnav has mount picker + nav items + quick filters + wardens roster
 - [ ] Topbar shows mount name + pages/wardens/lint stat chips
 - [ ] Home page has `1.2fr 1fr` grid layout with border separator
-- [ ] Mount cards grid uses minmax(300px, 1fr) *(already fixed)*
-- [ ] Feed row grid uses 58px/60px/66px/1fr *(already fixed)*
-- [ ] Chip styling is 10px uppercase with 0.05em letter-spacing *(already fixed)*
+- [ ] Mount cards grid uses minmax(300px, 1fr) _(already fixed)_
+- [ ] Feed row grid uses 58px/60px/66px/1fr _(already fixed)_
+- [ ] Chip styling is 10px uppercase with 0.05em letter-spacing _(already fixed)_
 - [ ] Pages view has triple-pane (tree / reader / meta)
 - [ ] Search view has mode toggle and result snippets
 - [ ] Graph view renders force layout

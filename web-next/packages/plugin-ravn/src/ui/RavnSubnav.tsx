@@ -38,7 +38,10 @@ function PersonasSubnav() {
 
   if (isLoading) {
     return (
-      <div className="niuu-p-3 niuu-text-xs niuu-text-text-muted" data-testid="personas-subnav-loading">
+      <div
+        className="niuu-p-3 niuu-text-xs niuu-text-text-muted"
+        data-testid="personas-subnav-loading"
+      >
         Loading personas…
       </div>
     );
@@ -64,7 +67,9 @@ function PersonasSubnav() {
       <div className="niuu-px-3 niuu-pt-1 niuu-pb-2 niuu-border-b niuu-border-border-subtle">
         <div className="niuu-text-sm niuu-font-medium niuu-text-text-primary">
           Personas{' '}
-          <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">{personas.length}</span>
+          <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
+            {personas.length}
+          </span>
         </div>
         <div className="niuu-text-xs niuu-text-text-muted">cognitive templates</div>
       </div>
@@ -79,7 +84,9 @@ function PersonasSubnav() {
               <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-uppercase niuu-tracking-wide">
                 {role}
               </span>
-              <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted">{group.length}</span>
+              <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted">
+                {group.length}
+              </span>
             </div>
             {group.map((p) => (
               <button
@@ -137,7 +144,10 @@ function SessionsSubnav() {
 
   if (isLoading) {
     return (
-      <div className="niuu-p-3 niuu-text-xs niuu-text-text-muted" data-testid="sessions-subnav-loading">
+      <div
+        className="niuu-p-3 niuu-text-xs niuu-text-text-muted"
+        data-testid="sessions-subnav-loading"
+      >
         Loading sessions…
       </div>
     );
@@ -169,7 +179,9 @@ function SessionsSubnav() {
             <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-uppercase niuu-tracking-wide">
               active
             </span>
-            <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted">{active.length}</span>
+            <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted">
+              {active.length}
+            </span>
           </div>
           {active.map((s) => {
             const ravn = ravnById.get(s.ravnId);
@@ -199,7 +211,9 @@ function SessionsSubnav() {
             <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-uppercase niuu-tracking-wide">
               closed
             </span>
-            <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted">{closed.length}</span>
+            <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted">
+              {closed.length}
+            </span>
           </div>
           {closed.map((s) => {
             const ravn = ravnById.get(s.ravnId);

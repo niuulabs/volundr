@@ -205,7 +205,9 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: border-color var(--transition-fast), color var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 .tyr-btn:hover {
   border-color: var(--color-border);

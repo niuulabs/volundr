@@ -28,15 +28,7 @@ const SEVERITY_DOT: Record<IssueSeverity, 'failed' | 'attention' | 'observing'> 
 };
 
 export function LintPage() {
-  const {
-    issues,
-    summary,
-    isLoading,
-    isError,
-    error,
-    runAutoFix,
-    isFixing,
-  } = useLint();
+  const { issues, summary, isLoading, isError, error, runAutoFix, isFixing } = useLint();
 
   const [selectedRule, setSelectedRule] = useState<LintRule | null>(null);
 
@@ -164,11 +156,7 @@ export function LintPage() {
               <span className="lint-page__issues-count">· {filtered.length}</span>
             </div>
             <div className="lint-page__issues-actions">
-              <button
-                type="button"
-                className="lint-page__btn"
-                aria-label="Run lint"
-              >
+              <button type="button" className="lint-page__btn" aria-label="Run lint">
                 Run lint
               </button>
               {autoFixableIds.length > 0 && (

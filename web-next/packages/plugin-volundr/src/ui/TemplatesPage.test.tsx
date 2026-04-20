@@ -106,9 +106,7 @@ describe('TemplatesPage', () => {
       },
     };
     renderWithVolundr(<TemplatesPage />, { templateStore: failStore });
-    await waitFor(() =>
-      expect(screen.getByText('failed to load templates')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('failed to load templates')).toBeInTheDocument());
   });
 
   // -----------------------------------------------------------------------
@@ -121,9 +119,7 @@ describe('TemplatesPage', () => {
       listTemplates: async () => [],
     };
     renderWithVolundr(<TemplatesPage />, { templateStore: emptyStore });
-    await waitFor(() =>
-      expect(screen.getByTestId('empty-state')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('empty-state')).toBeInTheDocument());
   });
 
   // -----------------------------------------------------------------------
@@ -132,9 +128,7 @@ describe('TemplatesPage', () => {
 
   it('renders template cards after data loads', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
   });
 
   it('renders both seed templates', async () => {
@@ -156,9 +150,7 @@ describe('TemplatesPage', () => {
 
   it('auto-selects the first template', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     // First card should be selected (aria-pressed=true)
     const cards = screen.getAllByTestId('template-card');
     expect(cards[0]).toHaveAttribute('aria-pressed', 'true');
@@ -166,9 +158,7 @@ describe('TemplatesPage', () => {
 
   it('selects a template when clicked', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     // Click the second card
     const cards = screen.getAllByTestId('template-card');
     fireEvent.click(cards[1]!);
@@ -177,9 +167,7 @@ describe('TemplatesPage', () => {
 
   it('shows detail panel for selected template', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     // Detail panel should show overview tab by default
     expect(screen.getByTestId('tab-overview')).toBeInTheDocument();
   });
@@ -190,9 +178,7 @@ describe('TemplatesPage', () => {
 
   it('renders all 6 tabs', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const tabs = screen.getAllByRole('tab');
     expect(tabs).toHaveLength(6);
     expect(tabs.map((t) => t.textContent)).toEqual([
@@ -207,54 +193,42 @@ describe('TemplatesPage', () => {
 
   it('overview tab is active by default', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const overviewTab = screen.getByRole('tab', { name: /overview/i });
     expect(overviewTab).toHaveAttribute('aria-selected', 'true');
   });
 
   it('switches to workspace tab', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /workspace/i }));
     expect(screen.getByTestId('tab-workspace')).toBeInTheDocument();
   });
 
   it('switches to runtime tab', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /runtime/i }));
     expect(screen.getByTestId('tab-runtime')).toBeInTheDocument();
   });
 
   it('switches to mcp tab', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     expect(screen.getByTestId('tab-mcp')).toBeInTheDocument();
   });
 
   it('switches to skills tab', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /skills/i }));
     expect(screen.getByTestId('tab-skills')).toBeInTheDocument();
   });
 
   it('switches to rules tab', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /rules/i }));
     expect(screen.getByTestId('tab-rules')).toBeInTheDocument();
   });
@@ -265,18 +239,14 @@ describe('TemplatesPage', () => {
 
   it('overview tab shows detail cards', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getByTestId('tab-overview')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('tab-overview')).toBeInTheDocument());
     const cards = screen.getAllByTestId('detail-card');
     expect(cards.length).toBeGreaterThanOrEqual(4);
   });
 
   it('overview tab shows image info in detail cards', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getByTestId('tab-overview')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('tab-overview')).toBeInTheDocument());
     // Image appears in list card + detail; just check at least one is present
     expect(screen.getAllByText(/ghcr\.io\/niuulabs\/skuld/).length).toBeGreaterThan(0);
   });
@@ -287,9 +257,7 @@ describe('TemplatesPage', () => {
 
   it('workspace tab shows empty state for templates with no mounts', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /workspace/i }));
     expect(screen.getByText(/no workspace sources/i)).toBeInTheDocument();
   });
@@ -300,9 +268,7 @@ describe('TemplatesPage', () => {
 
   it('runtime tab shows resource meters', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /runtime/i }));
     const meters = screen.getAllByTestId('meter');
     expect(meters.length).toBeGreaterThanOrEqual(2);
@@ -310,9 +276,7 @@ describe('TemplatesPage', () => {
 
   it('runtime tab shows TTL and idle timeout', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /runtime/i }));
     expect(screen.getByText('60m')).toBeInTheDocument(); // 3600s = 60m
     expect(screen.getByText('10m')).toBeInTheDocument(); // 600s = 10m
@@ -324,9 +288,7 @@ describe('TemplatesPage', () => {
 
   it('mcp tab shows empty state for template with no tools', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     // default template has no tools
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     expect(screen.getByText(/no mcp servers enabled/i)).toBeInTheDocument();
@@ -334,9 +296,7 @@ describe('TemplatesPage', () => {
 
   it('mcp tab shows tools for gpu-workload template', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     // Select gpu-workload
     const cards = screen.getAllByTestId('template-card');
     fireEvent.click(cards[1]!);
@@ -351,18 +311,14 @@ describe('TemplatesPage', () => {
 
   it('skills tab shows empty state for default template', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /skills/i }));
     expect(screen.getByText(/no skills defined/i)).toBeInTheDocument();
   });
 
   it('skills tab shows tool chips for gpu-workload', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const cards = screen.getAllByTestId('template-card');
     fireEvent.click(cards[1]!);
     fireEvent.click(screen.getByRole('tab', { name: /skills/i }));
@@ -375,18 +331,14 @@ describe('TemplatesPage', () => {
 
   it('rules tab shows empty state for default template', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /rules/i }));
     expect(screen.getByText(/no rules or constraints defined/i)).toBeInTheDocument();
   });
 
   it('rules tab shows cluster affinity for gpu-workload', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const cards = screen.getAllByTestId('template-card');
     fireEvent.click(cards[1]!);
     fireEvent.click(screen.getByRole('tab', { name: /rules/i }));
@@ -399,9 +351,7 @@ describe('TemplatesPage', () => {
 
   it('resets to overview tab when switching templates', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     // Navigate to runtime tab
     fireEvent.click(screen.getByRole('tab', { name: /runtime/i }));
     expect(screen.getByTestId('tab-runtime')).toBeInTheDocument();
@@ -418,9 +368,7 @@ describe('TemplatesPage', () => {
 
   it('shows CLI badge in detail header', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     expect(screen.getByTestId('cli-badge')).toBeInTheDocument();
   });
 
@@ -430,9 +378,7 @@ describe('TemplatesPage', () => {
 
   it('shows GPU chip on gpu-workload card', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     // The gpu-workload card should have a "GPU" chip
     const cards = screen.getAllByTestId('template-card');
     const gpuCard = cards[1]!;
@@ -445,9 +391,7 @@ describe('TemplatesPage', () => {
 
   it('overview tab shows mount entries when template has mounts', async () => {
     renderWithVolundr(<TemplatesPage />, { templateStore: storeWith([RICH_TEMPLATE]) });
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     expect(screen.getByTestId('tab-overview')).toBeInTheDocument();
     expect(screen.getByText('repo-volundr')).toBeInTheDocument();
     expect(screen.getByText('data-pvc')).toBeInTheDocument();
@@ -459,9 +403,7 @@ describe('TemplatesPage', () => {
 
   it('workspace tab renders mount rows with descriptions for templates with mounts', async () => {
     renderWithVolundr(<TemplatesPage />, { templateStore: storeWith([RICH_TEMPLATE]) });
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /workspace/i }));
     expect(screen.getByText('repo-volundr')).toBeInTheDocument();
     expect(screen.getByText(/shallow clone/)).toBeInTheDocument();
@@ -477,9 +419,7 @@ describe('TemplatesPage', () => {
 
   it('runtime tab shows GPU info for template with gpuCount > 0', async () => {
     renderWithVolundr(<TemplatesPage />, { templateStore: storeWith([RICH_TEMPLATE]) });
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /runtime/i }));
     // gpuCount = 2 should appear
     expect(screen.getByText('2')).toBeInTheDocument();
@@ -487,9 +427,7 @@ describe('TemplatesPage', () => {
 
   it('runtime tab shows env vars and secret refs', async () => {
     renderWithVolundr(<TemplatesPage />, { templateStore: storeWith([RICH_TEMPLATE]) });
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /runtime/i }));
     expect(screen.getByText('API_URL')).toBeInTheDocument();
     expect(screen.getByText('https://api.niuu.world')).toBeInTheDocument();
@@ -503,9 +441,7 @@ describe('TemplatesPage', () => {
 
   it('rules tab shows tolerations for template with tolerations', async () => {
     renderWithVolundr(<TemplatesPage />, { templateStore: storeWith([RICH_TEMPLATE]) });
-    await waitFor(() =>
-      expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /rules/i }));
     expect(screen.getByText('gpu-only')).toBeInTheDocument();
     expect(screen.getByText('spot')).toBeInTheDocument();

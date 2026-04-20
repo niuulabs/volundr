@@ -100,59 +100,45 @@ describe('SessionDetailPage', () => {
   describe('header', () => {
     it('renders the session header with session info after loading', async () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
-      await waitFor(() =>
-        expect(screen.getByTestId('session-header')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByTestId('session-header')).toBeInTheDocument());
       expect(screen.getByTestId('session-name')).toHaveTextContent('skald');
       expect(screen.getByTestId('session-id-label')).toHaveTextContent('ds-1');
     });
 
     it('shows lifecycle badge in the header', async () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
-      await waitFor(() =>
-        expect(screen.getByTestId('session-header')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByTestId('session-header')).toBeInTheDocument());
       // LifecycleBadge renders the state text "running"
       expect(screen.getAllByText('running').length).toBeGreaterThan(0);
     });
 
     it('shows the archived badge in readOnly mode', async () => {
       wrap(<SessionDetailPage sessionId="ds-1" readOnly />);
-      await waitFor(() =>
-        expect(screen.getByTestId('session-archived-badge')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByTestId('session-archived-badge')).toBeInTheDocument());
     });
 
     it('does NOT show the archived badge in interactive mode', async () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
-      await waitFor(() =>
-        expect(screen.getByTestId('session-header')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByTestId('session-header')).toBeInTheDocument());
       expect(screen.queryByTestId('session-archived-badge')).not.toBeInTheDocument();
     });
 
     it('renders session stats in the header', async () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
-      await waitFor(() =>
-        expect(screen.getByTestId('session-stats')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByTestId('session-stats')).toBeInTheDocument());
       const stats = screen.getAllByTestId('stat');
       expect(stats.length).toBeGreaterThanOrEqual(2);
     });
 
     it('renders source label and cluster chip', async () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
-      await waitFor(() =>
-        expect(screen.getByTestId('source-label')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByTestId('source-label')).toBeInTheDocument());
       expect(screen.getByTestId('cluster-chip')).toBeInTheDocument();
     });
 
     it('toggles resources row when clicking resources button', async () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
-      await waitFor(() =>
-        expect(screen.getByTestId('resources-toggle')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByTestId('resources-toggle')).toBeInTheDocument());
 
       // Resources row should not be visible initially
       expect(screen.queryByTestId('resources-row')).not.toBeInTheDocument();
@@ -168,9 +154,7 @@ describe('SessionDetailPage', () => {
 
     it('renders meters in the resources row', async () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
-      await waitFor(() =>
-        expect(screen.getByTestId('resources-toggle')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByTestId('resources-toggle')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('resources-toggle'));
       const resourcesRow = screen.getByTestId('resources-row');
       const meters = within(resourcesRow).getAllByTestId('meter');
@@ -351,9 +335,7 @@ describe('SessionDetailPage', () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
       fireEvent.click(screen.getByTestId('tab-terminal'));
       expect(screen.getByTestId('tab-terminal')).toHaveAttribute('aria-selected', 'true');
-      await waitFor(() =>
-        expect(screen.getByTestId('terminal-container')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByTestId('terminal-container')).toBeInTheDocument());
     });
   });
 
@@ -372,9 +354,7 @@ describe('SessionDetailPage', () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
       fireEvent.click(screen.getByTestId('tab-files'));
       expect(screen.getByTestId('tab-files')).toHaveAttribute('aria-selected', 'true');
-      await waitFor(() =>
-        expect(screen.getByTestId('filetree-root')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByTestId('filetree-root')).toBeInTheDocument());
     });
   });
 
@@ -413,9 +393,7 @@ describe('SessionDetailPage', () => {
         getSession: vi.fn().mockRejectedValue(new Error('store error')),
       };
       wrap(<SessionDetailPage sessionId="ds-1" />, { sessionStore: failingStore });
-      await waitFor(() =>
-        expect(screen.getByText('Failed to load session')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByText('Failed to load session')).toBeInTheDocument());
     });
 
     it('shows error message from the store error', async () => {
@@ -424,9 +402,7 @@ describe('SessionDetailPage', () => {
         getSession: vi.fn().mockRejectedValue(new Error('connection lost')),
       };
       wrap(<SessionDetailPage sessionId="ds-1" />, { sessionStore: failingStore });
-      await waitFor(() =>
-        expect(screen.getByText('connection lost')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByText('connection lost')).toBeInTheDocument());
     });
   });
 

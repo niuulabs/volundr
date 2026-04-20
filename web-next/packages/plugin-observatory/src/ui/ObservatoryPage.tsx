@@ -51,11 +51,7 @@ export function ObservatoryPage() {
       />
 
       {/* Accessible hidden node list — keyboard / screen-reader alternative to canvas hit-testing */}
-      <ul
-        data-testid="topology-node-list"
-        aria-label="Topology nodes"
-        className="sr-only"
-      >
+      <ul data-testid="topology-node-list" aria-label="Topology nodes" className="sr-only">
         {topology?.nodes.map((node) => (
           <li key={node.id}>
             <button

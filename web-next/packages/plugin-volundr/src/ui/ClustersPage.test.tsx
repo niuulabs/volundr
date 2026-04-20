@@ -152,9 +152,7 @@ describe('ClustersPage', () => {
 
   it('renders resource meter sections', async () => {
     renderWithVolundr(<ClustersPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('resource-meters').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('resource-meters').length).toBeGreaterThan(0));
   });
 
   it('renders resource panels for CPU and Memory on each cluster', async () => {

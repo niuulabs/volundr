@@ -18,7 +18,11 @@ const TIER_CLASSES: Record<string, string> = {
 /** Model alias with tier color indicator */
 export function ModelChip({ model, className }: ModelChipProps) {
   if (!model) {
-    return <span className="niuu-font-mono niuu-text-text-faint" data-testid="model-chip">—</span>;
+    return (
+      <span className="niuu-font-mono niuu-text-text-faint" data-testid="model-chip">
+        —
+      </span>
+    );
   }
 
   const alias = typeof model === 'string' ? model : model.alias;

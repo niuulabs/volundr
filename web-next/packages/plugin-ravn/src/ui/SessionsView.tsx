@@ -100,18 +100,21 @@ function Transcript({ session }: { session: Session }) {
 }
 
 function ContextSidebar({ session }: { session: Session }) {
-  const ratio = session.costUsd != null && session.messageCount != null && session.messageCount > 0
-    ? session.costUsd / session.messageCount
-    : null;
+  const ratio =
+    session.costUsd != null && session.messageCount != null && session.messageCount > 0
+      ? session.costUsd / session.messageCount
+      : null;
 
   return (
-    <aside className="rv-sessions-view__sidebar" aria-label="session context" data-testid="session-context-sidebar">
+    <aside
+      className="rv-sessions-view__sidebar"
+      aria-label="session context"
+      data-testid="session-context-sidebar"
+    >
       {/* Summary */}
       <section className="rv-ctx-sec" data-testid="ctx-summary">
         <h4 className="rv-ctx-sec__title">Summary</h4>
-        <p className="rv-ctx-sec__body">
-          {session.title ?? `Session ${session.id.slice(0, 8)}`}
-        </p>
+        <p className="rv-ctx-sec__body">{session.title ?? `Session ${session.id.slice(0, 8)}`}</p>
         <p className="rv-ctx-sec__body rv-ctx-sec__body--muted">
           {session.status === 'running' ? 'In progress' : 'Completed'}
         </p>
@@ -123,7 +126,9 @@ function ContextSidebar({ session }: { session: Session }) {
         <ol className="rv-ctx-timeline">
           <li className="rv-ctx-timeline__item">
             <span className="rv-ctx-timeline__dot" />
-            <span className="rv-ctx-timeline__ts">{session.createdAt.slice(0, 16).replace('T', ' ')}</span>
+            <span className="rv-ctx-timeline__ts">
+              {session.createdAt.slice(0, 16).replace('T', ' ')}
+            </span>
             <span className="rv-ctx-timeline__label">started</span>
           </li>
           {session.status !== 'running' && (

@@ -20,7 +20,11 @@ const KIND_CLASSES: Record<string, string> = {
 /** Cluster name + kind badge */
 export function ClusterChip({ cluster, className }: ClusterChipProps) {
   if (!cluster) {
-    return <span className="niuu-font-mono niuu-text-text-faint" data-testid="cluster-chip">—</span>;
+    return (
+      <span className="niuu-font-mono niuu-text-text-faint" data-testid="cluster-chip">
+        —
+      </span>
+    );
   }
 
   return (

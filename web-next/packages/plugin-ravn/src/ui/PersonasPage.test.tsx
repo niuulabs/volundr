@@ -89,9 +89,7 @@ describe('PersonasPage', () => {
     unmount();
     // No error should occur if we dispatch after unmount
     expect(() => {
-      window.dispatchEvent(
-        new CustomEvent('ravn:persona-selected', { detail: 'coding-agent' }),
-      );
+      window.dispatchEvent(new CustomEvent('ravn:persona-selected', { detail: 'coding-agent' }));
     }).not.toThrow();
   });
 });

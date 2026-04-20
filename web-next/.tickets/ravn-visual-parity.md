@@ -16,11 +16,13 @@ Ravn has 5 structural mismatches vs web2: tab count (8 vs 5), missing subnav for
 ## 1. Tabs: Reduce from 8 to 5
 
 web2 tabs (defined in `shell.jsx` line 6-12):
+
 ```
 Overview | Ravens | Personas | Sessions | Budget
 ```
 
 web-next currently has 8 tabs (Triggers, Events, Log promoted to top-level):
+
 ```
 Overview | Ravens | Personas | Sessions | Triggers | Events | Budget | Log
 ```
@@ -32,10 +34,13 @@ Overview | Ravens | Personas | Sessions | Triggers | Events | Budget | Log
 ## 2. Topbar Stats (MUST ADD)
 
 web2 `shell.jsx` renders `topbarRight` with stat chips:
+
 ```jsx
-<TopbarChip kind="ok" icon="●" label={`${activeRavens} active`} />
-{failedRavens > 0 && <TopbarChip kind="err" icon="●" label={`${failedRavens} failed`} />}
-<TopbarChip kind="dim" icon="◷" label={`${openSessions} sessions`} />
+<TopbarChip kind="ok" icon="●" label={`${activeRavens} active`} />;
+{
+  failedRavens > 0 && <TopbarChip kind="err" icon="●" label={`${failedRavens} failed`} />;
+}
+<TopbarChip kind="dim" icon="◷" label={`${openSessions} sessions`} />;
 ```
 
 CSS: `.topbar-chip`, `.chip-dot`, variants `ok`/`err`/`dim`.
@@ -47,11 +52,13 @@ web-next: topbarRight is not implemented for Ravn. Must add via the `topbarRight
 ## 3. Subnav (MUST ADD for Personas and Sessions tabs)
 
 web2 renders different subnav content per tab:
+
 - Overview, Ravens, Budget: **no subnav** (subnav column collapses)
 - Personas: persona list grouped by role
 - Sessions: session list split into active/closed
 
 ### Personas subnav:
+
 ```
 .subnav
   .subnav-section
@@ -71,6 +78,7 @@ web2 renders different subnav content per tab:
 ```
 
 ### Sessions subnav:
+
 ```
 .subnav
   .subnav-section
@@ -96,6 +104,7 @@ web2 renders different subnav content per tab:
 ## 4. Overview Page (CLOSE — minor fixes)
 
 web2 `overview.jsx` structure:
+
 ```
 .ov-root
   .ov-kpis (4 cards):
@@ -120,6 +129,7 @@ web2 `overview.jsx` structure:
 ```
 
 ### Current web-next gaps:
+
 - KPI cards: 6 instead of 4. Consolidate back to 4 matching web2 labels.
 - "By location" section: **MISSING**. Must add.
 - Fleet sparkline: should be `w=520, h=100` (much larger than default).
@@ -133,33 +143,41 @@ web2 `overview.jsx` structure:
 web2 `pages.jsx` RavensSplit structure:
 
 ### Left panel (list): 420px wide
+
 - Header: "Fleet" + counts + search input + groupBy segment (loc/persona/state/flat)
 - Group headers with counts
 - Rows: StateDot + PersonaAvatar(22) + name/persona col + location/deployment col + sessions col + BudgetBar/spend col
 
 ### Right panel (detail): RavnDetail with section tabs
+
 Section tabs: `overview | triggers {count} | activity {count} | sessions {count} | connectivity`
 
 **Current web-next:** Uses collapsible sections instead of tabs. Must change to **tab-based switching** matching web2.
 
 ### Section: Overview
+
 Two-panel grid:
+
 - Identity panel: id, persona, role, specialisations
 - Runtime panel: state, cascade, checkpoints, output, lastActivity, sessions, spend with percent pill
 - Wide panel: Mimir mounts (MountChip per mount) + write routing table
 
 ### Section: Triggers
+
 List of triggers with kind/schedule/spec + enable toggle.
 "Add trigger" form with kind selector (cron/event/gateway) and conditional fields.
 
 ### Section: Activity
+
 Filter bar (Seg: all/iter/tool/emit/wait/budget/trigger/done/idle/suspend).
 Rows: timestamp + kind badge + message + optional cost.
 
 ### Section: Sessions
+
 Filtered session list for this raven.
 
 ### Section: Connectivity
+
 Three panels: MCP servers (chip list), Gateway channels (chip list), Event subscriptions (chip list).
 
 ---
@@ -171,6 +189,7 @@ Three panels: MCP servers (chip list), Gateway channels (chip list), Event subsc
 **web-next:** Internal split-pane (left PersonaList sidebar + right detail). This is wrong.
 
 ### web2 persona editor structure:
+
 ```
 .pr-root
   .pr-head
@@ -184,6 +203,7 @@ Three panels: MCP servers (chip list), Gateway channels (chip list), Event subsc
 ```
 
 ### PersonaForm sections:
+
 1. **Identity**: name (readonly), role, description (wide textarea)
 2. **Runtime**: iteration_budget, permission_mode, llm.alias, llm.thinking, llm.max_tokens (3-column grid)
 3. **Tool access**: allowed tools (chip list + ToolPicker) + forbidden tools (chip list). Destructive tools show `⚠` risk indicator.
@@ -192,6 +212,7 @@ Three panels: MCP servers (chip list), Gateway channels (chip list), Event subsc
 6. **Fan-in**: strategy card selector (6 strategies) + per-strategy parameter fields + contributes_to EventPicker + peer personas preview
 
 ### Shared components needed:
+
 - `EventPicker`: dropdown with search, event catalog lookup, allows new events
 - `ToolPicker`: grouped tool list with search, destructive flag display
 - `SchemaEditor`: inline key/type editor rows with add/delete
@@ -205,6 +226,7 @@ Three panels: MCP servers (chip list), Gateway channels (chip list), Event subsc
 web2 `sessions.jsx` has a 2-column layout:
 
 ### Left column: Chat transcript
+
 ```
 .ss-chat
   .ss-chat-toolbar: filter Seg (all/chat/+tools/+system) + jump keys + follow indicator
@@ -213,6 +235,7 @@ web2 `sessions.jsx` has a 2-column layout:
 ```
 
 ### Right column: Context sidebar (MISSING in web-next)
+
 ```
 .ss-aside
   Summary section: session.summary text
@@ -223,6 +246,7 @@ web2 `sessions.jsx` has a 2-column layout:
 ```
 
 ### Message types (5 kinds):
+
 1. `user`: rail "you" + body + timestamp
 2. `assistant`: rail PersonaAvatar(22) + author name + prose body + timestamp
 3. `thought`: rail glyph "∴" + foldable thought text
@@ -239,11 +263,13 @@ web2 `sessions.jsx` has a 2-column layout:
 web2 `pages.jsx` BudgetView has 5 sections. web-next has 3.
 
 ### Missing sections to add:
+
 1. **Attention rail**: 4 columns (not 3): Over cap (⊘), Will exceed (⚠), Near cap (◐), Accelerating (↗)
 2. **Top drivers**: table with PersonaAvatar + name + share bar + sparkline + percentage
 3. **Recommended changes**: cap adjustment suggestions + under-utilized ravens
 
 ### Existing sections to verify:
+
 4. Hero: daily spend/cap/projection/runway bar
 5. Fleet burn chart: 24h sparkline
 6. Fleet table: collapsible, all ravens with budget comparison

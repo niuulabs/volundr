@@ -26,7 +26,8 @@ export function PlanWizard() {
     window.location.href = '/tyr/plan';
   }
 
-  const showGuidance = state.step === 'prompt' || state.step === 'questions' || state.step === 'draft';
+  const showGuidance =
+    state.step === 'prompt' || state.step === 'questions' || state.step === 'draft';
 
   return (
     <div className="niuu-flex niuu-h-full niuu-overflow-hidden">
