@@ -1,2 +1,14 @@
+/* Reset browser defaults */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
 @tailwind components;
 @tailwind utilities;
