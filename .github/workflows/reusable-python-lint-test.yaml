@@ -11,10 +11,9 @@ on:
         default: false
     secrets:
       CODECOV_TOKEN:
-        required: false
+        required: true
 
-permissions:
-  contents: read
+permissions: read-all
 
 jobs:
   lint:

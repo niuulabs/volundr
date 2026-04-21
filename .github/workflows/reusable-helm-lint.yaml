@@ -5,8 +5,7 @@ name: Reusable — Helm Lint
 on:
   workflow_call: {}
 
-permissions:
-  contents: read
+permissions: read-all
 
 jobs:
   lint:
