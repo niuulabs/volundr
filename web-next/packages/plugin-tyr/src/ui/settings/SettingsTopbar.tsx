@@ -2,10 +2,14 @@ import { useRouterState, useRouter } from '@tanstack/react-router';
 
 const SECTION_LABELS: Record<string, string> = {
   '/tyr/settings': 'Settings',
-  '/tyr/settings/personas': 'Personas',
+  '/tyr/settings/general': 'General',
+  '/tyr/settings/dispatch': 'Dispatch rules',
+  '/tyr/settings/integrations': 'Integrations',
+  '/tyr/settings/personas': 'Persona overrides',
+  '/tyr/settings/gates': 'Gates & reviewers',
   '/tyr/settings/flock': 'Flock Config',
-  '/tyr/settings/dispatch': 'Dispatch Defaults',
   '/tyr/settings/notifications': 'Notifications',
+  '/tyr/settings/advanced': 'Advanced',
   '/tyr/settings/audit': 'Audit Log',
 };
 

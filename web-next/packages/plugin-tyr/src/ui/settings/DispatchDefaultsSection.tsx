@@ -69,6 +69,8 @@ export function DispatchDefaultsSection() {
     const retryDelaySeconds = Number(data.get('retryDelaySeconds'));
     const autoContinue = data.get('autoContinue') === 'true';
     const escalateOnExhaustion = data.get('escalateOnExhaustion') === 'true';
+    const quietHours = String(data.get('quietHours') ?? '');
+    const escalateAfter = String(data.get('escalateAfter') ?? '');
 
     const validationErrors = validate({
       confidenceThreshold,
@@ -85,6 +87,8 @@ export function DispatchDefaultsSection() {
       maxConcurrentRaids,
       batchSize,
       autoContinue,
+      quietHours,
+      escalateAfter,
       retryPolicy: {
         maxRetries,
         retryDelaySeconds,
@@ -118,19 +122,19 @@ export function DispatchDefaultsSection() {
   }
 
   return (
-    <section aria-label="Dispatch defaults">
+    <section aria-label="Dispatch rules">
       <h3 className="niuu-text-base niuu-font-semibold niuu-text-text-primary niuu-mb-1">
-        Dispatch Defaults
+        Dispatch rules
       </h3>
       <p className="niuu-text-sm niuu-text-text-secondary niuu-mb-4">
-        Default thresholds, concurrency limits, and retry policy applied to the dispatcher.
+        How the dispatcher promotes queued raids into running ones.
       </p>
 
       <form
         onSubmit={(e) => void handleSubmit(e)}
         noValidate
         className="niuu-flex niuu-flex-col niuu-gap-4 niuu-max-w-lg"
-        aria-label="Dispatch defaults form"
+        aria-label="Dispatch rules form"
       >
         {errors.length > 0 && <ValidationSummary errors={errors} />}
 
@@ -194,6 +198,32 @@ export function DispatchDefaultsSection() {
             Auto-continue after each raid completes
           </label>
         </div>
+
+        <Field
+          id="dispatch-quiet-hours"
+          label="Quiet hours"
+          hint="Time window where the dispatcher will not start new raids (UTC)"
+        >
+          <Input
+            name="quietHours"
+            type="text"
+            defaultValue={defaults?.quietHours ?? '22:00–07:00 UTC'}
+            data-testid="quiet-hours"
+          />
+        </Field>
+
+        <Field
+          id="dispatch-escalate-after"
+          label="Escalate after (review)"
+          hint="Auto-escalate pending reviews after this duration"
+        >
+          <Input
+            name="escalateAfter"
+            type="text"
+            defaultValue={defaults?.escalateAfter ?? '30m'}
+            data-testid="escalate-after"
+          />
+        </Field>
 
         <div className="niuu-border-t niuu-border-border niuu-pt-4">
           <h4 className="niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-mb-3">

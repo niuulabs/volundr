@@ -8,10 +8,14 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'personas', label: 'Personas', path: '/tyr/settings/personas' },
+  { id: 'general', label: 'General', path: '/tyr/settings/general' },
+  { id: 'dispatch', label: 'Dispatch rules', path: '/tyr/settings/dispatch' },
+  { id: 'integrations', label: 'Integrations', path: '/tyr/settings/integrations' },
+  { id: 'personas', label: 'Persona overrides', path: '/tyr/settings/personas' },
+  { id: 'gates', label: 'Gates & reviewers', path: '/tyr/settings/gates' },
   { id: 'flock', label: 'Flock Config', path: '/tyr/settings/flock' },
-  { id: 'dispatch', label: 'Dispatch Defaults', path: '/tyr/settings/dispatch' },
   { id: 'notifications', label: 'Notifications', path: '/tyr/settings/notifications' },
+  { id: 'advanced', label: 'Advanced', path: '/tyr/settings/advanced' },
   { id: 'audit', label: 'Audit Log', path: '/tyr/settings/audit' },
 ];
 

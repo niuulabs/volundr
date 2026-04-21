@@ -568,6 +568,8 @@ interface RawDispatchDefaults {
   auto_continue: boolean;
   batch_size: number;
   retry_policy: RawRetryPolicy;
+  quiet_hours?: string;
+  escalate_after?: string;
   updated_at: string;
 }
 
@@ -618,6 +620,8 @@ function toDispatchDefaults(raw: RawDispatchDefaults): DispatchDefaults {
       retryDelaySeconds: raw.retry_policy.retry_delay_seconds,
       escalateOnExhaustion: raw.retry_policy.escalate_on_exhaustion,
     },
+    quietHours: raw.quiet_hours ?? '22:00–07:00 UTC',
+    escalateAfter: raw.escalate_after ?? '30m',
     updatedAt: raw.updated_at,
   };
 }
@@ -691,6 +695,8 @@ export function buildTyrSettingsHttpAdapter(client: ApiClient): ITyrSettingsServ
           escalate_on_exhaustion: patch.retryPolicy.escalateOnExhaustion,
         };
       }
+      if (patch.quietHours !== undefined) body['quiet_hours'] = patch.quietHours;
+      if (patch.escalateAfter !== undefined) body['escalate_after'] = patch.escalateAfter;
       const raw = await client.patch<RawDispatchDefaults>('/settings/dispatch', body);
       return toDispatchDefaults(raw);
     },

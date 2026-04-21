@@ -54,6 +54,10 @@ export const dispatchDefaultsSchema = z.object({
   batchSize: z.number().int().positive(),
   /** Retry policy applied to failed Raids. */
   retryPolicy: retryPolicySchema,
+  /** UTC time window where the dispatcher will not start new raids. */
+  quietHours: z.string(),
+  /** Duration after which pending reviews are auto-escalated. */
+  escalateAfter: z.string(),
   /** ISO-8601 UTC timestamp of last config save. */
   updatedAt: z.string().datetime(),
 });

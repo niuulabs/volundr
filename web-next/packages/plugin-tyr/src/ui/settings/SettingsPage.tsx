@@ -1,21 +1,40 @@
 import { Link } from '@tanstack/react-router';
-import { PersonasSection } from './PersonasSection';
-import { FlockConfigSection } from './FlockConfigSection';
+import { GeneralSection } from './GeneralSection';
 import { DispatchDefaultsSection } from './DispatchDefaultsSection';
+import { IntegrationsSection } from './IntegrationsSection';
+import { PersonasSection } from './PersonasSection';
+import { GatesReviewersSection } from './GatesReviewersSection';
+import { FlockConfigSection } from './FlockConfigSection';
 import { NotificationsSection } from './NotificationsSection';
+import { AdvancedSection } from './AdvancedSection';
 import { AuditLogSection } from './AuditLogSection';
 
+export type SettingsSectionId =
+  | 'general'
+  | 'dispatch'
+  | 'integrations'
+  | 'personas'
+  | 'gates'
+  | 'flock'
+  | 'notifications'
+  | 'advanced'
+  | 'audit';
+
 interface SettingsPageProps {
-  section: 'personas' | 'flock' | 'dispatch' | 'notifications' | 'audit';
+  section: SettingsSectionId;
 }
 
 export function SettingsPage({ section }: SettingsPageProps) {
   return (
     <div className="niuu-p-6 niuu-max-w-[900px]">
-      {section === 'personas' && <PersonasSection />}
-      {section === 'flock' && <FlockConfigSection />}
+      {section === 'general' && <GeneralSection />}
       {section === 'dispatch' && <DispatchDefaultsSection />}
+      {section === 'integrations' && <IntegrationsSection />}
+      {section === 'personas' && <PersonasSection />}
+      {section === 'gates' && <GatesReviewersSection />}
+      {section === 'flock' && <FlockConfigSection />}
       {section === 'notifications' && <NotificationsSection />}
+      {section === 'advanced' && <AdvancedSection />}
       {section === 'audit' && <AuditLogSection />}
     </div>
   );
@@ -23,9 +42,29 @@ export function SettingsPage({ section }: SettingsPageProps) {
 
 const SECTION_ITEMS = [
   {
+    id: 'general',
+    label: 'General',
+    description: 'Core service bindings for the saga coordinator',
+  },
+  {
+    id: 'dispatch',
+    label: 'Dispatch rules',
+    description: 'Confidence thresholds, batch sizes, and retry policy',
+  },
+  {
+    id: 'integrations',
+    label: 'Integrations',
+    description: 'Trackers, repos, notifiers reachable by the saga coordinator',
+  },
+  {
     id: 'personas',
-    label: 'Personas',
+    label: 'Persona overrides',
     description: 'Browse and inspect Ravn persona configurations',
+  },
+  {
+    id: 'gates',
+    label: 'Gates & reviewers',
+    description: 'Who can approve gates in workflows and routing rules',
   },
   {
     id: 'flock',
@@ -33,14 +72,14 @@ const SECTION_ITEMS = [
     description: 'Global defaults for new Sagas and Raids',
   },
   {
-    id: 'dispatch',
-    label: 'Dispatch Defaults',
-    description: 'Confidence thresholds, batch sizes, and retry policy',
-  },
-  {
     id: 'notifications',
     label: 'Notifications',
     description: 'Event triggers and delivery channels',
+  },
+  {
+    id: 'advanced',
+    label: 'Advanced',
+    description: 'Danger-zone actions for the dispatcher',
   },
   {
     id: 'audit',

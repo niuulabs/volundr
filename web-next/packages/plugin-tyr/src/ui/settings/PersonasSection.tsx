@@ -1,7 +1,10 @@
-import { useState } from 'react';
-import { StateDot, cn } from '@niuulabs/ui';
+import { useState, type KeyboardEvent } from 'react';
+import { PersonaAvatar, StateDot, cn } from '@niuulabs/ui';
+import type { PersonaRole } from '@niuulabs/domain';
 import type { TyrPersonaSummary } from '../../ports';
 import { usePersonasBrowser, usePersonaYaml } from './usePersonasBrowser';
+
+const DEFAULT_ROLE: PersonaRole = 'build';
 
 interface PersonaRowProps {
   persona: TyrPersonaSummary;
@@ -10,29 +13,72 @@ interface PersonaRowProps {
 }
 
 function PersonaRow({ persona, selected, onSelect }: PersonaRowProps) {
+  function handleKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSelect(persona.name);
+    }
+  }
+
   return (
-    <button
-      type="button"
+    <div
+      role="option"
+      tabIndex={0}
       className={cn(
-        'niuu-w-full niuu-text-left niuu-px-3 niuu-py-2 niuu-rounded-md niuu-transition-colors',
+        'niuu-w-full niuu-text-left niuu-px-3 niuu-py-2 niuu-rounded-md niuu-transition-colors niuu-cursor-pointer',
         'niuu-flex niuu-items-center niuu-gap-3 niuu-border niuu-border-transparent',
         selected
           ? 'niuu-bg-bg-elevated niuu-border-border'
           : 'hover:niuu-bg-bg-secondary niuu-text-text-primary',
       )}
       onClick={() => onSelect(persona.name)}
-      aria-pressed={selected}
+      onKeyDown={handleKeyDown}
+      aria-selected={selected}
     >
-      <span className="niuu-font-mono niuu-text-sm niuu-text-text-primary niuu-flex-1 niuu-truncate">
-        {persona.name}
+      <PersonaAvatar
+        role={(persona.role as PersonaRole) ?? DEFAULT_ROLE}
+        letter={persona.name.charAt(0)}
+        size={22}
+      />
+      <div className="niuu-flex-1 niuu-min-w-0">
+        <span className="niuu-font-mono niuu-text-sm niuu-text-text-primary niuu-truncate niuu-block">
+          {persona.name}
+        </span>
+        {persona.producesEvent && (
+          <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-block niuu-mt-0.5 niuu-truncate">
+            produces · {persona.producesEvent}
+          </span>
+        )}
+      </div>
+      <span
+        className="niuu-text-xs niuu-px-1.5 niuu-py-0.5 niuu-rounded niuu-bg-bg-secondary niuu-text-text-secondary niuu-shrink-0"
+        data-testid="budget-chip"
+      >
+        budget {persona.iterationBudget}
       </span>
+      {persona.model && (
+        <span
+          className="niuu-text-xs niuu-px-1.5 niuu-py-0.5 niuu-rounded niuu-bg-bg-secondary niuu-text-text-secondary niuu-shrink-0"
+          data-testid="model-chip"
+        >
+          model · {persona.model}
+        </span>
+      )}
       {persona.isBuiltin && (
         <span className="niuu-text-xs niuu-text-text-muted niuu-shrink-0">builtin</span>
       )}
       {persona.hasOverride && (
         <span className="niuu-text-xs niuu-text-accent-amber niuu-shrink-0">overridden</span>
       )}
-    </button>
+      <button
+        type="button"
+        className="niuu-text-xs niuu-px-2 niuu-py-1 niuu-rounded-md niuu-border niuu-border-border niuu-text-text-secondary hover:niuu-bg-bg-secondary niuu-transition-colors niuu-shrink-0"
+        data-testid="edit-persona"
+        onClick={(e) => e.stopPropagation()}
+      >
+        Edit
+      </button>
+    </div>
   );
 }
 
@@ -87,13 +133,12 @@ export function PersonasSection() {
   const { data: personas, isLoading, isError, error } = usePersonasBrowser(filter);
 
   return (
-    <section aria-label="Personas browser">
+    <section aria-label="Persona overrides">
       <h3 className="niuu-text-base niuu-font-semibold niuu-text-text-primary niuu-mb-1">
-        Personas
+        Persona overrides
       </h3>
       <p className="niuu-text-sm niuu-text-text-secondary niuu-mb-4">
-        Browse and inspect persona configurations managed by Ravn. Select a persona to view its YAML
-        source.
+        Workspace-level defaults applied to every workflow. Workflows can override further.
       </p>
 
       {/* Filter tabs */}

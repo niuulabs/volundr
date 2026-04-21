@@ -32,6 +32,8 @@ const VALID_DISPATCH_DEFAULTS: DispatchDefaults = {
     retryDelaySeconds: 30,
     escalateOnExhaustion: true,
   },
+  quietHours: '22:00–07:00 UTC',
+  escalateAfter: '30m',
   updatedAt: '2026-01-01T00:00:00Z',
 };
 

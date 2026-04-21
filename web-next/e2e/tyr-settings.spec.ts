@@ -10,27 +10,50 @@ test.describe('Tyr Settings index', () => {
     await expect(page.getByText('Tyr Settings')).toBeVisible();
   });
 
-  test('settings index shows all 5 section links', async ({ page }) => {
+  test('settings index shows all 9 section links', async ({ page }) => {
     await page.goto('/tyr/settings');
-    await expect(page.getByRole('link', { name: 'Personas' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'General' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Dispatch rules' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Integrations' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Persona overrides' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Gates & reviewers' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Flock Config' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Dispatch Defaults' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Notifications' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Advanced' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Audit Log' })).toBeVisible();
   });
 });
 
 // ---------------------------------------------------------------------------
-// /tyr/settings/dispatch — Dispatch Defaults section
+// /tyr/settings/general — General section
 // ---------------------------------------------------------------------------
 
-test.describe('Tyr Dispatch Defaults settings', () => {
+test.describe('Tyr General settings', () => {
+  test('renders general section heading', async ({ page }) => {
+    await page.goto('/tyr/settings/general');
+    await expect(page.getByRole('heading', { name: 'General' })).toBeVisible();
+  });
+
+  test('shows service binding KV rows', async ({ page }) => {
+    await page.goto('/tyr/settings/general');
+    await expect(page.getByText('Service URL')).toBeVisible();
+    await expect(page.getByText('https://tyr.niuu.internal')).toBeVisible();
+    await expect(page.getByText('Event backbone')).toBeVisible();
+    await expect(page.getByText('sleipnir · nats')).toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /tyr/settings/dispatch — Dispatch rules section
+// ---------------------------------------------------------------------------
+
+test.describe('Tyr Dispatch rules settings', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/tyr/settings/dispatch');
   });
 
-  test('renders dispatch defaults form', async ({ page }) => {
-    await expect(page.getByRole('form', { name: /dispatch defaults form/i })).toBeVisible({
+  test('renders dispatch rules form', async ({ page }) => {
+    await expect(page.getByRole('form', { name: /dispatch rules form/i })).toBeVisible({
       timeout: 5000,
     });
   });
@@ -65,6 +88,72 @@ test.describe('Tyr Dispatch Defaults settings', () => {
     await expect(page.getByRole('heading', { name: 'Retry Policy' })).toBeVisible({
       timeout: 5000,
     });
+  });
+
+  test('shows quiet hours field', async ({ page }) => {
+    await page.waitForSelector('[data-testid="quiet-hours"]');
+    await expect(page.getByTestId('quiet-hours')).toBeVisible();
+  });
+
+  test('shows escalate after field', async ({ page }) => {
+    await page.waitForSelector('[data-testid="escalate-after"]');
+    await expect(page.getByTestId('escalate-after')).toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /tyr/settings/integrations — Integrations section
+// ---------------------------------------------------------------------------
+
+test.describe('Tyr Integrations settings', () => {
+  test('renders integrations section heading', async ({ page }) => {
+    await page.goto('/tyr/settings/integrations');
+    await expect(page.getByRole('heading', { name: 'Integrations' })).toBeVisible();
+  });
+
+  test('shows all 5 integration cards', async ({ page }) => {
+    await page.goto('/tyr/settings/integrations');
+    await expect(page.getByText('Linear')).toBeVisible();
+    await expect(page.getByText('GitHub')).toBeVisible();
+    await expect(page.getByText('Jira')).toBeVisible();
+    await expect(page.getByText('Slack')).toBeVisible();
+    await expect(page.getByText('PagerDuty')).toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /tyr/settings/gates — Gates & reviewers section
+// ---------------------------------------------------------------------------
+
+test.describe('Tyr Gates and reviewers settings', () => {
+  test('renders gates section heading', async ({ page }) => {
+    await page.goto('/tyr/settings/gates');
+    await expect(page.getByRole('heading', { name: 'Gates & reviewers' })).toBeVisible();
+  });
+
+  test('shows reviewer emails', async ({ page }) => {
+    await page.goto('/tyr/settings/gates');
+    await expect(page.getByText('jonas@niuulabs.io')).toBeVisible();
+    await expect(page.getByText('oskar@niuulabs.io')).toBeVisible();
+    await expect(page.getByText('yngve@niuulabs.io')).toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /tyr/settings/advanced — Advanced section
+// ---------------------------------------------------------------------------
+
+test.describe('Tyr Advanced settings', () => {
+  test('renders advanced section heading', async ({ page }) => {
+    await page.goto('/tyr/settings/advanced');
+    await expect(page.getByRole('heading', { name: 'Advanced' })).toBeVisible();
+  });
+
+  test('shows danger buttons', async ({ page }) => {
+    await page.goto('/tyr/settings/advanced');
+    await expect(page.getByText('Flush')).toBeVisible();
+    await expect(page.getByText('Reset')).toBeVisible();
+    await expect(page.getByText('Rebuild')).toBeVisible();
   });
 });
 
@@ -135,16 +224,16 @@ test.describe('Tyr Flock Config settings', () => {
 });
 
 // ---------------------------------------------------------------------------
-// /tyr/settings/personas — Personas browser
+// /tyr/settings/personas — Persona overrides browser
 // ---------------------------------------------------------------------------
 
-test.describe('Tyr Personas settings', () => {
+test.describe('Tyr Persona overrides settings', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/tyr/settings/personas');
   });
 
-  test('renders personas section heading', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'Personas' })).toBeVisible();
+  test('renders persona overrides section heading', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: 'Persona overrides' })).toBeVisible();
   });
 
   test('shows persona list after loading', async ({ page }) => {
@@ -187,7 +276,7 @@ test.describe('Tyr Notifications settings', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Dispatch Defaults → applied on Dispatch page (integration test)
+// Dispatch rules → applied on Dispatch page (integration test)
 // ---------------------------------------------------------------------------
 
 test.describe('Dispatch defaults applied to dispatch behaviour', () => {
