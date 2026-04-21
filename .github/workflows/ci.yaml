@@ -8,7 +8,6 @@ permissions:
   checks: read
   contents: read
   deployments: read
-  discussions: read
   issues: read
   packages: write     # Required by containers + build-charts + reusable-container-build jobs
   pages: read
