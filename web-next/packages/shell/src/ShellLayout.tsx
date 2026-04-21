@@ -118,6 +118,7 @@ export function ShellLayout() {
                     key={t.id}
                     type="button"
                     className={clsx('niuu-shell__tab', isActive && 'niuu-shell__tab--active')}
+                    data-testid={`${active.id}-tab-${t.id}`}
                     onClick={() => {
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       router.navigate({ to: tabPath as any });

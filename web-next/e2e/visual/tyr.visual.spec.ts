@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
 test('tyr dashboard matches web2', async ({ page }) => {
   await page.goto('/tyr');
   await page.waitForLoadState('networkidle');
-  await page.waitForSelector('text=Tyr · Dashboard', { timeout: 10_000 });
+  await page.waitForSelector('text=Active sagas', { timeout: 10_000 });
   await expect(page).toHaveScreenshot('tyr-dashboard.png');
 });
 
@@ -22,7 +22,7 @@ test('tyr dashboard matches web2', async ({ page }) => {
 test('tyr sagas list matches web2', async ({ page }) => {
   await page.goto('/tyr/sagas');
   await page.waitForLoadState('networkidle');
-  await page.waitForSelector('text=Tyr · Sagas', { timeout: 10_000 });
+  await page.waitForSelector('text=Sagas', { timeout: 10_000 });
   await expect(page).toHaveScreenshot('tyr-sagas-list.png');
 });
 

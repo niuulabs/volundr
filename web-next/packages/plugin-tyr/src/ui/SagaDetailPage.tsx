@@ -174,7 +174,7 @@ export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPag
       {/* Saga header */}
       <header className="niuu-space-y-3">
         <div className="niuu-flex niuu-items-center niuu-gap-3">
-          <Rune glyph="ᛏ" size={28} />
+          <Rune glyph="ᚦ" size={28} />
           <h2 className="niuu-m-0 niuu-text-xl niuu-font-semibold niuu-text-text-primary">
             {saga.name}
           </h2>

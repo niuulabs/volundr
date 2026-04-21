@@ -12,7 +12,7 @@ import { PlanWizard } from './ui/PlanWizard';
 
 export const tyrPlugin = definePlugin({
   id: 'tyr',
-  rune: 'ᛏ',
+  rune: 'ᚦ',
   title: 'Tyr',
   subtitle: 'sagas · raids · dispatch',
   tabs: [
