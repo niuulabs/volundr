@@ -99,7 +99,7 @@ jobs:
 
   e2e:
     name: "web-next: E2E"
-    if: false # disabled — e2e selectors need updating after UI restructure
+    if: false  # Temporarily disabled — re-enable when visual baselines are stabilized
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
