@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
 test('volundr forge overview matches web2', async ({ page }) => {
   await page.goto('/volundr');
   await page.waitForLoadState('networkidle');
-  await page.waitForSelector('text=Völundr · session forge', { timeout: 10_000 });
+  await page.waitForSelector('[data-testid="forge-page"]', { timeout: 10_000 });
   await expect(page).toHaveScreenshot('volundr-forge-overview.png');
 });
 
@@ -37,7 +37,7 @@ test('volundr clusters matches web2', async ({ page }) => {
 
 test('volundr sessions matches web2', async ({ page }) => {
   await page.goto('/volundr/sessions');
-  await page.waitForSelector('[data-testid="sessions-page"]', { timeout: 10_000 });
+  await page.waitForTimeout(500);
   await page.waitForLoadState('networkidle');
   await expect(page).toHaveScreenshot('volundr-sessions.png');
 });

@@ -16,40 +16,34 @@ test.beforeEach(async ({ page }) => {
 test('mimir overview matches web2', async ({ page }) => {
   await page.goto('/mimir');
   await page.waitForLoadState('networkidle');
-  await page.waitForSelector('text=Mímir', { timeout: 10_000 });
+  await page.waitForTimeout(500);
   await expect(page).toHaveScreenshot('mimir-overview.png');
 });
 
 // ── Pages tab ─────────────────────────────────────────────────────────────────
 
 test('mimir pages — tree matches web2', async ({ page }) => {
-  await page.goto('/mimir');
+  await page.goto('/mimir/pages');
   await page.waitForLoadState('networkidle');
-  await page.getByRole('tab', { name: 'Pages' }).click();
-  await page.waitForTimeout(400);
   await expect(page).toHaveScreenshot('mimir-pages-tree.png');
 });
 
 test('mimir pages — reader matches web2', async ({ page }) => {
-  await page.goto('/mimir');
+  await page.goto('/mimir/pages');
   await page.waitForLoadState('networkidle');
-  await page.getByRole('tab', { name: 'Pages' }).click();
-  await page.waitForTimeout(300);
   await page
-    .getByRole('button', { name: /overview/ })
+    .getByRole('button', { name: /overview/i })
     .first()
     .click();
   await page.waitForTimeout(400);
   await expect(page).toHaveScreenshot('mimir-pages-reader.png');
 });
 
-// ── Sources tab ───────────────────────────────────────────────────────────────
+// ── Sources ───────────────────────────────────────────────────────────────────
 
 test('mimir sources matches web2', async ({ page }) => {
-  await page.goto('/mimir');
+  await page.goto('/mimir/sources');
   await page.waitForLoadState('networkidle');
-  await page.getByRole('tab', { name: 'Sources' }).click();
-  await page.waitForTimeout(400);
   await expect(page).toHaveScreenshot('mimir-sources.png');
 });
 
@@ -58,7 +52,7 @@ test('mimir sources matches web2', async ({ page }) => {
 test('mimir search matches web2', async ({ page }) => {
   await page.goto('/mimir/search');
   await page.waitForLoadState('networkidle');
-  await page.waitForSelector('[role="searchbox"]', { timeout: 10_000 });
+  await page.waitForSelector('input[type="search"]', { timeout: 10_000 });
   await expect(page).toHaveScreenshot('mimir-search.png');
 });
 

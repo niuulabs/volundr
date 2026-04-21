@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "@niuulabs/auth": "workspace:*",
-    "@niuulabs/domain": "workspace:*",
     "@niuulabs/design-tokens": "workspace:*",
     "@niuulabs/domain": "workspace:*",
     "@niuulabs/plugin-hello": "workspace:*",
