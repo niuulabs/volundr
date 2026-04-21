@@ -69,6 +69,8 @@ export function DispatchDefaultsSection() {
     const retryDelaySeconds = Number(data.get('retryDelaySeconds'));
     const autoContinue = data.get('autoContinue') === 'true';
     const escalateOnExhaustion = data.get('escalateOnExhaustion') === 'true';
+    const quietHours = String(data.get('quietHours') ?? '');
+    const escalateAfter = String(data.get('escalateAfter') ?? '');
 
     const validationErrors = validate({
       confidenceThreshold,
@@ -85,6 +87,8 @@ export function DispatchDefaultsSection() {
       maxConcurrentRaids,
       batchSize,
       autoContinue,
+      quietHours,
+      escalateAfter,
       retryPolicy: {
         maxRetries,
         retryDelaySeconds,
@@ -203,7 +207,7 @@ export function DispatchDefaultsSection() {
           <Input
             name="quietHours"
             type="text"
-            defaultValue="22:00–07:00 UTC"
+            defaultValue={defaults?.quietHours ?? '22:00–07:00 UTC'}
             data-testid="quiet-hours"
           />
         </Field>
@@ -213,7 +217,12 @@ export function DispatchDefaultsSection() {
           label="Escalate after (review)"
           hint="Auto-escalate pending reviews after this duration"
         >
-          <Input name="escalateAfter" type="text" defaultValue="30m" data-testid="escalate-after" />
+          <Input
+            name="escalateAfter"
+            type="text"
+            defaultValue={defaults?.escalateAfter ?? '30m'}
+            data-testid="escalate-after"
+          />
         </Field>
 
         <div className="niuu-border-t niuu-border-border niuu-pt-4">

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AdvancedSection } from './AdvancedSection';
 
@@ -29,20 +29,31 @@ describe('AdvancedSection', () => {
     expect(screen.getByText('Rebuild')).toBeInTheDocument();
   });
 
-  it('shows confirmation text on first click of a danger button', () => {
+  it('shows confirm message on first click of a danger button', () => {
     render(<AdvancedSection />);
     const flushBtn = screen.getByTestId('action-flush-queue');
     fireEvent.click(flushBtn);
-    expect(screen.getByText('Click again to confirm')).toBeInTheDocument();
+    expect(
+      screen.getByText('Are you sure you want to flush the dispatch queue? This cannot be undone.'),
+    ).toBeInTheDocument();
   });
 
-  it('hides confirmation text on second click (cancel)', () => {
-    render(<AdvancedSection />);
+  it('fires onAction callback on confirm (second click)', () => {
+    const onAction = vi.fn();
+    render(<AdvancedSection onAction={onAction} />);
     const flushBtn = screen.getByTestId('action-flush-queue');
     fireEvent.click(flushBtn);
-    expect(screen.getByText('Click again to confirm')).toBeInTheDocument();
+    expect(
+      screen.getByText('Are you sure you want to flush the dispatch queue? This cannot be undone.'),
+    ).toBeInTheDocument();
     fireEvent.click(flushBtn);
-    expect(screen.queryByText('Click again to confirm')).not.toBeInTheDocument();
+    expect(onAction).toHaveBeenCalledWith('Flush queue');
+    // Confirmation text clears after action
+    expect(
+      screen.queryByText(
+        'Are you sure you want to flush the dispatch queue? This cannot be undone.',
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it('has an accessible section label', () => {
@@ -54,5 +65,14 @@ describe('AdvancedSection', () => {
     render(<AdvancedSection />);
     const buttons = screen.getAllByRole('button');
     expect(buttons).toHaveLength(3);
+  });
+
+  it('shows confirm message with specific text for each action', () => {
+    render(<AdvancedSection />);
+    const resetBtn = screen.getByTestId('action-reset-dispatcher');
+    fireEvent.click(resetBtn);
+    expect(screen.getByTestId('confirm-msg-reset-dispatcher')).toHaveTextContent(
+      'Are you sure you want to reset the dispatcher?',
+    );
   });
 });

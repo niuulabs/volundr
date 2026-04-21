@@ -35,15 +35,20 @@ const ACTIONS: DangerAction[] = [
   },
 ];
 
-export function AdvancedSection() {
+export interface AdvancedSectionProps {
+  onAction?: (label: string) => void;
+}
+
+export function AdvancedSection({ onAction }: AdvancedSectionProps = {}) {
   const [confirming, setConfirming] = useState<string | null>(null);
 
-  function handleClick(label: string) {
-    if (confirming === label) {
+  function handleClick(action: DangerAction) {
+    if (confirming === action.label) {
+      onAction?.(action.label);
       setConfirming(null);
       return;
     }
-    setConfirming(label);
+    setConfirming(action.label);
   }
 
   return (
@@ -64,13 +69,17 @@ export function AdvancedSection() {
             <span className="niuu-text-sm niuu-text-text-primary">{action.label}</span>
             <div className="niuu-flex niuu-items-center niuu-gap-2">
               {confirming === action.label && (
-                <span className="niuu-text-xs niuu-text-text-muted" aria-live="polite">
-                  Click again to confirm
+                <span
+                  className="niuu-text-xs niuu-text-text-muted niuu-max-w-[220px]"
+                  aria-live="polite"
+                  data-testid={`confirm-msg-${action.label.toLowerCase().replace(/\s+/g, '-')}`}
+                >
+                  {action.confirmMessage}
                 </span>
               )}
               <button
                 type="button"
-                onClick={() => handleClick(action.label)}
+                onClick={() => handleClick(action)}
                 className={cn(
                   'niuu-px-3 niuu-py-1.5 niuu-rounded-md niuu-text-xs niuu-font-medium niuu-transition-colors',
                   action.danger
