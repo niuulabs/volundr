@@ -198,7 +198,7 @@ function RavnProfile({ ravn, onBack }: RavnProfileProps) {
           {ravn.expertise.length > 0 ? (
             <div className="niuu-flex niuu-flex-wrap niuu-gap-1">
               {ravn.expertise.map((e) => (
-                <Chip key={e} tone="accent">
+                <Chip key={e} tone="brand">
                   {e}
                 </Chip>
               ))}
