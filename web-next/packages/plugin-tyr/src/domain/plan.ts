@@ -79,4 +79,6 @@ export interface ClarifyingQuestion {
   id: string;
   question: string;
   hint?: string;
+  /** When 'workflow', renders a template picker grid instead of a text input. */
+  kind?: 'text' | 'workflow';
 }

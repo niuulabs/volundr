@@ -76,6 +76,12 @@ export interface RaidSpec {
   declaredFiles: string[];
   estimateHours: number;
   confidence: number;
+  /** Size classification returned by the planning raven. */
+  size?: 'S' | 'M' | 'L';
+  /** Persona ID responsible for this raid (e.g. "coding-agent"). */
+  persona?: string;
+  /** Phase label this raid belongs to (e.g. "Build", "Verify"). */
+  phase?: string;
 }
 
 export interface PhaseSpec {
@@ -83,11 +89,19 @@ export interface PhaseSpec {
   raids: RaidSpec[];
 }
 
+export interface PlanRisk {
+  /** Short category label — e.g. "blast", "untested", "dependency". */
+  kind: string;
+  message: string;
+}
+
 export interface ExtractedStructure {
   found: boolean;
   structure: {
     name: string;
     phases: PhaseSpec[];
+    /** Risks flagged by the planning raven. */
+    risks?: PlanRisk[];
   } | null;
 }
 

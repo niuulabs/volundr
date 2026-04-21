@@ -9,8 +9,15 @@ import { PlanQuestions } from './PlanQuestions';
 import { PlanRaiding } from './PlanRaiding';
 import { PlanDraft } from './PlanDraft';
 import { PlanApproved } from './PlanApproved';
-import type { ITyrService, ExtractedStructure, PlanSession } from '../ports';
+import type {
+  ITyrService,
+  IWorkflowService,
+  ExtractedStructure,
+  PlanSession,
+  PlanRisk,
+} from '../ports';
 import type { Saga } from '../domain/saga';
+import type { Workflow } from '../domain/workflow';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -24,6 +31,11 @@ const MOCK_SESSION: PlanSession = {
     { id: 'q2', question: 'Base branch?' },
   ],
 };
+
+const MOCK_RISKS: PlanRisk[] = [
+  { kind: 'blast', message: 'Touches dispatch path — ship behind flag.' },
+  { kind: 'untested', message: 'No existing tests for subscription graph.' },
+];
 
 const MOCK_STRUCTURE: ExtractedStructure = {
   found: true,
@@ -40,6 +52,9 @@ const MOCK_STRUCTURE: ExtractedStructure = {
             declaredFiles: ['src/auth.ts'],
             estimateHours: 8,
             confidence: 85,
+            size: 'M',
+            persona: 'coding-agent',
+            phase: 'Build',
           },
         ],
       },
@@ -57,6 +72,7 @@ const MOCK_STRUCTURE: ExtractedStructure = {
         ],
       },
     ],
+    risks: MOCK_RISKS,
   },
 };
 
@@ -74,6 +90,31 @@ const MOCK_SAGA: Saga = {
   phaseSummary: { total: 2, completed: 0 },
 };
 
+const MOCK_WORKFLOW: Workflow = {
+  id: 'wf-1',
+  name: 'Ship',
+  nodes: [
+    {
+      id: 'n1',
+      kind: 'stage',
+      label: 'Build',
+      raidId: null,
+      personaIds: [],
+      position: { x: 0, y: 0 },
+    },
+    {
+      id: 'n2',
+      kind: 'stage',
+      label: 'Test',
+      raidId: null,
+      personaIds: [],
+      position: { x: 100, y: 0 },
+    },
+    { id: 'n3', kind: 'gate', label: 'Review', condition: 'Approved', position: { x: 200, y: 0 } },
+  ],
+  edges: [],
+};
+
 function makeSvc(overrides: Partial<ITyrService> = {}): Partial<ITyrService> {
   return {
     getSagas: vi.fn().mockResolvedValue([]),
@@ -88,12 +129,25 @@ function makeSvc(overrides: Partial<ITyrService> = {}): Partial<ITyrService> {
   };
 }
 
-function wrap(svc: Partial<ITyrService>) {
+function makeWorkflowSvc(overrides: Partial<IWorkflowService> = {}): Partial<IWorkflowService> {
+  return {
+    listWorkflows: vi.fn().mockResolvedValue([MOCK_WORKFLOW]),
+    getWorkflow: vi.fn().mockResolvedValue(null),
+    saveWorkflow: vi.fn(),
+    deleteWorkflow: vi.fn(),
+    ...overrides,
+  };
+}
+
+function wrap(svc: Partial<ITyrService>, workflowSvc?: Partial<IWorkflowService>) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wfSvc = workflowSvc ?? makeWorkflowSvc();
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <QueryClientProvider client={client}>
-        <ServicesProvider services={{ tyr: svc }}>{children}</ServicesProvider>
+        <ServicesProvider services={{ tyr: svc, 'tyr.workflows': wfSvc }}>
+          {children}
+        </ServicesProvider>
       </QueryClientProvider>
     );
   };
@@ -142,6 +196,22 @@ describe('PlanPrompt', () => {
     render(<PlanPrompt onSubmit={vi.fn()} loading={false} error="Service unavailable" />);
     expect(screen.getByRole('alert')).toHaveTextContent('Service unavailable');
   });
+
+  it('renders hint chips', () => {
+    render(<PlanPrompt onSubmit={vi.fn()} loading={false} error={null} />);
+    expect(
+      screen.getByRole('button', { name: /example: subscription validation/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /example: simple endpoint/i })).toBeInTheDocument();
+  });
+
+  it('clicking a hint chip fills the textarea', async () => {
+    render(<PlanPrompt onSubmit={vi.fn()} loading={false} error={null} />);
+    const chip = screen.getByRole('button', { name: /example: simple endpoint/i });
+    fireEvent.click(chip);
+    const textarea = screen.getByRole('textbox', { name: /goal description/i });
+    expect((textarea as HTMLTextAreaElement).value).toMatch(/health check endpoint/i);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -186,6 +256,73 @@ describe('PlanQuestions', () => {
     render(<PlanQuestions questions={[]} onSubmit={vi.fn()} onBack={vi.fn()} />);
     expect(screen.getByText(/no clarifying questions/i)).toBeInTheDocument();
   });
+
+  it('shows YOUR BRIEF quote card when prompt is provided', () => {
+    render(
+      <PlanQuestions
+        questions={questions}
+        prompt="Build the auth module"
+        onSubmit={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText(/your brief/i)).toBeInTheDocument();
+    expect(screen.getByText('Build the auth module')).toBeInTheDocument();
+  });
+
+  it('does not render YOUR BRIEF card when no prompt', () => {
+    render(<PlanQuestions questions={questions} onSubmit={vi.fn()} onBack={vi.fn()} />);
+    expect(screen.queryByLabelText(/your brief/i)).not.toBeInTheDocument();
+  });
+
+  it('renders workflow picker for workflow-kind questions', () => {
+    const workflowQuestions = [
+      { id: 'wf', question: 'Apply which workflow?', kind: 'workflow' as const },
+    ];
+    render(
+      <PlanQuestions
+        questions={workflowQuestions}
+        workflows={[MOCK_WORKFLOW]}
+        onSubmit={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('group', { name: /workflow template picker/i })).toBeInTheDocument();
+    expect(screen.getByText('Ship')).toBeInTheDocument();
+    expect(screen.getByText('2 stages')).toBeInTheDocument();
+  });
+
+  it('selecting a workflow template sets the answer', () => {
+    const workflowQuestions = [
+      { id: 'wf', question: 'Apply which workflow?', kind: 'workflow' as const },
+    ];
+    render(
+      <PlanQuestions
+        questions={workflowQuestions}
+        workflows={[MOCK_WORKFLOW]}
+        onSubmit={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+    const wfButton = screen.getByRole('button', { name: /ship/i });
+    fireEvent.click(wfButton);
+    expect(wfButton).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('shows empty workflow message when no templates', () => {
+    const workflowQuestions = [
+      { id: 'wf', question: 'Apply which workflow?', kind: 'workflow' as const },
+    ];
+    render(
+      <PlanQuestions
+        questions={workflowQuestions}
+        workflows={[]}
+        onSubmit={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/no workflow templates/i)).toBeInTheDocument();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -198,6 +335,13 @@ describe('PlanRaiding', () => {
     // Use aria-label to disambiguate from StateDot's inner role="status"
     expect(screen.getByLabelText(/decomposing plan/i)).toBeInTheDocument();
     expect(screen.getByText(/Ravens are raiding/i)).toBeInTheDocument();
+  });
+
+  it('shows raven activity lines', () => {
+    render(<PlanRaiding error={null} onBack={vi.fn()} />);
+    expect(screen.getByText(/decomposer — analyzing brief/i)).toBeInTheDocument();
+    expect(screen.getByText(/investigator — probing repo/i)).toBeInTheDocument();
+    expect(screen.getByText(/mimir-indexer — pulling in prior-art/i)).toBeInTheDocument();
   });
 
   it('shows error state when error is present', () => {
@@ -267,6 +411,40 @@ describe('PlanDraft', () => {
     expect(screen.getByText('Scaffold OIDC')).toBeInTheDocument();
   });
 
+  it('renders risk kind badges', () => {
+    render(
+      <PlanDraft
+        structure={MOCK_STRUCTURE}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onEditPhase={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('blast')).toBeInTheDocument();
+    expect(screen.getByText('untested')).toBeInTheDocument();
+    expect(screen.getByText(/touches dispatch path/i)).toBeInTheDocument();
+  });
+
+  it('does not render risks section when no risks', () => {
+    const noRisksStructure: ExtractedStructure = {
+      found: true,
+      structure: { name: 'Test', phases: [], risks: [] },
+    };
+    render(
+      <PlanDraft
+        structure={noRisksStructure}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onEditPhase={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/risks flagged/i)).not.toBeInTheDocument();
+  });
+
   it('calls onApprove when approve button clicked', async () => {
     const onApprove = vi.fn();
     render(
@@ -295,8 +473,56 @@ describe('PlanDraft', () => {
         onEditPhase={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    fireEvent.click(screen.getByRole('button', { name: /← back/i }));
     expect(onBack).toHaveBeenCalled();
+  });
+
+  it('calls onReplan when re-plan button clicked', () => {
+    const onReplan = vi.fn();
+    render(
+      <PlanDraft
+        structure={MOCK_STRUCTURE}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onReplan={onReplan}
+        onEditPhase={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /re-plan/i }));
+    expect(onReplan).toHaveBeenCalled();
+  });
+
+  it('calls onSaveDraft when save as draft button clicked', () => {
+    const onSaveDraft = vi.fn();
+    render(
+      <PlanDraft
+        structure={MOCK_STRUCTURE}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onSaveDraft={onSaveDraft}
+        onEditPhase={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /save as draft/i }));
+    expect(onSaveDraft).toHaveBeenCalled();
+  });
+
+  it('does not render Re-plan button when onReplan not provided', () => {
+    render(
+      <PlanDraft
+        structure={MOCK_STRUCTURE}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onEditPhase={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /re-plan/i })).not.toBeInTheDocument();
   });
 
   it('allows editing a phase name', async () => {
@@ -387,6 +613,87 @@ describe('PlanDraft', () => {
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(onEditPhase).not.toHaveBeenCalled();
   });
+
+  it('renders size pill for raids with size', () => {
+    render(
+      <PlanDraft
+        structure={MOCK_STRUCTURE}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onEditPhase={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('M')).toBeInTheDocument();
+  });
+
+  it('renders "Own saga" button for each raid (disabled stub)', () => {
+    render(
+      <PlanDraft
+        structure={MOCK_STRUCTURE}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onEditPhase={vi.fn()}
+      />,
+    );
+    const ownSagaButtons = screen.getAllByRole('button', { name: /promote raid .* to own saga/i });
+    expect(ownSagaButtons.length).toBeGreaterThan(0);
+    ownSagaButtons.forEach((btn) => expect(btn).toBeDisabled());
+  });
+
+  it('calls onRemoveRaid when × button clicked', () => {
+    const onRemoveRaid = vi.fn();
+    render(
+      <PlanDraft
+        structure={MOCK_STRUCTURE}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onEditPhase={vi.fn()}
+        onRemoveRaid={onRemoveRaid}
+      />,
+    );
+    const removeButtons = screen.getAllByRole('button', { name: /remove raid/i });
+    expect(removeButtons.length).toBeGreaterThan(0);
+    fireEvent.click(removeButtons[0]!);
+    expect(onRemoveRaid).toHaveBeenCalledWith(0, 0);
+  });
+
+  it('does not render remove buttons when onRemoveRaid not provided', () => {
+    render(
+      <PlanDraft
+        structure={MOCK_STRUCTURE}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onEditPhase={vi.fn()}
+      />,
+    );
+    expect(screen.queryAllByRole('button', { name: /remove raid/i })).toHaveLength(0);
+  });
+
+  it('shows "Draft saved (local only)" feedback after clicking save as draft', async () => {
+    render(
+      <PlanDraft
+        structure={MOCK_STRUCTURE}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onSaveDraft={vi.fn()}
+        onEditPhase={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /save as draft/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/draft saved \(local only\)/i)).toBeInTheDocument(),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -433,6 +740,13 @@ describe('PlanWizard integration', () => {
     expect(screen.getByText('Describe your goal')).toBeInTheDocument();
   });
 
+  it('shows hint chips on the prompt step', () => {
+    render(<PlanWizard />, { wrapper: wrap(makeSvc()) });
+    expect(
+      screen.getByRole('button', { name: /example: subscription validation/i }),
+    ).toBeInTheDocument();
+  });
+
   it('shows the step dots navigation', () => {
     render(<PlanWizard />, { wrapper: wrap(makeSvc()) });
     expect(screen.getByRole('navigation', { name: /plan wizard steps/i })).toBeInTheDocument();
@@ -457,6 +771,21 @@ describe('PlanWizard integration', () => {
     expect(screen.getByText('Which repos?')).toBeInTheDocument();
   });
 
+  it('shows YOUR BRIEF card in questions step', async () => {
+    const svc = makeSvc();
+    render(<PlanWizard />, { wrapper: wrap(svc) });
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /goal description/i }),
+      'Build auth module',
+    );
+    fireEvent.submit(screen.getByRole('form', { name: /plan prompt form/i }));
+
+    await waitFor(() => expect(screen.getByText('Clarify your plan')).toBeInTheDocument());
+    expect(screen.getByLabelText(/your brief/i)).toBeInTheDocument();
+    expect(screen.getByText('Build auth module')).toBeInTheDocument();
+  });
+
   it('advances to raiding step after submitting answers', async () => {
     const svc = makeSvc();
     render(<PlanWizard />, { wrapper: wrap(svc) });
@@ -473,6 +802,25 @@ describe('PlanWizard integration', () => {
     fireEvent.submit(screen.getByRole('form', { name: /clarifying questions form/i }));
 
     await waitFor(() => expect(screen.getByLabelText(/decomposing plan/i)).toBeInTheDocument());
+  });
+
+  it('raiding step shows raven activity lines', async () => {
+    const svc = makeSvc({
+      decompose: vi.fn(() => new Promise(() => {})), // never resolves
+      extractStructure: vi.fn().mockResolvedValue(MOCK_STRUCTURE),
+    });
+    render(<PlanWizard />, { wrapper: wrap(svc) });
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /goal description/i }),
+      'Build auth module',
+    );
+    fireEvent.submit(screen.getByRole('form', { name: /plan prompt form/i }));
+    await waitFor(() => expect(screen.getByText('Clarify your plan')).toBeInTheDocument());
+    fireEvent.submit(screen.getByRole('form', { name: /clarifying questions form/i }));
+
+    await waitFor(() => expect(screen.getByLabelText(/decomposing plan/i)).toBeInTheDocument());
+    expect(screen.getByText(/decomposer — analyzing brief/i)).toBeInTheDocument();
   });
 
   it('auto-advances to draft after decomposition', async () => {
@@ -493,6 +841,69 @@ describe('PlanWizard integration', () => {
       timeout: 3000,
     });
     expect(screen.getByText('Auth Rewrite')).toBeInTheDocument();
+  });
+
+  it('draft shows risk kind badges', async () => {
+    const svc = makeSvc();
+    render(<PlanWizard />, { wrapper: wrap(svc) });
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /goal description/i }),
+      'Build auth module',
+    );
+    fireEvent.submit(screen.getByRole('form', { name: /plan prompt form/i }));
+    await waitFor(() => expect(screen.getByText('Clarify your plan')).toBeInTheDocument());
+    fireEvent.submit(screen.getByRole('form', { name: /clarifying questions form/i }));
+    await waitFor(() => expect(screen.getByText('Review your plan')).toBeInTheDocument(), {
+      timeout: 3000,
+    });
+
+    expect(screen.getByText('blast')).toBeInTheDocument();
+    expect(screen.getByText('untested')).toBeInTheDocument();
+  });
+
+  it('draft shows Re-plan and Save as draft buttons', async () => {
+    const svc = makeSvc();
+    render(<PlanWizard />, { wrapper: wrap(svc) });
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /goal description/i }),
+      'Build auth module',
+    );
+    fireEvent.submit(screen.getByRole('form', { name: /plan prompt form/i }));
+    await waitFor(() => expect(screen.getByText('Clarify your plan')).toBeInTheDocument());
+    fireEvent.submit(screen.getByRole('form', { name: /clarifying questions form/i }));
+    await waitFor(() => expect(screen.getByText('Review your plan')).toBeInTheDocument(), {
+      timeout: 3000,
+    });
+
+    expect(screen.getByRole('button', { name: /re-plan/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save as draft/i })).toBeInTheDocument();
+  });
+
+  it('re-plan button re-runs decomposition', async () => {
+    const svc = makeSvc();
+    render(<PlanWizard />, { wrapper: wrap(svc) });
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /goal description/i }),
+      'Build auth module',
+    );
+    fireEvent.submit(screen.getByRole('form', { name: /plan prompt form/i }));
+    await waitFor(() => expect(screen.getByText('Clarify your plan')).toBeInTheDocument());
+    fireEvent.submit(screen.getByRole('form', { name: /clarifying questions form/i }));
+    await waitFor(() => expect(screen.getByText('Review your plan')).toBeInTheDocument(), {
+      timeout: 3000,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /re-plan/i }));
+
+    // Should re-enter raiding step then come back to draft
+    await waitFor(() => expect(screen.getByText('Review your plan')).toBeInTheDocument(), {
+      timeout: 3000,
+    });
+    // decompose was called twice (once initially, once after re-plan)
+    expect(svc.decompose).toHaveBeenCalledTimes(2);
   });
 
   it('reaches approved step after full flow', async () => {

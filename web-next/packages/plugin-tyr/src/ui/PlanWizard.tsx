@@ -2,6 +2,7 @@ import { Rune } from '@niuulabs/ui';
 import { PLAN_STEPS } from '../domain/plan';
 import { StepDots } from './StepDots';
 import { usePlanWizard } from './usePlanWizard';
+import { useWorkflows } from './useWorkflows';
 import { PlanPrompt } from './PlanPrompt';
 import { PlanQuestions } from './PlanQuestions';
 import { PlanRaiding } from './PlanRaiding';
@@ -18,8 +19,19 @@ import { PlanGuidanceRail } from './PlanGuidanceRail';
  *         Full-width on raiding and approved (content fills the width).
  */
 export function PlanWizard() {
-  const { state, submitPrompt, submitAnswers, approveDraft, editPhase, back, clearError } =
-    usePlanWizard();
+  const {
+    state,
+    submitPrompt,
+    submitAnswers,
+    approveDraft,
+    editPhase,
+    removeRaid,
+    back,
+    clearError,
+    replan,
+    saveDraft,
+  } = usePlanWizard();
+  const { data: workflows = [] } = useWorkflows();
 
   function handleNewPlan() {
     // Navigate back to /tyr/plan to start fresh (the wizard unmounts and remounts)
@@ -51,6 +63,8 @@ export function PlanWizard() {
             <PlanQuestions
               questions={state.questions}
               initialAnswers={state.answers}
+              prompt={state.prompt}
+              workflows={workflows}
               onSubmit={submitAnswers}
               onBack={() => {
                 clearError();
@@ -79,7 +93,10 @@ export function PlanWizard() {
                 clearError();
                 back();
               }}
+              onReplan={replan}
+              onSaveDraft={saveDraft}
               onEditPhase={editPhase}
+              onRemoveRaid={removeRaid}
             />
           )}
 

@@ -21,6 +21,8 @@ export interface PlanWizardState {
   saga: Saga | null;
   loading: boolean;
   error: string | null;
+  /** True after saveDraft() is called; records the intent for testing. */
+  draftSaved: boolean;
 }
 
 const initialState: PlanWizardState = {
@@ -35,6 +37,7 @@ const initialState: PlanWizardState = {
   saga: null,
   loading: false,
   error: null,
+  draftSaved: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -50,7 +53,10 @@ type Action =
   | { type: 'APPROVE_DONE'; saga: Saga }
   | { type: 'APPROVE_ERROR'; error: string }
   | { type: 'BACK' }
+  | { type: 'REPLAN' }
   | { type: 'EDIT_PHASE'; phaseIndex: number; name: string }
+  | { type: 'REMOVE_RAID'; phaseIndex: number; raidIndex: number }
+  | { type: 'SAVE_DRAFT' }
   | { type: 'CLEAR_ERROR' };
 
 // ---------------------------------------------------------------------------
@@ -132,6 +138,11 @@ function reducer(state: PlanWizardState, action: Action): PlanWizardState {
       return { ...state, step, loading: false, error: null };
     }
 
+    case 'REPLAN': {
+      const step = planTransition(state.step, 'raiding');
+      return { ...state, step, structure: null, phases: [], loading: false, error: null };
+    }
+
     case 'EDIT_PHASE': {
       if (!state.structure?.structure) return state;
       const phases = state.structure.structure.phases.map((p, i) =>
@@ -145,6 +156,24 @@ function reducer(state: PlanWizardState, action: Action): PlanWizardState {
         },
       };
     }
+
+    case 'REMOVE_RAID': {
+      if (!state.structure?.structure) return state;
+      const phases = state.structure.structure.phases.map((p, i) => {
+        if (i !== action.phaseIndex) return p;
+        return { ...p, raids: p.raids.filter((_, ri) => ri !== action.raidIndex) };
+      });
+      return {
+        ...state,
+        structure: {
+          ...state.structure,
+          structure: { ...state.structure.structure, phases },
+        },
+      };
+    }
+
+    case 'SAVE_DRAFT':
+      return { ...state, draftSaved: true };
 
     case 'CLEAR_ERROR':
       return { ...state, error: null };
@@ -204,8 +233,13 @@ export interface PlanWizardActions {
   submitAnswers(answers: Record<string, string>): void;
   approveDraft(): Promise<void>;
   editPhase(phaseIndex: number, name: string): void;
+  removeRaid(phaseIndex: number, raidIndex: number): void;
   back(): void;
   clearError(): void;
+  /** Re-run decomposition with the same prompt and answers. */
+  replan(): void;
+  /** Persist the current draft state without creating the saga. No backend yet — dispatches SAVE_DRAFT. */
+  saveDraft(): void;
 }
 
 export function usePlanWizard(): { state: PlanWizardState } & PlanWizardActions {
@@ -289,5 +323,29 @@ export function usePlanWizard(): { state: PlanWizardState } & PlanWizardActions 
     dispatch({ type: 'CLEAR_ERROR' });
   }
 
-  return { state, submitPrompt, submitAnswers, approveDraft, editPhase, back, clearError };
+  function removeRaid(phaseIndex: number, raidIndex: number) {
+    dispatch({ type: 'REMOVE_RAID', phaseIndex, raidIndex });
+  }
+
+  function replan() {
+    dispatch({ type: 'REPLAN' });
+  }
+
+  function saveDraft() {
+    // TODO: send to backend when persistence endpoint is available.
+    dispatch({ type: 'SAVE_DRAFT' });
+  }
+
+  return {
+    state,
+    submitPrompt,
+    submitAnswers,
+    approveDraft,
+    editPhase,
+    removeRaid,
+    back,
+    clearError,
+    replan,
+    saveDraft,
+  };
 }

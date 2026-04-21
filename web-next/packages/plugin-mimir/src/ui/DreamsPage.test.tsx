@@ -191,8 +191,6 @@ describe('DreamsPage', () => {
       },
     };
     wrap(<DreamsPage />, failing);
-    await waitFor(() =>
-      expect(screen.getByText('activity log unavailable')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('activity log unavailable')).toBeInTheDocument());
   });
 });
