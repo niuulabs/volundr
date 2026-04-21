@@ -506,6 +506,10 @@ const MOCK_RAVN_BINDINGS: RavnBinding[] = [
     mountNames: ['local', 'shared', 'platform'],
     writeMount: 'local',
     lastDream: MOCK_DREAM_CYCLES[0] ?? null,
+    bio: 'Synthesises infrastructure documentation from git commits and runbooks',
+    pagesTouched: 52,
+    expertise: ['infra', 'api', 'arch'],
+    tools: ['mimir', 'web', 'file', 'ravn'],
   },
   {
     ravnId: 'ravn-skald',
@@ -515,6 +519,10 @@ const MOCK_RAVN_BINDINGS: RavnBinding[] = [
     mountNames: ['shared', 'platform'],
     writeMount: 'shared',
     lastDream: MOCK_DREAM_CYCLES[2] ?? null,
+    bio: 'Compiles API guidelines and architectural decisions from RFC discussions',
+    pagesTouched: 28,
+    expertise: ['api', 'observability'],
+    tools: ['mimir', 'web'],
   },
   {
     ravnId: 'ravn-galdra',
@@ -524,6 +532,10 @@ const MOCK_RAVN_BINDINGS: RavnBinding[] = [
     mountNames: ['shared'],
     writeMount: 'shared',
     lastDream: null,
+    bio: 'Verifies knowledge consistency and resolves broken wikilinks across mounts',
+    pagesTouched: 0,
+    expertise: ['lint', 'wikilinks'],
+    tools: ['mimir', 'lint-fix'],
   },
 ];
 
@@ -614,6 +626,7 @@ export function createMimirMockAdapter(): IMimirService {
   // Mutable copies for write operations
   let lintIssues = [...INITIAL_LINT_ISSUES];
   let routingRules = [...INITIAL_ROUTING_RULES];
+  let sources = [...MOCK_SOURCES];
 
   return {
     mounts: {
@@ -681,35 +694,71 @@ export function createMimirMockAdapter(): IMimirService {
         const q = query.toLowerCase();
         return MOCK_PAGES.filter(
           (p) => p.title.toLowerCase().includes(q) || p.summary.toLowerCase().includes(q),
-        ).map((p) => ({
+        ).map((p, i) => ({
           path: p.path,
           title: p.title,
           summary: p.summary,
           category: p.category,
           type: p.type,
           confidence: p.confidence,
+          score: Math.max(0.5, 0.95 - i * 0.1),
+          mounts: p.mounts,
         }));
       },
 
       async listSources(options): Promise<Source[]> {
-        let sources = MOCK_SOURCES;
+        let filtered = sources;
         if (options?.originType) {
-          sources = sources.filter((s) => s.originType === options.originType);
+          filtered = filtered.filter((s) => s.originType === options.originType);
         }
         if (options?.mountName) {
           // Filter sources that are attributed to pages on this mount
           const mountPages = MOCK_PAGES.filter((p) => p.mounts.includes(options.mountName!)).map(
             (p) => p.path,
           );
-          sources = sources.filter((s) => s.compiledInto.some((path) => mountPages.includes(path)));
+          filtered = filtered.filter((s) =>
+            s.compiledInto.some((path) => mountPages.includes(path)),
+          );
         }
-        return sources;
+        return filtered;
       },
 
       async getPageSources(path: string): Promise<Source[]> {
         const page = MOCK_PAGES.find((p) => p.path === path);
         if (!page) return [];
-        return MOCK_SOURCES.filter((s) => page.sourceIds.includes(s.id));
+        return sources.filter((s) => page.sourceIds.includes(s.id));
+      },
+
+      async ingestUrl(url: string): Promise<Source> {
+        const id = `src-${Date.now()}`;
+        const source: Source = {
+          id,
+          title: url,
+          originType: 'web',
+          originUrl: url,
+          ingestedAt: new Date().toISOString(),
+          ingestAgent: 'ravn-fjolnir',
+          compiledInto: [],
+          content: '',
+        };
+        sources = [source, ...sources];
+        return source;
+      },
+
+      async ingestFile(file: File): Promise<Source> {
+        const id = `src-${Date.now()}`;
+        const source: Source = {
+          id,
+          title: file.name,
+          originType: 'file',
+          originPath: file.name,
+          ingestedAt: new Date().toISOString(),
+          ingestAgent: 'ravn-fjolnir',
+          compiledInto: [],
+          content: '',
+        };
+        sources = [source, ...sources];
+        return source;
       },
 
       async getGraph(options): Promise<MimirGraph> {

@@ -141,9 +141,7 @@ describe('RavnSubnav — sessions route', () => {
 
   it('shows running sessions with title', async () => {
     render(<RavnSubnav />, { wrapper: wrapWithServices(services()) });
-    await waitFor(() =>
-      expect(screen.getByText('Implement login form')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Implement login form')).toBeInTheDocument());
   });
 
   it('dispatches ravn:session-selected event on click', async () => {
@@ -157,9 +155,7 @@ describe('RavnSubnav — sessions route', () => {
       ).toBeInTheDocument(),
     );
 
-    fireEvent.click(
-      screen.getByTestId('session-subnav-item-10000001-0000-4000-8000-000000000001'),
-    );
+    fireEvent.click(screen.getByTestId('session-subnav-item-10000001-0000-4000-8000-000000000001'));
     expect(handler).toHaveBeenCalledOnce();
 
     window.removeEventListener('ravn:session-selected', handler);

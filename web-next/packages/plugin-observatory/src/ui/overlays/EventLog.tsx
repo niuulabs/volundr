@@ -40,9 +40,7 @@ export function EventLog({ events, 'data-testid': testId }: EventLogProps) {
               data-testid={`event-${ev.id}`}
             >
               <span className="obs-event-log__ts">{ev.time}</span>
-              <span className={`obs-event-log__type ${TYPE_CLASS[ev.type] ?? ''}`}>
-                {ev.type}
-              </span>
+              <span className={`obs-event-log__type ${TYPE_CLASS[ev.type] ?? ''}`}>{ev.type}</span>
               <span className="obs-event-log__subject">{ev.subject}</span>
               <span className="obs-event-log__body">{ev.body}</span>
             </div>

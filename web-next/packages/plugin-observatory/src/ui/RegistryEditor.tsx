@@ -25,7 +25,7 @@ function TypePreviewDrawer({ type, onClose }: TypePreviewDrawerProps) {
   return (
     <div
       data-testid="type-preview-drawer"
-      className="niuu-w-[320px] niuu-shrink-0 niuu-border-l niuu-border-border-subtle niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-hidden"
+      className="niuu-border-l niuu-border-border-subtle niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-hidden"
     >
       <div className="niuu-p-4 niuu-border-b niuu-border-border-subtle niuu-flex niuu-items-start niuu-gap-3">
         <div className="niuu-w-12 niuu-h-12 niuu-flex niuu-items-center niuu-justify-center niuu-bg-bg-tertiary niuu-rounded-md niuu-border niuu-border-border-subtle niuu-shrink-0">
@@ -122,11 +122,10 @@ interface TypesTabProps {
   registry: Registry;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  search: string;
 }
 
-function TypesTab({ registry, selectedId, onSelect }: TypesTabProps) {
-  const [search, setSearch] = useState('');
-
+function TypesTab({ registry, selectedId, onSelect, search }: TypesTabProps) {
   const filtered = useMemo(() => {
     if (!search) return registry.types;
     const q = search.toLowerCase();
@@ -149,16 +148,6 @@ function TypesTab({ registry, selectedId, onSelect }: TypesTabProps) {
 
   return (
     <div>
-      <div className="niuu-mb-4">
-        <input
-          aria-label="Filter types"
-          placeholder="filter types…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="niuu-w-full niuu-h-9 niuu-px-3 niuu-bg-bg-tertiary niuu-border niuu-border-border niuu-rounded-sm niuu-text-text-primary niuu-text-sm niuu-font-sans niuu-box-border"
-        />
-      </div>
-
       {filtered.length === 0 && (
         <p className="niuu-text-text-muted niuu-text-sm">No types match your search.</p>
       )}
@@ -169,32 +158,40 @@ function TypesTab({ registry, selectedId, onSelect }: TypesTabProps) {
             {cat}
             <span className="niuu-font-normal niuu-text-text-muted">· {types.length}</span>
           </div>
-          <div className="niuu-flex niuu-flex-col niuu-gap-1">
+          <div className="type-grid">
             {types.map((t) => (
               <button
                 key={t.id}
                 data-testid={`type-row-${t.id}`}
+                data-selected={selectedId === t.id ? 'true' : undefined}
                 onClick={() => onSelect(t.id)}
-                className={`niuu-flex niuu-items-center niuu-gap-3 niuu-py-2 niuu-px-3 niuu-rounded-sm niuu-cursor-pointer niuu-text-left niuu-w-full niuu-border ${
-                  selectedId === t.id
-                    ? 'niuu-bg-bg-tertiary niuu-border-border'
-                    : 'niuu-bg-transparent niuu-border-transparent'
-                }`}
-                style={{ color: 'inherit' }}
+                className="type-card"
               >
-                <span className="niuu-w-[22px] niuu-h-[22px] niuu-inline-flex niuu-items-center niuu-justify-center niuu-shrink-0">
-                  <ShapeSvg shape={t.shape} color={t.color as ShapeColor} size={18} />
-                </span>
-                <span className="niuu-font-mono niuu-text-base niuu-text-brand niuu-font-bold niuu-w-5 niuu-text-center niuu-shrink-0">
-                  {t.rune}
-                </span>
-                <span className="niuu-flex-1 niuu-min-w-0">
-                  <span className="niuu-font-medium niuu-block">{t.label}</span>
-                  <span className="niuu-text-text-muted niuu-text-xs niuu-font-mono">{t.id}</span>
-                </span>
-                <span className="niuu-text-text-muted niuu-text-xs niuu-max-w-[180px] niuu-overflow-hidden niuu-text-ellipsis niuu-whitespace-nowrap niuu-shrink-0">
-                  {t.description.split('.')[0]}.
-                </span>
+                <div className="type-swatch">
+                  <ShapeSvg shape={t.shape} color={t.color as ShapeColor} size={22} />
+                </div>
+                <div className="type-name">
+                  {t.label}
+                  <span className="niuu-font-mono niuu-text-brand niuu-text-[12px] niuu-font-bold">
+                    {t.rune}
+                  </span>
+                </div>
+                <div className="type-meta">
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
+                      color: 'var(--brand-300)',
+                    }}
+                  >
+                    {t.id}
+                  </div>
+                  <div>
+                    shape ·{' '}
+                    <strong className="niuu-text-text-secondary niuu-font-medium">{t.shape}</strong>
+                  </div>
+                </div>
+                <div className="type-desc">{t.description.split('.')[0]}.</div>
               </button>
             ))}
           </div>
@@ -303,7 +300,7 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
     setOverId(null);
   };
 
-  const renderNode = (t: EntityType, depth = 0): React.ReactNode => {
+  const renderNode = (t: EntityType): React.ReactNode => {
     const children = t.canContain.map((id) => byId.get(id)).filter(Boolean) as EntityType[];
     const dropState = getDropState(t.id);
     const isDragging = dragId === t.id;
@@ -317,7 +314,6 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
           data-dragging={isDragging ? 'true' : undefined}
           draggable
           className="registry-tree-node"
-          style={{ '--tree-depth': depth } as React.CSSProperties}
           onDragStart={(e) => handleDragStart(e, t.id)}
           onDragOver={(e) => handleDragOver(e, t.id)}
           onDragLeave={(e) => handleDragLeave(e, t.id)}
@@ -342,18 +338,18 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
             {t.id}
           </span>
         </div>
-        {children.length > 0 && <div>{children.map((c) => renderNode(c, depth + 1))}</div>}
+        {children.length > 0 && (
+          <div className="registry-tree-children">{children.map((c) => renderNode(c))}</div>
+        )}
       </div>
     );
   };
 
   return (
     <div>
-      <p className="niuu-m-0 niuu-mb-4 niuu-text-sm niuu-text-text-muted niuu-leading-[1.5]">
-        <strong>Drag</strong> a type onto another to reparent it. The{' '}
-        <code className="niuu-font-mono niuu-text-[11px]">canContain</code> edge moves to the new
-        parent; <code className="niuu-font-mono niuu-text-[11px]">parentTypes</code> on the child
-        updates. Cycles are blocked.
+      <p className="containment-hint">
+        <strong>Drag</strong> a type onto another to reparent it. The <code>canContain</code> edge
+        moves to the new parent; <code>parentTypes</code> on the child updates. Cycles are blocked.
       </p>
 
       <div data-testid="containment-tree">{roots.map((r) => renderNode(r))}</div>
@@ -361,9 +357,9 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
       {orphans.length > 0 && (
         <div
           data-testid="orphans-section"
-          className="niuu-mt-6 niuu-pt-4 niuu-border-t niuu-border-border-subtle"
+          className="niuu-mt-4 niuu-pt-3 niuu-border-t niuu-border-dashed niuu-border-border-subtle"
         >
-          <div className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted niuu-uppercase niuu-tracking-[0.07em] niuu-mb-2">
+          <div className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted niuu-uppercase niuu-tracking-[0.08em] niuu-mb-1">
             orphans — parent missing
           </div>
           {orphans.map((o) => renderNode(o))}
@@ -409,7 +405,7 @@ function JsonTab({ registry }: JsonTabProps) {
       </button>
       <pre
         data-testid="json-output"
-        className="niuu-m-0 niuu-p-4 niuu-bg-bg-secondary niuu-border niuu-border-border-subtle niuu-rounded-md niuu-font-mono niuu-text-xs niuu-text-text-secondary niuu-overflow-x-auto niuu-leading-[1.6] niuu-max-h-[600px] niuu-overflow-y-auto"
+        className="niuu-m-0 niuu-p-4 niuu-bg-bg-primary niuu-border niuu-border-border-subtle niuu-rounded-md niuu-font-mono niuu-text-[11px] niuu-text-text-secondary niuu-overflow-x-auto niuu-leading-[1.55] niuu-min-h-[480px] niuu-max-h-[calc(100vh-240px)] niuu-overflow-y-auto"
       >
         {json}
       </pre>
@@ -425,14 +421,19 @@ export interface RegistryEditorProps {
 
 export function RegistryEditor({ registry: initialRegistry }: RegistryEditorProps) {
   const [activeTab, setActiveTab] = useState<TabId>('types');
+  const [search, setSearch] = useState('');
   const { registry, selectedId, select, tryReparent } = useRegistryEditor(initialRegistry);
 
   const selectedType = registry.types.find((t) => t.id === selectedId) ?? null;
+  const showDrawer = selectedType !== null && activeTab !== 'json';
 
   return (
-    <div className="niuu-flex niuu-h-full niuu-overflow-hidden niuu-bg-bg-primary">
+    <div
+      className="niuu-grid niuu-h-full niuu-overflow-hidden niuu-bg-bg-primary"
+      style={{ gridTemplateColumns: showDrawer ? '1fr 380px' : '1fr' }}
+    >
       {/* Main column */}
-      <div className="niuu-flex-1 niuu-flex niuu-flex-col niuu-overflow-hidden">
+      <div className="niuu-flex niuu-flex-col niuu-overflow-hidden">
         {/* Header */}
         <div className="niuu-py-4 niuu-px-6 niuu-border-b niuu-border-border-subtle niuu-shrink-0">
           <div className="niuu-flex niuu-items-baseline niuu-justify-between niuu-mb-1">
@@ -445,12 +446,16 @@ export function RegistryEditor({ registry: initialRegistry }: RegistryEditorProp
               updated {formatDate(registry.updatedAt)}
             </span>
           </div>
+          <p className="niuu-m-0 niuu-text-text-secondary niuu-text-sm niuu-max-w-[64ch]">
+            Every node that appears in the Observatory canvas is an instance of one of these types.
+            Edit a type here and the canvas re-renders.
+          </p>
         </div>
 
         {/* Tabs */}
         <div
           role="tablist"
-          className="niuu-flex niuu-border-b niuu-border-border-subtle niuu-px-6 niuu-shrink-0"
+          className="niuu-flex niuu-items-center niuu-border-b niuu-border-border-subtle niuu-px-6 niuu-shrink-0"
         >
           {(['types', 'containment', 'json'] as TabId[]).map((tab) => (
             <button
@@ -464,12 +469,28 @@ export function RegistryEditor({ registry: initialRegistry }: RegistryEditorProp
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
+          <div className="niuu-flex-1" />
+          {activeTab === 'types' && (
+            <input
+              aria-label="Filter types"
+              placeholder="filter types…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="niuu-h-8 niuu-px-3 niuu-bg-bg-tertiary niuu-border niuu-border-border niuu-rounded-sm niuu-text-text-primary niuu-text-sm niuu-font-sans niuu-box-border"
+              style={{ width: 220 }}
+            />
+          )}
         </div>
 
         {/* Tab content */}
         <div role="tabpanel" className="niuu-flex-1 niuu-overflow-y-auto niuu-py-5 niuu-px-6">
           {activeTab === 'types' && (
-            <TypesTab registry={registry} selectedId={selectedId} onSelect={select} />
+            <TypesTab
+              registry={registry}
+              selectedId={selectedId}
+              onSelect={select}
+              search={search}
+            />
           )}
           {activeTab === 'containment' && (
             <ContainmentTab
@@ -484,9 +505,7 @@ export function RegistryEditor({ registry: initialRegistry }: RegistryEditorProp
       </div>
 
       {/* Drawer */}
-      {selectedType && activeTab !== 'json' && (
-        <TypePreviewDrawer type={selectedType} onClose={() => select(null)} />
-      )}
+      {showDrawer && <TypePreviewDrawer type={selectedType} onClose={() => select(null)} />}
     </div>
   );
 }

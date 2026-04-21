@@ -1,5 +1,3 @@
-export { Meter } from './Meter';
-export type { MeterProps } from './Meter';
 export { CliBadge } from './CliBadge';
 export type { CliBadgeProps } from './CliBadge';
 export { SourceLabel } from './SourceLabel';
@@ -10,3 +8,5 @@ export { ModelChip } from './ModelChip';
 export type { ModelChipProps, ModelData } from './ModelChip';
 export { MiniBar } from './MiniBar';
 export type { MiniBarProps } from './MiniBar';
+export { ConnectionTypeBadge } from './ConnectionTypeBadge';
+export type { ConnectionTypeBadgeProps } from './ConnectionTypeBadge';

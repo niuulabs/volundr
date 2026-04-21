@@ -67,10 +67,7 @@ export function ShellLayout() {
   const subnavNode: ReactNode = active?.subnav?.(ctx) ?? null;
 
   return (
-    <div
-      className={clsx('niuu-shell', !subnavNode && 'niuu-shell--no-subnav')}
-      data-theme={config.theme}
-    >
+    <div className="niuu-shell" data-theme={config.theme}>
       <aside className="niuu-shell__rail">
         <div className="niuu-shell__rail-brand" title="Niuu">
           {brand}
@@ -118,6 +115,7 @@ export function ShellLayout() {
                     key={t.id}
                     type="button"
                     className={clsx('niuu-shell__tab', isActive && 'niuu-shell__tab--active')}
+                    data-testid={`${active.id}-tab-${t.id}`}
                     onClick={() => {
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       router.navigate({ to: tabPath as any });
@@ -126,6 +124,11 @@ export function ShellLayout() {
                   >
                     {t.rune && <span className="niuu-shell__tab-rune">{t.rune}</span>}
                     {t.label}
+                    {t.count != null && t.count > 0 && (
+                      <span className="niuu-shell__tab-count" data-testid={`tab-count-${t.id}`}>
+                        {t.count}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -147,7 +150,9 @@ export function ShellLayout() {
         </div>
       </header>
 
-      {subnavNode && <nav className="niuu-shell__subnav">{subnavNode}</nav>}
+      <nav className={clsx('niuu-shell__subnav', !subnavNode && 'niuu-shell__subnav--collapsed')}>
+        {subnavNode}
+      </nav>
 
       <main className="niuu-shell__content">
         <Outlet />
@@ -158,6 +163,9 @@ export function ShellLayout() {
           {active && <code>plugin:{active.id}</code>}
           <span className="niuu-shell__footer-sep">·</span>
           <span>niuu.world</span>
+        </div>
+        <div className="niuu-shell__footer-center" data-testid="footer-status">
+          {active?.footer?.(ctx)}
         </div>
         <div className="niuu-shell__footer-right">
           <span>{enabled.length} plugins loaded</span>

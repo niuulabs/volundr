@@ -84,6 +84,8 @@ export function buildMockRoom(session: Session): MockRoom {
       emits: ['code.changed', 'outcome.review'],
       tools: ['read_file', 'write_file', 'run_command', 'search_files'],
       gateway: 'bifrost://anthropic/claude-sonnet',
+      gatewayLatencyMs: 84,
+      gatewayRegion: 'us-east-1',
       expanded: true,
     },
     {
@@ -98,6 +100,8 @@ export function buildMockRoom(session: Session): MockRoom {
       emits: ['outcome.review'],
       tools: ['read_file', 'search_files'],
       gateway: 'bifrost://anthropic/claude-haiku',
+      gatewayLatencyMs: 312,
+      gatewayRegion: 'eu-west-1',
     },
   ];
 
@@ -160,7 +164,8 @@ export function buildMockTurns(_session: Session, room: MockRoom): ChatTurn[] {
       id: 't-2',
       role: 'thinking',
       peerId: mainPeer.peerId,
-      content: 'I need to create a JWT validation handler. Let me check the existing auth setup first.',
+      content:
+        'I need to create a JWT validation handler. Let me check the existing auth setup first.',
       ms: 1200,
       ts: now - 590_000,
     },
@@ -191,7 +196,8 @@ export function buildMockTurns(_session: Session, room: MockRoom): ChatTurn[] {
       id: 't-5',
       role: 'assistant',
       peerId: mainPeer.peerId,
-      content: 'I\'ve implemented the JWT validation handler. It validates tokens using RS256 and checks expiry, issuer, and audience claims.',
+      content:
+        "I've implemented the JWT validation handler. It validates tokens using RS256 and checks expiry, issuer, and audience claims.",
       tokens: 847,
       ms: 3200,
       ts: now - 560_000,

@@ -1,25 +1,33 @@
+/* EventLog — bottom strip matching web2 .eventlog spec */
 .obs-event-log {
-  position: fixed;
-  bottom: var(--space-4);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 480px;
-  height: 200px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   z-index: 40;
+  height: 110px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-bg-primary) 88%, transparent) 20%,
+    var(--color-bg-primary) 100%
+  );
   pointer-events: none;
 }
 
+/* Inner panel: inset from left and offset 320px from right to clear the drawer */
 .obs-event-log__inner {
-  width: 100%;
-  height: 100%;
-  overflow-y: auto;
-  background: color-mix(in srgb, var(--color-bg-primary) 92%, transparent);
+  position: absolute;
+  left: var(--space-4);
+  right: 320px;
+  bottom: var(--space-3);
+  height: 80px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-bg-secondary) 90%, transparent);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
-  padding: var(--space-2);
   display: flex;
   flex-direction: column;
-  gap: 1px;
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-subtle) transparent;
   pointer-events: auto;

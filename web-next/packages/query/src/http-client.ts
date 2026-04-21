@@ -59,7 +59,7 @@ export function createApiClient(basePath: string): ApiClient {
     const url = `${basePath}${endpoint}`;
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...(options.headers as Record<string, string>),
     };
 
@@ -94,6 +94,9 @@ export function createApiClient(basePath: string): ApiClient {
       return request<T>(endpoint, { method: 'GET' });
     },
     post<T>(endpoint: string, body?: unknown): Promise<T> {
+      if (body instanceof FormData) {
+        return request<T>(endpoint, { method: 'POST', body });
+      }
       return request<T>(endpoint, {
         method: 'POST',
         body: body ? JSON.stringify(body) : undefined,

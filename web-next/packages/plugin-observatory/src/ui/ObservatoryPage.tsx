@@ -42,20 +42,19 @@ export function ObservatoryPage() {
   }
 
   return (
-    <div data-testid="observatory-page" className="fixed inset-0 flex flex-col">
+    <div
+      data-testid="observatory-page"
+      className="niuu-relative niuu-flex niuu-flex-col niuu-h-full niuu-overflow-hidden"
+    >
       <TopologyCanvas
         topology={topology}
         onNodeClick={handleNodeClick}
         showMinimap={false}
-        className="flex-1 min-h-0"
+        className="niuu-flex-1 niuu-min-h-0"
       />
 
       {/* Accessible hidden node list — keyboard / screen-reader alternative to canvas hit-testing */}
-      <ul
-        data-testid="topology-node-list"
-        aria-label="Topology nodes"
-        className="sr-only"
-      >
+      <ul data-testid="topology-node-list" aria-label="Topology nodes" className="niuu-sr-only">
         {topology?.nodes.map((node) => (
           <li key={node.id}>
             <button

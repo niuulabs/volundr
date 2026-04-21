@@ -24,4 +24,12 @@ export interface RavnBinding {
   writeMount: string;
   /** Most recent dream cycle run by this ravn, or null if none yet. */
   lastDream: DreamCycle | null;
+  /** Short bio describing this ravn's purpose, shown in overview warden cards. */
+  bio: string;
+  /** Total pages this ravn has touched across all dream cycles. */
+  pagesTouched: number;
+  /** Areas of domain expertise (e.g. 'kubernetes', 'networking'). */
+  expertise: string[];
+  /** Tool names this ravn is allowed to invoke (e.g. 'mimir', 'web', 'file'). */
+  tools: string[];
 }

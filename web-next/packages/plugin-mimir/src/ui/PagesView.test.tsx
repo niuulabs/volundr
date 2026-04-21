@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import { renderWithMimir as wrap } from '../testing/renderWithMimir';
 import { PagesView } from './PagesView';
@@ -102,5 +102,120 @@ describe('PagesView', () => {
       expect(screen.getByRole('complementary', { name: /page metadata/ })).toBeInTheDocument(),
     );
     expect(screen.getByText('Provenance')).toBeInTheDocument();
+  });
+
+  // ── Layout toggle ────────────────────────────────────────────────────────
+
+  it('renders the Structured and Split layout toggle buttons', async () => {
+    wrap(<PagesView />);
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /overview/ }).length).toBeGreaterThan(0),
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: /overview/ })[0]);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /structured/i, hidden: false }),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: /split/i })).toBeInTheDocument();
+  });
+
+  it('defaults to structured layout (Structured button is pressed)', async () => {
+    wrap(<PagesView />);
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /overview/ }).length).toBeGreaterThan(0),
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: /overview/ })[0]);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /structured/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: /structured/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: /^split$/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('switches to split layout when Split is clicked', async () => {
+    wrap(<PagesView />);
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /overview/ }).length).toBeGreaterThan(0),
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: /overview/ })[0]);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^split$/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^split$/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^split$/i })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    // Raw sources pane should appear
+    expect(screen.getByLabelText('raw sources')).toBeInTheDocument();
+  });
+
+  // ── Action bar buttons ───────────────────────────────────────────────────
+
+  it('renders the action bar with Edit, Flag, Promote confidence, and Cite buttons', async () => {
+    wrap(<PagesView />);
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /overview/ }).length).toBeGreaterThan(0),
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: /overview/ })[0]);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /edit page/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: /flag for review/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /promote confidence/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cite page/i })).toBeInTheDocument();
+  });
+
+  it('Edit action bar button triggers zone edit for the first zone', async () => {
+    wrap(<PagesView />);
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /overview/ }).length).toBeGreaterThan(0),
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: /overview/ })[0]);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /edit page/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /edit page/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: /zone edit area/ })).toBeInTheDocument(),
+    );
+  });
+
+  it('Cite button copies page path + title to clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    wrap(<PagesView />);
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /overview/ }).length).toBeGreaterThan(0),
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: /overview/ })[0]);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /cite page/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /cite page/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText.mock.calls[0]![0]).toContain('/arch/overview');
+  });
+
+  // ── Broken wikilink warning in tree ─────────────────────────────────────
+
+  it('shows a warning indicator on tree leaves with broken wikilinks', async () => {
+    wrap(<PagesView />);
+    // /infra/k8s has related: ['/infra/envoy', '/arch/overview']
+    // '/infra/envoy' does not exist in the mock pages → broken link
+    await waitFor(() => expect(screen.getByText('infra/')).toBeInTheDocument());
+    // The k8s leaf should have a "broken wikilinks" indicator
+    const brokenIndicators = screen.queryAllByLabelText(/page has broken wikilinks/i);
+    expect(brokenIndicators.length).toBeGreaterThan(0);
   });
 });

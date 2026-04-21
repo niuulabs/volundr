@@ -365,6 +365,9 @@ importers:
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.2(@types/node@22.19.17)(jiti@1.21.7)(yaml@2.8.3)
 
   packages/plugin-mimir:
     dependencies:
@@ -475,6 +478,9 @@ importers:
       '@niuulabs/query':
         specifier: workspace:*
         version: link:../query
+      '@niuulabs/shell':
+        specifier: workspace:*
+        version: link:../shell
       '@niuulabs/ui':
         specifier: workspace:*
         version: link:../ui
@@ -549,6 +555,9 @@ importers:
       '@niuulabs/query':
         specifier: workspace:*
         version: link:../query
+      '@niuulabs/shell':
+        specifier: workspace:*
+        version: link:../shell
       '@niuulabs/ui':
         specifier: workspace:*
         version: link:../ui

@@ -58,16 +58,14 @@ describe('EntitiesPage', () => {
   it('shows entity titles in the list', async () => {
     wrap(<EntitiesPage />);
     await waitFor(() => expect(screen.getAllByTestId('entity-item').length).toBeGreaterThan(0));
-    // Verify entity title is rendered
-    const items = screen.getAllByTestId('entity-item');
-    const first = items[0]!;
-    expect(first.querySelector('.entities-page__item-title')).toBeTruthy();
+    const titles = screen.getAllByTestId('entity-item-title');
+    expect(titles.length).toBeGreaterThan(0);
   });
 
   it('shows entity paths in mono font', async () => {
     wrap(<EntitiesPage />);
     await waitFor(() => expect(screen.getAllByTestId('entity-item').length).toBeGreaterThan(0));
-    const paths = document.querySelectorAll('.entities-page__item-path');
+    const paths = screen.getAllByTestId('entity-item-path');
     expect(paths.length).toBeGreaterThan(0);
   });
 

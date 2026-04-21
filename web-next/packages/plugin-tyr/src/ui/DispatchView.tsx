@@ -6,8 +6,10 @@ import {
   ConfidenceBar,
   Tooltip,
   TooltipProvider,
+  SegmentedFilter,
+  cn,
 } from '@niuulabs/ui';
-import { cn } from '@niuulabs/ui';
+import type { SegmentedFilterOption } from '@niuulabs/ui';
 import type { IDispatchBus } from '../ports';
 import type { RaidStatus } from '../domain/saga';
 import {
@@ -77,43 +79,17 @@ function GateChips({ gates }: { gates: FeasibilityGate[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Segmented filter
+// Filter options builder
 // ---------------------------------------------------------------------------
 
-function SegmentedFilter({
-  value,
-  onChange,
-  counts,
-}: {
-  value: StatusFilter;
-  onChange: (v: StatusFilter) => void;
-  counts: Record<StatusFilter, number>;
-}) {
-  return (
-    <div
-      className="niuu-flex niuu-gap-1 niuu-p-1 niuu-rounded-md niuu-bg-bg-tertiary niuu-w-fit"
-      role="group"
-      aria-label="Filter raids by status"
-    >
-      {(Object.keys(FILTER_LABELS) as StatusFilter[]).map((key) => (
-        <button
-          key={key}
-          type="button"
-          onClick={() => onChange(key)}
-          aria-pressed={value === key}
-          className={cn(
-            'niuu-rounded niuu-px-3 niuu-py-1 niuu-text-xs niuu-font-medium niuu-transition-colors',
-            value === key
-              ? 'niuu-bg-bg-elevated niuu-text-text-primary'
-              : 'niuu-text-text-muted niuu-hover:text-text-secondary',
-          )}
-        >
-          {FILTER_LABELS[key]}
-          <span className="niuu-ml-1.5 niuu-opacity-60">{counts[key]}</span>
-        </button>
-      ))}
-    </div>
-  );
+function buildFilterOptions(
+  counts: Record<StatusFilter, number>,
+): SegmentedFilterOption<StatusFilter>[] {
+  return (Object.keys(FILTER_LABELS) as StatusFilter[]).map((key) => ({
+    value: key,
+    label: FILTER_LABELS[key],
+    count: counts[key],
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -261,11 +237,7 @@ function RaidRow({
         <div className="niuu-flex niuu-items-center niuu-gap-1.5 niuu-w-[80px]">
           <ConfidenceBar
             level={
-              entry.raid.confidence >= 80
-                ? 'high'
-                : entry.raid.confidence >= 50
-                  ? 'medium'
-                  : 'low'
+              entry.raid.confidence >= 80 ? 'high' : entry.raid.confidence >= 50 ? 'medium' : 'low'
             }
           />
           <span className="niuu-text-xs niuu-font-mono niuu-text-text-secondary">
@@ -419,7 +391,10 @@ export function DispatchView() {
 
   // Group filtered entries by sagaId
   const groupedBySaga = useMemo(() => {
-    const map = new Map<string, { sagaName: string; trackerId: string; featureBranch: string; entries: EnrichedEntry[] }>();
+    const map = new Map<
+      string,
+      { sagaName: string; trackerId: string; featureBranch: string; entries: EnrichedEntry[] }
+    >();
     for (const entry of filtered) {
       const existing = map.get(entry.saga.id);
       if (existing) {
@@ -522,12 +497,13 @@ export function DispatchView() {
           {/* Controls */}
           <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-2 niuu-border-b niuu-border-border-subtle niuu-flex-wrap">
             <SegmentedFilter
+              options={buildFilterOptions(counts)}
               value={statusFilter}
               onChange={(v) => {
                 setStatusFilter(v);
                 setSelectedIds(new Set());
               }}
-              counts={counts}
+              aria-label="Filter raids by status"
             />
             <input
               type="search"

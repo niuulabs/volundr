@@ -5,8 +5,6 @@
  */
 
 @import './ui/MimirPage.css';
-@import './ui/SearchPage.css';
-@import './ui/EntitiesPage.css';
 @import './ui/GraphPage.css';
 @import './ui/mimir-views.css';
 

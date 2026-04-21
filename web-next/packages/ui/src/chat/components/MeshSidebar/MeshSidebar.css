@@ -166,3 +166,75 @@
   color: var(--color-accent-emerald);
   background-color: color-mix(in srgb, var(--color-accent-emerald) 12%, transparent);
 }
+
+/* Gateway section */
+.niuu-chat-peer-gateway {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.niuu-chat-peer-gw-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.niuu-chat-peer-gw-seg {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-elevated);
+}
+
+.niuu-chat-peer-gw-proto {
+  color: var(--color-text-faint);
+}
+
+.niuu-chat-peer-gw-vendor {
+  color: var(--color-brand-400, var(--color-brand));
+}
+
+.niuu-chat-peer-gw-model {
+  color: var(--color-text-secondary);
+}
+
+.niuu-chat-peer-gw-sep {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--color-text-faint);
+}
+
+.niuu-chat-peer-gw-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: 2px;
+}
+
+.niuu-chat-peer-gw-region {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--color-text-faint);
+}
+
+.niuu-chat-peer-gw-latency {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--color-text-faint);
+}
+
+.niuu-chat-peer-gw-latency--ok {
+  color: var(--color-accent-emerald);
+}
+
+.niuu-chat-peer-gw-latency--warn {
+  color: var(--color-accent-amber);
+}
+
+.niuu-chat-peer-gw-latency--err {
+  color: var(--color-accent-red, var(--color-critical));
+}

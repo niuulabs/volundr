@@ -10,11 +10,13 @@ import {
   Sparkline,
   Pipe,
   StateDot,
+  ToastProvider,
+  useToast,
 } from '@niuulabs/ui';
 import type { ITyrService, Phase } from '../ports';
 import type { Saga, RaidStatus } from '../domain/saga';
 import { useSagas } from './useSagas';
-import { useDispatcher } from './useDispatcher';
+import { useDispatcherState } from './useDispatcherState';
 import { RaidMeshCanvas } from './RaidMeshCanvas';
 import './DashboardPage.css';
 
@@ -51,12 +53,42 @@ function mockConfidence(): number[] {
 
 /** Mock event feed entries — matches web2 spec. */
 const FEED = [
-  { t: '12s ago', subject: 'NIU-214.2', body: 'coding-agent → code.changed (raid-42aa)', kind: 'run' as const },
-  { t: '18s ago', subject: 'NIU-199.2', body: 'qa-agent → qa.completed verdict=pass', kind: 'ok' as const },
-  { t: '34s ago', subject: 'NIU-183.4', body: 'reviewer → review.completed needs_changes', kind: 'warn' as const },
-  { t: '1m ago', subject: 'NIU-088.1', body: 'saga published: saga.completed', kind: 'ok' as const },
-  { t: '2m ago', subject: 'NIU-148.2', body: 'coding-agent → raid.attempted verdict=fail', kind: 'crit' as const },
-  { t: '2m ago', subject: 'NIU-214.3', body: 'review-arbiter → review.arbitrated pending', kind: 'warn' as const },
+  {
+    t: '12s ago',
+    subject: 'NIU-214.2',
+    body: 'coding-agent → code.changed (raid-42aa)',
+    kind: 'run' as const,
+  },
+  {
+    t: '18s ago',
+    subject: 'NIU-199.2',
+    body: 'qa-agent → qa.completed verdict=pass',
+    kind: 'ok' as const,
+  },
+  {
+    t: '34s ago',
+    subject: 'NIU-183.4',
+    body: 'reviewer → review.completed needs_changes',
+    kind: 'warn' as const,
+  },
+  {
+    t: '1m ago',
+    subject: 'NIU-088.1',
+    body: 'saga published: saga.completed',
+    kind: 'ok' as const,
+  },
+  {
+    t: '2m ago',
+    subject: 'NIU-148.2',
+    body: 'coding-agent → raid.attempted verdict=fail',
+    kind: 'crit' as const,
+  },
+  {
+    t: '2m ago',
+    subject: 'NIU-214.3',
+    body: 'review-arbiter → review.arbitrated pending',
+    kind: 'warn' as const,
+  },
 ];
 
 function feedKindToState(kind: string) {
@@ -67,10 +99,19 @@ function feedKindToState(kind: string) {
 }
 
 export function DashboardPage() {
+  return (
+    <ToastProvider>
+      <DashboardContent />
+    </ToastProvider>
+  );
+}
+
+function DashboardContent() {
   const navigate = useNavigate();
   const tyr = useService<ITyrService>('tyr');
   const { data: sagas, isLoading, isError, error } = useSagas();
-  useDispatcher(); // keep the query warm for sub-components
+  const { data: dispatcherState } = useDispatcherState();
+  const { toast } = useToast();
 
   const phaseQueries = useQueries({
     queries: (sagas ?? []).map((s) => ({
@@ -97,8 +138,33 @@ export function DashboardPage() {
   const openSaga = (saga: Saga) =>
     void navigate({ to: '/tyr/sagas/$sagaId', params: { sagaId: saga.id } });
 
+  const handleViewAll = () => {
+    void navigate({ to: '/tyr/sagas' as never });
+    toast({ title: 'Navigating to Sagas' });
+  };
+
   return (
     <div className="tyr-dash">
+      {/* ── Dispatcher stats bar ──────────────────── */}
+      {dispatcherState && (
+        <div className="tyr-dash__topbar-stats tyr-dash__full" data-testid="tyr-dispatcher-stats">
+          <span className="tyr-dash__stat">
+            dispatcher <strong>{dispatcherState.running ? 'on' : 'off'}</strong>
+          </span>
+          <span className="tyr-dash__stat-sep" aria-hidden="true" />
+          <span className="tyr-dash__stat">
+            threshold <strong>{(dispatcherState.threshold / 100).toFixed(2)}</strong>
+          </span>
+          <span className="tyr-dash__stat-sep" aria-hidden="true" />
+          <span className="tyr-dash__stat">
+            concurrent{' '}
+            <strong>
+              {runningRaids}/{dispatcherState.maxConcurrentRaids}
+            </strong>
+          </span>
+        </div>
+      )}
+
       {/* ── KPI cards (4 columns) ─────────────────── */}
       <div className="tyr-kpi tyr-kpi--accent">
         <div className="tyr-kpi__label">Active sagas</div>
@@ -121,7 +187,11 @@ export function DashboardPage() {
         <Sparkline values={throughput.map((v) => v / Math.max(...throughput))} id="throughput" />
       </div>
 
-      <div className="tyr-kpi" style={{ cursor: 'pointer' }} onClick={() => void navigate({ to: '/tyr/sagas' as never })}>
+      <div
+        className="tyr-kpi"
+        style={{ cursor: 'pointer' }}
+        onClick={() => void navigate({ to: '/tyr/sagas' as never })}
+      >
         <div className="tyr-kpi__label">Awaiting review</div>
         <div className="tyr-kpi__val">{reviewRaids}</div>
         <div className="tyr-kpi__sub">
@@ -134,13 +204,16 @@ export function DashboardPage() {
       <div className="tyr-kpi">
         <div className="tyr-kpi__label">Merged · 24h</div>
         <div className="tyr-kpi__val">{allRaids.filter((r) => r.status === 'merged').length}</div>
-        <Sparkline values={[2, 3, 3, 4, 5, 6, 7, 9, 10, 11, 11, 12].map((v) => v / 12)} id="merged" />
+        <Sparkline
+          values={[2, 3, 3, 4, 5, 6, 7, 9, 10, 11, 11, 12].map((v) => v / 12)}
+          id="merged"
+        />
       </div>
 
       {/* ── Saga stream ───────────────────────────── */}
       <div className="tyr-dash__row-title">
         <h2>Saga stream</h2>
-        <button className="tyr-btn" type="button" onClick={() => void navigate({ to: '/tyr/sagas' as never })}>
+        <button className="tyr-btn" type="button" onClick={handleViewAll}>
           View all
         </button>
       </div>
@@ -161,12 +234,27 @@ export function DashboardPage() {
               <div className="tyr-saga-card__name">{saga.name}</div>
               <div className="tyr-saga-card__meta">
                 <span>{saga.trackerId}</span>
-                <StatusBadge status={saga.status === 'active' ? 'running' : saga.status === 'complete' ? 'complete' : 'failed'} />
+                <StatusBadge
+                  status={
+                    saga.status === 'active'
+                      ? 'running'
+                      : saga.status === 'complete'
+                        ? 'complete'
+                        : 'failed'
+                  }
+                />
                 <ConfidenceBadge value={saga.confidence / 100} />
                 <span>{saga.repos[0]}</span>
               </div>
             </div>
-            <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--color-text-muted)' }}>
+            <div
+              style={{
+                textAlign: 'right',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                color: 'var(--color-text-muted)',
+              }}
+            >
               {saga.phaseSummary.completed} / {saga.phaseSummary.total}
             </div>
             {cells.length > 0 && (
@@ -189,15 +277,11 @@ export function DashboardPage() {
           <StateDot state="running" pulse />
           Raid mesh
         </div>
-        <div className="tyr-flock-viz__cnt">
-          {runningRaids} raids active
-        </div>
+        <div className="tyr-flock-viz__cnt">{runningRaids} raids active</div>
         <RaidMeshCanvas
           sagas={sagas ?? []}
           phases={phaseQueries.map((q) => q.data ?? [])}
-          onClickSaga={(sagaId) =>
-            void navigate({ to: '/tyr/sagas/$sagaId', params: { sagaId } })
-          }
+          onClickSaga={(sagaId) => void navigate({ to: '/tyr/sagas/$sagaId', params: { sagaId } })}
         />
       </div>
 
@@ -205,17 +289,37 @@ export function DashboardPage() {
       <div className="tyr-dash__full">
         <div className="tyr-sec-head">
           <span className="tyr-sec-head__title">Event feed</span>
-          <span className="tyr-eyebrow" style={{ fontFamily: 'var(--font-mono)' }}>sleipnir:*</span>
+          <span className="tyr-eyebrow" style={{ fontFamily: 'var(--font-mono)' }}>
+            sleipnir:*
+          </span>
         </div>
         <div className="tyr-raid-feed">
-          {FEED.map((f, i) => (
-            <div key={i} className="tyr-feed-row">
-              <StateDot state={feedKindToState(f.kind)} />
-              <span className="tyr-feed-row__time">{f.t}</span>
-              <span>{f.body}</span>
-              <span className="tyr-feed-row__subject">{f.subject}</span>
-            </div>
-          ))}
+          {FEED.map((f, i) => {
+            const parentSaga = (sagas ?? []).find((s) => f.subject.startsWith(s.trackerId));
+            return (
+              <div key={i} className="tyr-feed-row">
+                <StateDot state={feedKindToState(f.kind)} />
+                <span className="tyr-feed-row__time">{f.t}</span>
+                <span>{f.body}</span>
+                <span className="tyr-feed-row__subject">{f.subject}</span>
+                <button
+                  className="tyr-feed-row__link"
+                  type="button"
+                  disabled={!parentSaga}
+                  title={parentSaga ? `Open ${parentSaga.trackerId}` : 'No linked saga'}
+                  onClick={() =>
+                    parentSaga &&
+                    void navigate({
+                      to: '/tyr/sagas/$sagaId',
+                      params: { sagaId: parentSaga.id },
+                    })
+                  }
+                >
+                  ↗
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -226,18 +330,24 @@ export function DashboardPage() {
 
       <div className="tyr-kpi tyr-dash__wide">
         <div className="tyr-kpi__label">Raids completed / hour</div>
-        <div className="tyr-kpi__val" style={{ fontSize: 18, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <div
+          className="tyr-kpi__val"
+          style={{ fontSize: 18, display: 'flex', alignItems: 'baseline', gap: 8 }}
+        >
           {throughputTotal}
           <span className="tyr-kpi__unit">· 24h</span>
         </div>
-        <Sparkline values={throughput.map((v) => v / Math.max(...throughput))} id="throughput-full" height={60} />
+        <Sparkline
+          values={throughput.map((v) => v / Math.max(...throughput))}
+          id="throughput-full"
+          height={60}
+        />
       </div>
 
       <div className="tyr-kpi tyr-dash__wide">
         <div className="tyr-kpi__label">Saga confidence</div>
         <div className="tyr-kpi__val" style={{ fontSize: 18 }}>
-          {latestConfidence}%
-          <span className="tyr-kpi__unit">· now</span>
+          {latestConfidence}%<span className="tyr-kpi__unit">· now</span>
         </div>
         <Sparkline values={confidence} id="confidence-full" height={60} />
       </div>

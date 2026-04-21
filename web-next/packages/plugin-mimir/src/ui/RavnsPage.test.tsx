@@ -38,11 +38,25 @@ describe('RavnsPage', () => {
     expect(texts).toContain('idle');
   });
 
-  it('shows dream stats for ravns that have dream cycles', async () => {
+  it('shows bio text for each ravn card', async () => {
+    wrap(<RavnsPage />);
+    await waitFor(() => expect(screen.getAllByTestId('ravn-bio').length).toBeGreaterThan(0));
+    const bios = screen.getAllByTestId('ravn-bio');
+    expect(bios[0]!.textContent).toBeTruthy();
+    expect(bios[0]!.textContent).not.toBe('');
+  });
+
+  it('shows pages-touched count in metrics row', async () => {
+    wrap(<RavnsPage />);
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/pages touched/).length).toBeGreaterThan(0);
+  });
+
+  it('shows last dream timestamp in metrics row for ravns with dream cycles', async () => {
     wrap(<RavnsPage />);
     await waitFor(() => expect(screen.getAllByTestId('ravn-dream').length).toBeGreaterThan(0));
-    const dream = screen.getAllByTestId('ravn-dream')[0]!;
-    expect(dream).toBeInTheDocument();
+    const dreamEl = screen.getAllByTestId('ravn-dream')[0]!;
+    expect(dreamEl.textContent).toMatch(/last dream/i);
   });
 
   it('shows "no dream cycles yet" for ravns without dreams', async () => {
@@ -69,9 +83,7 @@ describe('RavnsPage', () => {
     fireEvent.click(screen.getAllByTestId('ravn-item')[0]!);
     await waitFor(() => screen.getByTestId('ravn-profile'));
     fireEvent.click(screen.getByRole('button', { name: /back to wardens/i }));
-    await waitFor(() =>
-      expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
   });
 
   it('profile view shows dream stats for selected ravn', async () => {
@@ -81,6 +93,82 @@ describe('RavnsPage', () => {
     fireEvent.click(screen.getAllByTestId('ravn-item')[0]!);
     await waitFor(() => screen.getByTestId('ravn-profile'));
     expect(screen.getByTestId('ravn-dream')).toBeInTheDocument();
+  });
+
+  it('profile view shows expertise section', async () => {
+    wrap(<RavnsPage />);
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByTestId('ravn-item')[0]!);
+    await waitFor(() => screen.getByTestId('ravn-profile'));
+    expect(screen.getByTestId('ravn-expertise')).toBeInTheDocument();
+    expect(screen.getByText(/areas of expertise/i)).toBeInTheDocument();
+  });
+
+  it('profile view shows expertise chips from ravn data', async () => {
+    wrap(<RavnsPage />);
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByTestId('ravn-item')[0]!);
+    await waitFor(() => screen.getByTestId('ravn-profile'));
+    // ravn-fjolnir has expertise: ['infra', 'api', 'arch']
+    expect(screen.getByText('infra')).toBeInTheDocument();
+    expect(screen.getByText('api')).toBeInTheDocument();
+    expect(screen.getByText('arch')).toBeInTheDocument();
+  });
+
+  it('profile view shows tools list in hero section', async () => {
+    wrap(<RavnsPage />);
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByTestId('ravn-item')[0]!);
+    await waitFor(() => screen.getByTestId('ravn-profile'));
+    expect(screen.getByTestId('ravn-tools')).toBeInTheDocument();
+    // ravn-fjolnir has tools: ['mimir', 'web', 'file', 'ravn']
+    expect(screen.getByText(/tools:.*mimir/i)).toBeInTheDocument();
+  });
+
+  it('keyboard Enter on a ravn card opens the profile', async () => {
+    wrap(<RavnsPage />);
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
+    const card = screen.getAllByTestId('ravn-item')[0]!;
+    fireEvent.keyDown(card, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByTestId('ravn-profile')).toBeInTheDocument());
+  });
+
+  it('profile view shows no-dream message for ravn with no dream cycles', async () => {
+    wrap(<RavnsPage />);
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
+    // ravn-galdra is the 3rd card and has no dream cycles
+    fireEvent.click(screen.getAllByTestId('ravn-item')[2]!);
+    await waitFor(() => screen.getByTestId('ravn-profile'));
+    expect(screen.getByTestId('ravn-no-dream')).toBeInTheDocument();
+  });
+
+  it('profile view shows "no expertise defined" for ravn with empty expertise', async () => {
+    const noExpertise: IMimirService = {
+      ...createMimirMockAdapter(),
+      mounts: {
+        ...createMimirMockAdapter().mounts,
+        listRavnBindings: async () => [
+          {
+            ravnId: 'ravn-test',
+            ravnRune: 'ᚱ',
+            role: 'index',
+            state: 'idle',
+            mountNames: ['local'],
+            writeMount: 'local',
+            lastDream: null,
+            bio: 'Test ravn with no expertise',
+            pagesTouched: 0,
+            expertise: [],
+            tools: ['mimir'],
+          },
+        ],
+      },
+    };
+    wrap(<RavnsPage />, noExpertise);
+    await waitFor(() => expect(screen.getAllByTestId('ravn-item').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByTestId('ravn-item')[0]!);
+    await waitFor(() => screen.getByTestId('ravn-profile'));
+    expect(screen.getByText(/no expertise defined/i)).toBeInTheDocument();
   });
 
   it('shows error state when service throws', async () => {

@@ -26,6 +26,14 @@ export interface SessionResources {
   memLimitMi: number;
   memUsedMi: number;
   gpuCount: number;
+  diskUsedMi?: number;
+  diskLimitMi?: number;
+}
+
+export interface SessionFileStats {
+  added: number;
+  modified: number;
+  deleted: number;
 }
 
 export interface SessionEvent {
@@ -33,6 +41,8 @@ export interface SessionEvent {
   kind: string;
   body: string;
 }
+
+export type ConnectionType = 'cli' | 'ide' | 'api';
 
 export interface Session {
   id: string;
@@ -50,6 +60,20 @@ export interface Session {
   resources: SessionResources;
   env: Record<string, string>;
   events: SessionEvent[];
+  /** Boot progress 0–1, present while state is requested/provisioning. */
+  bootProgress?: number;
+  /** How the session is being accessed. */
+  connectionType?: ConnectionType;
+  /** Tokens consumed (input side). */
+  tokensIn?: number;
+  /** Tokens consumed (output side). */
+  tokensOut?: number;
+  /** Cost in cents. */
+  costCents?: number;
+  /** One-line preview of the last message or action (≤80 chars). */
+  preview?: string;
+  /** File change summary for this session's workspace. */
+  files?: SessionFileStats;
 }
 
 /** Legal transitions in the session lifecycle state machine. */

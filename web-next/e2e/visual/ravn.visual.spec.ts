@@ -3,6 +3,9 @@
  *
  * All views live at /ravn with tab-based navigation. Tests click each tab to
  * reach the target view, then compare the full page snapshot.
+ *
+ * Shell tabs: Overview, Ravens, Personas, Sessions, Budget
+ * (Triggers and Events content lives within the Overview page.)
  */
 
 import { test, expect } from '@playwright/test';
@@ -14,16 +17,10 @@ test.beforeEach(async ({ page }) => {
   await page.waitForLoadState('networkidle');
 });
 
-/** Click a shell tab by its visible label. */
-async function clickTab(page: import('@playwright/test').Page, label: string) {
-  await page.click(`button.niuu-shell__tab:has-text("${label}")`);
-  await page.waitForTimeout(400);
-}
-
 // ── Overview ──────────────────────────────────────────────────────────────────
 
 test('ravn overview matches web2', async ({ page }) => {
-  // Overview is the default tab, already active
+  // Overview is the default tab at /ravn
   await page.waitForSelector('[data-testid="overview-page"]', { timeout: 5_000 });
   await expect(page).toHaveScreenshot('ravn-overview.png');
 });
@@ -31,27 +28,32 @@ test('ravn overview matches web2', async ({ page }) => {
 // ── Ravens ─────────────────────────────────────────────────────────────────────
 
 test('ravn ravens split view matches web2', async ({ page }) => {
-  await clickTab(page, 'Ravens');
+  await page.getByTestId('ravn-tab-ravens').click();
+  await page.waitForSelector('[data-testid="ravens-page"]', { timeout: 5_000 });
+  await page.waitForSelector('[data-testid="layout-split"]', { timeout: 5_000 });
   await expect(page).toHaveScreenshot('ravn-ravens-split.png');
 });
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
 test('ravn sessions matches web2', async ({ page }) => {
-  await clickTab(page, 'Sessions');
+  await page.getByTestId('ravn-tab-sessions').click();
+  await page.waitForTimeout(400);
   await expect(page).toHaveScreenshot('ravn-sessions.png');
 });
 
 // ── Budget ─────────────────────────────────────────────────────────────────────
 
 test('ravn budget matches web2', async ({ page }) => {
-  await clickTab(page, 'Budget');
+  await page.getByTestId('ravn-tab-budget').click();
+  await page.waitForTimeout(400);
   await expect(page).toHaveScreenshot('ravn-budget.png');
 });
 
 // ── Personas ───────────────────────────────────────────────────────────────────
 
 test('ravn personas matches web2', async ({ page }) => {
-  await clickTab(page, 'Personas');
+  await page.getByTestId('ravn-tab-personas').click();
+  await page.waitForSelector('[data-testid="personas-page"]', { timeout: 5_000 });
   await expect(page).toHaveScreenshot('ravn-personas.png');
 });

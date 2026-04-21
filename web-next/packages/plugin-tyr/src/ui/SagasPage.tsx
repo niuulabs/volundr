@@ -9,6 +9,8 @@ import {
   Pipe,
   Rune,
   relTime,
+  useToast,
+  Modal,
 } from '@niuulabs/ui';
 import type { SagaStatus } from '../domain/saga';
 import type { Saga } from '../domain/saga';
@@ -26,7 +28,7 @@ const SAGA_GLYPHS = ['ᚠ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚢ', 'ᚨ', 'ᛃ', 'ᚦ', '�
 
 function sagaGlyph(id: string): string {
   let h = 0;
-  for (const c of id) h = ((h * 31 + c.charCodeAt(0)) >>> 0);
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return SAGA_GLYPHS[h % SAGA_GLYPHS.length]!;
 }
 
@@ -134,13 +136,13 @@ function SagaListRow({ saga, isSelected, onClick }: SagaListRowProps) {
 
 export function SagasPage() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const params = useParams({ strict: false }) as { sagaId?: string };
   const { data: sagas, isLoading, isError, error } = useSagas();
   const [filter, setFilter] = useState<StatusFilter>('all');
+  const [showNewSagaModal, setShowNewSagaModal] = useState(false);
   const [search, setSearch] = useState('');
-  const [selectedSagaId, setSelectedSagaId] = useState<string | null>(
-    params.sagaId ?? null,
-  );
+  const [selectedSagaId, setSelectedSagaId] = useState<string | null>(params.sagaId ?? null);
 
   // Auto-select first active saga when none selected
   useEffect(() => {
@@ -186,7 +188,7 @@ export function SagasPage() {
       >
         {/* Header */}
         <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-3 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary">
-          <Rune glyph="ᛏ" size={22} />
+          <Rune glyph="ᚦ" size={22} />
           <h2 className="niuu-m-0 niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-flex-1">
             Sagas
           </h2>
@@ -201,6 +203,7 @@ export function SagasPage() {
               a.download = 'sagas.json';
               a.click();
               setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+              toast({ title: `Exported ${allSagas.length} sagas`, tone: 'success' });
             }}
             aria-label="Export sagas as JSON"
           >
@@ -209,7 +212,7 @@ export function SagasPage() {
           <button
             type="button"
             className="niuu-px-2.5 niuu-py-1 niuu-text-xs niuu-bg-brand niuu-text-bg-primary niuu-rounded niuu-font-medium"
-            onClick={() => void navigate({ to: '/tyr/plan' as never })}
+            onClick={() => setShowNewSagaModal(true)}
             aria-label="Create new saga"
           >
             + New Saga
@@ -285,10 +288,36 @@ export function SagasPage() {
           <SagaDetailPage sagaId={selectedSagaId} hideBackButton />
         ) : (
           <div className="niuu-flex niuu-items-center niuu-justify-center niuu-h-full">
-            <EmptyState title="Select a saga" description="Click a saga on the left to view its details." />
+            <EmptyState
+              title="Select a saga"
+              description="Click a saga on the left to view its details."
+            />
           </div>
         )}
       </div>
+
+      {/* ── New saga confirmation modal ─────────────────── */}
+      <Modal
+        open={showNewSagaModal}
+        onOpenChange={setShowNewSagaModal}
+        title="New Saga"
+        description="New sagas start from a prompt in the Plan view."
+        actions={[
+          {
+            label: 'Cancel',
+            variant: 'secondary',
+            closes: true,
+          },
+          {
+            label: 'Go to Plan →',
+            variant: 'primary',
+            closes: true,
+            onClick: () => void navigate({ to: '/tyr/plan' as never }),
+          },
+        ]}
+      >
+        <p className="niuu-m-0 niuu-text-sm niuu-text-text-secondary">Want to go there now?</p>
+      </Modal>
     </div>
   );
 }

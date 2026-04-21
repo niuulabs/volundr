@@ -50,6 +50,7 @@ interface RawSaga {
   name: string;
   repos: string[];
   feature_branch: string;
+  base_branch?: string;
   status: string;
   confidence: number;
   created_at: string;
@@ -201,6 +202,7 @@ function toSaga(raw: RawSaga): Saga {
     name: raw.name,
     repos: raw.repos,
     featureBranch: raw.feature_branch,
+    baseBranch: raw.base_branch ?? 'main',
     status: raw.status as Saga['status'],
     confidence: raw.confidence,
     createdAt: raw.created_at,

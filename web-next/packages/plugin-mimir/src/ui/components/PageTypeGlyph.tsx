@@ -4,7 +4,7 @@
  * Maps each PageType to a canonical Elder Futhark rune from the
  * ShapeSvg / rune glyph map:
  *   entity     → ᚢ (Uruz — the aurochs, primal force)
- *   topic      → ᛏ (Tiwaz — the sky god, knowledge)
+ *   topic      → ᚦ (Thurisaz — the thorn, directed force)
  *   directive  → ᚱ (Raidho — the ride, forward movement)
  *   preference → ᚷ (Gebo — gift, mutual exchange)
  *   decision   → ᛜ (Ingwaz — the seed, crystallised outcome)
@@ -14,7 +14,7 @@ import type { PageType } from '../../domain/page';
 
 const GLYPH_MAP: Record<PageType, string> = {
   entity: 'ᚢ',
-  topic: 'ᛏ',
+  topic: 'ᚦ',
   directive: 'ᚱ',
   preference: 'ᚷ',
   decision: 'ᛜ',

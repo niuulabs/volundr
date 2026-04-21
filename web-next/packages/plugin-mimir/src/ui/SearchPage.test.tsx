@@ -78,7 +78,26 @@ describe('SearchPage', () => {
     await waitFor(() => expect(screen.getAllByTestId('search-result').length).toBeGreaterThan(0));
     const results = screen.getAllByTestId('search-result');
     const first = results[0]!;
-    expect(first.querySelector('.search-page__result-title')).toBeTruthy();
-    expect(first.querySelector('.search-page__result-path')).toBeTruthy();
+    expect(first.querySelector('[data-testid="result-title"]')).toBeTruthy();
+    expect(first.querySelector('[data-testid="result-path"]')).toBeTruthy();
+  });
+
+  it('each result shows a numeric score', async () => {
+    wrap(<SearchPage />);
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'architecture' } });
+    await waitFor(() => expect(screen.getAllByTestId('search-result').length).toBeGreaterThan(0));
+    const scoreEl = screen.getAllByTestId('result-score')[0]!;
+    expect(scoreEl.textContent).toMatch(/score \d+\.\d+/);
+  });
+
+  it('each result shows mount chips', async () => {
+    wrap(<SearchPage />);
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'architecture' } });
+    await waitFor(() => expect(screen.getAllByTestId('search-result').length).toBeGreaterThan(0));
+    // Mount chips use aria-label="mount: <name>"
+    const mountChips = screen
+      .getAllByRole('generic', { hidden: false })
+      .filter((el) => el.getAttribute('aria-label')?.startsWith('mount:'));
+    expect(mountChips.length).toBeGreaterThan(0);
   });
 });

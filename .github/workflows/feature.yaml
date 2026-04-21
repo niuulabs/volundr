@@ -13,7 +13,9 @@ on:
   push:
     branches: ['feat/**']
 
-permissions: read-all
+permissions:
+  contents: read
+  packages: write     # Required by containers + build-charts jobs
 
 env:
   REGISTRY: ghcr.io
@@ -66,6 +68,9 @@ jobs:
   containers:
     name: Containers
     needs: meta
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/reusable-container-build.yaml
     with:
       containers: '["volundr","skuld","devrunner","volundr-web","vscode-reh","tyr","niuu","mimir","bifrost"]'

@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { Drawer, DrawerContent, Sparkline, StateDot } from '@niuulabs/ui';
+import { useEffect, useMemo } from 'react';
+import { Sparkline, StateDot } from '@niuulabs/ui';
 import type { DotState } from '@niuulabs/ui';
 import type { TopologyNode, Topology, Registry, NodeActivity } from '../../domain';
 import './EntityDrawer.css';
@@ -67,10 +67,7 @@ function KindProperties({ node }: { node: TopologyNode }) {
           <>
             <dt>mode</dt>
             <dd>
-              <span
-                className="obs-entity-drawer__badge"
-                data-mode={node.mode}
-              >
+              <span className="obs-entity-drawer__badge" data-mode={node.mode}>
                 {node.mode ?? '—'}
               </span>
             </dd>
@@ -87,7 +84,9 @@ function KindProperties({ node }: { node: TopologyNode }) {
             <dt>req/min</dt>
             <dd>{node.reqPerMin ?? 0}</dd>
             <dt>cache hit</dt>
-            <dd>{node.cacheHitRate !== undefined ? `${Math.round(node.cacheHitRate * 100)}%` : '—'}</dd>
+            <dd>
+              {node.cacheHitRate !== undefined ? `${Math.round(node.cacheHitRate * 100)}%` : '—'}
+            </dd>
           </>
         )}
         {kind === 'volundr' && (
@@ -185,7 +184,7 @@ function KindProperties({ node }: { node: TopologyNode }) {
   );
 }
 
-// ── Realm drawer ──────────────────────────────────────────────────────────────
+// ── Realm drawer body ─────────────────────────────────────────────────────────
 
 interface RealmDrawerProps {
   node: TopologyNode;
@@ -197,7 +196,7 @@ function RealmDrawer({ node, topology, onNodeSelect }: RealmDrawerProps) {
   const residents = topology ? topology.nodes.filter((n) => n.parentId === node.id) : [];
 
   return (
-    <DrawerContent title={node.label} width={360}>
+    <>
       <div className="obs-entity-drawer__head">
         <div className="obs-entity-drawer__identity">
           <span className="obs-entity-drawer__rune" aria-hidden="true">
@@ -212,9 +211,7 @@ function RealmDrawer({ node, topology, onNodeSelect }: RealmDrawerProps) {
         </div>
       </div>
       <div className="obs-entity-drawer__body">
-        {node.purpose && (
-          <p className="obs-entity-drawer__description">{node.purpose}</p>
-        )}
+        {node.purpose && <p className="obs-entity-drawer__description">{node.purpose}</p>}
         <section className="obs-entity-drawer__section">
           <h4 className="obs-entity-drawer__section-title">About</h4>
           <dl className="obs-entity-drawer__prop-grid">
@@ -245,9 +242,7 @@ function RealmDrawer({ node, topology, onNodeSelect }: RealmDrawerProps) {
                     onClick={() => onNodeSelect?.(resident)}
                     data-testid={`resident-${resident.id}`}
                   >
-                    {resident.activity && (
-                      <ActivityDot activity={resident.activity} />
-                    )}
+                    {resident.activity && <ActivityDot activity={resident.activity} />}
                     <span className="obs-entity-drawer__resident-label">{resident.label}</span>
                     <span className="obs-entity-drawer__resident-kind">{resident.typeId}</span>
                   </button>
@@ -262,11 +257,11 @@ function RealmDrawer({ node, topology, onNodeSelect }: RealmDrawerProps) {
           </section>
         )}
       </div>
-    </DrawerContent>
+    </>
   );
 }
 
-// ── Cluster drawer ────────────────────────────────────────────────────────────
+// ── Cluster drawer body ───────────────────────────────────────────────────────
 
 interface ClusterDrawerProps {
   node: TopologyNode;
@@ -278,7 +273,7 @@ function ClusterDrawer({ node, topology, onNodeSelect }: ClusterDrawerProps) {
   const members = topology ? topology.nodes.filter((n) => n.parentId === node.id) : [];
 
   return (
-    <DrawerContent title={node.label} width={360}>
+    <>
       <div className="obs-entity-drawer__head">
         <div className="obs-entity-drawer__identity">
           <span className="obs-entity-drawer__rune" aria-hidden="true">
@@ -287,7 +282,9 @@ function ClusterDrawer({ node, topology, onNodeSelect }: ClusterDrawerProps) {
           <div className="obs-entity-drawer__meta">
             <span className="obs-entity-drawer__type-label">Cluster · k8s</span>
             {node.parentId && (
-              <span className="obs-entity-drawer__id-chip">realm · {node.zone ?? node.parentId}</span>
+              <span className="obs-entity-drawer__id-chip">
+                realm · {node.zone ?? node.parentId}
+              </span>
             )}
           </div>
         </div>
@@ -295,9 +292,7 @@ function ClusterDrawer({ node, topology, onNodeSelect }: ClusterDrawerProps) {
       <div className="obs-entity-drawer__body">
         <section className="obs-entity-drawer__section">
           <h4 className="obs-entity-drawer__section-title">About</h4>
-          {node.purpose && (
-            <p className="obs-entity-drawer__description">{node.purpose}</p>
-          )}
+          {node.purpose && <p className="obs-entity-drawer__description">{node.purpose}</p>}
           <dl className="obs-entity-drawer__prop-grid">
             {node.zone && (
               <>
@@ -320,9 +315,7 @@ function ClusterDrawer({ node, topology, onNodeSelect }: ClusterDrawerProps) {
                     onClick={() => onNodeSelect?.(member)}
                     data-testid={`resident-${member.id}`}
                   >
-                    {member.activity && (
-                      <ActivityDot activity={member.activity} />
-                    )}
+                    {member.activity && <ActivityDot activity={member.activity} />}
                     <span className="obs-entity-drawer__resident-label">{member.label}</span>
                     <span className="obs-entity-drawer__resident-kind">{member.typeId}</span>
                   </button>
@@ -332,7 +325,7 @@ function ClusterDrawer({ node, topology, onNodeSelect }: ClusterDrawerProps) {
           </section>
         )}
       </div>
-    </DrawerContent>
+    </>
   );
 }
 
@@ -359,25 +352,31 @@ export function EntityDrawer({
       { length: 24 },
       (_, i) => 30 + Math.sin(i * 0.7 + seed) * 15 + (Math.sin(i * 1.3 + seed * 3) * 10 + 10),
     );
-  }, [node?.id]);
+  }, [node]);
 
   const showSparkline = ['ravn_long', 'bifrost'].includes(node?.typeId ?? '');
 
+  useEffect(() => {
+    if (!node) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [node, onClose]);
+
+  if (!node) return null;
+
   return (
-    <Drawer
-      open={node !== null}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      {node && isRealm && (
-        <RealmDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />
-      )}
-      {node && isCluster && (
-        <ClusterDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />
-      )}
-      {node && !isRealm && !isCluster && (
-        <DrawerContent title={node.label} width={360}>
+    <aside role="dialog" aria-label={node.label} className="obs-entity-drawer__panel">
+      <button className="obs-entity-drawer__close-btn" aria-label="Close" onClick={onClose}>
+        <span aria-hidden="true">✕</span>
+      </button>
+
+      {isRealm && <RealmDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />}
+      {isCluster && <ClusterDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />}
+      {!isRealm && !isCluster && (
+        <>
           {/* HEAD — rune · label · activity · status · timestamp */}
           <div className="obs-entity-drawer__head">
             <div className="obs-entity-drawer__identity">
@@ -415,7 +414,9 @@ export function EntityDrawer({
             )}
 
             {entityType?.description && (
-              <p className="obs-entity-drawer__description">{entityType.description.split('.')[0]}.</p>
+              <p className="obs-entity-drawer__description">
+                {entityType.description.split('.')[0]}.
+              </p>
             )}
 
             {/* Identity section */}
@@ -481,10 +482,7 @@ export function EntityDrawer({
                           data-testid={`resident-${resident.id}`}
                         >
                           {residentType && (
-                            <span
-                              className="obs-entity-drawer__resident-rune"
-                              aria-hidden="true"
-                            >
+                            <span className="obs-entity-drawer__resident-rune" aria-hidden="true">
                               {residentType.rune}
                             </span>
                           )}
@@ -558,8 +556,8 @@ export function EntityDrawer({
               </div>
             </section>
           </div>
-        </DrawerContent>
+        </>
       )}
-    </Drawer>
+    </aside>
   );
 }

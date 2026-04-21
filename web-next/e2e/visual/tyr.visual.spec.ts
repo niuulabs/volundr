@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
 test('tyr dashboard matches web2', async ({ page }) => {
   await page.goto('/tyr');
   await page.waitForLoadState('networkidle');
-  await page.waitForSelector('text=Saga stream', { timeout: 10_000 });
+  await page.waitForSelector('text=Active sagas', { timeout: 10_000 });
   await expect(page).toHaveScreenshot('tyr-dashboard.png');
 });
 
@@ -22,12 +22,15 @@ test('tyr dashboard matches web2', async ({ page }) => {
 test('tyr sagas list matches web2', async ({ page }) => {
   await page.goto('/tyr/sagas');
   await page.waitForLoadState('networkidle');
+  await page.waitForSelector('text=Sagas', { timeout: 10_000 });
   await expect(page).toHaveScreenshot('tyr-sagas-list.png');
 });
 
 test('tyr saga detail matches web2', async ({ page }) => {
+  // Navigate to first saga detail (Auth Rewrite from seed data)
   await page.goto('/tyr/sagas/00000000-0000-0000-0000-000000000001');
   await page.waitForLoadState('networkidle');
+  await page.waitForSelector('text=Auth Rewrite', { timeout: 10_000 });
   await expect(page).toHaveScreenshot('tyr-saga-detail.png');
 });
 
@@ -52,7 +55,7 @@ test('tyr workflows matches web2', async ({ page }) => {
 test('tyr plan matches web2', async ({ page }) => {
   await page.goto('/tyr/plan');
   await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(500);
+  await page.waitForSelector('text=Describe your goal', { timeout: 10_000 });
   await expect(page).toHaveScreenshot('tyr-plan.png');
 });
 

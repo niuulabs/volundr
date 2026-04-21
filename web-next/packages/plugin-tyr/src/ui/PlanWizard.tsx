@@ -26,7 +26,8 @@ export function PlanWizard() {
     window.location.href = '/tyr/plan';
   }
 
-  const showGuidance = state.step === 'prompt' || state.step === 'questions' || state.step === 'draft';
+  const showGuidance =
+    state.step === 'prompt' || state.step === 'questions' || state.step === 'draft';
 
   return (
     <div className="niuu-flex niuu-h-full niuu-overflow-hidden">
@@ -34,7 +35,7 @@ export function PlanWizard() {
       <div className="niuu-flex-1 niuu-overflow-y-auto">
         <div className="niuu-p-6 niuu-max-w-2xl niuu-mx-auto">
           <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-mb-6">
-            <Rune glyph="ᛏ" size={24} />
+            <Rune glyph="ᚦ" size={24} />
             <h1 className="niuu-text-base niuu-font-semibold niuu-text-text-secondary niuu-m-0">
               New saga plan
             </h1>

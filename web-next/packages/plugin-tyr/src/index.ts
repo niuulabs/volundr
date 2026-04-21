@@ -6,12 +6,13 @@ import { SagasPage } from './ui/SagasPage';
 import { DispatchView } from './ui/DispatchView';
 import { SettingsPage, SettingsIndexPage } from './ui/settings/SettingsPage';
 import { SettingsRail } from './ui/settings/SettingsRail';
-import { SettingsTopbar } from './ui/settings/SettingsTopbar';
+import { TyrTopbar } from './ui/TyrTopbar';
+import { TyrFooter } from './ui/TyrFooter';
 import { PlanWizard } from './ui/PlanWizard';
 
 export const tyrPlugin = definePlugin({
   id: 'tyr',
-  rune: 'ᛏ',
+  rune: 'ᚦ',
   title: 'Tyr',
   subtitle: 'sagas · raids · dispatch',
   tabs: [
@@ -85,7 +86,8 @@ export const tyrPlugin = definePlugin({
     }),
   ],
   subnav: () => SettingsRail(),
-  topbarRight: () => SettingsTopbar(),
+  topbarRight: () => TyrTopbar(),
+  footer: () => TyrFooter(),
 });
 
 // Mock adapters

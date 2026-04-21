@@ -15,7 +15,11 @@ export interface SourceLabelProps {
 /** Git repo@branch label or local mount path */
 export function SourceLabel({ source, short = false, className }: SourceLabelProps) {
   if (!source) {
-    return <span className="niuu-font-mono niuu-text-text-faint" data-testid="source-label">—</span>;
+    return (
+      <span className="niuu-font-mono niuu-text-text-faint" data-testid="source-label">
+        —
+      </span>
+    );
   }
 
   if (source.type === 'git' && source.repo) {
@@ -29,7 +33,9 @@ export function SourceLabel({ source, short = false, className }: SourceLabelPro
         data-testid="source-label"
         title={`${source.repo}@${source.branch ?? 'main'}`}
       >
-        <span className="niuu-text-text-muted" aria-hidden>❯</span>
+        <span className="niuu-text-text-muted" aria-hidden>
+          ❯
+        </span>
         {short ? (
           <span>{repo}</span>
         ) : (
@@ -50,7 +56,9 @@ export function SourceLabel({ source, short = false, className }: SourceLabelPro
       data-testid="source-label"
       title={source.path}
     >
-      <span className="niuu-text-text-muted" aria-hidden>⌂</span>
+      <span className="niuu-text-text-muted" aria-hidden>
+        ⌂
+      </span>
       <span>{source.path}</span>
     </span>
   );

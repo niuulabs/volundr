@@ -1,5 +1,5 @@
 .obs-minimap {
-  position: fixed;
+  position: absolute;
   bottom: var(--space-4);
   right: var(--space-4);
   z-index: 40;

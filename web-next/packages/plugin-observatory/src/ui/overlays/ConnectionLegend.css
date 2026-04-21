@@ -1,5 +1,5 @@
 .obs-conn-legend {
-  position: fixed;
+  position: absolute;
   top: var(--space-4);
   left: var(--space-4);
   z-index: 40;

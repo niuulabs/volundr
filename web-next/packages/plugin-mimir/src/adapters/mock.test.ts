@@ -286,4 +286,50 @@ describe('createMimirMockAdapter', () => {
       expect(kinds.size).toBeGreaterThan(1);
     });
   });
+
+  describe('pages.ingestUrl', () => {
+    it('returns a source with web originType and the given URL', async () => {
+      const svc = createMimirMockAdapter();
+      const source = await svc.pages.ingestUrl('https://example.com/doc');
+      expect(source.originType).toBe('web');
+      expect(source.originUrl).toBe('https://example.com/doc');
+      expect(source.id).toBeDefined();
+      expect(source.ingestedAt).toBeDefined();
+    });
+
+    it('appends the new source to the list', async () => {
+      const svc = createMimirMockAdapter();
+      const before = await svc.pages.listSources();
+      await svc.pages.ingestUrl('https://example.com/new');
+      const after = await svc.pages.listSources();
+      expect(after.length).toBe(before.length + 1);
+    });
+
+    it('newly ingested source appears first in the list', async () => {
+      const svc = createMimirMockAdapter();
+      const source = await svc.pages.ingestUrl('https://example.com/newest');
+      const all = await svc.pages.listSources();
+      expect(all[0]!.id).toBe(source.id);
+    });
+  });
+
+  describe('pages.ingestFile', () => {
+    it('returns a source with file originType and the file name', async () => {
+      const svc = createMimirMockAdapter();
+      const file = new File(['# hello'], 'test.md', { type: 'text/markdown' });
+      const source = await svc.pages.ingestFile(file);
+      expect(source.originType).toBe('file');
+      expect(source.originPath).toBe('test.md');
+      expect(source.id).toBeDefined();
+    });
+
+    it('appends the new file source to the list', async () => {
+      const svc = createMimirMockAdapter();
+      const before = await svc.pages.listSources();
+      const file = new File(['content'], 'notes.txt', { type: 'text/plain' });
+      await svc.pages.ingestFile(file);
+      const after = await svc.pages.listSources();
+      expect(after.length).toBe(before.length + 1);
+    });
+  });
 });

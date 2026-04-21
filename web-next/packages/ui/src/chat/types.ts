@@ -36,6 +36,12 @@ export interface ParticipantMeta {
   subscribesTo?: string[];
   emits?: string[];
   tools?: string[];
+  /** Gateway URI, e.g. "bifrost://anthropic/claude-sonnet" */
+  gateway?: string;
+  /** Gateway round-trip latency in milliseconds */
+  gatewayLatencyMs?: number;
+  /** Gateway region, e.g. "us-east-1" */
+  gatewayRegion?: string;
 }
 
 export type RoomParticipant = ParticipantMeta;

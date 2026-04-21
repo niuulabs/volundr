@@ -43,6 +43,7 @@ function makeSaga(overrides: Partial<Saga> = {}): Saga {
     name: 'Auth Rewrite',
     repos: ['niuulabs/volundr'],
     featureBranch: 'feat/auth-rewrite',
+    baseBranch: 'main',
     status: 'active',
     confidence: 82,
     createdAt: '2026-01-10T09:00:00Z',
@@ -128,7 +129,10 @@ describe('SagaDetailPage', () => {
     render(<SagaDetailPage sagaId={SAGA_ID} />, {
       wrapper: wrap({ tyr: createMockTyrService() }),
     });
-    await waitFor(() => expect(screen.getByText('Phase 1: Foundation')).toBeInTheDocument());
+    // Phase name appears in the phase heading AND in the StageProgressRail labels
+    await waitFor(() =>
+      expect(screen.getAllByText('Phase 1: Foundation').length).toBeGreaterThan(0),
+    );
     expect(screen.getByText('Implement OIDC flow')).toBeInTheDocument();
   });
 
@@ -138,7 +142,10 @@ describe('SagaDetailPage', () => {
       getPhases: async () => [makePhase([makeRaid({ sessionId: 'sess-001' })])],
     };
     render(<SagaDetailPage sagaId={SAGA_ID} />, { wrapper: wrap({ tyr: svc }) });
-    await waitFor(() => expect(screen.getByText('Phase 1: Foundation')).toBeInTheDocument());
+    // Phase name appears in the phase heading AND in the StageProgressRail labels
+    await waitFor(() =>
+      expect(screen.getAllByText('Phase 1: Foundation').length).toBeGreaterThan(0),
+    );
     // PersonaAvatar for the build role uses aria-label="build persona" (default when no title)
     expect(screen.getAllByLabelText(/build persona/i).length).toBeGreaterThan(0);
   });
@@ -276,5 +283,165 @@ describe('SagaDetailRoute', () => {
   it('renders SagaDetailPage with sagaId from URL params', async () => {
     render(<SagaDetailRoute />, { wrapper: wrap({ tyr: createMockTyrService() }) });
     await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Right-column cards (added in NIU-709)
+// ---------------------------------------------------------------------------
+
+describe('SagaDetailPage — right-column cards', () => {
+  beforeEach(() => {
+    mockNavigate.mockClear();
+  });
+
+  it('renders the WorkflowCard section', async () => {
+    render(<SagaDetailPage sagaId={SAGA_ID} />, {
+      wrapper: wrap({ tyr: createMockTyrService() }),
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: /workflow/i })).toBeInTheDocument(),
+    );
+  });
+
+  it('renders the workflow name from saga data', async () => {
+    render(<SagaDetailPage sagaId={SAGA_ID} />, {
+      wrapper: wrap({ tyr: createMockTyrService() }),
+    });
+    await waitFor(() =>
+      expect(screen.getByText(/ship — default release cycle/i)).toBeInTheDocument(),
+    );
+  });
+
+  it('renders the workflow version from saga data', async () => {
+    render(<SagaDetailPage sagaId={SAGA_ID} />, {
+      wrapper: wrap({ tyr: createMockTyrService() }),
+    });
+    await waitFor(() => expect(screen.getByText('v1.4.2')).toBeInTheDocument());
+  });
+
+  it('renders the StageProgressRail section', async () => {
+    render(<SagaDetailPage sagaId={SAGA_ID} />, {
+      wrapper: wrap({ tyr: createMockTyrService() }),
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: /stage progress/i })).toBeInTheDocument(),
+    );
+  });
+
+  it('renders the stage count in StageProgressRail', async () => {
+    render(<SagaDetailPage sagaId={SAGA_ID} />, {
+      wrapper: wrap({ tyr: createMockTyrService() }),
+    });
+    // mock service returns 3 phases for saga 001: Phase 1 (complete), Phase 2 (complete), Phase 3 (pending)
+    await waitFor(() => expect(screen.getByText('2 / 3')).toBeInTheDocument());
+  });
+
+  it('renders the ConfidenceDriftCard section', async () => {
+    render(<SagaDetailPage sagaId={SAGA_ID} />, {
+      wrapper: wrap({ tyr: createMockTyrService() }),
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: /confidence drift/i })).toBeInTheDocument(),
+    );
+  });
+
+  it('renders the current confidence in ConfidenceDriftCard', async () => {
+    render(<SagaDetailPage sagaId={SAGA_ID} />, {
+      wrapper: wrap({ tyr: createMockTyrService() }),
+    });
+    // saga 001 has confidence 82 → 0.82
+    await waitFor(() => expect(screen.getByText('0.82')).toBeInTheDocument());
+  });
+
+  it('renders right-column cards with default workflow when saga has no workflow data', async () => {
+    const svc = {
+      getSaga: async () => makeSaga({ workflow: undefined, workflowVersion: undefined }),
+      getPhases: async () => [],
+    };
+    render(<SagaDetailPage sagaId={SAGA_ID} />, { wrapper: wrap({ tyr: svc }) });
+    await waitFor(() =>
+      expect(screen.getByText(/ship — default release cycle/i)).toBeInTheDocument(),
+    );
+    expect(screen.getByText('v1.0.0')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NIU-710: Visual parity additions
+// ---------------------------------------------------------------------------
+
+describe('SagaDetailPage — NIU-710 parity', () => {
+  beforeEach(() => {
+    mockNavigate.mockClear();
+  });
+
+  it('subline shows featureBranch → baseBranch', async () => {
+    const svc = {
+      getSaga: async () => makeSaga({ featureBranch: 'feat/auth-rewrite', baseBranch: 'main' }),
+      getPhases: async (): Promise<Phase[]> => [],
+    };
+    render(<SagaDetailPage sagaId={SAGA_ID} />, { wrapper: wrap({ tyr: svc }) });
+    await waitFor(() => expect(screen.getByText(/feat\/auth-rewrite → main/)).toBeInTheDocument());
+  });
+
+  it('subline uses saga.baseBranch when provided', async () => {
+    const svc = {
+      getSaga: async () => makeSaga({ featureBranch: 'feat/my-feature', baseBranch: 'dev' }),
+      getPhases: async (): Promise<Phase[]> => [],
+    };
+    render(<SagaDetailPage sagaId={SAGA_ID} />, { wrapper: wrap({ tyr: svc }) });
+    await waitFor(() => expect(screen.getByText(/feat\/my-feature → dev/)).toBeInTheDocument());
+  });
+
+  it('raid row shows raid trackerId in monospace between status and name', async () => {
+    const svc = {
+      getSaga: async () => makeSaga(),
+      getPhases: async () => [makePhase([makeRaid({ trackerId: 'NIU-501' })])],
+    };
+    render(<SagaDetailPage sagaId={SAGA_ID} />, { wrapper: wrap({ tyr: svc }) });
+    await waitFor(() => expect(screen.getByText('NIU-501')).toBeInTheDocument());
+  });
+
+  it('active phase header renders a StateDot with pulse', async () => {
+    const svc = {
+      getSaga: async () => makeSaga(),
+      getPhases: async () => [
+        {
+          ...makePhase([]),
+          status: 'active' as const,
+        },
+      ],
+    };
+    const { container } = render(<SagaDetailPage sagaId={SAGA_ID} />, {
+      wrapper: wrap({ tyr: svc }),
+    });
+    await waitFor(() =>
+      expect(screen.getAllByText('Phase 1: Foundation').length).toBeGreaterThan(0),
+    );
+    // StateDot for active phase renders with running state + pulse animation
+    expect(
+      container.querySelector('.niuu-state-dot--running.niuu-state-dot--pulse'),
+    ).not.toBeNull();
+  });
+
+  it('pending phase header renders a StateDot with idle state', async () => {
+    const svc = {
+      getSaga: async () => makeSaga(),
+      getPhases: async () => [
+        {
+          ...makePhase([]),
+          status: 'pending' as const,
+        },
+      ],
+    };
+    const { container } = render(<SagaDetailPage sagaId={SAGA_ID} />, {
+      wrapper: wrap({ tyr: svc }),
+    });
+    await waitFor(() =>
+      expect(screen.getAllByText('Phase 1: Foundation').length).toBeGreaterThan(0),
+    );
+    // StateDot for pending phase renders with idle state CSS class
+    expect(container.querySelector('.niuu-state-dot--idle')).not.toBeNull();
   });
 });

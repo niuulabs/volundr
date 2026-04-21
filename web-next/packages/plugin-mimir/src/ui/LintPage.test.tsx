@@ -37,9 +37,7 @@ describe('LintPage', () => {
 
   it('renders check rows for each rule in the sidebar', async () => {
     wrap(<LintPage />);
-    await waitFor(() =>
-      expect(screen.getAllByTestId('check-row').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('check-row').length).toBeGreaterThan(0));
   });
 
   it('clicking a check row filters issues to that rule', async () => {
@@ -146,5 +144,37 @@ describe('LintPage', () => {
   it('KPI strip shows auto-fixable count', async () => {
     wrap(<LintPage />);
     await waitFor(() => expect(screen.getByText('auto-fixable')).toBeInTheDocument());
+  });
+
+  it('does not show rule description box when no rule is selected', async () => {
+    wrap(<LintPage />);
+    await waitFor(() => expect(screen.getAllByTestId('lint-issue').length).toBeGreaterThan(0));
+    expect(screen.queryByTestId('rule-description')).not.toBeInTheDocument();
+  });
+
+  it('shows rule description box when a rule is selected', async () => {
+    wrap(<LintPage />);
+    await waitFor(() => expect(screen.getAllByTestId('check-row').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByTestId('check-row')[0]!);
+    await waitFor(() => expect(screen.getByTestId('rule-description')).toBeInTheDocument());
+  });
+
+  it('rule description box shows rule id, description, and fix hint', async () => {
+    wrap(<LintPage />);
+    await waitFor(() => expect(screen.getAllByTestId('check-row').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByTestId('check-row')[0]!);
+    await waitFor(() => expect(screen.getByTestId('rule-description')).toBeInTheDocument());
+    const box = screen.getByTestId('rule-description');
+    expect(box.textContent).toMatch(/How to fix:/);
+  });
+
+  it('hides rule description box after deselecting a rule', async () => {
+    wrap(<LintPage />);
+    await waitFor(() => expect(screen.getAllByTestId('check-row').length).toBeGreaterThan(0));
+    const row = screen.getAllByTestId('check-row')[0]!;
+    fireEvent.click(row);
+    await waitFor(() => expect(screen.getByTestId('rule-description')).toBeInTheDocument());
+    fireEvent.click(row);
+    await waitFor(() => expect(screen.queryByTestId('rule-description')).not.toBeInTheDocument());
   });
 });
