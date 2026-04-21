@@ -61,6 +61,24 @@ describe('createApiClient', () => {
     expect(opts.body).toBe(JSON.stringify({ name: 'x' }));
   });
 
+  it('POST with FormData passes it through without JSON.stringify', async () => {
+    const client = createApiClient(BASE);
+    const form = new FormData();
+    form.append('file', new Blob(['hello'], { type: 'text/plain' }), 'hello.txt');
+    await client.post('/upload', form);
+    const [, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(opts.method).toBe('POST');
+    expect(opts.body).toBe(form);
+  });
+
+  it('POST with FormData omits Content-Type header so browser sets multipart boundary', async () => {
+    const client = createApiClient(BASE);
+    const form = new FormData();
+    await client.post('/upload', form);
+    const [, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((opts.headers as Record<string, string>)['Content-Type']).toBeUndefined();
+  });
+
   it('PUT sends body as JSON', async () => {
     const client = createApiClient(BASE);
     await client.put('/items/1', { name: 'y' });
