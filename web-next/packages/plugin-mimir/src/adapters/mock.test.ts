@@ -205,6 +205,43 @@ describe('createMimirMockAdapter', () => {
     });
   });
 
+  describe('lint.getActivityLog', () => {
+    it('returns activity event records', async () => {
+      const svc = createMimirMockAdapter();
+      const events = await svc.lint.getActivityLog();
+      expect(events.length).toBeGreaterThan(0);
+    });
+
+    it('each event has required fields', async () => {
+      const svc = createMimirMockAdapter();
+      const events = await svc.lint.getActivityLog();
+      for (const e of events) {
+        expect(e).toHaveProperty('id');
+        expect(e).toHaveProperty('timestamp');
+        expect(e).toHaveProperty('kind');
+        expect(e).toHaveProperty('mount');
+        expect(e).toHaveProperty('ravn');
+        expect(e).toHaveProperty('message');
+      }
+    });
+
+    it('includes all expected kind values', async () => {
+      const svc = createMimirMockAdapter();
+      const events = await svc.lint.getActivityLog();
+      const kinds = new Set(events.map((e) => e.kind));
+      expect(kinds.has('write')).toBe(true);
+      expect(kinds.has('ingest')).toBe(true);
+      expect(kinds.has('lint')).toBe(true);
+      expect(kinds.has('dream')).toBe(true);
+    });
+
+    it('respects limit parameter', async () => {
+      const svc = createMimirMockAdapter();
+      const events = await svc.lint.getActivityLog(2);
+      expect(events.length).toBeLessThanOrEqual(2);
+    });
+  });
+
   describe('pages.getGraph', () => {
     it('returns a graph with nodes and edges', async () => {
       const svc = createMimirMockAdapter();

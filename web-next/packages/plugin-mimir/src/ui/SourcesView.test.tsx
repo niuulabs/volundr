@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import { renderWithMimir as wrap } from '../testing/renderWithMimir';
 import { SourcesView } from './SourcesView';

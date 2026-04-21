@@ -44,6 +44,26 @@ export interface LintReport {
 }
 
 // ---------------------------------------------------------------------------
+// Activity events
+// ---------------------------------------------------------------------------
+
+export type ActivityEventKind = 'write' | 'ingest' | 'lint' | 'dream' | 'query';
+
+export interface ActivityEvent {
+  id: string;
+  /** ISO-8601 timestamp. */
+  timestamp: string;
+  kind: ActivityEventKind;
+  mount: string;
+  /** Ravn that performed the action. */
+  ravn: string;
+  /** Human-readable event message. */
+  message: string;
+  /** Page path, if the event relates to a specific page. */
+  page?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Dream cycles
 // ---------------------------------------------------------------------------
 
