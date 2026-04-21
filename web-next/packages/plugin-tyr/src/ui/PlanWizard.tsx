@@ -19,8 +19,17 @@ import { PlanGuidanceRail } from './PlanGuidanceRail';
  *         Full-width on raiding and approved (content fills the width).
  */
 export function PlanWizard() {
-  const { state, submitPrompt, submitAnswers, approveDraft, editPhase, back, clearError, replan, saveDraft } =
-    usePlanWizard();
+  const {
+    state,
+    submitPrompt,
+    submitAnswers,
+    approveDraft,
+    editPhase,
+    back,
+    clearError,
+    replan,
+    saveDraft,
+  } = usePlanWizard();
   const { data: workflows = [] } = useWorkflows();
 
   function handleNewPlan() {

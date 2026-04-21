@@ -307,5 +307,15 @@ export function usePlanWizard(): { state: PlanWizardState } & PlanWizardActions 
     // No backend persistence yet — acknowledged as a no-op.
   }
 
-  return { state, submitPrompt, submitAnswers, approveDraft, editPhase, back, clearError, replan, saveDraft };
+  return {
+    state,
+    submitPrompt,
+    submitAnswers,
+    approveDraft,
+    editPhase,
+    back,
+    clearError,
+    replan,
+    saveDraft,
+  };
 }

@@ -9,7 +9,13 @@ import { PlanQuestions } from './PlanQuestions';
 import { PlanRaiding } from './PlanRaiding';
 import { PlanDraft } from './PlanDraft';
 import { PlanApproved } from './PlanApproved';
-import type { ITyrService, IWorkflowService, ExtractedStructure, PlanSession, PlanRisk } from '../ports';
+import type {
+  ITyrService,
+  IWorkflowService,
+  ExtractedStructure,
+  PlanSession,
+  PlanRisk,
+} from '../ports';
 import type { Saga } from '../domain/saga';
 import type { Workflow } from '../domain/workflow';
 
@@ -88,8 +94,22 @@ const MOCK_WORKFLOW: Workflow = {
   id: 'wf-1',
   name: 'Ship',
   nodes: [
-    { id: 'n1', kind: 'stage', label: 'Build', raidId: null, personaIds: [], position: { x: 0, y: 0 } },
-    { id: 'n2', kind: 'stage', label: 'Test', raidId: null, personaIds: [], position: { x: 100, y: 0 } },
+    {
+      id: 'n1',
+      kind: 'stage',
+      label: 'Build',
+      raidId: null,
+      personaIds: [],
+      position: { x: 0, y: 0 },
+    },
+    {
+      id: 'n2',
+      kind: 'stage',
+      label: 'Test',
+      raidId: null,
+      personaIds: [],
+      position: { x: 100, y: 0 },
+    },
     { id: 'n3', kind: 'gate', label: 'Review', condition: 'Approved', position: { x: 200, y: 0 } },
   ],
   edges: [],
@@ -404,9 +424,7 @@ describe('PlanDraft', () => {
     );
     expect(screen.getByText('blast')).toBeInTheDocument();
     expect(screen.getByText('untested')).toBeInTheDocument();
-    expect(
-      screen.getByText(/touches dispatch path/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/touches dispatch path/i)).toBeInTheDocument();
   });
 
   it('does not render risks section when no risks', () => {

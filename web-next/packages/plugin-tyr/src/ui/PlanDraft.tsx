@@ -20,7 +20,9 @@ const RISK_KIND_CLASSES: Record<string, string> = {
 };
 
 function getRiskKindClass(kind: string): string {
-  return RISK_KIND_CLASSES[kind] ?? 'niuu-bg-bg-elevated niuu-text-text-secondary niuu-border-border';
+  return (
+    RISK_KIND_CLASSES[kind] ?? 'niuu-bg-bg-elevated niuu-text-text-secondary niuu-border-border'
+  );
 }
 
 interface PlanDraftProps {
@@ -137,10 +139,16 @@ function PhaseEditor({ phase, phaseIndex, onSave }: PhaseEditorProps) {
                   {raid.name}
                 </span>
                 <span className="niuu-text-xs niuu-text-text-muted niuu-font-mono">
-                  {[raid.phase, raid.persona, raid.estimateHours ? `est ${raid.estimateHours}h` : null]
+                  {[
+                    raid.phase,
+                    raid.persona,
+                    raid.estimateHours ? `est ${raid.estimateHours}h` : null,
+                  ]
                     .filter(Boolean)
                     .join(' · ')}
-                  {!raid.phase && !raid.persona && `~${raid.estimateHours}h · ${raid.confidence}% confidence`}
+                  {!raid.phase &&
+                    !raid.persona &&
+                    `~${raid.estimateHours}h · ${raid.confidence}% confidence`}
                 </span>
               </div>
               {raid.size && (
