@@ -103,7 +103,11 @@ function SidebarSection({ label, collapsed, onToggle, children, testId }: Sideba
           ›
         </span>
       </button>
-      {!collapsed && <div role="group" aria-label={label}>{children}</div>}
+      {!collapsed && (
+        <div role="group" aria-label={label}>
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -173,12 +177,7 @@ function SearchInput({ value, onChange }: SearchInputProps) {
         aria-hidden="true"
       >
         <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.25" />
-        <path
-          d="M10 10L12.5 12.5"
-          stroke="currentColor"
-          strokeWidth="1.25"
-          strokeLinecap="round"
-        />
+        <path d="M10 10L12.5 12.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
       </svg>
       <input
         type="search"
@@ -238,8 +237,11 @@ export function SessionsPage({ issueKey, issueUrl }: SessionsPageProps = {}) {
   const navigate = useNavigate();
   const sessionsQuery = useSessionList();
 
-  const allSessions = sessionsQuery.data ?? [];
-  const grouped = sessionsQuery.data ? groupByState(sessionsQuery.data) : null;
+  const allSessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
+  const grouped = useMemo(
+    () => (sessionsQuery.data ? groupByState(sessionsQuery.data) : null),
+    [sessionsQuery.data],
+  );
 
   // Derive unique template IDs with counts
   const templateCounts = useMemo(() => {
@@ -395,11 +397,7 @@ export function SessionsPage({ issueKey, issueUrl }: SessionsPageProps = {}) {
           )}
 
           {sessionsQuery.data && visibleSessions.length > 0 && (
-            <Table<Session>
-              columns={columns}
-              rows={visibleSessions}
-              aria-label="Sessions"
-            />
+            <Table<Session> columns={columns} rows={visibleSessions} aria-label="Sessions" />
           )}
         </div>
       </div>

@@ -114,9 +114,7 @@ describe('SessionsPage', () => {
   it('renders template sidebar nodes from session data', async () => {
     wrap();
     await waitFor(() =>
-      expect(
-        screen.getByTestId('sidebar-node-template-tpl-default'),
-      ).toBeInTheDocument(),
+      expect(screen.getByTestId('sidebar-node-template-tpl-default')).toBeInTheDocument(),
     );
   });
 
@@ -273,9 +271,7 @@ describe('SessionsPage', () => {
     fireEvent.change(screen.getByTestId('session-search'), {
       target: { value: 'zzz-no-match-at-all' },
     });
-    await waitFor(() =>
-      expect(screen.getByText(/No sessions match/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/No sessions match/i)).toBeInTheDocument());
   });
 
   it('shows empty state when no sessions match the selected state filter', async () => {
@@ -338,8 +334,6 @@ describe('SessionsPage', () => {
       listSessions: vi.fn().mockRejectedValue(new Error('store failed')),
     };
     wrap(failingStore);
-    await waitFor(() =>
-      expect(screen.getByText('Failed to load sessions')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Failed to load sessions')).toBeInTheDocument());
   });
 });
