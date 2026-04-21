@@ -506,6 +506,8 @@ const MOCK_RAVN_BINDINGS: RavnBinding[] = [
     mountNames: ['local', 'shared', 'platform'],
     writeMount: 'local',
     lastDream: MOCK_DREAM_CYCLES[0] ?? null,
+    bio: 'Synthesises infrastructure documentation from git commits and runbooks',
+    pagesTouched: 52,
   },
   {
     ravnId: 'ravn-skald',
@@ -515,6 +517,8 @@ const MOCK_RAVN_BINDINGS: RavnBinding[] = [
     mountNames: ['shared', 'platform'],
     writeMount: 'shared',
     lastDream: MOCK_DREAM_CYCLES[2] ?? null,
+    bio: 'Compiles API guidelines and architectural decisions from RFC discussions',
+    pagesTouched: 28,
   },
   {
     ravnId: 'ravn-galdra',
@@ -524,6 +528,8 @@ const MOCK_RAVN_BINDINGS: RavnBinding[] = [
     mountNames: ['shared'],
     writeMount: 'shared',
     lastDream: null,
+    bio: 'Verifies knowledge consistency and resolves broken wikilinks across mounts',
+    pagesTouched: 0,
   },
 ];
 

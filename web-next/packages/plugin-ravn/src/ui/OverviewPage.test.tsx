@@ -68,6 +68,17 @@ describe('OverviewPage', () => {
     expect(rows.length).toBeGreaterThan(0);
   });
 
+  it('renders persona avatars in active ravens rows', async () => {
+    render(<OverviewPage />, { wrapper: wrap() });
+    await waitFor(() => expect(screen.getByTestId('active-ravens-list')).toBeInTheDocument());
+    // Active ravens in mock data have role/letter — avatars should be rendered
+    const rows = screen.getAllByTestId('active-ravn-row');
+    expect(rows.length).toBeGreaterThan(0);
+    // PersonaAvatar renders a span with aria-label containing "persona"
+    const avatars = screen.getAllByLabelText(/persona/i);
+    expect(avatars.length).toBeGreaterThan(0);
+  });
+
   it('renders the fleet sparkline widget', async () => {
     render(<OverviewPage />, { wrapper: wrap() });
     await waitFor(() => expect(screen.getByTestId('fleet-sparkline')).toBeInTheDocument());
@@ -89,6 +100,19 @@ describe('OverviewPage', () => {
     const rows = screen.getAllByTestId('location-row');
     // Mock has 3 locations: eu-west-1, us-east-1, ap-southeast-1
     expect(rows.length).toBe(3);
+  });
+
+  it('renders the recent activity log section', async () => {
+    render(<OverviewPage />, { wrapper: wrap() });
+    await waitFor(() => expect(screen.getByTestId('activity-log')).toBeInTheDocument());
+  });
+
+  it('renders up to 9 activity log rows', async () => {
+    render(<OverviewPage />, { wrapper: wrap() });
+    await waitFor(() => expect(screen.getByTestId('activity-log')).toBeInTheDocument());
+    const rows = screen.getAllByTestId('activity-log-row');
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThanOrEqual(9);
   });
 
   it('shows error state when ravens service fails', async () => {

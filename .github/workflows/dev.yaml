@@ -220,6 +220,9 @@ jobs:
   # ---------------------------------------------------------------------------
   containers:
     name: Containers
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/reusable-container-build.yaml
     with:
       containers: '["volundr","skuld","devrunner","volundr-web","vscode-reh","tyr","niuu","mimir","bifrost"]'
@@ -240,6 +243,10 @@ jobs:
   scan:
     name: Scan
     needs: containers
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
     uses: ./.github/workflows/reusable-container-scan.yaml
     with:
       containers: '["volundr","skuld","devrunner","volundr-web","vscode-reh","tyr","niuu","mimir","bifrost"]'

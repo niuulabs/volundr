@@ -1,3 +1,59 @@
+/* ── Panel container — absolute within the observatory content area ── */
+.obs-entity-drawer__panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 340px;
+  background: var(--color-bg-secondary);
+  border-left: 1px solid var(--color-border-subtle);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: obs-drawer-slide-in 240ms ease;
+}
+
+@keyframes obs-drawer-slide-in {
+  from {
+    transform: translateX(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.obs-entity-drawer__close-btn {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 18px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.obs-entity-drawer__close-btn:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+/* ── Body: flex-1 so it fills remaining panel height ── */
+
 .obs-entity-drawer__head {
   display: flex;
   align-items: center;
@@ -59,6 +115,8 @@
 }
 
 .obs-entity-drawer__body {
+  flex: 1;
+  min-height: 0;
   padding: var(--space-4);
   display: flex;
   flex-direction: column;

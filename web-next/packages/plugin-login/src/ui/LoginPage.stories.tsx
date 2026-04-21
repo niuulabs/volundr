@@ -28,7 +28,7 @@ const loadingAuth: AuthContextValue = {
   loading: true,
 };
 
-/** Default signed-out state — shows the login card with "Sign in" button. */
+/** Default signed-out state — shows the login card with Continue with passkey button. */
 export const SignedOut: Story = {
   render: () => (
     <AuthContext.Provider value={signedOutAuth}>
