@@ -82,7 +82,9 @@ function GateChips({ gates }: { gates: FeasibilityGate[] }) {
 // Filter options builder
 // ---------------------------------------------------------------------------
 
-function buildFilterOptions(counts: Record<StatusFilter, number>): SegmentedFilterOption<StatusFilter>[] {
+function buildFilterOptions(
+  counts: Record<StatusFilter, number>,
+): SegmentedFilterOption<StatusFilter>[] {
   return (Object.keys(FILTER_LABELS) as StatusFilter[]).map((key) => ({
     value: key,
     label: FILTER_LABELS[key],
