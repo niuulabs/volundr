@@ -48,7 +48,7 @@ export function ConfidenceDriftCard({ sagaId, confidence }: ConfidenceDriftCardP
 
       <div className="niuu-p-4 niuu-space-y-3">
         <p className="niuu-m-0 niuu-text-xs niuu-text-text-secondary">
-          How this saga's overall confidence has moved as raids reported back. Dips call for
+          How this saga&apos;s overall confidence has moved as raids reported back. Dips call for
           attention — a QA fail or security flag will pull it down.
         </p>
         <Sparkline values={values} id={sagaId} height={56} />

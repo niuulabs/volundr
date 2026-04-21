@@ -53,7 +53,7 @@ export function WorkflowCard({ workflow, workflowVersion }: WorkflowCardProps) {
             ⓘ
           </span>
           <span>
-            Override this workflow per-dispatch from the Dispatch view. The saga's workflow is the
+            Override this workflow per-dispatch from the Dispatch view. The saga&apos;s workflow is the
             default; overrides apply only to that run.
           </span>
         </div>
