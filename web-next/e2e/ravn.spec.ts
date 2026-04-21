@@ -62,18 +62,18 @@ test('clicking Overview tab returns to overview', async ({ page }) => {
   await expect(page.getByTestId('overview-page')).toBeVisible({ timeout: 3000 });
 });
 
-test('renders sessions, triggers, events, budget, log tabs', async ({ page }) => {
+test('renders all shell tabs', async ({ page }) => {
   await page.goto('/ravn');
-  await expect(page.getByRole('tab', { name: 'Sessions' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Triggers' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Events' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Budget' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Log' })).toBeVisible();
+  await expect(page.getByTestId('ravn-tab-overview')).toBeVisible();
+  await expect(page.getByTestId('ravn-tab-ravens')).toBeVisible();
+  await expect(page.getByTestId('ravn-tab-personas')).toBeVisible();
+  await expect(page.getByTestId('ravn-tab-sessions')).toBeVisible();
+  await expect(page.getByTestId('ravn-tab-budget')).toBeVisible();
 });
 
 test('Overview tab is active by default', async ({ page }) => {
   await page.goto('/ravn');
-  await expect(page.getByTestId('ravn-tab-overview')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('ravn-tab-overview')).toHaveClass(/--active/);
 });
 
 // ─── Layout variant switching ──────────────────────────────────────────────────

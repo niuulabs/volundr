@@ -59,7 +59,7 @@ describe('SagasPage', () => {
 
   it('renders the Tyr rune', async () => {
     render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
-    await waitFor(() => expect(screen.getByText('ᛏ', { hidden: true })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('ᚦ', { hidden: true })).toBeInTheDocument());
   });
 
   it('shows loading state initially', () => {

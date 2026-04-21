@@ -440,7 +440,7 @@ describe('PlanWizard integration', () => {
 
   it('shows the Tyr rune in the header', () => {
     render(<PlanWizard />, { wrapper: wrap(makeSvc()) });
-    expect(screen.getByText('ᛏ')).toBeInTheDocument();
+    expect(screen.getByText('ᚦ')).toBeInTheDocument();
   });
 
   it('advances to questions step after submitting prompt', async () => {

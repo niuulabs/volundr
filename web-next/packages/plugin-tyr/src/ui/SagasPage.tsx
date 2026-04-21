@@ -184,7 +184,7 @@ export function SagasPage() {
       >
         {/* Header */}
         <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-3 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary">
-          <Rune glyph="ᛏ" size={22} />
+          <Rune glyph="ᚦ" size={22} />
           <h2 className="niuu-m-0 niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-flex-1">
             Sagas
           </h2>

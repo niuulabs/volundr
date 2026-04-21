@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
 test('volundr forge overview matches web2', async ({ page }) => {
   await page.goto('/volundr');
   await page.waitForLoadState('networkidle');
-  await page.waitForSelector('text=Völundr · session forge', { timeout: 10_000 });
+  await page.waitForSelector('[data-testid="forge-page"]', { timeout: 10_000 });
   await expect(page).toHaveScreenshot('volundr-forge-overview.png');
 });
 
