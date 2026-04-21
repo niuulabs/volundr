@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback, useRef } from 'react';
 import { usePersonas } from './usePersonas';
 import { usePersona } from './usePersona';
 
@@ -16,6 +16,7 @@ const PAD_V = 40;
 interface GraphNode {
   id: string;
   label: string;
+  personaName: string; // actual persona name (for navigation)
   col: number; // 0 = producers, 1 = focus, 2 = consumers
   row: number;
 }
@@ -24,6 +25,7 @@ interface GraphEdge {
   from: string;
   to: string;
   label: string;
+  fieldCount: number;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -55,10 +57,14 @@ export interface PersonaSubsProps {
  *
  * Layout: producers (col 0) → this persona (col 1) → consumers (col 2).
  * Each edge is labelled with the event name that connects the nodes.
+ * Hovering a node dims unconnected nodes and edges.
+ * Clicking a non-focus node dispatches `ravn:persona-selected`.
  */
 export function PersonaSubs({ name }: PersonaSubsProps) {
   const { data: allPersonas } = usePersonas();
   const { data: persona, isLoading, isError, error } = usePersona(name);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const graph = useMemo<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(() => {
     if (!persona || !allPersonas) return null;
@@ -81,8 +87,9 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
 
     // Col 0: producers
     producers.forEach((p, i) => {
-      nodes.push({ id: p.name, label: p.name, col: 0, row: i });
-      edges.push({ from: p.name, to: name, label: p.producesEvent });
+      nodes.push({ id: p.name, label: p.name, personaName: p.name, col: 0, row: i });
+      // PersonaSummary has no schemaDef — field count unavailable for producers
+      edges.push({ from: p.name, to: name, label: p.producesEvent, fieldCount: 0 });
     });
 
     // Col 1: focus persona
@@ -90,16 +97,41 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
       0,
       Math.floor((Math.max(producers.length, consumers.length) - 1) / 2),
     );
-    nodes.push({ id: name, label: name, col: 1, row: focusRow });
+    nodes.push({ id: name, label: name, personaName: name, col: 1, row: focusRow });
 
     // Col 2: consumers
+    const producedFieldCount = persona.produces.schemaDef
+      ? Object.keys(persona.produces.schemaDef).length
+      : 0;
     consumers.forEach((p, i) => {
-      nodes.push({ id: `consumer-${p.name}`, label: p.name, col: 2, row: i });
-      edges.push({ from: name, to: `consumer-${p.name}`, label: producedEvent });
+      nodes.push({ id: `consumer-${p.name}`, label: p.name, personaName: p.name, col: 2, row: i });
+      edges.push({
+        from: name,
+        to: `consumer-${p.name}`,
+        label: producedEvent,
+        fieldCount: producedFieldCount,
+      });
     });
 
     return { nodes, edges };
   }, [persona, allPersonas, name]);
+
+  const handleNodeClick = useCallback(
+    (node: GraphNode) => {
+      if (node.personaName === name) return;
+      window.dispatchEvent(
+        new CustomEvent('ravn:persona-selected', { detail: node.personaName }),
+      );
+    },
+    [name],
+  );
+
+  const handleZoomToFit = useCallback(() => {
+    const el = containerRef.current;
+    if (el && typeof el.scrollTo === 'function') {
+      el.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+    }
+  }, []);
 
   if (isLoading) {
     return (
@@ -141,14 +173,39 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
   const svgW = nodeX(2) + COL_W + PAD_H;
   const svgH = nodeY(maxRow) + NODE_H + PAD_V;
 
+  // Determine which nodes/edges are connected to the hovered node
+  const connectedIds = hoveredNodeId
+    ? new Set<string>(
+        edges
+          .filter((e) => e.from === hoveredNodeId || e.to === hoveredNodeId)
+          .flatMap((e) => [e.from, e.to]),
+      )
+    : null;
+
   return (
-    <div data-testid="persona-subs" className="niuu-overflow-auto niuu-h-full niuu-p-4">
+    <div
+      ref={containerRef}
+      data-testid="persona-subs"
+      className="niuu-overflow-auto niuu-h-full niuu-p-4 niuu-flex niuu-flex-col niuu-gap-4"
+    >
+      {/* Zoom to fit button */}
+      <div className="niuu-flex niuu-justify-end">
+        <button
+          type="button"
+          onClick={handleZoomToFit}
+          data-testid="subs-zoom-fit"
+          className="niuu-text-xs niuu-text-text-muted niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded niuu-px-2 niuu-py-1 niuu-cursor-pointer hover:niuu-text-text-primary hover:niuu-border-brand niuu-transition-colors"
+        >
+          Zoom to fit
+        </button>
+      </div>
+
       <svg
         width={svgW}
         height={svgH}
         role="img"
         aria-label={`Event subscription graph for ${name}`}
-        className="niuu-block"
+        className="niuu-block niuu-shrink-0"
       >
         <title>Event subscription graph for {name}</title>
 
@@ -158,6 +215,11 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
           const toNode = nodes.find((n) => n.id === edge.to);
           if (!fromNode || !toNode) return null;
 
+          const isConnectedToHovered =
+            !connectedIds ||
+            connectedIds.has(edge.from) ||
+            connectedIds.has(edge.to);
+
           const x1 = nodeX(fromNode.col) + COL_W;
           const y1 = nodeCy(fromNode.row);
           const x2 = nodeX(toNode.col);
@@ -166,7 +228,7 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
           const midY = (y1 + y2) / 2;
 
           return (
-            <g key={`${edge.from}-${edge.to}`}>
+            <g key={`${edge.from}-${edge.to}`} opacity={isConnectedToHovered ? 1 : 0.2}>
               <path
                 d={`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`}
                 fill="none"
@@ -183,6 +245,20 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
               >
                 {edge.label}
               </text>
+              {edge.fieldCount > 0 && (
+                <text
+                  x={mx}
+                  y={midY + 8}
+                  textAnchor="middle"
+                  fontSize={8}
+                  fontFamily="var(--font-mono)"
+                  fill="var(--color-text-muted)"
+                  opacity={0.7}
+                  data-testid="edge-field-count"
+                >
+                  {edge.fieldCount}f
+                </text>
+              )}
             </g>
           );
         })}
@@ -192,9 +268,19 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
           const x = nodeX(node.col);
           const y = nodeY(node.row);
           const isFocus = node.id === name;
+          const isDimmed = connectedIds !== null && !connectedIds.has(node.id);
+          const isClickable = !isFocus;
 
           return (
-            <g key={node.id}>
+            <g
+              key={node.id}
+              opacity={isDimmed ? 0.25 : 1}
+              style={{ cursor: isClickable ? 'pointer' : 'default' }}
+              onMouseEnter={() => setHoveredNodeId(node.id)}
+              onMouseLeave={() => setHoveredNodeId(null)}
+              onClick={() => handleNodeClick(node)}
+              data-testid={`subs-node-${node.personaName}`}
+            >
               <rect
                 x={x}
                 y={y}
@@ -245,6 +331,32 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
           </text>
         ))}
       </svg>
+
+      {/* Legend */}
+      <div
+        data-testid="subs-legend"
+        className="niuu-flex niuu-items-center niuu-gap-4 niuu-text-xs niuu-text-text-muted niuu-font-mono niuu-border-t niuu-border-border-subtle niuu-pt-3 niuu-flex-wrap"
+      >
+        <span className="niuu-font-sans niuu-text-text-muted">Legend:</span>
+        <span className="niuu-flex niuu-items-center niuu-gap-1">
+          <span
+            className="niuu-inline-block niuu-w-8 niuu-h-3 niuu-rounded-sm niuu-border"
+            style={{ borderColor: 'var(--brand-400)', background: 'color-mix(in srgb, var(--brand-500) 18%, transparent)' }}
+          />
+          focus (this persona)
+        </span>
+        <span className="niuu-flex niuu-items-center niuu-gap-1">
+          <span className="niuu-inline-block niuu-w-8 niuu-h-3 niuu-rounded-sm niuu-border niuu-border-border niuu-bg-bg-secondary" />
+          producer / consumer
+        </span>
+        <span className="niuu-flex niuu-items-center niuu-gap-1">
+          <svg width={20} height={8} className="niuu-shrink-0">
+            <line x1="0" y1="4" x2="20" y2="4" stroke="var(--color-border)" strokeWidth={1.5} />
+          </svg>
+          event link
+        </span>
+        <span>edge label = event name · <span className="niuu-font-mono">Nf</span> = schema field count</span>
+      </div>
     </div>
   );
 }

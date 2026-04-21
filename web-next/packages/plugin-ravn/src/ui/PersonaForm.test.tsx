@@ -20,7 +20,7 @@ const MOCK_PERSONA: PersonaDetail = {
   hasOverride: false,
   producesEvent: 'code.changed',
   consumesEvents: ['review.completed'],
-  systemPromptTemplate: '# test-persona',
+  systemPromptTemplate: '# test-persona\nYou are {{name}}, a {{role}} persona.',
   llm: { primaryAlias: 'claude-sonnet-4-6', thinkingEnabled: false, maxTokens: 8192 },
   produces: { eventType: 'code.changed', schemaDef: { file: 'string' } },
   consumes: { events: [{ name: 'review.completed' }] },
@@ -45,6 +45,7 @@ describe('PersonaForm', () => {
       wrapper: wrap(),
     });
     expect(screen.getByText('Identity')).toBeInTheDocument();
+    expect(screen.getByText('System prompt')).toBeInTheDocument();
     expect(screen.getByText('LLM')).toBeInTheDocument();
     expect(screen.getByText('Tool access')).toBeInTheDocument();
     expect(screen.getByText('Produces')).toBeInTheDocument();
@@ -145,5 +146,172 @@ describe('PersonaForm', () => {
       wrapper: wrap(),
     });
     expect(screen.getByText('+ Add consumed event')).toBeInTheDocument();
+  });
+
+  // ── System prompt field ────────────────────────────────────────────────
+
+  it('renders system prompt textarea', () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    expect(screen.getByTestId('pf-system-prompt')).toBeInTheDocument();
+  });
+
+  it('populates system prompt from persona', () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    const textarea = screen.getByTestId('pf-system-prompt') as HTMLTextAreaElement;
+    expect(textarea.value).toContain('test-persona');
+  });
+
+  it('shows character and token count for system prompt', () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    const counter = screen.getByTestId('pf-prompt-char-count');
+    expect(counter.textContent).toMatch(/chars/);
+    expect(counter.textContent).toMatch(/tokens/);
+  });
+
+  it('updates character count when system prompt changes', async () => {
+    render(
+      <PersonaForm persona={{ ...MOCK_PERSONA, systemPromptTemplate: '' }} onSave={vi.fn()} />,
+      { wrapper: wrap() },
+    );
+    const textarea = screen.getByTestId('pf-system-prompt');
+    fireEvent.change(textarea, { target: { value: 'Hello world' } });
+    await waitFor(() => {
+      const counter = screen.getByTestId('pf-prompt-char-count');
+      expect(counter.textContent).toContain('11 chars');
+    });
+  });
+
+  it('shows/hides prompt preview on toggle', async () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    expect(screen.queryByTestId('pf-prompt-preview')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Show preview'));
+    await waitFor(() =>
+      expect(screen.getByTestId('pf-prompt-preview')).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByText('Hide preview'));
+    await waitFor(() =>
+      expect(screen.queryByTestId('pf-prompt-preview')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('renders {{variable}} highlights in prompt preview', async () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    fireEvent.click(screen.getByText('Show preview'));
+    await waitFor(() =>
+      expect(screen.getByTestId('pf-prompt-preview')).toBeInTheDocument(),
+    );
+    const preview = screen.getByTestId('pf-prompt-preview');
+    // Should have <mark> elements for {{name}} and {{role}}
+    const marks = preview.querySelectorAll('mark');
+    expect(marks.length).toBeGreaterThan(0);
+    expect(marks[0]!.textContent).toContain('{{');
+  });
+
+  // ── Fan-in strategy cards ──────────────────────────────────────────────
+
+  it('renders fan-in strategy cards grid', () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    expect(screen.getByTestId('fanin-cards')).toBeInTheDocument();
+  });
+
+  it('renders all 6 fan-in strategy cards', () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    expect(screen.getByTestId('fanin-card-all_must_pass')).toBeInTheDocument();
+    expect(screen.getByTestId('fanin-card-any_passes')).toBeInTheDocument();
+    expect(screen.getByTestId('fanin-card-quorum')).toBeInTheDocument();
+    expect(screen.getByTestId('fanin-card-merge')).toBeInTheDocument();
+    expect(screen.getByTestId('fanin-card-first_wins')).toBeInTheDocument();
+    expect(screen.getByTestId('fanin-card-weighted_score')).toBeInTheDocument();
+  });
+
+  it('marks the currently selected strategy card as active', () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    const mergeCard = screen.getByTestId('fanin-card-merge');
+    expect(mergeCard).toHaveAttribute('aria-pressed', 'true');
+    expect(mergeCard).toHaveClass('rv-fanin-card--active');
+  });
+
+  it('marks other strategy cards as inactive', () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    const anyPassesCard = screen.getByTestId('fanin-card-any_passes');
+    expect(anyPassesCard).toHaveAttribute('aria-pressed', 'false');
+    expect(anyPassesCard).not.toHaveClass('rv-fanin-card--active');
+  });
+
+  it('updates strategy when a different card is clicked', async () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    fireEvent.click(screen.getByTestId('fanin-card-first_wins'));
+    await waitFor(() => {
+      const card = screen.getByTestId('fanin-card-first_wins');
+      expect(card).toHaveAttribute('aria-pressed', 'true');
+      expect(card).toHaveClass('rv-fanin-card--active');
+    });
+  });
+
+  it('shows description text on each fan-in card', () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    expect(screen.getByText('All upstream events must arrive before processing')).toBeInTheDocument();
+    expect(screen.getByText('First arriving event triggers processing')).toBeInTheDocument();
+    expect(screen.getByText('N of M events must arrive')).toBeInTheDocument();
+    expect(screen.getByText('All events merged into a single context')).toBeInTheDocument();
+    expect(screen.getByText('First event wins, others discarded')).toBeInTheDocument();
+    expect(screen.getByText('Events scored and ranked by weight')).toBeInTheDocument();
+  });
+
+  it('renders SVG diagrams in fan-in cards', () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    const cards = screen.getByTestId('fanin-cards');
+    const svgs = cards.querySelectorAll('svg');
+    expect(svgs.length).toBe(6);
+  });
+
+  it('shows quorum params input when quorum strategy is selected', async () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    expect(screen.queryByLabelText('Quorum count')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('fanin-card-quorum'));
+    await waitFor(() => {
+      expect(screen.getByLabelText('Quorum count')).toBeInTheDocument();
+    });
+  });
+
+  it('shows weighted score params input when weighted_score strategy is selected', async () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    expect(screen.queryByLabelText('Min score threshold')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('fanin-card-weighted_score'));
+    await waitFor(() => {
+      expect(screen.getByLabelText('Min score threshold')).toBeInTheDocument();
+    });
   });
 });
