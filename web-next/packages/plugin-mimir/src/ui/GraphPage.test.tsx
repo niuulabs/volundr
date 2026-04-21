@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { GraphPage } from './GraphPage';
-import { layoutCategoryRadial } from './GraphPage';
+import { GraphPage, layoutCategoryRadial } from './GraphPage';
 import { createMimirMockAdapter } from '../adapters/mock';
 import type { IMimirService } from '../ports';
 import { renderWithMimir } from '../testing/renderWithMimir';
@@ -94,9 +93,8 @@ describe('GraphPage', () => {
     await waitFor(() => screen.getByRole('img', { name: /knowledge graph/i }));
     const svg = screen.getByRole('img', { name: /knowledge graph/i });
     const lines = svg.querySelectorAll('line');
-    if (lines.length > 0) {
-      expect(lines[0]!.classList.toString()).toContain('niuu-opacity-15');
-    }
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines[0]!.classList.toString()).toContain('niuu-opacity-15');
   });
 
   it('focused-node edges have highlighted opacity class', async () => {
@@ -122,10 +120,9 @@ describe('GraphPage', () => {
     await waitFor(() => screen.getByRole('img', { name: /knowledge graph/i }));
     const svg = screen.getByRole('img', { name: /knowledge graph/i });
     const nodeGroups = svg.querySelectorAll('g[role="button"]');
-    if (nodeGroups.length > 0) {
-      fireEvent.click(nodeGroups[0]!);
-      expect(screen.getByRole('button', { name: /clear focus/i })).toBeInTheDocument();
-    }
+    expect(nodeGroups.length).toBeGreaterThan(0);
+    fireEvent.click(nodeGroups[0]!);
+    expect(screen.getByRole('button', { name: /clear focus/i })).toBeInTheDocument();
   });
 });
 

@@ -73,7 +73,8 @@ export function layoutCategoryRadial(
 
     for (let i = 0; i < catNodes.length; i++) {
       const node = catNodes[i]!;
-      const innerAngle = (i / Math.max(1, catNodes.length)) * 0.8 - 0.4;
+      const spread = catNodes.length <= 1 ? 0 : 0.8;
+      const innerAngle = catNodes.length <= 1 ? 0 : (i / catNodes.length) * spread - spread / 2;
       const jitter = 0.5 + 0.5 * (Math.abs(Math.sin(i * 2.1)) * 0.9 + 0.1);
       const radius = r * jitter;
       result.push({
@@ -154,13 +155,7 @@ function GraphSvg({ graph, focusId, onNodeClick, categories }: GraphSvgProps) {
               key={node.id}
               transform={`translate(${x},${y})`}
               onClick={() => onNodeClick(node.id)}
-              className={[
-                'niuu-graph-node',
-                'niuu-cursor-pointer',
-                isFocus ? 'niuu-graph-node--focus' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
+              className="niuu-graph-node niuu-cursor-pointer"
               role="button"
               aria-pressed={isFocus}
               tabIndex={0}
