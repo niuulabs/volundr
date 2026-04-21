@@ -405,7 +405,7 @@ function JsonTab({ registry }: JsonTabProps) {
       </button>
       <pre
         data-testid="json-output"
-        className="niuu-m-0 niuu-p-4 niuu-bg-bg-secondary niuu-border niuu-border-border-subtle niuu-rounded-md niuu-font-mono niuu-text-xs niuu-text-text-secondary niuu-overflow-x-auto niuu-leading-[1.6] niuu-max-h-[600px] niuu-overflow-y-auto"
+        className="niuu-m-0 niuu-p-4 niuu-bg-bg-primary niuu-border niuu-border-border-subtle niuu-rounded-md niuu-font-mono niuu-text-[11px] niuu-text-text-secondary niuu-overflow-x-auto niuu-leading-[1.55] niuu-min-h-[480px] niuu-max-h-[calc(100vh-240px)] niuu-overflow-y-auto"
       >
         {json}
       </pre>
