@@ -29,6 +29,7 @@ export function WorkflowBuilderPage() {
   }
 
   function handleDelete(id: string) {
+    if (!window.confirm('Delete this workflow?')) return;
     deleteMutation.mutate(id, {
       onSuccess: () => setActiveWorkflow(null),
     });

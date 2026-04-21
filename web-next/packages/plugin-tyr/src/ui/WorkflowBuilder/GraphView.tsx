@@ -16,6 +16,7 @@
  */
 
 import { useRef, useState, useEffect, useMemo } from 'react';
+import { cn } from '@niuulabs/ui';
 import type { WorkflowNode, WorkflowEdge } from '../../domain/workflow';
 import type { WorkflowBuilderActions } from './useWorkflowBuilder';
 import {
@@ -48,10 +49,10 @@ const C = {
   textMuted: 'var(--color-text-secondary)',
   edgeStroke: 'var(--color-border)',
   edgeStrokeHover: 'var(--color-text-secondary)',
-  gate: 'color-mix(in srgb, var(--color-accent-amber) 20%, var(--color-bg-secondary))',
-  gateStroke: 'var(--color-accent-amber)',
-  cond: 'color-mix(in srgb, var(--color-accent-cyan) 20%, var(--color-bg-secondary))',
-  condStroke: 'var(--color-accent-cyan)',
+  gate: 'color-mix(in srgb, var(--status-amber) 20%, var(--color-bg-secondary))',
+  gateStroke: 'var(--status-amber)',
+  cond: 'color-mix(in srgb, var(--status-cyan) 20%, var(--color-bg-secondary))',
+  condStroke: 'var(--status-cyan)',
 };
 
 // ---------------------------------------------------------------------------
@@ -578,6 +579,9 @@ export function GraphView({
     onDragEnd: (pos: { x: number; y: number }) => onMoveNode(node.id, pos),
   });
 
+  const toolbarBtnClass =
+    'niuu-bg-bg-elevated niuu-text-text-primary niuu-border niuu-border-border niuu-rounded niuu-px-2.5 niuu-py-1 niuu-text-xs niuu-cursor-pointer niuu-font-sans';
+
   return (
     <div
       data-testid="graph-view"
@@ -588,7 +592,7 @@ export function GraphView({
         <button
           data-testid="add-stage"
           onClick={() => onAddNode('stage')}
-          className="niuu-bg-bg-elevated niuu-text-text-primary niuu-border niuu-border-border niuu-rounded niuu-px-2.5 niuu-py-1 niuu-text-xs niuu-cursor-pointer niuu-font-sans"
+          className={toolbarBtnClass}
           title="Add stage node"
         >
           + Stage
@@ -596,7 +600,7 @@ export function GraphView({
         <button
           data-testid="add-gate"
           onClick={() => onAddNode('gate')}
-          className="niuu-bg-bg-elevated niuu-text-text-primary niuu-border niuu-border-border niuu-rounded niuu-px-2.5 niuu-py-1 niuu-text-xs niuu-cursor-pointer niuu-font-sans"
+          className={toolbarBtnClass}
           title="Add gate node"
         >
           ◇ Gate
@@ -604,7 +608,7 @@ export function GraphView({
         <button
           data-testid="add-cond"
           onClick={() => onAddNode('cond')}
-          className="niuu-bg-bg-elevated niuu-text-text-primary niuu-border niuu-border-border niuu-rounded niuu-px-2.5 niuu-py-1 niuu-text-xs niuu-cursor-pointer niuu-font-sans"
+          className={toolbarBtnClass}
           title="Add condition node"
         >
           ○ Cond
@@ -613,7 +617,7 @@ export function GraphView({
           <button
             data-testid="delete-selected"
             onClick={() => onDeleteNode(selectedNodeId)}
-            className="niuu-bg-bg-elevated niuu-text-critical niuu-border niuu-border-border niuu-rounded niuu-px-2.5 niuu-py-1 niuu-text-xs niuu-cursor-pointer niuu-font-sans"
+            className={cn(toolbarBtnClass, 'niuu-text-critical')}
             title="Delete selected node"
           >
             Delete
@@ -630,11 +634,8 @@ export function GraphView({
       <svg
         ref={svgRef}
         data-testid="graph-canvas"
-        style={{
-          width: '100%',
-          height: '100%',
-          cursor: isConnectingMode ? 'crosshair' : panRef.current ? 'grabbing' : 'default',
-        }}
+        className="niuu-w-full niuu-h-full"
+        style={{ cursor: isConnectingMode ? 'crosshair' : panRef.current ? 'grabbing' : 'default' }}
         onMouseDown={handleSvgMouseDown}
         onMouseMove={handleSvgMouseMove}
         onMouseUp={handleSvgMouseUp}

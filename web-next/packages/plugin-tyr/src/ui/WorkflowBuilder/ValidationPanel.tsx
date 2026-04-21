@@ -40,6 +40,21 @@ export function ValidationPanel({ workflow, onSelectNode }: ValidationPanelProps
       ? '✓ No issues'
       : `${errorCount > 0 ? `${errorCount} error${errorCount !== 1 ? 's' : ''}` : ''}${errorCount > 0 && warnCount > 0 ? ', ' : ''}${warnCount > 0 ? `${warnCount} warning${warnCount !== 1 ? 's' : ''}` : ''}`;
 
+  const severityClasses =
+    errorCount > 0
+      ? { text: 'niuu-text-critical', border: 'niuu-border-critical', bg: 'niuu-bg-critical' }
+      : warnCount > 0
+        ? {
+            text: 'niuu-text-status-amber',
+            border: 'niuu-border-status-amber',
+            bg: 'niuu-bg-status-amber',
+          }
+        : {
+            text: 'niuu-text-status-emerald',
+            border: 'niuu-border-status-emerald',
+            bg: 'niuu-bg-status-emerald',
+          };
+
   return (
     <div
       data-testid="validation-panel"
@@ -66,9 +81,7 @@ export function ValidationPanel({ workflow, onSelectNode }: ValidationPanelProps
               <span
                 className={cn(
                   'niuu-shrink-0 niuu-text-sm niuu-leading-snug niuu-w-[18px] niuu-text-center',
-                  issue.severity === 'error'
-                    ? 'niuu-text-critical'
-                    : 'niuu-text-[var(--color-accent-amber)]',
+                  issue.severity === 'error' ? 'niuu-text-critical' : 'niuu-text-status-amber',
                 )}
               >
                 {KIND_ICON[issue.kind]}
@@ -88,21 +101,14 @@ export function ValidationPanel({ workflow, onSelectNode }: ValidationPanelProps
         onClick={() => setExpanded((e) => !e)}
         className={cn(
           'niuu-pointer-events-auto niuu-bg-bg-secondary niuu-rounded-full niuu-py-1 niuu-px-3.5 niuu-text-xs niuu-font-medium niuu-cursor-pointer niuu-shadow-sm niuu-flex niuu-items-center niuu-gap-1.5 niuu-border niuu-transition-colors',
-          errorCount > 0
-            ? 'niuu-text-critical niuu-border-critical'
-            : warnCount > 0
-              ? 'niuu-text-[var(--color-accent-amber)] niuu-border-[var(--color-accent-amber)]'
-              : 'niuu-text-[var(--color-accent-emerald)] niuu-border-[var(--color-accent-emerald)]',
+          severityClasses.text,
+          severityClasses.border,
         )}
       >
         <span
           className={cn(
             'niuu-w-[7px] niuu-h-[7px] niuu-rounded-full niuu-shrink-0',
-            errorCount > 0
-              ? 'niuu-bg-critical'
-              : warnCount > 0
-                ? 'niuu-bg-[var(--color-accent-amber)]'
-                : 'niuu-bg-[var(--color-accent-emerald)]',
+            severityClasses.bg,
           )}
         />
         {label}

@@ -43,8 +43,8 @@ export function NodeInspector({
                 node.kind === 'stage'
                   ? 'niuu-text-brand'
                   : node.kind === 'gate'
-                    ? 'niuu-text-[var(--color-accent-amber)]'
-                    : 'niuu-text-[var(--color-accent-cyan)]',
+                    ? 'niuu-text-status-amber'
+                    : 'niuu-text-status-cyan',
               )}
             >
               {kindLabel}

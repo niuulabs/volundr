@@ -145,6 +145,7 @@ describe('WorkflowBuilderPage', () => {
   });
 
   it('calls deleteWorkflow when delete button is clicked', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const svc = {
       listWorkflows: vi.fn().mockResolvedValue([wf1]),
       deleteWorkflow: vi.fn().mockResolvedValue(undefined),

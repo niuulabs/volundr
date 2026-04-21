@@ -26,8 +26,8 @@ const KIND_LABEL: Record<WorkflowNode['kind'], string> = {
 
 const KIND_BADGE_CLASS: Record<WorkflowNode['kind'], string> = {
   stage: 'niuu-text-brand',
-  gate: 'niuu-text-[var(--color-accent-amber)]',
-  cond: 'niuu-text-[var(--color-accent-cyan)]',
+  gate: 'niuu-text-status-amber',
+  cond: 'niuu-text-status-cyan',
 };
 
 export function PipelineView({ nodes, edges, selectedNodeId, onSelectNode }: PipelineViewProps) {
