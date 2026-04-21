@@ -2,7 +2,7 @@ import type { Mount } from '@niuulabs/domain';
 import type { IMimirService } from '../ports';
 import type { RecentWrite } from '../ports/IMountAdapter';
 import type { PageMeta, Page, SearchResult } from '../domain/page';
-import type { LintIssue, LintReport, DreamCycle } from '../domain/lint';
+import type { LintIssue, LintReport, DreamCycle, ActivityEvent } from '../domain/lint';
 import type { Source } from '../domain/source';
 import type { MimirStats, MimirGraph } from '../domain/api-types';
 import type { EmbeddingSearchResult } from '../ports/IEmbeddingStore';
@@ -619,6 +619,100 @@ const MOCK_RECENT_WRITES: RecentWrite[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Seed data — Activity event log
+// ---------------------------------------------------------------------------
+
+const MOCK_ACTIVITY_EVENTS: ActivityEvent[] = [
+  {
+    id: 'act-001',
+    timestamp: '2026-04-19T10:14:02Z',
+    kind: 'write',
+    mount: 'local',
+    ravn: 'ravn-fjolnir',
+    message: 'rewrote compiled-truth of entities/person-karpathy.md',
+    page: 'entities/person-karpathy.md',
+  },
+  {
+    id: 'act-002',
+    timestamp: '2026-04-19T10:12:40Z',
+    kind: 'lint',
+    mount: 'shared',
+    ravn: 'ravn-skald',
+    message: 'auto-fixed L11 (stale index.md, 3 entries added)',
+    page: 'index.md',
+  },
+  {
+    id: 'act-003',
+    timestamp: '2026-04-19T10:10:18Z',
+    kind: 'ingest',
+    mount: 'local',
+    ravn: 'ravn-fjolnir',
+    message: 'ingested karpathy.github.io — pages_updated=1',
+    page: 'entities/person-karpathy.md',
+  },
+  {
+    id: 'act-004',
+    timestamp: '2026-04-19T10:08:54Z',
+    kind: 'write',
+    mount: 'shared',
+    ravn: 'ravn-fjolnir',
+    message: 'appended timeline entry to entities/project-niuu.md',
+    page: 'entities/project-niuu.md',
+  },
+  {
+    id: 'act-005',
+    timestamp: '2026-04-19T09:54:22Z',
+    kind: 'dream',
+    mount: 'shared',
+    ravn: 'ravn-fjolnir',
+    message: 'dream cycle complete (pages_updated=2, lint_fixes=1)',
+  },
+  {
+    id: 'act-006',
+    timestamp: '2026-04-19T09:44:01Z',
+    kind: 'query',
+    mount: 'shared',
+    ravn: 'ravn-fjolnir',
+    message: 'mimir_query "compounding knowledge" → 4 results',
+  },
+  {
+    id: 'act-007',
+    timestamp: '2026-04-19T09:41:12Z',
+    kind: 'ingest',
+    mount: 'platform',
+    ravn: 'ravn-skald',
+    message: 'ingested Anycubic resin datasheet',
+    page: 'technical/forge/resin-profiles.md',
+  },
+  {
+    id: 'act-008',
+    timestamp: '2026-04-19T09:22:10Z',
+    kind: 'lint',
+    mount: 'platform',
+    ravn: 'ravn-skald',
+    message: 'L02 contradiction detected in resin-profiles (escalated)',
+    page: 'technical/forge/resin-profiles.md',
+  },
+  {
+    id: 'act-009',
+    timestamp: '2026-04-19T09:11:08Z',
+    kind: 'write',
+    mount: 'local',
+    ravn: 'ravn-fjolnir',
+    message: 'wrote projects/niuu/architecture.md',
+    page: 'projects/niuu/architecture.md',
+  },
+  {
+    id: 'act-010',
+    timestamp: '2026-04-19T08:58:44Z',
+    kind: 'query',
+    mount: 'local',
+    ravn: 'ravn-fjolnir',
+    message: 'mimir_query "cluster upgrade" → 2 results',
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Mock adapter
 // ---------------------------------------------------------------------------
 
@@ -840,6 +934,10 @@ export function createMimirMockAdapter(): IMimirService {
 
       async getDreamCycles(limit = 20): Promise<DreamCycle[]> {
         return MOCK_DREAM_CYCLES.slice(0, limit);
+      },
+
+      async getActivityLog(limit = 50): Promise<ActivityEvent[]> {
+        return MOCK_ACTIVITY_EVENTS.slice(0, limit);
       },
     },
   };
