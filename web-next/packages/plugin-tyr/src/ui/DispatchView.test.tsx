@@ -525,4 +525,61 @@ describe('DispatchView', () => {
     await user.click(screen.getByRole('button', { name: /apply workflow/i }));
     await waitFor(() => expect(screen.getByText('Apply workflow override')).toBeInTheDocument());
   });
+
+  it('shows toast and closes modal when a workflow is applied', async () => {
+    const user = userEvent.setup();
+    render(<DispatchView />, { wrapper: wrap(makeServices()) });
+    await waitFor(() => screen.getByText('Test Raid'));
+
+    await user.click(screen.getByRole('checkbox', { name: /select row/i }));
+    await user.click(screen.getByRole('button', { name: /apply workflow/i }));
+    await waitFor(() => screen.getByText('Apply workflow override'));
+
+    // Click the first workflow in the list
+    await user.click(screen.getByRole('button', { name: /Auth Rewrite Workflow/i }));
+    await waitFor(() =>
+      expect(screen.queryByText('Apply workflow override')).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/Applied "Auth Rewrite Workflow" to 1 raid/i)).toBeInTheDocument(),
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Error toasts
+  // ---------------------------------------------------------------------------
+
+  it('shows error toast when dispatch fails', async () => {
+    const user = userEvent.setup();
+    const services = makeServices({
+      dispatch: {
+        dispatchBatch: vi.fn().mockRejectedValue(new Error('network error')),
+      },
+    });
+
+    render(<DispatchView />, { wrapper: wrap(services) });
+    await waitFor(() => screen.getByText('Test Raid'));
+
+    await user.click(screen.getByRole('checkbox', { name: /select row/i }));
+    await user.click(screen.getByRole('button', { name: /dispatch now/i }));
+    await waitFor(() => expect(screen.getByText(/dispatch failed/i)).toBeInTheDocument());
+  });
+
+  it('shows error toast when pause fails', async () => {
+    const user = userEvent.setup();
+    const services = makeServices({
+      dispatcher: {
+        getState: vi.fn().mockResolvedValue(makeDispatcherState({ running: true })),
+        setRunning: vi.fn().mockRejectedValue(new Error('service error')),
+      },
+    });
+
+    render(<DispatchView />, { wrapper: wrap(services) });
+    await waitFor(() => screen.getByRole('button', { name: /pause dispatcher/i }));
+
+    await user.click(screen.getByRole('button', { name: /pause dispatcher/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/failed to update dispatcher/i)).toBeInTheDocument(),
+    );
+  });
 });

@@ -370,6 +370,7 @@ function DispatchViewContent() {
 
   // Local overrides — null = use server state
   const [thresholdOverride, setThresholdOverride] = useState<number | null>(null);
+  const [workflowOverride, setWorkflowOverride] = useState<Map<string, Workflow>>(new Map());
   const [rulesOverride, setRulesOverride] = useState<{
     maxConcurrentRaids: number;
     autoContinue: boolean;
@@ -500,6 +501,7 @@ function DispatchViewContent() {
         ids.forEach((id) => next.delete(id));
         return next;
       });
+      toast({ title: 'Dispatch failed', tone: 'critical' });
     } finally {
       setIsDispatching(false);
     }
@@ -513,16 +515,22 @@ function DispatchViewContent() {
       await dispatcherService.setRunning(nextRunning);
       await dispatcherQuery.refetch();
       toast({ title: nextRunning ? 'Dispatcher resumed' : 'Dispatcher paused' });
+    } catch {
+      toast({ title: 'Failed to update dispatcher', tone: 'critical' });
     } finally {
       setIsPausing(false);
     }
   }
 
   function handleApplyWorkflow(workflow: Workflow) {
+    setWorkflowOverride((prev) => {
+      const next = new Map(prev);
+      selectedIds.forEach((id) => next.set(id, workflow));
+      return next;
+    });
     toast({
       title: `Applied "${workflow.name}" to ${selectedIds.size} raid${selectedIds.size !== 1 ? 's' : ''}`,
     });
-    setShowWorkflowModal(false);
   }
 
   function handleApplyThreshold(threshold: number) {
@@ -671,8 +679,7 @@ function DispatchViewContent() {
 
         {/* ── Right: rules panel ──────────────────────── */}
         <div
-          className="niuu-border-l niuu-border-border-subtle niuu-overflow-y-auto niuu-bg-bg-primary"
-          style={{ width: 280, flexShrink: 0 }}
+          className="niuu-border-l niuu-border-border-subtle niuu-overflow-y-auto niuu-bg-bg-primary niuu-w-[280px] niuu-shrink-0"
           aria-label="Dispatch rules panel"
         >
           {dispatcherState ? (

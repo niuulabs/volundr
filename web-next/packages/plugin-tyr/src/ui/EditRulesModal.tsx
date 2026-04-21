@@ -35,7 +35,7 @@ export function EditRulesModal({ open, onOpenChange, rules, onSave }: EditRulesM
     setMaxConcurrentRaids(rules.maxConcurrentRaids);
     setAutoContinue(rules.autoContinue);
     setRetryCount(rules.retryCount);
-  }, [open, rules]);
+  }, [open, rules.threshold, rules.maxConcurrentRaids, rules.autoContinue, rules.retryCount]);
 
   function handleSave() {
     onSave({ threshold, maxConcurrentRaids, autoContinue, retryCount });

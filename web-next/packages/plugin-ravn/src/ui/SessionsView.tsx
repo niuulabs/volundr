@@ -372,24 +372,25 @@ function Transcript({
 
 function ContextSidebar({ session, messages }: { session: Session; messages: Message[] }) {
   const [timelineExpanded, setTimelineExpanded] = useState(false);
-  const msgs = useMemo(() => messages, [messages]);
-
   const ratio =
     session.costUsd != null && session.messageCount != null && session.messageCount > 0
       ? session.costUsd / session.messageCount
       : null;
 
-  const timelineEvents = useMemo(() => deriveTimelineEvents(msgs, session), [msgs, session]);
+  const timelineEvents = useMemo(
+    () => deriveTimelineEvents(messages, session),
+    [messages, session],
+  );
   const visibleEvents = timelineExpanded
     ? timelineEvents
     : timelineEvents.slice(0, TIMELINE_MAX_ITEMS);
   const hasMore = timelineEvents.length > TIMELINE_MAX_ITEMS;
 
   // Injects: system messages represent context injected into the session
-  const injects = useMemo(() => msgs.filter((m) => m.kind === 'system'), [msgs]);
+  const injects = useMemo(() => messages.filter((m) => m.kind === 'system'), [messages]);
 
   // Emissions: emit messages emitted by the session
-  const emissions = useMemo(() => msgs.filter((m) => m.kind === 'emit'), [msgs]);
+  const emissions = useMemo(() => messages.filter((m) => m.kind === 'emit'), [messages]);
 
   return (
     <aside
