@@ -83,6 +83,10 @@ export interface SearchResult {
   category: string;
   type: PageType;
   confidence: Confidence;
+  /** Relevance score in [0, 1] — present for semantic and hybrid modes. */
+  score?: number;
+  /** Mounts that carry this page. */
+  mounts?: string[];
 }
 
 // ---------------------------------------------------------------------------

@@ -688,13 +688,15 @@ export function createMimirMockAdapter(): IMimirService {
         const q = query.toLowerCase();
         return MOCK_PAGES.filter(
           (p) => p.title.toLowerCase().includes(q) || p.summary.toLowerCase().includes(q),
-        ).map((p) => ({
+        ).map((p, i) => ({
           path: p.path,
           title: p.title,
           summary: p.summary,
           category: p.category,
           type: p.type,
           confidence: p.confidence,
+          score: Math.max(0.5, 0.95 - i * 0.1),
+          mounts: p.mounts,
         }));
       },
 

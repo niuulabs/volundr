@@ -1,5 +1,14 @@
 /* ── Shared Mímir view tokens ─────────────────────────────────────────────── */
 
+/* ── Search highlight mark — color-mix() not expressible in Tailwind ──────── */
+.mm-highlight {
+  background: color-mix(in srgb, var(--color-accent-amber) 25%, transparent);
+  color: var(--color-accent-amber);
+  border-radius: 2px;
+  padding: 0 1px;
+  font-style: normal;
+}
+
 /* ── MountChip ────────────────────────────────────────────────────────────── */
 .mm-mount-chip {
   display: inline-flex;
