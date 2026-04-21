@@ -418,6 +418,18 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
         const raw = await client.get<RawSource[]>(`/page/sources?path=${encodeURIComponent(path)}`);
         return raw.map(toSource);
       },
+
+      async ingestUrl(url: string): Promise<Source> {
+        const raw = await client.post<RawSource>('/sources/ingest/url', { url });
+        return toSource(raw);
+      },
+
+      async ingestFile(file: File): Promise<Source> {
+        const form = new FormData();
+        form.append('file', file);
+        const raw = await client.post<RawSource>('/sources/ingest/file', form);
+        return toSource(raw);
+      },
     },
 
     embeddings: {
