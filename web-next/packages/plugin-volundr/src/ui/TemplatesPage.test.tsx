@@ -283,26 +283,150 @@ describe('TemplatesPage', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Template list card: description + usage count
+  // -----------------------------------------------------------------------
+
+  it('renders description on template list card', async () => {
+    renderWithVolundr(<TemplatesPage />);
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    expect(
+      screen.getByText(/minimal forge template/i),
+    ).toBeInTheDocument();
+  });
+
+  it('renders usage count pill on template list card', async () => {
+    renderWithVolundr(<TemplatesPage />);
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    expect(screen.getByText('42 uses')).toBeInTheDocument();
+  });
+
+  it('does not render usage count when usageCount is absent', async () => {
+    const noUsageStore = storeWith([{ ...RICH_TEMPLATE, usageCount: undefined }]);
+    renderWithVolundr(<TemplatesPage />, { templateStore: noUsageStore });
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    expect(screen.queryByText(/uses$/)).not.toBeInTheDocument();
+  });
+
+  // -----------------------------------------------------------------------
+  // Detail header: Clone / Edit action buttons
+  // -----------------------------------------------------------------------
+
+  it('shows clone and edit buttons in the detail header', async () => {
+    renderWithVolundr(<TemplatesPage />);
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    expect(screen.getByRole('button', { name: /clone template/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /edit template/i })).toBeInTheDocument();
+  });
+
+  it('clone button label includes selected template name', async () => {
+    renderWithVolundr(<TemplatesPage />);
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    expect(
+      screen.getByRole('button', { name: /clone template default/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('edit button label includes selected template name', async () => {
+    renderWithVolundr(<TemplatesPage />);
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    expect(
+      screen.getByRole('button', { name: /edit template default/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('clone button label updates when template is switched', async () => {
+    renderWithVolundr(<TemplatesPage />);
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    const cards = screen.getAllByTestId('template-card');
+    fireEvent.click(cards[1]!);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /clone template gpu-workload/i }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  // -----------------------------------------------------------------------
   // Tab content: MCP
   // -----------------------------------------------------------------------
 
-  it('mcp tab shows empty state for template with no tools', async () => {
+  it('mcp tab shows empty state for template with no mcp servers', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    // default template has no tools
+    // default template has no MCP servers
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     expect(screen.getByText(/no mcp servers enabled/i)).toBeInTheDocument();
   });
 
-  it('mcp tab shows tools for gpu-workload template', async () => {
+  it('mcp tab shows server cards for gpu-workload template', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    // Select gpu-workload
     const cards = screen.getAllByTestId('template-card');
     fireEvent.click(cards[1]!);
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     expect(screen.getByText('python')).toBeInTheDocument();
     expect(screen.getByText('jupyter')).toBeInTheDocument();
+  });
+
+  it('mcp server card shows connection string', async () => {
+    renderWithVolundr(<TemplatesPage />);
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    const cards = screen.getAllByTestId('template-card');
+    fireEvent.click(cards[1]!);
+    fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
+    expect(screen.getByText('uvx mcp-python')).toBeInTheDocument();
+  });
+
+  it('mcp server card shows transport protocol', async () => {
+    renderWithVolundr(<TemplatesPage />);
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    const cards = screen.getAllByTestId('template-card');
+    fireEvent.click(cards[1]!);
+    fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
+    expect(screen.getAllByText('stdio').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('mcp server card tool list is collapsed by default', async () => {
+    renderWithVolundr(<TemplatesPage />);
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    const cards = screen.getAllByTestId('template-card');
+    fireEvent.click(cards[1]!);
+    fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
+    expect(screen.queryByTestId('mcp-tool-chip')).not.toBeInTheDocument();
+  });
+
+  it('mcp server card expands to show tools on click', async () => {
+    renderWithVolundr(<TemplatesPage />);
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    const cards = screen.getAllByTestId('template-card');
+    fireEvent.click(cards[1]!);
+    fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
+    // Expand the python server card
+    fireEvent.click(screen.getByRole('button', { name: /^python$/i }));
+    expect(screen.getByText('run_script')).toBeInTheDocument();
+    expect(screen.getByText('install_package')).toBeInTheDocument();
+  });
+
+  it('mcp server card collapses tools on second click', async () => {
+    renderWithVolundr(<TemplatesPage />);
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    const cards = screen.getAllByTestId('template-card');
+    fireEvent.click(cards[1]!);
+    fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
+    const pythonBtn = screen.getByRole('button', { name: /^python$/i });
+    fireEvent.click(pythonBtn); // expand
+    expect(screen.getByText('run_script')).toBeInTheDocument();
+    fireEvent.click(pythonBtn); // collapse
+    expect(screen.queryByText('run_script')).not.toBeInTheDocument();
+  });
+
+  it('renders mcp-server-card elements for each server', async () => {
+    renderWithVolundr(<TemplatesPage />);
+    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    const cards = screen.getAllByTestId('template-card');
+    fireEvent.click(cards[1]!);
+    fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
+    expect(screen.getAllByTestId('mcp-server-card').length).toBe(2);
   });
 
   // -----------------------------------------------------------------------
