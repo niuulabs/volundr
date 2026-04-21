@@ -5,7 +5,6 @@ import type {
   ClusterNode,
   ClusterPod,
   ClusterDisk,
-  ClusterKind,
   ClusterStatus,
   NodeStatus,
   PodStatus,
@@ -76,8 +75,7 @@ function comparePods(a: ClusterPod, b: ClusterPod, field: SortField, dir: SortDi
     const aPct = a.memLimitMi > 0 ? a.memUsedMi / a.memLimitMi : 0;
     const bPct = b.memLimitMi > 0 ? b.memUsedMi / b.memLimitMi : 0;
     cmp = aPct - bPct;
-  }
-  else if (field === 'restarts') cmp = a.restarts - b.restarts;
+  } else if (field === 'restarts') cmp = a.restarts - b.restarts;
   return dir === 'asc' ? cmp : -cmp;
 }
 

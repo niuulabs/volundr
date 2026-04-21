@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, Field, Input, Select } from '@niuulabs/ui';
 import { useTemplates } from './useTemplates';
 import type { Template } from '../domain/template';
@@ -431,7 +431,7 @@ function BootingStep({ bootStep, progress }: { bootStep: number; progress: numbe
 /** 4-step modal wizard for launching new Volundr sessions. */
 export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWizardProps) {
   const templates = useTemplates();
-  const allTemplates = templates.data ?? [];
+  const allTemplates = useMemo(() => templates.data ?? [], [templates.data]);
 
   const [step, setStep] = useState<WizardStep>('template');
   const [form, setForm] = useState<WizardForm>(() => ({

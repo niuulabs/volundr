@@ -80,6 +80,7 @@ describe('ForgePage', () => {
   it('renders error strip when failed sessions exist', async () => {
     wrap();
     await waitFor(() => {
+      const _errorStrip = screen.queryByTestId('error-strip');
       // May or may not have failed sessions depending on mock data
       expect(screen.getByTestId('forge-page')).toBeInTheDocument();
     });

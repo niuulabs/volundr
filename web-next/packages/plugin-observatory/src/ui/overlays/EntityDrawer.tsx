@@ -352,7 +352,7 @@ export function EntityDrawer({
       { length: 24 },
       (_, i) => 30 + Math.sin(i * 0.7 + seed) * 15 + (Math.sin(i * 1.3 + seed * 3) * 10 + 10),
     );
-  }, [node?.id]);
+  }, [node]);
 
   const showSparkline = ['ravn_long', 'bifrost'].includes(node?.typeId ?? '');
 
