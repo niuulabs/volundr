@@ -43,6 +43,7 @@ function makeSaga(overrides: Partial<Saga> = {}): Saga {
     name: 'Auth Rewrite',
     repos: ['niuulabs/volundr'],
     featureBranch: 'feat/auth-rewrite',
+    baseBranch: 'main',
     status: 'active',
     confidence: 82,
     createdAt: '2026-01-10T09:00:00Z',
@@ -363,5 +364,89 @@ describe('SagaDetailPage — right-column cards', () => {
       expect(screen.getByText(/ship — default release cycle/i)).toBeInTheDocument(),
     );
     expect(screen.getByText('v1.0.0')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NIU-710: Visual parity additions
+// ---------------------------------------------------------------------------
+
+describe('SagaDetailPage — NIU-710 parity', () => {
+  beforeEach(() => {
+    mockNavigate.mockClear();
+  });
+
+  it('subline shows featureBranch → baseBranch', async () => {
+    const svc = {
+      getSaga: async () => makeSaga({ featureBranch: 'feat/auth-rewrite', baseBranch: 'main' }),
+      getPhases: async (): Promise<Phase[]> => [],
+    };
+    render(<SagaDetailPage sagaId={SAGA_ID} />, { wrapper: wrap({ tyr: svc }) });
+    await waitFor(() =>
+      expect(screen.getByText(/feat\/auth-rewrite → main/)).toBeInTheDocument(),
+    );
+  });
+
+  it('subline uses saga.baseBranch when provided', async () => {
+    const svc = {
+      getSaga: async () =>
+        makeSaga({ featureBranch: 'feat/my-feature', baseBranch: 'dev' }),
+      getPhases: async (): Promise<Phase[]> => [],
+    };
+    render(<SagaDetailPage sagaId={SAGA_ID} />, { wrapper: wrap({ tyr: svc }) });
+    await waitFor(() =>
+      expect(screen.getByText(/feat\/my-feature → dev/)).toBeInTheDocument(),
+    );
+  });
+
+  it('raid row shows raid trackerId in monospace between status and name', async () => {
+    const svc = {
+      getSaga: async () => makeSaga(),
+      getPhases: async () => [makePhase([makeRaid({ trackerId: 'NIU-501' })])],
+    };
+    render(<SagaDetailPage sagaId={SAGA_ID} />, { wrapper: wrap({ tyr: svc }) });
+    await waitFor(() => expect(screen.getByText('NIU-501')).toBeInTheDocument());
+  });
+
+  it('active phase header renders a StateDot with pulse', async () => {
+    const svc = {
+      getSaga: async () => makeSaga(),
+      getPhases: async () => [
+        {
+          ...makePhase([]),
+          status: 'active' as const,
+        },
+      ],
+    };
+    const { container } = render(<SagaDetailPage sagaId={SAGA_ID} />, {
+      wrapper: wrap({ tyr: svc }),
+    });
+    await waitFor(() =>
+      expect(screen.getAllByText('Phase 1: Foundation').length).toBeGreaterThan(0),
+    );
+    // StateDot for active phase renders with running state + pulse animation
+    expect(
+      container.querySelector('.niuu-state-dot--running.niuu-state-dot--pulse'),
+    ).not.toBeNull();
+  });
+
+  it('pending phase header renders a StateDot with idle state', async () => {
+    const svc = {
+      getSaga: async () => makeSaga(),
+      getPhases: async () => [
+        {
+          ...makePhase([]),
+          status: 'pending' as const,
+        },
+      ],
+    };
+    const { container } = render(<SagaDetailPage sagaId={SAGA_ID} />, {
+      wrapper: wrap({ tyr: svc }),
+    });
+    await waitFor(() =>
+      expect(screen.getAllByText('Phase 1: Foundation').length).toBeGreaterThan(0),
+    );
+    // StateDot for pending phase renders with idle state CSS class
+    expect(container.querySelector('.niuu-state-dot--idle')).not.toBeNull();
   });
 });

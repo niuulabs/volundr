@@ -65,6 +65,8 @@ export const sagaSchema = z.object({
   workflow: z.string().optional(),
   /** Applied workflow version string (e.g. "1.4.2"). */
   workflowVersion: z.string().optional(),
+  /** Base branch all feature work merges into (e.g. "main"). */
+  baseBranch: z.string().default('main'),
 });
 export type Saga = z.infer<typeof sagaSchema>;
 
