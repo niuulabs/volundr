@@ -39,13 +39,13 @@ const SEVERITY_DOT: Record<IssueSeverity, 'failed' | 'attention' | 'observing'> 
 const SEVERITY_BADGE_CLS: Record<IssueSeverity, string> = {
   error: 'niuu-text-critical niuu-border-critical',
   warn: 'niuu-text-brand-400 niuu-border-brand-400',
-  info: 'niuu-text-status-cyan niuu-border-status-cyan',
+  info: 'niuu-text-brand-300 niuu-border-brand-300',
 };
 
 const ISSUE_BORDER_CLS: Record<IssueSeverity, string> = {
   error: 'niuu-border-l-[3px] niuu-border-l-critical',
   warn: 'niuu-border-l-[3px] niuu-border-l-brand-400',
-  info: 'niuu-border-l-[3px] niuu-border-l-status-cyan',
+  info: 'niuu-border-l-[3px] niuu-border-l-brand-300',
 };
 
 const BTN_BASE =
@@ -270,7 +270,7 @@ export function LintPage() {
                   {severityByRule[selectedRule] ?? 'info'}
                 </span>
                 {autoFixByRule[selectedRule] && (
-                  <span className="niuu-font-mono niuu-text-[10px] niuu-px-2 niuu-rounded-full niuu-border niuu-text-status-emerald niuu-border-status-emerald">
+                  <span className="niuu-font-mono niuu-text-[10px] niuu-px-2 niuu-rounded-full niuu-border niuu-text-brand-200 niuu-border-brand-200">
                     auto-fix
                   </span>
                 )}
@@ -279,7 +279,7 @@ export function LintPage() {
                 <span className="niuu-font-medium niuu-text-text-secondary">How to fix: </span>
                 {RULE_FIX_HINTS[selectedRule]}
                 {autoFixByRule[selectedRule] && (
-                  <span className="niuu-text-status-emerald">
+                  <span className="niuu-text-brand-200">
                     {' '}
                     Auto-fixable via <code className="niuu-font-mono">mimir_lint --fix</code>.
                   </span>

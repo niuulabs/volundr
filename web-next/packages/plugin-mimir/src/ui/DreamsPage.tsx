@@ -24,9 +24,9 @@ const KIND_FILTERS: Array<{ value: ActivityEventKind | 'all'; label: string }> =
 ];
 
 const KIND_COLOR: Record<ActivityEventKind, string> = {
-  write: 'niuu-text-status-cyan',
-  ingest: 'niuu-text-status-indigo',
-  lint: 'niuu-text-status-emerald',
+  write: 'niuu-text-brand-300',
+  ingest: 'niuu-text-brand-500',
+  lint: 'niuu-text-brand-200',
   dream: 'niuu-text-brand',
   query: 'niuu-text-text-muted',
 };

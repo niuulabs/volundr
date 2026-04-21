@@ -32,9 +32,9 @@ function formatTimestamp(iso: string): string {
 
 /** Tailwind color class per feed entry kind. Falls back to text-secondary. */
 const FEED_KIND_COLOR: Record<string, string> = {
-  write: 'niuu-text-status-cyan',
+  write: 'niuu-text-brand-300',
   compile: 'niuu-text-brand',
-  'lint-fix': 'niuu-text-status-emerald',
+  'lint-fix': 'niuu-text-brand-200',
   dream: 'niuu-text-brand',
 };
 

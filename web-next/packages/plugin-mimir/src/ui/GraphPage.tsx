@@ -11,14 +11,14 @@ const SVG_R = 170;
 
 // Category color palette (maps to CSS tokens in order)
 const CATEGORY_COLORS = [
-  'var(--color-accent-cyan)',
-  'var(--color-accent-indigo)',
-  'var(--color-accent-emerald)',
-  'var(--color-accent-purple)',
+  'var(--brand-300)',
   'var(--brand-400)',
-  'var(--color-accent-orange)',
-  'var(--color-accent-red)',
+  'var(--brand-500)',
+  'var(--brand-200)',
   'var(--color-text-secondary)',
+  'var(--brand-600)',
+  'var(--color-text-muted)',
+  'var(--brand-700)',
 ] as const;
 
 function getCategoryIndex(category: string, categories: string[]): number {

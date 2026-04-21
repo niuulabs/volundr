@@ -7,31 +7,31 @@
  *   2. SVG node hover glow filter (CSS filter on SVG not expressible in Tailwind)
  */
 
-/* ── Legend dot colors ─────────────────────────────────────────────────────── */
+/* ── Legend dot colors (brand-derived only) ───────────────────────────────── */
 
 .niuu-graph-legend-dot[data-color-idx='0'] {
-  background: var(--color-accent-cyan);
+  background: var(--brand-300);
 }
 .niuu-graph-legend-dot[data-color-idx='1'] {
-  background: var(--color-accent-indigo);
-}
-.niuu-graph-legend-dot[data-color-idx='2'] {
-  background: var(--color-accent-emerald);
-}
-.niuu-graph-legend-dot[data-color-idx='3'] {
-  background: var(--color-accent-purple);
-}
-.niuu-graph-legend-dot[data-color-idx='4'] {
   background: var(--brand-400);
 }
+.niuu-graph-legend-dot[data-color-idx='2'] {
+  background: var(--brand-500);
+}
+.niuu-graph-legend-dot[data-color-idx='3'] {
+  background: var(--brand-200);
+}
+.niuu-graph-legend-dot[data-color-idx='4'] {
+  background: var(--color-text-secondary);
+}
 .niuu-graph-legend-dot[data-color-idx='5'] {
-  background: var(--color-accent-orange);
+  background: var(--brand-600);
 }
 .niuu-graph-legend-dot[data-color-idx='6'] {
-  background: var(--color-accent-red);
+  background: var(--color-text-muted);
 }
 .niuu-graph-legend-dot[data-color-idx='7'] {
-  background: var(--color-text-secondary);
+  background: var(--brand-700);
 }
 
 /* ── SVG node hover glow ───────────────────────────────────────────────────── */

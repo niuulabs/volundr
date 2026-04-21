@@ -297,7 +297,7 @@ export function RoutingPage() {
                       </td>
                       <td className={TD_BASE}>
                         <span
-                          className={`niuu-font-mono niuu-text-xs ${rule.active ? 'niuu-text-status-emerald' : 'niuu-text-text-muted'}`}
+                          className={`niuu-font-mono niuu-text-xs ${rule.active ? 'niuu-text-brand-200' : 'niuu-text-text-muted'}`}
                         >
                           {rule.active ? 'yes' : 'no'}
                         </span>

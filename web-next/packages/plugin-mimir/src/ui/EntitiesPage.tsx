@@ -14,10 +14,11 @@ const KIND_ICONS: Record<EntityKind, string> = {
 };
 
 const FILTER_BTN_BASE =
-  'niuu-px-3 niuu-py-1 niuu-rounded-full niuu-font-sans niuu-text-xs niuu-cursor-pointer niuu-border';
-const FILTER_BTN_ACTIVE = 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-medium';
+  'niuu-px-3 niuu-py-1 niuu-rounded-sm niuu-font-mono niuu-text-xs niuu-cursor-pointer niuu-border niuu-transition-colors';
+const FILTER_BTN_ACTIVE =
+  'niuu-bg-bg-tertiary niuu-border-border niuu-text-text-primary niuu-font-medium';
 const FILTER_BTN_INACTIVE =
-  'niuu-bg-bg-secondary niuu-border-border-subtle niuu-text-text-secondary';
+  'niuu-bg-transparent niuu-border-transparent niuu-text-text-muted hover:niuu-text-text-secondary hover:niuu-bg-bg-secondary';
 
 export function EntitiesPage() {
   const [filterKind, setFilterKind] = useState<EntityKind | undefined>(undefined);

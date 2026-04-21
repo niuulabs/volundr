@@ -84,7 +84,7 @@ const SOURCES_COLUMNS: TableColumn<Source>[] = [
       if (row.originUrl) {
         return (
           <span
-            className="niuu-font-mono niuu-text-xs niuu-text-status-cyan niuu-overflow-hidden niuu-text-ellipsis niuu-whitespace-nowrap niuu-block"
+            className="niuu-font-mono niuu-text-xs niuu-text-brand-300 niuu-overflow-hidden niuu-text-ellipsis niuu-whitespace-nowrap niuu-block"
             title={row.originUrl}
           >
             {row.originUrl}
@@ -234,14 +234,14 @@ function IngestForm({ onIngestSuccess, onMutationStart }: IngestFormProps) {
             required
             aria-label="URL to fetch"
             data-testid="url-input"
-            className="niuu-flex-1 niuu-bg-bg-primary niuu-border niuu-border-border niuu-rounded-sm niuu-px-3 niuu-py-1 niuu-text-sm niuu-text-text-primary niuu-font-mono placeholder:niuu-text-text-muted focus:niuu-outline-none focus:niuu-border-status-cyan"
+            className="niuu-flex-1 niuu-bg-bg-primary niuu-border niuu-border-border niuu-rounded-sm niuu-px-3 niuu-py-1 niuu-text-sm niuu-text-text-primary niuu-font-mono placeholder:niuu-text-text-muted focus:niuu-outline-none focus:niuu-border-brand-300"
           />
           <button
             type="submit"
             disabled={isPending || !url.trim()}
             aria-label="Fetch"
             data-testid="fetch-button"
-            className="niuu-px-4 niuu-py-1 niuu-text-xs niuu-rounded-sm niuu-bg-status-cyan niuu-text-bg-primary niuu-font-mono disabled:niuu-opacity-50 hover:niuu-opacity-85 niuu-transition-opacity"
+            className="niuu-px-4 niuu-py-1 niuu-text-xs niuu-rounded-sm niuu-bg-brand niuu-border niuu-border-brand niuu-text-bg-primary niuu-font-mono niuu-font-medium disabled:niuu-opacity-50 hover:niuu-opacity-85 niuu-transition-opacity"
           >
             {isPending ? 'Fetching…' : 'Fetch'}
           </button>
@@ -250,7 +250,7 @@ function IngestForm({ onIngestSuccess, onMutationStart }: IngestFormProps) {
 
       {mode === 'file' && (
         <label
-          className="niuu-flex niuu-flex-col niuu-items-center niuu-justify-center niuu-gap-2 niuu-border niuu-border-dashed niuu-border-border niuu-rounded-md niuu-p-6 niuu-text-center niuu-cursor-pointer hover:niuu-border-status-cyan niuu-transition-colors"
+          className="niuu-flex niuu-flex-col niuu-items-center niuu-justify-center niuu-gap-2 niuu-border niuu-border-dashed niuu-border-border niuu-rounded-md niuu-p-6 niuu-text-center niuu-cursor-pointer hover:niuu-border-brand-300 niuu-transition-colors"
           aria-label="Upload file dropzone"
           data-testid="file-dropzone"
         >
@@ -318,7 +318,7 @@ export function SourcesView() {
 
       {showSuccess && (
         <p
-          className="niuu-text-xs niuu-text-status-emerald niuu-m-0"
+          className="niuu-text-xs niuu-text-brand-200 niuu-m-0"
           role="status"
           data-testid="ingest-success"
         >
@@ -341,7 +341,7 @@ export function SourcesView() {
             className={[
               'niuu-px-3 niuu-py-1 niuu-rounded-full niuu-text-xs niuu-font-mono niuu-border niuu-transition-colors',
               activeOrigin === id
-                ? 'niuu-border-status-cyan/30 niuu-text-status-cyan mm-origin-chip--active-bg'
+                ? 'niuu-border-brand-300/30 niuu-text-brand-300 mm-origin-chip--active-bg'
                 : 'niuu-border-border niuu-bg-bg-secondary niuu-text-text-secondary hover:niuu-bg-bg-tertiary hover:niuu-text-text-primary',
             ].join(' ')}
             onClick={() => setActiveOrigin(id as OriginType | 'all')}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StateDot, Chip, RavnAvatar } from '@niuulabs/ui';
+import { StateDot, Chip } from '@niuulabs/ui';
 import { useRavns } from '../application/useRavns';
 import type { RavnBinding } from '../domain/ravn-binding';
 import { RAVN_DOT_STATE } from './mimir.constants';
@@ -10,7 +10,7 @@ import { formatDuration, formatTimestamp } from './format';
 // ---------------------------------------------------------------------------
 
 const STATE_PILL: Record<RavnBinding['state'], string> = {
-  active: 'niuu-bg-state-ok-bg niuu-text-status-emerald',
+  active: 'niuu-bg-bg-tertiary niuu-text-brand-200',
   idle: 'niuu-bg-bg-tertiary niuu-text-text-muted',
   offline: 'niuu-bg-critical-bg niuu-text-critical',
 };
@@ -39,13 +39,13 @@ function RavnCard({ ravn, onClick }: RavnCardProps) {
     >
       {/* Head: avatar + name + state */}
       <div className="niuu-flex niuu-items-center niuu-gap-3">
-        <RavnAvatar
-          role={ravn.role}
-          rune={ravn.ravnRune}
-          state={RAVN_DOT_STATE[ravn.state]}
-          pulse={ravn.state === 'active'}
-          size={36}
-        />
+        <span
+          className="niuu-inline-flex niuu-items-center niuu-justify-center niuu-font-mono niuu-text-sm niuu-font-bold niuu-text-text-secondary niuu-bg-bg-tertiary niuu-border niuu-border-border-subtle niuu-uppercase niuu-shrink-0"
+          style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)' }}
+          aria-hidden
+        >
+          {ravn.ravnId.charAt(0)}{ravn.ravnId.charAt(ravn.ravnId.length - 1)}
+        </span>
         <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-flex-1 niuu-min-w-0">
           <span className="niuu-font-mono niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-truncate">
             {ravn.ravnId}
@@ -133,13 +133,13 @@ function RavnProfile({ ravn, onBack }: RavnProfileProps) {
 
       {/* Hero section */}
       <div className="niuu-flex niuu-items-center niuu-gap-4 niuu-p-4 niuu-bg-bg-secondary niuu-border niuu-border-border-subtle niuu-rounded-lg">
-        <RavnAvatar
-          role={ravn.role}
-          rune={ravn.ravnRune}
-          state={RAVN_DOT_STATE[ravn.state]}
-          pulse={ravn.state === 'active'}
-          size={48}
-        />
+        <span
+          className="niuu-inline-flex niuu-items-center niuu-justify-center niuu-font-mono niuu-text-xl niuu-font-bold niuu-text-text-secondary niuu-bg-bg-tertiary niuu-border niuu-border-border-subtle niuu-uppercase niuu-shrink-0"
+          style={{ width: 48, height: 48, borderRadius: 'var(--radius-sm)' }}
+          aria-hidden
+        >
+          {ravn.ravnId.charAt(0)}{ravn.ravnId.charAt(ravn.ravnId.length - 1)}
+        </span>
         <div className="niuu-flex niuu-flex-col niuu-gap-2">
           <h2 className="niuu-m-0 niuu-text-xl niuu-font-mono">{ravn.ravnId}</h2>
           <div className="niuu-flex niuu-items-center niuu-gap-2">
