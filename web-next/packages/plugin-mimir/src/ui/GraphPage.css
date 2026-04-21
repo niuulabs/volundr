@@ -1,217 +1,25 @@
-.graph-page {
-  padding: var(--space-6);
-  max-width: 960px;
-}
+/*
+ * GraphPage.css — minimal SVG-specific overrides.
+ *
+ * All layout and typography are handled by Tailwind utilities (niuu- prefix)
+ * in GraphPage.tsx. This file covers only what Tailwind cannot express:
+ *   1. Legend dot background colors via data-attribute (8 category slots)
+ *   2. SVG node hover glow filter (CSS filter on SVG not expressible in Tailwind)
+ */
 
-.graph-page__title {
-  margin: 0 0 var(--space-5);
-}
+/* ── Legend dot colors ─────────────────────────────────────────────────────── */
 
-.graph-page__toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  margin-bottom: var(--space-4);
-  align-items: flex-end;
-}
+.niuu-graph-legend-dot[data-color-idx='0'] { background: var(--color-accent-cyan); }
+.niuu-graph-legend-dot[data-color-idx='1'] { background: var(--color-accent-indigo); }
+.niuu-graph-legend-dot[data-color-idx='2'] { background: var(--color-accent-emerald); }
+.niuu-graph-legend-dot[data-color-idx='3'] { background: var(--color-accent-purple); }
+.niuu-graph-legend-dot[data-color-idx='4'] { background: var(--color-accent-amber); }
+.niuu-graph-legend-dot[data-color-idx='5'] { background: var(--color-accent-orange); }
+.niuu-graph-legend-dot[data-color-idx='6'] { background: var(--color-accent-red); }
+.niuu-graph-legend-dot[data-color-idx='7'] { background: var(--color-text-secondary); }
 
-.graph-page__label {
-  display: block;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  margin-bottom: var(--space-1);
-}
+/* ── SVG node hover glow ───────────────────────────────────────────────────── */
 
-.graph-page__focus-controls {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 220px;
-}
-
-.graph-page__focus-input {
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text-primary);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  outline: none;
-}
-
-.graph-page__focus-input:focus {
-  border-color: var(--color-brand);
-}
-
-.graph-page__clear-btn {
-  margin-top: var(--space-1);
-  align-self: flex-start;
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  padding: 0;
-}
-
-.graph-page__clear-btn:hover {
-  color: var(--color-text-secondary);
-}
-
-.graph-page__hop-controls {
-  display: flex;
-  flex-direction: column;
-}
-
-.graph-page__hop-btns {
-  display: flex;
-  gap: var(--space-1);
-}
-
-.graph-page__hop-btn {
-  width: 32px;
-  height: 28px;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
-  font-size: var(--text-xs);
-  cursor: pointer;
-}
-
-.graph-page__hop-btn--active {
-  background: var(--color-brand);
-  border-color: var(--color-brand);
-  color: var(--color-bg-primary);
-  font-weight: 600;
-}
-
-.graph-page__status {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.graph-page__stats {
-  display: flex;
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.graph-page__svg {
-  width: 100%;
-  max-width: 600px;
-  height: auto;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-secondary);
-  display: block;
-}
-
-.graph-page__edge {
-  stroke: var(--color-border);
-  stroke-width: 1.5;
-}
-
-.graph-page__node {
-  cursor: pointer;
-}
-
-.graph-page__node-circle {
-  fill: var(--color-bg-tertiary);
-  stroke: var(--color-border);
-  stroke-width: 1.5;
-}
-
-.graph-page__node--focus .graph-page__node-circle {
-  fill: var(--color-brand);
-  stroke: var(--color-brand);
-}
-
-.graph-page__node-label {
-  text-anchor: middle;
-  fill: var(--color-text-secondary);
-  font-size: var(--text-xs);
-  font-family: var(--font-sans);
-  pointer-events: none;
-}
-
-/* ── Canvas + legend row ───────────────────────────────────────────────────── */
-
-.graph-page__canvas-wrap {
-  display: flex;
-  gap: var(--space-4);
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
-
-/* ── Legend card ───────────────────────────────────────────────────────────── */
-
-.graph-page__legend {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  min-width: 140px;
-}
-
-.graph-page__legend-title {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--color-text-muted);
-  padding-bottom: var(--space-1);
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-
-.graph-page__legend-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.graph-page__legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-/* 8 category color slots mapped from CSS tokens */
-.graph-page__legend-dot[data-color-idx='0'] {
-  background: var(--color-accent-cyan);
-}
-.graph-page__legend-dot[data-color-idx='1'] {
-  background: var(--color-accent-indigo);
-}
-.graph-page__legend-dot[data-color-idx='2'] {
-  background: var(--color-accent-emerald);
-}
-.graph-page__legend-dot[data-color-idx='3'] {
-  background: var(--color-accent-purple);
-}
-.graph-page__legend-dot[data-color-idx='4'] {
-  background: var(--color-accent-amber);
-}
-.graph-page__legend-dot[data-color-idx='5'] {
-  background: var(--color-accent-orange);
-}
-.graph-page__legend-dot[data-color-idx='6'] {
-  background: var(--color-accent-red);
-}
-.graph-page__legend-dot[data-color-idx='7'] {
-  background: var(--color-text-secondary);
-}
-
-.graph-page__legend-label {
-  font-size: var(--text-xs);
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.niuu-graph-node:hover .niuu-graph-node-circle {
+  filter: url(#niuu-node-glow);
 }
