@@ -119,6 +119,21 @@ async function waitForReady(page: Page): Promise<void> {
   });
   // Let any rAF-driven animations reach steady state.
   await page.waitForTimeout(600);
+
+  // Hide live clocks so screenshots are stable across captures.
+  // Web2 prototypes render a live UTC clock that changes every second.
+  await page.evaluate(() => {
+    document.querySelectorAll('.topbar-meta').forEach((el) => {
+      if (el.textContent?.includes('UTC') || el.textContent?.includes('Z')) {
+        (el as HTMLElement).style.display = 'none';
+        // Also hide the preceding separator
+        const prev = el.previousElementSibling;
+        if (prev?.classList.contains('topbar-sep')) {
+          (prev as HTMLElement).style.display = 'none';
+        }
+      }
+    });
+  });
 }
 
 /**
