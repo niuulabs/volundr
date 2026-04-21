@@ -10,7 +10,15 @@ import type { Mount } from '@niuulabs/domain';
 import type { IMimirService, SearchMode, RecentWrite } from '../ports';
 import type { PageMeta, Page, SearchResult } from '../domain/page';
 import type { Source, OriginType } from '../domain/source';
-import type { LintReport, DreamCycle, LintIssue, IssueSeverity, LintRule } from '../domain/lint';
+import type {
+  LintReport,
+  DreamCycle,
+  LintIssue,
+  IssueSeverity,
+  LintRule,
+  ActivityEvent,
+  ActivityEventKind,
+} from '../domain/lint';
 import type { MimirStats, MimirGraph, GraphNode, GraphEdge } from '../domain/api-types';
 import type { EmbeddingSearchResult } from '../ports/IEmbeddingStore';
 import type { EntityKind, EntityMeta } from '../domain/entity';
@@ -133,6 +141,16 @@ interface RawDreamCycle {
   entities_created: number;
   lint_fixes: number;
   duration_ms: number;
+}
+
+interface RawActivityEvent {
+  id: string;
+  timestamp: string;
+  kind: string;
+  mount: string;
+  ravn: string;
+  message: string;
+  page?: string;
 }
 
 interface RawGraphNode {
@@ -275,6 +293,18 @@ function toDreamCycle(raw: RawDreamCycle): DreamCycle {
     entitiesCreated: raw.entities_created,
     lintFixes: raw.lint_fixes,
     durationMs: raw.duration_ms,
+  };
+}
+
+function toActivityEvent(raw: RawActivityEvent): ActivityEvent {
+  return {
+    id: raw.id,
+    timestamp: raw.timestamp,
+    kind: raw.kind as ActivityEventKind,
+    mount: raw.mount,
+    ravn: raw.ravn,
+    message: raw.message,
+    page: raw.page,
   };
 }
 
@@ -463,6 +493,11 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
       async getDreamCycles(limit = 20): Promise<DreamCycle[]> {
         const raw = await client.get<RawDreamCycle[]>(`/dreams?limit=${limit}`);
         return raw.map(toDreamCycle);
+      },
+
+      async getActivityLog(limit = 50): Promise<ActivityEvent[]> {
+        const raw = await client.get<RawActivityEvent[]>(`/activity?limit=${limit}`);
+        return raw.map(toActivityEvent);
       },
 
       async reassignIssues(issueIds: string[], assignee: string): Promise<LintReport> {

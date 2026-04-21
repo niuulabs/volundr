@@ -1,4 +1,4 @@
-import type { LintReport, DreamCycle } from '../domain/lint';
+import type { LintReport, DreamCycle, ActivityEvent } from '../domain/lint';
 
 /**
  * Port: ILintEngine
@@ -34,4 +34,11 @@ export interface ILintEngine {
    * @param limit Maximum records to return (default: 20).
    */
   getDreamCycles(limit?: number): Promise<DreamCycle[]>;
+
+  /**
+   * Fetch recent activity events across all mounts, most-recent-first.
+   *
+   * @param limit Maximum records to return (default: 50).
+   */
+  getActivityLog(limit?: number): Promise<ActivityEvent[]>;
 }

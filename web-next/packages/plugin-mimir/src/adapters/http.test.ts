@@ -228,6 +228,38 @@ describe('buildMimirHttpAdapter', () => {
     });
   });
 
+  describe('lint.getActivityLog', () => {
+    it('calls GET /activity with limit', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).lint.getActivityLog(10);
+      expect(client.get).toHaveBeenCalledWith('/activity?limit=10');
+    });
+
+    it('maps raw activity event fields', async () => {
+      const raw = [
+        {
+          id: 'act-1',
+          timestamp: '2026-04-19T10:00:00Z',
+          kind: 'write',
+          mount: 'local',
+          ravn: 'ravn-fjolnir',
+          message: 'wrote some page',
+          page: 'some/page.md',
+        },
+      ];
+      const client = makeClient({ get: vi.fn().mockResolvedValue(raw) });
+      const events = await buildMimirHttpAdapter(client).lint.getActivityLog();
+      expect(events[0]).toMatchObject({
+        id: 'act-1',
+        kind: 'write',
+        mount: 'local',
+        ravn: 'ravn-fjolnir',
+        message: 'wrote some page',
+        page: 'some/page.md',
+      });
+    });
+  });
+
   describe('pages.getGraph', () => {
     it('calls GET /graph without query string when no options', async () => {
       const rawGraph = { nodes: [], edges: [] };
