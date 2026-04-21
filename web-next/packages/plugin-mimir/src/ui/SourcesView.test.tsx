@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import { renderWithMimir as wrap } from '../testing/renderWithMimir';
 import { SourcesView } from './SourcesView';
@@ -143,6 +143,42 @@ describe('SourcesView', () => {
 
     await waitFor(() => expect(ingestUrl).toHaveBeenCalledWith('https://example.com'));
     await waitFor(() => expect(screen.getByTestId('ingest-success')).toBeInTheDocument());
+  });
+
+  it('success banner is cleared when a new mutation starts', async () => {
+    const mockAdapter = createMimirMockAdapter();
+    let callCount = 0;
+    const ingestUrl = vi.fn().mockImplementation(async () => {
+      callCount++;
+      if (callCount > 1) throw new Error('second attempt fails');
+      return {
+        id: 'src-new',
+        title: 'https://example.com',
+        originType: 'web' as const,
+        originUrl: 'https://example.com',
+        ingestedAt: '2026-04-21T00:00:00Z',
+        ingestAgent: 'ravn-fjolnir',
+        compiledInto: [],
+        content: '',
+      };
+    });
+    const service: IMimirService = { ...mockAdapter, pages: { ...mockAdapter.pages, ingestUrl } };
+
+    wrap(<SourcesView />, service);
+
+    // First ingest — success banner appears
+    fireEvent.change(screen.getByTestId('url-input'), {
+      target: { value: 'https://example.com' },
+    });
+    fireEvent.click(screen.getByTestId('fetch-button'));
+    await waitFor(() => expect(screen.getByTestId('ingest-success')).toBeInTheDocument());
+
+    // Second ingest — success banner must disappear before result
+    fireEvent.change(screen.getByTestId('url-input'), {
+      target: { value: 'https://example.com' },
+    });
+    fireEvent.click(screen.getByTestId('fetch-button'));
+    await waitFor(() => expect(screen.queryByTestId('ingest-success')).not.toBeInTheDocument());
   });
 
   it('shows error message when ingestUrl fails', async () => {

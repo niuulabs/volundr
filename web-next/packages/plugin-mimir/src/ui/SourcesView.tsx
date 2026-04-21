@@ -127,9 +127,10 @@ const SOURCES_COLUMNS: TableColumn<Source>[] = [
 
 interface IngestFormProps {
   onIngestSuccess: () => void;
+  onMutationStart: () => void;
 }
 
-function IngestForm({ onIngestSuccess }: IngestFormProps) {
+function IngestForm({ onIngestSuccess, onMutationStart }: IngestFormProps) {
   const [mode, setMode] = useState<IngestMode>('url');
   const [url, setUrl] = useState('');
   const [ingestError, setIngestError] = useState<string | null>(null);
@@ -139,6 +140,7 @@ function IngestForm({ onIngestSuccess }: IngestFormProps) {
 
   const mutation = useMutation({
     mutationFn: (payload: { type: 'url'; url: string } | { type: 'file'; file: File }) => {
+      onMutationStart();
       if (payload.type === 'url') {
         return service.pages.ingestUrl(payload.url);
       }
@@ -292,7 +294,7 @@ function IngestForm({ onIngestSuccess }: IngestFormProps) {
 
 export function SourcesView() {
   const [activeOrigin, setActiveOrigin] = useState<OriginType | 'all'>('all');
-  const [lastIngestId, setLastIngestId] = useState<string | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const {
     data: sources,
@@ -301,12 +303,20 @@ export function SourcesView() {
     error,
   } = useMimirSources(activeOrigin !== 'all' ? { originType: activeOrigin } : undefined);
 
+  function handleIngestSuccess() {
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
+  }
+
   return (
     <div className="niuu-p-6 niuu-flex niuu-flex-col niuu-gap-4">
       {/* ── Ingest form ────────────────────────────────────────── */}
-      <IngestForm onIngestSuccess={() => setLastIngestId(Date.now().toString())} />
+      <IngestForm
+        onIngestSuccess={handleIngestSuccess}
+        onMutationStart={() => setShowSuccess(false)}
+      />
 
-      {lastIngestId && (
+      {showSuccess && (
         <p
           className="niuu-text-xs niuu-text-status-emerald niuu-m-0"
           role="status"
