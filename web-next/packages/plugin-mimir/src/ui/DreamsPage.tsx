@@ -10,7 +10,7 @@ import { formatDuration, formatTimestamp } from './format';
 const STATUS_ROW = 'niuu-flex niuu-items-center niuu-gap-2 niuu-text-sm niuu-text-text-secondary';
 
 const LOG_ROW =
-  'niuu-grid niuu-[grid-template-columns:90px_60px_70px_1fr] niuu-gap-3 niuu-py-[3px] ' +
+  'niuu-grid niuu-grid-cols-[90px_60px_70px_1fr] niuu-gap-3 niuu-py-[3px] ' +
   'niuu-border-0 niuu-border-b niuu-border-solid ' +
   'niuu-border-[color-mix(in_srgb,var(--color-border-subtle)_40%,transparent)] ' +
   'niuu-items-center hover:niuu-bg-bg-tertiary';
@@ -253,7 +253,7 @@ export function DreamsPage() {
             data-testid="activity-log"
           >
             {/* Header row */}
-            <div className="niuu-grid niuu-[grid-template-columns:90px_60px_70px_1fr] niuu-gap-3 niuu-py-[2px] niuu-text-text-muted niuu-uppercase niuu-tracking-[0.07em] niuu-text-[9px] niuu-font-medium">
+            <div className="niuu-grid niuu-grid-cols-[90px_60px_70px_1fr] niuu-gap-3 niuu-py-[2px] niuu-text-text-muted niuu-uppercase niuu-tracking-[0.07em] niuu-text-[9px] niuu-font-medium">
               <span>time</span>
               <span>kind</span>
               <span>mount</span>

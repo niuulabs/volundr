@@ -105,7 +105,7 @@ export function LintPage() {
     {
       label: 'errors',
       value: summary.error,
-      valueCls: `${KPI_VAL_BASE} ${summary.error > 0 ? 'niuu-text-critical' : 'niuu-text-text-muted'}`,
+      valueCls: `${KPI_VAL_BASE} ${summary.error > 0 ? 'niuu-text-critical-fg' : 'niuu-text-text-muted'}`,
       cardBorder: 'niuu-border-border-subtle',
     },
     {

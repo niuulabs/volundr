@@ -5,12 +5,12 @@ import { ENTITY_KINDS } from '../domain/entity';
 import type { EntityKind } from '../domain/entity';
 
 const KIND_ICONS: Record<EntityKind, string> = {
-  person: '👤',
-  org: '🏢',
-  concept: '💡',
-  project: '📦',
-  component: '⚙️',
-  technology: '🔧',
+  person: '◇',
+  org: '◈',
+  concept: '◎',
+  project: '▣',
+  component: '⬡',
+  technology: '⌖',
 };
 
 const FILTER_BTN_BASE =
