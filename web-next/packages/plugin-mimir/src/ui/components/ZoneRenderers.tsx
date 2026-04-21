@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { resolveWikilink } from '../../domain';
+import { splitWikilinks, resolveWikilink } from '../../domain';
 import { WikilinkPill } from './WikilinkPill';
 import type {
   Zone,
@@ -20,23 +20,22 @@ function KeyFactsZone({ zone, pages, onNavigate }: ZoneRendererProps & { zone: Z
   return (
     <ul>
       {zone.items.map((item, i) => {
-        const parts = item.split(/(\[\[[^\]]+]])/g);
+        const parts = splitWikilinks(item);
         return (
           <li key={i}>
             {parts.map((part, j) => {
-              if (part.startsWith('[[') && part.endsWith(']]')) {
-                const slug = part.slice(2, -2);
-                const target = resolveWikilink(slug, pages);
+              if (part.kind === 'link') {
+                const target = resolveWikilink(part.slug, pages);
                 return (
                   <WikilinkPill
                     key={j}
-                    slug={slug}
+                    slug={part.slug}
                     broken={target.broken}
                     onNavigate={onNavigate}
                   />
                 );
               }
-              return <Fragment key={j}>{part}</Fragment>;
+              return <Fragment key={j}>{part.value}</Fragment>;
             })}
           </li>
         );
