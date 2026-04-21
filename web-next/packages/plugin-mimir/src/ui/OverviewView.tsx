@@ -93,7 +93,7 @@ export function OverviewView() {
       </KpiStrip>
 
       {/* ── 2-column home layout ──────────────────────────────────── */}
-      <div className="niuu-grid niuu-border niuu-border-border-subtle niuu-rounded-lg niuu-overflow-hidden niuu-grid-cols-[1.2fr_1fr]">
+      <div className="niuu-grid niuu-grid-cols-[1.2fr_1fr] niuu-min-h-0">
         {/* LEFT column: mount grid + wardens */}
         <div className="niuu-p-5 niuu-overflow-y-auto niuu-border-r niuu-border-border-subtle">
           {/* ── Mounts section head ────────────────────────────────── */}
@@ -106,7 +106,7 @@ export function OverviewView() {
           </div>
 
           {/* ── Mount cards grid ───────────────────────────────────── */}
-          <div className="niuu-grid niuu-gap-4 niuu-grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
+          <div className="niuu-grid niuu-gap-3 niuu-grid-cols-2 niuu-mb-5">
             {mounts?.map((mount) => {
               const isExpanded = expandedMount === mount.name;
               const mountFeed =

@@ -1,3 +1,23 @@
+/* ── Mímir KPI strip — override @niuulabs/ui KpiCard to match web2 ────────── */
+/* Web2 uses gap-border approach: strip bg = border-subtle, cells bg = bg-secondary,
+   gap: 1px creates the divider lines. No rounded card borders. */
+
+.mm-page-shell .niuu-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1px;
+  background: var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.mm-page-shell .niuu-kpi-card {
+  border: none;
+  border-radius: 0;
+  background: var(--color-bg-secondary);
+  padding: var(--space-3) var(--space-4);
+  min-width: auto;
+}
+
 /* ── Shared Mímir view tokens ─────────────────────────────────────────────── */
 
 /* ── Search highlight mark — color-mix() not expressible in Tailwind ──────── */

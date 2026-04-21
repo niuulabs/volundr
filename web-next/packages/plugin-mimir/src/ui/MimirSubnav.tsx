@@ -79,7 +79,6 @@ export function MimirSubnav({ ctx }: MimirSubnavProps) {
             onClick={() => setActiveMount('all')}
             aria-pressed={activeMount === 'all'}
           >
-            <span className="mm-mount-row__dot mm-mount-row__dot--all" aria-hidden />
             <span className="mm-mount-row__name">All mounts</span>
             <span className="mm-mount-row__count">{mounts.length}</span>
           </button>

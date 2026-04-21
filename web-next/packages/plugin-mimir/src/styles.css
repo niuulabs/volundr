@@ -5,6 +5,9 @@
  */
 
 @import './ui/MimirPage.css';
+@import './ui/MimirSubnav.css';
+@import './ui/MimirTopbar.css';
+@import './ui/LintBadge.css';
 @import './ui/GraphPage.css';
 @import './ui/mimir-views.css';
 
