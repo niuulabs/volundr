@@ -1,11 +1,11 @@
 import { useNavigate } from '@tanstack/react-router';
-import { KpiStrip, KpiCard, StateDot, LoadingState, Meter, relTime } from '@niuulabs/ui';
+import { KpiStrip, KpiCard, StateDot, LoadingState, Meter, relTime, Sparkline } from '@niuulabs/ui';
 import { useVolundrStats } from './useVolundrSessions';
 import { useVolundrClusters } from './hooks/useVolundrClusters';
 import { useSessionList } from './hooks/useSessionStore';
 import { useTemplates } from './useTemplates';
-import { MiniBar } from './atoms';
-import { tokens } from './utils/formatters';
+import { MiniBar, ConnectionTypeBadge } from './atoms';
+import { tokens, money } from './utils/formatters';
 import type { Session } from '../domain/session';
 import type { Cluster } from '../domain/cluster';
 import type { Template } from '../domain/template';
@@ -18,27 +18,45 @@ function InflightRow({ session, onClick }: { session: Session; onClick: () => vo
   const isBooting = session.state === 'provisioning' || session.state === 'requested';
 
   if (isBooting) {
+    const progress = session.bootProgress ?? 0.1;
     return (
       <button
-        className="niuu-flex niuu-w-full niuu-items-center niuu-gap-3 niuu-rounded niuu-px-3 niuu-py-2 niuu-text-left hover:niuu-bg-bg-tertiary"
+        className="niuu-relative niuu-flex niuu-w-full niuu-flex-col niuu-overflow-hidden niuu-rounded niuu-px-3 niuu-py-2 niuu-text-left hover:niuu-bg-bg-tertiary"
         onClick={onClick}
         data-testid="inflight-row"
       >
-        <StateDot state="processing" pulse />
-        <div className="niuu-flex-1">
-          <div className="niuu-font-mono niuu-text-sm niuu-text-text-primary">{session.id}</div>
-          <div className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-            {session.personaName}
+        <div className="niuu-flex niuu-w-full niuu-items-center niuu-gap-3">
+          <StateDot state="processing" pulse />
+          <div className="niuu-flex-1">
+            <div className="niuu-font-mono niuu-text-sm niuu-text-text-primary">{session.id}</div>
+            <div className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+              {session.personaName}
+            </div>
           </div>
+          {session.connectionType && (
+            <ConnectionTypeBadge connectionType={session.connectionType} />
+          )}
         </div>
-        <span className="niuu-text-xs niuu-text-text-muted">booting…</span>
+        {/* Boot progress bar */}
+        <div
+          className="niuu-absolute niuu-bottom-0 niuu-left-0 niuu-h-0.5 niuu-w-full niuu-bg-bg-elevated"
+          aria-hidden="true"
+        >
+          <div
+            className="niuu-h-full niuu-bg-brand niuu-transition-all niuu-duration-500"
+            style={{ width: `${Math.round(progress * 100)}%` }}
+            data-testid="boot-progress-bar"
+          />
+        </div>
       </button>
     );
   }
 
+  const totalTokens = (session.tokensIn ?? 0) + (session.tokensOut ?? 0);
+
   return (
     <button
-      className="niuu-flex niuu-w-full niuu-items-center niuu-gap-3 niuu-rounded niuu-px-3 niuu-py-2 niuu-text-left hover:niuu-bg-bg-tertiary"
+      className="niuu-flex niuu-w-full niuu-items-start niuu-gap-3 niuu-rounded niuu-px-3 niuu-py-2 niuu-text-left hover:niuu-bg-bg-tertiary"
       onClick={onClick}
       data-testid="inflight-row"
     >
@@ -53,20 +71,36 @@ function InflightRow({ session, onClick }: { session: Session; onClick: () => vo
         <div className="niuu-text-xs niuu-text-text-faint">
           {session.personaName} · {session.clusterId}
         </div>
+        {(totalTokens > 0 || session.costCents !== undefined) && (
+          <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+            {totalTokens > 0 && <span data-testid="token-stat">{tokens(totalTokens)}</span>}
+            {totalTokens > 0 && session.costCents !== undefined && (
+              <span className="niuu-text-text-faint">·</span>
+            )}
+            {session.costCents !== undefined && (
+              <span data-testid="cost-stat">{money(session.costCents)}</span>
+            )}
+          </div>
+        )}
       </div>
-      <div className="niuu-flex niuu-items-center niuu-gap-2">
-        <Meter
-          used={session.resources.cpuUsed}
-          limit={session.resources.cpuLimit}
-          label="cpu"
-          className="niuu-w-16"
-        />
-        <Meter
-          used={session.resources.memUsedMi}
-          limit={session.resources.memLimitMi}
-          label="mem"
-          className="niuu-w-16"
-        />
+      <div className="niuu-flex niuu-flex-col niuu-items-end niuu-gap-1.5">
+        {session.connectionType && (
+          <ConnectionTypeBadge connectionType={session.connectionType} />
+        )}
+        <div className="niuu-flex niuu-items-center niuu-gap-2">
+          <Meter
+            used={session.resources.cpuUsed}
+            limit={session.resources.cpuLimit}
+            label="cpu"
+            className="niuu-w-16"
+          />
+          <Meter
+            used={session.resources.memUsedMi}
+            limit={session.resources.memLimitMi}
+            label="mem"
+            className="niuu-w-16"
+          />
+        </div>
       </div>
     </button>
   );
@@ -124,7 +158,7 @@ function ClusterLoadRow({ cluster }: { cluster: Cluster }) {
 function QuickLaunchCard({ template, onClick }: { template: Template; onClick: () => void }) {
   return (
     <button
-      className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-3 niuu-text-left hover:niuu-border-brand"
+      className="niuu-relative niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-3 niuu-text-left hover:niuu-border-brand"
       onClick={onClick}
       data-testid="quick-launch-card"
     >
@@ -136,9 +170,19 @@ function QuickLaunchCard({ template, onClick }: { template: Template; onClick: (
       <div className="niuu-text-xs niuu-text-text-muted niuu-line-clamp-2">
         {template.spec.image}:{template.spec.tag}
       </div>
-      <div className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-        {template.spec.resources.cpuRequest}c · {template.spec.resources.memRequestMi}Mi
-        {template.spec.resources.gpuCount > 0 && ` · gpu ${template.spec.resources.gpuCount}`}
+      <div className="niuu-flex niuu-items-end niuu-justify-between niuu-gap-2">
+        <div className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+          {template.spec.resources.cpuRequest}c · {template.spec.resources.memRequestMi}Mi
+          {template.spec.resources.gpuCount > 0 && ` · gpu ${template.spec.resources.gpuCount}`}
+        </div>
+        {template.usageCount !== undefined && (
+          <span
+            className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint"
+            data-testid="usage-count"
+          >
+            {template.usageCount}×
+          </span>
+        )}
       </div>
     </button>
   );
@@ -179,6 +223,9 @@ export function ForgePage() {
   const totalGpuCap = clusters.data?.reduce((s, c) => s + c.capacity.gpu, 0) ?? 0;
   const totalGpuUsed = clusters.data?.reduce((s, c) => s + c.used.gpu, 0) ?? 0;
 
+  // Sparkline data from stats
+  const sparklines = stats.data?.sparklines;
+
   function handleOpenSession(sessionId: string) {
     void navigate({ to: '/volundr/session/$sessionId', params: { sessionId } });
   }
@@ -198,24 +245,68 @@ export function ForgePage() {
               value={activeSessions.length}
               delta={`${bootingSessions.length} booting · ${erroredSessions.length} error`}
               deltaTrend="neutral"
+              sparkline={
+                sparklines?.activePods ? (
+                  <Sparkline
+                    values={sparklines.activePods}
+                    width={48}
+                    height={16}
+                    fill={false}
+                    className="niuu-opacity-50"
+                  />
+                ) : undefined
+              }
             />
             <KpiCard
               label="tokens today"
               value={stats.data ? tokens(stats.data.tokensToday) : '—'}
               delta="burn rate"
               deltaTrend="neutral"
+              sparkline={
+                sparklines?.tokensToday ? (
+                  <Sparkline
+                    values={sparklines.tokensToday}
+                    width={48}
+                    height={16}
+                    fill={false}
+                    className="niuu-opacity-50"
+                  />
+                ) : undefined
+              }
             />
             <KpiCard
               label="cost today"
               value={stats.data ? `$${stats.data.costToday.toFixed(2)}` : '—'}
               delta="projected 24h"
               deltaTrend="neutral"
+              sparkline={
+                sparklines?.costToday ? (
+                  <Sparkline
+                    values={sparklines.costToday}
+                    width={48}
+                    height={16}
+                    fill={false}
+                    className="niuu-opacity-50"
+                  />
+                ) : undefined
+              }
             />
             <KpiCard
               label="GPUs"
               value={`${totalGpuUsed}/${totalGpuCap}`}
               delta={`across ${clusters.data?.length ?? 0} clusters`}
               deltaTrend="neutral"
+              sparkline={
+                sparklines?.gpus ? (
+                  <Sparkline
+                    values={sparklines.gpus}
+                    width={48}
+                    height={16}
+                    fill={false}
+                    className="niuu-opacity-50"
+                  />
+                ) : undefined
+              }
             />
           </KpiStrip>
         )}
@@ -315,6 +406,18 @@ export function ForgePage() {
                 <span className="niuu-font-mono niuu-text-text-primary">{s.id}</span>
                 <span className="niuu-text-text-faint">·</span>
                 <span className="niuu-text-text-muted niuu-truncate">{s.personaName}</span>
+                {s.preview && (
+                  <>
+                    <span className="niuu-text-text-faint">·</span>
+                    <span
+                      className="niuu-text-text-faint niuu-truncate niuu-max-w-[20rem]"
+                      data-testid="chronicle-preview"
+                      title={s.preview}
+                    >
+                      {s.preview.length > 80 ? `${s.preview.slice(0, 80)}…` : s.preview}
+                    </span>
+                  </>
+                )}
               </li>
             ))}
           </ol>

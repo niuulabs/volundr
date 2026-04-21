@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { resolveWikilink } from '../../domain';
+import { splitWikilinks, resolveWikilink } from '../../domain';
 import { WikilinkPill } from './WikilinkPill';
 import type {
   Zone,
@@ -18,25 +18,24 @@ interface ZoneRendererProps {
 
 function KeyFactsZone({ zone, pages, onNavigate }: ZoneRendererProps & { zone: ZoneKeyFacts }) {
   return (
-    <ul>
+    <ul className="niuu-m-0 niuu-pl-5">
       {zone.items.map((item, i) => {
-        const parts = item.split(/(\[\[[^\]]+]])/g);
+        const parts = splitWikilinks(item);
         return (
-          <li key={i}>
+          <li key={i} className="niuu-text-sm niuu-text-text-secondary niuu-py-[2px]">
             {parts.map((part, j) => {
-              if (part.startsWith('[[') && part.endsWith(']]')) {
-                const slug = part.slice(2, -2);
-                const target = resolveWikilink(slug, pages);
+              if (part.kind === 'link') {
+                const target = resolveWikilink(part.slug, pages);
                 return (
                   <WikilinkPill
                     key={j}
-                    slug={slug}
+                    slug={part.slug}
                     broken={target.broken}
                     onNavigate={onNavigate}
                   />
                 );
               }
-              return <Fragment key={j}>{part}</Fragment>;
+              return <Fragment key={j}>{part.value}</Fragment>;
             })}
           </li>
         );
@@ -51,13 +50,15 @@ function RelationshipsZone({
   onNavigate,
 }: ZoneRendererProps & { zone: ZoneRelationships }) {
   return (
-    <ul>
+    <ul className="niuu-m-0 niuu-pl-5">
       {zone.items.map((rel, i) => {
         const target = resolveWikilink(rel.slug, pages);
         return (
-          <li key={i}>
+          <li key={i} className="niuu-text-sm niuu-text-text-secondary niuu-py-[2px]">
             <WikilinkPill slug={rel.slug} broken={target.broken} onNavigate={onNavigate} />
-            {rel.note && <span className="mm-rel-note">— {rel.note}</span>}
+            {rel.note && (
+              <span className="niuu-text-text-secondary niuu-ml-2">— {rel.note}</span>
+            )}
           </li>
         );
       })}
@@ -66,19 +67,29 @@ function RelationshipsZone({
 }
 
 function AssessmentZone({ zone }: { zone: ZoneAssessment }) {
-  return <p>{zone.text}</p>;
+  return <p className="niuu-text-sm niuu-text-text-secondary niuu-m-0">{zone.text}</p>;
 }
 
 function TimelineZone({ zone }: { zone: ZoneTimeline }) {
+  const sorted = [...zone.items].sort((a, b) => b.date.localeCompare(a.date));
   return (
     <div>
-      {zone.items.map((entry, i) => (
-        <div key={i} className="mm-timeline-entry">
-          <span className="mm-timeline-date">{entry.date}</span>
-          <span className="mm-timeline-note">{entry.note}</span>
+      {sorted.map((entry, i) => (
+        <div
+          key={i}
+          className="niuu-grid niuu-grid-cols-[100px_1fr] niuu-gap-2 niuu-py-2 niuu-border-b niuu-border-border-subtle last:niuu-border-b-0"
+        >
+          <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted niuu-pt-[2px]">
+            {entry.date}
+          </span>
+          <span className="niuu-text-sm niuu-text-text-secondary">{entry.note}</span>
         </div>
       ))}
-      {zone.items.length === 0 && <p className="mm-timeline-empty">no timeline entries yet</p>}
+      {zone.items.length === 0 && (
+        <p className="niuu-text-text-muted niuu-text-xs niuu-italic niuu-m-0">
+          No timeline entries yet
+        </p>
+      )}
     </div>
   );
 }

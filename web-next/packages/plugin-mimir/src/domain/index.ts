@@ -48,8 +48,8 @@ export type { RavnState, RavnBinding } from './ravn-binding';
 export type { FileTreeDir, FileTreeLeaf, FileTreeItem } from './tree';
 export { buildFileTree, mergeFileTrees, countLeaves, collectLeaves } from './tree';
 
-export type { WikilinkTarget } from './wikilink';
-export { parseWikilinks, resolveWikilink, resolveAll, detectBrokenWikilinks } from './wikilink';
+export type { WikilinkTarget, WikilinkPart } from './wikilink';
+export { splitWikilinks, parseWikilinks, resolveWikilink, resolveAll, detectBrokenWikilinks } from './wikilink';
 
 export type { ZoneEditState, ZoneEditAction } from './zone-edit';
 export { zoneEditReducer } from './zone-edit';
