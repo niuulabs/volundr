@@ -17,24 +17,28 @@ The Overview page layout (2-col grid 1.2fr|1fr, KPI strip) matches web2. Mount c
 ## Required changes
 
 ### 1. Mount detail expanded view
+
 **Web2 spec**: Clicking a mount card expands it inline to show full configuration details (host, role, categories, per-mount event log excerpt, storage size breakdown).
 **Web-next currently**: Mount cards are static; clicking them does nothing (there is a `cursor: pointer` but no click handler).
 **What to do:** Add an expandable detail panel to mount cards. On click, expand the card to show host detail, role description, category list with count badges, and a 5-item recent activity excerpt filtered to that mount. Use a disclosure pattern (`aria-expanded`).
 **Files to modify:** `packages/plugin-mimir/src/ui/OverviewView.tsx`
 
 ### 2. Ravn bio text in warden cards
+
 **Web2 spec**: Each warden card in the overview shows a 1-2 line `bio` field beneath the name/role row (e.g. "Synthesises infrastructure documentation from git commits and runbooks").
 **Web-next currently**: Warden cards in the overview show identity (name, rune, role, state dot) and mount bindings, but no bio text.
 **What to do:** Add a bio line to the overview ravn card, sourced from the `RavnBinding` domain model. If the model lacks a `bio` field, extend it. Display as a single-line truncated paragraph below the identity row.
 **Files to modify:** `packages/plugin-mimir/src/ui/OverviewView.tsx`, `packages/plugin-mimir/src/domain/ravn-binding.ts`
 
 ### 3. Pages-touched metric in ravn cards
+
 **Web2 spec**: Each warden card shows `<N> pages touched` and `last dream <time>` in a metrics row at the bottom.
 **Web-next currently**: Overview ravn cards do not show a pages-touched count.
 **What to do:** Add a metrics row at the bottom of each overview ravn card showing pages-touched count and last-dream timestamp. Source from `RavnBinding` (extend model if needed).
 **Files to modify:** `packages/plugin-mimir/src/ui/OverviewView.tsx`, `packages/plugin-mimir/src/domain/ravn-binding.ts`
 
 ### 4. Migrate mimir-views.css overview section to Tailwind
+
 **Web2 spec**: N/A — this is a code-quality requirement.
 **Web-next currently**: Overview uses BEM classes in `mimir-views.css` (e.g. `.mm-overview`, `.mm-home-cols`, `.mm-mount-card`).
 **What to do:** Replace CSS class usage in `OverviewView.tsx` with Tailwind utility classes using the `niuu-` prefix. Remove corresponding rules from `mimir-views.css` once no other component references them. Use token-backed utilities (`niuu-bg-bg-secondary`, `niuu-border-border-subtle`, etc.) — never raw hex values.

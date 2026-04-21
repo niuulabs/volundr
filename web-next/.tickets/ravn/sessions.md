@@ -21,6 +21,7 @@ The Sessions view has the correct 3-pane layout (session list, transcript center
 **Web2 spec** (sessions.jsx): Transcript area has a header card at the top containing: persona avatar (circle + letter), session title, status badge (running/idle/stopped/failed), metadata row (model, created time, duration), metrics row (messages, tokens, cost), and action buttons (export, pause, abort).
 **Web-next currently**: Transcript has a simple header div with just persona name, model, and message count text.
 **What to do:**
+
 1. Create a `TranscriptHeader` component with:
    - `PersonaAvatar` (from `@niuulabs/ui`) showing persona letter and role color.
    - Session title (or fallback `Session {id.slice(0,8)}`).
@@ -29,7 +30,8 @@ The Sessions view has the correct 3-pane layout (session list, transcript center
    - Metrics row: message count, token count, cost.
    - Action buttons group: Export (download icon), Pause (pause icon, disabled if not running), Abort (stop icon, disabled if not running).
 2. Style with `.rv-transcript-header` classes matching web2 card appearance (subtle border-bottom, padding, flex layout).
-**Files to modify:**
+   **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/SessionsView.tsx`
 - `packages/plugin-ravn/src/ui/SessionsView.css` (or co-located CSS)
 
@@ -38,11 +40,13 @@ The Sessions view has the correct 3-pane layout (session list, transcript center
 **Web2 spec** (sessions.jsx): Below the header, a toolbar with a segmented control allowing filtering messages by kind: All | User | Assistant | Tool | Emit | System | Think. Active segment is highlighted. Changing filter updates the visible messages in the transcript.
 **Web-next currently**: No filter toolbar exists. All messages are shown unfiltered.
 **What to do:**
+
 1. Add a `FilterToolbar` component with segmented buttons for each message kind.
 2. Track filter state in `Transcript` component.
 3. Filter the messages array before rendering, keeping "All" as default.
 4. Style as a horizontal bar below the header with pill-shaped segmented buttons.
-**Files to modify:**
+   **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/SessionsView.tsx`
 - `packages/plugin-ravn/src/ui/SessionsView.css`
 
@@ -51,12 +55,14 @@ The Sessions view has the correct 3-pane layout (session list, transcript center
 **Web2 spec** (sessions.jsx): At the bottom of the transcript pane, a composer bar with: multi-line textarea (auto-resize, placeholder "Send a message..."), send button (arrow icon), and a subtle toolbar row above with inject/attach buttons. Composer is disabled when session is not running.
 **Web-next currently**: No composer exists. The transcript ends at the bottom of the message list with the `ActiveCursor`.
 **What to do:**
+
 1. Add a `Composer` component below the transcript body (above `ActiveCursor` or replacing it when session is running).
 2. Textarea with auto-resize, placeholder text, and disabled state.
 3. Send button that dispatches a send action (wire to port later).
 4. Show inject/attach controls as icon buttons in a toolbar row above the textarea.
 5. Disable entire composer when `session.status !== 'running'`.
-**Files to modify:**
+   **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/SessionsView.tsx`
 - `packages/plugin-ravn/src/ui/SessionsView.css`
 - `packages/plugin-ravn/src/ports/index.ts` (add sendMessage to session port if missing)
@@ -66,6 +72,7 @@ The Sessions view has the correct 3-pane layout (session list, transcript center
 **Web2 spec** (sessions.jsx ContextSidebar): Sidebar has 6 sections: Summary, Timeline (full with intermediate events), Stats, Injects (list of injected context items with source and timestamp), Emissions (list of emitted events with type, timestamp, payload preview), and Raven card.
 **Web-next currently**: Sidebar has 4 sections: Summary, Timeline (only start + end), Stats, and Raven card. Missing Injects and Emissions entirely.
 **What to do:**
+
 1. Add "Injects" section between Timeline and Stats:
    - Query session injects (items injected into context during the session).
    - Each item: source label, timestamp, truncated content preview.
@@ -75,7 +82,8 @@ The Sessions view has the correct 3-pane layout (session list, transcript center
    - Each item: event type badge (cyan), timestamp, payload preview (monospace, truncated).
    - Styled as `.rv-ctx-emissions` list.
 3. Enrich Timeline to show intermediate events (tool calls, emits, errors) not just start/end.
-**Files to modify:**
+   **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/SessionsView.tsx` (ContextSidebar)
 - `packages/plugin-ravn/src/ui/SessionsView.css`
 - `packages/plugin-ravn/src/ui/hooks/useSessions.ts` (add injects/emissions queries if needed)
@@ -86,11 +94,13 @@ The Sessions view has the correct 3-pane layout (session list, transcript center
 **Web2 spec** (sessions.jsx Timeline): Timeline shows all significant events: session start, each tool call (with tool name), each emit (with event type), errors/failures, and session end. Events have colored dots matching their kind.
 **Web-next currently**: Timeline shows only "started" and the final status (stopped/failed/idle). No intermediate events.
 **What to do:**
+
 1. Derive timeline events from the messages list (tool_call, emit, and error messages become timeline entries).
 2. Render each with a kind-colored dot (amber for tool, cyan for emit, red for error).
 3. Include timestamp and a short label (tool name or event type).
 4. Cap at ~15 entries with a "show more" expand control.
-**Files to modify:**
+   **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/SessionsView.tsx` (ContextSidebar Timeline section)
 - `packages/plugin-ravn/src/ui/SessionsView.css`
 

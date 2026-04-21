@@ -21,6 +21,7 @@ the OAuth provider buttons (passkey primary + GitHub/Google secondary) and the
 ### 1. Add OAuth provider buttons
 
 **Web2 spec** (`page.jsx` lines 68–87):
+
 ```jsx
 <div className="niuu-auth">
   <button className="niuu-btn primary">
@@ -53,6 +54,7 @@ the OAuth provider buttons (passkey primary + GitHub/Google secondary) and the
    - Google (with Google SVG icon)
 
 3. **CSS for `.login-page__oauth-row`** (add to `LoginPage.css`):
+
    ```css
    .login-page__oauth-row {
      display: flex;
@@ -61,6 +63,7 @@ the OAuth provider buttons (passkey primary + GitHub/Google secondary) and the
    ```
 
 4. **CSS for `.login-page__btn--ghost`** (add to `LoginPage.css`):
+
    ```css
    .login-page__btn--ghost {
      flex: 1;
@@ -75,6 +78,7 @@ the OAuth provider buttons (passkey primary + GitHub/Google secondary) and the
    ```
 
 5. **CSS for `.login-page__kbd`** (keyboard hint on passkey button):
+
    ```css
    .login-page__kbd {
      margin-left: auto;
@@ -98,6 +102,7 @@ the OAuth provider buttons (passkey primary + GitHub/Google secondary) and the
    later, extend `useAuth().login(provider?: string)`.
 
 **Files to modify:**
+
 - `packages/plugin-login/src/ui/LoginPage.tsx` — add OAuth row JSX
 - `packages/plugin-login/src/ui/LoginPage.css` — add ghost button + kbd styles
 - Create `packages/plugin-login/src/ui/icons/GithubIcon.tsx`
@@ -108,24 +113,31 @@ the OAuth provider buttons (passkey primary + GitHub/Google secondary) and the
 ### 2. Add "no account? request access" footer
 
 **Web2 spec** (`page.jsx` lines 89–92):
+
 ```jsx
 <div className="niuu-foot mono">
   <span className="dim">no account?</span>
-  <a href="#" className="niuu-link">request access</a>
+  <a href="#" className="niuu-link">
+    request access
+  </a>
 </div>
 ```
 
 **What to do:**
 
 1. Add footer JSX below the auth section in `LoginPage.tsx`:
+
    ```tsx
    <div className="login-page__foot login-page__mono">
      <span className="login-page__foot-dim">no account?</span>
-     <a href="#" className="login-page__link">request access</a>
+     <a href="#" className="login-page__link">
+       request access
+     </a>
    </div>
    ```
 
 2. **CSS** (add to `LoginPage.css`):
+
    ```css
    .login-page__foot {
      display: flex;
@@ -152,6 +164,7 @@ the OAuth provider buttons (passkey primary + GitHub/Google secondary) and the
    form. For now, use `#` and wire later.
 
 **Files to modify:**
+
 - `packages/plugin-login/src/ui/LoginPage.tsx` — add footer JSX
 - `packages/plugin-login/src/ui/LoginPage.css` — add footer + link styles
 
@@ -160,6 +173,7 @@ the OAuth provider buttons (passkey primary + GitHub/Google secondary) and the
 ### 3. Add build metadata version string
 
 **Web2 spec** (`page.jsx` line 60):
+
 ```jsx
 niuu · build 2026.04.18-7f3a2c · valaskjálf
 ```
@@ -167,26 +181,28 @@ niuu · build 2026.04.18-7f3a2c · valaskjálf
 **Web-next currently:** Shows only `niuu` (no version or realm).
 
 **What to do:**
+
 - Read version and realm from `config.json` (via `useConfig()`) or build-time env
 - Render as: `niuu · build ${version} · ${realm}`
 - If config has no version, fall back to just `niuu` (current behavior)
 
 **Files to modify:**
+
 - `packages/plugin-login/src/ui/LoginPage.tsx` — update build info rendering
 
 ---
 
 ## What to keep as-is (web-next improvements over web2)
 
-| Element | Web-next behavior | Why keep |
-|---------|------------------|----------|
-| Error handling | OIDC error display with `role="alert"` | Production requirement — web2 had none |
-| Loading state | Spinner + disabled button + "redirecting…" | Production requirement — web2 had none |
-| Motion preference | `useReducedMotion()` in all ambient variants | Accessibility requirement |
-| ARIA labels | `aria-label` on all interactive elements | Accessibility requirement |
-| `data-testid` | On all key elements | Testing infrastructure |
-| CSS tokens | `var(--text-xs)` instead of hardcoded `11px` | Better maintainability |
-| Tweaks panel | Removed | Design-time tool, not for end users |
+| Element           | Web-next behavior                            | Why keep                               |
+| ----------------- | -------------------------------------------- | -------------------------------------- |
+| Error handling    | OIDC error display with `role="alert"`       | Production requirement — web2 had none |
+| Loading state     | Spinner + disabled button + "redirecting…"   | Production requirement — web2 had none |
+| Motion preference | `useReducedMotion()` in all ambient variants | Accessibility requirement              |
+| ARIA labels       | `aria-label` on all interactive elements     | Accessibility requirement              |
+| `data-testid`     | On all key elements                          | Testing infrastructure                 |
+| CSS tokens        | `var(--text-xs)` instead of hardcoded `11px` | Better maintainability                 |
+| Tweaks panel      | Removed                                      | Design-time tool, not for end users    |
 
 ---
 

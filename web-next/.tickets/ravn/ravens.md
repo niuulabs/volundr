@@ -21,12 +21,14 @@ The Ravens page layout (3 modes: split/table/cards, 420px list panel) matches we
 **Web2 spec** (pages.jsx RavnDetail): Overview tab contains three distinct panels: (a) Identity panel with avatar, persona name, role badge, summary text; (b) Runtime panel with model, uptime, status, location, iteration budget, write routing selector; (c) Mounts panel showing attached mounts with MountChip icons and read/write badges.
 **Web-next currently**: Has a flat `<dl>` with persona, state, model, since, location, and a budget bar. No mounts panel, no runtime panel separation, no write routing, no iteration budget display.
 **What to do:**
+
 1. Restructure `OverviewSection` into three sub-panels: Identity, Runtime, Mounts.
 2. Identity: Add `PersonaAvatar`, role badge, summary text.
 3. Runtime: Add iteration budget display, write routing indicator (using `MountChip`), cascade/deployment fields.
 4. Mounts: Query ravn mounts and display each with `MountChip` + read/write indicator.
 5. Keep danger zone (suspend/delete) at the bottom.
-**Files to modify:**
+   **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/RavnDetail.tsx` (OverviewSection)
 - `packages/plugin-ravn/src/ui/RavnDetail.css`
 - `packages/plugin-ravn/src/domain/ravn.ts` (add mounts, iterationBudget, writeRouting fields if missing)
@@ -37,11 +39,13 @@ The Ravens page layout (3 modes: split/table/cards, 420px list panel) matches we
 **Web2 spec** (pages.jsx TriggersSection): Each trigger renders as a card showing: kind icon, spec (cron expression or event pattern), enabled/disabled toggle, last-fired timestamp, fire count, linked persona. Cards have a subtle border and hover state.
 **Web-next currently**: Renders a flat `<ul>` with `<li>` items showing kind, spec, and on/off text. No card styling, no timestamps, no fire count, no toggle.
 **What to do:**
+
 1. Restyle each trigger as a card (`.rv-trigger-card`) with border, padding, and hover.
 2. Add fields: `lastFiredAt`, `fireCount` from the trigger domain model.
 3. Add an enabled/disabled toggle switch (visual only for now, wire action later).
 4. Show linked persona name with avatar.
-**Files to modify:**
+   **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/RavnDetail.tsx` (TriggersSection)
 - `packages/plugin-ravn/src/ui/RavnDetail.css`
 - `packages/plugin-ravn/src/domain/trigger.ts` (add lastFiredAt, fireCount if missing)
@@ -51,12 +55,14 @@ The Ravens page layout (3 modes: split/table/cards, 420px list panel) matches we
 **Web2 spec** (pages.jsx ActivitySection): Shows a full scrollable activity log for the selected ravn with rows: timestamp, kind badge (colored), message excerpt, expandable detail. Supports filtering by kind. Shows a "live" indicator when ravn is active.
 **Web-next currently**: Shows only the last 10 messages from one session, with minimal styling (`[kind] content`).
 **What to do:**
+
 1. Aggregate activity across all sessions for this ravn, not just one.
 2. Add kind-colored badges matching MessageRow styling (user=indigo, asst=neutral, tool=amber, emit=cyan, think=purple, system=muted).
 3. Add a filter control for kind (segmented control or checkbox group).
 4. Add a "live" pulsing indicator when `ravn.status === 'active'`.
 5. Make the log scrollable with virtualization if list exceeds 100 items.
-**Files to modify:**
+   **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/RavnDetail.tsx` (ActivitySection)
 - `packages/plugin-ravn/src/ui/RavnDetail.css`
 - `packages/plugin-ravn/src/ui/hooks/useSessions.ts` (if multi-session aggregation needed)
@@ -66,11 +72,13 @@ The Ravens page layout (3 modes: split/table/cards, 420px list panel) matches we
 **Web2 spec** (pages.jsx SessionsSection): Each session renders as a card with: status dot, persona name, model, created timestamp, message count, cost, duration, and a mini budget bar. Cards are clickable (navigate to Sessions view with that session selected).
 **Web-next currently**: A flat `<ul>` with `<li>` items showing only status dot, truncated ID, and status text.
 **What to do:**
+
 1. Render each session as a card (`.rv-session-card`) with persona name, model, timestamp.
 2. Add metrics row: message count, cost ($X.XX), duration.
 3. Add a mini BudgetBar if cost/cap data is available.
 4. Make cards clickable — dispatch `ravn:session-selected` event to navigate.
-**Files to modify:**
+   **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/RavnDetail.tsx` (SessionsSection)
 - `packages/plugin-ravn/src/ui/RavnDetail.css`
 
@@ -79,11 +87,13 @@ The Ravens page layout (3 modes: split/table/cards, 420px list panel) matches we
 **Web2 spec** (pages.jsx ConnectivitySection): Three sub-panels: (a) MCP Servers — list of connected MCP server names with status dots; (b) Gateway Channels — list of channels this ravn communicates through; (c) Event Subscriptions — list of consumed/produced events with arrows showing direction.
 **Web-next currently**: Shows only the model name and a text note saying "View the Events tab for the full graph."
 **What to do:**
+
 1. Add MCP servers sub-panel querying ravn connectivity data.
 2. Add gateway channels sub-panel.
 3. Add event subscriptions sub-panel showing consumed/produced events with direction indicators.
 4. Each sub-panel uses a consistent card style with `.rv-conn-panel` class.
-**Files to modify:**
+   **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/RavnDetail.tsx` (ConnectivitySection)
 - `packages/plugin-ravn/src/ui/RavnDetail.css`
 - `packages/plugin-ravn/src/domain/ravn.ts` (add mcpServers, channels fields if missing)
