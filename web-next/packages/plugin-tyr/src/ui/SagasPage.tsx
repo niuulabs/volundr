@@ -316,9 +316,7 @@ export function SagasPage() {
           },
         ]}
       >
-        <p className="niuu-m-0 niuu-text-sm niuu-text-text-secondary">
-          Want to go there now?
-        </p>
+        <p className="niuu-m-0 niuu-text-sm niuu-text-text-secondary">Want to go there now?</p>
       </Modal>
     </div>
   );

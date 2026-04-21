@@ -101,9 +101,7 @@ describe('SagasPage', () => {
     render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
     const listPanel = await screen.findByRole('list', { name: 'Sagas' });
     fireEvent.click(screen.getByRole('tab', { name: /active/i }));
-    await waitFor(() =>
-      expect(within(listPanel).getByText('Auth Rewrite')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(within(listPanel).getByText('Auth Rewrite')).toBeInTheDocument());
     expect(within(listPanel).queryByText('Plugin Ravn Scaffold')).not.toBeInTheDocument();
     expect(within(listPanel).queryByText('Observatory Topology Canvas')).not.toBeInTheDocument();
   });
@@ -133,9 +131,7 @@ describe('SagasPage', () => {
     const listPanel = await screen.findByRole('list', { name: 'Sagas' });
     const searchInput = screen.getByRole('searchbox', { name: /Search sagas/i });
     fireEvent.change(searchInput, { target: { value: 'auth' } });
-    await waitFor(() =>
-      expect(within(listPanel).getByText('Auth Rewrite')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(within(listPanel).getByText('Auth Rewrite')).toBeInTheDocument());
     expect(within(listPanel).queryByText('Plugin Ravn Scaffold')).not.toBeInTheDocument();
   });
 
@@ -217,9 +213,7 @@ describe('SagasPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Create new saga/i }));
 
-    await waitFor(() =>
-      expect(screen.getByRole('dialog')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
@@ -229,9 +223,7 @@ describe('SagasPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Create new saga/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/Want to go there now/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/Want to go there now/i)).toBeInTheDocument());
   });
 
   it('new saga modal Cancel button closes without navigation', async () => {
@@ -244,9 +236,7 @@ describe('SagasPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
 
-    await waitFor(() =>
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 

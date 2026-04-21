@@ -382,21 +382,16 @@ describe('SagaDetailPage — NIU-710 parity', () => {
       getPhases: async (): Promise<Phase[]> => [],
     };
     render(<SagaDetailPage sagaId={SAGA_ID} />, { wrapper: wrap({ tyr: svc }) });
-    await waitFor(() =>
-      expect(screen.getByText(/feat\/auth-rewrite → main/)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/feat\/auth-rewrite → main/)).toBeInTheDocument());
   });
 
   it('subline uses saga.baseBranch when provided', async () => {
     const svc = {
-      getSaga: async () =>
-        makeSaga({ featureBranch: 'feat/my-feature', baseBranch: 'dev' }),
+      getSaga: async () => makeSaga({ featureBranch: 'feat/my-feature', baseBranch: 'dev' }),
       getPhases: async (): Promise<Phase[]> => [],
     };
     render(<SagaDetailPage sagaId={SAGA_ID} />, { wrapper: wrap({ tyr: svc }) });
-    await waitFor(() =>
-      expect(screen.getByText(/feat\/my-feature → dev/)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/feat\/my-feature → dev/)).toBeInTheDocument());
   });
 
   it('raid row shows raid trackerId in monospace between status and name', async () => {
