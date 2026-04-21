@@ -165,7 +165,10 @@ test.describe('capture web2 baselines — observatory', () => {
     await waitForReady(page);
     await clickTab(page, 'Registry');
     await clickTab(page, 'Containment');
-    await page.screenshot({ path: outPath('observatory', 'registry-containment'), fullPage: false });
+    await page.screenshot({
+      path: outPath('observatory', 'registry-containment'),
+      fullPage: false,
+    });
   });
 
   test('registry — json tab', async ({ page }) => {
