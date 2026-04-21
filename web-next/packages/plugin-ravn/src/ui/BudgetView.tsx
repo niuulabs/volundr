@@ -140,8 +140,8 @@ function HeroCard({ budget }: { budget: BudgetState }) {
   const tone = ratio >= 0.9 ? 'crit' : ratio >= budget.warnAt ? 'warn' : 'ok';
 
   const rate = burnRate(budget, ELAPSED_HOURS);
-  // Approximate previous rate as 90% of current (no historical data in mock)
-  const prevRate = rate * 0.9;
+  // No historical data in mock mode — use equal rates so trend shows "steady"
+  const prevRate = rate;
   const trend = burnTrend(rate, prevRate);
 
   return (

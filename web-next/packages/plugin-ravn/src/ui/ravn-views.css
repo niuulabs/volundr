@@ -1176,6 +1176,10 @@
   background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
   color: var(--color-text-muted);
 }
+.rv-budget-rec-row__badge--near-cap {
+  background: color-mix(in srgb, var(--color-accent-amber) 12%, transparent);
+  color: var(--color-accent-amber);
+}
 .rv-budget-rec-action {
   flex-shrink: 0;
   background: none;
@@ -1208,6 +1212,13 @@
 }
 .rv-budget-rec-action--burning-fast:hover {
   background: color-mix(in srgb, var(--color-accent-amber) 10%, transparent);
+}
+.rv-budget-rec-action--idle {
+  border-color: color-mix(in srgb, var(--color-text-muted) 40%, transparent);
+  color: var(--color-text-muted);
+}
+.rv-budget-rec-action--idle:hover {
+  background: color-mix(in srgb, var(--color-text-muted) 10%, transparent);
 }
 
 /* Runway bar */
