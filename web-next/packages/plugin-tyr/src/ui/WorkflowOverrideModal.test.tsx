@@ -145,9 +145,7 @@ describe('WorkflowOverrideModal', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const Wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={client}>
-        <ServicesProvider services={{ 'tyr.workflows': neverService }}>
-          {children}
-        </ServicesProvider>
+        <ServicesProvider services={{ 'tyr.workflows': neverService }}>{children}</ServicesProvider>
       </QueryClientProvider>
     );
 
@@ -173,9 +171,7 @@ describe('WorkflowOverrideModal', () => {
       />,
       { wrapper: wrap(null, true) },
     );
-    await waitFor(() =>
-      expect(screen.getByText(/failed to load workflows/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/failed to load workflows/i)).toBeInTheDocument());
   });
 
   it('shows empty state when no workflows', async () => {
@@ -188,9 +184,7 @@ describe('WorkflowOverrideModal', () => {
       />,
       { wrapper: wrap([]) },
     );
-    await waitFor(() =>
-      expect(screen.getByText(/no workflows available/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/no workflows available/i)).toBeInTheDocument());
   });
 
   it('renders workflow list with stage counts', async () => {

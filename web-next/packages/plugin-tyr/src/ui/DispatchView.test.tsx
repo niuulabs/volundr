@@ -523,8 +523,6 @@ describe('DispatchView', () => {
 
     await user.click(screen.getByRole('checkbox', { name: /select row/i }));
     await user.click(screen.getByRole('button', { name: /apply workflow/i }));
-    await waitFor(() =>
-      expect(screen.getByText('Apply workflow override')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Apply workflow override')).toBeInTheDocument());
   });
 });

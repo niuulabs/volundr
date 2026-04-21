@@ -588,8 +588,7 @@ function DispatchViewContent() {
                 {dispatcherState && (
                   <>
                     <span className="niuu-text-xs niuu-font-mono niuu-bg-bg-elevated niuu-px-2 niuu-py-1 niuu-rounded niuu-text-text-secondary">
-                      threshold{' '}
-                      <strong className="niuu-text-brand">{effectiveThreshold}%</strong>
+                      threshold <strong className="niuu-text-brand">{effectiveThreshold}%</strong>
                     </span>
                     <span className="niuu-text-xs niuu-font-mono niuu-bg-bg-elevated niuu-px-2 niuu-py-1 niuu-rounded niuu-text-text-secondary">
                       concurrent <strong>{effectiveMaxConcurrent}</strong>
@@ -605,7 +604,9 @@ function DispatchViewContent() {
                           : 'niuu-text-brand niuu-bg-bg-elevated',
                         isPausing && 'niuu-opacity-50 niuu-cursor-not-allowed',
                       )}
-                      aria-label={dispatcherState.running ? 'Pause dispatcher' : 'Resume dispatcher'}
+                      aria-label={
+                        dispatcherState.running ? 'Pause dispatcher' : 'Resume dispatcher'
+                      }
                     >
                       {isPausing
                         ? '…'

@@ -25,24 +25,14 @@ function makeRules(overrides: Partial<RulesFormState> = {}): RulesFormState {
 describe('EditRulesModal', () => {
   it('renders nothing when closed', () => {
     render(
-      <EditRulesModal
-        open={false}
-        onOpenChange={vi.fn()}
-        rules={makeRules()}
-        onSave={vi.fn()}
-      />,
+      <EditRulesModal open={false} onOpenChange={vi.fn()} rules={makeRules()} onSave={vi.fn()} />,
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('renders dialog when open', () => {
     render(
-      <EditRulesModal
-        open={true}
-        onOpenChange={vi.fn()}
-        rules={makeRules()}
-        onSave={vi.fn()}
-      />,
+      <EditRulesModal open={true} onOpenChange={vi.fn()} rules={makeRules()} onSave={vi.fn()} />,
     );
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('Edit dispatch rules')).toBeInTheDocument();
@@ -110,7 +100,12 @@ describe('EditRulesModal', () => {
       <EditRulesModal
         open={true}
         onOpenChange={onOpenChange}
-        rules={makeRules({ threshold: 70, maxConcurrentRaids: 3, autoContinue: false, retryCount: 2 })}
+        rules={makeRules({
+          threshold: 70,
+          maxConcurrentRaids: 3,
+          autoContinue: false,
+          retryCount: 2,
+        })}
         onSave={onSave}
       />,
     );
@@ -144,12 +139,7 @@ describe('EditRulesModal', () => {
   it('resets to original rules when reopened', () => {
     const rules = makeRules({ threshold: 70 });
     const { rerender } = render(
-      <EditRulesModal
-        open={false}
-        onOpenChange={vi.fn()}
-        rules={rules}
-        onSave={vi.fn()}
-      />,
+      <EditRulesModal open={false} onOpenChange={vi.fn()} rules={rules} onSave={vi.fn()} />,
     );
     rerender(
       <EditRulesModal
@@ -164,12 +154,7 @@ describe('EditRulesModal', () => {
 
   it('renders all four form fields', () => {
     render(
-      <EditRulesModal
-        open={true}
-        onOpenChange={vi.fn()}
-        rules={makeRules()}
-        onSave={vi.fn()}
-      />,
+      <EditRulesModal open={true} onOpenChange={vi.fn()} rules={makeRules()} onSave={vi.fn()} />,
     );
     expect(screen.getByLabelText(/confidence threshold/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/max concurrent raids/i)).toBeInTheDocument();
