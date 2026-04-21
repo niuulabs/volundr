@@ -7,7 +7,8 @@ import { DispatchView } from './DispatchView';
 import { createMockTyrService } from '../adapters/mock';
 import { createMockDispatcherService } from '../adapters/mock';
 import { createMockDispatchBus } from '../adapters/mock';
-import type { ITyrService, IDispatcherService, IDispatchBus } from '../ports';
+import { createMockWorkflowService } from '../adapters/mock';
+import type { ITyrService, IDispatcherService, IDispatchBus, IWorkflowService } from '../ports';
 import type { Saga, Phase, Raid } from '../domain/saga';
 import type { DispatcherState } from '../domain/dispatcher';
 
@@ -86,6 +87,7 @@ function makeServices(
     tyr?: Partial<ITyrService>;
     dispatcher?: Partial<IDispatcherService>;
     dispatch?: Partial<IDispatchBus>;
+    workflows?: Partial<IWorkflowService>;
   } = {},
 ) {
   const saga = makeSaga();
@@ -95,6 +97,7 @@ function makeServices(
   const tyrBase = createMockTyrService();
   const dispatcherBase = createMockDispatcherService();
   const dispatchBase = createMockDispatchBus();
+  const workflowsBase = createMockWorkflowService();
 
   const tyr: ITyrService = {
     ...tyrBase,
@@ -114,7 +117,17 @@ function makeServices(
     ...overrides.dispatch,
   };
 
-  return { tyr, 'tyr.dispatcher': dispatcher, 'tyr.dispatch': dispatch };
+  const workflows: IWorkflowService = {
+    ...workflowsBase,
+    ...overrides.workflows,
+  };
+
+  return {
+    tyr,
+    'tyr.dispatcher': dispatcher,
+    'tyr.dispatch': dispatch,
+    'tyr.workflows': workflows,
+  };
 }
 
 function wrap(services: Record<string, unknown>) {
@@ -319,7 +332,7 @@ describe('DispatchView', () => {
 
     const checkbox = screen.getByRole('checkbox', { name: /select row/i });
     await user.click(checkbox);
-    const dispatchBtn = screen.getByRole('button', { name: /dispatch/i });
+    const dispatchBtn = screen.getByRole('button', { name: /dispatch now/i });
     expect(dispatchBtn).toHaveAttribute('aria-disabled', 'true');
   });
 
@@ -334,7 +347,7 @@ describe('DispatchView', () => {
     await waitFor(() => screen.getByText('Test Raid'));
 
     await user.click(screen.getByRole('checkbox', { name: /select row/i }));
-    await user.click(screen.getByRole('button', { name: /dispatch/i }));
+    await user.click(screen.getByRole('button', { name: /dispatch now/i }));
     await waitFor(() =>
       expect(dispatchSpy).toHaveBeenCalledWith(['00000000-0000-0000-0000-000000000010']),
     );
@@ -365,7 +378,7 @@ describe('DispatchView', () => {
     await user.click(screen.getByRole('checkbox', { name: /select row/i }));
     expect(screen.getByText(/1 raid selected/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /dispatch/i }));
+    await user.click(screen.getByRole('button', { name: /dispatch now/i }));
 
     // Optimistic update: selection cleared immediately, raid still visible as "queued"
     await waitFor(() => expect(screen.queryByText(/1 raid selected/i)).not.toBeInTheDocument());
@@ -376,5 +389,214 @@ describe('DispatchView', () => {
   it('shows confidence level for raids', async () => {
     render(<DispatchView />, { wrapper: wrap(makeServices()) });
     await waitFor(() => expect(screen.getByText('80%')).toBeInTheDocument());
+  });
+
+  // ---------------------------------------------------------------------------
+  // Pause / Resume dispatcher
+  // ---------------------------------------------------------------------------
+
+  it('shows Pause dispatcher button in header', async () => {
+    render(<DispatchView />, { wrapper: wrap(makeServices()) });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /pause dispatcher/i })).toBeInTheDocument(),
+    );
+  });
+
+  it('shows Resume dispatcher button when dispatcher is stopped', async () => {
+    const services = makeServices({
+      dispatcher: { getState: async () => makeDispatcherState({ running: false }) },
+    });
+    render(<DispatchView />, { wrapper: wrap(services) });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /resume dispatcher/i })).toBeInTheDocument(),
+    );
+  });
+
+  it('calls setRunning(false) when Pause is clicked', async () => {
+    const user = userEvent.setup();
+    const setRunningSpy = vi.fn().mockResolvedValue(undefined);
+    const getStateSpy = vi
+      .fn()
+      .mockResolvedValueOnce(makeDispatcherState({ running: true }))
+      .mockResolvedValue(makeDispatcherState({ running: false }));
+    const services = makeServices({
+      dispatcher: { getState: getStateSpy, setRunning: setRunningSpy },
+    });
+
+    render(<DispatchView />, { wrapper: wrap(services) });
+    await waitFor(() => screen.getByRole('button', { name: /pause dispatcher/i }));
+
+    await user.click(screen.getByRole('button', { name: /pause dispatcher/i }));
+    await waitFor(() => expect(setRunningSpy).toHaveBeenCalledWith(false));
+  });
+
+  it('calls setRunning(true) when Resume is clicked', async () => {
+    const user = userEvent.setup();
+    const setRunningSpy = vi.fn().mockResolvedValue(undefined);
+    const getStateSpy = vi
+      .fn()
+      .mockResolvedValueOnce(makeDispatcherState({ running: false }))
+      .mockResolvedValue(makeDispatcherState({ running: true }));
+    const services = makeServices({
+      dispatcher: { getState: getStateSpy, setRunning: setRunningSpy },
+    });
+
+    render(<DispatchView />, { wrapper: wrap(services) });
+    await waitFor(() => screen.getByRole('button', { name: /resume dispatcher/i }));
+
+    await user.click(screen.getByRole('button', { name: /resume dispatcher/i }));
+    await waitFor(() => expect(setRunningSpy).toHaveBeenCalledWith(true));
+  });
+
+  // ---------------------------------------------------------------------------
+  // Dispatch rules panel
+  // ---------------------------------------------------------------------------
+
+  it('shows Edit button in dispatch rules panel', async () => {
+    render(<DispatchView />, { wrapper: wrap(makeServices()) });
+    await waitFor(() => screen.getByText('Dispatch rules'));
+    expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument();
+  });
+
+  it('shows recent dispatches in the panel', async () => {
+    render(<DispatchView />, { wrapper: wrap(makeServices()) });
+    await waitFor(() => screen.getByText('Recent dispatches'));
+    expect(screen.getByText('NIU-214.2')).toBeInTheDocument();
+    expect(screen.getByText('NIU-199.1')).toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Override threshold modal
+  // ---------------------------------------------------------------------------
+
+  it('shows Override threshold button when raids are selected', async () => {
+    const user = userEvent.setup();
+    render(<DispatchView />, { wrapper: wrap(makeServices()) });
+    await waitFor(() => screen.getByText('Test Raid'));
+
+    await user.click(screen.getByRole('checkbox', { name: /select row/i }));
+    expect(screen.getByRole('button', { name: /override threshold/i })).toBeInTheDocument();
+  });
+
+  it('opens threshold modal when Override threshold is clicked', async () => {
+    const user = userEvent.setup();
+    render(<DispatchView />, { wrapper: wrap(makeServices()) });
+    await waitFor(() => screen.getByText('Test Raid'));
+
+    await user.click(screen.getByRole('checkbox', { name: /select row/i }));
+    await user.click(screen.getByRole('button', { name: /override threshold/i }));
+    await waitFor(() =>
+      expect(screen.getByText('Override dispatch threshold')).toBeInTheDocument(),
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Edit rules modal
+  // ---------------------------------------------------------------------------
+
+  it('opens edit rules modal when Edit button is clicked', async () => {
+    const user = userEvent.setup();
+    render(<DispatchView />, { wrapper: wrap(makeServices()) });
+    await waitFor(() => screen.getByRole('button', { name: /edit/i }));
+
+    await user.click(screen.getByRole('button', { name: /edit/i }));
+    await waitFor(() => expect(screen.getByText('Edit dispatch rules')).toBeInTheDocument());
+  });
+
+  // ---------------------------------------------------------------------------
+  // Apply workflow modal
+  // ---------------------------------------------------------------------------
+
+  it('shows Apply workflow button when raids are selected', async () => {
+    const user = userEvent.setup();
+    render(<DispatchView />, { wrapper: wrap(makeServices()) });
+    await waitFor(() => screen.getByText('Test Raid'));
+
+    await user.click(screen.getByRole('checkbox', { name: /select row/i }));
+    expect(screen.getByRole('button', { name: /apply workflow/i })).toBeInTheDocument();
+  });
+
+  it('opens workflow modal when Apply workflow is clicked', async () => {
+    const user = userEvent.setup();
+    render(<DispatchView />, { wrapper: wrap(makeServices()) });
+    await waitFor(() => screen.getByText('Test Raid'));
+
+    await user.click(screen.getByRole('checkbox', { name: /select row/i }));
+    await user.click(screen.getByRole('button', { name: /apply workflow/i }));
+    await waitFor(() => expect(screen.getByText('Apply workflow override')).toBeInTheDocument());
+  });
+
+  it('shows toast and closes modal when a workflow is applied', async () => {
+    const user = userEvent.setup();
+    render(<DispatchView />, { wrapper: wrap(makeServices()) });
+    await waitFor(() => screen.getByText('Test Raid'));
+
+    await user.click(screen.getByRole('checkbox', { name: /select row/i }));
+    await user.click(screen.getByRole('button', { name: /apply workflow/i }));
+    await waitFor(() => screen.getByText('Apply workflow override'));
+
+    // Click the first workflow in the list
+    await user.click(screen.getByRole('button', { name: /Auth Rewrite Workflow/i }));
+    await waitFor(() =>
+      expect(screen.queryByText('Apply workflow override')).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/Applied "Auth Rewrite Workflow" to 1 raid/i)).toBeInTheDocument(),
+    );
+  });
+
+  it('shows workflow override chip on raid row after applying', async () => {
+    const user = userEvent.setup();
+    render(<DispatchView />, { wrapper: wrap(makeServices()) });
+    await waitFor(() => screen.getByText('Test Raid'));
+
+    await user.click(screen.getByRole('checkbox', { name: /select row/i }));
+    await user.click(screen.getByRole('button', { name: /apply workflow/i }));
+    await waitFor(() => screen.getByText('Apply workflow override'));
+    await user.click(screen.getByRole('button', { name: /Auth Rewrite Workflow/i }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('generic', { name: /workflow override: Auth Rewrite Workflow/i }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Error toasts
+  // ---------------------------------------------------------------------------
+
+  it('shows error toast when dispatch fails', async () => {
+    const user = userEvent.setup();
+    const services = makeServices({
+      dispatch: {
+        dispatchBatch: vi.fn().mockRejectedValue(new Error('network error')),
+      },
+    });
+
+    render(<DispatchView />, { wrapper: wrap(services) });
+    await waitFor(() => screen.getByText('Test Raid'));
+
+    await user.click(screen.getByRole('checkbox', { name: /select row/i }));
+    await user.click(screen.getByRole('button', { name: /dispatch now/i }));
+    await waitFor(() => expect(screen.getByText(/dispatch failed/i)).toBeInTheDocument());
+  });
+
+  it('shows error toast when pause fails', async () => {
+    const user = userEvent.setup();
+    const services = makeServices({
+      dispatcher: {
+        getState: vi.fn().mockResolvedValue(makeDispatcherState({ running: true })),
+        setRunning: vi.fn().mockRejectedValue(new Error('service error')),
+      },
+    });
+
+    render(<DispatchView />, { wrapper: wrap(services) });
+    await waitFor(() => screen.getByRole('button', { name: /pause dispatcher/i }));
+
+    await user.click(screen.getByRole('button', { name: /pause dispatcher/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/failed to update dispatcher/i)).toBeInTheDocument(),
+    );
   });
 });

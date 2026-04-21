@@ -6,12 +6,15 @@ import {
   ConfidenceBar,
   Tooltip,
   TooltipProvider,
+  ToastProvider,
+  useToast,
   SegmentedFilter,
   cn,
 } from '@niuulabs/ui';
 import type { SegmentedFilterOption } from '@niuulabs/ui';
-import type { IDispatchBus } from '../ports';
+import type { IDispatchBus, IDispatcherService } from '../ports';
 import type { RaidStatus } from '../domain/saga';
+import type { Workflow } from '../domain/workflow';
 import {
   checkFeasibility,
   type FeasibilityGate,
@@ -19,12 +22,23 @@ import {
 } from '../application/dispatch-feasibility';
 import { useDispatcherState } from './useDispatcherState';
 import { useDispatchQueue, type DispatchEntry } from './useDispatchQueue';
+import { WorkflowOverrideModal } from './WorkflowOverrideModal';
+import { ThresholdOverrideModal } from './ThresholdOverrideModal';
+import { EditRulesModal, type RulesFormState } from './EditRulesModal';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const DEFAULT_MAX_RETRIES = 3;
+
+const MOCK_RECENT_DISPATCHES: { id: string; workflow: string; time: string }[] = [
+  { id: 'NIU-214.2', workflow: 'ship', time: '13:42' },
+  { id: 'NIU-199.2', workflow: 'ship', time: '13:28' },
+  { id: 'NIU-183.4', workflow: 'deep-review', time: '13:11' },
+  { id: 'NIU-214.1', workflow: 'ship', time: '12:49' },
+  { id: 'NIU-199.1', workflow: 'ship', time: '12:30' },
+];
 
 // ---------------------------------------------------------------------------
 // Filter types
@@ -196,10 +210,12 @@ function RaidRow({
   entry,
   isSelected,
   onToggle,
+  workflowName,
 }: {
   entry: EnrichedEntry;
   isSelected: boolean;
   onToggle: () => void;
+  workflowName?: string;
 }) {
   return (
     <div
@@ -223,6 +239,14 @@ function RaidRow({
         </div>
       </div>
       <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-shrink-0">
+        {workflowName && (
+          <span
+            className="niuu-rounded niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-xs niuu-text-brand niuu-border niuu-border-brand/30"
+            aria-label={`workflow override: ${workflowName}`}
+          >
+            {workflowName}
+          </span>
+        )}
         <StatusBadge
           status={entry.effectiveStatus as Parameters<typeof StatusBadge>[0]['status']}
           pulse={entry.effectiveStatus === 'running'}
@@ -257,16 +281,20 @@ function DispatchRulesPanel({
   threshold,
   maxConcurrentRaids,
   autoContinue,
+  retryCount,
+  onEdit,
 }: {
   threshold: number;
   maxConcurrentRaids: number;
   autoContinue: boolean;
+  retryCount: number;
+  onEdit: () => void;
 }) {
   const rules = [
     { label: 'Confidence threshold', value: `${threshold}%` },
     { label: 'Concurrent cap', value: String(maxConcurrentRaids) },
     { label: 'Auto-continue', value: autoContinue ? 'on' : 'off' },
-    { label: 'Retries', value: String(DEFAULT_MAX_RETRIES) },
+    { label: 'Retries', value: String(retryCount) },
     { label: 'Quiet hours', value: 'none' },
     { label: 'Escalation', value: 'notify' },
   ];
@@ -278,9 +306,18 @@ function DispatchRulesPanel({
         className="niuu-rounded-lg niuu-border niuu-border-border niuu-bg-bg-secondary niuu-p-4"
         aria-label="Dispatch rules"
       >
-        <h3 className="niuu-m-0 niuu-mb-3 niuu-text-sm niuu-font-semibold niuu-text-text-primary">
-          Dispatch rules
-        </h3>
+        <div className="niuu-flex niuu-items-center niuu-justify-between niuu-mb-3">
+          <h3 className="niuu-m-0 niuu-text-sm niuu-font-semibold niuu-text-text-primary">
+            Dispatch rules
+          </h3>
+          <button
+            type="button"
+            onClick={onEdit}
+            className="niuu-text-xs niuu-border niuu-border-border niuu-rounded-md niuu-px-2 niuu-py-1 niuu-text-text-secondary hover:niuu-text-text-primary niuu-bg-transparent niuu-transition-colors"
+          >
+            Edit
+          </button>
+        </div>
         <dl className="niuu-grid niuu-grid-cols-2 niuu-gap-x-4 niuu-gap-y-2 niuu-text-xs niuu-m-0">
           {rules.map((r) => (
             <div key={r.label}>
@@ -296,28 +333,69 @@ function DispatchRulesPanel({
         <h3 className="niuu-m-0 niuu-mb-3 niuu-text-sm niuu-font-semibold niuu-text-text-primary">
           Recent dispatches
         </h3>
-        <p className="niuu-m-0 niuu-text-xs niuu-text-text-muted">No recent dispatches.</p>
+        <div>
+          {MOCK_RECENT_DISPATCHES.map((d, i) => (
+            <div
+              key={d.id}
+              className={cn(
+                'niuu-grid niuu-grid-cols-[auto_1fr_auto] niuu-gap-2 niuu-py-1.5 niuu-text-xs',
+                i > 0 && 'niuu-border-t niuu-border-border-subtle',
+              )}
+            >
+              <span className="niuu-rounded niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-text-secondary">
+                {d.id}
+              </span>
+              <span className="niuu-font-mono niuu-text-text-muted">wf: {d.workflow}</span>
+              <span className="niuu-font-mono niuu-text-text-muted">{d.time}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Main view
+// Inner content (needs Toast context)
 // ---------------------------------------------------------------------------
 
-export function DispatchView() {
+function DispatchViewContent() {
   const dispatcherQuery = useDispatcherState();
   const queueQuery = useDispatchQueue();
   const dispatchBus = useService<IDispatchBus>('tyr.dispatch');
+  const dispatcherService = useService<IDispatcherService>('tyr.dispatcher');
+  const { toast } = useToast();
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [optimisticQueued, setOptimisticQueued] = useState<Set<string>>(new Set());
   const [isDispatching, setIsDispatching] = useState(false);
+  const [isPausing, setIsPausing] = useState(false);
+
+  // Modal visibility
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+  const [showThresholdModal, setShowThresholdModal] = useState(false);
+  const [showEditRulesModal, setShowEditRulesModal] = useState(false);
+
+  // Local overrides — null = use server state
+  const [thresholdOverride, setThresholdOverride] = useState<number | null>(null);
+  const [workflowOverride, setWorkflowOverride] = useState<Map<string, Workflow>>(new Map());
+  const [rulesOverride, setRulesOverride] = useState<{
+    maxConcurrentRaids: number;
+    autoContinue: boolean;
+    retryCount: number;
+  } | null>(null);
 
   const dispatcherState = dispatcherQuery.data ?? null;
+
+  // Effective display values (server state + local overrides)
+  const effectiveThreshold = thresholdOverride ?? dispatcherState?.threshold ?? 70;
+  const effectiveMaxConcurrent =
+    rulesOverride?.maxConcurrentRaids ?? dispatcherState?.maxConcurrentRaids ?? 3;
+  const effectiveAutoContinue =
+    rulesOverride?.autoContinue ?? dispatcherState?.autoContinue ?? false;
+  const effectiveRetryCount = rulesOverride?.retryCount ?? DEFAULT_MAX_RETRIES;
 
   // Enrich each entry with feasibility + optimistic status
   const enriched: EnrichedEntry[] = useMemo(() => {
@@ -423,15 +501,61 @@ export function DispatchView() {
 
     try {
       await dispatchBus.dispatchBatch(ids);
+      toast({
+        title: `Dispatched ${ids.length} raid${ids.length !== 1 ? 's' : ''}`,
+        tone: 'success',
+      });
     } catch {
       setOptimisticQueued((prev) => {
         const next = new Set(prev);
         ids.forEach((id) => next.delete(id));
         return next;
       });
+      toast({ title: 'Dispatch failed', tone: 'critical' });
     } finally {
       setIsDispatching(false);
     }
+  }
+
+  async function handlePauseToggle() {
+    if (!dispatcherState) return;
+    const nextRunning = !dispatcherState.running;
+    setIsPausing(true);
+    try {
+      await dispatcherService.setRunning(nextRunning);
+      await dispatcherQuery.refetch();
+      toast({ title: nextRunning ? 'Dispatcher resumed' : 'Dispatcher paused' });
+    } catch {
+      toast({ title: 'Failed to update dispatcher', tone: 'critical' });
+    } finally {
+      setIsPausing(false);
+    }
+  }
+
+  function handleApplyWorkflow(workflow: Workflow) {
+    setWorkflowOverride((prev) => {
+      const next = new Map(prev);
+      selectedIds.forEach((id) => next.set(id, workflow));
+      return next;
+    });
+    toast({
+      title: `Applied "${workflow.name}" to ${selectedIds.size} raid${selectedIds.size !== 1 ? 's' : ''}`,
+    });
+  }
+
+  function handleApplyThreshold(threshold: number) {
+    setThresholdOverride(threshold);
+    toast({ title: `Threshold → ${threshold.toFixed(2)}` });
+  }
+
+  function handleSaveRules(rules: RulesFormState) {
+    setThresholdOverride(rules.threshold);
+    setRulesOverride({
+      maxConcurrentRaids: rules.maxConcurrentRaids,
+      autoContinue: rules.autoContinue,
+      retryCount: rules.retryCount,
+    });
+    toast({ title: 'Dispatch rules updated' });
   }
 
   function toggleId(id: string) {
@@ -478,16 +602,36 @@ export function DispatchView() {
               <h2 className="niuu-m-0 niuu-text-lg niuu-font-semibold niuu-text-text-primary">
                 {counts.all} raids · {counts.ready} ready
               </h2>
-              <div className="niuu-flex niuu-gap-2">
+              <div className="niuu-flex niuu-items-center niuu-gap-2">
                 {dispatcherState && (
                   <>
                     <span className="niuu-text-xs niuu-font-mono niuu-bg-bg-elevated niuu-px-2 niuu-py-1 niuu-rounded niuu-text-text-secondary">
-                      threshold{' '}
-                      <strong className="niuu-text-brand">{dispatcherState.threshold}%</strong>
+                      threshold <strong className="niuu-text-brand">{effectiveThreshold}%</strong>
                     </span>
                     <span className="niuu-text-xs niuu-font-mono niuu-bg-bg-elevated niuu-px-2 niuu-py-1 niuu-rounded niuu-text-text-secondary">
-                      concurrent <strong>{dispatcherState.maxConcurrentRaids}</strong>
+                      concurrent <strong>{effectiveMaxConcurrent}</strong>
                     </span>
+                    <button
+                      type="button"
+                      onClick={handlePauseToggle}
+                      disabled={isPausing}
+                      className={cn(
+                        'niuu-text-xs niuu-border niuu-border-border niuu-rounded-md niuu-px-2 niuu-py-1 niuu-transition-colors',
+                        dispatcherState.running
+                          ? 'niuu-text-text-secondary hover:niuu-text-text-primary niuu-bg-transparent'
+                          : 'niuu-text-brand niuu-bg-bg-elevated',
+                        isPausing && 'niuu-opacity-50 niuu-cursor-not-allowed',
+                      )}
+                      aria-label={
+                        dispatcherState.running ? 'Pause dispatcher' : 'Resume dispatcher'
+                      }
+                    >
+                      {isPausing
+                        ? '…'
+                        : dispatcherState.running
+                          ? '⏸ Pause dispatcher'
+                          : '▶ Resume dispatcher'}
+                    </button>
                   </>
                 )}
               </div>
@@ -535,6 +679,7 @@ export function DispatchView() {
                       entry={entry}
                       isSelected={selectedIds.has(entry.raid.id)}
                       onToggle={() => toggleId(entry.raid.id)}
+                      workflowName={workflowOverride.get(entry.raid.id)?.name}
                     />
                   ))}
                 </div>
@@ -545,15 +690,16 @@ export function DispatchView() {
 
         {/* ── Right: rules panel ──────────────────────── */}
         <div
-          className="niuu-border-l niuu-border-border-subtle niuu-overflow-y-auto niuu-bg-bg-primary"
-          style={{ width: 280, flexShrink: 0 }}
+          className="niuu-border-l niuu-border-border-subtle niuu-overflow-y-auto niuu-bg-bg-primary niuu-w-[280px] niuu-shrink-0"
           aria-label="Dispatch rules panel"
         >
           {dispatcherState ? (
             <DispatchRulesPanel
-              threshold={dispatcherState.threshold}
-              maxConcurrentRaids={dispatcherState.maxConcurrentRaids}
-              autoContinue={dispatcherState.autoContinue}
+              threshold={effectiveThreshold}
+              maxConcurrentRaids={effectiveMaxConcurrent}
+              autoContinue={effectiveAutoContinue}
+              retryCount={effectiveRetryCount}
+              onEdit={() => setShowEditRulesModal(true)}
             />
           ) : null}
         </div>
@@ -565,7 +711,48 @@ export function DispatchView() {
         canDispatch={allSelectedFeasible}
         onDispatch={handleDispatch}
         isDispatching={isDispatching}
+        onApplyWorkflow={() => setShowWorkflowModal(true)}
+        onOverrideThreshold={() => setShowThresholdModal(true)}
+      />
+
+      {/* Modals — workflow modal only mounts when open to avoid eager service calls */}
+      {showWorkflowModal && (
+        <WorkflowOverrideModal
+          open={showWorkflowModal}
+          onOpenChange={setShowWorkflowModal}
+          selectedCount={selectedIds.size}
+          onApply={handleApplyWorkflow}
+        />
+      )}
+      <ThresholdOverrideModal
+        open={showThresholdModal}
+        onOpenChange={setShowThresholdModal}
+        currentThreshold={effectiveThreshold / 100}
+        onApply={(v) => handleApplyThreshold(Math.round(v * 100))}
+      />
+      <EditRulesModal
+        open={showEditRulesModal}
+        onOpenChange={setShowEditRulesModal}
+        rules={{
+          threshold: effectiveThreshold,
+          maxConcurrentRaids: effectiveMaxConcurrent,
+          autoContinue: effectiveAutoContinue,
+          retryCount: effectiveRetryCount,
+        }}
+        onSave={handleSaveRules}
       />
     </TooltipProvider>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main view (provides Toast context)
+// ---------------------------------------------------------------------------
+
+export function DispatchView() {
+  return (
+    <ToastProvider>
+      <DispatchViewContent />
+    </ToastProvider>
   );
 }
