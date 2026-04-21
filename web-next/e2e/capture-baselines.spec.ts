@@ -113,10 +113,9 @@ async function waitForReady(page: Page): Promise<void> {
   // Babel compiles scripts sequentially. The shell renders first, then plugins.
   // Wait until button elements appear (tabs or subnav), which means the full
   // app has mounted — not just the shell chrome.
-  await page.waitForFunction(
-    () => document.querySelectorAll('#root button').length >= 3,
-    { timeout: 10_000 },
-  );
+  await page.waitForFunction(() => document.querySelectorAll('#root button').length >= 3, {
+    timeout: 10_000,
+  });
   // Let any rAF-driven animations reach steady state.
   await page.waitForTimeout(600);
 }
@@ -132,7 +131,7 @@ async function waitForReady(page: Page): Promise<void> {
 async function clickTab(page: Page, label: string): Promise<void> {
   // Try title attribute first (rail items), then text content (tabs & subnav).
   const byTitle = page.locator(`button[title*="${label}"]`).first();
-  if (await byTitle.count() > 0) {
+  if ((await byTitle.count()) > 0) {
     await byTitle.click({ force: true });
   } else {
     await page.locator(`button:has-text("${label}")`).first().click({ force: true });
