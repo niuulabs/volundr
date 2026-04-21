@@ -7,6 +7,7 @@
  */
 
 import { Fragment } from 'react';
+import { splitWikilinks } from '../../domain';
 
 interface RawSource {
   id: string;
@@ -19,25 +20,6 @@ interface RawSourcePaneProps {
   sources: RawSource[];
   /** Called when user clicks a resolved wikilink inside source content. */
   onNavigate?: (path: string) => void;
-}
-
-/** Split a raw text string into literal parts and [[wikilink]] tokens. */
-function splitWikilinks(text: string): Array<{ kind: 'text'; value: string } | { kind: 'link'; slug: string }> {
-  const parts: Array<{ kind: 'text'; value: string } | { kind: 'link'; slug: string }> = [];
-  const re = /(\[\[[^\]]+]])/g;
-  let last = 0;
-  for (const match of text.matchAll(re)) {
-    if (match.index > last) {
-      parts.push({ kind: 'text', value: text.slice(last, match.index) });
-    }
-    const slug = match[0].slice(2, -2);
-    parts.push({ kind: 'link', slug });
-    last = match.index + match[0].length;
-  }
-  if (last < text.length) {
-    parts.push({ kind: 'text', value: text.slice(last) });
-  }
-  return parts;
 }
 
 function SourceContent({ content, onNavigate }: { content: string; onNavigate?: (path: string) => void }) {

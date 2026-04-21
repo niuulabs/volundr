@@ -12,23 +12,22 @@ interface TreeNodeProps {
   depth: number;
   selectedPath: string | null;
   onSelect: (path: string) => void;
-  allPages: PageMeta[];
+  /** O(1) set of known page paths (both `/slug` and `slug` forms). */
+  knownPaths: Set<string>;
 }
 
-/** Returns true when at least one of the page's related slugs cannot be resolved. */
-function pageHasBrokenLinks(page: PageMeta, allPages: PageMeta[]): boolean {
+/** Returns true when at least one of the page's related slugs is not in knownPaths. */
+function pageHasBrokenLinks(page: PageMeta, knownPaths: Set<string>): boolean {
   if (!page.related || page.related.length === 0) return false;
-  return page.related.some(
-    (slug) => !allPages.some((p) => p.path === `/${slug}` || p.path === slug),
-  );
+  return page.related.some((slug) => !knownPaths.has(`/${slug}`) && !knownPaths.has(slug));
 }
 
-export function TreeNode({ node, depth, selectedPath, onSelect, allPages }: TreeNodeProps) {
+export function TreeNode({ node, depth, selectedPath, onSelect, knownPaths }: TreeNodeProps) {
   const [open, setOpen] = useState(depth <= 1);
 
   if (!node.isDir) {
     const conf = node.page.confidence;
-    const hasBrokenLinks = pageHasBrokenLinks(node.page, allPages);
+    const hasBrokenLinks = pageHasBrokenLinks(node.page, knownPaths);
     const isActive = selectedPath === node.path;
 
     return (
@@ -90,7 +89,7 @@ export function TreeNode({ node, depth, selectedPath, onSelect, allPages }: Tree
             depth={depth + 1}
             selectedPath={selectedPath}
             onSelect={onSelect}
-            allPages={allPages}
+            knownPaths={knownPaths}
           />
         ))}
     </div>

@@ -6,7 +6,7 @@
  * Right:  page meta panel (provenance, sources, backlinks)
  */
 
-import { useState, useReducer, useEffect, useRef, Fragment } from 'react';
+import { useState, useReducer, useEffect, useRef, useMemo, Fragment } from 'react';
 import { useService } from '@niuulabs/plugin-sdk';
 import { useMimirPages, useMimirPage, useMimirPageSources } from './useMimirPages';
 import { TreeNode } from './components/TreeNode';
@@ -16,7 +16,8 @@ import { MountChip } from './components/MountChip';
 import { RawSourcePane } from './components/RawSourcePane';
 import { mergeFileTrees } from '../domain';
 import { zoneEditReducer } from '../domain/zone-edit';
-import type { Zone } from '../domain/page';
+import type { Zone, Page, PageMeta } from '../domain/page';
+import type { ZoneEditState } from '../domain/zone-edit';
 import type { IMimirService } from '../ports';
 import './mimir-views.css';
 
@@ -53,6 +54,12 @@ export function PagesView() {
   }, []);
 
   const tree = mergeFileTrees(allPages);
+
+  /** O(N) set of known paths for O(1) broken-link lookup in TreeNode leaves. */
+  const knownPaths = useMemo(
+    () => new Set(allPages.flatMap((p) => [p.path, p.path.replace(/^\//, '')])),
+    [allPages],
+  );
 
   function handleNavigate(slug: string) {
     const target = allPages.find((p) => p.path === `/${slug}` || p.path === slug);
@@ -134,7 +141,7 @@ export function PagesView() {
               depth={0}
               selectedPath={activePagePath}
               onSelect={setSelectedPath}
-              allPages={allPages}
+              knownPaths={knownPaths}
             />
           ))}
         </div>
@@ -184,7 +191,6 @@ export function PagesView() {
                   <PageContent
                     page={page}
                     breadcrumbs={breadcrumbs}
-                    pageSources={pageSources}
                     allPages={allPages}
                     editState={editState}
                     onNavigate={handleNavigate}
@@ -207,7 +213,6 @@ export function PagesView() {
                 <PageContent
                   page={page}
                   breadcrumbs={breadcrumbs}
-                  pageSources={pageSources}
                   allPages={allPages}
                   editState={editState}
                   onNavigate={handleNavigate}
@@ -248,13 +253,9 @@ export function PagesView() {
 // Internal sub-component: the scrollable page body (shared by both layout modes)
 // ---------------------------------------------------------------------------
 
-import type { Page, PageMeta } from '../domain/page';
-import type { ZoneEditState } from '../domain/zone-edit';
-
 interface PageContentProps {
   page: Page;
   breadcrumbs: string[];
-  pageSources: { id: string; title: string; originType: string; content: string }[];
   allPages: PageMeta[];
   editState: ZoneEditState;
   onNavigate: (slug: string) => void;
