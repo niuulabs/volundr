@@ -8,4 +8,6 @@ export interface Template {
   spec: PodSpec;
   createdAt: string;
   updatedAt: string;
+  /** Number of times this template has been used to launch a session. */
+  usageCount?: number;
 }

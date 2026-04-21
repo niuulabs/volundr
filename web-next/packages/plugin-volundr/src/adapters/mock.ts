@@ -57,6 +57,12 @@ const SEED_STATS: VolundrStats = {
   localTokens: 0,
   cloudTokens: 9_600,
   costToday: 0.14,
+  sparklines: {
+    activePods: [1, 2, 1, 3, 2, 2, 3, 4, 3, 2, 1, 2, 3, 4, 3, 3, 2, 3, 4, 3, 2, 3, 3, 4],
+    tokensToday: [400, 600, 500, 800, 700, 900, 1200, 1100, 1000, 800, 900, 1100, 1200, 1300, 1100, 1000, 900, 1200, 1400, 1300, 1100, 1200, 1300, 1500],
+    costToday: [1, 2, 2, 3, 3, 4, 5, 5, 5, 4, 4, 5, 6, 7, 6, 6, 5, 6, 7, 7, 6, 7, 7, 8],
+    gpus: [0, 0, 1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 2, 2, 2, 3, 3, 2, 2, 2, 1, 1, 2, 2],
+  },
 };
 
 const SEED_CLUSTERS: Cluster[] = [
@@ -99,6 +105,12 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
     state: 'running',
     startedAt: new Date(Date.now() - 3_600_000).toISOString(),
     readyAt: new Date(Date.now() - 3_590_000).toISOString(),
+    lastActivityAt: new Date(Date.now() - 60_000).toISOString(),
+    connectionType: 'cli',
+    tokensIn: 4_200,
+    tokensOut: 1_800,
+    costCents: 8,
+    preview: 'Refactoring the auth middleware to use the new OIDC adapter pattern',
     resources: {
       cpuRequest: 1,
       cpuLimit: 2,
@@ -138,6 +150,11 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
     startedAt: new Date(Date.now() - 7_200_000).toISOString(),
     readyAt: new Date(Date.now() - 7_190_000).toISOString(),
     lastActivityAt: new Date(Date.now() - 1_800_000).toISOString(),
+    connectionType: 'ide',
+    tokensIn: 600,
+    tokensOut: 200,
+    costCents: 2,
+    preview: 'Writing unit tests for the session lifecycle state machine',
     resources: {
       cpuRequest: 1,
       cpuLimit: 2,
@@ -170,6 +187,8 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
     clusterId: 'cl-eitri',
     state: 'provisioning',
     startedAt: new Date(Date.now() - 120_000).toISOString(),
+    connectionType: 'api',
+    bootProgress: 0.45,
     resources: {
       cpuRequest: 2,
       cpuLimit: 4,
@@ -339,6 +358,7 @@ const SEED_TEMPLATES: Template[] = [
     id: 'tpl-default',
     name: 'default',
     version: 1,
+    usageCount: 42,
     spec: {
       image: 'ghcr.io/niuulabs/skuld',
       tag: 'latest',
@@ -363,6 +383,7 @@ const SEED_TEMPLATES: Template[] = [
     id: 'tpl-gpu',
     name: 'gpu-workload',
     version: 2,
+    usageCount: 7,
     spec: {
       image: 'ghcr.io/niuulabs/skuld',
       tag: 'cuda-12',
