@@ -298,7 +298,9 @@ describe('SagaDetailPage — right-column cards', () => {
     render(<SagaDetailPage sagaId={SAGA_ID} />, {
       wrapper: wrap({ tyr: createMockTyrService() }),
     });
-    await waitFor(() => expect(screen.getByRole('region', { name: /workflow/i })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: /workflow/i })).toBeInTheDocument(),
+    );
   });
 
   it('renders the workflow name from saga data', async () => {

@@ -7,12 +7,7 @@ import type { Phase } from '../domain/saga';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makePhase(
-  id: string,
-  number: number,
-  name: string,
-  status: Phase['status'],
-): Phase {
+function makePhase(id: string, number: number, name: string, status: Phase['status']): Phase {
   return {
     id,
     sagaId: 'saga-001',

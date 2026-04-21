@@ -202,8 +202,6 @@ describe('SagasPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Export sagas as JSON/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/Exported \d+ sagas/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/Exported \d+ sagas/i)).toBeInTheDocument());
   });
 });

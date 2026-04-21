@@ -13,8 +13,7 @@ function dotClassName(status: PhaseStatus): string {
     'niuu-w-6 niuu-h-6 niuu-rounded-full niuu-flex niuu-items-center niuu-justify-center niuu-text-xs niuu-font-semibold niuu-border niuu-shrink-0';
   if (status === 'complete')
     return `${base} niuu-bg-accent-emerald niuu-border-accent-emerald niuu-text-bg-primary`;
-  if (status === 'active')
-    return `${base} niuu-bg-brand niuu-border-brand niuu-text-bg-primary`;
+  if (status === 'active') return `${base} niuu-bg-brand niuu-border-brand niuu-text-bg-primary`;
   if (status === 'gated')
     return `${base} niuu-bg-accent-amber niuu-border-accent-amber niuu-text-bg-primary`;
   return `${base} niuu-bg-bg-elevated niuu-border-border niuu-text-text-muted`;
@@ -64,10 +63,7 @@ export function StageProgressRail({ phases }: StageProgressRailProps) {
                     {i + 1}
                   </div>
                   {i < phases.length - 1 && (
-                    <div
-                      className={barClassName(phase.status)}
-                      aria-hidden="true"
-                    />
+                    <div className={barClassName(phase.status)} aria-hidden="true" />
                   )}
                 </Fragment>
               ))}

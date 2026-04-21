@@ -53,8 +53,8 @@ export function WorkflowCard({ workflow, workflowVersion }: WorkflowCardProps) {
             ⓘ
           </span>
           <span>
-            Override this workflow per-dispatch from the Dispatch view. The saga&apos;s workflow is the
-            default; overrides apply only to that run.
+            Override this workflow per-dispatch from the Dispatch view. The saga&apos;s workflow is
+            the default; overrides apply only to that run.
           </span>
         </div>
 
@@ -62,10 +62,7 @@ export function WorkflowCard({ workflow, workflowVersion }: WorkflowCardProps) {
           <div className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-uppercase niuu-tracking-wide niuu-mb-2">
             FLOCK
           </div>
-          <div
-            className="niuu-flex niuu-flex-wrap niuu-gap-2"
-            aria-label="Workflow participants"
-          >
+          <div className="niuu-flex niuu-flex-wrap niuu-gap-2" aria-label="Workflow participants">
             {FLOCK_PERSONAS.map(({ role, label }) => (
               <span
                 key={role}

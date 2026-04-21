@@ -17,9 +17,7 @@ describe('ConfidenceDriftCard', () => {
 
   it('renders the description paragraph', () => {
     render(<ConfidenceDriftCard sagaId={SAGA_ID} confidence={82} />);
-    expect(
-      screen.getByText(/how this saga's overall confidence has moved/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/how this saga's overall confidence has moved/i)).toBeInTheDocument();
   });
 
   it('renders the event count in the header', () => {
@@ -63,12 +61,8 @@ describe('ConfidenceDriftCard', () => {
   });
 
   it('renders consistently for the same saga ID (deterministic)', () => {
-    const { container: c1 } = render(
-      <ConfidenceDriftCard sagaId={SAGA_ID} confidence={82} />,
-    );
-    const { container: c2 } = render(
-      <ConfidenceDriftCard sagaId={SAGA_ID} confidence={82} />,
-    );
+    const { container: c1 } = render(<ConfidenceDriftCard sagaId={SAGA_ID} confidence={82} />);
+    const { container: c2 } = render(<ConfidenceDriftCard sagaId={SAGA_ID} confidence={82} />);
     expect(c1.innerHTML).toEqual(c2.innerHTML);
   });
 

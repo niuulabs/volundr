@@ -176,7 +176,12 @@ export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPag
 
       {/* 2-column layout: content left, cards right */}
       <div
-        style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '24px', alignItems: 'start' }}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 320px',
+          gap: '24px',
+          alignItems: 'start',
+        }}
       >
         {/* ── Left column: header + phases ─── */}
         <div className="niuu-space-y-6">
