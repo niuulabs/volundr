@@ -367,4 +367,19 @@ describe('usePlanWizard — saveDraft', () => {
 
     expect(result.current.state.step).toBe(stepBefore);
   });
+
+  it('sets draftSaved to true', async () => {
+    const svc = makeMockService();
+    const { result } = renderHook(() => usePlanWizard(), { wrapper: makeWrapper(svc) });
+
+    await act(async () => {
+      await result.current.submitPrompt('Build auth', 'repo');
+    });
+    act(() => result.current.submitAnswers({}));
+    await waitFor(() => expect(result.current.state.step).toBe('draft'));
+
+    expect(result.current.state.draftSaved).toBe(false);
+    act(() => result.current.saveDraft());
+    expect(result.current.state.draftSaved).toBe(true);
+  });
 });

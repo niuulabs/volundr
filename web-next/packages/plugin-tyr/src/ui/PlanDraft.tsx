@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ConfidenceBar, type ConfidenceLevel } from '@niuulabs/ui';
 import type { ExtractedStructure, PhaseSpec } from '../ports';
 
@@ -34,15 +34,17 @@ interface PlanDraftProps {
   onReplan?(): void;
   onSaveDraft?(): void;
   onEditPhase(phaseIndex: number, name: string): void;
+  onRemoveRaid?(phaseIndex: number, raidIndex: number): void;
 }
 
 interface PhaseEditorProps {
   phase: PhaseSpec;
   phaseIndex: number;
   onSave(name: string): void;
+  onRemoveRaid?(raidIndex: number): void;
 }
 
-function PhaseEditor({ phase, phaseIndex, onSave }: PhaseEditorProps) {
+function PhaseEditor({ phase, phaseIndex, onSave, onRemoveRaid }: PhaseEditorProps) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(phase.name);
 
@@ -125,8 +127,11 @@ function PhaseEditor({ phase, phaseIndex, onSave }: PhaseEditorProps) {
             <li
               key={ri}
               className="niuu-rounded niuu-bg-bg-tertiary niuu-px-3 niuu-py-2 niuu-grid niuu-items-center niuu-gap-x-3 niuu-gap-y-0"
-              style={{ gridTemplateColumns: 'auto 1fr auto' }}
+              style={{ gridTemplateColumns: 'auto 1fr auto auto auto' }}
             >
+              {/* Col 1: Persona circle
+                  TODO: Replace with <PersonaAvatar role={...} letter={...} size={22} /> once
+                  RaidSpec includes a personaRole field that maps to the PersonaRole enum. */}
               <span
                 className="niuu-w-6 niuu-h-6 niuu-rounded-full niuu-bg-bg-elevated niuu-flex niuu-items-center niuu-justify-center niuu-text-xs niuu-text-text-muted niuu-flex-shrink-0"
                 title={raid.persona ?? 'raven'}
@@ -134,8 +139,10 @@ function PhaseEditor({ phase, phaseIndex, onSave }: PhaseEditorProps) {
               >
                 {raid.persona ? raid.persona.charAt(0).toUpperCase() : 'ᚱ'}
               </span>
-              <div className="niuu-flex niuu-flex-col niuu-gap-0.5">
-                <span className="niuu-text-xs niuu-font-medium niuu-text-text-primary">
+
+              {/* Col 2: Name + meta */}
+              <div className="niuu-flex niuu-flex-col niuu-gap-0.5 niuu-min-w-0">
+                <span className="niuu-text-xs niuu-font-medium niuu-text-text-primary niuu-truncate">
                   {raid.name}
                 </span>
                 <span className="niuu-text-xs niuu-text-text-muted niuu-font-mono">
@@ -151,12 +158,40 @@ function PhaseEditor({ phase, phaseIndex, onSave }: PhaseEditorProps) {
                     `~${raid.estimateHours}h · ${raid.confidence}% confidence`}
                 </span>
               </div>
-              {raid.size && (
+
+              {/* Col 3: Size pill (always occupies grid cell) */}
+              {raid.size ? (
                 <span
                   className={`niuu-text-xs niuu-font-semibold niuu-rounded niuu-border niuu-px-1.5 niuu-py-0.5 ${SIZE_CLASSES[raid.size]}`}
                 >
                   {raid.size}
                 </span>
+              ) : (
+                <span />
+              )}
+
+              {/* Col 4: Own saga (disabled stub — no backend yet) */}
+              <button
+                type="button"
+                disabled
+                aria-label={`Promote raid ${ri + 1} to own saga`}
+                className="niuu-text-xs niuu-text-text-muted niuu-border niuu-border-border niuu-rounded niuu-px-1.5 niuu-py-0.5 niuu-opacity-40 niuu-cursor-not-allowed"
+              >
+                Own saga
+              </button>
+
+              {/* Col 5: Remove button */}
+              {onRemoveRaid ? (
+                <button
+                  type="button"
+                  onClick={() => onRemoveRaid(ri)}
+                  aria-label={`Remove raid ${ri + 1}`}
+                  className="niuu-text-xs niuu-text-text-muted hover:niuu-text-critical niuu-transition-colors niuu-leading-none"
+                >
+                  ×
+                </button>
+              ) : (
+                <span />
               )}
             </li>
           ))}
@@ -170,7 +205,8 @@ function PhaseEditor({ phase, phaseIndex, onSave }: PhaseEditorProps) {
  * Step 4 of the Plan wizard — review the decomposed saga structure with
  * per-phase edit buttons before approving.
  *
- * Includes: risk rows with kind badges, Re-plan button, and Save as draft button.
+ * Includes: risk rows with kind badges, Re-plan button, Save as draft button,
+ * and per-raid promote (Own saga) + remove buttons.
  */
 export function PlanDraft({
   structure,
@@ -181,6 +217,7 @@ export function PlanDraft({
   onReplan,
   onSaveDraft,
   onEditPhase,
+  onRemoveRaid,
 }: PlanDraftProps) {
   const phases = structure.structure?.phases ?? [];
   const sagaName = structure.structure?.name ?? 'New Saga';
@@ -193,6 +230,19 @@ export function PlanDraft({
           phases.flatMap((p) => p.raids).reduce((sum, r) => sum + r.confidence, 0) / totalRaids,
         )
       : 0;
+
+  const [draftSavedFeedback, setDraftSavedFeedback] = useState(false);
+
+  useEffect(() => {
+    if (!draftSavedFeedback) return;
+    const id = setTimeout(() => setDraftSavedFeedback(false), 2000);
+    return () => clearTimeout(id);
+  }, [draftSavedFeedback]);
+
+  function handleSaveDraft() {
+    onSaveDraft?.();
+    setDraftSavedFeedback(true);
+  }
 
   return (
     <div className="niuu-flex niuu-flex-col niuu-gap-4">
@@ -255,6 +305,7 @@ export function PlanDraft({
             phase={phase}
             phaseIndex={idx}
             onSave={(name) => onEditPhase(idx, name)}
+            onRemoveRaid={onRemoveRaid ? (ri) => onRemoveRaid(idx, ri) : undefined}
           />
         ))}
       </div>
@@ -286,14 +337,25 @@ export function PlanDraft({
         )}
         <span className="niuu-flex-1" />
         {onSaveDraft && (
-          <button
-            type="button"
-            onClick={onSaveDraft}
-            disabled={loading}
-            className="niuu-rounded-md niuu-px-4 niuu-py-2 niuu-text-sm niuu-font-medium niuu-text-text-secondary niuu-border niuu-border-border hover:niuu-bg-bg-elevated disabled:niuu-opacity-40 niuu-transition-colors"
-          >
-            Save as draft
-          </button>
+          <div className="niuu-flex niuu-items-center niuu-gap-2">
+            {draftSavedFeedback && (
+              <span
+                className="niuu-text-xs niuu-text-text-muted niuu-font-mono"
+                role="status"
+                aria-live="polite"
+              >
+                Draft saved (local only)
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={loading}
+              className="niuu-rounded-md niuu-px-4 niuu-py-2 niuu-text-sm niuu-font-medium niuu-text-text-secondary niuu-border niuu-border-border hover:niuu-bg-bg-elevated disabled:niuu-opacity-40 niuu-transition-colors"
+            >
+              Save as draft
+            </button>
+          </div>
         )}
         <button
           type="button"

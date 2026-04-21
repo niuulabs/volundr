@@ -25,6 +25,7 @@ export function PlanWizard() {
     submitAnswers,
     approveDraft,
     editPhase,
+    removeRaid,
     back,
     clearError,
     replan,
@@ -95,6 +96,7 @@ export function PlanWizard() {
               onReplan={replan}
               onSaveDraft={saveDraft}
               onEditPhase={editPhase}
+              onRemoveRaid={removeRaid}
             />
           )}
 

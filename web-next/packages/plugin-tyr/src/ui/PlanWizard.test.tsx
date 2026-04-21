@@ -627,6 +627,73 @@ describe('PlanDraft', () => {
     );
     expect(screen.getByText('M')).toBeInTheDocument();
   });
+
+  it('renders "Own saga" button for each raid (disabled stub)', () => {
+    render(
+      <PlanDraft
+        structure={MOCK_STRUCTURE}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onEditPhase={vi.fn()}
+      />,
+    );
+    const ownSagaButtons = screen.getAllByRole('button', { name: /promote raid .* to own saga/i });
+    expect(ownSagaButtons.length).toBeGreaterThan(0);
+    ownSagaButtons.forEach((btn) => expect(btn).toBeDisabled());
+  });
+
+  it('calls onRemoveRaid when × button clicked', () => {
+    const onRemoveRaid = vi.fn();
+    render(
+      <PlanDraft
+        structure={MOCK_STRUCTURE}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onEditPhase={vi.fn()}
+        onRemoveRaid={onRemoveRaid}
+      />,
+    );
+    const removeButtons = screen.getAllByRole('button', { name: /remove raid/i });
+    expect(removeButtons.length).toBeGreaterThan(0);
+    fireEvent.click(removeButtons[0]!);
+    expect(onRemoveRaid).toHaveBeenCalledWith(0, 0);
+  });
+
+  it('does not render remove buttons when onRemoveRaid not provided', () => {
+    render(
+      <PlanDraft
+        structure={MOCK_STRUCTURE}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onEditPhase={vi.fn()}
+      />,
+    );
+    expect(screen.queryAllByRole('button', { name: /remove raid/i })).toHaveLength(0);
+  });
+
+  it('shows "Draft saved (local only)" feedback after clicking save as draft', async () => {
+    render(
+      <PlanDraft
+        structure={MOCK_STRUCTURE}
+        loading={false}
+        error={null}
+        onApprove={vi.fn()}
+        onBack={vi.fn()}
+        onSaveDraft={vi.fn()}
+        onEditPhase={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /save as draft/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/draft saved \(local only\)/i)).toBeInTheDocument(),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
