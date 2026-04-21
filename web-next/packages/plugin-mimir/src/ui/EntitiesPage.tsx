@@ -13,6 +13,11 @@ const KIND_ICONS: Record<EntityKind, string> = {
   technology: '🔧',
 };
 
+const FILTER_BTN_BASE =
+  'niuu-px-3 niuu-py-1 niuu-rounded-full niuu-font-sans niuu-text-xs niuu-cursor-pointer niuu-border';
+const FILTER_BTN_ACTIVE = 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-medium';
+const FILTER_BTN_INACTIVE = 'niuu-bg-bg-secondary niuu-border-border-subtle niuu-text-text-secondary';
+
 export function EntitiesPage() {
   const [filterKind, setFilterKind] = useState<EntityKind | undefined>(undefined);
   const { entities, grouped, isLoading, isError, error } = useEntities(filterKind);
@@ -33,12 +38,7 @@ export function EntitiesPage() {
         aria-label="Filter by entity type"
       >
         <button
-          className={[
-            'niuu-px-3 niuu-py-1 niuu-rounded-full niuu-font-sans niuu-text-xs niuu-cursor-pointer niuu-border',
-            filterKind == null
-              ? 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-medium'
-              : 'niuu-bg-bg-secondary niuu-border-border-subtle niuu-text-text-secondary',
-          ].join(' ')}
+          className={[FILTER_BTN_BASE, filterKind == null ? FILTER_BTN_ACTIVE : FILTER_BTN_INACTIVE].join(' ')}
           onClick={() => setFilterKind(undefined)}
           aria-pressed={filterKind == null}
         >
@@ -47,12 +47,7 @@ export function EntitiesPage() {
         {ENTITY_KINDS.map((k) => (
           <button
             key={k}
-            className={[
-              'niuu-px-3 niuu-py-1 niuu-rounded-full niuu-font-sans niuu-text-xs niuu-cursor-pointer niuu-border',
-              filterKind === k
-                ? 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-medium'
-                : 'niuu-bg-bg-secondary niuu-border-border-subtle niuu-text-text-secondary',
-            ].join(' ')}
+            className={[FILTER_BTN_BASE, filterKind === k ? FILTER_BTN_ACTIVE : FILTER_BTN_INACTIVE].join(' ')}
             onClick={() => setFilterKind(filterKind === k ? undefined : k)}
             aria-pressed={filterKind === k}
             data-kind={k}
