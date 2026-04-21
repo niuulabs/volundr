@@ -35,6 +35,10 @@ export const triggerSchema = z.object({
   enabled: z.boolean(),
   /** ISO-8601 UTC creation timestamp. */
   createdAt: z.string().datetime(),
+  /** ISO-8601 UTC timestamp when this trigger last fired. */
+  lastFiredAt: z.string().datetime().optional(),
+  /** Total number of times this trigger has fired. */
+  fireCount: z.number().int().nonnegative().optional(),
 });
 
 export type Trigger = z.infer<typeof triggerSchema>;
