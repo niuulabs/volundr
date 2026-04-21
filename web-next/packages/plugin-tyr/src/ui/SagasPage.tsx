@@ -9,6 +9,7 @@ import {
   Pipe,
   Rune,
   relTime,
+  useToast,
 } from '@niuulabs/ui';
 import type { SagaStatus } from '../domain/saga';
 import type { Saga } from '../domain/saga';
@@ -134,6 +135,7 @@ function SagaListRow({ saga, isSelected, onClick }: SagaListRowProps) {
 
 export function SagasPage() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const params = useParams({ strict: false }) as { sagaId?: string };
   const { data: sagas, isLoading, isError, error } = useSagas();
   const [filter, setFilter] = useState<StatusFilter>('all');
@@ -199,6 +201,7 @@ export function SagasPage() {
               a.download = 'sagas.json';
               a.click();
               setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+              toast({ title: `Exported ${allSagas.length} sagas`, tone: 'success' });
             }}
             aria-label="Export sagas as JSON"
           >

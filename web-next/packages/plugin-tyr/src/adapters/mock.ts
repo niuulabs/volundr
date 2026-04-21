@@ -53,6 +53,8 @@ const SEED_SAGAS: Saga[] = [
     confidence: 82,
     createdAt: '2026-01-10T09:00:00Z',
     phaseSummary: { total: 3, completed: 1 },
+    workflow: 'ship',
+    workflowVersion: '1.4.2',
   },
   {
     id: '00000000-0000-0000-0000-000000000002',
@@ -66,6 +68,8 @@ const SEED_SAGAS: Saga[] = [
     confidence: 95,
     createdAt: '2026-01-05T08:00:00Z',
     phaseSummary: { total: 2, completed: 2 },
+    workflow: 'scaffold',
+    workflowVersion: '2.1.0',
   },
   {
     id: '00000000-0000-0000-0000-000000000003',
@@ -79,6 +83,8 @@ const SEED_SAGAS: Saga[] = [
     confidence: 30,
     createdAt: '2026-01-15T10:00:00Z',
     phaseSummary: { total: 4, completed: 0 },
+    workflow: 'ship',
+    workflowVersion: '1.3.0',
   },
 ];
 
