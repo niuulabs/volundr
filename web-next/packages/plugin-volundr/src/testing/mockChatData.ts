@@ -84,6 +84,8 @@ export function buildMockRoom(session: Session): MockRoom {
       emits: ['code.changed', 'outcome.review'],
       tools: ['read_file', 'write_file', 'run_command', 'search_files'],
       gateway: 'bifrost://anthropic/claude-sonnet',
+      gatewayLatencyMs: 84,
+      gatewayRegion: 'us-east-1',
       expanded: true,
     },
     {
@@ -98,6 +100,8 @@ export function buildMockRoom(session: Session): MockRoom {
       emits: ['outcome.review'],
       tools: ['read_file', 'search_files'],
       gateway: 'bifrost://anthropic/claude-haiku',
+      gatewayLatencyMs: 312,
+      gatewayRegion: 'eu-west-1',
     },
   ];
 

@@ -160,6 +160,24 @@ describe('SessionDetailPage', () => {
       const meters = within(resourcesRow).getAllByTestId('meter');
       expect(meters.length).toBeGreaterThanOrEqual(2);
     });
+
+    it('renders disk meter in the resources row when disk data present', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('resources-toggle')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('resources-toggle'));
+      const resourcesRow = screen.getByTestId('resources-row');
+      // ds-1 has diskUsedMi and diskLimitMi set
+      const meters = within(resourcesRow).getAllByTestId('meter');
+      expect(meters.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('renders file change summary when session has file stats', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      await waitFor(() => expect(screen.getByTestId('file-change-summary')).toBeInTheDocument());
+      expect(screen.getByTestId('files-added')).toBeInTheDocument();
+      expect(screen.getByTestId('files-modified')).toBeInTheDocument();
+      expect(screen.getByTestId('files-deleted')).toBeInTheDocument();
+    });
   });
 
   // ─── Tab bar ────────────────────────────────────────────
@@ -341,10 +359,32 @@ describe('SessionDetailPage', () => {
 
   // ─── Diffs tab ──────────────────────────────────────────
   describe('diffs tab', () => {
-    it('shows diffs placeholder', () => {
+    it('renders two-pane diffs layout', () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
       fireEvent.click(screen.getByTestId('tab-diffs'));
-      expect(screen.getByTestId('placeholder-diffs')).toBeInTheDocument();
+      expect(screen.getByTestId('diffs-tab')).toBeInTheDocument();
+      expect(screen.getByTestId('diff-file-list')).toBeInTheDocument();
+      expect(screen.getByTestId('diff-viewer')).toBeInTheDocument();
+    });
+
+    it('renders diff file list entries', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      fireEvent.click(screen.getByTestId('tab-diffs'));
+      const modFiles = screen.getAllByTestId('diff-file-mod');
+      const newFiles = screen.getAllByTestId('diff-file-new');
+      const delFiles = screen.getAllByTestId('diff-file-del');
+      expect(modFiles.length + newFiles.length + delFiles.length).toBeGreaterThan(0);
+    });
+
+    it('switches diff viewer on file click', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      fireEvent.click(screen.getByTestId('tab-diffs'));
+      const fileList = screen.getByTestId('diff-file-list');
+      const fileButtons = fileList.querySelectorAll('button');
+      if (fileButtons.length > 1) {
+        fireEvent.click(fileButtons[1]!);
+        expect(screen.getByTestId('diff-viewer')).toBeInTheDocument();
+      }
     });
   });
 
@@ -360,19 +400,52 @@ describe('SessionDetailPage', () => {
 
   // ─── Chronicle tab ─────────────────────────────────────
   describe('chronicle tab', () => {
-    it('shows chronicle placeholder', () => {
+    it('renders chronicle timeline', () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
       fireEvent.click(screen.getByTestId('tab-chronicle'));
-      expect(screen.getByTestId('placeholder-chronicle')).toBeInTheDocument();
+      expect(screen.getByTestId('chronicle-tab')).toBeInTheDocument();
+      expect(screen.getByTestId('chronicle-timeline')).toBeInTheDocument();
+    });
+
+    it('renders chronicle summary stats', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      fireEvent.click(screen.getByTestId('tab-chronicle'));
+      expect(screen.getByTestId('chronicle-summary')).toBeInTheDocument();
+    });
+
+    it('renders chronicle event rows', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      fireEvent.click(screen.getByTestId('tab-chronicle'));
+      const gitEvents = screen.getAllByTestId('chronicle-event-git');
+      expect(gitEvents.length).toBeGreaterThan(0);
     });
   });
 
   // ─── Logs tab ──────────────────────────────────────────
   describe('logs tab', () => {
-    it('shows logs placeholder', () => {
+    it('renders logs terminal container', () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
       fireEvent.click(screen.getByTestId('tab-logs'));
-      expect(screen.getByTestId('placeholder-logs')).toBeInTheDocument();
+      expect(screen.getByTestId('logs-tab')).toBeInTheDocument();
+      expect(screen.getByTestId('logs-body')).toBeInTheDocument();
+    });
+
+    it('renders log filter buttons', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      fireEvent.click(screen.getByTestId('tab-logs'));
+      expect(screen.getByTestId('log-filter-all')).toBeInTheDocument();
+      expect(screen.getByTestId('log-filter-error')).toBeInTheDocument();
+      expect(screen.getByTestId('log-filter-warn')).toBeInTheDocument();
+    });
+
+    it('filters log lines by level', () => {
+      wrap(<SessionDetailPage sessionId="ds-1" />);
+      fireEvent.click(screen.getByTestId('tab-logs'));
+
+      fireEvent.click(screen.getByTestId('log-filter-warn'));
+      const warnLines = screen.getAllByTestId('log-line-warn');
+      expect(warnLines.length).toBeGreaterThan(0);
+      expect(screen.queryByTestId('log-line-debug')).not.toBeInTheDocument();
     });
   });
 
