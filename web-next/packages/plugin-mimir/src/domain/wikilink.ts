@@ -25,6 +25,38 @@ export interface WikilinkTarget {
 // Parsing
 // ---------------------------------------------------------------------------
 
+/** A single part produced by {@link splitWikilinks}. */
+export type WikilinkPart = { kind: 'text'; value: string } | { kind: 'link'; slug: string };
+
+/**
+ * Split text into interleaved plain-text and wikilink parts for inline rendering.
+ *
+ * e.g. `"see [[arch/overview]] for more"` →
+ * ```
+ * [
+ *   { kind: 'text', value: 'see ' },
+ *   { kind: 'link', slug: 'arch/overview' },
+ *   { kind: 'text', value: ' for more' },
+ * ]
+ * ```
+ */
+export function splitWikilinks(text: string): WikilinkPart[] {
+  const parts: WikilinkPart[] = [];
+  const re = /\[\[([^\]]+)]]/g;
+  let last = 0;
+  for (const match of text.matchAll(re)) {
+    if (match.index > last) {
+      parts.push({ kind: 'text', value: text.slice(last, match.index) });
+    }
+    parts.push({ kind: 'link', slug: match[1]!.trim() });
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) {
+    parts.push({ kind: 'text', value: text.slice(last) });
+  }
+  return parts;
+}
+
 /** Extract all [[slug]] patterns from a text string. */
 export function parseWikilinks(text: string): string[] {
   const slugs: string[] = [];

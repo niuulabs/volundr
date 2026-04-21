@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Chip, LoadingState, ErrorState, Meter } from '@niuulabs/ui';
 import type { Template } from '../domain/template';
-import type { Mount } from '../domain/pod';
+import type { Mount, McpServer } from '../domain/pod';
 import { useTemplates } from './useTemplates';
 import { CliBadge } from './atoms';
 
@@ -87,12 +87,22 @@ function TemplateListCard({
       <div className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
         {spec.image}:{spec.tag}
       </div>
-      <div className="niuu-flex niuu-flex-wrap niuu-gap-1.5">
+      {template.description && (
+        <p className="niuu-line-clamp-2 niuu-text-xs niuu-text-text-secondary">
+          {template.description}
+        </p>
+      )}
+      <div className="niuu-flex niuu-flex-wrap niuu-items-center niuu-gap-1.5">
         <Chip tone="default">
           {spec.resources.cpuRequest}c &middot; {spec.resources.memRequestMi}Mi
         </Chip>
         {spec.resources.gpuCount > 0 && (
           <Chip tone="brand">GPU &times;{spec.resources.gpuCount}</Chip>
+        )}
+        {template.usageCount !== undefined && (
+          <span className="niuu-ml-auto niuu-font-mono niuu-text-xs niuu-text-text-faint">
+            {template.usageCount} uses
+          </span>
         )}
       </div>
     </button>
@@ -304,29 +314,66 @@ function TplRuntime({ template }: { template: Template }) {
 // Tab: MCP
 // ---------------------------------------------------------------------------
 
+function McpServerCard({ server }: { server: McpServer }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div
+      className="niuu-overflow-hidden niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary"
+      data-testid="mcp-server-card"
+    >
+      <button
+        type="button"
+        className="niuu-flex niuu-w-full niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-3 niuu-text-left"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        aria-label={server.name}
+      >
+        <span className="niuu-h-2 niuu-w-2 niuu-shrink-0 niuu-rounded-full niuu-bg-brand" aria-hidden />
+        <span className="niuu-font-mono niuu-text-sm niuu-font-medium niuu-text-text-primary">
+          {server.name}
+        </span>
+        <span className="niuu-truncate niuu-font-mono niuu-text-xs niuu-text-text-muted">
+          {server.connectionString}
+        </span>
+        <span className="niuu-ml-auto niuu-shrink-0 niuu-font-mono niuu-text-xs niuu-text-text-faint">
+          {server.transport}
+        </span>
+        <span className="niuu-shrink-0 niuu-text-xs niuu-text-text-faint" aria-hidden>
+          {expanded ? '▴' : '▾'}
+        </span>
+      </button>
+      {expanded && (
+        <div className="niuu-flex niuu-flex-wrap niuu-gap-1.5 niuu-border-t niuu-border-border-subtle niuu-bg-bg-primary niuu-px-4 niuu-py-3">
+          {server.tools.length === 0 ? (
+            <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">no tools listed</span>
+          ) : (
+            server.tools.map((tool) => (
+              <span
+                key={tool}
+                className="niuu-rounded niuu-bg-bg-secondary niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-xs niuu-text-text-secondary"
+                data-testid="mcp-tool-chip"
+              >
+                {tool}
+              </span>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TplMcp({ template }: { template: Template }) {
-  const { spec } = template;
-  // MCP servers aren't modeled in PodSpec yet, show tools as proxy
-  const hasTools = spec.tools.length > 0;
+  const servers = template.spec.mcpServers ?? [];
   return (
     <div className="niuu-flex niuu-flex-col niuu-gap-4" data-testid="tab-mcp">
       <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">MCP servers</h3>
-      {!hasTools ? (
+      {servers.length === 0 ? (
         <p className="niuu-font-mono niuu-text-sm niuu-text-text-faint">no MCP servers enabled</p>
       ) : (
         <div className="niuu-flex niuu-flex-col niuu-gap-2">
-          {spec.tools.map((tool) => (
-            <div
-              key={tool}
-              className="niuu-flex niuu-items-center niuu-gap-3 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-3"
-            >
-              <span className="niuu-h-2 niuu-w-2 niuu-rounded-full niuu-bg-brand" aria-hidden />
-              <span className="niuu-font-mono niuu-text-sm niuu-text-text-primary">{tool}</span>
-              <span className="niuu-text-xs niuu-text-text-muted">tool server</span>
-              <span className="niuu-ml-auto niuu-font-mono niuu-text-xs niuu-text-text-faint">
-                stdio
-              </span>
-            </div>
+          {servers.map((server) => (
+            <McpServerCard key={server.name} server={server} />
           ))}
         </div>
       )}
@@ -485,6 +532,22 @@ export function TemplatesPage() {
                       default
                     </span>
                   )}
+                  <div className="niuu-ml-auto niuu-flex niuu-gap-2">
+                    <button
+                      type="button"
+                      className="niuu-rounded niuu-border niuu-border-border niuu-bg-transparent niuu-px-3 niuu-py-1 niuu-text-sm niuu-text-text-secondary niuu-transition-colors hover:niuu-bg-bg-tertiary"
+                      aria-label={`Clone template ${selectedTemplate.name}`}
+                    >
+                      clone
+                    </button>
+                    <button
+                      type="button"
+                      className="niuu-rounded niuu-bg-brand niuu-px-3 niuu-py-1 niuu-text-sm niuu-font-medium niuu-text-bg-primary niuu-transition-colors hover:niuu-opacity-90"
+                      aria-label={`Edit template ${selectedTemplate.name}`}
+                    >
+                      edit
+                    </button>
+                  </div>
                 </div>
                 <p className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
                   {selectedTemplate.spec.image}:{selectedTemplate.spec.tag}

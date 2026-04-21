@@ -44,6 +44,17 @@ export interface ResourceSpec {
   gpuCount: number;
 }
 
+/** MCP server definition — one entry per server exposed to the agent in a pod. */
+export interface McpServer {
+  name: string;
+  /** Transport protocol: stdio | http | sse. */
+  transport: string;
+  /** Connection string — command for stdio, URL for http/sse. */
+  connectionString: string;
+  /** Tool names exposed by this server. */
+  tools: string[];
+}
+
 /** Full specification for a pod — runtime config + resource bounds. */
 export interface PodSpec {
   image: string;
@@ -53,6 +64,8 @@ export interface PodSpec {
   envSecretRefs: string[];
   /** Tool IDs from Ravn's registry that this pod exposes to its bound raven. */
   tools: string[];
+  /** MCP servers available to the agent in this pod. */
+  mcpServers?: McpServer[];
   resources: ResourceSpec;
   /** Maximum session duration in seconds. */
   ttlSec: number;
