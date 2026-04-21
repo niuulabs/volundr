@@ -22,7 +22,7 @@
   background: var(--color-accent-purple);
 }
 .niuu-graph-legend-dot[data-color-idx='4'] {
-  background: var(--color-accent-amber);
+  background: var(--brand-400);
 }
 .niuu-graph-legend-dot[data-color-idx='5'] {
   background: var(--color-accent-orange);

@@ -122,22 +122,22 @@
 /* topbar tabs */
 .niuu-shell__tabs {
   display: flex;
-  gap: 2px;
+  gap: 0;
   align-self: stretch;
 }
 .niuu-shell__tab {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 var(--space-4);
+  gap: 6px;
+  padding: 0 var(--space-3);
   background: transparent;
   border: none;
   cursor: pointer;
   color: var(--color-text-muted);
   font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 400;
   transition: color var(--transition-fast);
 }
 .niuu-shell__tab:hover {

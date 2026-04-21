@@ -194,7 +194,7 @@ export function DreamsPage() {
 
       {/* Activity log section */}
       <section
-        className="niuu-border-t niuu-border-solid niuu-border-border niuu-pt-6"
+        className="niuu-border-t niuu-border-solid niuu-border-border niuu-pt-6 niuu-px-4"
         aria-label="Activity log"
       >
         <div className="niuu-flex niuu-items-baseline niuu-gap-3 niuu-mb-3">

@@ -148,7 +148,7 @@ export function OverviewView() {
                       <strong
                         className={
                           mount.lintIssues > 10
-                            ? 'niuu-text-status-amber'
+                            ? 'niuu-text-brand-400'
                             : 'niuu-text-text-primary'
                         }
                       >

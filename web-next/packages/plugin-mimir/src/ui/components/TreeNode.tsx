@@ -52,7 +52,7 @@ export function TreeNode({ node, depth, selectedPath, onSelect, knownPaths }: Tr
         </span>
         {hasBrokenLinks && (
           <span
-            className="niuu-inline-block niuu-w-1.5 niuu-h-1.5 niuu-rounded-full niuu-bg-status-amber niuu-flex-shrink-0"
+            className="niuu-inline-block niuu-w-1.5 niuu-h-1.5 niuu-rounded-full niuu-bg-brand-400 niuu-flex-shrink-0"
             aria-label="page has broken wikilinks"
             title="This page has broken wikilinks"
           />

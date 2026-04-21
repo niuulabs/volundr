@@ -109,7 +109,9 @@ export function ShellLayout() {
                 const isActive =
                   active.activeTab != null
                     ? active.activeTab === t.id
-                    : pathname === tabPath || pathname.startsWith(tabPath + '/');
+                    : tabPath === `/${active.id}`
+                      ? pathname === tabPath
+                      : pathname === tabPath || pathname.startsWith(tabPath + '/');
                 return (
                   <button
                     key={t.id}

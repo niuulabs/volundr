@@ -19,15 +19,15 @@
 
 /* Lint KPI uses amber for warning state — web2 uses subdued amber, not red */
 .mm-kpi--warn .niuu-kpi-card__value {
-  color: var(--color-accent-amber);
+  color: var(--brand-400);
 }
 
 /* ── Shared Mímir view tokens ─────────────────────────────────────────────── */
 
 /* ── Search highlight mark — color-mix() not expressible in Tailwind ──────── */
 .mm-highlight {
-  background: color-mix(in srgb, var(--color-accent-amber) 25%, transparent);
-  color: var(--color-accent-amber);
+  background: color-mix(in srgb, var(--brand-400) 25%, transparent);
+  color: var(--brand-400);
   border-radius: 2px;
   padding: 0 1px;
   font-style: normal;
@@ -63,9 +63,9 @@
   background: color-mix(in srgb, var(--brand-300, var(--color-accent-cyan)) 12%, transparent);
 }
 .mm-mount-chip--domain {
-  color: var(--color-accent-amber);
-  border-color: color-mix(in srgb, var(--color-accent-amber) 20%, transparent);
-  background: color-mix(in srgb, var(--color-accent-amber) 12%, transparent);
+  color: var(--brand-400);
+  border-color: color-mix(in srgb, var(--brand-400) 20%, transparent);
+  background: color-mix(in srgb, var(--brand-400) 12%, transparent);
 }
 .mm-mount-chip__name {
   color: inherit;
@@ -116,7 +116,7 @@
   color: var(--color-accent-indigo);
 }
 .mm-page-type-glyph[data-type='directive'] {
-  color: var(--color-accent-amber);
+  color: var(--brand-400);
 }
 .mm-page-type-glyph[data-type='preference'] {
   color: var(--color-accent-emerald);
@@ -166,7 +166,7 @@
 
 /* Zone head editing tint — uses color-mix which is not expressible as a Tailwind token */
 .mm-zone-head--editing {
-  background: color-mix(in srgb, var(--color-accent-amber) 8%, var(--color-bg-secondary));
+  background: color-mix(in srgb, var(--brand-400) 8%, var(--color-bg-secondary));
 }
 
 /* conf-dot — kept for 6 px pixel-perfect sizing not in the token spacing scale */
@@ -180,7 +180,7 @@
   background: var(--color-accent-emerald);
 }
 .mm-conf-dot--medium {
-  background: var(--color-accent-amber);
+  background: var(--brand-400);
 }
 .mm-conf-dot--low {
   background: var(--color-accent-red);
@@ -336,7 +336,7 @@
   color: var(--color-accent-emerald);
 }
 .mm-origin-badge--mail {
-  color: var(--color-accent-amber);
+  color: var(--brand-400);
 }
 .mm-origin-badge--chat {
   color: var(--color-accent-purple);

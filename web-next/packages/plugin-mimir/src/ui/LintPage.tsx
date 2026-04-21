@@ -38,13 +38,13 @@ const SEVERITY_DOT: Record<IssueSeverity, 'failed' | 'attention' | 'observing'> 
 
 const SEVERITY_BADGE_CLS: Record<IssueSeverity, string> = {
   error: 'niuu-text-critical niuu-border-critical',
-  warn: 'niuu-text-status-amber niuu-border-status-amber',
+  warn: 'niuu-text-brand-400 niuu-border-brand-400',
   info: 'niuu-text-status-cyan niuu-border-status-cyan',
 };
 
 const ISSUE_BORDER_CLS: Record<IssueSeverity, string> = {
   error: 'niuu-border-l-[3px] niuu-border-l-critical',
-  warn: 'niuu-border-l-[3px] niuu-border-l-status-amber',
+  warn: 'niuu-border-l-[3px] niuu-border-l-brand-400',
   info: 'niuu-border-l-[3px] niuu-border-l-status-cyan',
 };
 
@@ -99,8 +99,8 @@ export function LintPage() {
     {
       label: 'total issues',
       value: totalLint,
-      valueCls: `${KPI_VAL_BASE} niuu-text-status-amber`,
-      cardBorder: 'niuu-border-status-amber',
+      valueCls: `${KPI_VAL_BASE} niuu-text-brand-400`,
+      cardBorder: 'niuu-border-brand-400',
     },
     {
       label: 'errors',
@@ -111,7 +111,7 @@ export function LintPage() {
     {
       label: 'warnings',
       value: summary.warn,
-      valueCls: `${KPI_VAL_BASE} niuu-text-status-amber`,
+      valueCls: `${KPI_VAL_BASE} niuu-text-brand-400`,
       cardBorder: 'niuu-border-border-subtle',
     },
     {

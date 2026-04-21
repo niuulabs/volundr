@@ -15,7 +15,7 @@ const CATEGORY_COLORS = [
   'var(--color-accent-indigo)',
   'var(--color-accent-emerald)',
   'var(--color-accent-purple)',
-  'var(--color-accent-amber)',
+  'var(--brand-400)',
   'var(--color-accent-orange)',
   'var(--color-accent-red)',
   'var(--color-text-secondary)',

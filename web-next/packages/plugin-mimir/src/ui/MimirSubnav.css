@@ -158,7 +158,7 @@
 }
 
 .mm-subnav-btn__glyph--warn {
-  color: var(--color-accent-amber);
+  color: var(--brand-400);
 }
 
 .mm-subnav-btn__glyph--dim {

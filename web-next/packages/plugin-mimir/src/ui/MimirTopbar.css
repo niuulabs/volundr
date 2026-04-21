@@ -24,7 +24,7 @@
 }
 
 .mm-topbar-stat__v--warn {
-  color: var(--color-accent-amber);
+  color: var(--brand-400);
 }
 
 .mm-topbar-sep {

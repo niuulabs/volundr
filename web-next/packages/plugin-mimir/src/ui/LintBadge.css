@@ -28,9 +28,9 @@
 }
 
 .lint-badge__count--warn {
-  background: color-mix(in srgb, var(--color-accent-amber) 18%, transparent);
-  color: var(--color-accent-amber);
-  border: 1px solid color-mix(in srgb, var(--color-accent-amber) 30%, transparent);
+  background: color-mix(in srgb, var(--brand-400) 18%, transparent);
+  color: var(--brand-400);
+  border: 1px solid color-mix(in srgb, var(--brand-400) 30%, transparent);
 }
 
 .lint-badge__count--info {
