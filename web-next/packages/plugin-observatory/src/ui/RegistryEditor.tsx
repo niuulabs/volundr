@@ -339,9 +339,7 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
           </span>
         </div>
         {children.length > 0 && (
-          <div className="registry-tree-children">
-            {children.map((c) => renderNode(c))}
-          </div>
+          <div className="registry-tree-children">{children.map((c) => renderNode(c))}</div>
         )}
       </div>
     );
