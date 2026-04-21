@@ -1,9 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { RoutingPage } from './RoutingPage';
 import { createMimirMockAdapter } from '../adapters/mock';
 import type { IMimirService } from '../ports';
 import { renderWithMimir } from '../testing/renderWithMimir';
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({
+    to,
+    className,
+    children,
+  }: {
+    to: string;
+    className?: string;
+    children: React.ReactNode;
+  }) => (
+    <a href={to} className={className}>
+      {children}
+    </a>
+  ),
+}));
 
 const wrap = renderWithMimir;
 

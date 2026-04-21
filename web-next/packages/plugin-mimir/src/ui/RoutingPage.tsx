@@ -1,4 +1,5 @@
 import { useState, Fragment } from 'react';
+import { Link } from '@tanstack/react-router';
 import { StateDot, Chip } from '@niuulabs/ui';
 import { useRouting } from '../application/useRouting';
 import type { WriteRoutingRule } from '../domain/routing';
@@ -29,6 +30,13 @@ const TH_CLS =
   'niuu-border-0 niuu-border-b niuu-border-solid niuu-border-border';
 
 const TD_BASE = 'niuu-py-2 niuu-px-3 niuu-align-middle';
+
+const LABEL_CLS = 'niuu-text-xs niuu-text-text-muted niuu-min-w-[5rem] niuu-shrink-0';
+
+const STATUS_CLS = 'niuu-flex niuu-items-center niuu-gap-2 niuu-text-sm niuu-text-text-secondary';
+
+const EDITOR_CLS =
+  'niuu-p-4 niuu-bg-bg-secondary niuu-border niuu-border-solid niuu-border-border niuu-rounded-md niuu-mb-4';
 
 function newRule(): WriteRoutingRule {
   return {
@@ -67,10 +75,7 @@ function RuleForm({ rule, onSave, onCancel, isSaving }: RuleFormProps) {
       aria-label="Routing rule editor"
     >
       <div className="niuu-flex niuu-items-center niuu-gap-3">
-        <label
-          className="niuu-text-xs niuu-text-text-muted niuu-min-w-[5rem] niuu-shrink-0"
-          htmlFor="rule-prefix"
-        >
+        <label className={LABEL_CLS} htmlFor="rule-prefix">
           Prefix
         </label>
         <input
@@ -86,10 +91,7 @@ function RuleForm({ rule, onSave, onCancel, isSaving }: RuleFormProps) {
       </div>
 
       <div className="niuu-flex niuu-items-center niuu-gap-3">
-        <label
-          className="niuu-text-xs niuu-text-text-muted niuu-min-w-[5rem] niuu-shrink-0"
-          htmlFor="rule-mount"
-        >
+        <label className={LABEL_CLS} htmlFor="rule-mount">
           Mount
         </label>
         <input
@@ -105,10 +107,7 @@ function RuleForm({ rule, onSave, onCancel, isSaving }: RuleFormProps) {
       </div>
 
       <div className="niuu-flex niuu-items-center niuu-gap-3">
-        <label
-          className="niuu-text-xs niuu-text-text-muted niuu-min-w-[5rem] niuu-shrink-0"
-          htmlFor="rule-priority"
-        >
+        <label className={LABEL_CLS} htmlFor="rule-priority">
           Priority
         </label>
         <input
@@ -124,10 +123,7 @@ function RuleForm({ rule, onSave, onCancel, isSaving }: RuleFormProps) {
       </div>
 
       <div className="niuu-flex niuu-items-center niuu-gap-3">
-        <label
-          className="niuu-text-xs niuu-text-text-muted niuu-min-w-[5rem] niuu-shrink-0"
-          htmlFor="rule-desc"
-        >
+        <label className={LABEL_CLS} htmlFor="rule-desc">
           Description
         </label>
         <input
@@ -142,10 +138,7 @@ function RuleForm({ rule, onSave, onCancel, isSaving }: RuleFormProps) {
       </div>
 
       <div className="niuu-flex niuu-items-center niuu-gap-3">
-        <label
-          className="niuu-text-xs niuu-text-text-muted niuu-min-w-[5rem] niuu-shrink-0"
-          htmlFor="rule-active"
-        >
+        <label className={LABEL_CLS} htmlFor="rule-active">
           Active
         </label>
         <input
@@ -216,21 +209,21 @@ export function RoutingPage() {
       </p>
       <p className="niuu-text-xs niuu-text-text-muted niuu-m-0 niuu-mb-5">
         To ingest content (URL fetch or file upload), go to the{' '}
-        <a href="/mimir" className="niuu-text-brand hover:niuu-underline">
+        <Link to="/mimir" className="niuu-text-brand hover:niuu-underline">
           Sources
-        </a>{' '}
+        </Link>{' '}
         page.
       </p>
 
       {isLoading && (
-        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-sm niuu-text-text-secondary">
+        <div className={STATUS_CLS}>
           <StateDot state="processing" pulse />
           <span>loading rules…</span>
         </div>
       )}
 
       {isError && (
-        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-sm niuu-text-text-secondary">
+        <div className={STATUS_CLS}>
           <StateDot state="failed" />
           <span>{error instanceof Error ? error.message : 'routing load failed'}</span>
         </div>
@@ -250,10 +243,7 @@ export function RoutingPage() {
           </div>
 
           {isAdding && (
-            <div
-              className="niuu-p-4 niuu-bg-bg-secondary niuu-border niuu-border-solid niuu-border-border niuu-rounded-md niuu-mb-4"
-              data-testid="rule-editor"
-            >
+            <div className={EDITOR_CLS} data-testid="rule-editor">
               <h3 className="niuu-text-sm niuu-font-semibold niuu-m-0 niuu-mb-4">New rule</h3>
               <RuleForm
                 rule={newRule()}
@@ -336,10 +326,7 @@ export function RoutingPage() {
                     {editingRule?.id === rule.id && (
                       <tr key={`${rule.id}-edit`}>
                         <td colSpan={6} className="niuu-p-0">
-                          <div
-                            className="niuu-p-4 niuu-bg-bg-secondary niuu-border niuu-border-solid niuu-border-border niuu-rounded-md niuu-mb-4"
-                            data-testid="rule-editor"
-                          >
+                          <div className={EDITOR_CLS} data-testid="rule-editor">
                             <h3 className="niuu-text-sm niuu-font-semibold niuu-m-0 niuu-mb-4">
                               Edit rule
                             </h3>
