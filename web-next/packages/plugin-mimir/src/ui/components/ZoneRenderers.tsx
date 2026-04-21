@@ -56,9 +56,7 @@ function RelationshipsZone({
         return (
           <li key={i} className="niuu-text-sm niuu-text-text-secondary niuu-py-[2px]">
             <WikilinkPill slug={rel.slug} broken={target.broken} onNavigate={onNavigate} />
-            {rel.note && (
-              <span className="niuu-text-text-secondary niuu-ml-2">— {rel.note}</span>
-            )}
+            {rel.note && <span className="niuu-text-text-secondary niuu-ml-2">— {rel.note}</span>}
           </li>
         );
       })}

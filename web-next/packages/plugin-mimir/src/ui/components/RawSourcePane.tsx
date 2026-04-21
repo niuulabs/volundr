@@ -22,7 +22,13 @@ interface RawSourcePaneProps {
   onNavigate?: (path: string) => void;
 }
 
-function SourceContent({ content, onNavigate }: { content: string; onNavigate?: (path: string) => void }) {
+function SourceContent({
+  content,
+  onNavigate,
+}: {
+  content: string;
+  onNavigate?: (path: string) => void;
+}) {
   const parts = splitWikilinks(content);
   return (
     <p className="niuu-m-0 niuu-text-xs niuu-text-text-secondary niuu-font-mono niuu-whitespace-pre-wrap niuu-break-words">
@@ -75,9 +81,7 @@ export function RawSourcePane({ sources, onNavigate }: RawSourcePaneProps) {
               {source.originType}
             </span>
           </div>
-          {source.content && (
-            <SourceContent content={source.content} onNavigate={onNavigate} />
-          )}
+          {source.content && <SourceContent content={source.content} onNavigate={onNavigate} />}
         </div>
       ))}
     </div>
