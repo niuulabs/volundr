@@ -100,8 +100,8 @@ jobs:
   e2e:
     name: "web-next: E2E"
     runs-on: ubuntu-latest
-    # Increased from 15m to 20m — visual regression screenshots add ~5m on CI.
-    timeout-minutes: 20
+    # Increased from 20m to 30m — mimir visual regression suite adds ~10m on CI.
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: web-next
