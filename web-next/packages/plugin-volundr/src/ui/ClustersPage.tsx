@@ -5,7 +5,6 @@ import type {
   ClusterNode,
   ClusterPod,
   ClusterDisk,
-  ClusterKind,
   ClusterStatus,
   NodeStatus,
   PodStatus,
