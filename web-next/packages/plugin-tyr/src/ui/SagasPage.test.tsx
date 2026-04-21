@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
+import { ToastProvider } from '@niuulabs/ui';
 import { SagasPage } from './SagasPage';
 import { createMockTyrService } from '../adapters/mock';
 import type { Saga } from '../domain/saga';
@@ -23,9 +24,11 @@ function wrap(services: Record<string, unknown>) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
-      <QueryClientProvider client={client}>
-        <ServicesProvider services={services}>{children}</ServicesProvider>
-      </QueryClientProvider>
+      <ToastProvider>
+        <QueryClientProvider client={client}>
+          <ServicesProvider services={services}>{children}</ServicesProvider>
+        </QueryClientProvider>
+      </ToastProvider>
     );
   };
 }
@@ -185,5 +188,22 @@ describe('SagasPage', () => {
     // Pipe renders with role="list" aria-label="phase progress"
     const pipes = screen.getAllByRole('list', { name: /phase progress/i });
     expect(pipes.length).toBeGreaterThan(0);
+  });
+
+  it('shows a toast notification after clicking Export', async () => {
+    // Mock URL APIs used by the export handler
+    const mockCreateObjectURL = vi.fn(() => 'blob:mock');
+    const mockRevokeObjectURL = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', { value: mockCreateObjectURL, writable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: mockRevokeObjectURL, writable: true });
+
+    render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
+    await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Export sagas as JSON/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Exported \d+ sagas/i)).toBeInTheDocument(),
+    );
   });
 });
