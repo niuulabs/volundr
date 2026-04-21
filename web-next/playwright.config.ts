@@ -21,6 +21,9 @@ export default defineConfig({
       maxDiffPixelRatio: 0.05,
       animations: 'disabled',
       caret: 'hide',
+      // Hide React Query devtools button — it appears in web-next dev mode
+      // but not in web2 prototypes, causing pixel diffs in every screenshot.
+      stylePath: './e2e/visual-test-overrides.css',
     },
   },
   projects: [
