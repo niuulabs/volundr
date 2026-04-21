@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { renderWithMimir as wrap } from '../testing/renderWithMimir';
 import { OverviewView } from './OverviewView';
 import { createMimirMockAdapter } from '../adapters/mock';
@@ -72,5 +72,110 @@ describe('OverviewView', () => {
     };
     wrap(<OverviewView />, noLintService);
     await waitFor(() => expect(screen.getByText('clean')).toBeInTheDocument());
+  });
+
+  it('renders mount cards with aria-expanded=false initially', async () => {
+    wrap(<OverviewView />);
+    await waitFor(() =>
+      expect(screen.getByRole('article', { name: 'mount local' })).toBeInTheDocument(),
+    );
+    const card = screen.getByRole('article', { name: 'mount local' });
+    expect(card).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('expands a mount card on click and shows detail', async () => {
+    wrap(<OverviewView />);
+    await waitFor(() =>
+      expect(screen.getByRole('article', { name: 'mount local' })).toBeInTheDocument(),
+    );
+    const card = screen.getByRole('article', { name: 'mount local' });
+    fireEvent.click(card);
+    expect(card).toHaveAttribute('aria-expanded', 'true');
+    // Expanded detail shows "recent activity" heading
+    expect(within(card).getByText('recent activity')).toBeInTheDocument();
+    // Shows role label (host is shown in collapsed portion, not repeated)
+    expect(within(card).getByText('role')).toBeInTheDocument();
+    // Shows size label
+    expect(within(card).getByText('size')).toBeInTheDocument();
+    // Does NOT show a duplicate host label in the expanded section
+    expect(within(card).queryByText('host')).not.toBeInTheDocument();
+  });
+
+  it('collapses a mount card when clicked again', async () => {
+    wrap(<OverviewView />);
+    await waitFor(() =>
+      expect(screen.getByRole('article', { name: 'mount local' })).toBeInTheDocument(),
+    );
+    const card = screen.getByRole('article', { name: 'mount local' });
+    fireEvent.click(card);
+    expect(card).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(card);
+    expect(card).toHaveAttribute('aria-expanded', 'false');
+    expect(within(card).queryByText('recent activity')).not.toBeInTheDocument();
+  });
+
+  it('shows categories in expanded mount detail when present', async () => {
+    wrap(<OverviewView />);
+    await waitFor(() =>
+      expect(screen.getByRole('article', { name: 'mount platform' })).toBeInTheDocument(),
+    );
+    const card = screen.getByRole('article', { name: 'mount platform' });
+    fireEvent.click(card);
+    expect(within(card).getByText('categories')).toBeInTheDocument();
+    expect(within(card).getByText('infra')).toBeInTheDocument();
+    expect(within(card).getByText('api')).toBeInTheDocument();
+    expect(within(card).getByText('arch')).toBeInTheDocument();
+  });
+
+  it('renders warden ravn cards with bio text', async () => {
+    wrap(<OverviewView />);
+    await waitFor(() => expect(screen.getByText('Wardens')).toBeInTheDocument());
+    expect(
+      screen.getByText(
+        'Synthesises infrastructure documentation from git commits and runbooks',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Compiles API guidelines and architectural decisions from RFC discussions',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('renders warden cards with pages-touched metric', async () => {
+    wrap(<OverviewView />);
+    await waitFor(() => expect(screen.getByText('Wardens')).toBeInTheDocument());
+    // ravn-fjolnir has 52 pagesTouched
+    expect(screen.getByText('52')).toBeInTheDocument();
+    // "pages touched" label appears at least once
+    expect(screen.getAllByText('pages touched').length).toBeGreaterThan(0);
+  });
+
+  it('renders warden cards with last-dream timestamp', async () => {
+    wrap(<OverviewView />);
+    await waitFor(() => expect(screen.getByText('Wardens')).toBeInTheDocument());
+    // At least one "last dream" label
+    expect(screen.getAllByText(/last dream/).length).toBeGreaterThan(0);
+  });
+
+  it('shows "never" for last dream when ravn has no dream cycle', async () => {
+    wrap(<OverviewView />);
+    await waitFor(() => expect(screen.getByText('Wardens')).toBeInTheDocument());
+    // ravn-galdra has lastDream: null
+    expect(screen.getByText('last dream never')).toBeInTheDocument();
+  });
+
+  it('renders error banner on mount fetch failure', async () => {
+    const failService: IMimirService = {
+      ...createMimirMockAdapter(),
+      mounts: {
+        ...createMimirMockAdapter().mounts,
+        async listMounts() {
+          throw new Error('network error');
+        },
+      },
+    };
+    wrap(<OverviewView />, failService);
+    await waitFor(() => expect(screen.getByText('network error')).toBeInTheDocument());
   });
 });
