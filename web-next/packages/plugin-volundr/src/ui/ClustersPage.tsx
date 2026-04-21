@@ -58,10 +58,6 @@ function clusterStatusState(status: ClusterStatus): 'healthy' | 'attention' | 'f
   return 'failed';
 }
 
-function kindLabel(kind: ClusterKind): string {
-  return kind;
-}
-
 function pct(used: number, capacity: number): number {
   if (capacity === 0) return 0;
   return used / capacity;
@@ -72,8 +68,15 @@ function comparePods(a: ClusterPod, b: ClusterPod, field: SortField, dir: SortDi
   if (field === 'name') cmp = a.name.localeCompare(b.name);
   else if (field === 'status') cmp = a.status.localeCompare(b.status);
   else if (field === 'age') cmp = new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime();
-  else if (field === 'cpu') cmp = a.cpuUsed / a.cpuLimit - b.cpuUsed / b.cpuLimit;
-  else if (field === 'memory') cmp = a.memUsedMi / a.memLimitMi - b.memUsedMi / b.memLimitMi;
+  else if (field === 'cpu') {
+    const aPct = a.cpuLimit > 0 ? a.cpuUsed / a.cpuLimit : 0;
+    const bPct = b.cpuLimit > 0 ? b.cpuUsed / b.cpuLimit : 0;
+    cmp = aPct - bPct;
+  } else if (field === 'memory') {
+    const aPct = a.memLimitMi > 0 ? a.memUsedMi / a.memLimitMi : 0;
+    const bPct = b.memLimitMi > 0 ? b.memUsedMi / b.memLimitMi : 0;
+    cmp = aPct - bPct;
+  }
   else if (field === 'restarts') cmp = a.restarts - b.restarts;
   return dir === 'asc' ? cmp : -cmp;
 }
@@ -103,7 +106,7 @@ function ClusterDetailHeader({ cluster }: ClusterDetailHeaderProps) {
             )}
             data-testid="kind-badge"
           >
-            {kindLabel(cluster.kind)}
+            {cluster.kind}
           </span>
           <h3 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">{cluster.name}</h3>
           <span
@@ -119,18 +122,21 @@ function ClusterDetailHeader({ cluster }: ClusterDetailHeaderProps) {
         </div>
         <div className="niuu-flex niuu-items-center niuu-gap-2" data-testid="action-buttons">
           <button
+            type="button"
             className="niuu-rounded niuu-border niuu-border-state-warn niuu-px-3 niuu-py-1.5 niuu-text-xs niuu-font-medium niuu-text-state-warn hover:niuu-bg-state-warn-bg niuu-transition-colors"
             data-testid="cordon-btn"
           >
             Cordon
           </button>
           <button
+            type="button"
             className="niuu-rounded niuu-border niuu-border-critical niuu-px-3 niuu-py-1.5 niuu-text-xs niuu-font-medium niuu-text-critical hover:niuu-bg-critical/10 niuu-transition-colors"
             data-testid="drain-btn"
           >
             Drain
           </button>
           <button
+            type="button"
             className="niuu-rounded niuu-bg-brand niuu-px-3 niuu-py-1.5 niuu-text-xs niuu-font-medium niuu-text-bg-primary hover:niuu-opacity-90 niuu-transition-opacity"
             data-testid="forge-here-btn"
           >
