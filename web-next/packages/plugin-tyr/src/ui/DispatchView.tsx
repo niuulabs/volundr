@@ -210,10 +210,12 @@ function RaidRow({
   entry,
   isSelected,
   onToggle,
+  workflowName,
 }: {
   entry: EnrichedEntry;
   isSelected: boolean;
   onToggle: () => void;
+  workflowName?: string;
 }) {
   return (
     <div
@@ -237,6 +239,14 @@ function RaidRow({
         </div>
       </div>
       <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-shrink-0">
+        {workflowName && (
+          <span
+            className="niuu-rounded niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-xs niuu-text-brand niuu-border niuu-border-brand/30"
+            aria-label={`workflow override: ${workflowName}`}
+          >
+            {workflowName}
+          </span>
+        )}
         <StatusBadge
           status={entry.effectiveStatus as Parameters<typeof StatusBadge>[0]['status']}
           pulse={entry.effectiveStatus === 'running'}
@@ -669,6 +679,7 @@ function DispatchViewContent() {
                       entry={entry}
                       isSelected={selectedIds.has(entry.raid.id)}
                       onToggle={() => toggleId(entry.raid.id)}
+                      workflowName={workflowOverride.get(entry.raid.id)?.name}
                     />
                   ))}
                 </div>

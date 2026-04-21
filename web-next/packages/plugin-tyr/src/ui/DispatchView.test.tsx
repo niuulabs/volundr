@@ -545,6 +545,23 @@ describe('DispatchView', () => {
     );
   });
 
+  it('shows workflow override chip on raid row after applying', async () => {
+    const user = userEvent.setup();
+    render(<DispatchView />, { wrapper: wrap(makeServices()) });
+    await waitFor(() => screen.getByText('Test Raid'));
+
+    await user.click(screen.getByRole('checkbox', { name: /select row/i }));
+    await user.click(screen.getByRole('button', { name: /apply workflow/i }));
+    await waitFor(() => screen.getByText('Apply workflow override'));
+    await user.click(screen.getByRole('button', { name: /Auth Rewrite Workflow/i }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('generic', { name: /workflow override: Auth Rewrite Workflow/i }),
+      ).toBeInTheDocument(),
+    );
+  });
+
   // ---------------------------------------------------------------------------
   // Error toasts
   // ---------------------------------------------------------------------------
