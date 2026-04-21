@@ -352,7 +352,7 @@ export function EntityDrawer({
       { length: 24 },
       (_, i) => 30 + Math.sin(i * 0.7 + seed) * 15 + (Math.sin(i * 1.3 + seed * 3) * 10 + 10),
     );
-  }, [node?.id]);
+  }, [node]);
 
   const showSparkline = ['ravn_long', 'bifrost'].includes(node?.typeId ?? '');
 
@@ -368,25 +368,13 @@ export function EntityDrawer({
   if (!node) return null;
 
   return (
-    <aside
-      role="dialog"
-      aria-label={node.label}
-      className="obs-entity-drawer__panel"
-    >
-      <button
-        className="obs-entity-drawer__close-btn"
-        aria-label="Close"
-        onClick={onClose}
-      >
+    <aside role="dialog" aria-label={node.label} className="obs-entity-drawer__panel">
+      <button className="obs-entity-drawer__close-btn" aria-label="Close" onClick={onClose}>
         <span aria-hidden="true">✕</span>
       </button>
 
-      {isRealm && (
-        <RealmDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />
-      )}
-      {isCluster && (
-        <ClusterDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />
-      )}
+      {isRealm && <RealmDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />}
+      {isCluster && <ClusterDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />}
       {!isRealm && !isCluster && (
         <>
           {/* HEAD — rune · label · activity · status · timestamp */}

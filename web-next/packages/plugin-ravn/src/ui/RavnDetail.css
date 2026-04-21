@@ -185,15 +185,42 @@
   border: 1px solid var(--color-border);
 }
 
-.rv-role-badge--build { color: var(--color-accent-indigo); border-color: color-mix(in srgb, var(--color-accent-indigo) 30%, transparent); }
-.rv-role-badge--review { color: var(--color-accent-purple); border-color: color-mix(in srgb, var(--color-accent-purple) 30%, transparent); }
-.rv-role-badge--verify { color: var(--color-accent-amber); border-color: color-mix(in srgb, var(--color-accent-amber) 30%, transparent); }
-.rv-role-badge--plan { color: var(--color-accent-cyan); border-color: color-mix(in srgb, var(--color-accent-cyan) 30%, transparent); }
-.rv-role-badge--gate { color: var(--color-accent-red); border-color: color-mix(in srgb, var(--color-accent-red) 30%, transparent); }
-.rv-role-badge--audit { color: var(--color-accent-orange); border-color: color-mix(in srgb, var(--color-accent-orange) 30%, transparent); }
-.rv-role-badge--ship { color: var(--color-accent-emerald); border-color: color-mix(in srgb, var(--color-accent-emerald) 30%, transparent); }
-.rv-role-badge--index { color: var(--color-accent-purple); border-color: color-mix(in srgb, var(--color-accent-purple) 30%, transparent); }
-.rv-role-badge--report { color: var(--color-accent-emerald); border-color: color-mix(in srgb, var(--color-accent-emerald) 30%, transparent); }
+.rv-role-badge--build {
+  color: var(--color-accent-indigo);
+  border-color: color-mix(in srgb, var(--color-accent-indigo) 30%, transparent);
+}
+.rv-role-badge--review {
+  color: var(--color-accent-purple);
+  border-color: color-mix(in srgb, var(--color-accent-purple) 30%, transparent);
+}
+.rv-role-badge--verify {
+  color: var(--color-accent-amber);
+  border-color: color-mix(in srgb, var(--color-accent-amber) 30%, transparent);
+}
+.rv-role-badge--plan {
+  color: var(--color-accent-cyan);
+  border-color: color-mix(in srgb, var(--color-accent-cyan) 30%, transparent);
+}
+.rv-role-badge--gate {
+  color: var(--color-accent-red);
+  border-color: color-mix(in srgb, var(--color-accent-red) 30%, transparent);
+}
+.rv-role-badge--audit {
+  color: var(--color-accent-orange);
+  border-color: color-mix(in srgb, var(--color-accent-orange) 30%, transparent);
+}
+.rv-role-badge--ship {
+  color: var(--color-accent-emerald);
+  border-color: color-mix(in srgb, var(--color-accent-emerald) 30%, transparent);
+}
+.rv-role-badge--index {
+  color: var(--color-accent-purple);
+  border-color: color-mix(in srgb, var(--color-accent-purple) 30%, transparent);
+}
+.rv-role-badge--report {
+  color: var(--color-accent-emerald);
+  border-color: color-mix(in srgb, var(--color-accent-emerald) 30%, transparent);
+}
 
 /* Overview dl */
 .rv-overview-dl {
@@ -307,10 +334,22 @@
   white-space: nowrap;
 }
 
-.rv-trigger-kind--cron { color: var(--color-accent-amber); background: color-mix(in srgb, var(--color-accent-amber) 12%, transparent); }
-.rv-trigger-kind--event { color: var(--color-accent-cyan); background: color-mix(in srgb, var(--color-accent-cyan) 12%, transparent); }
-.rv-trigger-kind--webhook { color: var(--color-accent-indigo); background: color-mix(in srgb, var(--color-accent-indigo) 12%, transparent); }
-.rv-trigger-kind--manual { color: var(--color-accent-purple); background: color-mix(in srgb, var(--color-accent-purple) 12%, transparent); }
+.rv-trigger-kind--cron {
+  color: var(--color-accent-amber);
+  background: color-mix(in srgb, var(--color-accent-amber) 12%, transparent);
+}
+.rv-trigger-kind--event {
+  color: var(--color-accent-cyan);
+  background: color-mix(in srgb, var(--color-accent-cyan) 12%, transparent);
+}
+.rv-trigger-kind--webhook {
+  color: var(--color-accent-indigo);
+  background: color-mix(in srgb, var(--color-accent-indigo) 12%, transparent);
+}
+.rv-trigger-kind--manual {
+  color: var(--color-accent-purple);
+  background: color-mix(in srgb, var(--color-accent-purple) 12%, transparent);
+}
 
 .rv-trigger-kind__icon {
   font-size: var(--text-xs);
@@ -351,7 +390,9 @@
   height: 10px;
   border-radius: var(--radius-full);
   background: var(--color-text-muted);
-  transition: transform 0.15s, background 0.15s;
+  transition:
+    transform 0.15s,
+    background 0.15s;
 }
 
 .rv-toggle--on .rv-toggle__thumb {
@@ -408,8 +449,13 @@
 }
 
 @keyframes rv-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 .rv-activity-filter {
@@ -532,7 +578,9 @@
   gap: var(--space-2);
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
   width: 100%;
 }
 

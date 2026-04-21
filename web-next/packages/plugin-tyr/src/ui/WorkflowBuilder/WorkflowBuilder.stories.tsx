@@ -136,7 +136,7 @@ export const ReadOnly: Story = {
 
 function noop() {}
 
-const graphMeta: Meta<typeof GraphView> = {
+export const graphMeta: Meta<typeof GraphView> = {
   title: 'Tyr/WorkflowBuilder/GraphView',
   component: GraphView,
   parameters: { layout: 'fullscreen' },

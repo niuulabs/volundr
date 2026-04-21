@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import { ClustersPage } from './ClustersPage';
 import { renderWithVolundr } from '../testing/renderWithVolundr';

@@ -17,9 +17,17 @@ export function RavnFooter() {
 
   return (
     <div className="niuu-flex niuu-items-center niuu-gap-1" data-testid="ravn-footer">
-      <FooterChip name="ravens" state={activeRavens > 0 ? 'ok' : 'warn'} value={`${activeRavens}/${totalRavens}`} />
+      <FooterChip
+        name="ravens"
+        state={activeRavens > 0 ? 'ok' : 'warn'}
+        value={`${activeRavens}/${totalRavens}`}
+      />
       <FooterChipSep />
-      <FooterChip name="sessions" state={openSessions > 0 ? 'ok' : 'warn'} value={`${openSessions} active`} />
+      <FooterChip
+        name="sessions"
+        state={openSessions > 0 ? 'ok' : 'warn'}
+        value={`${openSessions} active`}
+      />
     </div>
   );
 }

@@ -17,9 +17,17 @@ export function TyrFooter() {
     <div className="niuu-flex niuu-items-center niuu-gap-1" data-testid="tyr-footer">
       <FooterChip name="api" state={apiState} value={apiLabel} />
       <FooterChipSep />
-      <FooterChip name="dispatcher" state={state?.running ? 'ok' : 'warn'} value={state?.running ? 'active' : 'paused'} />
+      <FooterChip
+        name="dispatcher"
+        state={state?.running ? 'ok' : 'warn'}
+        value={state?.running ? 'active' : 'paused'}
+      />
       <FooterChipSep />
-      <FooterChip name="threshold" state="ok" value={state ? (state.threshold / 100).toFixed(2) : '—'} />
+      <FooterChip
+        name="threshold"
+        state="ok"
+        value={state ? (state.threshold / 100).toFixed(2) : '—'}
+      />
     </div>
   );
 }

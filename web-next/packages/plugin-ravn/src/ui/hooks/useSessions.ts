@@ -40,8 +40,9 @@ export function useRavnActivity(ravnId: string) {
     queryFn: () => service.listSessions(),
   });
 
-  const ravnSessionIds =
-    (sessionsQuery.data ?? []).filter((s) => s.ravnId === ravnId).map((s) => s.id);
+  const ravnSessionIds = (sessionsQuery.data ?? [])
+    .filter((s) => s.ravnId === ravnId)
+    .map((s) => s.id);
 
   const messageQueries = useQueries({
     queries: ravnSessionIds.map((sessionId) => ({

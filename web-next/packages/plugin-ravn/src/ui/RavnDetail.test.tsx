@@ -526,7 +526,9 @@ describe('RavnDetail — Connectivity tab', () => {
 
   it('shows "None configured" when no MCP servers', () => {
     render(
-      <RavnDetail ravn={{ ...SAMPLE_RAVN, mcpServers: [], gatewayChannels: [], eventSubscriptions: [] }} />,
+      <RavnDetail
+        ravn={{ ...SAMPLE_RAVN, mcpServers: [], gatewayChannels: [], eventSubscriptions: [] }}
+      />,
       { wrapper: wrap() },
     );
     fireEvent.click(screen.getByTestId('sectab-connectivity'));

@@ -82,9 +82,7 @@ function OverviewSection({ ravn, budget }: OverviewSectionProps) {
           {!ravn.role && (
             <div className="rv-identity-name rv-identity-name--plain">{ravn.personaName}</div>
           )}
-          {ravn.summary && (
-            <p className="rv-identity-summary">{ravn.summary}</p>
-          )}
+          {ravn.summary && <p className="rv-identity-summary">{ravn.summary}</p>}
           <dl className="rv-overview-dl rv-overview-dl--identity">
             <dt>ID</dt>
             <dd className="rv-overview-dd--model">{ravn.id.slice(0, 8)}</dd>
@@ -235,13 +233,18 @@ function TriggersSection({ ravnPersonaName }: TriggersSectionProps) {
               data-testid="trigger-card"
             >
               <div className="rv-trigger-card__header">
-                <span className={`rv-trigger-kind rv-trigger-kind--${t.kind}`} data-testid="trigger-kind">
+                <span
+                  className={`rv-trigger-kind rv-trigger-kind--${t.kind}`}
+                  data-testid="trigger-kind"
+                >
                   <span className="rv-trigger-kind__icon" aria-hidden>
                     {TRIGGER_KIND_LABELS[t.kind] ?? t.kind}
                   </span>
                   {t.kind}
                 </span>
-                <span className="rv-trigger-spec" data-testid="trigger-spec">{t.spec}</span>
+                <span className="rv-trigger-spec" data-testid="trigger-spec">
+                  {t.spec}
+                </span>
                 <button
                   type="button"
                   className={`rv-toggle${t.enabled ? ' rv-toggle--on' : ''}`}
@@ -259,7 +262,10 @@ function TriggersSection({ ravnPersonaName }: TriggersSectionProps) {
                   </span>
                 )}
                 {t.fireCount != null && (
-                  <span className="rv-trigger-meta-item rv-trigger-meta-item--count" data-testid="trigger-fire-count">
+                  <span
+                    className="rv-trigger-meta-item rv-trigger-meta-item--count"
+                    data-testid="trigger-fire-count"
+                  >
                     {t.fireCount} fires
                   </span>
                 )}
@@ -324,9 +330,7 @@ function ActivitySection({ ravnId, isActive }: ActivitySectionProps) {
       ) : (
         <div className="rv-activity-messages" data-testid="activity-messages">
           {filtered.length > 100 && (
-            <p className="rv-activity-overflow">
-              Showing last 100 of {filtered.length} messages
-            </p>
+            <p className="rv-activity-overflow">Showing last 100 of {filtered.length} messages</p>
           )}
           {displayMessages.map((msg) => (
             <div
@@ -336,7 +340,10 @@ function ActivitySection({ ravnId, isActive }: ActivitySectionProps) {
               data-testid="activity-message"
             >
               <span className="rv-activity-message__ts">{formatTs(msg.ts)}</span>
-              <span className={`rv-activity-kind-badge rv-activity-kind-badge--${msg.kind}`} data-testid="activity-kind-badge">
+              <span
+                className={`rv-activity-kind-badge rv-activity-kind-badge--${msg.kind}`}
+                data-testid="activity-kind-badge"
+              >
                 {msg.kind}
               </span>
               <span className="rv-activity-message__content">
@@ -360,9 +367,7 @@ function SessionsSection({ ravnId }: SessionsSectionProps) {
   const ravnSessions = sessions?.filter((s) => s.ravnId === ravnId) ?? [];
 
   function handleSessionClick(sessionId: string) {
-    window.dispatchEvent(
-      new CustomEvent('ravn:session-selected', { detail: { sessionId } }),
-    );
+    window.dispatchEvent(new CustomEvent('ravn:session-selected', { detail: { sessionId } }));
   }
 
   return (
@@ -382,7 +387,11 @@ function SessionsSection({ ravnId }: SessionsSectionProps) {
               <div className="rv-session-card__header">
                 <StateDot
                   state={
-                    s.status === 'running' ? 'running' : s.status === 'failed' ? 'failed' : 'unknown'
+                    s.status === 'running'
+                      ? 'running'
+                      : s.status === 'failed'
+                        ? 'failed'
+                        : 'unknown'
                   }
                   pulse={s.status === 'running'}
                   size={8}
@@ -403,7 +412,10 @@ function SessionsSection({ ravnId }: SessionsSectionProps) {
                   </span>
                 )}
                 {s.costUsd != null && (
-                  <span className="rv-session-metric rv-session-metric--cost" data-testid="session-cost">
+                  <span
+                    className="rv-session-metric rv-session-metric--cost"
+                    data-testid="session-cost"
+                  >
                     ${s.costUsd.toFixed(2)}
                   </span>
                 )}
@@ -444,7 +456,11 @@ function ConnectivitySection({ ravn }: ConnectivitySectionProps) {
           ) : (
             <div className="rv-conn-chips">
               {mcpServers.map((s) => (
-                <span key={s} className="rv-conn-chip rv-conn-chip--mcp" data-testid="mcp-server-chip">
+                <span
+                  key={s}
+                  className="rv-conn-chip rv-conn-chip--mcp"
+                  data-testid="mcp-server-chip"
+                >
                   {s}
                 </span>
               ))}
@@ -465,7 +481,11 @@ function ConnectivitySection({ ravn }: ConnectivitySectionProps) {
           ) : (
             <div className="rv-conn-chips">
               {gatewayChannels.map((c) => (
-                <span key={c} className="rv-conn-chip rv-conn-chip--gw" data-testid="gateway-channel-chip">
+                <span
+                  key={c}
+                  className="rv-conn-chip rv-conn-chip--gw"
+                  data-testid="gateway-channel-chip"
+                >
                   {c}
                 </span>
               ))}
@@ -486,7 +506,11 @@ function ConnectivitySection({ ravn }: ConnectivitySectionProps) {
           ) : (
             <div className="rv-conn-chips">
               {eventSubscriptions.map((e) => (
-                <span key={e} className="rv-conn-chip rv-conn-chip--event" data-testid="event-subscription-chip">
+                <span
+                  key={e}
+                  className="rv-conn-chip rv-conn-chip--event"
+                  data-testid="event-subscription-chip"
+                >
                   {e}
                 </span>
               ))}
