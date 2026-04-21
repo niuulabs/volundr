@@ -25,6 +25,16 @@ export const mimirPlugin = definePlugin({
     }),
     createRoute({
       getParentRoute: () => rootRoute,
+      path: '/mimir/pages',
+      component: () => <MimirPage defaultTab="pages" />,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/mimir/sources',
+      component: () => <MimirPage defaultTab="sources" />,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
       path: '/mimir/search',
       component: SearchPage,
     }),

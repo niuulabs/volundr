@@ -14,8 +14,8 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'sources', label: 'Sources' },
 ];
 
-export function MimirPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+export function MimirPage({ defaultTab = 'overview' }: { defaultTab?: Tab } = {}) {
+  const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
 
   return (
     <div className="mm-page-shell">

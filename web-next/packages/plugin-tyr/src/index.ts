@@ -5,10 +5,10 @@ import { WorkflowBuilderPage } from './ui/WorkflowBuilderPage';
 import { SagasPage } from './ui/SagasPage';
 import { DispatchView } from './ui/DispatchView';
 import { SettingsPage, SettingsIndexPage } from './ui/settings/SettingsPage';
-import { SettingsRail } from './ui/settings/SettingsRail';
 import { TyrTopbar } from './ui/TyrTopbar';
 import { TyrFooter } from './ui/TyrFooter';
 import { PlanWizard } from './ui/PlanWizard';
+import { TyrSubnav } from './ui/TyrSubnav';
 
 export const tyrPlugin = definePlugin({
   id: 'tyr',
@@ -105,7 +105,7 @@ export const tyrPlugin = definePlugin({
       component: PlanWizard,
     }),
   ],
-  subnav: () => SettingsRail(),
+  subnav: () => TyrSubnav(),
   topbarRight: () => TyrTopbar(),
   footer: () => TyrFooter(),
 });
