@@ -10,6 +10,7 @@ import {
   Rune,
   relTime,
   useToast,
+  Modal,
 } from '@niuulabs/ui';
 import type { SagaStatus } from '../domain/saga';
 import type { Saga } from '../domain/saga';
@@ -139,6 +140,7 @@ export function SagasPage() {
   const params = useParams({ strict: false }) as { sagaId?: string };
   const { data: sagas, isLoading, isError, error } = useSagas();
   const [filter, setFilter] = useState<StatusFilter>('all');
+  const [showNewSagaModal, setShowNewSagaModal] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedSagaId, setSelectedSagaId] = useState<string | null>(params.sagaId ?? null);
 
@@ -210,7 +212,7 @@ export function SagasPage() {
           <button
             type="button"
             className="niuu-px-2.5 niuu-py-1 niuu-text-xs niuu-bg-brand niuu-text-bg-primary niuu-rounded niuu-font-medium"
-            onClick={() => void navigate({ to: '/tyr/plan' as never })}
+            onClick={() => setShowNewSagaModal(true)}
             aria-label="Create new saga"
           >
             + New Saga
@@ -293,6 +295,29 @@ export function SagasPage() {
           </div>
         )}
       </div>
+
+      {/* ── New saga confirmation modal ─────────────────── */}
+      <Modal
+        open={showNewSagaModal}
+        onOpenChange={setShowNewSagaModal}
+        title="New Saga"
+        description="New sagas start from a prompt in the Plan view."
+        actions={[
+          {
+            label: 'Cancel',
+            variant: 'secondary',
+            closes: true,
+          },
+          {
+            label: 'Go to Plan →',
+            variant: 'primary',
+            closes: true,
+            onClick: () => void navigate({ to: '/tyr/plan' as never }),
+          },
+        ]}
+      >
+        <p className="niuu-m-0 niuu-text-sm niuu-text-text-secondary">Want to go there now?</p>
+      </Modal>
     </div>
   );
 }

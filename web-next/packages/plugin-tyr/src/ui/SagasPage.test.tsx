@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { ToastProvider } from '@niuulabs/ui';
@@ -42,6 +42,7 @@ function makeSaga(overrides: Partial<Saga> = {}): Saga {
     name: 'Test Saga',
     repos: [],
     featureBranch: 'feat/test',
+    baseBranch: 'main',
     status: 'active',
     confidence: 80,
     createdAt: '2026-01-01T00:00:00Z',
@@ -98,40 +99,40 @@ describe('SagasPage', () => {
 
   it('filters to only active sagas when "Active" tab is clicked', async () => {
     render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
-    await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
+    const listPanel = await screen.findByRole('list', { name: 'Sagas' });
     fireEvent.click(screen.getByRole('tab', { name: /active/i }));
-    await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
-    expect(screen.queryByText('Plugin Ravn Scaffold')).not.toBeInTheDocument();
-    expect(screen.queryByText('Observatory Topology Canvas')).not.toBeInTheDocument();
+    await waitFor(() => expect(within(listPanel).getByText('Auth Rewrite')).toBeInTheDocument());
+    expect(within(listPanel).queryByText('Plugin Ravn Scaffold')).not.toBeInTheDocument();
+    expect(within(listPanel).queryByText('Observatory Topology Canvas')).not.toBeInTheDocument();
   });
 
   it('filters to only complete sagas when "Complete" tab is clicked', async () => {
     render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
-    await waitFor(() => expect(screen.getByText('Plugin Ravn Scaffold')).toBeInTheDocument());
+    const listPanel = await screen.findByRole('list', { name: 'Sagas' });
     fireEvent.click(screen.getByRole('tab', { name: /complete/i }));
-    await waitFor(() => expect(screen.getByText('Plugin Ravn Scaffold')).toBeInTheDocument());
-    expect(screen.queryByText('Auth Rewrite')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(listPanel).getByText('Plugin Ravn Scaffold')).toBeInTheDocument(),
+    );
+    expect(within(listPanel).queryByText('Auth Rewrite')).not.toBeInTheDocument();
   });
 
   it('filters to only failed sagas when "Failed" tab is clicked', async () => {
     render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
-    await waitFor(() =>
-      expect(screen.getByText('Observatory Topology Canvas')).toBeInTheDocument(),
-    );
+    const listPanel = await screen.findByRole('list', { name: 'Sagas' });
     fireEvent.click(screen.getByRole('tab', { name: /failed/i }));
     await waitFor(() =>
-      expect(screen.getByText('Observatory Topology Canvas')).toBeInTheDocument(),
+      expect(within(listPanel).getByText('Observatory Topology Canvas')).toBeInTheDocument(),
     );
-    expect(screen.queryByText('Auth Rewrite')).not.toBeInTheDocument();
+    expect(within(listPanel).queryByText('Auth Rewrite')).not.toBeInTheDocument();
   });
 
   it('filters sagas by search term', async () => {
     render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
-    await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
+    const listPanel = await screen.findByRole('list', { name: 'Sagas' });
     const searchInput = screen.getByRole('searchbox', { name: /Search sagas/i });
     fireEvent.change(searchInput, { target: { value: 'auth' } });
-    await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
-    expect(screen.queryByText('Plugin Ravn Scaffold')).not.toBeInTheDocument();
+    await waitFor(() => expect(within(listPanel).getByText('Auth Rewrite')).toBeInTheDocument());
+    expect(within(listPanel).queryByText('Plugin Ravn Scaffold')).not.toBeInTheDocument();
   });
 
   it('shows empty state when search matches nothing', async () => {
@@ -203,5 +204,52 @@ describe('SagasPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Export sagas as JSON/i }));
 
     await waitFor(() => expect(screen.getByText(/Exported \d+ sagas/i)).toBeInTheDocument());
+  });
+
+  it('clicking "+ New Saga" opens confirmation modal instead of navigating directly', async () => {
+    mockNavigate.mockClear();
+    render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
+    await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Create new saga/i }));
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('new saga modal shows confirmation message', async () => {
+    render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
+    await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Create new saga/i }));
+
+    await waitFor(() => expect(screen.getByText(/Want to go there now/i)).toBeInTheDocument());
+  });
+
+  it('new saga modal Cancel button closes without navigation', async () => {
+    mockNavigate.mockClear();
+    render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
+    await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Create new saga/i }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('new saga modal "Go to Plan" button navigates to /tyr/plan', async () => {
+    mockNavigate.mockClear();
+    render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
+    await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Create new saga/i }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Go to Plan/i }));
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith({ to: '/tyr/plan' }));
   });
 });

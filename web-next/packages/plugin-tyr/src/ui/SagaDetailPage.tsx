@@ -9,11 +9,12 @@ import {
   Pipe,
   PersonaAvatar,
   Rune,
+  StateDot,
 } from '@niuulabs/ui';
 import type { Raid } from '../domain/saga';
 import { useSaga } from './useSaga';
 import { usePhases } from './usePhases';
-import { phaseStatusToCell } from './mappers';
+import { phaseStatusToCell, phaseStatusToStateDot } from './mappers';
 import { WorkflowCard } from './WorkflowCard';
 import { StageProgressRail } from './StageProgressRail';
 import { ConfidenceDriftCard } from './ConfidenceDriftCard';
@@ -196,8 +197,7 @@ export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPag
               <ConfidenceBadge value={saga.confidence / 100} />
             </div>
             <p className="niuu-m-0 niuu-text-sm niuu-text-text-muted">
-              {saga.trackerId} · {saga.featureBranch} · Created{' '}
-              {new Date(saga.createdAt).toLocaleDateString()}
+              {saga.trackerId} · {saga.featureBranch} → {saga.baseBranch}
             </p>
 
             {/* Phase pipeline */}
@@ -222,6 +222,12 @@ export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPag
               {allPhases.map((phase) => (
                 <section key={phase.id} aria-label={`Phase ${phase.number}: ${phase.name}`}>
                   <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-mb-3">
+                    <StateDot
+                      state={phaseStatusToStateDot(phase.status)}
+                      pulse={phase.status === 'active'}
+                      size={10}
+                      title={phase.status}
+                    />
                     <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted">
                       Phase {phase.number}
                     </span>
@@ -251,6 +257,9 @@ export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPag
                             <div className="niuu-flex niuu-items-center niuu-justify-between niuu-gap-3">
                               <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-min-w-0">
                                 <StatusBadge status={raid.status} />
+                                <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted niuu-shrink-0">
+                                  {raid.trackerId}
+                                </span>
                                 <span className="niuu-text-sm niuu-font-medium niuu-text-text-primary niuu-truncate">
                                   {raid.name}
                                 </span>
