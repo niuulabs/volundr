@@ -8,7 +8,8 @@ on:
       CODECOV_TOKEN:
         required: false
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   lint:
