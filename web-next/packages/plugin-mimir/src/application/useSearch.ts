@@ -15,7 +15,7 @@ export interface UseSearchReturn {
 }
 
 export function useSearch(): UseSearchReturn {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState('architecture');
   const deferredQuery = useDeferredValue(query);
   const [mode, setMode] = useState<SearchMode>('hybrid');
   const service = useService<IMimirService>('mimir');
