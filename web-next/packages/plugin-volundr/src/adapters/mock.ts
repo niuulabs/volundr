@@ -357,6 +357,7 @@ const SEED_TEMPLATES: Template[] = [
   {
     id: 'tpl-default',
     name: 'default',
+    description: 'Minimal forge template — standard skuld image with no extra tooling.',
     version: 1,
     usageCount: 42,
     spec: {
@@ -366,6 +367,7 @@ const SEED_TEMPLATES: Template[] = [
       env: {},
       envSecretRefs: [],
       tools: [],
+      mcpServers: [],
       resources: {
         cpuRequest: '1',
         cpuLimit: '2',
@@ -382,6 +384,7 @@ const SEED_TEMPLATES: Template[] = [
   {
     id: 'tpl-gpu',
     name: 'gpu-workload',
+    description: 'GPU-accelerated research template with Python and Jupyter via CUDA 12.',
     version: 2,
     usageCount: 7,
     spec: {
@@ -391,6 +394,20 @@ const SEED_TEMPLATES: Template[] = [
       env: { MODEL_PATH: '/models' },
       envSecretRefs: ['HF_TOKEN'],
       tools: ['python', 'jupyter'],
+      mcpServers: [
+        {
+          name: 'python',
+          transport: 'stdio',
+          connectionString: 'uvx mcp-python',
+          tools: ['run_script', 'install_package', 'read_file'],
+        },
+        {
+          name: 'jupyter',
+          transport: 'stdio',
+          connectionString: 'uvx mcp-jupyter',
+          tools: ['execute_cell', 'list_kernels', 'create_notebook'],
+        },
+      ],
       resources: {
         cpuRequest: '2',
         cpuLimit: '4',

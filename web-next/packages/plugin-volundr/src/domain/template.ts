@@ -4,6 +4,8 @@ import type { PodSpec } from './pod';
 export interface Template {
   id: string;
   name: string;
+  /** Short human-readable description of this template. */
+  description?: string;
   version: number;
   spec: PodSpec;
   createdAt: string;
