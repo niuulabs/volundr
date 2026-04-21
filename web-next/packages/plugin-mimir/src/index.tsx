@@ -17,6 +17,16 @@ export const mimirPlugin = definePlugin({
   rune: 'ᛗ',
   title: 'Mímir',
   subtitle: 'the well of knowledge',
+  tabs: [
+    { id: 'overview', label: 'Overview', rune: '◎', path: '/mimir' },
+    { id: 'pages', label: 'Pages', rune: '❑', path: '/mimir/pages' },
+    { id: 'search', label: 'Search', rune: '⌕', path: '/mimir/search' },
+    { id: 'graph', label: 'Graph', rune: '⌖', path: '/mimir/graph' },
+    { id: 'wardens', label: 'Wardens', rune: 'ᚢ', path: '/mimir/ravns' },
+    { id: 'routing', label: 'Routing', rune: '↧', path: '/mimir/routing' },
+    { id: 'lint', label: 'Lint', rune: '⚠', path: '/mimir/lint' },
+    { id: 'dreams', label: 'Dreams', rune: '≡', path: '/mimir/dreams' },
+  ],
   routes: (rootRoute) => [
     createRoute({
       getParentRoute: () => rootRoute,
