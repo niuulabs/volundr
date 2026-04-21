@@ -28,4 +28,8 @@ export interface RavnBinding {
   bio: string;
   /** Total pages this ravn has touched across all dream cycles. */
   pagesTouched: number;
+  /** Areas of domain expertise (e.g. 'kubernetes', 'networking'). */
+  expertise: string[];
+  /** Tool names this ravn is allowed to invoke (e.g. 'mimir', 'web', 'file'). */
+  tools: string[];
 }
