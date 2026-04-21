@@ -20,7 +20,7 @@ export const activityLogEntrySchema = z.object({
   /** Stable key for React rendering. */
   id: z.string(),
   /** ISO-8601 UTC timestamp. */
-  ts: z.string(),
+  ts: z.string().datetime(),
   /** Event kind — drives badge colour. */
   kind: activityLogKindSchema,
   /** Short ravn / persona identifier shown in the "ravn" column. */

@@ -14,6 +14,7 @@ import { useSessions } from './hooks/useSessions';
 import { useFleetBudget, useRavnBudgets } from './hooks/useBudget';
 import { useActivityLog } from './hooks/useActivityLog';
 import { topBudgetSpenders } from './grouping';
+import { formatTime } from './formatTime';
 import type { ActivityLogEntry } from '../domain/activityLog';
 import './OverviewPage.css';
 
@@ -44,14 +45,6 @@ function byLocation(ravens: { location?: string }[]): Array<{ name: string; coun
     .sort((a, b) => b.count - a.count);
 }
 
-function formatTs(ts: string): string {
-  const d = new Date(ts);
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  const ss = String(d.getUTCSeconds()).padStart(2, '0');
-  return `${hh}:${mm}:${ss}`;
-}
-
 function ActivityLogSection({ entries }: { entries: ActivityLogEntry[] }) {
   if (entries.length === 0) {
     return (
@@ -75,7 +68,7 @@ function ActivityLogSection({ entries }: { entries: ActivityLogEntry[] }) {
         <tbody>
           {entries.map((e) => (
             <tr key={e.id} className="rv-log-row" data-testid="activity-log-row">
-              <td className="rv-log-td--time">{formatTs(e.ts)}</td>
+              <td className="rv-log-td--time">{formatTime(e.ts)}</td>
               <td className="rv-log-td--kind">
                 <span className={`rv-log-kind rv-log-kind--${e.kind}`}>{e.kind}</span>
               </td>

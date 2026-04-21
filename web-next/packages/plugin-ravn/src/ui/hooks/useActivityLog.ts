@@ -8,11 +8,10 @@ import type { Trigger } from '../../domain/trigger';
 const ACTIVITY_LOG_ROWS = 9;
 
 function sessionToEntry(s: Session): ActivityLogEntry {
-  const kind = s.status === 'failed' ? 'emit' : 'session';
   return {
     id: `session-${s.id}`,
     ts: s.createdAt,
-    kind,
+    kind: 'session',
     ravnId: s.ravnId.slice(0, 8),
     message: s.title ?? `session ${s.id.slice(0, 8)}`,
   };
