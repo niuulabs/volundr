@@ -164,7 +164,10 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
       memLimitMi: 1_024,
       memUsedMi: 320,
       gpuCount: 0,
+      diskUsedMi: 2_048,
+      diskLimitMi: 10_240,
     },
+    files: { added: 3, modified: 7, deleted: 1 },
     env: {},
     events: [
       {

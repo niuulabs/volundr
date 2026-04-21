@@ -15,13 +15,80 @@ interface PeerCardProps {
   onSelect: () => void;
 }
 
+interface GatewaySectionProps {
+  gateway: string;
+  latencyMs?: number;
+  region?: string;
+}
+
+function latencyClass(ms: number | undefined): string {
+  if (ms === undefined) return '';
+  if (ms < 100) return 'niuu-chat-peer-gw-latency--ok';
+  if (ms < 500) return 'niuu-chat-peer-gw-latency--warn';
+  return 'niuu-chat-peer-gw-latency--err';
+}
+
+function parseGatewayUri(uri: string): { proto: string; vendor: string; model?: string } | null {
+  const m = uri.match(/^([a-z0-9+.-]+):\/\/([^/]+)(?:\/(.+))?$/i);
+  if (!m) return null;
+  const [, proto, vendor, model] = m;
+  return { proto: proto!, vendor: vendor!, model };
+}
+
+function GatewaySection({ gateway, latencyMs, region }: GatewaySectionProps) {
+  const parsed = parseGatewayUri(gateway);
+
+  return (
+    <div className="niuu-chat-peer-gateway" data-testid="peer-gateway-section">
+      <span className="niuu-chat-peer-meta-label">Gateway</span>
+      <div className="niuu-chat-peer-gw-breadcrumb">
+        {parsed ? (
+          <>
+            <span className="niuu-chat-peer-gw-seg niuu-chat-peer-gw-proto">{parsed.proto}</span>
+            <span className="niuu-chat-peer-gw-sep">›</span>
+            <span className="niuu-chat-peer-gw-seg niuu-chat-peer-gw-vendor">{parsed.vendor}</span>
+            {parsed.model && (
+              <>
+                <span className="niuu-chat-peer-gw-sep">›</span>
+                <span className="niuu-chat-peer-gw-seg niuu-chat-peer-gw-model">
+                  {parsed.model}
+                </span>
+              </>
+            )}
+          </>
+        ) : (
+          <span className="niuu-chat-peer-gw-seg">{gateway}</span>
+        )}
+      </div>
+      {(region || latencyMs !== undefined) && (
+        <div className="niuu-chat-peer-gw-meta">
+          {region && (
+            <span className="niuu-chat-peer-gw-region" data-testid="peer-gateway-region">
+              {region}
+            </span>
+          )}
+          {latencyMs !== undefined && (
+            <span
+              className={cn('niuu-chat-peer-gw-latency', latencyClass(latencyMs))}
+              data-testid="peer-gateway-latency"
+            >
+              {latencyMs}ms
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PeerCard({ participant, isSelected, onSelect }: PeerCardProps) {
   const [expanded, setExpanded] = useState(false);
 
   const hasMetadata =
     (participant.subscribesTo && participant.subscribesTo.length > 0) ||
     (participant.emits && participant.emits.length > 0) ||
-    (participant.tools && participant.tools.length > 0);
+    (participant.tools && participant.tools.length > 0) ||
+    !!participant.gateway;
 
   return (
     <div
@@ -90,6 +157,13 @@ function PeerCard({ participant, isSelected, onSelect }: PeerCardProps) {
                 ))}
               </div>
             </>
+          )}
+          {participant.gateway && (
+            <GatewaySection
+              gateway={participant.gateway}
+              latencyMs={participant.gatewayLatencyMs}
+              region={participant.gatewayRegion}
+            />
           )}
         </div>
       )}

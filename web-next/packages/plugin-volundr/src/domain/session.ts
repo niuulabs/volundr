@@ -26,6 +26,14 @@ export interface SessionResources {
   memLimitMi: number;
   memUsedMi: number;
   gpuCount: number;
+  diskUsedMi?: number;
+  diskLimitMi?: number;
+}
+
+export interface SessionFileStats {
+  added: number;
+  modified: number;
+  deleted: number;
 }
 
 export interface SessionEvent {
@@ -64,6 +72,8 @@ export interface Session {
   costCents?: number;
   /** One-line preview of the last message or action (≤80 chars). */
   preview?: string;
+  /** File change summary for this session's workspace. */
+  files?: SessionFileStats;
 }
 
 /** Legal transitions in the session lifecycle state machine. */

@@ -10,6 +10,7 @@ import {
   MeshSidebar,
   MeshEventCard,
   resolveParticipantColor,
+  relTime,
 } from '@niuulabs/ui';
 import type { MeshEvent, MeshEventType, RoomParticipant } from '@niuulabs/ui';
 import { SourceLabel } from './atoms/SourceLabel';
@@ -23,7 +24,7 @@ import { buildMockRoom, buildMockTurns, groupTurns } from '../testing/mockChatDa
 import type { ChatTurn, PeerMeta, MockRoom, TurnGroup } from '../testing/mockChatData';
 import type { IPtyStream } from '../ports/IPtyStream';
 import type { IFileSystemPort, FileTreeNode } from '../ports/IFileSystemPort';
-import type { Session } from '../domain/session';
+import type { Session, SessionFileStats } from '../domain/session';
 import type { SessionSource } from './atoms/SourceLabel';
 import type { ClusterData } from './atoms/ClusterChip';
 
@@ -73,6 +74,33 @@ function Stat({ label, value }: { label: string; value: string | number }) {
         {label}
       </span>
       <span className="niuu-font-mono niuu-text-xs niuu-text-text-primary">{value}</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FileChangeSummary
+// ---------------------------------------------------------------------------
+
+function FileChangeSummary({ files }: { files: SessionFileStats }) {
+  return (
+    <div
+      className="niuu-flex niuu-items-center niuu-gap-3 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-1.5"
+      data-testid="file-change-summary"
+    >
+      <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">files</span>
+      <span className="niuu-font-mono niuu-text-xs niuu-text-state-ok" data-testid="files-added">
+        +{files.added}
+      </span>
+      <span
+        className="niuu-font-mono niuu-text-xs niuu-text-state-warn"
+        data-testid="files-modified"
+      >
+        ~{files.modified}
+      </span>
+      <span className="niuu-font-mono niuu-text-xs niuu-text-critical" data-testid="files-deleted">
+        -{files.deleted}
+      </span>
     </div>
   );
 }
@@ -169,6 +197,9 @@ function SessionHeader({ session, readOnly }: { session: Session; readOnly: bool
         </button>
       </div>
 
+      {/* File change summary row */}
+      {session.files && <FileChangeSummary files={session.files} />}
+
       {/* Resources row (collapsible) */}
       {showRes && (
         <div
@@ -183,6 +214,15 @@ function SessionHeader({ session, readOnly }: { session: Session; readOnly: bool
             label="mem"
             className="niuu-w-32"
           />
+          {r.diskUsedMi !== undefined && r.diskLimitMi !== undefined && (
+            <Meter
+              used={r.diskUsedMi}
+              limit={r.diskLimitMi}
+              unit="Mi"
+              label="disk"
+              className="niuu-w-32"
+            />
+          )}
           {r.gpuCount > 0 && (
             <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
               gpu: {r.gpuCount}
@@ -541,16 +581,569 @@ function ChatTab({ session }: { session: Session }) {
 }
 
 // ---------------------------------------------------------------------------
-// Placeholder tabs
+// DiffsTab
 // ---------------------------------------------------------------------------
 
-function PlaceholderTab({ label }: { label: string }) {
+interface MockDiffFile {
+  path: string;
+  status: 'new' | 'mod' | 'del';
+  ins: number;
+  del: number;
+}
+
+interface DiffHunkLine {
+  type: 'add' | 'remove' | 'ctx';
+  content: string;
+  oldLine?: number;
+  newLine?: number;
+}
+
+interface DiffHunk {
+  oldStart: number;
+  oldCount: number;
+  newStart: number;
+  newCount: number;
+  lines: DiffHunkLine[];
+}
+
+const MOCK_DIFF_FILES: MockDiffFile[] = [
+  { path: 'src/auth/handler.ts', status: 'mod', ins: 42, del: 8 },
+  { path: 'src/auth/jwt.ts', status: 'new', ins: 96, del: 0 },
+  { path: 'src/auth/legacy.ts', status: 'del', ins: 0, del: 34 },
+];
+
+function buildMockHunks(file: MockDiffFile): DiffHunk[] {
+  if (file.status === 'del') {
+    return [
+      {
+        oldStart: 1,
+        oldCount: 3,
+        newStart: 0,
+        newCount: 0,
+        lines: [
+          { type: 'remove', content: 'export class LegacyAuth {', oldLine: 1 },
+          { type: 'remove', content: '  // deprecated — use AuthHandler', oldLine: 2 },
+          { type: 'remove', content: '}', oldLine: 3 },
+        ],
+      },
+    ];
+  }
+  if (file.status === 'new') {
+    return [
+      {
+        oldStart: 0,
+        oldCount: 0,
+        newStart: 1,
+        newCount: 4,
+        lines: [
+          { type: 'add', content: 'import { verify } from "jsonwebtoken";', newLine: 1 },
+          { type: 'add', content: '', newLine: 2 },
+          { type: 'add', content: 'export function validateJwt(token: string) {', newLine: 3 },
+          { type: 'add', content: '  return verify(token, process.env.JWT_SECRET!);', newLine: 4 },
+        ],
+      },
+    ];
+  }
+  return [
+    {
+      oldStart: 10,
+      oldCount: 4,
+      newStart: 10,
+      newCount: 6,
+      lines: [
+        { type: 'ctx', content: 'export class AuthHandler {', oldLine: 10, newLine: 10 },
+        { type: 'remove', content: '  validate(token: string): boolean {', oldLine: 11 },
+        {
+          type: 'add',
+          content: '  async validate(token: string): Promise<boolean> {',
+          newLine: 11,
+        },
+        { type: 'add', content: '    const claims = await validateJwt(token);', newLine: 12 },
+        { type: 'ctx', content: '    return !!claims;', oldLine: 12, newLine: 13 },
+        { type: 'ctx', content: '  }', oldLine: 13, newLine: 14 },
+      ],
+    },
+  ];
+}
+
+function diffStatusLetter(status: MockDiffFile['status']): string {
+  return status === 'new' ? 'A' : status === 'mod' ? 'M' : 'D';
+}
+
+function diffStatusColor(status: MockDiffFile['status']): string {
+  return status === 'new'
+    ? 'niuu-text-state-ok'
+    : status === 'mod'
+      ? 'niuu-text-state-warn'
+      : 'niuu-text-critical';
+}
+
+function DiffFileList({
+  files,
+  selectedPath,
+  onSelect,
+}: {
+  files: MockDiffFile[];
+  selectedPath: string | null;
+  onSelect: (path: string) => void;
+}) {
   return (
     <div
-      className="niuu-flex niuu-h-full niuu-items-center niuu-justify-center niuu-font-mono niuu-text-sm niuu-text-text-muted"
-      data-testid={`placeholder-${label.toLowerCase()}`}
+      className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-auto"
+      data-testid="diff-file-list"
     >
-      {label} tab {'\u2014'} coming soon
+      {files.map((f) => (
+        <button
+          key={f.path}
+          onClick={() => onSelect(f.path)}
+          className={cn(
+            'niuu-flex niuu-items-center niuu-gap-2 niuu-px-3 niuu-py-1.5 niuu-text-left niuu-text-xs hover:niuu-bg-bg-elevated',
+            selectedPath === f.path && 'niuu-bg-bg-elevated',
+          )}
+          data-testid={`diff-file-${f.status}`}
+        >
+          <span
+            className={cn(
+              'niuu-w-4 niuu-flex-shrink-0 niuu-font-mono niuu-font-medium',
+              diffStatusColor(f.status),
+            )}
+          >
+            {diffStatusLetter(f.status)}
+          </span>
+          <span className="niuu-min-w-0 niuu-flex-1 niuu-truncate niuu-font-mono niuu-text-text-secondary">
+            {f.path}
+          </span>
+          <span className="niuu-flex-shrink-0 niuu-font-mono niuu-text-[10px]">
+            {f.ins > 0 && <span className="niuu-text-state-ok">+{f.ins}</span>}
+            {f.del > 0 && <span className="niuu-ml-1 niuu-text-critical">-{f.del}</span>}
+          </span>
+        </button>
+      ))}
+      {files.length === 0 && (
+        <div className="niuu-p-3 niuu-font-mono niuu-text-xs niuu-text-text-muted">
+          no uncommitted changes
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DiffViewer({ file }: { file: MockDiffFile }) {
+  const hunks = buildMockHunks(file);
+  return (
+    <div
+      className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-auto"
+      data-testid="diff-viewer"
+    >
+      <div className="niuu-flex niuu-flex-shrink-0 niuu-items-center niuu-gap-2 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2">
+        <span
+          className={cn(
+            'niuu-font-mono niuu-font-medium niuu-text-xs',
+            diffStatusColor(file.status),
+          )}
+        >
+          {diffStatusLetter(file.status)}
+        </span>
+        <span className="niuu-font-mono niuu-text-sm niuu-text-text-primary">{file.path}</span>
+        <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
+          {file.ins > 0 && <span className="niuu-text-state-ok">+{file.ins}</span>}
+          {file.del > 0 && <span className="niuu-ml-1 niuu-text-critical">-{file.del}</span>}
+        </span>
+      </div>
+      <div className="niuu-flex-1 niuu-overflow-auto niuu-bg-bg-primary">
+        {hunks.map((hunk, i) => (
+          <div key={i} className="niuu-font-mono niuu-text-xs">
+            <div className="niuu-bg-bg-tertiary niuu-px-4 niuu-py-0.5 niuu-text-text-muted">
+              @@ -{hunk.oldStart},{hunk.oldCount} +{hunk.newStart},{hunk.newCount} @@
+            </div>
+            {hunk.lines.map((line, j) => (
+              <div
+                key={j}
+                className={cn(
+                  'niuu-flex niuu-gap-2 niuu-px-4 niuu-py-px',
+                  line.type === 'add' &&
+                    'niuu-bg-[color-mix(in_srgb,var(--color-accent-emerald)_8%,transparent)]',
+                  line.type === 'remove' &&
+                    'niuu-bg-[color-mix(in_srgb,var(--color-critical)_8%,transparent)]',
+                )}
+              >
+                <span className="niuu-w-8 niuu-flex-shrink-0 niuu-select-none niuu-text-right niuu-text-text-faint">
+                  {line.oldLine ?? ''}
+                </span>
+                <span className="niuu-w-8 niuu-flex-shrink-0 niuu-select-none niuu-text-right niuu-text-text-faint">
+                  {line.newLine ?? ''}
+                </span>
+                <span
+                  className={cn(
+                    'niuu-w-3 niuu-flex-shrink-0 niuu-select-none',
+                    line.type === 'add' && 'niuu-text-state-ok',
+                    line.type === 'remove' && 'niuu-text-critical',
+                    line.type === 'ctx' && 'niuu-text-text-faint',
+                  )}
+                >
+                  {line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' '}
+                </span>
+                <span className="niuu-text-text-primary">{line.content}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DiffsTab() {
+  const [selectedPath, setSelectedPath] = useState<string | null>(MOCK_DIFF_FILES[0]?.path ?? null);
+  const selectedFile = MOCK_DIFF_FILES.find((f) => f.path === selectedPath) ?? null;
+
+  return (
+    <div className="niuu-grid niuu-h-full niuu-grid-cols-[220px_1fr]" data-testid="diffs-tab">
+      <div className="niuu-overflow-hidden niuu-border-r niuu-border-border-subtle niuu-bg-bg-secondary">
+        <DiffFileList
+          files={MOCK_DIFF_FILES}
+          selectedPath={selectedPath}
+          onSelect={setSelectedPath}
+        />
+      </div>
+      <div className="niuu-overflow-hidden">
+        {selectedFile ? (
+          <DiffViewer file={selectedFile} />
+        ) : (
+          <div className="niuu-flex niuu-h-full niuu-items-center niuu-justify-center niuu-font-mono niuu-text-sm niuu-text-text-muted">
+            select a file
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ChronicleTab
+// ---------------------------------------------------------------------------
+
+type ChronicleEventType = 'session' | 'git' | 'file' | 'terminal' | 'message' | 'error';
+
+interface ChronicleEvent {
+  id: string;
+  type: ChronicleEventType;
+  label: string;
+  ts: number;
+  hash?: string;
+  ins?: number;
+  del?: number;
+  exit?: number | null;
+}
+
+const CHRONICLE_TYPE_COLORS: Record<ChronicleEventType, string> = {
+  session: 'niuu-text-brand',
+  git: 'niuu-text-brand',
+  file: 'niuu-text-brand',
+  terminal: 'niuu-text-state-warn',
+  message: 'niuu-text-text-muted',
+  error: 'niuu-text-critical',
+};
+
+const CHRONICLE_TYPE_LABELS: Record<ChronicleEventType, string> = {
+  session: 'SESSION',
+  git: 'GIT',
+  file: 'FILE',
+  terminal: 'TERM',
+  message: 'MSG',
+  error: 'ERR',
+};
+
+function buildMockChronicle(): ChronicleEvent[] {
+  const now = Date.now();
+  return [
+    {
+      id: 'c-1',
+      type: 'session',
+      label: 'session started · workspace cloned',
+      ts: now - 3_600_000,
+    },
+    { id: 'c-2', type: 'message', label: 'user: implement the auth handler', ts: now - 3_500_000 },
+    { id: 'c-3', type: 'terminal', label: 'npm install', ts: now - 3_480_000, exit: 0 },
+    {
+      id: 'c-4',
+      type: 'file',
+      label: 'src/auth/handler.ts · initial implementation',
+      ts: now - 3_400_000,
+      ins: 42,
+      del: 0,
+    },
+    {
+      id: 'c-5',
+      type: 'file',
+      label: 'src/auth/jwt.ts · add JWT validation',
+      ts: now - 3_380_000,
+      ins: 96,
+      del: 0,
+    },
+    { id: 'c-6', type: 'terminal', label: 'npm test', ts: now - 3_360_000, exit: 0 },
+    {
+      id: 'c-7',
+      type: 'git',
+      label: 'feat(auth): add JWT validation handler',
+      ts: now - 3_340_000,
+      hash: 'a1b2c3d',
+    },
+    { id: 'c-8', type: 'message', label: 'user: run the tests', ts: now - 2_400_000 },
+    { id: 'c-9', type: 'terminal', label: 'npm test -- --coverage', ts: now - 2_380_000, exit: 0 },
+    {
+      id: 'c-10',
+      type: 'git',
+      label: 'test(auth): add coverage for jwt handler',
+      ts: now - 2_340_000,
+      hash: 'e4f5a6b',
+    },
+  ];
+}
+
+function ChronicleEventRow({ event }: { event: ChronicleEvent }) {
+  const colorClass = CHRONICLE_TYPE_COLORS[event.type];
+  const typeLabel = CHRONICLE_TYPE_LABELS[event.type];
+
+  return (
+    <li
+      className="niuu-flex niuu-items-start niuu-gap-3 niuu-py-1.5"
+      data-testid={`chronicle-event-${event.type}`}
+    >
+      <span className="niuu-mt-0.5 niuu-w-10 niuu-flex-shrink-0 niuu-font-mono niuu-text-[10px] niuu-text-text-faint">
+        {relTime(event.ts)}
+      </span>
+      <span
+        className={cn(
+          'niuu-w-14 niuu-flex-shrink-0 niuu-font-mono niuu-text-[10px] niuu-font-medium',
+          colorClass,
+        )}
+      >
+        {typeLabel}
+      </span>
+      <span className="niuu-flex niuu-min-w-0 niuu-flex-1 niuu-flex-wrap niuu-items-center niuu-gap-x-2 niuu-text-xs">
+        {event.type === 'git' && event.hash ? (
+          <>
+            <span className="niuu-font-mono niuu-text-text-muted">{event.hash.slice(0, 7)}</span>
+            <span className="niuu-text-text-primary">{event.label.replace(/^.*·\s*/, '')}</span>
+          </>
+        ) : event.type === 'terminal' ? (
+          <>
+            <span className="niuu-font-mono niuu-text-text-secondary">$ {event.label}</span>
+            {event.exit !== undefined && event.exit !== null && (
+              <span
+                className={cn(
+                  'niuu-font-mono niuu-text-[10px]',
+                  event.exit === 0 ? 'niuu-text-state-ok' : 'niuu-text-critical',
+                )}
+              >
+                exit {event.exit}
+              </span>
+            )}
+            {event.exit === null && (
+              <span className="niuu-font-mono niuu-text-[10px] niuu-text-state-warn">running…</span>
+            )}
+          </>
+        ) : event.type === 'file' ? (
+          (() => {
+            const [filePath, desc] = event.label.split(' · ');
+            return (
+              <>
+                <span className="niuu-font-mono niuu-text-text-secondary">{filePath}</span>
+                {desc && <span className="niuu-text-text-muted">{desc}</span>}
+                {(event.ins !== undefined || event.del !== undefined) && (
+                  <span className="niuu-font-mono niuu-text-[10px]">
+                    {event.ins !== undefined && (
+                      <span className="niuu-text-state-ok">+{event.ins}</span>
+                    )}
+                    {event.del !== undefined && (
+                      <span className="niuu-ml-1 niuu-text-critical">-{event.del}</span>
+                    )}
+                  </span>
+                )}
+              </>
+            );
+          })()
+        ) : (
+          <span className="niuu-text-text-secondary">{event.label}</span>
+        )}
+      </span>
+    </li>
+  );
+}
+
+function ChronicleTab() {
+  const events = buildMockChronicle();
+  const commitCount = events.filter((e) => e.type === 'git' && e.hash).length;
+  const termCount = events.filter((e) => e.type === 'terminal').length;
+  const msgCount = events.filter((e) => e.type === 'message').length;
+  const fileCount = new Set(
+    events.filter((e) => e.type === 'file').map((e) => e.label.split(' · ')[0] ?? ''),
+  ).size;
+
+  return (
+    <div
+      className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-auto niuu-p-4"
+      data-testid="chronicle-tab"
+    >
+      {/* Summary stats */}
+      <div className="niuu-mb-4 niuu-flex niuu-gap-6" data-testid="chronicle-summary">
+        {[
+          { label: 'commits', value: commitCount },
+          { label: 'files touched', value: fileCount },
+          { label: 'shell runs', value: termCount },
+          { label: 'messages', value: msgCount },
+        ].map(({ label, value }) => (
+          <div key={label} className="niuu-flex niuu-flex-col niuu-items-center niuu-gap-0.5">
+            <span className="niuu-font-mono niuu-text-sm niuu-font-medium niuu-text-text-primary">
+              {value}
+            </span>
+            <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint">{label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Timeline */}
+      <div className="niuu-relative">
+        {/* Vertical spine */}
+        <div className="niuu-absolute niuu-bottom-0 niuu-left-[5.5rem] niuu-top-0 niuu-w-px niuu-bg-border-subtle" />
+        <ol className="niuu-flex niuu-flex-col niuu-gap-0" data-testid="chronicle-timeline">
+          {events.map((event) => (
+            <ChronicleEventRow key={event.id} event={event} />
+          ))}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// LogsTab
+// ---------------------------------------------------------------------------
+
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+interface LogLine {
+  id: string;
+  ts: string;
+  level: LogLevel;
+  src: string;
+  msg: string;
+}
+
+const LOG_LEVEL_CLASSES: Record<LogLevel, string> = {
+  debug: 'niuu-text-text-faint',
+  info: 'niuu-text-text-secondary',
+  warn: 'niuu-text-state-warn',
+  error: 'niuu-text-critical',
+};
+
+const MOCK_LOGS: LogLine[] = [
+  { id: 'l-1', ts: '10:00:01', level: 'info', src: 'skuld', msg: 'session starting' },
+  {
+    id: 'l-2',
+    ts: '10:00:02',
+    level: 'info',
+    src: 'skuld',
+    msg: 'workspace cloned: niuulabs/volundr',
+  },
+  {
+    id: 'l-3',
+    ts: '10:00:05',
+    level: 'debug',
+    src: 'ravn',
+    msg: 'model loaded: claude-sonnet-4-6',
+  },
+  { id: 'l-4', ts: '10:00:06', level: 'info', src: 'ravn', msg: 'mesh room joined: room-ds-1' },
+  {
+    id: 'l-5',
+    ts: '10:01:14',
+    level: 'info',
+    src: 'ravn',
+    msg: 'tool: read_file src/auth/handler.ts',
+  },
+  { id: 'l-6', ts: '10:01:15', level: 'debug', src: 'ravn', msg: 'tool ok · 45ms · 2.1kb' },
+  {
+    id: 'l-7',
+    ts: '10:02:30',
+    level: 'info',
+    src: 'ravn',
+    msg: 'tool: write_file src/auth/jwt.ts',
+  },
+  { id: 'l-8', ts: '10:02:31', level: 'debug', src: 'ravn', msg: 'tool ok · 12ms' },
+  {
+    id: 'l-9',
+    ts: '10:04:00',
+    level: 'warn',
+    src: 'skuld',
+    msg: 'cpu approaching limit: 1.8/2.0c',
+  },
+  { id: 'l-10', ts: '10:05:22', level: 'info', src: 'ravn', msg: 'tool: run_command npm test' },
+  { id: 'l-11', ts: '10:05:23', level: 'debug', src: 'ravn', msg: 'exit 0 · 1.2s' },
+  {
+    id: 'l-12',
+    ts: '10:06:00',
+    level: 'info',
+    src: 'skuld',
+    msg: 'commit: feat(auth): add JWT validation handler',
+  },
+];
+
+function LogsTab() {
+  const [levelFilter, setLevelFilter] = useState<LogLevel | 'all'>('all');
+
+  const filtered =
+    levelFilter === 'all' ? MOCK_LOGS : MOCK_LOGS.filter((l) => l.level === levelFilter);
+
+  return (
+    <div className="niuu-flex niuu-h-full niuu-flex-col" data-testid="logs-tab">
+      {/* Filter bar */}
+      <div className="niuu-flex niuu-flex-shrink-0 niuu-items-center niuu-gap-1 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2">
+        {(['all', 'error', 'warn', 'info', 'debug'] as const).map((lvl) => (
+          <button
+            key={lvl}
+            onClick={() => setLevelFilter(lvl)}
+            className={cn(
+              'niuu-rounded niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-xs',
+              levelFilter === lvl
+                ? 'niuu-bg-bg-elevated niuu-text-brand'
+                : 'niuu-text-text-muted hover:niuu-text-text-secondary',
+            )}
+            data-testid={`log-filter-${lvl}`}
+          >
+            {lvl}
+          </button>
+        ))}
+      </div>
+
+      {/* Log body */}
+      <div
+        className="niuu-flex-1 niuu-overflow-auto niuu-bg-bg-primary niuu-px-4 niuu-py-2"
+        data-testid="logs-body"
+      >
+        {filtered.map((line) => (
+          <div
+            key={line.id}
+            className="niuu-flex niuu-gap-3 niuu-py-px niuu-font-mono niuu-text-xs"
+            data-testid={`log-line-${line.level}`}
+          >
+            <span className="niuu-w-14 niuu-flex-shrink-0 niuu-text-text-faint">{line.ts}</span>
+            <span
+              className={cn(
+                'niuu-w-10 niuu-flex-shrink-0 niuu-font-medium niuu-uppercase',
+                LOG_LEVEL_CLASSES[line.level],
+              )}
+            >
+              {line.level}
+            </span>
+            <span className="niuu-w-12 niuu-flex-shrink-0 niuu-text-text-faint">{line.src}</span>
+            <span className="niuu-text-text-primary">{line.msg}</span>
+          </div>
+        ))}
+        {filtered.length === 0 && (
+          <div className="niuu-py-4 niuu-text-center niuu-text-text-muted">no log entries</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -689,7 +1282,7 @@ export function SessionDetailPage({
           hidden={activeTab !== 'diffs'}
           className="niuu-h-full"
         >
-          {activeTab === 'diffs' && <PlaceholderTab label="Diffs" />}
+          {activeTab === 'diffs' && <DiffsTab />}
         </div>
 
         {/* Files */}
@@ -756,7 +1349,7 @@ export function SessionDetailPage({
           hidden={activeTab !== 'chronicle'}
           className="niuu-h-full"
         >
-          {activeTab === 'chronicle' && <PlaceholderTab label="Chronicle" />}
+          {activeTab === 'chronicle' && <ChronicleTab />}
         </div>
 
         {/* Logs */}
@@ -766,7 +1359,7 @@ export function SessionDetailPage({
           hidden={activeTab !== 'logs'}
           className="niuu-h-full"
         >
-          {activeTab === 'logs' && <PlaceholderTab label="Logs" />}
+          {activeTab === 'logs' && <LogsTab />}
         </div>
       </div>
     </div>

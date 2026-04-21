@@ -98,4 +98,152 @@ describe('MeshSidebar', () => {
     expect(screen.getByText('bash')).toBeInTheDocument();
     expect(screen.getByText('hide details')).toBeInTheDocument();
   });
+
+  describe('gateway section', () => {
+    it('shows expand toggle when participant has a gateway', () => {
+      const withGateway: ReadonlyMap<string, RoomParticipant> = new Map([
+        [
+          'peer-1',
+          {
+            peerId: 'peer-1',
+            persona: 'Ada',
+            participantType: 'ravn',
+            gateway: 'bifrost://anthropic/claude-sonnet',
+          },
+        ],
+      ]);
+      render(
+        <MeshSidebar participants={withGateway} selectedPeerId={null} onSelectPeer={vi.fn()} />,
+      );
+      expect(screen.getByText('show details')).toBeInTheDocument();
+    });
+
+    it('renders gateway section when expanded', () => {
+      const withGateway: ReadonlyMap<string, RoomParticipant> = new Map([
+        [
+          'peer-1',
+          {
+            peerId: 'peer-1',
+            persona: 'Ada',
+            participantType: 'ravn',
+            gateway: 'bifrost://anthropic/claude-sonnet',
+            gatewayLatencyMs: 84,
+            gatewayRegion: 'us-east-1',
+          },
+        ],
+      ]);
+      render(
+        <MeshSidebar participants={withGateway} selectedPeerId={null} onSelectPeer={vi.fn()} />,
+      );
+      fireEvent.click(screen.getByText('show details'));
+      expect(screen.getByTestId('peer-gateway-section')).toBeInTheDocument();
+    });
+
+    it('renders gateway breadcrumb segments', () => {
+      const withGateway: ReadonlyMap<string, RoomParticipant> = new Map([
+        [
+          'peer-1',
+          {
+            peerId: 'peer-1',
+            persona: 'Ada',
+            participantType: 'ravn',
+            gateway: 'bifrost://anthropic/claude-sonnet',
+          },
+        ],
+      ]);
+      render(
+        <MeshSidebar participants={withGateway} selectedPeerId={null} onSelectPeer={vi.fn()} />,
+      );
+      fireEvent.click(screen.getByText('show details'));
+      expect(screen.getByText('bifrost')).toBeInTheDocument();
+      expect(screen.getByText('anthropic')).toBeInTheDocument();
+      expect(screen.getByText('claude-sonnet')).toBeInTheDocument();
+    });
+
+    it('shows latency in green for <100ms', () => {
+      const withGateway: ReadonlyMap<string, RoomParticipant> = new Map([
+        [
+          'peer-1',
+          {
+            peerId: 'peer-1',
+            persona: 'Ada',
+            participantType: 'ravn',
+            gateway: 'bifrost://anthropic/claude-sonnet',
+            gatewayLatencyMs: 84,
+          },
+        ],
+      ]);
+      render(
+        <MeshSidebar participants={withGateway} selectedPeerId={null} onSelectPeer={vi.fn()} />,
+      );
+      fireEvent.click(screen.getByText('show details'));
+      const latency = screen.getByTestId('peer-gateway-latency');
+      expect(latency).toHaveTextContent('84ms');
+      expect(latency.className).toContain('ok');
+    });
+
+    it('shows latency in amber for 100-499ms', () => {
+      const withGateway: ReadonlyMap<string, RoomParticipant> = new Map([
+        [
+          'peer-1',
+          {
+            peerId: 'peer-1',
+            persona: 'Ada',
+            participantType: 'ravn',
+            gateway: 'bifrost://anthropic/claude-sonnet',
+            gatewayLatencyMs: 312,
+          },
+        ],
+      ]);
+      render(
+        <MeshSidebar participants={withGateway} selectedPeerId={null} onSelectPeer={vi.fn()} />,
+      );
+      fireEvent.click(screen.getByText('show details'));
+      const latency = screen.getByTestId('peer-gateway-latency');
+      expect(latency).toHaveTextContent('312ms');
+      expect(latency.className).toContain('warn');
+    });
+
+    it('shows latency in red for >=500ms', () => {
+      const withGateway: ReadonlyMap<string, RoomParticipant> = new Map([
+        [
+          'peer-1',
+          {
+            peerId: 'peer-1',
+            persona: 'Ada',
+            participantType: 'ravn',
+            gateway: 'bifrost://anthropic/claude-sonnet',
+            gatewayLatencyMs: 600,
+          },
+        ],
+      ]);
+      render(
+        <MeshSidebar participants={withGateway} selectedPeerId={null} onSelectPeer={vi.fn()} />,
+      );
+      fireEvent.click(screen.getByText('show details'));
+      const latency = screen.getByTestId('peer-gateway-latency');
+      expect(latency).toHaveTextContent('600ms');
+      expect(latency.className).toContain('err');
+    });
+
+    it('shows region when provided', () => {
+      const withGateway: ReadonlyMap<string, RoomParticipant> = new Map([
+        [
+          'peer-1',
+          {
+            peerId: 'peer-1',
+            persona: 'Ada',
+            participantType: 'ravn',
+            gateway: 'bifrost://anthropic/claude-sonnet',
+            gatewayRegion: 'eu-west-1',
+          },
+        ],
+      ]);
+      render(
+        <MeshSidebar participants={withGateway} selectedPeerId={null} onSelectPeer={vi.fn()} />,
+      );
+      fireEvent.click(screen.getByText('show details'));
+      expect(screen.getByTestId('peer-gateway-region')).toHaveTextContent('eu-west-1');
+    });
+  });
 });
