@@ -2,7 +2,33 @@ import { useState, Fragment } from 'react';
 import { StateDot, Chip } from '@niuulabs/ui';
 import { useRouting } from '../application/useRouting';
 import type { WriteRoutingRule } from '../domain/routing';
-import './RoutingPage.css';
+
+const INPUT_BASE =
+  'niuu-flex-1 niuu-py-2 niuu-px-3 niuu-bg-bg-primary niuu-border niuu-border-solid niuu-border-border ' +
+  'niuu-rounded-md niuu-text-text-primary niuu-font-sans niuu-text-sm niuu-outline-none niuu-box-border ' +
+  'focus:niuu-border-brand';
+
+const BTN_BASE =
+  'niuu-py-2 niuu-px-4 niuu-bg-bg-secondary niuu-border niuu-border-solid niuu-border-border ' +
+  'niuu-rounded-md niuu-text-text-primary niuu-font-sans niuu-text-sm niuu-cursor-pointer ' +
+  'disabled:niuu-opacity-50 disabled:niuu-cursor-not-allowed';
+
+const BTN_PRIMARY = `${BTN_BASE} niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-medium`;
+
+const ACTION_BTN_BASE =
+  'niuu-bg-transparent niuu-border niuu-border-solid niuu-border-border-subtle niuu-rounded-sm ' +
+  'niuu-text-text-secondary niuu-font-sans niuu-text-xs niuu-py-[2px] niuu-px-2 niuu-cursor-pointer ' +
+  'hover:niuu-border-border hover:niuu-text-text-primary';
+
+const ACTION_BTN_DANGER =
+  `${ACTION_BTN_BASE} niuu-text-critical niuu-border-[color-mix(in_srgb,var(--color-critical)_30%,transparent)] ` +
+  'disabled:niuu-opacity-50 disabled:niuu-cursor-not-allowed';
+
+const TH_CLS =
+  'niuu-text-left niuu-py-2 niuu-px-3 niuu-text-text-muted niuu-font-medium niuu-text-xs ' +
+  'niuu-border-0 niuu-border-b niuu-border-solid niuu-border-border';
+
+const TD_BASE = 'niuu-py-2 niuu-px-3 niuu-align-middle';
 
 function newRule(): WriteRoutingRule {
   return {
@@ -35,14 +61,21 @@ function RuleForm({ rule, onSave, onCancel, isSaving }: RuleFormProps) {
   }
 
   return (
-    <form className="routing-page__form" onSubmit={handleSubmit} aria-label="Routing rule editor">
-      <div className="routing-page__form-row">
-        <label className="routing-page__label" htmlFor="rule-prefix">
+    <form
+      className="niuu-flex niuu-flex-col niuu-gap-3"
+      onSubmit={handleSubmit}
+      aria-label="Routing rule editor"
+    >
+      <div className="niuu-flex niuu-items-center niuu-gap-3">
+        <label
+          className="niuu-text-xs niuu-text-text-muted niuu-min-w-[5rem] niuu-shrink-0"
+          htmlFor="rule-prefix"
+        >
           Prefix
         </label>
         <input
           id="rule-prefix"
-          className="routing-page__input"
+          className={INPUT_BASE}
           type="text"
           placeholder="/infra"
           value={draft.prefix}
@@ -52,13 +85,16 @@ function RuleForm({ rule, onSave, onCancel, isSaving }: RuleFormProps) {
         />
       </div>
 
-      <div className="routing-page__form-row">
-        <label className="routing-page__label" htmlFor="rule-mount">
+      <div className="niuu-flex niuu-items-center niuu-gap-3">
+        <label
+          className="niuu-text-xs niuu-text-text-muted niuu-min-w-[5rem] niuu-shrink-0"
+          htmlFor="rule-mount"
+        >
           Mount
         </label>
         <input
           id="rule-mount"
-          className="routing-page__input"
+          className={INPUT_BASE}
           type="text"
           placeholder="local"
           value={draft.mountName}
@@ -68,13 +104,16 @@ function RuleForm({ rule, onSave, onCancel, isSaving }: RuleFormProps) {
         />
       </div>
 
-      <div className="routing-page__form-row">
-        <label className="routing-page__label" htmlFor="rule-priority">
+      <div className="niuu-flex niuu-items-center niuu-gap-3">
+        <label
+          className="niuu-text-xs niuu-text-text-muted niuu-min-w-[5rem] niuu-shrink-0"
+          htmlFor="rule-priority"
+        >
           Priority
         </label>
         <input
           id="rule-priority"
-          className="routing-page__input routing-page__input--narrow"
+          className={`${INPUT_BASE} niuu-flex-none niuu-w-24`}
           type="number"
           min={0}
           value={draft.priority}
@@ -84,13 +123,16 @@ function RuleForm({ rule, onSave, onCancel, isSaving }: RuleFormProps) {
         />
       </div>
 
-      <div className="routing-page__form-row">
-        <label className="routing-page__label" htmlFor="rule-desc">
+      <div className="niuu-flex niuu-items-center niuu-gap-3">
+        <label
+          className="niuu-text-xs niuu-text-text-muted niuu-min-w-[5rem] niuu-shrink-0"
+          htmlFor="rule-desc"
+        >
           Description
         </label>
         <input
           id="rule-desc"
-          className="routing-page__input"
+          className={INPUT_BASE}
           type="text"
           placeholder="optional description"
           value={draft.desc ?? ''}
@@ -99,8 +141,11 @@ function RuleForm({ rule, onSave, onCancel, isSaving }: RuleFormProps) {
         />
       </div>
 
-      <div className="routing-page__form-row">
-        <label className="routing-page__label" htmlFor="rule-active">
+      <div className="niuu-flex niuu-items-center niuu-gap-3">
+        <label
+          className="niuu-text-xs niuu-text-text-muted niuu-min-w-[5rem] niuu-shrink-0"
+          htmlFor="rule-active"
+        >
           Active
         </label>
         <input
@@ -112,16 +157,11 @@ function RuleForm({ rule, onSave, onCancel, isSaving }: RuleFormProps) {
         />
       </div>
 
-      <div className="routing-page__form-actions">
-        <button
-          type="submit"
-          className="routing-page__btn routing-page__btn--primary"
-          disabled={isSaving}
-          aria-label="Save rule"
-        >
+      <div className="niuu-flex niuu-gap-2 niuu-mt-2">
+        <button type="submit" className={BTN_PRIMARY} disabled={isSaving} aria-label="Save rule">
           {isSaving ? 'saving…' : 'Save rule'}
         </button>
-        <button type="button" className="routing-page__btn" onClick={onCancel} aria-label="Cancel">
+        <button type="button" className={BTN_BASE} onClick={onCancel} aria-label="Cancel">
           Cancel
         </button>
       </div>
@@ -169,21 +209,28 @@ export function RoutingPage() {
   }
 
   return (
-    <div className="routing-page">
-      <h2 className="routing-page__title">Write Routing</h2>
-      <p className="routing-page__subtitle">
+    <div className="niuu-p-6 niuu-max-w-[960px]">
+      <h2 className="niuu-text-xl niuu-font-semibold niuu-m-0 niuu-mb-2">Write Routing</h2>
+      <p className="niuu-text-sm niuu-text-text-secondary niuu-m-0 niuu-mb-1">
         Prefix-based routing rules — first match wins (lowest priority number).
+      </p>
+      <p className="niuu-text-xs niuu-text-text-muted niuu-m-0 niuu-mb-5">
+        To ingest content (URL fetch or file upload), go to the{' '}
+        <a href="/mimir" className="niuu-text-brand hover:niuu-underline">
+          Sources
+        </a>{' '}
+        page.
       </p>
 
       {isLoading && (
-        <div className="routing-page__status">
+        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-sm niuu-text-text-secondary">
           <StateDot state="processing" pulse />
           <span>loading rules…</span>
         </div>
       )}
 
       {isError && (
-        <div className="routing-page__status">
+        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-sm niuu-text-text-secondary">
           <StateDot state="failed" />
           <span>{error instanceof Error ? error.message : 'routing load failed'}</span>
         </div>
@@ -191,9 +238,9 @@ export function RoutingPage() {
 
       {!isLoading && !isError && (
         <>
-          <div className="routing-page__toolbar">
+          <div className="niuu-mb-4">
             <button
-              className="routing-page__btn routing-page__btn--primary"
+              className={BTN_PRIMARY}
               onClick={startAdd}
               aria-label="Add rule"
               disabled={isAdding}
@@ -203,8 +250,11 @@ export function RoutingPage() {
           </div>
 
           {isAdding && (
-            <div className="routing-page__editor" data-testid="rule-editor">
-              <h3 className="routing-page__editor-title">New rule</h3>
+            <div
+              className="niuu-p-4 niuu-bg-bg-secondary niuu-border niuu-border-solid niuu-border-border niuu-rounded-md niuu-mb-4"
+              data-testid="rule-editor"
+            >
+              <h3 className="niuu-text-sm niuu-font-semibold niuu-m-0 niuu-mb-4">New rule</h3>
               <RuleForm
                 rule={newRule()}
                 onSave={handleSave}
@@ -215,59 +265,66 @@ export function RoutingPage() {
           )}
 
           {rules.length === 0 && !isAdding && (
-            <p className="routing-page__empty">
+            <p className="niuu-text-sm niuu-text-text-muted niuu-mb-6">
               No routing rules configured. All writes go to the default mount.
             </p>
           )}
 
           {rules.length > 0 && (
-            <table className="routing-page__table" aria-label="Routing rules">
+            <table
+              className="niuu-w-full niuu-border-collapse niuu-mb-8 niuu-text-sm"
+              aria-label="Routing rules"
+            >
               <thead>
                 <tr>
-                  <th>Priority</th>
-                  <th>Prefix</th>
-                  <th>Mount</th>
-                  <th>Active</th>
-                  <th>Description</th>
-                  <th>Actions</th>
+                  <th className={TH_CLS}>Priority</th>
+                  <th className={TH_CLS}>Prefix</th>
+                  <th className={TH_CLS}>Mount</th>
+                  <th className={TH_CLS}>Active</th>
+                  <th className={TH_CLS}>Description</th>
+                  <th className={TH_CLS}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {rules.map((rule) => (
                   <Fragment key={rule.id}>
-                    <tr className="routing-page__row" data-testid="routing-rule-row">
-                      <td className="routing-page__cell routing-page__cell--priority">
+                    <tr
+                      className="niuu-border-0 niuu-border-b niuu-border-solid niuu-border-border-subtle hover:niuu-bg-bg-secondary"
+                      data-testid="routing-rule-row"
+                    >
+                      <td
+                        className={`${TD_BASE} niuu-font-mono niuu-text-xs niuu-text-text-muted niuu-w-16`}
+                      >
                         {rule.priority}
                       </td>
-                      <td className="routing-page__cell">
-                        <code className="routing-page__prefix">{rule.prefix}</code>
+                      <td className={TD_BASE}>
+                        <code className="niuu-font-mono niuu-text-xs niuu-bg-bg-tertiary niuu-py-[2px] niuu-px-2 niuu-rounded-sm">
+                          {rule.prefix}
+                        </code>
                       </td>
-                      <td className="routing-page__cell">
+                      <td className={TD_BASE}>
                         <Chip tone="muted">{rule.mountName}</Chip>
                       </td>
-                      <td className="routing-page__cell">
+                      <td className={TD_BASE}>
                         <span
-                          className={[
-                            'routing-page__active',
-                            rule.active ? 'routing-page__active--yes' : 'routing-page__active--no',
-                          ].join(' ')}
+                          className={`niuu-font-mono niuu-text-xs ${rule.active ? 'niuu-text-status-emerald' : 'niuu-text-text-muted'}`}
                         >
                           {rule.active ? 'yes' : 'no'}
                         </span>
                       </td>
-                      <td className="routing-page__cell routing-page__cell--desc">
+                      <td className={`${TD_BASE} niuu-text-text-secondary niuu-max-w-[20rem]`}>
                         {rule.desc ?? '—'}
                       </td>
-                      <td className="routing-page__cell routing-page__cell--actions">
+                      <td className={`${TD_BASE} niuu-flex niuu-gap-2 niuu-items-center`}>
                         <button
-                          className="routing-page__action-btn"
+                          className={ACTION_BTN_BASE}
                           onClick={() => startEdit(rule)}
                           aria-label={`Edit rule ${rule.prefix}`}
                         >
                           Edit
                         </button>
                         <button
-                          className="routing-page__action-btn routing-page__action-btn--danger"
+                          className={ACTION_BTN_DANGER}
                           onClick={() => deleteRule(rule.id)}
                           disabled={isDeleting}
                           aria-label={`Delete rule ${rule.prefix}`}
@@ -278,9 +335,14 @@ export function RoutingPage() {
                     </tr>
                     {editingRule?.id === rule.id && (
                       <tr key={`${rule.id}-edit`}>
-                        <td colSpan={6} className="routing-page__edit-cell">
-                          <div className="routing-page__editor" data-testid="rule-editor">
-                            <h3 className="routing-page__editor-title">Edit rule</h3>
+                        <td colSpan={6} className="niuu-p-0">
+                          <div
+                            className="niuu-p-4 niuu-bg-bg-secondary niuu-border niuu-border-solid niuu-border-border niuu-rounded-md niuu-mb-4"
+                            data-testid="rule-editor"
+                          >
+                            <h3 className="niuu-text-sm niuu-font-semibold niuu-m-0 niuu-mb-4">
+                              Edit rule
+                            </h3>
                             <RuleForm
                               rule={editingRule}
                               onSave={handleSave}
@@ -298,14 +360,17 @@ export function RoutingPage() {
           )}
 
           {/* Test pane */}
-          <section className="routing-page__test-pane" aria-label="Route test pane">
-            <h3 className="routing-page__test-title">Test a path</h3>
-            <p className="routing-page__test-hint">
+          <section
+            className="niuu-border-t niuu-border-solid niuu-border-border niuu-pt-6"
+            aria-label="Route test pane"
+          >
+            <h3 className="niuu-text-base niuu-font-semibold niuu-m-0 niuu-mb-2">Test a path</h3>
+            <p className="niuu-text-sm niuu-text-text-secondary niuu-m-0 niuu-mb-3">
               Enter a page path to see which rule and mount it would be routed to.
             </p>
-            <div className="routing-page__test-controls">
+            <div className="niuu-mb-3">
               <input
-                className="routing-page__input routing-page__input--test"
+                className={`${INPUT_BASE} niuu-flex-none niuu-w-full`}
                 type="text"
                 placeholder="/infra/k8s"
                 value={testPath}
@@ -317,20 +382,22 @@ export function RoutingPage() {
             {testResult && (
               <div
                 className={[
-                  'routing-page__test-result',
+                  'niuu-flex niuu-items-center niuu-gap-2 niuu-p-3 niuu-rounded-md niuu-text-sm niuu-border niuu-border-solid',
                   testResult.mountName
-                    ? 'routing-page__test-result--match'
-                    : 'routing-page__test-result--no-match',
+                    ? 'niuu-bg-[color-mix(in_srgb,var(--brand-500)_10%,transparent)] niuu-border-[color-mix(in_srgb,var(--brand-500)_25%,transparent)]'
+                    : 'niuu-bg-bg-secondary niuu-border-border-subtle',
                 ].join(' ')}
                 data-testid="test-result"
               >
                 {testResult.mountName ? (
                   <>
                     <Chip tone="brand">{testResult.mountName}</Chip>
-                    <span className="routing-page__test-reason">{testResult.reason}</span>
+                    <span className="niuu-text-text-secondary niuu-font-mono niuu-text-xs">
+                      {testResult.reason}
+                    </span>
                   </>
                 ) : (
-                  <span className="routing-page__test-reason routing-page__test-reason--muted">
+                  <span className="niuu-text-text-muted niuu-font-mono niuu-text-xs">
                     {testResult.reason}
                   </span>
                 )}

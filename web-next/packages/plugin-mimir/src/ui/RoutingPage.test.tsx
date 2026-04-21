@@ -13,6 +13,13 @@ describe('RoutingPage', () => {
     expect(screen.getByRole('heading', { name: /write routing/i })).toBeInTheDocument();
   });
 
+  it('renders a link to the Sources page for ingest', () => {
+    wrap(<RoutingPage />);
+    const link = screen.getByRole('link', { name: /sources/i });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', '/mimir');
+  });
+
   it('shows loading state initially', () => {
     wrap(<RoutingPage />);
     expect(screen.getByText(/loading rules/)).toBeInTheDocument();
