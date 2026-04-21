@@ -179,4 +179,20 @@ describe('DreamsPage', () => {
     wrap(<DreamsPage />);
     await waitFor(() => expect(screen.getByText(/append-only · \d+ entries/)).toBeInTheDocument());
   });
+
+  it('shows error state when activity log service throws', async () => {
+    const failing: IMimirService = {
+      ...createMimirMockAdapter(),
+      lint: {
+        ...createMimirMockAdapter().lint,
+        getActivityLog: async () => {
+          throw new Error('activity log unavailable');
+        },
+      },
+    };
+    wrap(<DreamsPage />, failing);
+    await waitFor(() =>
+      expect(screen.getByText('activity log unavailable')).toBeInTheDocument(),
+    );
+  });
 });

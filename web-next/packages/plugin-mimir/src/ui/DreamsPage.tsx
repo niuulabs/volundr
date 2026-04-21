@@ -25,7 +25,7 @@ const KIND_FILTERS: Array<{ value: ActivityEventKind | 'all'; label: string }> =
 
 const KIND_COLOR: Record<ActivityEventKind, string> = {
   write: 'niuu-text-status-cyan',
-  ingest: 'niuu-text-brand',
+  ingest: 'niuu-text-status-indigo',
   lint: 'niuu-text-status-emerald',
   dream: 'niuu-text-status-purple',
   query: 'niuu-text-text-muted',
@@ -143,7 +143,7 @@ function ActivityRow({ event }: ActivityRowProps) {
 
 export function DreamsPage() {
   const { data: cycles, isLoading: cyclesLoading, isError: cyclesError, error } = useDreams();
-  const { data: events, isLoading: eventsLoading } = useActivityLog();
+  const { data: events, isLoading: eventsLoading, isError: eventsError, error: eventsErr } = useActivityLog();
 
   const [kindFilter, setKindFilter] = useState<ActivityEventKind | 'all'>('all');
 
@@ -227,7 +227,14 @@ export function DreamsPage() {
           </div>
         )}
 
-        {!eventsLoading && filteredEvents?.length === 0 && (
+        {eventsError && (
+          <div className={STATUS_ROW}>
+            <StateDot state="failed" />
+            <span>{eventsErr instanceof Error ? eventsErr.message : 'activity log load failed'}</span>
+          </div>
+        )}
+
+        {!eventsLoading && !eventsError && filteredEvents?.length === 0 && (
           <p className="niuu-text-sm niuu-text-text-muted" data-testid="activity-empty">
             No activity events{kindFilter !== 'all' ? ` for kind "${kindFilter}"` : ''}.
           </p>

@@ -66,6 +66,7 @@ const preset = {
         'status-orange': 'var(--status-orange)',
         'status-red': 'var(--status-red)',
         'status-cyan': 'var(--status-cyan)',
+        'status-indigo': 'var(--status-indigo)',
         'status-purple': 'var(--status-purple)',
       },
       fontFamily: {
