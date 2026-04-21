@@ -492,9 +492,8 @@ function ContextSidebar({ session, messages }: { session: Session; messages: Mes
           <ul className="rv-ctx-emissions" data-testid="emissions-list">
             {emissions.map((m) => {
               const { event: eventName, payload } = parseEmitContent(m.content);
-              const payloadPreview = payload != null
-                ? JSON.stringify(payload).slice(0, 48)
-                : m.content.slice(0, 48);
+              const payloadPreview =
+                payload != null ? JSON.stringify(payload).slice(0, 48) : m.content.slice(0, 48);
               return (
                 <li key={m.id} className="rv-ctx-emit-item">
                   <div className="rv-ctx-emit-item__head">
