@@ -1,7 +1,6 @@
 /* Shell for all Mimir views — fills the content area with no gaps */
 .mm-page-shell {
-  height: 100%;
-  overflow: auto;
+  min-height: 100%;
   background: var(--color-bg-primary);
 }
 

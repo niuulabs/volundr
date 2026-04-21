@@ -248,6 +248,7 @@
   grid-area: content;
   overflow: auto;
   position: relative;
+  background: var(--color-bg-primary);
 }
 
 /* ── Footer ────────────────────────────────────────── */

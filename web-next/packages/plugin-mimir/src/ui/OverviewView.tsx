@@ -73,7 +73,7 @@ export function OverviewView() {
   }
 
   return (
-    <div className="niuu-p-6 niuu-flex niuu-flex-col niuu-gap-6">
+    <div className="niuu-flex niuu-flex-col">
       {/* ── KPI strip ─────────────────────────────────────────────── */}
       <KpiStrip>
         <KpiCard label="pages" value={totalPages.toLocaleString()} />
@@ -94,7 +94,7 @@ export function OverviewView() {
       </KpiStrip>
 
       {/* ── 2-column home layout ──────────────────────────────────── */}
-      <div className="niuu-grid niuu-grid-cols-[1.2fr_1fr] niuu-min-h-0">
+      <div className="niuu-grid niuu-grid-cols-[1.2fr_1fr] niuu-flex-1 niuu-min-h-0">
         {/* LEFT column: mount grid + wardens */}
         <div className="niuu-p-5 niuu-overflow-y-auto niuu-border-r niuu-border-border-subtle">
           {/* ── Mounts section head ────────────────────────────────── */}
