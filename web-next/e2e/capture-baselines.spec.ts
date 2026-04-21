@@ -68,7 +68,8 @@ function inlineBabelScripts(htmlPath: string): string {
 
 test.beforeAll(async () => {
   server = http.createServer((req, res) => {
-    const url = decodeURIComponent(req.url ?? '/');
+    // Strip query strings (e.g. styles.css?v=4) before resolving file paths.
+    const url = decodeURIComponent(req.url ?? '/').split('?')[0];
     const filePath = path.join(WEB2_ROOT, url);
     if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
       res.writeHead(404);
@@ -148,7 +149,7 @@ test.describe('capture web2 baselines — observatory', () => {
   test('canvas view', async ({ page }) => {
     await page.goto(web2Url('flokk_observatory/design/Flokk Observatory.html'));
     await waitForReady(page);
-    await page.screenshot({ path: outPath('observatory', 'canvas'), fullPage: true });
+    await page.screenshot({ path: outPath('observatory', 'canvas'), fullPage: false });
   });
 
   test('registry — types tab', async ({ page }) => {
@@ -156,7 +157,7 @@ test.describe('capture web2 baselines — observatory', () => {
     await waitForReady(page);
     await clickTab(page, 'Registry');
     await page.waitForTimeout(400);
-    await page.screenshot({ path: outPath('observatory', 'registry-types'), fullPage: true });
+    await page.screenshot({ path: outPath('observatory', 'registry-types'), fullPage: false });
   });
 
   test('registry — containment tab', async ({ page }) => {
@@ -164,7 +165,10 @@ test.describe('capture web2 baselines — observatory', () => {
     await waitForReady(page);
     await clickTab(page, 'Registry');
     await clickTab(page, 'Containment');
-    await page.screenshot({ path: outPath('observatory', 'registry-containment'), fullPage: true });
+    await page.screenshot({
+      path: outPath('observatory', 'registry-containment'),
+      fullPage: false,
+    });
   });
 
   test('registry — json tab', async ({ page }) => {
@@ -172,7 +176,7 @@ test.describe('capture web2 baselines — observatory', () => {
     await waitForReady(page);
     await clickTab(page, 'Registry');
     await clickTab(page, 'JSON');
-    await page.screenshot({ path: outPath('observatory', 'registry-json'), fullPage: true });
+    await page.screenshot({ path: outPath('observatory', 'registry-json'), fullPage: false });
   });
 });
 
@@ -183,35 +187,35 @@ test.describe('capture web2 baselines — ravn', () => {
     await page.goto(web2Url('ravn/design/Ravn.html'));
     await waitForReady(page);
     await clickTab(page, 'Overview');
-    await page.screenshot({ path: outPath('ravn', 'overview'), fullPage: true });
+    await page.screenshot({ path: outPath('ravn', 'overview'), fullPage: false });
   });
 
   test('ravens — split view', async ({ page }) => {
     await page.goto(web2Url('ravn/design/Ravn.html'));
     await waitForReady(page);
     await clickTab(page, 'Ravens');
-    await page.screenshot({ path: outPath('ravn', 'ravens-split'), fullPage: true });
+    await page.screenshot({ path: outPath('ravn', 'ravens-split'), fullPage: false });
   });
 
   test('personas', async ({ page }) => {
     await page.goto(web2Url('ravn/design/Ravn.html'));
     await waitForReady(page);
     await clickTab(page, 'Personas');
-    await page.screenshot({ path: outPath('ravn', 'personas'), fullPage: true });
+    await page.screenshot({ path: outPath('ravn', 'personas'), fullPage: false });
   });
 
   test('sessions', async ({ page }) => {
     await page.goto(web2Url('ravn/design/Ravn.html'));
     await waitForReady(page);
     await clickTab(page, 'Sessions');
-    await page.screenshot({ path: outPath('ravn', 'sessions'), fullPage: true });
+    await page.screenshot({ path: outPath('ravn', 'sessions'), fullPage: false });
   });
 
   test('budget', async ({ page }) => {
     await page.goto(web2Url('ravn/design/Ravn.html'));
     await waitForReady(page);
     await clickTab(page, 'Budget');
-    await page.screenshot({ path: outPath('ravn', 'budget'), fullPage: true });
+    await page.screenshot({ path: outPath('ravn', 'budget'), fullPage: false });
   });
 });
 
@@ -222,101 +226,110 @@ test.describe('capture web2 baselines — tyr', () => {
     await page.goto(web2Url('tyr/design/Tyr Saga Coordinator.html'));
     await waitForReady(page);
     await clickTab(page, 'Dashboard');
-    await page.screenshot({ path: outPath('tyr', 'dashboard'), fullPage: true });
+    await page.screenshot({ path: outPath('tyr', 'dashboard'), fullPage: false });
   });
 
   test('sagas', async ({ page }) => {
     await page.goto(web2Url('tyr/design/Tyr Saga Coordinator.html'));
     await waitForReady(page);
     await clickTab(page, 'Sagas');
-    await page.screenshot({ path: outPath('tyr', 'sagas'), fullPage: true });
+    await page.screenshot({ path: outPath('tyr', 'sagas'), fullPage: false });
   });
 
   test('workflows', async ({ page }) => {
     await page.goto(web2Url('tyr/design/Tyr Saga Coordinator.html'));
     await waitForReady(page);
     await clickTab(page, 'Workflows');
-    await page.screenshot({ path: outPath('tyr', 'workflows'), fullPage: true });
+    await page.screenshot({ path: outPath('tyr', 'workflows'), fullPage: false });
   });
 
   test('plan', async ({ page }) => {
     await page.goto(web2Url('tyr/design/Tyr Saga Coordinator.html'));
     await waitForReady(page);
     await clickTab(page, 'Plan');
-    await page.screenshot({ path: outPath('tyr', 'plan'), fullPage: true });
+    await page.screenshot({ path: outPath('tyr', 'plan'), fullPage: false });
   });
 
   test('dispatch', async ({ page }) => {
     await page.goto(web2Url('tyr/design/Tyr Saga Coordinator.html'));
     await waitForReady(page);
     await clickTab(page, 'Dispatch');
-    await page.screenshot({ path: outPath('tyr', 'dispatch'), fullPage: true });
+    await page.screenshot({ path: outPath('tyr', 'dispatch'), fullPage: false });
   });
 
   test('settings', async ({ page }) => {
     await page.goto(web2Url('tyr/design/Tyr Saga Coordinator.html'));
     await waitForReady(page);
     await clickTab(page, 'Settings');
-    await page.screenshot({ path: outPath('tyr', 'settings'), fullPage: true });
+    await page.screenshot({ path: outPath('tyr', 'settings'), fullPage: false });
   });
 });
 
 // ── Mimir ──────────────────────────────────────────────────────────────────────
 
 test.describe('capture web2 baselines — mimir', () => {
-  test('home', async ({ page }) => {
+  /** Navigate to Mimir prototype and activate the Mimir plugin in the shell. */
+  async function gotoMimir(page: Page): Promise<void> {
     await page.goto(web2Url('mimir/design/Flokk Mimir.html'));
     await waitForReady(page);
-    await page.screenshot({ path: outPath('mimir', 'home'), fullPage: true });
+    // The Flokk shell defaults to Observatory. Click the Mímir rail icon.
+    await clickTab(page, 'mir');
+    // Wait for the Mimir subnav buttons to appear
+    await page.waitForSelector('button.mm-subnav-btn', { timeout: 5_000 });
+  }
+
+  test('home', async ({ page }) => {
+    await gotoMimir(page);
+    await page.screenshot({ path: outPath('mimir', 'home'), fullPage: false });
   });
 
   test('pages — tree', async ({ page }) => {
-    await page.goto(web2Url('mimir/design/Flokk Mimir.html'));
-    await waitForReady(page);
-    await clickTab(page, 'Pages');
-    await page.screenshot({ path: outPath('mimir', 'pages-tree'), fullPage: true });
+    await gotoMimir(page);
+    await page.click('button.mm-subnav-btn:has-text("Pages")');
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: outPath('mimir', 'pages-tree'), fullPage: false });
   });
 
   test('search', async ({ page }) => {
-    await page.goto(web2Url('mimir/design/Flokk Mimir.html'));
-    await waitForReady(page);
-    await clickTab(page, 'Search');
-    await page.screenshot({ path: outPath('mimir', 'search'), fullPage: true });
+    await gotoMimir(page);
+    await page.click('button.mm-subnav-btn:has-text("Search")');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: outPath('mimir', 'search'), fullPage: false });
   });
 
   test('graph', async ({ page }) => {
-    await page.goto(web2Url('mimir/design/Flokk Mimir.html'));
-    await waitForReady(page);
-    await clickTab(page, 'Graph');
-    await page.screenshot({ path: outPath('mimir', 'graph'), fullPage: true });
+    await gotoMimir(page);
+    await page.click('button.mm-subnav-btn:has-text("Graph")');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: outPath('mimir', 'graph'), fullPage: false });
   });
 
   test('ravns', async ({ page }) => {
-    await page.goto(web2Url('mimir/design/Flokk Mimir.html'));
-    await waitForReady(page);
-    await clickTab(page, 'Wardens');
-    await page.screenshot({ path: outPath('mimir', 'ravns'), fullPage: true });
+    await gotoMimir(page);
+    await page.click('button.mm-subnav-btn:has-text("Wardens")');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: outPath('mimir', 'ravns'), fullPage: false });
   });
 
   test('lint', async ({ page }) => {
-    await page.goto(web2Url('mimir/design/Flokk Mimir.html'));
-    await waitForReady(page);
-    await clickTab(page, 'Lint');
-    await page.screenshot({ path: outPath('mimir', 'lint'), fullPage: true });
+    await gotoMimir(page);
+    await page.click('button.mm-subnav-btn:has-text("Lint")');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: outPath('mimir', 'lint'), fullPage: false });
   });
 
   test('ingest', async ({ page }) => {
-    await page.goto(web2Url('mimir/design/Flokk Mimir.html'));
-    await waitForReady(page);
-    await clickTab(page, 'Ingest');
-    await page.screenshot({ path: outPath('mimir', 'ingest'), fullPage: true });
+    await gotoMimir(page);
+    await page.click('button.mm-subnav-btn:has-text("Ingest")');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: outPath('mimir', 'ingest'), fullPage: false });
   });
 
   test('log', async ({ page }) => {
-    await page.goto(web2Url('mimir/design/Flokk Mimir.html'));
-    await waitForReady(page);
-    await clickTab(page, 'Log');
-    await page.screenshot({ path: outPath('mimir', 'log'), fullPage: true });
+    await gotoMimir(page);
+    await page.click('button.mm-subnav-btn:has-text("Log")');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: outPath('mimir', 'log'), fullPage: false });
   });
 });
 
@@ -326,28 +339,28 @@ test.describe('capture web2 baselines — volundr', () => {
   test('forge overview', async ({ page }) => {
     await page.goto(web2Url('volundr/design/Volundr.html'));
     await waitForReady(page);
-    await page.screenshot({ path: outPath('volundr', 'forge-overview'), fullPage: true });
+    await page.screenshot({ path: outPath('volundr', 'forge-overview'), fullPage: false });
   });
 
   test('templates', async ({ page }) => {
     await page.goto(web2Url('volundr/design/Volundr.html'));
     await waitForReady(page);
     await clickTab(page, 'Templates');
-    await page.screenshot({ path: outPath('volundr', 'templates'), fullPage: true });
+    await page.screenshot({ path: outPath('volundr', 'templates'), fullPage: false });
   });
 
   test('clusters', async ({ page }) => {
     await page.goto(web2Url('volundr/design/Volundr.html'));
     await waitForReady(page);
     await clickTab(page, 'Clusters');
-    await page.screenshot({ path: outPath('volundr', 'clusters'), fullPage: true });
+    await page.screenshot({ path: outPath('volundr', 'clusters'), fullPage: false });
   });
 
   test('sessions', async ({ page }) => {
     await page.goto(web2Url('volundr/design/Volundr.html'));
     await waitForReady(page);
     await clickTab(page, 'Sessions');
-    await page.screenshot({ path: outPath('volundr', 'sessions'), fullPage: true });
+    await page.screenshot({ path: outPath('volundr', 'sessions'), fullPage: false });
   });
 });
 
@@ -357,6 +370,6 @@ test.describe('capture web2 baselines — login', () => {
   test('login page', async ({ page }) => {
     await page.goto(web2Url('niuu_login/design/Niuu Login.html'));
     await waitForReady(page);
-    await page.screenshot({ path: outPath('login', 'login-page'), fullPage: true });
+    await page.screenshot({ path: outPath('login', 'login-page'), fullPage: false });
   });
 });
