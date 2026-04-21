@@ -5,6 +5,9 @@ import './GraphPage.css';
 
 const MAX_HOPS = 4;
 const MIN_HOPS = 1;
+const SVG_CX = 300;
+const SVG_CY = 220;
+const SVG_R = 170;
 
 // Category color palette (maps to CSS tokens in order)
 const CATEGORY_COLORS = [
@@ -37,19 +40,59 @@ interface NodePosition {
   y: number;
 }
 
-function layoutCircle(nodes: GraphNode[], cx = 300, cy = 220, r = 170): NodePosition[] {
+/**
+ * Category-radial layout: groups nodes by category into radial sectors.
+ * Each category occupies a sector proportional to its node count. Within
+ * each sector, nodes are offset with sine-based jitter (seeded by index)
+ * for a visually organic, deterministic layout matching the web2 prototype.
+ */
+export function layoutCategoryRadial(
+  nodes: GraphNode[],
+  cx = SVG_CX,
+  cy = SVG_CY,
+  r = SVG_R,
+): NodePosition[] {
   if (nodes.length === 0) return [];
   if (nodes.length === 1) return [{ node: nodes[0]!, x: cx, y: cy }];
 
-  return nodes.map((node, i) => {
-    const angle = (i / nodes.length) * 2 * Math.PI - Math.PI / 2;
-    return {
-      node,
-      x: cx + r * Math.cos(angle),
-      y: cy + r * Math.sin(angle),
-    };
-  });
+  const categories = [...new Set(nodes.map((n) => n.category))];
+  const byCategory = new Map<string, GraphNode[]>();
+  for (const node of nodes) {
+    const list = byCategory.get(node.category) ?? [];
+    list.push(node);
+    byCategory.set(node.category, list);
+  }
+
+  const result: NodePosition[] = [];
+  let sectorStart = -Math.PI / 2; // start from top of circle
+
+  for (const cat of categories) {
+    const catNodes = byCategory.get(cat) ?? [];
+    const sectorSize = (catNodes.length / nodes.length) * 2 * Math.PI;
+    const sectorCenter = sectorStart + sectorSize / 2;
+
+    for (let i = 0; i < catNodes.length; i++) {
+      const node = catNodes[i]!;
+      const spread = catNodes.length <= 1 ? 0 : 0.8;
+      const innerAngle = catNodes.length <= 1 ? 0 : (i / catNodes.length) * spread - spread / 2;
+      const jitter = 0.5 + 0.5 * (Math.abs(Math.sin(i * 2.1)) * 0.9 + 0.1);
+      const radius = r * jitter;
+      result.push({
+        node,
+        x: cx + radius * Math.cos(sectorCenter + innerAngle),
+        y: cy + radius * Math.sin(sectorCenter + innerAngle),
+      });
+    }
+
+    sectorStart += sectorSize;
+  }
+
+  return result;
 }
+
+// ---------------------------------------------------------------------------
+// Graph SVG
+// ---------------------------------------------------------------------------
 
 interface GraphSvgProps {
   graph: MimirGraph;
@@ -59,16 +102,33 @@ interface GraphSvgProps {
 }
 
 function GraphSvg({ graph, focusId, onNodeClick, categories }: GraphSvgProps) {
-  const positions = layoutCircle(graph.nodes);
+  const positions = layoutCategoryRadial(graph.nodes);
   const posMap = new Map(positions.map((p) => [p.node.id, p]));
 
   return (
-    <svg className="graph-page__svg" viewBox="0 0 600 440" role="img" aria-label="Knowledge graph">
-      <g className="graph-page__edges">
+    <svg
+      className="niuu-w-full niuu-max-w-[600px] niuu-h-auto niuu-border niuu-border-border-subtle niuu-rounded-lg niuu-bg-bg-secondary niuu-block"
+      viewBox="0 0 600 440"
+      role="img"
+      aria-label="Knowledge graph"
+    >
+      <defs>
+        <filter id="niuu-node-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+
+      <g>
         {graph.edges.map((edge) => {
           const src = posMap.get(edge.source);
           const tgt = posMap.get(edge.target);
           if (!src || !tgt) return null;
+          const isFocusEdge =
+            focusId !== null && (edge.source === focusId || edge.target === focusId);
           return (
             <line
               key={`${edge.source}-${edge.target}`}
@@ -76,12 +136,15 @@ function GraphSvg({ graph, focusId, onNodeClick, categories }: GraphSvgProps) {
               y1={src.y}
               x2={tgt.x}
               y2={tgt.y}
-              className="graph-page__edge"
+              stroke="var(--color-border)"
+              strokeWidth={1.5}
+              className={isFocusEdge ? 'niuu-opacity-50' : 'niuu-opacity-15'}
             />
           );
         })}
       </g>
-      <g className="graph-page__nodes">
+
+      <g>
         {positions.map(({ node, x, y }) => {
           const isFocus = node.id === focusId;
           const fill = isFocus
@@ -92,9 +155,7 @@ function GraphSvg({ graph, focusId, onNodeClick, categories }: GraphSvgProps) {
               key={node.id}
               transform={`translate(${x},${y})`}
               onClick={() => onNodeClick(node.id)}
-              className={['graph-page__node', isFocus ? 'graph-page__node--focus' : '']
-                .filter(Boolean)
-                .join(' ')}
+              className="niuu-graph-node niuu-cursor-pointer"
               role="button"
               aria-pressed={isFocus}
               tabIndex={0}
@@ -104,11 +165,17 @@ function GraphSvg({ graph, focusId, onNodeClick, categories }: GraphSvgProps) {
             >
               <circle
                 r={isFocus ? 14 : 10}
-                className="graph-page__node-circle"
+                className="niuu-graph-node-circle"
                 fill={fill}
                 stroke={isFocus ? fill : 'var(--color-border)'}
+                strokeWidth={1.5}
               />
-              <text dy={isFocus ? 26 : 22} className="graph-page__node-label">
+              <text
+                dy={isFocus ? 26 : 22}
+                textAnchor="middle"
+                fill="var(--color-text-secondary)"
+                className="niuu-text-xs niuu-font-sans niuu-pointer-events-none"
+              >
                 {node.title.length > 20 ? `${node.title.slice(0, 18)}…` : node.title}
               </text>
             </g>
@@ -130,16 +197,23 @@ interface LegendProps {
 function GraphLegend({ categories }: LegendProps) {
   if (categories.length === 0) return null;
   return (
-    <div className="graph-page__legend" aria-label="Graph legend">
-      <span className="graph-page__legend-title">Categories</span>
+    <div
+      className="niuu-flex niuu-flex-col niuu-gap-2 niuu-px-4 niuu-py-3 niuu-bg-bg-secondary niuu-border niuu-border-border-subtle niuu-rounded-lg niuu-min-w-[140px]"
+      aria-label="Graph legend"
+    >
+      <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-widest niuu-text-text-muted niuu-pb-1 niuu-border-b niuu-border-border-subtle">
+        Categories
+      </span>
       {categories.map((cat, i) => (
-        <div key={cat} className="graph-page__legend-item">
+        <div key={cat} className="niuu-flex niuu-items-center niuu-gap-2">
           <span
-            className="graph-page__legend-dot"
+            className="niuu-graph-legend-dot niuu-w-2.5 niuu-h-2.5 niuu-rounded-full niuu-shrink-0"
             data-color-idx={String(i % CATEGORY_COLORS.length)}
             aria-hidden
           />
-          <span className="graph-page__legend-label">{cat}</span>
+          <span className="niuu-text-xs niuu-text-text-secondary niuu-whitespace-nowrap niuu-overflow-hidden niuu-text-ellipsis">
+            {cat}
+          </span>
         </div>
       ))}
     </div>
@@ -160,17 +234,22 @@ export function GraphPage() {
     : [];
 
   return (
-    <div className="graph-page">
-      <h2 className="graph-page__title">Knowledge Graph</h2>
+    <div className="niuu-p-6 niuu-max-w-4xl">
+      <h2 className="niuu-m-0 niuu-mb-5 niuu-text-2xl niuu-font-semibold niuu-text-text-primary">
+        Knowledge Graph
+      </h2>
 
-      <div className="graph-page__toolbar">
-        <div className="graph-page__focus-controls">
-          <label htmlFor="graph-focus-input" className="graph-page__label">
+      <div className="niuu-flex niuu-flex-wrap niuu-gap-4 niuu-mb-4 niuu-items-end">
+        <div className="niuu-flex niuu-flex-col niuu-flex-1 niuu-min-w-[220px]">
+          <label
+            htmlFor="graph-focus-input"
+            className="niuu-block niuu-text-text-muted niuu-text-xs niuu-mb-1"
+          >
             Focus node
           </label>
           <input
             id="graph-focus-input"
-            className="graph-page__focus-input"
+            className="niuu-px-3 niuu-py-2 niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded-md niuu-text-text-primary niuu-font-mono niuu-text-xs niuu-outline-none focus:niuu-border-brand"
             type="text"
             placeholder="Page path or ID…"
             value={focusId ?? ''}
@@ -179,7 +258,7 @@ export function GraphPage() {
           />
           {focusId && (
             <button
-              className="graph-page__clear-btn"
+              className="niuu-mt-1 niuu-self-start niuu-bg-transparent niuu-border-0 niuu-text-text-muted niuu-text-xs niuu-cursor-pointer niuu-p-0 hover:niuu-text-text-secondary"
               onClick={() => setFocusId(null)}
               aria-label="Clear focus"
             >
@@ -188,15 +267,18 @@ export function GraphPage() {
           )}
         </div>
 
-        <div className="graph-page__hop-controls">
-          <label className="graph-page__label">Hops</label>
-          <div className="graph-page__hop-btns" role="group" aria-label="Hop count">
+        <div className="niuu-flex niuu-flex-col">
+          <label className="niuu-block niuu-text-text-muted niuu-text-xs niuu-mb-1">Hops</label>
+          <div className="niuu-flex niuu-gap-1" role="group" aria-label="Hop count">
             {Array.from({ length: MAX_HOPS - MIN_HOPS + 1 }, (_, i) => i + MIN_HOPS).map((h) => (
               <button
                 key={h}
-                className={['graph-page__hop-btn', h === hops ? 'graph-page__hop-btn--active' : '']
-                  .filter(Boolean)
-                  .join(' ')}
+                className={[
+                  'niuu-w-8 niuu-h-7 niuu-border niuu-rounded-sm niuu-text-xs niuu-cursor-pointer',
+                  h === hops
+                    ? 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-semibold'
+                    : 'niuu-bg-bg-secondary niuu-border-border-subtle niuu-text-text-secondary',
+                ].join(' ')}
                 onClick={() => setHops(h)}
                 aria-pressed={h === hops}
                 data-hops={h}
@@ -209,14 +291,14 @@ export function GraphPage() {
       </div>
 
       {isLoading && (
-        <div className="graph-page__status">
+        <div className="niuu-flex niuu-items-center niuu-gap-2">
           <StateDot state="processing" pulse />
           <span>loading graph…</span>
         </div>
       )}
 
       {isError && (
-        <div className="graph-page__status">
+        <div className="niuu-flex niuu-items-center niuu-gap-2">
           <StateDot state="failed" />
           <span>{error instanceof Error ? error.message : 'graph load failed'}</span>
         </div>
@@ -224,7 +306,7 @@ export function GraphPage() {
 
       {displayGraph && (
         <>
-          <div className="graph-page__stats">
+          <div className="niuu-flex niuu-gap-2 niuu-mb-4 niuu-flex-wrap">
             <Chip tone="muted">{displayGraph.nodes.length} nodes</Chip>
             <Chip tone="muted">{displayGraph.edges.length} edges</Chip>
             {focusId && (
@@ -234,7 +316,7 @@ export function GraphPage() {
             )}
           </div>
 
-          <div className="graph-page__canvas-wrap">
+          <div className="niuu-flex niuu-gap-4 niuu-items-start niuu-flex-wrap">
             <GraphSvg
               graph={displayGraph}
               focusId={focusId}
