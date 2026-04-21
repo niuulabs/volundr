@@ -23,6 +23,7 @@ The Dispatch page is well-implemented in web-next: split layout (queue left, rul
 **Web-next currently**: The `BatchDispatchBar` has an `onApplyWorkflow` prop but it is not wired — it is passed as `undefined`. No modal exists.
 
 **What to do**: Create a `WorkflowOverrideModal` component that:
+
 - Lists available workflows from `useWorkflows()`
 - Shows name, version, stage count for each
 - On selection, applies the workflow override to the sagas of selected raids
@@ -31,6 +32,7 @@ The Dispatch page is well-implemented in web-next: split layout (queue left, rul
 Wire it into `DispatchView` with state management (`showWorkflowModal`).
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/WorkflowOverrideModal.tsx` — new component
 - `packages/plugin-tyr/src/ui/WorkflowOverrideModal.test.tsx` — tests
 - `packages/plugin-tyr/src/ui/DispatchView.tsx` — add modal state, wire `onApplyWorkflow`
@@ -40,6 +42,7 @@ Wire it into `DispatchView` with state management (`showWorkflowModal`).
 ### 2. Add "Override threshold" modal
 
 **Web2 spec**: The threshold modal (lines 657-671) shows:
+
 - Description text about what the threshold does
 - A range slider (0 to 1, step 0.05) with current value displayed prominently
 - Cancel and Apply buttons
@@ -50,6 +53,7 @@ Wire it into `DispatchView` with state management (`showWorkflowModal`).
 **What to do**: Create a `ThresholdOverrideModal` with a slider input and the same UX as web2. On apply, update local dispatcher state (or call a service method).
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/ThresholdOverrideModal.tsx` — new component
 - `packages/plugin-tyr/src/ui/ThresholdOverrideModal.test.tsx` — tests
 - `packages/plugin-tyr/src/ui/DispatchView.tsx` — add modal state, wire `onOverrideThreshold`
@@ -65,6 +69,7 @@ Wire it into `DispatchView` with state management (`showWorkflowModal`).
 **What to do**: Add an "Edit" button to the rules card header. Create an `EditRulesModal` with form inputs matching web2. On save, update local state (and optionally call `IDispatchBus.updateRules()` if the port supports it).
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/EditRulesModal.tsx` — new component
 - `packages/plugin-tyr/src/ui/EditRulesModal.test.tsx` — tests
 - `packages/plugin-tyr/src/ui/DispatchView.tsx` — add Edit button to rules panel, modal state
@@ -80,6 +85,7 @@ Wire it into `DispatchView` with state management (`showWorkflowModal`).
 **What to do**: Add mock recent dispatch data (matching the web2 pattern) and render it as a list of rows with: id-chip, workflow name, timestamp. In the future this will come from a service call.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/DispatchView.tsx` — add mock data and render in `DispatchRulesPanel`
 
 ---
@@ -93,6 +99,7 @@ Wire it into `DispatchView` with state management (`showWorkflowModal`).
 **What to do**: Add a "Pause dispatcher" / "Resume dispatcher" button in the dispatch header. Wire it to toggle `dispatcherState.enabled` through the dispatch bus port.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/DispatchView.tsx` — add pause button in header
 - `packages/plugin-tyr/src/ports/index.ts` — ensure `IDispatchBus` has a `togglePause()` method
 
@@ -107,6 +114,7 @@ Wire it into `DispatchView` with state management (`showWorkflowModal`).
 **What to do**: Wire toast notifications (from the shared Toast component in dashboard ticket) to dispatch, workflow-apply, threshold-change, and rules-save actions.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/DispatchView.tsx` — add toast triggers on actions
 
 ---

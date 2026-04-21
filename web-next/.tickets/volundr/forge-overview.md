@@ -22,6 +22,7 @@ The Forge overview page is missing several data-dense UI elements present in the
 **Web-next currently**: Inflight pods show only a status badge with no progress indication.
 **What to do:** Add a `<BootProgressBar />` component rendered inside the pod card when `pod.status` is `booting` or `initializing`. Use `niuu-h-1 niuu-rounded-full niuu-bg-gradient-to-r` with the appropriate accent colour token. Accept a `progress` prop (0-100) and animate width via inline `style={{ width }}` (only dynamic value allowed).
 **Files to modify:**
+
 - `packages/plugin-volundr/src/ui/ForgePage.tsx`
 - `packages/plugin-volundr/src/ui/components/PodCard.tsx` (new or existing)
 - `packages/plugin-volundr/src/ui/components/BootProgressBar.tsx` (new)
@@ -32,6 +33,7 @@ The Forge overview page is missing several data-dense UI elements present in the
 **Web-next currently**: No connection-type badge is rendered.
 **What to do:** Add a badge element inside the pod card header. Use `niuu-text-xs niuu-font-mono niuu-px-1.5 niuu-py-0.5 niuu-rounded niuu-bg-zinc-800 niuu-text-zinc-400`. Derive the label from `pod.connectionType` or similar field.
 **Files to modify:**
+
 - `packages/plugin-volundr/src/ui/components/PodCard.tsx`
 
 ### 3. Token/cost inline stats on pod cards
@@ -40,6 +42,7 @@ The Forge overview page is missing several data-dense UI elements present in the
 **Web-next currently**: Pod cards show model and status but no token/cost metrics.
 **What to do:** Add a stats row after the model label. Render `pod.tokensUsed` (formatted with k/M suffix) and `pod.cost` (formatted as USD). Use `niuu-text-xs niuu-text-zinc-500 niuu-flex niuu-items-center niuu-gap-1`.
 **Files to modify:**
+
 - `packages/plugin-volundr/src/ui/components/PodCard.tsx`
 
 ### 4. Sparkline in KPI tiles
@@ -48,6 +51,7 @@ The Forge overview page is missing several data-dense UI elements present in the
 **Web-next currently**: KPI tiles show only the numeric value and label.
 **What to do:** Create a `<Sparkline />` component that accepts a `data: number[]` prop and renders an inline SVG polyline. Place it in the bottom-right of each KPI tile. Use `niuu-absolute niuu-bottom-2 niuu-right-2 niuu-opacity-50`. The SVG stroke colour should match the tile's accent token.
 **Files to modify:**
+
 - `packages/plugin-volundr/src/ui/ForgePage.tsx`
 - `packages/plugin-volundr/src/ui/components/Sparkline.tsx` (new)
 - `packages/plugin-volundr/src/ui/components/KpiTile.tsx` (new or existing)
@@ -58,6 +62,7 @@ The Forge overview page is missing several data-dense UI elements present in the
 **Web-next currently**: Quick-launch cards show template name and icon only.
 **What to do:** Add a usage count label. Use `niuu-text-xs niuu-text-zinc-500 niuu-mt-auto`. Source the count from `template.usageCount`.
 **Files to modify:**
+
 - `packages/plugin-volundr/src/ui/ForgePage.tsx`
 - `packages/plugin-volundr/src/ui/components/QuickLaunchCard.tsx` (if exists)
 
@@ -67,6 +72,7 @@ The Forge overview page is missing several data-dense UI elements present in the
 **Web-next currently**: Chronicle entries show timestamp + event type but no preview content.
 **What to do:** Add a preview line below the event header. Use `niuu-text-xs niuu-text-zinc-500 niuu-truncate niuu-max-w-md`. Source from `entry.preview` or `entry.lastMessage`.
 **Files to modify:**
+
 - `packages/plugin-volundr/src/ui/ForgePage.tsx`
 - `packages/plugin-volundr/src/ui/components/ChronicleEntry.tsx` (if exists)
 
@@ -74,22 +80,22 @@ The Forge overview page is missing several data-dense UI elements present in the
 
 ## What to keep as-is
 
-| Element | Reason |
-|---------|--------|
-| Pod card layout (grid vs list toggle) | Already matches web2 |
-| Status badge colours | Already correct |
-| Page header with breadcrumb | Already matches web2 |
-| Responsive grid breakpoints | Already matches web2 |
-| Dark theme base colours | Already using correct tokens |
+| Element                               | Reason                       |
+| ------------------------------------- | ---------------------------- |
+| Pod card layout (grid vs list toggle) | Already matches web2         |
+| Status badge colours                  | Already correct              |
+| Page header with breadcrumb           | Already matches web2         |
+| Responsive grid breakpoints           | Already matches web2         |
+| Dark theme base colours               | Already using correct tokens |
 
 ## Shared components
 
-| Component | Source |
-|-----------|--------|
-| `Badge` | `@niuulabs/ui` — reuse for CLI/IDE/API badge |
-| `Sparkline` | Plugin-local — too specific for shared lib |
-| `BootProgressBar` | Plugin-local — Volundr-specific |
-| `KpiTile` | Evaluate if `@niuulabs/ui` has a `StatCard`; otherwise plugin-local |
+| Component         | Source                                                              |
+| ----------------- | ------------------------------------------------------------------- |
+| `Badge`           | `@niuulabs/ui` — reuse for CLI/IDE/API badge                        |
+| `Sparkline`       | Plugin-local — too specific for shared lib                          |
+| `BootProgressBar` | Plugin-local — Volundr-specific                                     |
+| `KpiTile`         | Evaluate if `@niuulabs/ui` has a `StatCard`; otherwise plugin-local |
 
 ## Acceptance criteria
 

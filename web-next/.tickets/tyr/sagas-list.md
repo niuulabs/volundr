@@ -19,6 +19,7 @@ The Sagas List uses a left panel + right detail split layout in both web2 and we
 ### 1. Add workflow card to saga detail (right column)
 
 **Web2 spec**: The saga detail right column (lines 363-386) includes a "Workflow" card showing:
+
 - Applied workflow name + version chip
 - Description line ("qa -> pre-ship review -> version bump -> release PR")
 - Info row about override capability
@@ -29,6 +30,7 @@ The Sagas List uses a left panel + right detail split layout in both web2 and we
 **What to do**: Add a `WorkflowCard` component rendered in the saga detail view. It should show the applied workflow name, version, description, and participating personas. This requires extending the `Saga` domain model with `workflow` and `workflowVersion` fields, and the mock adapter should supply values.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/domain/saga.ts` — add `workflow?: string`, `workflowVersion?: string` fields
 - `packages/plugin-tyr/src/ui/SagaDetailPage.tsx` — add WorkflowCard in a right-column layout
 - `packages/plugin-tyr/src/ui/SagaDetailPage.test.tsx` — test new card rendering
@@ -45,6 +47,7 @@ The Sagas List uses a left panel + right detail split layout in both web2 and we
 **What to do**: Create a `StageProgressRail` component showing numbered dots (1, 2, 3...) with connecting bars between them. Each dot is colored by status (complete = filled, active = pulsing/highlighted, pending = gray). Labels appear below. Render it in the saga detail right column.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/StageProgressRail.tsx` — new component
 - `packages/plugin-tyr/src/ui/StageProgressRail.test.tsx` — tests
 - `packages/plugin-tyr/src/ui/SagaDetailPage.tsx` — integrate StageProgressRail
@@ -54,6 +57,7 @@ The Sagas List uses a left panel + right detail split layout in both web2 and we
 ### 3. Add confidence drift sparkline chart to saga detail
 
 **Web2 spec**: Lines 408-425 render a "Confidence drift" card containing:
+
 - A sparkline showing how confidence has moved over time as raids reported back
 - A description paragraph
 - A footer row showing start confidence, current confidence, scope_adherence, and test coverage
@@ -63,6 +67,7 @@ The Sagas List uses a left panel + right detail split layout in both web2 and we
 **What to do**: Add a `ConfidenceDriftCard` that renders a Sparkline of historical confidence values (from the mock adapter), plus the footer metrics. The mock data can use a deterministic sine-based array (matching web2's pattern).
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/ConfidenceDriftCard.tsx` — new component
 - `packages/plugin-tyr/src/ui/ConfidenceDriftCard.test.tsx` — tests
 - `packages/plugin-tyr/src/ui/SagaDetailPage.tsx` — integrate card
@@ -78,6 +83,7 @@ The Sagas List uses a left panel + right detail split layout in both web2 and we
 **What to do**: Restructure the detail page layout into a 2-column grid. The left column contains header + phases/raids. The right column contains the three cards (workflow, stage progress, confidence drift) stacked vertically.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/SagaDetailPage.tsx` — wrap content in 2-column grid
 
 ---
@@ -91,6 +97,7 @@ The Sagas List uses a left panel + right detail split layout in both web2 and we
 **What to do**: After the Toast component is available (see dashboard ticket), wire the export action to show a toast confirming the export.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/SagasPage.tsx` — add toast on export
 
 ---

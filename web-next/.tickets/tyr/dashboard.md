@@ -25,6 +25,7 @@ The Dashboard page is structurally complete — 4-column CSS grid, 4 KPI cards w
 **What to do**: Expose dispatcher status in the shell's topbar slot or as a dashboard-level header row. Preferred approach: add a compact stats bar below the shell topbar (or inside it via a plugin-contributed topbar slot) showing `dispatcher: on | threshold: 0.70 | concurrent: 3/5`. The data comes from `useDispatcherState()`.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/DashboardPage.tsx` — add a stats row above the KPI grid
 - `packages/plugin-tyr/src/ui/DashboardPage.css` — add `.tyr-dash__topbar-stats` styles
 - Possibly `packages/shell/src/Topbar.tsx` — if using a plugin slot system
@@ -40,6 +41,7 @@ The Dashboard page is structurally complete — 4-column CSS grid, 4 KPI cards w
 **What to do**: Implement a `<Toast>` component (or integrate one from `@niuulabs/ui`) that can be triggered imperatively. Wire it into the Dashboard for actions like "View all" navigations, and ensure it is available for other Tyr pages (Dispatch, Sagas). Pattern: a Zustand store or context-based toast queue rendering in a portal at `position: fixed; bottom: 24px; left: 50%`.
 
 **Files to modify:**
+
 - `packages/ui/src/Toast/Toast.tsx` — new shared component
 - `packages/ui/src/Toast/Toast.test.tsx` — tests
 - `packages/ui/src/index.ts` — export
@@ -56,6 +58,7 @@ The Dashboard page is structurally complete — 4-column CSS grid, 4 KPI cards w
 **What to do**: Add a 5th column to `tyr-feed-row` — a ghost button `↗` that calls `navigate({ to: '/tyr/sagas/$sagaId' })` for the matched saga. When no saga matches the subject prefix, render the button as disabled.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/DashboardPage.tsx` — add link button to FEED rows
 - `packages/plugin-tyr/src/ui/DashboardPage.css` — update `.tyr-feed-row` grid to 5 columns
 
@@ -70,6 +73,7 @@ The Dashboard page is structurally complete — 4-column CSS grid, 4 KPI cards w
 **What to do**: Add a `hover` state to RaidMeshCanvas that tracks mouse position relative to nodes. Render a positioned tooltip div (absolute within the `.tyr-flock-viz` container) when hovering over cluster or raven nodes, showing the same metadata as web2.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/RaidMeshCanvas.tsx` — add hover detection + tooltip rendering
 - `packages/plugin-tyr/src/ui/DashboardPage.css` — add `.mesh-tip` styles
 

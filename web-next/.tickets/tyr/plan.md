@@ -25,6 +25,7 @@ The Plan wizard is structurally well-matched: 5-step flow (prompt, questions, ra
 **What to do**: Add 2-3 clickable hint chips below the textarea that pre-fill the prompt input with example text. Style as small rounded chips with a `+` prefix, subtle background, and hover state.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/PlanPrompt.tsx` — add hint chip buttons
 - Tests for PlanPrompt — verify chip click fills textarea
 
@@ -39,6 +40,7 @@ The Plan wizard is structurally well-matched: 5-step flow (prompt, questions, ra
 **What to do**: Add a styled quote/callout card at the top of the questions form showing the user's original prompt. Style with subtle background, monospace eyebrow label "YOUR BRIEF", and the prompt text below.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/PlanQuestions.tsx` — add quote card (needs prompt passed as prop)
 - `packages/plugin-tyr/src/ui/PlanWizard.tsx` — pass prompt to PlanQuestions if not already
 
@@ -53,6 +55,7 @@ The Plan wizard is structurally well-matched: 5-step flow (prompt, questions, ra
 **What to do**: Ensure the workflow question renders as a 3-column grid of selectable template cards (not a text input). Each card shows the workflow name, version badge, and stage count.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/PlanQuestions.tsx` — add workflow picker grid
 - `packages/plugin-tyr/src/ui/useWorkflows.ts` — reuse existing hook for template list
 
@@ -67,6 +70,7 @@ The Plan wizard is structurally well-matched: 5-step flow (prompt, questions, ra
 **What to do**: Ensure the sub-tasks list matches: persona avatar, name with phase/persona/estimate meta line, size pill (S/M/L colored), promote-to-saga button, and remove button. Use Tailwind grid with 5 columns.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/PlanDraft.tsx` — match sub-task row layout and size pills
 
 ---
@@ -80,6 +84,7 @@ The Plan wizard is structurally well-matched: 5-step flow (prompt, questions, ra
 **What to do**: Ensure risk rows show a colored kind badge (using critical/warning token colors) followed by the risk message text.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/PlanDraft.tsx` — style risk rows with kind badges
 
 ---
@@ -93,6 +98,7 @@ The Plan wizard is structurally well-matched: 5-step flow (prompt, questions, ra
 **What to do**: Add "Re-plan" button (restarts the planning raid with same inputs) and "Save as draft" button (persists current state without creating the saga). Place them matching web2's layout: back left, re-plan left-center, save-draft right, approve right.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/PlanDraft.tsx` — add Re-plan and Save as draft buttons
 - `packages/plugin-tyr/src/ui/usePlanWizard.ts` — add `replan()` and `saveDraft()` actions if missing
 
@@ -107,6 +113,7 @@ The Plan wizard is structurally well-matched: 5-step flow (prompt, questions, ra
 **What to do**: Ensure the raiding step shows descriptive raven activity text (3 lines with rune prefix) below the loading animation.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/PlanRaiding.tsx` — add raven activity text lines
 
 ---

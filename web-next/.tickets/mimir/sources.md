@@ -17,18 +17,21 @@ Web2 combines ingest (form + source list) into a single `IngestView`. Web-next s
 ## Required changes
 
 ### 1. Ingest form UI (fetch URL, upload file)
+
 **Web2 spec**: Above the source list, web2 shows an ingest form with two input modes: (a) "Fetch URL" — a text input for a URL + a "Fetch" button, and (b) "Upload file" — a file drop zone / file picker. Both submit to the ingest pipeline and the new source appears in the list below. A mode toggle switches between URL and file.
 **Web-next currently**: `SourcesView` shows only the origin filter tabs and the source table. No ingest form exists.
 **What to do:** Add an ingest form section above the origin filter tabs. Include: a mode toggle (URL | File), a URL text input with "Fetch" button for URL mode, a file dropzone/picker for file mode. Wire to the `IMimirService.sources.ingest()` port method (stub if not yet implemented). Show a loading state during ingestion and append the new source to the list on success.
 **Files to modify:** `packages/plugin-mimir/src/ui/SourcesView.tsx`, `packages/plugin-mimir/src/ports/index.ts` (if ingest method is missing)
 
 ### 2. Source list visual alignment
+
 **Web2 spec**: Each source row in web2 shows: origin badge (colored by type), title (primary text), URL/path (mono, cyan for URLs), ingest date + agent, and compiled-into page chips.
 **Web-next currently**: Uses a `Table` component with custom column renderers. The visual output is close but the structured table adds header rows and uniform column widths that differ slightly from web2's more fluid list.
 **What to do:** Verify that column widths and row heights visually match the web2 screenshot. The Table component is fine to keep — adjust column `width` props if needed to match the proportional balance in web2. Ensure origin badges have the correct color mapping per type.
 **Files to modify:** `packages/plugin-mimir/src/ui/SourcesView.tsx`
 
 ### 3. Migrate sources CSS to Tailwind
+
 **Web2 spec**: N/A — code-quality requirement.
 **Web-next currently**: Sources view uses BEM classes from `mimir-views.css` (`.mm-sources`, `.mm-origin-tabs`, `.mm-origin-chip`, `.mm-source-*`, `.mm-origin-badge`).
 **What to do:** Replace class-based styling with Tailwind utilities using `niuu-` prefix. Remove dead CSS from `mimir-views.css`.

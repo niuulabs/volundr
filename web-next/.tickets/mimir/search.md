@@ -17,18 +17,21 @@ The search page layout (heading + controls + results list) matches web2. Mode to
 ## Required changes
 
 ### 1. Score display per result
+
 **Web2 spec**: Each search result shows a score value (e.g. "score 0.82") right-aligned on the same row as the title. The score is rendered in monospace, muted text color, font-size 10-11px.
 **Web-next currently**: Results show title, category chip, confidence chip, summary, and path — but no score value.
 **What to do:** Add a score display to the result header row, right-aligned. Show "score {value}" in mono font, muted color. The score should come from the search result domain model (extend `SearchResult` type if needed to include a `score: number` field from the service response).
 **Files to modify:** `packages/plugin-mimir/src/ui/SearchPage.tsx`, `packages/plugin-mimir/src/domain/api-types.ts` (if SearchResult lacks score field)
 
 ### 2. Mount chips in results
+
 **Web2 spec**: Each search result shows mount chips (e.g. "local", "shared") at the end of the chips row, indicating which mount(s) the page lives in.
 **Web-next currently**: Results show category and confidence chips but no mount chips.
 **What to do:** Add mount chips to each result row after the confidence chip. Each mount name gets its own `Chip` (or `MountChip` component). Data comes from the search result's `mounts` field (ensure the domain model includes it).
 **Files to modify:** `packages/plugin-mimir/src/ui/SearchPage.tsx`, `packages/plugin-mimir/src/ui/components/MountChip.tsx`
 
 ### 3. Migrate SearchPage.css to Tailwind
+
 **Web2 spec**: N/A — code-quality requirement.
 **Web-next currently**: Search page uses a dedicated `SearchPage.css` file with BEM classes (`.search-page`, `.search-page__input`, `.search-page__mode-btn`, `.search-page__result`, etc.).
 **What to do:** Replace all class-based styling with Tailwind utilities using `niuu-` prefix. Delete `SearchPage.css` entirely once migration is complete. Ensure the highlight `<mark>` styling uses Tailwind (e.g. `niuu-bg-accent-amber/20 niuu-text-text-primary`).
