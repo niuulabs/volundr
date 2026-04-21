@@ -3,14 +3,7 @@ name: CI
 on:
   pull_request:
 
-# Workflow-level ceiling. Jobs needing write access (container push, SARIF
-# upload) inherit it from here; they cannot exceed this ceiling.
-permissions:
-  contents: read
-  packages: write
-  security-events: write
-  pull-requests: read
-  actions: read
+permissions: read-all
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
