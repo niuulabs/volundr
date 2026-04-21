@@ -95,9 +95,9 @@ describe('SearchPage', () => {
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'architecture' } });
     await waitFor(() => expect(screen.getAllByTestId('search-result').length).toBeGreaterThan(0));
     // Mount chips use aria-label="mount: <name>"
-    const mountChips = screen.getAllByRole('generic', { hidden: false }).filter(
-      (el) => el.getAttribute('aria-label')?.startsWith('mount:'),
-    );
+    const mountChips = screen
+      .getAllByRole('generic', { hidden: false })
+      .filter((el) => el.getAttribute('aria-label')?.startsWith('mount:'));
     expect(mountChips.length).toBeGreaterThan(0);
   });
 });
