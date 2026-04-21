@@ -7,47 +7,36 @@
  *     LEFT:  mount cards grid (minmax 300px) + wardens ravn cards
  *     RIGHT: activity feed (time / kind / mount / message)
  *
- * Mount cards are expandable — clicking reveals host detail, role,
- * categories with count badges, and a 5-item recent activity excerpt.
+ * Mount cards are expandable — clicking reveals role, size, category
+ * badges, and a 5-item per-mount recent activity excerpt.
  * Warden cards show bio text and a pages-touched / last-dream metrics row.
  */
 
 import { useState } from 'react';
-import { KpiStrip, KpiCard, StateDot, RavnAvatar } from '@niuulabs/ui';
+import { KpiStrip, KpiCard, StateDot, RavnAvatar, relTime } from '@niuulabs/ui';
 import { useMimirMounts } from './useMimirMounts';
 import { useMimirRecentWrites } from './useMimirSources';
 import { useRavns } from '../application/useRavns';
 import { MountChip } from './components/MountChip';
 import { RAVN_DOT_STATE, MOUNT_DOT_STATE } from './mimir.constants';
-import './mimir-views.css';
 
 const FEED_LIMIT = 20;
 const MOUNT_ACTIVITY_LIMIT = 5;
 const TIMESTAMP_HOUR_START = 11;
 const TIMESTAMP_HOUR_END = 16;
 
+/** HH:MM slice from ISO timestamp — used in feed row and mount activity excerpt. */
 function formatTimestamp(iso: string): string {
   return iso.slice(TIMESTAMP_HOUR_START, TIMESTAMP_HOUR_END);
 }
 
-function formatLastWrite(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diffH = Math.round((now.getTime() - d.getTime()) / 3_600_000);
-  if (diffH < 1) return '< 1h ago';
-  if (diffH < 24) return `${diffH}h ago`;
-  return `${Math.round(diffH / 24)}d ago`;
-}
-
-function formatLastDream(iso: string | null | undefined): string {
-  if (!iso) return 'never';
-  const d = new Date(iso);
-  const now = new Date();
-  const diffH = Math.round((now.getTime() - d.getTime()) / 3_600_000);
-  if (diffH < 1) return '< 1h ago';
-  if (diffH < 24) return `${diffH}h ago`;
-  return `${Math.round(diffH / 24)}d ago`;
-}
+/** Tailwind color class per feed entry kind. Falls back to text-secondary. */
+const FEED_KIND_COLOR: Record<string, string> = {
+  write: 'niuu-text-status-cyan',
+  compile: 'niuu-text-brand',
+  'lint-fix': 'niuu-text-status-emerald',
+  dream: 'niuu-text-status-purple',
+};
 
 export function OverviewView() {
   const [expandedMount, setExpandedMount] = useState<string | null>(null);
@@ -76,7 +65,7 @@ export function OverviewView() {
   if (mountsError) {
     return (
       <div className="niuu-p-6">
-        <div className="mm-error-banner">
+        <div className="niuu-text-xs niuu-text-critical niuu-bg-critical-bg niuu-border niuu-border-critical-bo niuu-rounded-sm niuu-px-4 niuu-py-2">
           {mountsError instanceof Error ? mountsError.message : String(mountsError)}
         </div>
       </div>
@@ -98,7 +87,7 @@ export function OverviewView() {
         />
         <KpiCard
           label="last write"
-          value={lastWrite ? formatLastWrite(lastWrite) : '—'}
+          value={lastWrite ? relTime(lastWrite) : '—'}
           deltaLabel="newest across mounts"
         />
       </KpiStrip>
@@ -186,12 +175,8 @@ export function OverviewView() {
                   {/* ── Expanded detail panel ──────────────────────── */}
                   {isExpanded && (
                     <div className="niuu-mt-4 niuu-pt-4 niuu-border-t niuu-border-border-subtle">
-                      {/* Config detail grid */}
+                      {/* Config detail grid — host already visible above, not repeated */}
                       <div className="niuu-grid niuu-grid-cols-2 niuu-gap-3 niuu-mb-3 niuu-font-mono niuu-text-xs">
-                        <div>
-                          <div className="niuu-text-text-muted">host</div>
-                          <div className="niuu-text-text-primary">{mount.host}</div>
-                        </div>
                         <div>
                           <div className="niuu-text-text-muted">role</div>
                           <div className="niuu-text-text-primary">{mount.role}</div>
@@ -316,7 +301,10 @@ export function OverviewView() {
                         <strong className="niuu-text-text-primary">{ravn.pagesTouched}</strong>{' '}
                         pages touched
                       </span>
-                      <span>last dream {formatLastDream(ravn.lastDream?.timestamp)}</span>
+                      <span>
+                        last dream{' '}
+                        {ravn.lastDream ? relTime(ravn.lastDream.timestamp) : 'never'}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -332,17 +320,26 @@ export function OverviewView() {
             <span className="niuu-text-xs niuu-text-text-muted">all mounts · newest first</span>
           </div>
           {feed && feed.length > 0 ? (
-            <div className="mm-feed" aria-label="recent writes feed" role="log">
+            <div
+              className="niuu-bg-bg-secondary niuu-border niuu-border-border-subtle niuu-rounded-lg niuu-overflow-hidden"
+              aria-label="recent writes feed"
+              role="log"
+            >
               {feed.map((entry) => (
-                <div key={entry.id} className="mm-feed-row">
-                  <span className="mm-feed__time">{formatTimestamp(entry.timestamp)}</span>
-                  <span className={`mm-feed__kind mm-feed__kind--${entry.kind}`}>{entry.kind}</span>
+                <div
+                  key={entry.id}
+                  className="niuu-grid niuu-grid-cols-[58px_60px_66px_1fr] niuu-gap-3 niuu-items-center niuu-px-4 niuu-py-2 niuu-border-b niuu-border-border-subtle last:niuu-border-b-0 niuu-text-xs niuu-font-mono"
+                >
+                  <span className="niuu-text-text-muted">{formatTimestamp(entry.timestamp)}</span>
+                  <span className={FEED_KIND_COLOR[entry.kind] ?? 'niuu-text-text-secondary'}>
+                    {entry.kind}
+                  </span>
                   <span>
                     <MountChip name={entry.mount} />
                   </span>
-                  <span className="mm-feed__msg">
-                    <span className="mm-feed__ravn">{entry.ravn}</span>
-                    <span className="mm-feed__sep">{' · '}</span>
+                  <span className="niuu-font-sans niuu-text-xs niuu-text-text-secondary niuu-truncate">
+                    <span className="niuu-text-text-primary">{entry.ravn}</span>
+                    <span className="niuu-text-text-muted">{' · '}</span>
                     {entry.message}
                   </span>
                 </div>

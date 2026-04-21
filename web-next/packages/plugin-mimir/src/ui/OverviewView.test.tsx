@@ -93,12 +93,12 @@ describe('OverviewView', () => {
     expect(card).toHaveAttribute('aria-expanded', 'true');
     // Expanded detail shows "recent activity" heading
     expect(within(card).getByText('recent activity')).toBeInTheDocument();
-    // Shows host label
-    expect(within(card).getByText('host')).toBeInTheDocument();
-    // Shows role label
+    // Shows role label (host is shown in collapsed portion, not repeated)
     expect(within(card).getByText('role')).toBeInTheDocument();
     // Shows size label
     expect(within(card).getByText('size')).toBeInTheDocument();
+    // Does NOT show a duplicate host label in the expanded section
+    expect(within(card).queryByText('host')).not.toBeInTheDocument();
   });
 
   it('collapses a mount card when clicked again', async () => {

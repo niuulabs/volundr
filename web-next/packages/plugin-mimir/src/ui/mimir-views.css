@@ -124,51 +124,7 @@
 /* Overview layout is now handled by Tailwind utilities in OverviewView.tsx */
 
 /* ── Feed ─────────────────────────────────────────────────────────────────── */
-.mm-feed {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-.mm-feed-row {
-  display: grid;
-  grid-template-columns: 58px 60px 66px 1fr;
-  gap: var(--space-3);
-  align-items: center;
-  padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--color-border-subtle);
-  font-size: var(--text-xs);
-  font-family: var(--font-mono);
-}
-.mm-feed-row:last-child {
-  border-bottom: none;
-}
-.mm-feed__time {
-  color: var(--color-text-muted);
-}
-.mm-feed__kind {
-  color: var(--color-text-secondary);
-}
-.mm-feed__kind--write {
-  color: var(--color-accent-cyan);
-}
-.mm-feed__kind--compile {
-  color: var(--color-accent-indigo);
-}
-.mm-feed__kind--lint-fix {
-  color: var(--color-accent-emerald);
-}
-.mm-feed__kind--dream {
-  color: var(--color-accent-purple);
-}
-.mm-feed__msg {
-  color: var(--color-text-secondary);
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* Migrated to Tailwind utilities in OverviewView.tsx */
 
 /* ── Pages ────────────────────────────────────────────────────────────────── */
 .mm-pages-root {
@@ -649,12 +605,7 @@
 /* Migrated to Tailwind utilities in OverviewView.tsx */
 
 /* ── Activity feed text ───────────────────────────────────────────────────── */
-.mm-feed__ravn {
-  color: var(--color-text-primary);
-}
-.mm-feed__sep {
-  color: var(--color-text-muted);
-}
+/* Migrated to Tailwind utilities in OverviewView.tsx */
 
 /* ── Tree indent via CSS variable ─────────────────────────────────────────── */
 :root {
