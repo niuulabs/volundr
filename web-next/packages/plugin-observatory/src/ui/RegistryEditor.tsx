@@ -300,7 +300,7 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
     setOverId(null);
   };
 
-  const renderNode = (t: EntityType, depth = 0): React.ReactNode => {
+  const renderNode = (t: EntityType): React.ReactNode => {
     const children = t.canContain.map((id) => byId.get(id)).filter(Boolean) as EntityType[];
     const dropState = getDropState(t.id);
     const isDragging = dragId === t.id;
@@ -340,7 +340,7 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
         </div>
         {children.length > 0 && (
           <div className="registry-tree-children">
-            {children.map((c) => renderNode(c, depth + 1))}
+            {children.map((c) => renderNode(c))}
           </div>
         )}
       </div>
