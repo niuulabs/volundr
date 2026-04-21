@@ -49,9 +49,7 @@ export function SegmentedFilter<T extends string = string>({
           )}
         >
           {opt.label}
-          {opt.count != null && (
-            <span className="niuu-ml-1.5 niuu-opacity-60">{opt.count}</span>
-          )}
+          {opt.count != null && <span className="niuu-ml-1.5 niuu-opacity-60">{opt.count}</span>}
         </button>
       ))}
     </div>

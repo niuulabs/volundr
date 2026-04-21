@@ -36,7 +36,12 @@ function DispatcherStats() {
         label={`dispatcher ${state.running ? 'on' : 'off'}`}
         testId={`tyr-chip-dispatcher-${state.running ? 'on' : 'off'}`}
       />
-      <TopbarChip kind="dim" icon="◈" label={`threshold ${thresholdDisplay}`} testId={`tyr-chip-threshold-${thresholdDisplay}`} />
+      <TopbarChip
+        kind="dim"
+        icon="◈"
+        label={`threshold ${thresholdDisplay}`}
+        testId={`tyr-chip-threshold-${thresholdDisplay}`}
+      />
       <TopbarChip
         kind="dim"
         icon="⇥"

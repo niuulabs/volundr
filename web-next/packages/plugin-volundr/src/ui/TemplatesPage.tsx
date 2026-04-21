@@ -328,7 +328,10 @@ function McpServerCard({ server }: { server: McpServer }) {
         aria-expanded={expanded}
         aria-label={server.name}
       >
-        <span className="niuu-h-2 niuu-w-2 niuu-shrink-0 niuu-rounded-full niuu-bg-brand" aria-hidden />
+        <span
+          className="niuu-h-2 niuu-w-2 niuu-shrink-0 niuu-rounded-full niuu-bg-brand"
+          aria-hidden
+        />
         <span className="niuu-font-mono niuu-text-sm niuu-font-medium niuu-text-text-primary">
           {server.name}
         </span>
@@ -345,7 +348,9 @@ function McpServerCard({ server }: { server: McpServer }) {
       {expanded && (
         <div className="niuu-flex niuu-flex-wrap niuu-gap-1.5 niuu-border-t niuu-border-border-subtle niuu-bg-bg-primary niuu-px-4 niuu-py-3">
           {server.tools.length === 0 ? (
-            <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">no tools listed</span>
+            <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+              no tools listed
+            </span>
           ) : (
             server.tools.map((tool) => (
               <span
