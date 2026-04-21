@@ -82,7 +82,7 @@ function Transcript({ session }: { session: Session }) {
   }
 
   return (
-    <div className="rv-transcript" role="log" aria-label={`transcript for ${session.personaName}`}>
+    <div className="rv-transcript" role="log" aria-label={`transcript: ${session.personaName}`}>
       <div className="rv-transcript__header">
         <span className="rv-transcript__persona">{session.personaName}</span>
         <span className="rv-transcript__model">{session.model}</span>
