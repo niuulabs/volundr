@@ -122,7 +122,11 @@ export function LoginPage({
           >
             {loading ? <span className="login-page__spinner" aria-hidden /> : <LockIcon />}
             <span>{loading ? 'redirecting…' : 'Continue with passkey'}</span>
-            {!loading && <span className="login-page__kbd login-page__mono" aria-hidden>↵</span>}
+            {!loading && (
+              <span className="login-page__kbd login-page__mono" aria-hidden>
+                ↵
+              </span>
+            )}
           </button>
 
           <div className="login-page__oauth-row" data-testid="oauth-row">

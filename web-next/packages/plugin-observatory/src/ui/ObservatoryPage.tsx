@@ -42,7 +42,10 @@ export function ObservatoryPage() {
   }
 
   return (
-    <div data-testid="observatory-page" className="niuu-relative niuu-flex niuu-flex-col niuu-h-full niuu-overflow-hidden">
+    <div
+      data-testid="observatory-page"
+      className="niuu-relative niuu-flex niuu-flex-col niuu-h-full niuu-overflow-hidden"
+    >
       <TopologyCanvas
         topology={topology}
         onNodeClick={handleNodeClick}
