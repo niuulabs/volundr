@@ -72,9 +72,7 @@ export function NodeInspector({
                 data-testid="inspector-condition"
                 className="niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded niuu-px-2 niuu-py-1.5 niuu-text-text-secondary niuu-text-xs niuu-font-mono"
               >
-                {node.condition || (
-                  <em className="niuu-text-text-muted">not set</em>
-                )}
+                {node.condition || <em className="niuu-text-text-muted">not set</em>}
               </div>
             </div>
           )}
@@ -88,9 +86,7 @@ export function NodeInspector({
                 data-testid="inspector-predicate"
                 className="niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded niuu-px-2 niuu-py-1.5 niuu-text-text-secondary niuu-text-xs niuu-font-mono"
               >
-                {node.predicate || (
-                  <em className="niuu-text-text-muted">not set</em>
-                )}
+                {node.predicate || <em className="niuu-text-text-muted">not set</em>}
               </div>
             </div>
           )}

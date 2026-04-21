@@ -150,7 +150,9 @@ describe('WorkflowBuilderPage', () => {
       deleteWorkflow: vi.fn().mockResolvedValue(undefined),
     };
     render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
-    await waitFor(() => expect(screen.getByTestId(`delete-workflow-${wf1.id}`)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId(`delete-workflow-${wf1.id}`)).toBeInTheDocument(),
+    );
     fireEvent.click(screen.getByTestId(`delete-workflow-${wf1.id}`));
     await waitFor(() => expect(svc.deleteWorkflow).toHaveBeenCalledWith(wf1.id));
   });
