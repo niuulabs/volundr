@@ -295,11 +295,16 @@ test.describe('capture web2 baselines — mimir', () => {
 
   test('home', async ({ page }) => {
     await gotoMimir(page);
+    // Prototype defaults to Pages tab (TWEAKS.tab="pages"). Click Overview explicitly.
+    await page.click('button.mm-subnav-btn:has-text("Overview")');
+    await page.waitForTimeout(400);
     await page.screenshot({ path: outPath('mimir', 'home'), fullPage: false });
   });
 
   test('pages — tree', async ({ page }) => {
     await gotoMimir(page);
+    // Prototype defaults to Pages tab, so this should already show Pages.
+    // Click anyway to be explicit.
     await page.click('button.mm-subnav-btn:has-text("Pages")');
     await page.waitForTimeout(400);
     await page.screenshot({ path: outPath('mimir', 'pages-tree'), fullPage: false });
