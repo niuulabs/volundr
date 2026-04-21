@@ -177,7 +177,13 @@ function TypesTab({ registry, selectedId, onSelect, search }: TypesTabProps) {
                   </span>
                 </div>
                 <div className="type-meta">
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--brand-300)' }}>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
+                      color: 'var(--brand-300)',
+                    }}
+                  >
                     {t.id}
                   </div>
                   <div>
@@ -480,7 +486,12 @@ export function RegistryEditor({ registry: initialRegistry }: RegistryEditorProp
         {/* Tab content */}
         <div role="tabpanel" className="niuu-flex-1 niuu-overflow-y-auto niuu-py-5 niuu-px-6">
           {activeTab === 'types' && (
-            <TypesTab registry={registry} selectedId={selectedId} onSelect={select} search={search} />
+            <TypesTab
+              registry={registry}
+              selectedId={selectedId}
+              onSelect={select}
+              search={search}
+            />
           )}
           {activeTab === 'containment' && (
             <ContainmentTab
@@ -495,9 +506,7 @@ export function RegistryEditor({ registry: initialRegistry }: RegistryEditorProp
       </div>
 
       {/* Drawer */}
-      {showDrawer && (
-        <TypePreviewDrawer type={selectedType} onClose={() => select(null)} />
-      )}
+      {showDrawer && <TypePreviewDrawer type={selectedType} onClose={() => select(null)} />}
     </div>
   );
 }

@@ -42,7 +42,9 @@
     cursor: pointer;
     text-align: left;
     width: 100%;
-    transition: border-color 120ms ease, background 120ms ease;
+    transition:
+      border-color 120ms ease,
+      background 120ms ease;
   }
 
   .type-card:hover {
