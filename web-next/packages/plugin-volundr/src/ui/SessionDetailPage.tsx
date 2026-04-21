@@ -197,9 +197,7 @@ function SessionHeader({ session, readOnly }: { session: Session; readOnly: bool
       </div>
 
       {/* File change summary row */}
-      {session.files && (
-        <FileChangeSummary files={session.files} />
-      )}
+      {session.files && <FileChangeSummary files={session.files} />}
 
       {/* Resources row (collapsible) */}
       {showRes && (
@@ -654,7 +652,11 @@ function buildMockHunks(file: MockDiffFile): DiffHunk[] {
       lines: [
         { type: 'ctx', content: 'export class AuthHandler {', oldLine: 10, newLine: 10 },
         { type: 'remove', content: '  validate(token: string): boolean {', oldLine: 11 },
-        { type: 'add', content: '  async validate(token: string): Promise<boolean> {', newLine: 11 },
+        {
+          type: 'add',
+          content: '  async validate(token: string): Promise<boolean> {',
+          newLine: 11,
+        },
         { type: 'add', content: '    const claims = await validateJwt(token);', newLine: 12 },
         { type: 'ctx', content: '    return !!claims;', oldLine: 12, newLine: 13 },
         { type: 'ctx', content: '  }', oldLine: 13, newLine: 14 },
@@ -673,7 +675,10 @@ function DiffFileList({
   onSelect: (path: string) => void;
 }) {
   return (
-    <div className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-auto" data-testid="diff-file-list">
+    <div
+      className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-auto"
+      data-testid="diff-file-list"
+    >
       {files.map((f) => (
         <button
           key={f.path}
@@ -715,7 +720,10 @@ function DiffFileList({
 function DiffViewer({ file }: { file: MockDiffFile }) {
   const hunks = buildMockHunks(file);
   return (
-    <div className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-auto" data-testid="diff-viewer">
+    <div
+      className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-auto"
+      data-testid="diff-viewer"
+    >
       <div className="niuu-flex niuu-flex-shrink-0 niuu-items-center niuu-gap-2 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2">
         <span
           className={cn(
@@ -744,8 +752,10 @@ function DiffViewer({ file }: { file: MockDiffFile }) {
                 key={j}
                 className={cn(
                   'niuu-flex niuu-gap-2 niuu-px-4 niuu-py-px',
-                  line.type === 'add' && 'niuu-bg-[color-mix(in_srgb,var(--color-accent-emerald)_8%,transparent)]',
-                  line.type === 'remove' && 'niuu-bg-[color-mix(in_srgb,var(--color-critical)_8%,transparent)]',
+                  line.type === 'add' &&
+                    'niuu-bg-[color-mix(in_srgb,var(--color-accent-emerald)_8%,transparent)]',
+                  line.type === 'remove' &&
+                    'niuu-bg-[color-mix(in_srgb,var(--color-critical)_8%,transparent)]',
                 )}
               >
                 <span className="niuu-w-8 niuu-flex-shrink-0 niuu-select-none niuu-text-right niuu-text-text-faint">
@@ -838,16 +848,47 @@ const CHRONICLE_TYPE_LABELS: Record<ChronicleEventType, string> = {
 function buildMockChronicle(): ChronicleEvent[] {
   const now = Date.now();
   return [
-    { id: 'c-1', type: 'session', label: 'session started · workspace cloned', ts: now - 3_600_000 },
+    {
+      id: 'c-1',
+      type: 'session',
+      label: 'session started · workspace cloned',
+      ts: now - 3_600_000,
+    },
     { id: 'c-2', type: 'message', label: 'user: implement the auth handler', ts: now - 3_500_000 },
     { id: 'c-3', type: 'terminal', label: 'npm install', ts: now - 3_480_000, exit: 0 },
-    { id: 'c-4', type: 'file', label: 'src/auth/handler.ts · initial implementation', ts: now - 3_400_000, ins: 42, del: 0 },
-    { id: 'c-5', type: 'file', label: 'src/auth/jwt.ts · add JWT validation', ts: now - 3_380_000, ins: 96, del: 0 },
+    {
+      id: 'c-4',
+      type: 'file',
+      label: 'src/auth/handler.ts · initial implementation',
+      ts: now - 3_400_000,
+      ins: 42,
+      del: 0,
+    },
+    {
+      id: 'c-5',
+      type: 'file',
+      label: 'src/auth/jwt.ts · add JWT validation',
+      ts: now - 3_380_000,
+      ins: 96,
+      del: 0,
+    },
     { id: 'c-6', type: 'terminal', label: 'npm test', ts: now - 3_360_000, exit: 0 },
-    { id: 'c-7', type: 'git', label: 'feat(auth): add JWT validation handler', ts: now - 3_340_000, hash: 'a1b2c3d' },
+    {
+      id: 'c-7',
+      type: 'git',
+      label: 'feat(auth): add JWT validation handler',
+      ts: now - 3_340_000,
+      hash: 'a1b2c3d',
+    },
     { id: 'c-8', type: 'message', label: 'user: run the tests', ts: now - 2_400_000 },
     { id: 'c-9', type: 'terminal', label: 'npm test -- --coverage', ts: now - 2_380_000, exit: 0 },
-    { id: 'c-10', type: 'git', label: 'test(auth): add coverage for jwt handler', ts: now - 2_340_000, hash: 'e4f5a6b' },
+    {
+      id: 'c-10',
+      type: 'git',
+      label: 'test(auth): add coverage for jwt handler',
+      ts: now - 2_340_000,
+      hash: 'e4f5a6b',
+    },
   ];
 }
 
@@ -905,14 +946,20 @@ function ChronicleEventRow({ event }: { event: ChronicleEvent }) {
           </>
         ) : event.type === 'file' ? (
           <>
-            <span className="niuu-font-mono niuu-text-text-secondary">{event.label.split(' · ')[0]}</span>
+            <span className="niuu-font-mono niuu-text-text-secondary">
+              {event.label.split(' · ')[0]}
+            </span>
             {event.label.split(' · ')[1] && (
               <span className="niuu-text-text-muted">{event.label.split(' · ')[1]}</span>
             )}
             {(event.ins !== undefined || event.del !== undefined) && (
               <span className="niuu-font-mono niuu-text-[10px]">
-                {event.ins !== undefined && <span className="niuu-text-state-ok">+{event.ins}</span>}
-                {event.del !== undefined && <span className="niuu-ml-1 niuu-text-critical">-{event.del}</span>}
+                {event.ins !== undefined && (
+                  <span className="niuu-text-state-ok">+{event.ins}</span>
+                )}
+                {event.del !== undefined && (
+                  <span className="niuu-ml-1 niuu-text-critical">-{event.del}</span>
+                )}
               </span>
             )}
           </>
@@ -992,17 +1039,53 @@ const LOG_LEVEL_CLASSES: Record<LogLevel, string> = {
 
 const MOCK_LOGS: LogLine[] = [
   { id: 'l-1', ts: '10:00:01', level: 'info', src: 'skuld', msg: 'session starting' },
-  { id: 'l-2', ts: '10:00:02', level: 'info', src: 'skuld', msg: 'workspace cloned: niuulabs/volundr' },
-  { id: 'l-3', ts: '10:00:05', level: 'debug', src: 'ravn', msg: 'model loaded: claude-sonnet-4-6' },
+  {
+    id: 'l-2',
+    ts: '10:00:02',
+    level: 'info',
+    src: 'skuld',
+    msg: 'workspace cloned: niuulabs/volundr',
+  },
+  {
+    id: 'l-3',
+    ts: '10:00:05',
+    level: 'debug',
+    src: 'ravn',
+    msg: 'model loaded: claude-sonnet-4-6',
+  },
   { id: 'l-4', ts: '10:00:06', level: 'info', src: 'ravn', msg: 'mesh room joined: room-ds-1' },
-  { id: 'l-5', ts: '10:01:14', level: 'info', src: 'ravn', msg: 'tool: read_file src/auth/handler.ts' },
+  {
+    id: 'l-5',
+    ts: '10:01:14',
+    level: 'info',
+    src: 'ravn',
+    msg: 'tool: read_file src/auth/handler.ts',
+  },
   { id: 'l-6', ts: '10:01:15', level: 'debug', src: 'ravn', msg: 'tool ok · 45ms · 2.1kb' },
-  { id: 'l-7', ts: '10:02:30', level: 'info', src: 'ravn', msg: 'tool: write_file src/auth/jwt.ts' },
+  {
+    id: 'l-7',
+    ts: '10:02:30',
+    level: 'info',
+    src: 'ravn',
+    msg: 'tool: write_file src/auth/jwt.ts',
+  },
   { id: 'l-8', ts: '10:02:31', level: 'debug', src: 'ravn', msg: 'tool ok · 12ms' },
-  { id: 'l-9', ts: '10:04:00', level: 'warn', src: 'skuld', msg: 'cpu approaching limit: 1.8/2.0c' },
+  {
+    id: 'l-9',
+    ts: '10:04:00',
+    level: 'warn',
+    src: 'skuld',
+    msg: 'cpu approaching limit: 1.8/2.0c',
+  },
   { id: 'l-10', ts: '10:05:22', level: 'info', src: 'ravn', msg: 'tool: run_command npm test' },
   { id: 'l-11', ts: '10:05:23', level: 'debug', src: 'ravn', msg: 'exit 0 · 1.2s' },
-  { id: 'l-12', ts: '10:06:00', level: 'info', src: 'skuld', msg: 'commit: feat(auth): add JWT validation handler' },
+  {
+    id: 'l-12',
+    ts: '10:06:00',
+    level: 'info',
+    src: 'skuld',
+    msg: 'commit: feat(auth): add JWT validation handler',
+  },
 ];
 
 function LogsTab() {
