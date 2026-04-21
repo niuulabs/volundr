@@ -112,4 +112,49 @@ describe('WorkflowBuilderPage', () => {
     render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
     await waitFor(() => expect(screen.getByTestId('workflow-builder')).toBeInTheDocument());
   });
+
+  it('renders the new workflow button', async () => {
+    const svc = { listWorkflows: vi.fn().mockResolvedValue([wf1]) };
+    render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
+    expect(screen.getByTestId('new-workflow')).toBeInTheDocument();
+  });
+
+  it('calls saveWorkflow when new workflow button is clicked', async () => {
+    const newWf: Workflow = { id: 'new-id', name: 'New Workflow', nodes: [], edges: [] };
+    const svc = {
+      listWorkflows: vi.fn().mockResolvedValue([wf1]),
+      saveWorkflow: vi.fn().mockResolvedValue(newWf),
+    };
+    render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
+    fireEvent.click(screen.getByTestId('new-workflow'));
+    await waitFor(() => expect(svc.saveWorkflow).toHaveBeenCalledTimes(1));
+    const saved = svc.saveWorkflow.mock.calls[0]![0] as Workflow;
+    expect(saved.name).toBe('New Workflow');
+    expect(saved.nodes).toHaveLength(0);
+    expect(saved.edges).toHaveLength(0);
+  });
+
+  it('shows delete button on the active workflow tab', async () => {
+    const svc = { listWorkflows: vi.fn().mockResolvedValue([wf1, wf2]) };
+    render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
+    await waitFor(() => expect(screen.getByTestId(`workflow-tab-${wf1.id}`)).toBeInTheDocument());
+    // First workflow is active by default — its delete button should be visible
+    expect(screen.getByTestId(`delete-workflow-${wf1.id}`)).toBeInTheDocument();
+    // Second workflow is not active — no delete button
+    expect(screen.queryByTestId(`delete-workflow-${wf2.id}`)).not.toBeInTheDocument();
+  });
+
+  it('calls deleteWorkflow when delete button is clicked', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const svc = {
+      listWorkflows: vi.fn().mockResolvedValue([wf1]),
+      deleteWorkflow: vi.fn().mockResolvedValue(undefined),
+    };
+    render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
+    await waitFor(() =>
+      expect(screen.getByTestId(`delete-workflow-${wf1.id}`)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId(`delete-workflow-${wf1.id}`));
+    await waitFor(() => expect(svc.deleteWorkflow).toHaveBeenCalledWith(wf1.id));
+  });
 });

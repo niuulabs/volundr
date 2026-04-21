@@ -32,33 +32,12 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
   return (
     <div
       data-testid="library-panel"
-      style={{
-        width: 140,
-        flexShrink: 0,
-        borderLeft: '1px solid var(--color-border)',
-        background: 'var(--color-bg-secondary)',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-      }}
+      className="niuu-w-[140px] niuu-shrink-0 niuu-border-l niuu-border-border niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-hidden"
     >
-      <div
-        style={{
-          padding: '10px 10px 6px',
-          fontSize: 10,
-          fontWeight: 600,
-          textTransform: 'uppercase',
-          letterSpacing: 1,
-          color: 'var(--color-text-muted)',
-          fontFamily: 'var(--font-sans)',
-          borderBottom: '1px solid var(--color-border)',
-        }}
-      >
+      <div className="niuu-px-2.5 niuu-pt-2.5 niuu-pb-1.5 niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-widest niuu-text-text-muted niuu-font-sans niuu-border-b niuu-border-border">
         Personas
       </div>
-      <div
-        style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 4, overflowY: 'auto' }}
-      >
+      <div className="niuu-p-2 niuu-flex niuu-flex-col niuu-gap-1 niuu-overflow-y-auto">
         {personas.map((persona) => (
           <div
             key={persona.id}
@@ -68,24 +47,9 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
               e.dataTransfer.setData('application/niuu-persona-id', persona.id);
               e.dataTransfer.effectAllowed = 'copy';
             }}
-            style={{
-              padding: '6px 8px',
-              background: 'var(--color-bg-elevated)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 4,
-              cursor: 'grab',
-              fontSize: 11,
-              color: 'var(--color-text-primary)',
-              fontFamily: 'var(--font-sans)',
-              userSelect: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
+            className="niuu-py-1.5 niuu-px-2 niuu-bg-bg-elevated niuu-border niuu-border-border niuu-rounded niuu-cursor-grab niuu-text-xs niuu-text-text-primary niuu-font-sans niuu-select-none niuu-flex niuu-items-center niuu-gap-1"
           >
-            <span
-              style={{ fontSize: 8, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}
-            >
+            <span className="niuu-text-[8px] niuu-text-text-muted niuu-uppercase">
               {persona.role}
             </span>
             <span>{persona.label}</span>

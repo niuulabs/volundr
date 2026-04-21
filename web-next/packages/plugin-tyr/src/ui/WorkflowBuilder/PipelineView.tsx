@@ -7,6 +7,7 @@
  * Owner: plugin-tyr (WorkflowBuilder).
  */
 
+import { cn } from '@niuulabs/ui';
 import type { WorkflowNode, WorkflowEdge } from '../../domain/workflow';
 import { topologicalSort } from '../../domain/topologicalSort';
 
@@ -23,10 +24,10 @@ const KIND_LABEL: Record<WorkflowNode['kind'], string> = {
   cond: 'Cond',
 };
 
-const KIND_BADGE_COLOR: Record<WorkflowNode['kind'], string> = {
-  stage: 'var(--color-brand)',
-  gate: 'var(--color-accent-amber)',
-  cond: 'var(--color-accent-cyan)',
+const KIND_BADGE_CLASS: Record<WorkflowNode['kind'], string> = {
+  stage: 'niuu-text-brand',
+  gate: 'niuu-text-status-amber',
+  cond: 'niuu-text-status-cyan',
 };
 
 export function PipelineView({ nodes, edges, selectedNodeId, onSelectNode }: PipelineViewProps) {
@@ -45,15 +46,7 @@ export function PipelineView({ nodes, edges, selectedNodeId, onSelectNode }: Pip
     return (
       <div
         data-testid="pipeline-view"
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--color-text-muted)',
-          fontSize: 13,
-          fontFamily: 'var(--font-sans)',
-        }}
+        className="niuu-flex-1 niuu-flex niuu-items-center niuu-justify-center niuu-text-text-muted niuu-text-sm niuu-font-sans"
       >
         No nodes — add stages in the Graph view.
       </div>
@@ -63,31 +56,17 @@ export function PipelineView({ nodes, edges, selectedNodeId, onSelectNode }: Pip
   return (
     <div
       data-testid="pipeline-view"
-      style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: 24,
-        fontFamily: 'var(--font-sans)',
-        background: 'var(--color-bg-primary)',
-      }}
+      className="niuu-flex-1 niuu-overflow-y-auto niuu-p-6 niuu-font-sans niuu-bg-bg-primary"
     >
       {layers.map((layer, layerIdx) => (
         <div key={layer.depth}>
           {/* Layer label */}
-          <div
-            style={{
-              fontSize: 10,
-              color: 'var(--color-text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              marginBottom: 6,
-            }}
-          >
+          <div className="niuu-text-xs niuu-text-text-muted niuu-uppercase niuu-tracking-widest niuu-mb-1.5">
             Layer {layer.depth}
           </div>
 
           {/* Nodes in this layer */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+          <div className="niuu-flex niuu-flex-wrap niuu-gap-2 niuu-mb-2">
             {layer.nodeIds.map((id) => {
               const node = nodeById.get(id);
               if (!node) return null;
@@ -98,44 +77,26 @@ export function PipelineView({ nodes, edges, selectedNodeId, onSelectNode }: Pip
                   data-testid={`pipeline-node-${id}`}
                   data-selected={isSelected ? 'true' : undefined}
                   onClick={() => onSelectNode?.(id)}
-                  style={{
-                    background: isSelected
-                      ? 'var(--color-bg-elevated)'
-                      : 'var(--color-bg-secondary)',
-                    border: `1px solid ${isSelected ? 'var(--color-brand)' : 'var(--color-border)'}`,
-                    borderRadius: 6,
-                    padding: '8px 14px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    gap: 2,
-                    minWidth: 120,
-                    fontFamily: 'var(--font-sans)',
-                  }}
+                  className={cn(
+                    'niuu-rounded-sm niuu-px-3.5 niuu-py-2 niuu-cursor-pointer niuu-flex niuu-flex-col niuu-items-start niuu-gap-0.5 niuu-min-w-[120px] niuu-font-sans niuu-border',
+                    isSelected
+                      ? 'niuu-bg-bg-elevated niuu-border-brand'
+                      : 'niuu-bg-bg-secondary niuu-border-border',
+                  )}
                 >
                   <span
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      letterSpacing: 0.5,
-                      color: KIND_BADGE_COLOR[node.kind],
-                    }}
+                    className={cn(
+                      'niuu-text-[9px] niuu-font-semibold niuu-uppercase niuu-tracking-wide',
+                      KIND_BADGE_CLASS[node.kind],
+                    )}
                   >
                     {KIND_LABEL[node.kind]}
                   </span>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      color: 'var(--color-text-primary)',
-                      fontWeight: 500,
-                    }}
-                  >
+                  <span className="niuu-text-sm niuu-text-text-primary niuu-font-medium">
                     {node.label}
                   </span>
                   {node.kind === 'stage' && node.personaIds.length > 0 && (
-                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+                    <span className="niuu-text-xs niuu-text-text-muted">
                       {node.personaIds.length} persona{node.personaIds.length !== 1 ? 's' : ''}
                     </span>
                   )}
@@ -146,15 +107,7 @@ export function PipelineView({ nodes, edges, selectedNodeId, onSelectNode }: Pip
 
           {/* Connector arrow between layers */}
           {layerIdx < layers.length - 1 && (
-            <div
-              style={{
-                marginLeft: 16,
-                marginBottom: 8,
-                color: 'var(--color-border)',
-                fontSize: 18,
-                lineHeight: 1,
-              }}
-            >
+            <div className="niuu-ml-4 niuu-mb-2 niuu-text-border niuu-text-lg niuu-leading-none">
               ↓
             </div>
           )}
@@ -163,34 +116,17 @@ export function PipelineView({ nodes, edges, selectedNodeId, onSelectNode }: Pip
 
       {/* Cycle nodes (excluded from topological sort) */}
       {cycleNodes.length > 0 && (
-        <div style={{ marginTop: 16 }}>
-          <div
-            style={{
-              fontSize: 10,
-              color: 'var(--color-critical)',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              marginBottom: 6,
-            }}
-          >
+        <div className="niuu-mt-4">
+          <div className="niuu-text-xs niuu-text-critical niuu-uppercase niuu-tracking-widest niuu-mb-1.5">
             ⚠ Cycle nodes (excluded)
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div className="niuu-flex niuu-flex-wrap niuu-gap-2">
             {cycleNodes.map((node) => (
               <button
                 key={node.id}
                 data-testid={`pipeline-node-${node.id}`}
                 onClick={() => onSelectNode?.(node.id)}
-                style={{
-                  background: 'var(--color-critical-bg)',
-                  border: '1px solid var(--color-critical)',
-                  borderRadius: 6,
-                  padding: '8px 14px',
-                  cursor: 'pointer',
-                  fontFamily: 'var(--font-sans)',
-                  color: 'var(--color-critical-fg)',
-                  fontSize: 13,
-                }}
+                className="niuu-bg-critical-bg niuu-border niuu-border-critical niuu-rounded-sm niuu-px-3.5 niuu-py-2 niuu-cursor-pointer niuu-font-sans niuu-text-critical-fg niuu-text-sm"
               >
                 {node.label}
               </button>

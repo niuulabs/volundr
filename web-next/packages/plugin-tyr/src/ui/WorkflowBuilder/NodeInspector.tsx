@@ -7,7 +7,7 @@
  * Owner: plugin-tyr (WorkflowBuilder).
  */
 
-import { Dialog, DialogContent } from '@niuulabs/ui';
+import { cn, Dialog, DialogContent } from '@niuulabs/ui';
 import type { WorkflowNode } from '../../domain/workflow';
 import type { WorkflowBuilderActions } from './useWorkflowBuilder';
 
@@ -34,115 +34,59 @@ export function NodeInspector({
       }}
     >
       <DialogContent title={`${kindLabel}: ${node.label}`} description={`Node ID: ${node.id}`}>
-        <div data-testid="node-inspector" style={{ fontFamily: 'var(--font-sans)', fontSize: 13 }}>
+        <div data-testid="node-inspector" className="niuu-font-sans niuu-text-sm">
           {/* Kind badge */}
-          <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="niuu-mb-3 niuu-flex niuu-gap-2 niuu-items-center">
             <span
-              style={{
-                fontSize: 10,
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: 0.5,
-                color:
-                  node.kind === 'stage'
-                    ? 'var(--color-brand)'
-                    : node.kind === 'gate'
-                      ? 'var(--color-accent-amber)'
-                      : 'var(--color-accent-cyan)',
-                background: 'var(--color-bg-elevated)',
-                padding: '2px 8px',
-                borderRadius: 4,
-              }}
+              className={cn(
+                'niuu-text-xs niuu-font-semibold niuu-uppercase niuu-tracking-wide niuu-bg-bg-elevated niuu-px-2 niuu-py-0.5 niuu-rounded',
+                node.kind === 'stage'
+                  ? 'niuu-text-brand'
+                  : node.kind === 'gate'
+                    ? 'niuu-text-status-amber'
+                    : 'niuu-text-status-cyan',
+              )}
             >
               {kindLabel}
             </span>
           </div>
 
           {/* Label editor */}
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <span
-              style={{
-                display: 'block',
-                fontSize: 11,
-                color: 'var(--color-text-muted)',
-                marginBottom: 4,
-              }}
-            >
-              Label
-            </span>
+          <label className="niuu-block niuu-mb-3">
+            <span className="niuu-block niuu-text-xs niuu-text-text-muted niuu-mb-1">Label</span>
             <input
               data-testid="inspector-label"
               defaultValue={node.label}
               onBlur={(e) => onUpdateLabel(node.id, e.currentTarget.value)}
-              style={{
-                width: '100%',
-                background: 'var(--color-bg-secondary)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 4,
-                padding: '6px 8px',
-                color: 'var(--color-text-primary)',
-                fontSize: 13,
-                fontFamily: 'var(--font-sans)',
-                boxSizing: 'border-box',
-              }}
+              className="niuu-w-full niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded niuu-px-2 niuu-py-1.5 niuu-text-text-primary niuu-text-sm niuu-font-sans niuu-box-border"
             />
           </label>
 
           {/* Kind-specific fields */}
           {node.kind === 'gate' && (
-            <div style={{ marginBottom: 12 }}>
-              <span
-                style={{
-                  display: 'block',
-                  fontSize: 11,
-                  color: 'var(--color-text-muted)',
-                  marginBottom: 4,
-                }}
-              >
+            <div className="niuu-mb-3">
+              <span className="niuu-block niuu-text-xs niuu-text-text-muted niuu-mb-1">
                 Condition
               </span>
               <div
                 data-testid="inspector-condition"
-                style={{
-                  background: 'var(--color-bg-secondary)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 4,
-                  padding: '6px 8px',
-                  color: 'var(--color-text-secondary)',
-                  fontSize: 12,
-                  fontFamily: 'var(--font-mono)',
-                }}
+                className="niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded niuu-px-2 niuu-py-1.5 niuu-text-text-secondary niuu-text-xs niuu-font-mono"
               >
-                {node.condition || <em style={{ color: 'var(--color-text-muted)' }}>not set</em>}
+                {node.condition || <em className="niuu-text-text-muted">not set</em>}
               </div>
             </div>
           )}
 
           {node.kind === 'cond' && (
-            <div style={{ marginBottom: 12 }}>
-              <span
-                style={{
-                  display: 'block',
-                  fontSize: 11,
-                  color: 'var(--color-text-muted)',
-                  marginBottom: 4,
-                }}
-              >
+            <div className="niuu-mb-3">
+              <span className="niuu-block niuu-text-xs niuu-text-text-muted niuu-mb-1">
                 Predicate
               </span>
               <div
                 data-testid="inspector-predicate"
-                style={{
-                  background: 'var(--color-bg-secondary)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 4,
-                  padding: '6px 8px',
-                  color: 'var(--color-text-secondary)',
-                  fontSize: 12,
-                  fontFamily: 'var(--font-mono)',
-                }}
+                className="niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded niuu-px-2 niuu-py-1.5 niuu-text-text-secondary niuu-text-xs niuu-font-mono"
               >
-                {node.predicate || <em style={{ color: 'var(--color-text-muted)' }}>not set</em>}
+                {node.predicate || <em className="niuu-text-text-muted">not set</em>}
               </div>
             </div>
           )}
@@ -150,81 +94,41 @@ export function NodeInspector({
           {node.kind === 'stage' && (
             <>
               {/* Raid linkage */}
-              <div style={{ marginBottom: 12 }}>
-                <span
-                  style={{
-                    display: 'block',
-                    fontSize: 11,
-                    color: 'var(--color-text-muted)',
-                    marginBottom: 4,
-                  }}
-                >
+              <div className="niuu-mb-3">
+                <span className="niuu-block niuu-text-xs niuu-text-text-muted niuu-mb-1">
                   Raid ID
                 </span>
                 <div
                   data-testid="inspector-raid-id"
-                  style={{
-                    background: 'var(--color-bg-secondary)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 4,
-                    padding: '6px 8px',
-                    color: node.raidId ? 'var(--color-text-secondary)' : 'var(--color-text-muted)',
-                    fontSize: 12,
-                    fontFamily: 'var(--font-mono)',
-                  }}
+                  className={cn(
+                    'niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded niuu-px-2 niuu-py-1.5 niuu-text-xs niuu-font-mono',
+                    node.raidId ? 'niuu-text-text-secondary' : 'niuu-text-text-muted',
+                  )}
                 >
                   {node.raidId ?? 'unassigned'}
                 </div>
               </div>
 
               {/* Personas */}
-              <div style={{ marginBottom: 12 }}>
-                <span
-                  style={{
-                    display: 'block',
-                    fontSize: 11,
-                    color: 'var(--color-text-muted)',
-                    marginBottom: 4,
-                  }}
-                >
+              <div className="niuu-mb-3">
+                <span className="niuu-block niuu-text-xs niuu-text-text-muted niuu-mb-1">
                   Personas
                 </span>
                 {node.personaIds.length === 0 ? (
-                  <div style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>
-                    None assigned
-                  </div>
+                  <div className="niuu-text-text-muted niuu-text-xs">None assigned</div>
                 ) : (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  <div className="niuu-flex niuu-flex-wrap niuu-gap-1">
                     {node.personaIds.map((pid) => (
                       <span
                         key={pid}
                         data-testid={`inspector-persona-${pid}`}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          background: 'var(--color-bg-elevated)',
-                          border: '1px solid var(--color-border)',
-                          borderRadius: 4,
-                          padding: '2px 8px',
-                          fontSize: 12,
-                          color: 'var(--color-text-primary)',
-                          fontFamily: 'var(--font-sans)',
-                        }}
+                        className="niuu-inline-flex niuu-items-center niuu-gap-1 niuu-bg-bg-elevated niuu-border niuu-border-border niuu-rounded niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-text-text-primary niuu-font-sans"
                       >
                         {pid}
                         <button
                           data-testid={`remove-persona-${pid}`}
                           onClick={() => onRemovePersona(node.id, pid)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: 'var(--color-text-muted)',
-                            padding: 0,
-                            fontSize: 12,
-                            lineHeight: 1,
-                          }}
+                          className="niuu-bg-transparent niuu-border-none niuu-cursor-pointer niuu-text-text-muted niuu-p-0 niuu-text-xs niuu-leading-none"
                         >
                           ×
                         </button>

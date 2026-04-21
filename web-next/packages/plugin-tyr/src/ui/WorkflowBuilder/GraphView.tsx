@@ -16,6 +16,7 @@
  */
 
 import { useRef, useState, useEffect, useMemo } from 'react';
+import { cn } from '@niuulabs/ui';
 import type { WorkflowNode, WorkflowEdge } from '../../domain/workflow';
 import type { WorkflowBuilderActions } from './useWorkflowBuilder';
 import {
@@ -48,10 +49,10 @@ const C = {
   textMuted: 'var(--color-text-secondary)',
   edgeStroke: 'var(--color-border)',
   edgeStrokeHover: 'var(--color-text-secondary)',
-  gate: 'color-mix(in srgb, var(--color-accent-amber) 20%, var(--color-bg-secondary))',
-  gateStroke: 'var(--color-accent-amber)',
-  cond: 'color-mix(in srgb, var(--color-accent-cyan) 20%, var(--color-bg-secondary))',
-  condStroke: 'var(--color-accent-cyan)',
+  gate: 'color-mix(in srgb, var(--status-amber) 20%, var(--color-bg-secondary))',
+  gateStroke: 'var(--status-amber)',
+  cond: 'color-mix(in srgb, var(--status-cyan) 20%, var(--color-bg-secondary))',
+  condStroke: 'var(--status-cyan)',
 };
 
 // ---------------------------------------------------------------------------
@@ -123,7 +124,7 @@ function ConnectButton({
         e.stopPropagation();
         onClick();
       }}
-      style={{ cursor: 'pointer' }}
+      className="niuu-cursor-pointer"
     >
       <circle cx={cx} cy={cy} r={8} fill="var(--color-brand)" />
       <text
@@ -133,7 +134,7 @@ function ConnectButton({
         dominantBaseline="middle"
         fill="var(--color-bg-primary)"
         fontSize={12}
-        style={{ pointerEvents: 'none' }}
+        className="niuu-pointer-events-none"
       >
         →
       </text>
@@ -159,7 +160,7 @@ function DeleteButton({
         e.stopPropagation();
         onClick();
       }}
-      style={{ cursor: 'pointer' }}
+      className="niuu-cursor-pointer"
     >
       <circle cx={cx} cy={cy} r={7} fill="var(--color-critical)" />
       <text
@@ -169,7 +170,7 @@ function DeleteButton({
         dominantBaseline="middle"
         fill="var(--color-bg-primary)"
         fontSize={10}
-        style={{ pointerEvents: 'none' }}
+        className="niuu-pointer-events-none"
       >
         ×
       </text>
@@ -249,7 +250,7 @@ function StageNode({
         fill={C.text}
         fontSize={12}
         fontFamily="var(--font-sans)"
-        style={{ pointerEvents: 'none', userSelect: 'none' }}
+        className="niuu-pointer-events-none niuu-select-none"
       >
         {node.kind === 'stage' && node.label.length > 18
           ? node.label.slice(0, 16) + '…'
@@ -264,7 +265,7 @@ function StageNode({
           fill={C.textMuted}
           fontSize={9}
           fontFamily="var(--font-sans)"
-          style={{ pointerEvents: 'none', userSelect: 'none' }}
+          className="niuu-pointer-events-none niuu-select-none"
         >
           {node.kind === 'stage'
             ? `${node.personaIds.length} persona${node.personaIds.length !== 1 ? 's' : ''}`
@@ -290,7 +291,7 @@ function StageNode({
         width={STAGE_WIDTH}
         height={STAGE_HEIGHT}
         fill="transparent"
-        style={{ pointerEvents: 'none' }}
+        className="niuu-pointer-events-none"
       />
     </g>
   );
@@ -350,7 +351,7 @@ function GateNode({
         fill={C.text}
         fontSize={11}
         fontFamily="var(--font-sans)"
-        style={{ pointerEvents: 'none', userSelect: 'none' }}
+        className="niuu-pointer-events-none niuu-select-none"
       >
         {node.label.length > 8 ? node.label.slice(0, 7) + '…' : node.label}
       </text>
@@ -417,7 +418,7 @@ function CondNode({
         fill={C.text}
         fontSize={10}
         fontFamily="var(--font-sans)"
-        style={{ pointerEvents: 'none', userSelect: 'none' }}
+        className="niuu-pointer-events-none niuu-select-none"
       >
         {node.label.length > 6 ? node.label.slice(0, 5) + '…' : node.label}
       </text>
@@ -578,37 +579,20 @@ export function GraphView({
     onDragEnd: (pos: { x: number; y: number }) => onMoveNode(node.id, pos),
   });
 
+  const toolbarBtnClass =
+    'niuu-bg-bg-elevated niuu-text-text-primary niuu-border niuu-border-border niuu-rounded niuu-px-2.5 niuu-py-1 niuu-text-xs niuu-cursor-pointer niuu-font-sans';
+
   return (
     <div
       data-testid="graph-view"
-      style={{
-        flex: 1,
-        position: 'relative',
-        overflow: 'hidden',
-        background: C.bg,
-        minHeight: 400,
-      }}
+      className="niuu-flex-1 niuu-relative niuu-overflow-hidden niuu-bg-bg-primary niuu-min-h-[400px]"
     >
       {/* Toolbar */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 16,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          gap: 8,
-          zIndex: 10,
-          background: 'var(--color-bg-secondary)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 8,
-          padding: '6px 10px',
-        }}
-      >
+      <div className="niuu-absolute niuu-bottom-4 niuu-left-1/2 niuu--translate-x-1/2 niuu-flex niuu-gap-2 niuu-z-10 niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded-md niuu-py-1.5 niuu-px-2.5">
         <button
           data-testid="add-stage"
           onClick={() => onAddNode('stage')}
-          style={toolbarBtn}
+          className={toolbarBtnClass}
           title="Add stage node"
         >
           + Stage
@@ -616,7 +600,7 @@ export function GraphView({
         <button
           data-testid="add-gate"
           onClick={() => onAddNode('gate')}
-          style={toolbarBtn}
+          className={toolbarBtnClass}
           title="Add gate node"
         >
           ◇ Gate
@@ -624,7 +608,7 @@ export function GraphView({
         <button
           data-testid="add-cond"
           onClick={() => onAddNode('cond')}
-          style={toolbarBtn}
+          className={toolbarBtnClass}
           title="Add condition node"
         >
           ○ Cond
@@ -633,14 +617,14 @@ export function GraphView({
           <button
             data-testid="delete-selected"
             onClick={() => onDeleteNode(selectedNodeId)}
-            style={{ ...toolbarBtn, color: 'var(--color-critical)' }}
+            className={cn(toolbarBtnClass, 'niuu-text-critical')}
             title="Delete selected node"
           >
             Delete
           </button>
         )}
         {isConnectingMode && (
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 12, alignSelf: 'center' }}>
+          <span className="niuu-text-text-secondary niuu-text-xs niuu-self-center">
             Click target node…
           </span>
         )}
@@ -650,11 +634,8 @@ export function GraphView({
       <svg
         ref={svgRef}
         data-testid="graph-canvas"
-        style={{
-          width: '100%',
-          height: '100%',
-          cursor: isConnectingMode ? 'crosshair' : panRef.current ? 'grabbing' : 'default',
-        }}
+        className="niuu-w-full niuu-h-full"
+        style={{ cursor: isConnectingMode ? 'crosshair' : panRef.current ? 'grabbing' : 'default' }}
         onMouseDown={handleSvgMouseDown}
         onMouseMove={handleSvgMouseMove}
         onMouseUp={handleSvgMouseUp}
@@ -687,14 +668,3 @@ export function GraphView({
     </div>
   );
 }
-
-const toolbarBtn: React.CSSProperties = {
-  background: 'var(--color-bg-elevated)',
-  color: 'var(--color-text-primary)',
-  border: '1px solid var(--color-border)',
-  borderRadius: 4,
-  padding: '4px 10px',
-  fontSize: 12,
-  cursor: 'pointer',
-  fontFamily: 'var(--font-sans)',
-};
