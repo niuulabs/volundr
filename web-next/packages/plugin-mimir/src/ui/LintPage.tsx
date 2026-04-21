@@ -53,36 +53,79 @@ const BTN_BASE =
 const BTN_SECONDARY = `${BTN_BASE} niuu-bg-bg-secondary niuu-border-border niuu-text-text-primary hover:niuu-bg-bg-tertiary`;
 const BTN_FIX = `${BTN_BASE} niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-medium hover:niuu-opacity-[0.88]`;
 
+// F8: shared base class for sidebar check rows (All + per-rule)
+const CHECK_ROW_BASE =
+  'niuu-grid niuu-grid-cols-[52px_1fr_28px] niuu-items-center niuu-gap-2 niuu-py-2 niuu-px-3 ' +
+  'niuu-border-0 niuu-border-b niuu-border-solid niuu-border-border-subtle ' +
+  'niuu-cursor-pointer niuu-text-left niuu-w-full niuu-transition-colors';
+
+// F2/F3/F4/F5: shared KPI typography constants
+const KPI_CARD_BASE =
+  'niuu-flex niuu-flex-col niuu-gap-[2px] niuu-py-3 niuu-px-4 niuu-bg-bg-secondary niuu-border niuu-rounded-md niuu-min-w-[80px]';
+const KPI_LBL = 'niuu-text-[10px] niuu-uppercase niuu-tracking-[0.07em] niuu-text-text-muted';
+const KPI_VAL_BASE = 'niuu-text-2xl niuu-font-medium niuu-font-mono niuu-tracking-[-0.01em]';
+
 export function LintPage() {
   const { issues, summary, isLoading, isError, error, runAutoFix, isFixing } = useLint();
   const [selectedRule, setSelectedRule] = useState<LintRule | null>(null);
 
-  const countByRule = issues.reduce<Record<string, number>>((acc, issue) => {
-    acc[issue.rule] = (acc[issue.rule] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  const severityByRule = issues.reduce<Record<string, IssueSeverity>>((acc, issue) => {
-    const cur = acc[issue.rule];
-    if (
-      !cur ||
-      (issue.severity === 'error' && cur !== 'error') ||
-      (issue.severity === 'warn' && cur === 'info')
-    ) {
-      acc[issue.rule] = issue.severity;
-    }
-    return acc;
-  }, {});
-
-  const autoFixByRule = issues.reduce<Record<string, boolean>>((acc, issue) => {
-    if (issue.autoFix) acc[issue.rule] = true;
-    return acc;
-  }, {});
+  // F7: single-pass reduce for all three per-rule maps
+  const { countByRule, severityByRule, autoFixByRule } = issues.reduce<{
+    countByRule: Record<string, number>;
+    severityByRule: Record<string, IssueSeverity>;
+    autoFixByRule: Record<string, boolean>;
+  }>(
+    (acc, issue) => {
+      acc.countByRule[issue.rule] = (acc.countByRule[issue.rule] ?? 0) + 1;
+      const cur = acc.severityByRule[issue.rule];
+      if (
+        !cur ||
+        (issue.severity === 'error' && cur !== 'error') ||
+        (issue.severity === 'warn' && cur === 'info')
+      ) {
+        acc.severityByRule[issue.rule] = issue.severity;
+      }
+      if (issue.autoFix) acc.autoFixByRule[issue.rule] = true;
+      return acc;
+    },
+    { countByRule: {}, severityByRule: {}, autoFixByRule: {} },
+  );
 
   const rules = Object.keys(RULE_DESCRIPTIONS) as LintRule[];
   const filtered = selectedRule ? issues.filter((i) => i.rule === selectedRule) : issues;
+  // F1: auto-fixable KPI always shows global count; filtered ids drive the Fix-all button
+  const totalAutoFixable = issues.filter((i) => i.autoFix).length;
   const autoFixableIds = filtered.filter((i) => i.autoFix).map((i) => i.id);
   const totalLint = summary.error + summary.warn + summary.info;
+
+  // F9: KPI config array — avoids repeated card markup
+  const kpis = [
+    {
+      label: 'total issues',
+      value: totalLint,
+      valueCls: `${KPI_VAL_BASE} niuu-text-status-amber`,
+      cardBorder: 'niuu-border-status-amber',
+    },
+    {
+      label: 'errors',
+      value: summary.error,
+      valueCls: `${KPI_VAL_BASE} ${summary.error > 0 ? 'niuu-text-critical' : 'niuu-text-text-muted'}`,
+      cardBorder: 'niuu-border-border-subtle',
+    },
+    {
+      label: 'warnings',
+      value: summary.warn,
+      valueCls: `${KPI_VAL_BASE} niuu-text-status-amber`,
+      cardBorder: 'niuu-border-border-subtle',
+    },
+    // F6: auto-fixable uses brand-300, not status-cyan
+    {
+      label: 'auto-fixable',
+      value: totalAutoFixable,
+      valueCls: `${KPI_VAL_BASE} niuu-text-brand-300`,
+      cardBorder: 'niuu-border-brand-300',
+    },
+  ];
 
   if (isLoading) {
     return (
@@ -106,42 +149,12 @@ export function LintPage() {
     <div className="niuu-p-6 niuu-flex niuu-flex-col niuu-gap-4 niuu-h-full niuu-box-border">
       {/* ── KPI strip ───────────────────────────────────────────── */}
       <div className="niuu-flex niuu-gap-4 niuu-flex-wrap">
-        <div className="niuu-flex niuu-flex-col niuu-gap-[2px] niuu-py-3 niuu-px-4 niuu-bg-bg-secondary niuu-border niuu-border-status-amber niuu-rounded-md niuu-min-w-[80px]">
-          <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-[0.06em] niuu-text-text-muted">
-            total issues
-          </span>
-          <span className="niuu-text-xl niuu-font-bold niuu-font-mono niuu-text-status-amber">
-            {totalLint}
-          </span>
-        </div>
-        <div className="niuu-flex niuu-flex-col niuu-gap-[2px] niuu-py-3 niuu-px-4 niuu-bg-bg-secondary niuu-border niuu-border-border-subtle niuu-rounded-md niuu-min-w-[80px]">
-          <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-[0.06em] niuu-text-text-muted">
-            errors
-          </span>
-          <span
-            className={`niuu-text-xl niuu-font-bold niuu-font-mono ${
-              summary.error > 0 ? 'niuu-text-critical' : 'niuu-text-text-muted'
-            }`}
-          >
-            {summary.error}
-          </span>
-        </div>
-        <div className="niuu-flex niuu-flex-col niuu-gap-[2px] niuu-py-3 niuu-px-4 niuu-bg-bg-secondary niuu-border niuu-border-border-subtle niuu-rounded-md niuu-min-w-[80px]">
-          <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-[0.06em] niuu-text-text-muted">
-            warnings
-          </span>
-          <span className="niuu-text-xl niuu-font-bold niuu-font-mono niuu-text-status-amber">
-            {summary.warn}
-          </span>
-        </div>
-        <div className="niuu-flex niuu-flex-col niuu-gap-[2px] niuu-py-3 niuu-px-4 niuu-bg-bg-secondary niuu-border niuu-border-status-cyan niuu-rounded-md niuu-min-w-[80px]">
-          <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-[0.06em] niuu-text-text-muted">
-            auto-fixable
-          </span>
-          <span className="niuu-text-xl niuu-font-bold niuu-font-mono niuu-text-status-cyan">
-            {autoFixableIds.length}
-          </span>
-        </div>
+        {kpis.map((kpi) => (
+          <div key={kpi.label} className={`${KPI_CARD_BASE} ${kpi.cardBorder}`}>
+            <span className={KPI_LBL}>{kpi.label}</span>
+            <span className={kpi.valueCls}>{kpi.value}</span>
+          </div>
+        ))}
       </div>
 
       {/* ── 2-column layout ─────────────────────────────────────── */}
@@ -154,16 +167,10 @@ export function LintPage() {
           <h4 className="niuu-py-3 niuu-px-4 niuu-m-0 niuu-text-xs niuu-uppercase niuu-tracking-[0.07em] niuu-text-text-muted niuu-border-b niuu-border-border-subtle niuu-shrink-0">
             Lint checks
           </h4>
+          {/* F8: both rows reuse CHECK_ROW_BASE */}
           <button
             type="button"
-            className={[
-              'niuu-grid niuu-grid-cols-[52px_1fr_28px] niuu-items-center niuu-gap-2 niuu-py-2 niuu-px-3',
-              'niuu-border-0 niuu-border-b niuu-border-solid niuu-border-border-subtle',
-              'niuu-cursor-pointer niuu-text-left niuu-w-full niuu-transition-colors',
-              selectedRule === null
-                ? 'niuu-bg-bg-elevated'
-                : 'niuu-bg-transparent hover:niuu-bg-bg-tertiary',
-            ].join(' ')}
+            className={`${CHECK_ROW_BASE} ${selectedRule === null ? 'niuu-bg-bg-elevated' : 'niuu-bg-transparent hover:niuu-bg-bg-tertiary'}`}
             onClick={() => setSelectedRule(null)}
             aria-pressed={selectedRule === null}
           >
@@ -184,14 +191,7 @@ export function LintPage() {
               <button
                 key={rule}
                 type="button"
-                className={[
-                  'niuu-grid niuu-grid-cols-[52px_1fr_28px] niuu-items-center niuu-gap-2 niuu-py-2 niuu-px-3',
-                  'niuu-border-0 niuu-border-b niuu-border-solid niuu-border-border-subtle',
-                  'niuu-cursor-pointer niuu-text-left niuu-w-full niuu-transition-colors',
-                  selectedRule === rule
-                    ? 'niuu-bg-bg-elevated'
-                    : 'niuu-bg-transparent hover:niuu-bg-bg-tertiary',
-                ].join(' ')}
+                className={`${CHECK_ROW_BASE} ${selectedRule === rule ? 'niuu-bg-bg-elevated' : 'niuu-bg-transparent hover:niuu-bg-bg-tertiary'}`}
                 onClick={() => setSelectedRule(selectedRule === rule ? null : rule)}
                 aria-pressed={selectedRule === rule}
                 data-testid="check-row"
