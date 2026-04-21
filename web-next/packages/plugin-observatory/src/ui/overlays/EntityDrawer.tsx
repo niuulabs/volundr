@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Sparkline, StateDot } from '@niuulabs/ui';
 import type { DotState } from '@niuulabs/ui';
 import type { TopologyNode, Topology, Registry, NodeActivity } from '../../domain';
@@ -355,6 +355,15 @@ export function EntityDrawer({
   }, [node?.id]);
 
   const showSparkline = ['ravn_long', 'bifrost'].includes(node?.typeId ?? '');
+
+  useEffect(() => {
+    if (!node) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [node, onClose]);
 
   if (!node) return null;
 

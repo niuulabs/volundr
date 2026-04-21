@@ -317,4 +317,16 @@ describe('EntityDrawer', () => {
     });
     expect(screen.getByText('unknown-type')).toBeInTheDocument();
   });
+
+  it('calls onClose when Escape key is pressed', () => {
+    const { onClose } = renderDrawer(TYR_NODE);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('does not add Escape listener when drawer is closed (node is null)', () => {
+    const { onClose } = renderDrawer(null);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
