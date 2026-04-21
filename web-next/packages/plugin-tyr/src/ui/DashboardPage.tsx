@@ -157,7 +157,7 @@ function DashboardContent() {
           </span>
           <span className="tyr-dash__stat-sep" aria-hidden="true" />
           <span className="tyr-dash__stat">
-            concurrent <strong>{dispatcherState.maxConcurrentRaids}</strong>
+            concurrent <strong>{runningRaids}/{dispatcherState.maxConcurrentRaids}</strong>
           </span>
         </div>
       )}

@@ -161,7 +161,7 @@ describe('DashboardPage', () => {
     expect(bar).toHaveTextContent('threshold');
     expect(bar).toHaveTextContent('0.70');
     expect(bar).toHaveTextContent('concurrent');
-    expect(bar).toHaveTextContent('3');
+    expect(bar).toHaveTextContent('1/3');
   });
 
   it('does not render dispatcher stats bar while dispatcher is loading', () => {
@@ -191,7 +191,7 @@ describe('DashboardPage', () => {
     await waitFor(() => expect(screen.getByTestId('tyr-dispatcher-stats')).toBeInTheDocument());
     expect(screen.getByTestId('tyr-dispatcher-stats')).toHaveTextContent('off');
     expect(screen.getByTestId('tyr-dispatcher-stats')).toHaveTextContent('0.80');
-    expect(screen.getByTestId('tyr-dispatcher-stats')).toHaveTextContent('5');
+    expect(screen.getByTestId('tyr-dispatcher-stats')).toHaveTextContent('1/5');
   });
 
   // ---------------------------------------------------------------------------
