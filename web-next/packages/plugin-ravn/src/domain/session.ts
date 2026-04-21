@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { PersonaRole } from '@niuulabs/domain';
+import { personaRoleSchema, type PersonaRole } from '@niuulabs/domain';
 
 /**
  * Live status of a Session.
@@ -22,7 +22,7 @@ export const sessionSchema = z.object({
   /** Persona bound to the ravn at session start. */
   personaName: z.string().min(1),
   /** Functional role of the persona (drives avatar shape). */
-  personaRole: z.string().optional(),
+  personaRole: personaRoleSchema.optional(),
   /** Single display letter for the persona avatar. */
   personaLetter: z.string().optional(),
   /** Current session status. */

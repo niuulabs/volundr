@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { StateDot, PersonaAvatar } from '@niuulabs/ui';
+import { StateDot, PersonaAvatar, SegmentedFilter } from '@niuulabs/ui';
 import { useSessions, useMessages } from './hooks/useSessions';
 import { ActiveCursor } from './ActiveCursor';
 import { MessageRow } from './MessageRow';
@@ -18,7 +18,6 @@ import { loadStorage, saveStorage } from './storage';
 import { formatTime } from './formatTime';
 import type { Session } from '../domain/session';
 import type { Message, MessageKind } from '../domain/message';
-import type { PersonaRole } from '@niuulabs/domain';
 
 const SESSION_STORAGE_KEY = 'ravn.session';
 
@@ -55,6 +54,23 @@ function filterMessages(messages: Message[], filter: MessageFilter): Message[] {
 }
 
 // ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+function parseEmitContent(content: string): { event: string; payload?: unknown } {
+  try {
+    const parsed = JSON.parse(content) as { event?: string; payload?: unknown };
+    return { event: parsed.event ?? 'event', payload: parsed.payload };
+  } catch {
+    return { event: 'event' };
+  }
+}
+
+function formatTokens(count: number): string {
+  return count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count);
+}
+
+// ---------------------------------------------------------------------------
 // Derived timeline events
 // ---------------------------------------------------------------------------
 
@@ -79,19 +95,14 @@ function deriveTimelineEvents(messages: Message[], session: Session): TimelineEv
     if (m.kind === 'tool_call') {
       events.push({ kind: 'tool_call', ts: m.ts, label: `tool · ${m.toolName ?? 'call'}` });
     } else if (m.kind === 'emit') {
-      let eventName = 'event';
-      try {
-        const parsed = JSON.parse(m.content) as { event?: string };
-        eventName = parsed.event ?? 'event';
-      } catch {
-        // use default
-      }
-      events.push({ kind: 'emit', ts: m.ts, label: `emit · ${eventName}` });
+      const { event } = parseEmitContent(m.content);
+      events.push({ kind: 'emit', ts: m.ts, label: `emit · ${event}` });
     }
   }
 
   if (session.status !== 'running') {
-    events.push({ kind: 'end', ts: session.createdAt, label: session.status });
+    const endTs = messages.length > 0 ? messages[messages.length - 1]!.ts : session.createdAt;
+    events.push({ kind: 'end', ts: endTs, label: session.status });
   }
 
   return events;
@@ -136,7 +147,7 @@ function SessionListItem({
 // ---------------------------------------------------------------------------
 
 function TranscriptHeader({ session }: { session: Session }) {
-  const role = (session.personaRole ?? 'build') as PersonaRole;
+  const role = session.personaRole ?? 'build';
   const letter = session.personaLetter ?? session.personaName.charAt(0).toUpperCase();
   const isRunning = session.status === 'running';
 
@@ -174,9 +185,7 @@ function TranscriptHeader({ session }: { session: Session }) {
           {session.tokenCount != null && (
             <span className="rv-transcript__metric">
               <span className="rv-transcript__metric-value">
-                {session.tokenCount >= 1000
-                  ? `${(session.tokenCount / 1000).toFixed(1)}k`
-                  : String(session.tokenCount)}
+                {formatTokens(session.tokenCount)}
               </span>
               <span className="rv-transcript__metric-label">tokens</span>
             </span>
@@ -212,39 +221,6 @@ function TranscriptHeader({ session }: { session: Session }) {
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Filter toolbar
-// ---------------------------------------------------------------------------
-
-function FilterToolbar({
-  filter,
-  onFilter,
-}: {
-  filter: MessageFilter;
-  onFilter: (f: MessageFilter) => void;
-}) {
-  return (
-    <div
-      className="rv-filter-toolbar"
-      role="group"
-      aria-label="filter messages"
-      data-testid="filter-toolbar"
-    >
-      {FILTER_OPTIONS.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          className={`rv-filter-btn${filter === opt.value ? ' rv-filter-btn--active' : ''}`}
-          aria-pressed={filter === opt.value}
-          onClick={() => onFilter(opt.value)}
-        >
-          {opt.label}
-        </button>
-      ))}
     </div>
   );
 }
@@ -332,8 +308,17 @@ function Composer({ session }: { session: Session }) {
 // Transcript
 // ---------------------------------------------------------------------------
 
-function Transcript({ session }: { session: Session }) {
-  const { data: messages, isLoading, isError } = useMessages(session.id);
+function Transcript({
+  session,
+  messages,
+  messagesLoading,
+  messagesError,
+}: {
+  session: Session;
+  messages: Message[];
+  messagesLoading: boolean;
+  messagesError: boolean;
+}) {
   const [filter, setFilter] = useState<MessageFilter>('all');
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -341,7 +326,7 @@ function Transcript({ session }: { session: Session }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  if (isLoading) {
+  if (messagesLoading) {
     return (
       <div className="rv-transcript__empty">
         <StateDot state="processing" pulse />
@@ -350,7 +335,7 @@ function Transcript({ session }: { session: Session }) {
     );
   }
 
-  if (isError) {
+  if (messagesError) {
     return (
       <div className="rv-transcript__empty rv-transcript__empty--error">
         failed to load messages
@@ -358,13 +343,17 @@ function Transcript({ session }: { session: Session }) {
     );
   }
 
-  const allMessages = messages ?? [];
-  const filtered = filterMessages(allMessages, filter);
+  const filtered = filterMessages(messages, filter);
 
   return (
     <div className="rv-transcript" role="log" aria-label={`transcript for ${session.personaName}`}>
       <TranscriptHeader session={session} />
-      <FilterToolbar filter={filter} onFilter={setFilter} />
+      <SegmentedFilter
+        options={FILTER_OPTIONS}
+        value={filter}
+        onChange={setFilter}
+        aria-label="filter messages"
+      />
       <div className="rv-transcript__body">
         {filtered.map((msg) => (
           <MessageRow key={msg.id} message={msg} />
@@ -381,10 +370,9 @@ function Transcript({ session }: { session: Session }) {
 // Context sidebar
 // ---------------------------------------------------------------------------
 
-function ContextSidebar({ session }: { session: Session }) {
+function ContextSidebar({ session, messages }: { session: Session; messages: Message[] }) {
   const [timelineExpanded, setTimelineExpanded] = useState(false);
-  const { data: messages } = useMessages(session.id);
-  const msgs = useMemo(() => messages ?? [], [messages]);
+  const msgs = useMemo(() => messages, [messages]);
 
   const ratio =
     session.costUsd != null && session.messageCount != null && session.messageCount > 0
@@ -476,11 +464,7 @@ function ContextSidebar({ session }: { session: Session }) {
           <dd data-testid="ctx-msg-count">{session.messageCount ?? '—'}</dd>
           <dt>Tokens</dt>
           <dd data-testid="ctx-token-count">
-            {session.tokenCount != null
-              ? session.tokenCount >= 1000
-                ? `${(session.tokenCount / 1000).toFixed(1)}k`
-                : String(session.tokenCount)
-              : '—'}
+            {session.tokenCount != null ? formatTokens(session.tokenCount) : '—'}
           </dd>
           <dt>Cost</dt>
           <dd data-testid="ctx-cost">
@@ -507,15 +491,10 @@ function ContextSidebar({ session }: { session: Session }) {
         ) : (
           <ul className="rv-ctx-emissions" data-testid="emissions-list">
             {emissions.map((m) => {
-              let eventName = 'event';
-              let payloadPreview = '';
-              try {
-                const parsed = JSON.parse(m.content) as { event?: string; payload?: unknown };
-                eventName = parsed.event ?? 'event';
-                payloadPreview = JSON.stringify(parsed.payload ?? {}).slice(0, 48);
-              } catch {
-                payloadPreview = m.content.slice(0, 48);
-              }
+              const { event: eventName, payload } = parseEmitContent(m.content);
+              const payloadPreview = payload != null
+                ? JSON.stringify(payload).slice(0, 48)
+                : m.content.slice(0, 48);
               return (
                 <li key={m.id} className="rv-ctx-emit-item">
                   <div className="rv-ctx-emit-item__head">
@@ -558,6 +537,18 @@ export function SessionsView() {
     loadStorage<string | null>(SESSION_STORAGE_KEY, null),
   );
 
+  const sorted = sessions
+    ? [...sessions].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    : [];
+  const selected = sorted.find((s) => s.id === selectedId) ?? sorted[0] ?? null;
+
+  const {
+    data: rawMessages,
+    isLoading: messagesLoading,
+    isError: messagesError,
+  } = useMessages(selected?.id ?? '');
+  const sessionMessages = rawMessages ?? [];
+
   // Listen for subnav selection events
   useEffect(() => {
     const handleSelect = (e: Event) => {
@@ -568,11 +559,6 @@ export function SessionsView() {
     window.addEventListener('ravn:session-selected', handleSelect);
     return () => window.removeEventListener('ravn:session-selected', handleSelect);
   }, []);
-
-  const sorted = sessions
-    ? [...sessions].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    : [];
-  const selected = sorted.find((s) => s.id === selectedId) ?? sorted[0] ?? null;
 
   if (isLoading) {
     return (
@@ -625,14 +611,19 @@ export function SessionsView() {
       {/* ── Transcript ───────────────────────────────────────────────── */}
       <main className="rv-sessions-view__transcript">
         {selected ? (
-          <Transcript session={selected} />
+          <Transcript
+            session={selected}
+            messages={sessionMessages}
+            messagesLoading={messagesLoading}
+            messagesError={messagesError}
+          />
         ) : (
           <div className="rv-transcript__empty">select a session</div>
         )}
       </main>
 
       {/* ── Context sidebar ──────────────────────────────────────────── */}
-      {selected && <ContextSidebar session={selected} />}
+      {selected && <ContextSidebar session={selected} messages={sessionMessages} />}
     </div>
   );
 }

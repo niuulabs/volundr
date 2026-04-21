@@ -226,14 +226,15 @@ describe('TranscriptHeader', () => {
 describe('FilterToolbar', () => {
   it('renders filter toolbar', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() => expect(screen.getByTestId('filter-toolbar')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('group', { name: 'filter messages' })).toBeInTheDocument(),
+    );
   });
 
   it('renders all filter buttons', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
     await waitFor(() => {
-      const toolbar = screen.getByTestId('filter-toolbar');
-      expect(toolbar).toBeInTheDocument();
+      expect(screen.getByRole('group', { name: 'filter messages' })).toBeInTheDocument();
       ['All', 'User', 'Assistant', 'Tool', 'Emit', 'System', 'Think'].forEach((label) => {
         expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
       });
@@ -263,14 +264,17 @@ describe('FilterToolbar', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'User' })).toBeInTheDocument());
     // wait for messages to load
     await waitFor(() => expect(screen.getByRole('log')).toBeInTheDocument(), { timeout: 3000 });
+    // wait for message rows to appear (coding-agent session has 6 messages)
+    await waitFor(
+      () => expect(document.querySelectorAll('[data-kind]').length).toBeGreaterThan(0),
+      { timeout: 3000 },
+    );
     fireEvent.click(screen.getByRole('button', { name: 'User' }));
     await waitFor(() => {
-      // Only user kind messages should be shown
-      const _userMsgs = screen.getAllByTestId
-        ? document.querySelectorAll('[data-kind="user"]')
-        : [];
-      // At minimum the transcript should still be present
-      expect(screen.getByRole('log')).toBeInTheDocument();
+      const userMsgs = document.querySelectorAll('[data-kind="user"]');
+      const nonUserMsgs = document.querySelectorAll('[data-kind]:not([data-kind="user"])');
+      expect(userMsgs.length).toBeGreaterThan(0);
+      expect(nonUserMsgs.length).toBe(0);
     });
   });
 });
