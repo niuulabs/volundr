@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback, useRef } from 'react';
 import { usePersonas } from './usePersonas';
 import { usePersona } from './usePersona';
+import './PersonaSubs.css';
 
 // ── Layout constants ───────────────────────────────────────────────────────
 
@@ -171,11 +172,19 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
   const svgW = nodeX(2) + COL_W + PAD_H;
   const svgH = nodeY(maxRow) + NODE_H + PAD_V;
 
-  // Determine which nodes/edges are connected to the hovered node
-  const connectedIds = hoveredNodeId
+  // Determine which edges/nodes are connected to the hovered node.
+  // Track by edge key so edge opacity and node opacity are derived consistently.
+  const connectedEdgeKeys = hoveredNodeId
     ? new Set<string>(
         edges
           .filter((e) => e.from === hoveredNodeId || e.to === hoveredNodeId)
+          .map((e) => `${e.from}-${e.to}`),
+      )
+    : null;
+  const connectedNodeIds = connectedEdgeKeys
+    ? new Set<string>(
+        edges
+          .filter((e) => connectedEdgeKeys.has(`${e.from}-${e.to}`))
           .flatMap((e) => [e.from, e.to]),
       )
     : null;
@@ -214,7 +223,7 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
           if (!fromNode || !toNode) return null;
 
           const isConnectedToHovered =
-            !connectedIds || connectedIds.has(edge.from) || connectedIds.has(edge.to);
+            !connectedEdgeKeys || connectedEdgeKeys.has(`${edge.from}-${edge.to}`);
 
           const x1 = nodeX(fromNode.col) + COL_W;
           const y1 = nodeCy(fromNode.row);
@@ -264,14 +273,14 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
           const x = nodeX(node.col);
           const y = nodeY(node.row);
           const isFocus = node.id === name;
-          const isDimmed = connectedIds !== null && !connectedIds.has(node.id);
+          const isDimmed = connectedNodeIds !== null && !connectedNodeIds.has(node.id);
           const isClickable = !isFocus;
 
           return (
             <g
               key={node.id}
               opacity={isDimmed ? 0.25 : 1}
-              style={{ cursor: isClickable ? 'pointer' : 'default' }}
+              className={isClickable ? 'niuu-cursor-pointer' : undefined}
               onMouseEnter={() => setHoveredNodeId(node.id)}
               onMouseLeave={() => setHoveredNodeId(null)}
               onClick={() => handleNodeClick(node)}
@@ -335,13 +344,7 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
       >
         <span className="niuu-font-sans niuu-text-text-muted">Legend:</span>
         <span className="niuu-flex niuu-items-center niuu-gap-1">
-          <span
-            className="niuu-inline-block niuu-w-8 niuu-h-3 niuu-rounded-sm niuu-border"
-            style={{
-              borderColor: 'var(--brand-400)',
-              background: 'color-mix(in srgb, var(--brand-500) 18%, transparent)',
-            }}
-          />
+          <span className="niuu-inline-block niuu-w-8 niuu-h-3 niuu-rounded-sm niuu-border rv-subs-legend-focus" />
           focus (this persona)
         </span>
         <span className="niuu-flex niuu-items-center niuu-gap-1">

@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { usePersonaYaml } from './usePersona';
 
 // ── YAML tokenizer ─────────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ function tokenizeLine(line: string): YamlToken[] {
 
     if (rest!.trim()) {
       const trimmed = rest!.trim();
-      if (/^[\d.]+$/.test(trimmed)) {
+      if (/^\d+(\.\d+)?$/.test(trimmed)) {
         tokens.push({ type: 'number', text: rest! });
       } else if (/^(true|false|null)$/.test(trimmed)) {
         tokens.push({ type: 'boolean', text: rest! });
@@ -67,7 +67,6 @@ export interface PersonaYamlProps {
 
 export function PersonaYaml({ name }: PersonaYamlProps) {
   const { data, isLoading, isError, error } = usePersonaYaml(name);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const tokenizedLines = useMemo(() => {
     if (!data) return [];
@@ -97,11 +96,7 @@ export function PersonaYaml({ name }: PersonaYamlProps) {
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="niuu-overflow-auto niuu-h-full niuu-p-6"
-      data-testid="persona-yaml"
-    >
+    <div className="niuu-overflow-auto niuu-h-full niuu-p-6" data-testid="persona-yaml">
       <pre className="niuu-m-0 niuu-font-mono niuu-text-xs niuu-leading-relaxed">
         {tokenizedLines.map(({ lineNumber, tokens }) => (
           <div key={lineNumber} className="niuu-flex">

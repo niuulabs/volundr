@@ -1,4 +1,4 @@
-import { PersonaAvatar } from '@niuulabs/ui';
+import { cn, PersonaAvatar } from '@niuulabs/ui';
 import type { PersonaRole } from '@niuulabs/domain';
 import { usePersonas } from './usePersonas';
 import { PERSONA_ROLE_ORDER } from '../catalog';
@@ -90,14 +90,14 @@ export function PersonaList({ selectedName, onSelect, onNew }: PersonaListProps)
                   type="button"
                   aria-current={isSelected ? 'page' : undefined}
                   onClick={() => onSelect(p.name)}
-                  className={[
+                  className={cn(
                     'niuu-flex niuu-items-center niuu-gap-2 niuu-w-full niuu-px-3 niuu-py-2',
                     'niuu-text-left niuu-text-sm niuu-font-sans niuu-rounded-none niuu-border-0',
                     'niuu-transition-colors',
                     isSelected
                       ? 'rv-persona-row--selected niuu-bg-bg-tertiary niuu-text-text-primary'
                       : 'niuu-bg-transparent niuu-text-text-secondary hover:niuu-bg-bg-tertiary hover:niuu-text-text-primary',
-                  ].join(' ')}
+                  )}
                 >
                   <PersonaAvatar role={p.role} letter={p.letter} size={24} />
                   <span className="niuu-truncate niuu-flex-1">{p.name}</span>

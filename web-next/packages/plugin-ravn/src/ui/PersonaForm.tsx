@@ -1,5 +1,12 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { EventPicker, SchemaEditor, ToolPicker, ValidationSummary, MountChip } from '@niuulabs/ui';
+import {
+  cn,
+  EventPicker,
+  SchemaEditor,
+  ToolPicker,
+  ValidationSummary,
+  MountChip,
+} from '@niuulabs/ui';
 import type { FieldType, PersonaRole } from '@niuulabs/domain';
 import type { PersonaDetail, PersonaCreateRequest, PersonaConsumesEvent } from '../ports';
 import { validatePersona } from './validatePersona';
@@ -475,12 +482,12 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
                 return (
                   <span
                     key={toolId}
-                    className={[
+                    className={cn(
                       'niuu-inline-flex niuu-items-center niuu-gap-1 niuu-px-2 niuu-py-0 niuu-rounded niuu-text-xs niuu-font-mono',
                       tool?.destructive
                         ? 'niuu-bg-critical/10 niuu-text-critical niuu-border niuu-border-critical/30'
                         : 'niuu-bg-bg-tertiary niuu-text-text-secondary niuu-border niuu-border-border',
-                    ].join(' ')}
+                    )}
                   >
                     {tool?.destructive && (
                       <span className="niuu-inline-block niuu-w-1.5 niuu-h-1.5 niuu-rounded-full niuu-bg-critical" />
@@ -641,7 +648,10 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
                   type="button"
                   data-testid={`fanin-card-${s}`}
                   aria-pressed={isActive}
-                  onClick={() => update('fanInStrategy', s)}
+                  onClick={() => {
+                    setForm((prev) => ({ ...prev, fanInStrategy: s, fanInParams: undefined }));
+                    setDirty(true);
+                  }}
                   className={`rv-fanin-card${isActive ? ' rv-fanin-card--active' : ''}`}
                 >
                   <span className="rv-fanin-card__diagram">{FAN_IN_DIAGRAMS[s]}</span>
@@ -656,11 +666,11 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
           <button
             type="button"
             onClick={() => update('fanInStrategy', undefined)}
-            className={[
+            className={cn(
               'niuu-mt-2 niuu-text-xs niuu-text-text-muted niuu-bg-transparent niuu-border-0',
               'niuu-cursor-pointer niuu-px-0 hover:niuu-text-text-secondary niuu-self-start',
-              !form.fanInStrategy ? 'niuu-underline' : '',
-            ].join(' ')}
+              !form.fanInStrategy && 'niuu-underline',
+            )}
           >
             {form.fanInStrategy ? 'Clear strategy (none)' : '— no strategy selected —'}
           </button>
