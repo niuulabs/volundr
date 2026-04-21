@@ -1,6 +1,30 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
 
+// Node 22+ ships a built-in `localStorage` global that requires a valid
+// `--localstorage-file` path. Without it the object exists but methods like
+// `clear()`, `getItem()`, etc. are missing — breaking every test that touches
+// localStorage. Override with a simple in-memory implementation so jsdom tests
+// behave as expected regardless of the Node version.
+if (typeof localStorage === 'undefined' || typeof localStorage.clear !== 'function') {
+  const store = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => store.set(key, String(value)),
+    removeItem: (key: string) => store.delete(key),
+    clear: () => store.clear(),
+    get length() {
+      return store.size;
+    },
+    key: (index: number) => [...store.keys()][index] ?? null,
+  };
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: storage,
+    writable: true,
+    configurable: true,
+  });
+}
+
 // TanStack Router calls window.scrollTo during scroll-restoration inside tests.
 // jsdom doesn't implement it; stub it out to keep test output clean.
 Object.defineProperty(window, 'scrollTo', { value: () => {}, writable: true });

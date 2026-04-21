@@ -3,6 +3,9 @@
  *
  * All views live at /ravn with tab-based navigation. Tests click each tab to
  * reach the target view, then compare the full page snapshot.
+ *
+ * Shell tabs: Overview, Ravens, Personas, Sessions, Budget
+ * (Triggers and Events content lives within the Overview page.)
  */
 
 import { test, expect } from '@playwright/test';
@@ -17,7 +20,7 @@ test.beforeEach(async ({ page }) => {
 // ── Overview ──────────────────────────────────────────────────────────────────
 
 test('ravn overview matches web2', async ({ page }) => {
-  await page.getByTestId('ravn-tab-overview').click();
+  // Overview is the default tab at /ravn
   await page.waitForSelector('[data-testid="overview-page"]', { timeout: 5_000 });
   await expect(page).toHaveScreenshot('ravn-overview.png');
 });
@@ -34,31 +37,15 @@ test('ravn ravens split view matches web2', async ({ page }) => {
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
 test('ravn sessions matches web2', async ({ page }) => {
-  await page.getByRole('tab', { name: 'Sessions' }).click();
+  await page.getByTestId('ravn-tab-sessions').click();
   await page.waitForTimeout(400);
   await expect(page).toHaveScreenshot('ravn-sessions.png');
-});
-
-// ── Triggers ──────────────────────────────────────────────────────────────────
-
-test('ravn triggers matches web2', async ({ page }) => {
-  await page.getByRole('tab', { name: 'Triggers' }).click();
-  await page.waitForTimeout(400);
-  await expect(page).toHaveScreenshot('ravn-triggers.png');
-});
-
-// ── Events ────────────────────────────────────────────────────────────────────
-
-test('ravn events matches web2', async ({ page }) => {
-  await page.getByRole('tab', { name: 'Events' }).click();
-  await page.waitForTimeout(400);
-  await expect(page).toHaveScreenshot('ravn-events.png');
 });
 
 // ── Budget ─────────────────────────────────────────────────────────────────────
 
 test('ravn budget matches web2', async ({ page }) => {
-  await page.getByRole('tab', { name: 'Budget' }).click();
+  await page.getByTestId('ravn-tab-budget').click();
   await page.waitForTimeout(400);
   await expect(page).toHaveScreenshot('ravn-budget.png');
 });

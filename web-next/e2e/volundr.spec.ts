@@ -2,12 +2,12 @@ import { test, expect } from '@playwright/test';
 
 test('navigate to /volundr shows the session forge page', async ({ page }) => {
   await page.goto('/volundr');
-  await expect(page.getByText('Völundr · session forge')).toBeVisible();
+  await expect(page.getByTestId('forge-page')).toBeVisible();
 });
 
 test('volundr overview shows KPI strip after data loads', async ({ page }) => {
   await page.goto('/volundr');
-  await expect(page.getByText('Völundr · session forge')).toBeVisible();
+  await expect(page.getByTestId('forge-page')).toBeVisible();
   // Wait for KPI cards to appear — scope to the KPI region to avoid matching
   // other elements that contain these words (e.g. "Active sessions" heading,
   // LifecycleBadge "idle" pill in the sessions table).

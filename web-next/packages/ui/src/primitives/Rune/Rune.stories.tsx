@@ -17,7 +17,7 @@ export const Large: Story = { args: { size: 32 } };
 export const PluginGlyphs: Story = {
   render: () => (
     <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-      {['ᚠ', 'ᛗ', 'ᚱ', 'ᛏ', 'ᚢ', 'ᛚ'].map((g) => (
+      {['ᚠ', 'ᛗ', 'ᚱ', 'ᚦ', 'ᚢ', 'ᛚ'].map((g) => (
         <Rune key={g} glyph={g} size={28} />
       ))}
     </div>
