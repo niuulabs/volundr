@@ -4,6 +4,7 @@ import {
   BudgetBar,
   Sparkline,
   StateDot,
+  PersonaAvatar,
   LoadingState,
   ErrorState,
 } from '@niuulabs/ui';
@@ -11,7 +12,10 @@ import { useRavens } from './hooks/useRavens';
 import { useTriggers } from './hooks/useTriggers';
 import { useSessions } from './hooks/useSessions';
 import { useFleetBudget, useRavnBudgets } from './hooks/useBudget';
+import { useActivityLog } from './hooks/useActivityLog';
 import { topBudgetSpenders } from './grouping';
+import { formatTime } from './formatTime';
+import type { ActivityLogEntry } from '../domain/activityLog';
 import './OverviewPage.css';
 
 const TOP_SPENDERS_COUNT = 5;
@@ -41,11 +45,49 @@ function byLocation(ravens: { location?: string }[]): Array<{ name: string; coun
     .sort((a, b) => b.count - a.count);
 }
 
+function ActivityLogSection({ entries }: { entries: ActivityLogEntry[] }) {
+  if (entries.length === 0) {
+    return (
+      <div className="rv-log-panel" data-testid="activity-log">
+        <p className="rv-log-empty">No recent activity</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rv-log-panel" data-testid="activity-log">
+      <table className="rv-log-table" aria-label="Recent activity">
+        <thead>
+          <tr className="rv-log-thead-row">
+            <th className="rv-log-th">Time</th>
+            <th className="rv-log-th">Kind</th>
+            <th className="rv-log-th">Ravn</th>
+            <th className="rv-log-th">Event</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((e) => (
+            <tr key={e.id} className="rv-log-row" data-testid="activity-log-row">
+              <td className="rv-log-td--time">{formatTime(e.ts)}</td>
+              <td className="rv-log-td--kind">
+                <span className={`rv-log-kind rv-log-kind--${e.kind}`}>{e.kind}</span>
+              </td>
+              <td className="rv-log-td--persona">{e.ravnId}</td>
+              <td className="rv-log-td--event">{e.message}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function OverviewPage() {
   const ravens = useRavens();
   const triggers = useTriggers();
   const sessions = useSessions();
   const fleetBudget = useFleetBudget();
+  const activityLog = useActivityLog();
 
   const ravnList = ravens.data ?? [];
   const ravnIds = ravnList.map((r) => r.id);
@@ -142,6 +184,9 @@ export function OverviewPage() {
               <ul className="rv-active-list" data-testid="active-ravens-list">
                 {activeRavens.map((r) => (
                   <li key={r.id} className="rv-active-row" data-testid="active-ravn-row">
+                    {r.role && r.letter && (
+                      <PersonaAvatar role={r.role} letter={r.letter} size={16} />
+                    )}
                     <StateDot state="running" pulse size={8} />
                     <span className="rv-active-row__name">{r.personaName}</span>
                     <span className="rv-active-row__model">{r.model}</span>
@@ -175,7 +220,7 @@ export function OverviewPage() {
           )}
         </div>
 
-        {/* Right: Fleet sparkline + budget spenders */}
+        {/* Right: Fleet sparkline + budget spenders + activity log */}
         <section aria-labelledby="burning-now-heading">
           <h3 id="burning-now-heading" className="rv-section-heading">
             Burning now
@@ -226,6 +271,14 @@ export function OverviewPage() {
               );
             })}
           </ul>
+
+          {/* Recent activity log tail */}
+          <section aria-labelledby="activity-log-heading" className="rv-overview__activity">
+            <h3 id="activity-log-heading" className="rv-section-heading">
+              Recent activity
+            </h3>
+            <ActivityLogSection entries={activityLog.data ?? []} />
+          </section>
         </section>
       </div>
     </div>

@@ -6,10 +6,10 @@
   padding: 20px 24px;
 }
 
-/* 2-column grid — left (ravens) wider than right (spend) */
+/* 2-column grid — equal-width columns matching web2 spec */
 .rv-overview__grid {
   display: grid;
-  grid-template-columns: 3fr 2fr;
+  grid-template-columns: 1fr 1fr;
   gap: 20px;
   align-items: start;
 }
@@ -110,7 +110,7 @@
 
 .rv-loc-bar-fill {
   height: 100%;
-  background: var(--color-accent-cyan);
+  background: var(--brand-300);
   border-radius: var(--radius-full);
   transition: width 0.3s ease;
   min-width: 4px;
@@ -198,6 +198,41 @@
   font-family: var(--font-mono);
 }
 
+/* Recent activity section spacing */
+.rv-overview__activity {
+  margin-top: var(--space-5);
+}
+
+/* Activity log kind badges */
+.rv-log-kind {
+  display: inline-block;
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rv-log-kind--session {
+  background: color-mix(in srgb, var(--brand-300) 18%, transparent);
+  color: var(--brand-300);
+  border: 1px solid color-mix(in srgb, var(--brand-300) 30%, transparent);
+}
+
+.rv-log-kind--trigger {
+  background: color-mix(in srgb, var(--color-accent-amber) 18%, transparent);
+  color: var(--color-accent-amber);
+  border: 1px solid color-mix(in srgb, var(--color-accent-amber) 30%, transparent);
+}
+
+.rv-log-kind--emit {
+  background: color-mix(in srgb, var(--color-accent-purple) 18%, transparent);
+  color: var(--color-accent-purple);
+  border: 1px solid color-mix(in srgb, var(--color-accent-purple) 30%, transparent);
+}
+
 /* Log tail */
 .rv-log-panel {
   background: var(--color-bg-secondary);
@@ -237,6 +272,11 @@
 .rv-log-td--time {
   padding: var(--space-2) var(--space-3);
   color: var(--color-text-muted);
+}
+
+.rv-log-td--kind {
+  padding: var(--space-2) var(--space-3);
+  white-space: nowrap;
 }
 
 .rv-log-td--persona {

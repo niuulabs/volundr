@@ -226,6 +226,8 @@ interface RawRavn {
   model: string;
   created_at: string;
   updated_at?: string;
+  role?: string;
+  letter?: string;
 }
 
 interface RawSession {
@@ -269,6 +271,8 @@ function toRavn(raw: RawRavn): Ravn {
     model: raw.model,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
+    role: raw.role as Ravn['role'],
+    letter: raw.letter,
   };
 }
 

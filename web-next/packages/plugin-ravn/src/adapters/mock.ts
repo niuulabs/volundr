@@ -338,6 +338,8 @@ const SEED_RAVENS: Ravn[] = [
     model: 'claude-sonnet-4-6',
     createdAt: '2026-04-15T09:12:34Z',
     location: 'eu-west-1',
+    role: 'build',
+    letter: 'C',
   },
   {
     id: 'b7e2c9d1-3a4f-4b8e-a1c6-5d7f8e9a0b2c',
@@ -346,6 +348,8 @@ const SEED_RAVENS: Ravn[] = [
     model: 'claude-opus-4-6',
     createdAt: '2026-04-15T08:45:11Z',
     location: 'us-east-1',
+    role: 'review',
+    letter: 'R',
   },
   {
     id: 'c4d5e6f7-1a2b-4c3d-8e9f-0a1b2c3d4e5f',
@@ -354,6 +358,8 @@ const SEED_RAVENS: Ravn[] = [
     model: 'claude-haiku-4-5',
     createdAt: '2026-04-15T08:30:00Z',
     location: 'eu-west-1',
+    role: 'gate',
+    letter: 'S',
   },
   {
     id: 'd8e9f0a1-2b3c-4d5e-6f7a-8b9c0d1e2f3a',
@@ -362,6 +368,8 @@ const SEED_RAVENS: Ravn[] = [
     model: 'claude-sonnet-4-6',
     createdAt: '2026-04-15T07:55:22Z',
     location: 'ap-southeast-1',
+    role: 'verify',
+    letter: 'Q',
   },
   {
     id: 'e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b',
@@ -370,6 +378,8 @@ const SEED_RAVENS: Ravn[] = [
     model: 'claude-opus-4-6',
     createdAt: '2026-04-14T22:10:45Z',
     location: 'us-east-1',
+    role: 'verify',
+    letter: 'I',
   },
   {
     id: 'f5a6b7c8-9d0e-4f1a-2b3c-4d5e6f7a8b9c',
@@ -378,6 +388,8 @@ const SEED_RAVENS: Ravn[] = [
     model: 'claude-sonnet-4-6',
     createdAt: '2026-04-14T18:33:07Z',
     location: 'ap-southeast-1',
+    role: 'audit',
+    letter: 'H',
   },
 ];
 

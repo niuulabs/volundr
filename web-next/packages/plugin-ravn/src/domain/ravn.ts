@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { personaRoleSchema } from '@niuulabs/domain';
 
 /**
  * Deployment status of a Ravn node.
@@ -28,6 +29,10 @@ export const ravnSchema = z.object({
   updatedAt: z.string().datetime().optional(),
   /** Deployment location label (e.g. "eu-west-1", "us-east-1"). */
   location: z.string().optional(),
+  /** Persona role — cached for display (avatar shape). */
+  role: personaRoleSchema.optional(),
+  /** Persona letter — cached for display (avatar letter). */
+  letter: z.string().optional(),
 });
 
 export type Ravn = z.infer<typeof ravnSchema>;
