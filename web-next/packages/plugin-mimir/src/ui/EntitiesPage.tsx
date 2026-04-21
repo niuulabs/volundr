@@ -3,7 +3,6 @@ import { Chip, StateDot } from '@niuulabs/ui';
 import { useEntities } from '../application/useEntities';
 import { ENTITY_KINDS } from '../domain/entity';
 import type { EntityKind } from '../domain/entity';
-import './EntitiesPage.css';
 
 const KIND_ICONS: Record<EntityKind, string> = {
   person: '👤',
@@ -23,17 +22,23 @@ export function EntitiesPage() {
     : ENTITY_KINDS.filter((k) => (grouped[k]?.length ?? 0) > 0);
 
   return (
-    <div className="entities-page">
-      <h2 className="entities-page__title">Entities</h2>
+    <div className="niuu-p-6 niuu-max-w-4xl">
+      <h2 className="niuu-m-0 niuu-mb-5 niuu-text-2xl niuu-font-semibold niuu-text-text-primary">
+        Entities
+      </h2>
 
-      <div className="entities-page__filter" role="group" aria-label="Filter by entity type">
+      <div
+        className="niuu-flex niuu-flex-wrap niuu-gap-2 niuu-mb-6"
+        role="group"
+        aria-label="Filter by entity type"
+      >
         <button
           className={[
-            'entities-page__filter-btn',
-            filterKind == null ? 'entities-page__filter-btn--active' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
+            'niuu-px-3 niuu-py-1 niuu-rounded-full niuu-font-sans niuu-text-xs niuu-cursor-pointer niuu-border',
+            filterKind == null
+              ? 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-medium'
+              : 'niuu-bg-bg-secondary niuu-border-border-subtle niuu-text-text-secondary',
+          ].join(' ')}
           onClick={() => setFilterKind(undefined)}
           aria-pressed={filterKind == null}
         >
@@ -43,11 +48,11 @@ export function EntitiesPage() {
           <button
             key={k}
             className={[
-              'entities-page__filter-btn',
-              filterKind === k ? 'entities-page__filter-btn--active' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
+              'niuu-px-3 niuu-py-1 niuu-rounded-full niuu-font-sans niuu-text-xs niuu-cursor-pointer niuu-border',
+              filterKind === k
+                ? 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-medium'
+                : 'niuu-bg-bg-secondary niuu-border-border-subtle niuu-text-text-secondary',
+            ].join(' ')}
             onClick={() => setFilterKind(filterKind === k ? undefined : k)}
             aria-pressed={filterKind === k}
             data-kind={k}
@@ -58,43 +63,64 @@ export function EntitiesPage() {
       </div>
 
       {isLoading && (
-        <div className="entities-page__status">
+        <div className="niuu-flex niuu-items-center niuu-gap-2">
           <StateDot state="processing" pulse />
-          <span>loading entities…</span>
+          <span className="niuu-text-sm niuu-text-text-secondary">loading entities…</span>
         </div>
       )}
 
       {isError && (
-        <div className="entities-page__status">
+        <div className="niuu-flex niuu-items-center niuu-gap-2">
           <StateDot state="failed" />
-          <span>{error instanceof Error ? error.message : 'entities load failed'}</span>
+          <span className="niuu-text-sm niuu-text-text-secondary">
+            {error instanceof Error ? error.message : 'entities load failed'}
+          </span>
         </div>
       )}
 
       {!isLoading && !isError && entities.length === 0 && (
-        <p className="entities-page__empty">No entities found.</p>
+        <p className="niuu-text-sm niuu-text-text-muted">No entities found.</p>
       )}
 
       {kindsWithEntities.map((kind) => {
         const group = grouped[kind] ?? [];
         if (group.length === 0) return null;
         return (
-          <section key={kind} className="entities-page__group">
-            <h3 className="entities-page__group-title">
+          <section key={kind} className="niuu-mb-8">
+            <h3 className="niuu-flex niuu-items-center niuu-gap-2 niuu-m-0 niuu-mb-3 niuu-text-sm niuu-text-text-muted niuu-capitalize niuu-tracking-wider niuu-font-normal">
               {KIND_ICONS[kind]} {kind}
               <Chip tone="muted">{group.length}</Chip>
             </h3>
-            <ul className="entities-page__list" aria-label={`${kind} entities`}>
+            <ul
+              className="niuu-list-none niuu-p-0 niuu-m-0 niuu-grid niuu-gap-2"
+              aria-label={`${kind} entities`}
+            >
               {group.map((entity) => (
-                <li key={entity.path} className="entities-page__item" data-testid="entity-item">
-                  <div className="entities-page__item-header">
-                    <span className="entities-page__item-title">{entity.title}</span>
+                <li
+                  key={entity.path}
+                  className="niuu-py-3 niuu-px-4 niuu-border niuu-border-border-subtle niuu-rounded-md niuu-bg-bg-secondary"
+                  data-testid="entity-item"
+                >
+                  <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-mb-1">
+                    <span
+                      className="niuu-flex-1 niuu-font-medium niuu-text-sm"
+                      data-testid="entity-item-title"
+                    >
+                      {entity.title}
+                    </span>
                     {entity.relationshipCount > 0 && (
                       <Chip tone="muted">{entity.relationshipCount} links</Chip>
                     )}
                   </div>
-                  <p className="entities-page__item-summary">{entity.summary}</p>
-                  <span className="entities-page__item-path">{entity.path}</span>
+                  <p className="niuu-text-sm niuu-text-text-secondary niuu-m-0 niuu-mb-1">
+                    {entity.summary}
+                  </p>
+                  <span
+                    className="niuu-text-xs niuu-text-text-muted niuu-font-mono"
+                    data-testid="entity-item-path"
+                  >
+                    {entity.path}
+                  </span>
                 </li>
               ))}
             </ul>
