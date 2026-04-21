@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BudgetBar, StateDot, PersonaAvatar, MountChip } from '@niuulabs/ui';
+import { BudgetBar, StateDot, PersonaAvatar, MountChip, LiveBadge, relTime } from '@niuulabs/ui';
 import type { Ravn } from '../domain/ravn';
 import type { MessageKind } from '../domain/message';
 import type { BudgetState } from '@niuulabs/domain';
@@ -34,16 +34,6 @@ function formatTs(isoTs: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function formatRelative(isoTs: string): string {
-  const diff = Date.now() - new Date(isoTs).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 function kindMatchesFilter(kind: MessageKind, filter: string): boolean {
@@ -258,7 +248,7 @@ function TriggersSection({ ravnPersonaName }: TriggersSectionProps) {
               <div className="rv-trigger-card__meta">
                 {t.lastFiredAt && (
                   <span className="rv-trigger-meta-item" data-testid="trigger-last-fired">
-                    Last fired {formatRelative(t.lastFiredAt)}
+                    Last fired {relTime(t.lastFiredAt)}
                   </span>
                 )}
                 {t.fireCount != null && (
@@ -303,9 +293,8 @@ function ActivitySection({ ravnId, isActive }: ActivitySectionProps) {
     <div data-testid="activity-section-body">
       <div className="rv-activity-header">
         {isActive && (
-          <span className="rv-activity-live" data-testid="activity-live">
-            <span className="rv-activity-live__dot" aria-hidden />
-            live
+          <span data-testid="activity-live">
+            <LiveBadge label="live" />
           </span>
         )}
         <div className="rv-activity-filter" data-testid="activity-filter">
@@ -403,7 +392,7 @@ function SessionsSection({ ravnId }: SessionsSectionProps) {
               </div>
               <div className="rv-session-card__sub">
                 <span className="rv-session-card__model">{s.model}</span>
-                <span className="rv-session-card__since">{formatRelative(s.createdAt)}</span>
+                <span className="rv-session-card__since">{relTime(s.createdAt)}</span>
               </div>
               <div className="rv-session-card__metrics" data-testid="session-metrics">
                 {s.messageCount != null && (
@@ -420,11 +409,6 @@ function SessionsSection({ ravnId }: SessionsSectionProps) {
                   </span>
                 )}
               </div>
-              {s.costUsd != null && s.costUsd > 0 && (
-                <div className="rv-session-card__budget">
-                  <BudgetBar spent={s.costUsd} cap={Math.max(s.costUsd * 2, 1)} size="sm" />
-                </div>
-              )}
             </button>
           ))}
         </div>
@@ -527,7 +511,6 @@ function ConnectivitySection({ ravn }: ConnectivitySectionProps) {
 export interface RavnDetailProps {
   ravn: Ravn;
   onClose?: () => void;
-  className?: string;
 }
 
 export function RavnDetail({ ravn, onClose }: RavnDetailProps) {
