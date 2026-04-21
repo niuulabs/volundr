@@ -131,14 +131,10 @@ describe('OverviewView', () => {
     wrap(<OverviewView />);
     await waitFor(() => expect(screen.getByText('Wardens')).toBeInTheDocument());
     expect(
-      screen.getByText(
-        'Synthesises infrastructure documentation from git commits and runbooks',
-      ),
+      screen.getByText('Synthesises infrastructure documentation from git commits and runbooks'),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Compiles API guidelines and architectural decisions from RFC discussions',
-      ),
+      screen.getByText('Compiles API guidelines and architectural decisions from RFC discussions'),
     ).toBeInTheDocument();
   });
 

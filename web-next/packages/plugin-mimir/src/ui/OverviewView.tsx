@@ -110,9 +110,7 @@ export function OverviewView() {
             {mounts?.map((mount) => {
               const isExpanded = expandedMount === mount.name;
               const mountFeed =
-                feed
-                  ?.filter((e) => e.mount === mount.name)
-                  .slice(0, MOUNT_ACTIVITY_LIMIT) ?? [];
+                feed?.filter((e) => e.mount === mount.name).slice(0, MOUNT_ACTIVITY_LIMIT) ?? [];
 
               return (
                 <article
@@ -302,8 +300,7 @@ export function OverviewView() {
                         pages touched
                       </span>
                       <span>
-                        last dream{' '}
-                        {ravn.lastDream ? relTime(ravn.lastDream.timestamp) : 'never'}
+                        last dream {ravn.lastDream ? relTime(ravn.lastDream.timestamp) : 'never'}
                       </span>
                     </div>
                   </div>

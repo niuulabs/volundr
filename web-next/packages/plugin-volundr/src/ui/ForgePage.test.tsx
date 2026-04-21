@@ -174,9 +174,7 @@ describe('ForgePage', () => {
     };
 
     wrap(createMockVolundrService(), createMockClusterAdapter(), overriddenStore);
-    await waitFor(() =>
-      expect(screen.getByTestId('connection-type-badge')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('connection-type-badge')).toBeInTheDocument());
     expect(screen.getByText('IDE')).toBeInTheDocument();
   });
 
@@ -232,9 +230,7 @@ describe('ForgePage', () => {
 
   it('renders usage count on quick-launch cards', async () => {
     wrap();
-    await waitFor(() =>
-      expect(screen.getAllByTestId('usage-count').length).toBeGreaterThan(0),
-    );
+    await waitFor(() => expect(screen.getAllByTestId('usage-count').length).toBeGreaterThan(0));
     const counts = screen.getAllByTestId('usage-count');
     expect(counts[0]?.textContent).toMatch(/\d+×/);
   });

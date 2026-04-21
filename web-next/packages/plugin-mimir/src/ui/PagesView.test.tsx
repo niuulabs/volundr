@@ -113,7 +113,9 @@ describe('PagesView', () => {
     );
     fireEvent.click(screen.getAllByRole('button', { name: /overview/ })[0]);
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /structured/i, hidden: false })).toBeInTheDocument(),
+      expect(
+        screen.getByRole('button', { name: /structured/i, hidden: false }),
+      ).toBeInTheDocument(),
     );
     expect(screen.getByRole('button', { name: /split/i })).toBeInTheDocument();
   });
@@ -127,8 +129,14 @@ describe('PagesView', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /structured/i })).toBeInTheDocument(),
     );
-    expect(screen.getByRole('button', { name: /structured/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /^split$/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /structured/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: /^split$/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 
   it('switches to split layout when Split is clicked', async () => {
@@ -137,10 +145,15 @@ describe('PagesView', () => {
       expect(screen.getAllByRole('button', { name: /overview/ }).length).toBeGreaterThan(0),
     );
     fireEvent.click(screen.getAllByRole('button', { name: /overview/ })[0]);
-    await waitFor(() => expect(screen.getByRole('button', { name: /^split$/i })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^split$/i })).toBeInTheDocument(),
+    );
     fireEvent.click(screen.getByRole('button', { name: /^split$/i }));
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /^split$/i })).toHaveAttribute('aria-pressed', 'true'),
+      expect(screen.getByRole('button', { name: /^split$/i })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
     );
     // Raw sources pane should appear
     expect(screen.getByLabelText('raw sources')).toBeInTheDocument();
@@ -200,9 +213,7 @@ describe('PagesView', () => {
     wrap(<PagesView />);
     // /infra/k8s has related: ['/infra/envoy', '/arch/overview']
     // '/infra/envoy' does not exist in the mock pages → broken link
-    await waitFor(() =>
-      expect(screen.getByText('infra/')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('infra/')).toBeInTheDocument());
     // The k8s leaf should have a "broken wikilinks" indicator
     const brokenIndicators = screen.queryAllByLabelText(/page has broken wikilinks/i);
     expect(brokenIndicators.length).toBeGreaterThan(0);

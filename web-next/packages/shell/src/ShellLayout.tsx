@@ -67,10 +67,7 @@ export function ShellLayout() {
   const subnavNode: ReactNode = active?.subnav?.(ctx) ?? null;
 
   return (
-    <div
-      className="niuu-shell"
-      data-theme={config.theme}
-    >
+    <div className="niuu-shell" data-theme={config.theme}>
       <aside className="niuu-shell__rail">
         <div className="niuu-shell__rail-brand" title="Niuu">
           {brand}

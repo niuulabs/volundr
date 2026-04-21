@@ -289,9 +289,7 @@ describe('TemplatesPage', () => {
   it('renders description on template list card', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    expect(
-      screen.getByText(/minimal forge template/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/minimal forge template/i)).toBeInTheDocument();
   });
 
   it('renders usage count pill on template list card', async () => {
@@ -321,17 +319,13 @@ describe('TemplatesPage', () => {
   it('clone button label includes selected template name', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    expect(
-      screen.getByRole('button', { name: /clone template default/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /clone template default/i })).toBeInTheDocument();
   });
 
   it('edit button label includes selected template name', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    expect(
-      screen.getByRole('button', { name: /edit template default/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /edit template default/i })).toBeInTheDocument();
   });
 
   it('clone button label updates when template is switched', async () => {

@@ -148,9 +148,7 @@ export function PagesView() {
       </aside>
 
       {/* ── Page reader ────────────────────────────────────────── */}
-      <main
-        className="niuu-overflow-hidden niuu-flex niuu-flex-col niuu-border-r niuu-border-border-subtle"
-      >
+      <main className="niuu-overflow-hidden niuu-flex niuu-flex-col niuu-border-r niuu-border-border-subtle">
         {page ? (
           <>
             {/* Reader layout toggle */}
@@ -295,9 +293,7 @@ function PageContent({
             <span className="niuu-text-border">/</span>
           </Fragment>
         ))}
-        <span className="niuu-text-text-secondary">
-          {breadcrumbs[breadcrumbs.length - 1]}
-        </span>
+        <span className="niuu-text-text-secondary">{breadcrumbs[breadcrumbs.length - 1]}</span>
       </div>
 
       <h1 className="niuu-text-xl niuu-font-semibold niuu-text-text-primary niuu-m-0 niuu-mb-2">

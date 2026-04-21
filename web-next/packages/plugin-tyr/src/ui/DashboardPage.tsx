@@ -10,11 +10,13 @@ import {
   Sparkline,
   Pipe,
   StateDot,
+  ToastProvider,
+  useToast,
 } from '@niuulabs/ui';
 import type { ITyrService, Phase } from '../ports';
 import type { Saga, RaidStatus } from '../domain/saga';
 import { useSagas } from './useSagas';
-import { useDispatcher } from './useDispatcher';
+import { useDispatcherState } from './useDispatcherState';
 import { RaidMeshCanvas } from './RaidMeshCanvas';
 import './DashboardPage.css';
 
@@ -97,10 +99,19 @@ function feedKindToState(kind: string) {
 }
 
 export function DashboardPage() {
+  return (
+    <ToastProvider>
+      <DashboardContent />
+    </ToastProvider>
+  );
+}
+
+function DashboardContent() {
   const navigate = useNavigate();
   const tyr = useService<ITyrService>('tyr');
   const { data: sagas, isLoading, isError, error } = useSagas();
-  useDispatcher(); // keep the query warm for sub-components
+  const { data: dispatcherState } = useDispatcherState();
+  const { toast } = useToast();
 
   const phaseQueries = useQueries({
     queries: (sagas ?? []).map((s) => ({
@@ -127,8 +138,30 @@ export function DashboardPage() {
   const openSaga = (saga: Saga) =>
     void navigate({ to: '/tyr/sagas/$sagaId', params: { sagaId: saga.id } });
 
+  const handleViewAll = () => {
+    void navigate({ to: '/tyr/sagas' as never });
+    toast({ title: 'Navigating to Sagas' });
+  };
+
   return (
     <div className="tyr-dash">
+      {/* ── Dispatcher stats bar ──────────────────── */}
+      {dispatcherState && (
+        <div className="tyr-dash__topbar-stats tyr-dash__full" data-testid="tyr-dispatcher-stats">
+          <span className="tyr-dash__stat">
+            dispatcher <strong>{dispatcherState.running ? 'on' : 'off'}</strong>
+          </span>
+          <span className="tyr-dash__stat-sep" aria-hidden="true" />
+          <span className="tyr-dash__stat">
+            threshold <strong>{(dispatcherState.threshold / 100).toFixed(2)}</strong>
+          </span>
+          <span className="tyr-dash__stat-sep" aria-hidden="true" />
+          <span className="tyr-dash__stat">
+            concurrent <strong>{runningRaids}/{dispatcherState.maxConcurrentRaids}</strong>
+          </span>
+        </div>
+      )}
+
       {/* ── KPI cards (4 columns) ─────────────────── */}
       <div className="tyr-kpi tyr-kpi--accent">
         <div className="tyr-kpi__label">Active sagas</div>
@@ -177,11 +210,7 @@ export function DashboardPage() {
       {/* ── Saga stream ───────────────────────────── */}
       <div className="tyr-dash__row-title">
         <h2>Saga stream</h2>
-        <button
-          className="tyr-btn"
-          type="button"
-          onClick={() => void navigate({ to: '/tyr/sagas' as never })}
-        >
+        <button className="tyr-btn" type="button" onClick={handleViewAll}>
           View all
         </button>
       </div>
@@ -262,14 +291,32 @@ export function DashboardPage() {
           </span>
         </div>
         <div className="tyr-raid-feed">
-          {FEED.map((f, i) => (
-            <div key={i} className="tyr-feed-row">
-              <StateDot state={feedKindToState(f.kind)} />
-              <span className="tyr-feed-row__time">{f.t}</span>
-              <span>{f.body}</span>
-              <span className="tyr-feed-row__subject">{f.subject}</span>
-            </div>
-          ))}
+          {FEED.map((f, i) => {
+            const parentSaga = (sagas ?? []).find((s) => f.subject.startsWith(s.trackerId));
+            return (
+              <div key={i} className="tyr-feed-row">
+                <StateDot state={feedKindToState(f.kind)} />
+                <span className="tyr-feed-row__time">{f.t}</span>
+                <span>{f.body}</span>
+                <span className="tyr-feed-row__subject">{f.subject}</span>
+                <button
+                  className="tyr-feed-row__link"
+                  type="button"
+                  disabled={!parentSaga}
+                  title={parentSaga ? `Open ${parentSaga.trackerId}` : 'No linked saga'}
+                  onClick={() =>
+                    parentSaga &&
+                    void navigate({
+                      to: '/tyr/sagas/$sagaId',
+                      params: { sagaId: parentSaga.id },
+                    })
+                  }
+                >
+                  ↗
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
 
