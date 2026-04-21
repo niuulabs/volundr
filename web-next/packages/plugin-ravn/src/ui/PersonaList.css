@@ -1,0 +1,39 @@
+/* Role group header — colored left border per role */
+.rv-persona-role-header {
+  border-left: 3px solid var(--color-border);
+  padding-left: calc(var(--space-3) - 3px);
+}
+
+.rv-persona-role-header[data-role='plan'] {
+  border-left-color: var(--color-accent-cyan);
+}
+.rv-persona-role-header[data-role='build'] {
+  border-left-color: var(--color-accent-indigo);
+}
+.rv-persona-role-header[data-role='verify'] {
+  border-left-color: var(--color-accent-amber);
+}
+.rv-persona-role-header[data-role='review'] {
+  border-left-color: var(--color-accent-purple);
+}
+.rv-persona-role-header[data-role='gate'] {
+  border-left-color: var(--color-accent-red);
+}
+.rv-persona-role-header[data-role='audit'] {
+  border-left-color: var(--color-accent-orange);
+}
+.rv-persona-role-header[data-role='ship'] {
+  border-left-color: var(--color-accent-emerald);
+}
+.rv-persona-role-header[data-role='index'] {
+  border-left-color: var(--color-accent-purple);
+}
+.rv-persona-role-header[data-role='report'] {
+  border-left-color: var(--color-accent-emerald);
+}
+
+/* Selected persona row — left border indicator */
+.rv-persona-row--selected {
+  border-left: 3px solid var(--brand-400);
+  padding-left: calc(var(--space-3) - 3px);
+}

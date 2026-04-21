@@ -85,4 +85,57 @@ describe('PersonaList', () => {
     const builtinBadges = screen.getAllByText('builtin');
     expect(builtinBadges.length).toBeGreaterThan(0);
   });
+
+  it('renders role group headers with data-role attribute', async () => {
+    render(<PersonaList selectedName={null} onSelect={() => {}} />, {
+      wrapper: wrap({ 'ravn.personas': createMockPersonaStore() }),
+    });
+    await waitFor(() => expect(screen.getByTestId('persona-list')).toBeInTheDocument());
+
+    // Check that a role header has the correct data-role attribute for CSS border coloring
+    const buildHeader = screen.getByTestId('persona-role-header-build');
+    expect(buildHeader).toHaveAttribute('data-role', 'build');
+    expect(buildHeader).toHaveClass('rv-persona-role-header');
+  });
+
+  it('applies selection border class to selected persona row', async () => {
+    render(<PersonaList selectedName="reviewer" onSelect={() => {}} />, {
+      wrapper: wrap({ 'ravn.personas': createMockPersonaStore() }),
+    });
+    await waitFor(() => expect(screen.getByTestId('persona-list')).toBeInTheDocument());
+
+    const selected = screen.getByRole('button', { name: /reviewer/ });
+    expect(selected).toHaveClass('rv-persona-row--selected');
+  });
+
+  it('does not apply selection border class to unselected rows', async () => {
+    render(<PersonaList selectedName="reviewer" onSelect={() => {}} />, {
+      wrapper: wrap({ 'ravn.personas': createMockPersonaStore() }),
+    });
+    await waitFor(() => expect(screen.getByTestId('persona-list')).toBeInTheDocument());
+
+    const unselected = screen.getByRole('button', { name: /coder/ });
+    expect(unselected).not.toHaveClass('rv-persona-row--selected');
+  });
+
+  it('renders "New persona" button', async () => {
+    render(<PersonaList selectedName={null} onSelect={() => {}} />, {
+      wrapper: wrap({ 'ravn.personas': createMockPersonaStore() }),
+    });
+    await waitFor(() => expect(screen.getByTestId('persona-list')).toBeInTheDocument());
+
+    expect(screen.getByTestId('persona-new-button')).toBeInTheDocument();
+    expect(screen.getByTestId('persona-new-button')).toHaveTextContent('+ New persona');
+  });
+
+  it('calls onNew when "New persona" button is clicked', async () => {
+    const onNew = vi.fn();
+    render(<PersonaList selectedName={null} onSelect={() => {}} onNew={onNew} />, {
+      wrapper: wrap({ 'ravn.personas': createMockPersonaStore() }),
+    });
+    await waitFor(() => expect(screen.getByTestId('persona-list')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('persona-new-button'));
+    expect(onNew).toHaveBeenCalledOnce();
+  });
 });

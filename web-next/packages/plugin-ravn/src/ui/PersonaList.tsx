@@ -1,7 +1,8 @@
-import { PersonaAvatar } from '@niuulabs/ui';
+import { cn, PersonaAvatar } from '@niuulabs/ui';
 import type { PersonaRole } from '@niuulabs/domain';
 import { usePersonas } from './usePersonas';
 import { PERSONA_ROLE_ORDER } from '../catalog';
+import './PersonaList.css';
 
 const ROLE_LABEL: Record<PersonaRole, string> = {
   plan: 'Plan',
@@ -18,9 +19,10 @@ const ROLE_LABEL: Record<PersonaRole, string> = {
 export interface PersonaListProps {
   selectedName: string | null;
   onSelect: (name: string) => void;
+  onNew?: () => void;
 }
 
-export function PersonaList({ selectedName, onSelect }: PersonaListProps) {
+export function PersonaList({ selectedName, onSelect, onNew }: PersonaListProps) {
   const { data, isLoading, isError, error } = usePersonas();
 
   if (isLoading) {
@@ -73,34 +75,53 @@ export function PersonaList({ selectedName, onSelect }: PersonaListProps) {
 
         return (
           <div key={role} className="niuu-mb-3">
-            <div className="niuu-px-3 niuu-py-1 niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-uppercase niuu-tracking-widest">
+            <div
+              className="rv-persona-role-header niuu-py-1 niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-uppercase niuu-tracking-widest"
+              data-role={role}
+              data-testid={`persona-role-header-${role}`}
+            >
               {ROLE_LABEL[role]}
             </div>
-            {personas.map((p) => (
-              <button
-                key={p.name}
-                type="button"
-                aria-current={p.name === selectedName ? 'page' : undefined}
-                onClick={() => onSelect(p.name)}
-                className={[
-                  'niuu-flex niuu-items-center niuu-gap-2 niuu-w-full niuu-px-3 niuu-py-2',
-                  'niuu-text-left niuu-text-sm niuu-font-sans niuu-rounded-none niuu-border-0',
-                  'niuu-transition-colors',
-                  p.name === selectedName
-                    ? 'niuu-bg-bg-tertiary niuu-text-text-primary'
-                    : 'niuu-bg-transparent niuu-text-text-secondary hover:niuu-bg-bg-tertiary hover:niuu-text-text-primary',
-                ].join(' ')}
-              >
-                <PersonaAvatar role={p.role} letter={p.letter} size={20} />
-                <span className="niuu-truncate niuu-flex-1">{p.name}</span>
-                {p.isBuiltin && (
-                  <span className="niuu-text-xs niuu-text-text-muted niuu-shrink-0">builtin</span>
-                )}
-              </button>
-            ))}
+            {personas.map((p) => {
+              const isSelected = p.name === selectedName;
+              return (
+                <button
+                  key={p.name}
+                  type="button"
+                  aria-current={isSelected ? 'page' : undefined}
+                  onClick={() => onSelect(p.name)}
+                  className={cn(
+                    'niuu-flex niuu-items-center niuu-gap-2 niuu-w-full niuu-px-3 niuu-py-2',
+                    'niuu-text-left niuu-text-sm niuu-font-sans niuu-rounded-none niuu-border-0',
+                    'niuu-transition-colors',
+                    isSelected
+                      ? 'rv-persona-row--selected niuu-bg-bg-tertiary niuu-text-text-primary'
+                      : 'niuu-bg-transparent niuu-text-text-secondary hover:niuu-bg-bg-tertiary hover:niuu-text-text-primary',
+                  )}
+                >
+                  <PersonaAvatar role={p.role} letter={p.letter} size={24} />
+                  <span className="niuu-truncate niuu-flex-1">{p.name}</span>
+                  {p.isBuiltin && (
+                    <span className="niuu-text-xs niuu-text-text-muted niuu-shrink-0">builtin</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         );
       })}
+
+      {/* New persona button */}
+      <div className="niuu-px-3 niuu-mt-auto niuu-pt-3 niuu-pb-2">
+        <button
+          type="button"
+          onClick={onNew}
+          data-testid="persona-new-button"
+          className="niuu-w-full niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-muted niuu-border niuu-border-dashed niuu-border-border niuu-rounded-md niuu-bg-transparent niuu-cursor-pointer hover:niuu-border-brand hover:niuu-text-text-primary niuu-transition-colors"
+        >
+          + New persona
+        </button>
+      </div>
     </nav>
   );
 }

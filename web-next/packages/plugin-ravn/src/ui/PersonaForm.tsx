@@ -1,11 +1,23 @@
-import { useState, useCallback, useEffect } from 'react';
-import { EventPicker, SchemaEditor, ToolPicker, ValidationSummary, MountChip } from '@niuulabs/ui';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import {
+  cn,
+  EventPicker,
+  SchemaEditor,
+  ToolPicker,
+  ValidationSummary,
+  MountChip,
+} from '@niuulabs/ui';
 import type { FieldType, PersonaRole } from '@niuulabs/domain';
 import type { PersonaDetail, PersonaCreateRequest, PersonaConsumesEvent } from '../ports';
 import { validatePersona } from './validatePersona';
 import { SEED_EVENT_CATALOG, SEED_TOOL_REGISTRY, PERSONA_ROLE_ORDER } from '../catalog';
+import './PersonaForm.css';
 
 const PERMISSION_MODES = ['default', 'safe', 'loose'] as const;
+const MIMIR_ROUTINGS = ['local', 'shared', 'domain'] as const;
+
+// ── Fan-in strategy definitions ────────────────────────────────────────────
+
 const FAN_IN_STRATEGIES = [
   'all_must_pass',
   'any_passes',
@@ -14,7 +26,112 @@ const FAN_IN_STRATEGIES = [
   'first_wins',
   'weighted_score',
 ] as const;
-const MIMIR_ROUTINGS = ['local', 'shared', 'domain'] as const;
+
+type FanInStrategy = (typeof FAN_IN_STRATEGIES)[number];
+
+const FAN_IN_DESCRIPTIONS: Record<FanInStrategy, string> = {
+  all_must_pass: 'All upstream events must arrive before processing',
+  any_passes: 'First arriving event triggers processing',
+  quorum: 'N of M events must arrive',
+  merge: 'All events merged into a single context',
+  first_wins: 'First event wins, others discarded',
+  weighted_score: 'Events scored and ranked by weight',
+};
+
+// ── Fan-in SVG diagrams ─────────────────────────────────────────────────────
+
+function AllMustPassDiagram() {
+  return (
+    <svg width={32} height={20} viewBox="0 0 32 20" fill="none" aria-hidden="true">
+      <line x1="2" y1="5" x2="14" y2="10" stroke="currentColor" strokeWidth={1.5} />
+      <line x1="2" y1="10" x2="14" y2="10" stroke="currentColor" strokeWidth={1.5} />
+      <line x1="2" y1="15" x2="14" y2="10" stroke="currentColor" strokeWidth={1.5} />
+      <circle cx="17" cy="10" r="3" fill="currentColor" />
+      <line x1="20" y1="10" x2="30" y2="10" stroke="currentColor" strokeWidth={1.5} />
+    </svg>
+  );
+}
+
+function AnyPassesDiagram() {
+  return (
+    <svg width={32} height={20} viewBox="0 0 32 20" fill="none" aria-hidden="true">
+      <line x1="2" y1="5" x2="14" y2="10" stroke="currentColor" strokeWidth={1.5} />
+      <line x1="2" y1="10" x2="14" y2="10" stroke="currentColor" strokeWidth={0.8} opacity={0.4} />
+      <line x1="2" y1="15" x2="14" y2="10" stroke="currentColor" strokeWidth={0.8} opacity={0.4} />
+      <polygon points="14,7 20,10 14,13" fill="currentColor" />
+      <line x1="20" y1="10" x2="30" y2="10" stroke="currentColor" strokeWidth={1.5} />
+    </svg>
+  );
+}
+
+function QuorumDiagram() {
+  return (
+    <svg width={32} height={20} viewBox="0 0 32 20" fill="none" aria-hidden="true">
+      <line x1="2" y1="5" x2="12" y2="10" stroke="currentColor" strokeWidth={1.5} />
+      <line x1="2" y1="10" x2="12" y2="10" stroke="currentColor" strokeWidth={1.5} />
+      <line x1="2" y1="15" x2="12" y2="10" stroke="currentColor" strokeWidth={0.8} opacity={0.4} />
+      <rect x="12" y="7" width="8" height="6" rx="1" fill="currentColor" opacity={0.6} />
+      <line x1="20" y1="10" x2="30" y2="10" stroke="currentColor" strokeWidth={1.5} />
+    </svg>
+  );
+}
+
+function MergeDiagram() {
+  return (
+    <svg width={32} height={20} viewBox="0 0 32 20" fill="none" aria-hidden="true">
+      <line x1="2" y1="4" x2="14" y2="10" stroke="currentColor" strokeWidth={1.5} />
+      <line x1="2" y1="10" x2="14" y2="10" stroke="currentColor" strokeWidth={1.5} />
+      <line x1="2" y1="16" x2="14" y2="10" stroke="currentColor" strokeWidth={1.5} />
+      <line x1="14" y1="10" x2="30" y2="10" stroke="currentColor" strokeWidth={3} />
+    </svg>
+  );
+}
+
+function FirstWinsDiagram() {
+  return (
+    <svg width={32} height={20} viewBox="0 0 32 20" fill="none" aria-hidden="true">
+      <line x1="2" y1="5" x2="30" y2="5" stroke="currentColor" strokeWidth={1.5} />
+      <line x1="2" y1="10" x2="18" y2="10" stroke="currentColor" strokeWidth={0.8} opacity={0.3} />
+      <line x1="16" y1="8" x2="20" y2="12" stroke="currentColor" strokeWidth={1} opacity={0.3} />
+      <line x1="16" y1="12" x2="20" y2="8" stroke="currentColor" strokeWidth={1} opacity={0.3} />
+      <line x1="2" y1="15" x2="18" y2="15" stroke="currentColor" strokeWidth={0.8} opacity={0.3} />
+      <line x1="16" y1="13" x2="20" y2="17" stroke="currentColor" strokeWidth={1} opacity={0.3} />
+      <line x1="16" y1="17" x2="20" y2="13" stroke="currentColor" strokeWidth={1} opacity={0.3} />
+    </svg>
+  );
+}
+
+function WeightedScoreDiagram() {
+  return (
+    <svg width={32} height={20} viewBox="0 0 32 20" fill="none" aria-hidden="true">
+      <rect x="2" y="12" width="6" height="6" fill="currentColor" opacity={0.5} />
+      <rect x="11" y="6" width="6" height="12" fill="currentColor" opacity={0.8} />
+      <rect x="20" y="9" width="6" height="9" fill="currentColor" opacity={0.65} />
+      <line x1="1" y1="19" x2="31" y2="19" stroke="currentColor" strokeWidth={0.8} />
+    </svg>
+  );
+}
+
+const FAN_IN_DIAGRAMS: Record<FanInStrategy, React.ReactElement> = {
+  all_must_pass: <AllMustPassDiagram />,
+  any_passes: <AnyPassesDiagram />,
+  quorum: <QuorumDiagram />,
+  merge: <MergeDiagram />,
+  first_wins: <FirstWinsDiagram />,
+  weighted_score: <WeightedScoreDiagram />,
+};
+
+// ── System prompt preview ──────────────────────────────────────────────────
+
+function renderPromptPreview(template: string): React.ReactNode[] {
+  const parts = template.split(/({{[^}]+}})/g);
+  return parts.map((part, i) => {
+    if (/^{{[^}]+}}$/.test(part)) {
+      return <mark key={i}>{part}</mark>;
+    }
+    return part;
+  });
+}
 
 // ── Form state ─────────────────────────────────────────────────────────────
 
@@ -99,6 +216,7 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
   const [dirty, setDirty] = useState(false);
   const [showAllowPicker, setShowAllowPicker] = useState(false);
   const [showDenyPicker, setShowDenyPicker] = useState(false);
+  const [showPromptPreview, setShowPromptPreview] = useState(false);
 
   // Sync form when persona prop changes (navigating to another persona).
   // Intentionally depend only on persona.name — not the full persona object —
@@ -152,6 +270,12 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
     },
     [form.consumesEvents, update],
   );
+
+  const promptCharCount = useMemo(
+    () => (form.systemPromptTemplate ?? '').length,
+    [form.systemPromptTemplate],
+  );
+  const promptTokenEstimate = useMemo(() => Math.ceil(promptCharCount / 4), [promptCharCount]);
 
   return (
     <div className="niuu-flex niuu-flex-col niuu-h-full" data-testid="persona-form">
@@ -243,6 +367,44 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
           </FieldRow>
         </Section>
 
+        {/* System prompt */}
+        <Section title="System prompt">
+          <FieldRow label="Template" htmlFor="pf-system-prompt">
+            <textarea
+              id="pf-system-prompt"
+              data-testid="pf-system-prompt"
+              className="niuu-form-control niuu-font-mono niuu-text-xs"
+              rows={8}
+              value={form.systemPromptTemplate ?? ''}
+              placeholder="Enter Jinja2 template… Use {{variable}} for dynamic values."
+              onChange={(e) => update('systemPromptTemplate', e.target.value)}
+            />
+            <div className="niuu-flex niuu-items-center niuu-justify-between niuu-mt-1">
+              <button
+                type="button"
+                onClick={() => setShowPromptPreview((v) => !v)}
+                className="niuu-text-xs niuu-text-text-muted niuu-bg-transparent niuu-border-0 niuu-cursor-pointer hover:niuu-text-text-secondary niuu-p-0"
+              >
+                {showPromptPreview ? 'Hide preview' : 'Show preview'}
+              </button>
+              <span
+                className="niuu-text-xs niuu-text-text-muted niuu-font-mono"
+                data-testid="pf-prompt-char-count"
+              >
+                {promptCharCount} chars · ~{promptTokenEstimate} tokens
+              </span>
+            </div>
+          </FieldRow>
+          {showPromptPreview && form.systemPromptTemplate && (
+            <div
+              data-testid="pf-prompt-preview"
+              className="rv-prompt-preview niuu-p-3 niuu-bg-bg-secondary niuu-rounded-md niuu-border niuu-border-border-subtle"
+            >
+              {renderPromptPreview(form.systemPromptTemplate)}
+            </div>
+          )}
+        </Section>
+
         {/* LLM */}
         <Section title="LLM">
           <FieldRow label="Model alias" htmlFor="pf-llm-alias">
@@ -320,12 +482,12 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
                 return (
                   <span
                     key={toolId}
-                    className={[
+                    className={cn(
                       'niuu-inline-flex niuu-items-center niuu-gap-1 niuu-px-2 niuu-py-0 niuu-rounded niuu-text-xs niuu-font-mono',
                       tool?.destructive
                         ? 'niuu-bg-critical/10 niuu-text-critical niuu-border niuu-border-critical/30'
                         : 'niuu-bg-bg-tertiary niuu-text-text-secondary niuu-border niuu-border-border',
-                    ].join(' ')}
+                    )}
                   >
                     {tool?.destructive && (
                       <span className="niuu-inline-block niuu-w-1.5 niuu-h-1.5 niuu-rounded-full niuu-bg-critical" />
@@ -477,21 +639,93 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
 
         {/* Fan-in */}
         <Section title="Fan-in">
-          <FieldRow label="Strategy" htmlFor="pf-fanin">
-            <select
-              id="pf-fanin"
-              className="niuu-form-control niuu-w-52"
-              value={form.fanInStrategy ?? ''}
-              onChange={(e) => update('fanInStrategy', e.target.value || undefined)}
-            >
-              <option value="">— none —</option>
-              {FAN_IN_STRATEGIES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
+          <div className="rv-fanin-grid" data-testid="fanin-cards">
+            {FAN_IN_STRATEGIES.map((s) => {
+              const isActive = form.fanInStrategy === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  data-testid={`fanin-card-${s}`}
+                  aria-pressed={isActive}
+                  onClick={() => {
+                    setForm((prev) => ({ ...prev, fanInStrategy: s, fanInParams: undefined }));
+                    setDirty(true);
+                  }}
+                  className={`rv-fanin-card${isActive ? ' rv-fanin-card--active' : ''}`}
+                >
+                  <span className="rv-fanin-card__diagram">{FAN_IN_DIAGRAMS[s]}</span>
+                  <span className="rv-fanin-card__name">{s}</span>
+                  <span className="rv-fanin-card__desc">{FAN_IN_DESCRIPTIONS[s]}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* "None" option */}
+          <button
+            type="button"
+            onClick={() => update('fanInStrategy', undefined)}
+            className={cn(
+              'niuu-mt-2 niuu-text-xs niuu-text-text-muted niuu-bg-transparent niuu-border-0',
+              'niuu-cursor-pointer niuu-px-0 hover:niuu-text-text-secondary niuu-self-start',
+              !form.fanInStrategy && 'niuu-underline',
+            )}
+          >
+            {form.fanInStrategy ? 'Clear strategy (none)' : '— no strategy selected —'}
+          </button>
+
+          {/* Quorum params */}
+          {form.fanInStrategy === 'quorum' && (
+            <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-mt-2">
+              <label
+                htmlFor="pf-fanin-quorum"
+                className="niuu-text-sm niuu-text-text-muted niuu-font-sans"
+              >
+                Quorum count
+              </label>
+              <input
+                id="pf-fanin-quorum"
+                type="number"
+                className="niuu-form-control niuu-w-24"
+                min={1}
+                value={(form.fanInParams as Record<string, number> | undefined)?.quorum ?? 2}
+                onChange={(e) =>
+                  update('fanInParams', {
+                    ...form.fanInParams,
+                    quorum: parseInt(e.target.value, 10) || 2,
+                  })
+                }
+              />
+            </div>
+          )}
+
+          {/* Weighted score params */}
+          {form.fanInStrategy === 'weighted_score' && (
+            <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-mt-2">
+              <label
+                htmlFor="pf-fanin-threshold"
+                className="niuu-text-sm niuu-text-text-muted niuu-font-sans"
+              >
+                Min score threshold
+              </label>
+              <input
+                id="pf-fanin-threshold"
+                type="number"
+                className="niuu-form-control niuu-w-24"
+                min={0}
+                max={1}
+                step={0.1}
+                value={(form.fanInParams as Record<string, number> | undefined)?.threshold ?? 0.5}
+                onChange={(e) =>
+                  update('fanInParams', {
+                    ...form.fanInParams,
+                    threshold: parseFloat(e.target.value) || 0.5,
+                  })
+                }
+              />
+            </div>
+          )}
         </Section>
 
         {/* Mímir write routing */}
