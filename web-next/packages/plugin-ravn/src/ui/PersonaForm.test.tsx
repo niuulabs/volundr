@@ -194,14 +194,10 @@ describe('PersonaForm', () => {
     expect(screen.queryByTestId('pf-prompt-preview')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Show preview'));
-    await waitFor(() =>
-      expect(screen.getByTestId('pf-prompt-preview')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('pf-prompt-preview')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('Hide preview'));
-    await waitFor(() =>
-      expect(screen.queryByTestId('pf-prompt-preview')).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByTestId('pf-prompt-preview')).not.toBeInTheDocument());
   });
 
   it('renders {{variable}} highlights in prompt preview', async () => {
@@ -209,9 +205,7 @@ describe('PersonaForm', () => {
       wrapper: wrap(),
     });
     fireEvent.click(screen.getByText('Show preview'));
-    await waitFor(() =>
-      expect(screen.getByTestId('pf-prompt-preview')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('pf-prompt-preview')).toBeInTheDocument());
     const preview = screen.getByTestId('pf-prompt-preview');
     // Should have <mark> elements for {{name}} and {{role}}
     const marks = preview.querySelectorAll('mark');
@@ -274,7 +268,9 @@ describe('PersonaForm', () => {
     render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
       wrapper: wrap(),
     });
-    expect(screen.getByText('All upstream events must arrive before processing')).toBeInTheDocument();
+    expect(
+      screen.getByText('All upstream events must arrive before processing'),
+    ).toBeInTheDocument();
     expect(screen.getByText('First arriving event triggers processing')).toBeInTheDocument();
     expect(screen.getByText('N of M events must arrive')).toBeInTheDocument();
     expect(screen.getByText('All events merged into a single context')).toBeInTheDocument();

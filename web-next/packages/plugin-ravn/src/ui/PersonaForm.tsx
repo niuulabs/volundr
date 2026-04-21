@@ -268,10 +268,7 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
     () => (form.systemPromptTemplate ?? '').length,
     [form.systemPromptTemplate],
   );
-  const promptTokenEstimate = useMemo(
-    () => Math.ceil(promptCharCount / 4),
-    [promptCharCount],
-  );
+  const promptTokenEstimate = useMemo(() => Math.ceil(promptCharCount / 4), [promptCharCount]);
 
   return (
     <div className="niuu-flex niuu-flex-col niuu-h-full" data-testid="persona-form">
@@ -684,7 +681,10 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
                 min={1}
                 value={(form.fanInParams as Record<string, number> | undefined)?.quorum ?? 2}
                 onChange={(e) =>
-                  update('fanInParams', { ...form.fanInParams, quorum: parseInt(e.target.value, 10) || 2 })
+                  update('fanInParams', {
+                    ...form.fanInParams,
+                    quorum: parseInt(e.target.value, 10) || 2,
+                  })
                 }
               />
             </div>

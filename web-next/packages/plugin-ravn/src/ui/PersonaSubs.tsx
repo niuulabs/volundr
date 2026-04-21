@@ -119,9 +119,7 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
   const handleNodeClick = useCallback(
     (node: GraphNode) => {
       if (node.personaName === name) return;
-      window.dispatchEvent(
-        new CustomEvent('ravn:persona-selected', { detail: node.personaName }),
-      );
+      window.dispatchEvent(new CustomEvent('ravn:persona-selected', { detail: node.personaName }));
     },
     [name],
   );
@@ -216,9 +214,7 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
           if (!fromNode || !toNode) return null;
 
           const isConnectedToHovered =
-            !connectedIds ||
-            connectedIds.has(edge.from) ||
-            connectedIds.has(edge.to);
+            !connectedIds || connectedIds.has(edge.from) || connectedIds.has(edge.to);
 
           const x1 = nodeX(fromNode.col) + COL_W;
           const y1 = nodeCy(fromNode.row);
@@ -341,7 +337,10 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
         <span className="niuu-flex niuu-items-center niuu-gap-1">
           <span
             className="niuu-inline-block niuu-w-8 niuu-h-3 niuu-rounded-sm niuu-border"
-            style={{ borderColor: 'var(--brand-400)', background: 'color-mix(in srgb, var(--brand-500) 18%, transparent)' }}
+            style={{
+              borderColor: 'var(--brand-400)',
+              background: 'color-mix(in srgb, var(--brand-500) 18%, transparent)',
+            }}
           />
           focus (this persona)
         </span>
@@ -355,7 +354,9 @@ export function PersonaSubs({ name }: PersonaSubsProps) {
           </svg>
           event link
         </span>
-        <span>edge label = event name · <span className="niuu-font-mono">Nf</span> = schema field count</span>
+        <span>
+          edge label = event name · <span className="niuu-font-mono">Nf</span> = schema field count
+        </span>
       </div>
     </div>
   );
