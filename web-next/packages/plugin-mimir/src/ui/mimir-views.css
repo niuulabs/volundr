@@ -18,6 +18,11 @@
   min-width: auto;
 }
 
+/* Lint KPI uses amber for warning state — web2 uses subdued amber, not red */
+.mm-kpi--warn .niuu-kpi-card__value {
+  color: var(--color-accent-amber);
+}
+
 /* ── Shared Mímir view tokens ─────────────────────────────────────────────── */
 
 /* ── Search highlight mark — color-mix() not expressible in Tailwind ──────── */

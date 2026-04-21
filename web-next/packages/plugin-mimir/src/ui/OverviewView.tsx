@@ -13,7 +13,7 @@
  */
 
 import { useState } from 'react';
-import { KpiStrip, KpiCard, StateDot, RavnAvatar, relTime } from '@niuulabs/ui';
+import { KpiStrip, KpiCard, StateDot, relTime } from '@niuulabs/ui';
 import { useMimirMounts } from './useMimirMounts';
 import { useMimirRecentWrites } from './useMimirSources';
 import { useRavns } from '../application/useRavns';
@@ -82,8 +82,9 @@ export function OverviewView() {
         <KpiCard
           label="lint issues"
           value={totalLint}
-          deltaTrend={totalLint > 0 ? 'up' : 'neutral'}
           delta={totalLint > 0 ? `${totalLint} open` : 'clean'}
+          deltaTrend="neutral"
+          className={totalLint > 0 ? 'mm-kpi--warn' : undefined}
         />
         <KpiCard
           label="last write"
@@ -250,12 +251,13 @@ export function OverviewView() {
                   >
                     {/* Identity row */}
                     <div className="niuu-flex niuu-items-center niuu-gap-2">
-                      <RavnAvatar
-                        role={ravn.role}
-                        rune={ravn.ravnRune}
-                        state={RAVN_DOT_STATE[ravn.state]}
-                        size={32}
-                      />
+                      <span
+                        className="niuu-inline-flex niuu-items-center niuu-justify-center niuu-font-mono niuu-text-xs niuu-font-bold niuu-text-text-secondary niuu-bg-bg-tertiary niuu-border niuu-border-border-subtle niuu-uppercase niuu-shrink-0"
+                        style={{ width: 28, height: 28, borderRadius: 'var(--radius-sm)' }}
+                        aria-hidden
+                      >
+                        {ravn.ravnId.charAt(0)}{ravn.ravnId.charAt(ravn.ravnId.length - 1)}
+                      </span>
                       <div className="niuu-flex-1 niuu-min-w-0">
                         <div className="niuu-flex niuu-items-center niuu-gap-2">
                           <span className="niuu-font-mono niuu-text-xs niuu-font-semibold niuu-text-text-primary niuu-truncate">

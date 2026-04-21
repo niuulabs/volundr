@@ -188,7 +188,7 @@ export function MimirSubnav({ ctx }: MimirSubnavProps) {
               aria-label={`Warden ${ravn.ravnId}`}
             >
               <span className="mm-subnav-btn__initials" aria-hidden>
-                {ravn.ravnId.slice(0, 2)}
+                {ravn.ravnId.charAt(0)}{ravn.ravnId.charAt(ravn.ravnId.length - 1)}
               </span>
               <span className="mm-subnav-btn__label">{ravn.ravnId}</span>
               <StateDot state={RAVN_DOT_STATE[ravn.state]} size={6} />
