@@ -620,6 +620,7 @@ export function createMimirMockAdapter(): IMimirService {
   // Mutable copies for write operations
   let lintIssues = [...INITIAL_LINT_ISSUES];
   let routingRules = [...INITIAL_ROUTING_RULES];
+  let sources = [...MOCK_SOURCES];
 
   return {
     mounts: {
@@ -698,24 +699,58 @@ export function createMimirMockAdapter(): IMimirService {
       },
 
       async listSources(options): Promise<Source[]> {
-        let sources = MOCK_SOURCES;
+        let filtered = sources;
         if (options?.originType) {
-          sources = sources.filter((s) => s.originType === options.originType);
+          filtered = filtered.filter((s) => s.originType === options.originType);
         }
         if (options?.mountName) {
           // Filter sources that are attributed to pages on this mount
           const mountPages = MOCK_PAGES.filter((p) => p.mounts.includes(options.mountName!)).map(
             (p) => p.path,
           );
-          sources = sources.filter((s) => s.compiledInto.some((path) => mountPages.includes(path)));
+          filtered = filtered.filter((s) =>
+            s.compiledInto.some((path) => mountPages.includes(path)),
+          );
         }
-        return sources;
+        return filtered;
       },
 
       async getPageSources(path: string): Promise<Source[]> {
         const page = MOCK_PAGES.find((p) => p.path === path);
         if (!page) return [];
-        return MOCK_SOURCES.filter((s) => page.sourceIds.includes(s.id));
+        return sources.filter((s) => page.sourceIds.includes(s.id));
+      },
+
+      async ingestUrl(url: string): Promise<Source> {
+        const id = `src-${Date.now()}`;
+        const source: Source = {
+          id,
+          title: url,
+          originType: 'web',
+          originUrl: url,
+          ingestedAt: new Date().toISOString(),
+          ingestAgent: 'ravn-fjolnir',
+          compiledInto: [],
+          content: '',
+        };
+        sources = [source, ...sources];
+        return source;
+      },
+
+      async ingestFile(file: File): Promise<Source> {
+        const id = `src-${Date.now()}`;
+        const source: Source = {
+          id,
+          title: file.name,
+          originType: 'file',
+          originPath: file.name,
+          ingestedAt: new Date().toISOString(),
+          ingestAgent: 'ravn-fjolnir',
+          compiledInto: [],
+          content: '',
+        };
+        sources = [source, ...sources];
+        return source;
       },
 
       async getGraph(options): Promise<MimirGraph> {

@@ -50,6 +50,18 @@ export interface IPageStore {
   getPageSources(path: string): Promise<Source[]>;
 
   /**
+   * Ingest a source from a remote URL (web, RSS, or arxiv).
+   * Returns the newly created source record.
+   */
+  ingestUrl(url: string): Promise<Source>;
+
+  /**
+   * Ingest a source from an uploaded file.
+   * Returns the newly created source record.
+   */
+  ingestFile(file: File): Promise<Source>;
+
+  /**
    * Fetch the knowledge graph (page nodes + relationship edges).
    * Optionally scoped to a single mount.
    */
