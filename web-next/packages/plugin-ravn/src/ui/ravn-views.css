@@ -498,7 +498,9 @@
   background: var(--color-bg-tertiary);
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s;
 }
 .rv-btn:hover:not(:disabled) {
   background: var(--color-bg-elevated);
@@ -547,7 +549,10 @@
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s,
+    border-color 0.1s;
 }
 .rv-filter-btn:hover {
   background: var(--color-bg-tertiary);

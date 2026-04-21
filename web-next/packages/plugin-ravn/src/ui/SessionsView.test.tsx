@@ -148,9 +148,7 @@ describe('SessionsView', () => {
 describe('TranscriptHeader', () => {
   it('renders transcript header card with session title', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByTestId('transcript-header')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('transcript-header')).toBeInTheDocument());
   });
 
   it('shows session title in header', async () => {
@@ -163,9 +161,7 @@ describe('TranscriptHeader', () => {
 
   it('shows metrics in header', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByTestId('transcript-metrics')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('transcript-metrics')).toBeInTheDocument());
   });
 
   it('shows action buttons in header', async () => {
@@ -230,9 +226,7 @@ describe('TranscriptHeader', () => {
 describe('FilterToolbar', () => {
   it('renders filter toolbar', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByTestId('filter-toolbar')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('filter-toolbar')).toBeInTheDocument());
   });
 
   it('renders all filter buttons', async () => {
@@ -256,9 +250,7 @@ describe('FilterToolbar', () => {
 
   it('clicking a filter button activates it', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'User' })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'User' })).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'User' }));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'User' })).toHaveAttribute('aria-pressed', 'true');
@@ -268,14 +260,9 @@ describe('FilterToolbar', () => {
 
   it('filtering to User shows only user messages', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'User' })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'User' })).toBeInTheDocument());
     // wait for messages to load
-    await waitFor(
-      () => expect(screen.getByRole('log')).toBeInTheDocument(),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(screen.getByRole('log')).toBeInTheDocument(), { timeout: 3000 });
     fireEvent.click(screen.getByRole('button', { name: 'User' }));
     await waitFor(() => {
       // Only user kind messages should be shown
@@ -309,9 +296,7 @@ describe('Composer', () => {
         }),
       );
     });
-    await waitFor(() =>
-      expect(screen.getByTestId('composer-closed')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('composer-closed')).toBeInTheDocument());
   });
 
   it('composer textarea is present', async () => {
@@ -374,18 +359,14 @@ describe('Composer', () => {
         }),
       );
     });
-    await waitFor(() =>
-      expect(screen.getByText(/read-only/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/read-only/i)).toBeInTheDocument());
   });
 });
 
 describe('ContextSidebar — Injects', () => {
   it('shows injects section', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByTestId('ctx-injects')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('ctx-injects')).toBeInTheDocument());
   });
 
   it('shows "no injected context" when no system messages', async () => {
@@ -401,16 +382,12 @@ describe('ContextSidebar — Injects', () => {
 describe('ContextSidebar — Emissions', () => {
   it('shows emissions section', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByTestId('ctx-emissions')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('ctx-emissions')).toBeInTheDocument());
   });
 
   it('shows emit message in emissions when present', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByTestId('ctx-emissions')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('ctx-emissions')).toBeInTheDocument());
     // coding-agent session has an emit message with 'code.changed' event
     await waitFor(
       () => {
@@ -442,7 +419,9 @@ describe('ContextSidebar — Emissions', () => {
           costUsd: 0.42,
         },
       ],
-      getSession: async () => { throw new Error('not called'); },
+      getSession: async () => {
+        throw new Error('not called');
+      },
       getMessages: async () => [],
     };
 
@@ -467,13 +446,10 @@ describe('ContextSidebar — Emissions', () => {
 describe('ContextSidebar — Timeline enrichment', () => {
   it('timeline shows start event', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByTestId('ctx-timeline')).toBeInTheDocument(),
-    );
-    await waitFor(
-      () => expect(screen.getByTestId('timeline-event-start')).toBeInTheDocument(),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(screen.getByTestId('ctx-timeline')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('timeline-event-start')).toBeInTheDocument(), {
+      timeout: 3000,
+    });
   });
 
   it('timeline shows tool_call events from messages', async () => {
@@ -505,9 +481,7 @@ describe('ContextSidebar — Timeline enrichment', () => {
 
   it('stats section shows token count', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByTestId('ctx-token-count')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('ctx-token-count')).toBeInTheDocument());
   });
 
   it('shows end event in timeline for non-running sessions', async () => {
@@ -522,10 +496,9 @@ describe('ContextSidebar — Timeline enrichment', () => {
         }),
       );
     });
-    await waitFor(
-      () => expect(screen.getByTestId('timeline-event-end')).toBeInTheDocument(),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(screen.getByTestId('timeline-event-end')).toBeInTheDocument(), {
+      timeout: 3000,
+    });
   });
 
   it('timeline shows intermediate events with label from tool_call toolName', async () => {
@@ -560,15 +533,15 @@ describe('SessionsView — additional branch coverage', () => {
           costUsd: 0.18,
         },
       ],
-      getSession: async () => { throw new Error('not called'); },
+      getSession: async () => {
+        throw new Error('not called');
+      },
       getMessages: async () => [],
     };
     render(<SessionsView />, {
       wrapper: wrap({ 'ravn.sessions': streamNoTitle, 'ravn.ravens': createMockRavenStream() }),
     });
-    await waitFor(() =>
-      expect(screen.getByText(/session 10000001/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/session 10000001/i)).toBeInTheDocument());
   });
 
   it('uses personaName first letter as avatar fallback when personaLetter is missing', async () => {
@@ -585,15 +558,15 @@ describe('SessionsView — additional branch coverage', () => {
           title: 'Test session',
         },
       ],
-      getSession: async () => { throw new Error('not called'); },
+      getSession: async () => {
+        throw new Error('not called');
+      },
       getMessages: async () => [],
     };
     render(<SessionsView />, {
       wrapper: wrap({ 'ravn.sessions': streamNoLetter, 'ravn.ravens': createMockRavenStream() }),
     });
-    await waitFor(() =>
-      expect(screen.getByTestId('transcript-header')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('transcript-header')).toBeInTheDocument());
   });
 
   it('shows small token count without k suffix', async () => {
@@ -614,15 +587,15 @@ describe('SessionsView — additional branch coverage', () => {
           costUsd: 0.01,
         },
       ],
-      getSession: async () => { throw new Error('not called'); },
+      getSession: async () => {
+        throw new Error('not called');
+      },
       getMessages: async () => [],
     };
     render(<SessionsView />, {
       wrapper: wrap({ 'ravn.sessions': streamSmallTokens, 'ravn.ravens': createMockRavenStream() }),
     });
-    await waitFor(() =>
-      expect(screen.getByText('500')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('500')).toBeInTheDocument());
   });
 
   it('shows ratio in stats when messageCount > 0 and costUsd present', async () => {
@@ -654,7 +627,9 @@ describe('SessionsView — additional branch coverage', () => {
           messageCount: 2,
         },
       ],
-      getSession: async () => { throw new Error('not called'); },
+      getSession: async () => {
+        throw new Error('not called');
+      },
       getMessages: async () => [
         {
           id: '00000001-0000-4000-8000-000000000099',
@@ -668,15 +643,17 @@ describe('SessionsView — additional branch coverage', () => {
     render(<SessionsView />, {
       wrapper: wrap({ 'ravn.sessions': streamBadJson, 'ravn.ravens': createMockRavenStream() }),
     });
-    await waitFor(() =>
-      expect(screen.getByTestId('ctx-emissions')).toBeInTheDocument(),
+    await waitFor(() => expect(screen.getByTestId('ctx-emissions')).toBeInTheDocument(), {
+      timeout: 3000,
+    });
+    // Should render without crashing, showing the emissions list
+    await waitFor(
+      () => {
+        const emissionsList = document.querySelector('[data-testid="emissions-list"]');
+        expect(emissionsList).toBeInTheDocument();
+      },
       { timeout: 3000 },
     );
-    // Should render without crashing, showing the emissions list
-    await waitFor(() => {
-      const emissionsList = document.querySelector('[data-testid="emissions-list"]');
-      expect(emissionsList).toBeInTheDocument();
-    }, { timeout: 3000 });
   });
 
   it('filter toolbar filters asst messages', async () => {
@@ -687,15 +664,16 @@ describe('SessionsView — additional branch coverage', () => {
     await waitFor(() => expect(screen.getByRole('log')).toBeInTheDocument(), { timeout: 3000 });
     fireEvent.click(screen.getByRole('button', { name: 'Assistant' }));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Assistant' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: 'Assistant' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
     });
   });
 
   it('filter toolbar filters tool messages', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Tool' })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Tool' })).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Tool' }));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Tool' })).toHaveAttribute('aria-pressed', 'true');
@@ -704,9 +682,7 @@ describe('SessionsView — additional branch coverage', () => {
 
   it('filter toolbar filters emit messages', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Emit' })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Emit' })).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Emit' }));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Emit' })).toHaveAttribute('aria-pressed', 'true');
@@ -715,9 +691,7 @@ describe('SessionsView — additional branch coverage', () => {
 
   it('filter toolbar filters think messages', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Think' })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Think' })).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Think' }));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Think' })).toHaveAttribute('aria-pressed', 'true');
@@ -726,12 +700,13 @@ describe('SessionsView — additional branch coverage', () => {
 
   it('filter toolbar filters system messages', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'System' })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'System' })).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'System' }));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'System' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: 'System' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
     });
   });
 
@@ -778,7 +753,9 @@ describe('SessionsView — additional branch coverage', () => {
           messageCount: 1,
         },
       ],
-      getSession: async () => { throw new Error('not called'); },
+      getSession: async () => {
+        throw new Error('not called');
+      },
       getMessages: async () => [
         {
           id: '00000001-0000-4000-8000-000000000050',
@@ -792,10 +769,9 @@ describe('SessionsView — additional branch coverage', () => {
     render(<SessionsView />, {
       wrapper: wrap({ 'ravn.sessions': streamWithSystem, 'ravn.ravens': createMockRavenStream() }),
     });
-    await waitFor(
-      () => expect(screen.getByTestId('injects-list')).toBeInTheDocument(),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(screen.getByTestId('injects-list')).toBeInTheDocument(), {
+      timeout: 3000,
+    });
   });
 
   it('shows no emissions label for stopped session with no emit messages', async () => {
@@ -810,10 +786,9 @@ describe('SessionsView — additional branch coverage', () => {
         }),
       );
     });
-    await waitFor(
-      () => expect(screen.getByText(/no emissions/i)).toBeInTheDocument(),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(screen.getByText(/no emissions/i)).toBeInTheDocument(), {
+      timeout: 3000,
+    });
   });
 
   it('shows messages count without cost/msg ratio when messageCount is undefined', async () => {
@@ -832,15 +807,15 @@ describe('SessionsView — additional branch coverage', () => {
           // no messageCount or costUsd
         },
       ],
-      getSession: async () => { throw new Error('not called'); },
+      getSession: async () => {
+        throw new Error('not called');
+      },
       getMessages: async () => [],
     };
     render(<SessionsView />, {
       wrapper: wrap({ 'ravn.sessions': streamNoCount, 'ravn.ravens': createMockRavenStream() }),
     });
-    await waitFor(() =>
-      expect(screen.getByTestId('ctx-stats')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('ctx-stats')).toBeInTheDocument());
     // No Cost/msg row when ratio is null
     const statsDl = screen.getByTestId('ctx-stats');
     expect(statsDl.textContent).not.toContain('Cost/msg');
@@ -872,16 +847,17 @@ describe('SessionsView — additional branch coverage', () => {
           messageCount: 20,
         },
       ],
-      getSession: async () => { throw new Error('not called'); },
+      getSession: async () => {
+        throw new Error('not called');
+      },
       getMessages: async () => manyMessages,
     };
     render(<SessionsView />, {
       wrapper: wrap({ 'ravn.sessions': streamManyEvents, 'ravn.ravens': createMockRavenStream() }),
     });
-    await waitFor(
-      () => expect(screen.getByTestId('timeline-show-more')).toBeInTheDocument(),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(screen.getByTestId('timeline-show-more')).toBeInTheDocument(), {
+      timeout: 3000,
+    });
     fireEvent.click(screen.getByTestId('timeline-show-more'));
     await waitFor(() => {
       // After expanding, show-more should disappear

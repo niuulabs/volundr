@@ -49,7 +49,8 @@ const FILTER_OPTIONS: { value: MessageFilter; label: string }[] = [
 
 function filterMessages(messages: Message[], filter: MessageFilter): Message[] {
   if (filter === 'all') return messages;
-  if (filter === 'tool') return messages.filter((m) => m.kind === 'tool_call' || m.kind === 'tool_result');
+  if (filter === 'tool')
+    return messages.filter((m) => m.kind === 'tool_call' || m.kind === 'tool_result');
   return messages.filter((m) => m.kind === (filter as MessageKind));
 }
 
@@ -71,13 +72,8 @@ const TIMELINE_KIND_COLOR: Partial<Record<TimelineEvent['kind'], string>> = {
   end: 'emerald',
 };
 
-function deriveTimelineEvents(
-  messages: Message[],
-  session: Session,
-): TimelineEvent[] {
-  const events: TimelineEvent[] = [
-    { kind: 'start', ts: session.createdAt, label: 'started' },
-  ];
+function deriveTimelineEvents(messages: Message[], session: Session): TimelineEvent[] {
+  const events: TimelineEvent[] = [{ kind: 'start', ts: session.createdAt, label: 'started' }];
 
   for (const m of messages) {
     if (m.kind === 'tool_call') {
@@ -232,7 +228,12 @@ function FilterToolbar({
   onFilter: (f: MessageFilter) => void;
 }) {
   return (
-    <div className="rv-filter-toolbar" role="group" aria-label="filter messages" data-testid="filter-toolbar">
+    <div
+      className="rv-filter-toolbar"
+      role="group"
+      aria-label="filter messages"
+      data-testid="filter-toolbar"
+    >
       {FILTER_OPTIONS.map((opt) => (
         <button
           key={opt.value}
@@ -283,9 +284,7 @@ function Composer({ session }: { session: Session }) {
   if (!isRunning) {
     return (
       <div className="rv-composer rv-composer--closed" data-testid="composer-closed">
-        <span className="rv-composer__closed-label">
-          session {session.status} · read-only
-        </span>
+        <span className="rv-composer__closed-label">session {session.status} · read-only</span>
         <button type="button" className="rv-btn rv-btn--sm">
           resume in new session
         </button>
@@ -399,16 +398,10 @@ function ContextSidebar({ session }: { session: Session }) {
   const hasMore = timelineEvents.length > TIMELINE_MAX_ITEMS;
 
   // Injects: system messages represent context injected into the session
-  const injects = useMemo(
-    () => msgs.filter((m) => m.kind === 'system'),
-    [msgs],
-  );
+  const injects = useMemo(() => msgs.filter((m) => m.kind === 'system'), [msgs]);
 
   // Emissions: emit messages emitted by the session
-  const emissions = useMemo(
-    () => msgs.filter((m) => m.kind === 'emit'),
-    [msgs],
-  );
+  const emissions = useMemo(() => msgs.filter((m) => m.kind === 'emit'), [msgs]);
 
   return (
     <aside
@@ -435,7 +428,9 @@ function ContextSidebar({ session }: { session: Session }) {
               className={`rv-ctx-timeline__item rv-ctx-timeline__item--${TIMELINE_KIND_COLOR[ev.kind] ?? 'muted'}`}
               data-testid={`timeline-event-${ev.kind}`}
             >
-              <span className={`rv-ctx-timeline__dot rv-ctx-timeline__dot--${TIMELINE_KIND_COLOR[ev.kind] ?? 'muted'}`} />
+              <span
+                className={`rv-ctx-timeline__dot rv-ctx-timeline__dot--${TIMELINE_KIND_COLOR[ev.kind] ?? 'muted'}`}
+              />
               <span className="rv-ctx-timeline__ts">{formatTime(ev.ts)}</span>
               <span className="rv-ctx-timeline__label">{ev.label}</span>
             </li>
@@ -456,8 +451,7 @@ function ContextSidebar({ session }: { session: Session }) {
       {/* Injects */}
       <section className="rv-ctx-sec" data-testid="ctx-injects">
         <h4 className="rv-ctx-sec__title">
-          Injects{' '}
-          <span className="rv-ctx-sec__title-sub">context this session has loaded</span>
+          Injects <span className="rv-ctx-sec__title-sub">context this session has loaded</span>
         </h4>
         {injects.length === 0 ? (
           <p className="rv-ctx-sec__body rv-ctx-sec__body--muted">no injected context</p>
@@ -504,8 +498,7 @@ function ContextSidebar({ session }: { session: Session }) {
       {/* Emissions */}
       <section className="rv-ctx-sec" data-testid="ctx-emissions">
         <h4 className="rv-ctx-sec__title">
-          Emissions{' '}
-          <span className="rv-ctx-sec__title-sub">events this session has produced</span>
+          Emissions <span className="rv-ctx-sec__title-sub">events this session has produced</span>
         </h4>
         {emissions.length === 0 ? (
           <p className="rv-ctx-sec__body rv-ctx-sec__body--muted">
