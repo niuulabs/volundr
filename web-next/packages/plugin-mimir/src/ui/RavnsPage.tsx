@@ -91,10 +91,7 @@ function RavnCard({ ravn, onClick }: RavnCardProps) {
             last dream {formatTimestamp(ravn.lastDream.timestamp)}
           </span>
         ) : (
-          <span
-            className="niuu-text-text-muted niuu-italic"
-            data-testid="ravn-no-dream"
-          >
+          <span className="niuu-text-text-muted niuu-italic" data-testid="ravn-no-dream">
             no dream cycles yet
           </span>
         )}
@@ -104,8 +101,8 @@ function RavnCard({ ravn, onClick }: RavnCardProps) {
       {ravn.lastDream && (
         <div className="niuu-text-xs niuu-text-text-secondary">
           <strong className="niuu-text-text-primary">{ravn.lastDream.pagesUpdated}</strong> pages ·{' '}
-          <strong className="niuu-text-text-primary">{ravn.lastDream.entitiesCreated}</strong> entities ·{' '}
-          {formatDuration(ravn.lastDream.durationMs)}
+          <strong className="niuu-text-text-primary">{ravn.lastDream.entitiesCreated}</strong>{' '}
+          entities · {formatDuration(ravn.lastDream.durationMs)}
         </div>
       )}
     </article>
