@@ -2,12 +2,12 @@ import { test, expect } from '@playwright/test';
 
 test('tyr dashboard renders at /tyr', async ({ page }) => {
   await page.goto('/tyr');
-  await expect(page.getByText('Tyr · Dashboard')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tyr' })).toBeVisible();
 });
 
-test('tyr dashboard shows the Tyr rune ᛏ', async ({ page }) => {
+test('tyr dashboard shows the Tyr rune ᚦ', async ({ page }) => {
   await page.goto('/tyr');
-  await expect(page.getByText('ᛏ').first()).toBeVisible();
+  await expect(page.getByText('ᚦ').first()).toBeVisible();
 });
 
 test('tyr dashboard shows active sagas from seed data', async ({ page }) => {

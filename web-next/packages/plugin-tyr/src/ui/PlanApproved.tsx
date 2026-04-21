@@ -16,7 +16,7 @@ export function PlanApproved({ saga, onNewPlan }: PlanApprovedProps) {
       aria-live="polite"
       data-testid="plan-approved"
     >
-      <Rune glyph="ᛏ" size={48} />
+      <Rune glyph="ᚦ" size={48} />
 
       <div className="niuu-flex niuu-flex-col niuu-gap-2">
         <h2 className="niuu-text-xl niuu-font-semibold niuu-text-text-primary">Saga launched!</h2>

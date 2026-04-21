@@ -58,7 +58,7 @@ test('mimir sources matches web2', async ({ page }) => {
 test('mimir search matches web2', async ({ page }) => {
   await page.goto('/mimir/search');
   await page.waitForLoadState('networkidle');
-  await page.waitForSelector('[role="searchbox"]', { timeout: 10_000 });
+  await page.waitForSelector('input[type="search"]', { timeout: 10_000 });
   await expect(page).toHaveScreenshot('mimir-search.png');
 });
 
