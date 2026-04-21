@@ -8,6 +8,7 @@ import '@niuulabs/plugin-login/styles.css';
 import '@niuulabs/plugin-mimir/styles.css';
 import '@niuulabs/plugin-observatory/styles.css';
 import '@niuulabs/plugin-ravn/styles.css';
+import '@niuulabs/plugin-tyr/styles.css';
 import '@niuulabs/plugin-volundr/styles.css';
 import './styles.css';
 import { setTokenProvider } from '@niuulabs/query';
