@@ -27,7 +27,28 @@ describe('BudgetView', () => {
     await waitFor(() => {
       expect(screen.getByText('spent')).toBeInTheDocument();
       expect(screen.getByText('cap')).toBeInTheDocument();
-      expect(screen.getByText('runway')).toBeInTheDocument();
+      expect(screen.getAllByText('runway').length).toBeGreaterThan(0);
+    });
+  });
+
+  it('shows burn rate KPI in hero card', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(() => {
+      expect(screen.getByText('burn rate')).toBeInTheDocument();
+    });
+  });
+
+  it('shows runway bar with projection text', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(() => {
+      expect(screen.getByTestId('runway-bar')).toBeInTheDocument();
+    });
+  });
+
+  it('shows burn trend badge', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(() => {
+      expect(screen.getByTestId('burn-trend')).toBeInTheDocument();
     });
   });
 
@@ -39,6 +60,28 @@ describe('BudgetView', () => {
       expect(screen.getByLabelText('Burning fast')).toBeInTheDocument();
       expect(screen.getByLabelText('Near cap')).toBeInTheDocument();
       expect(screen.getByLabelText('Idle')).toBeInTheDocument();
+    });
+  });
+
+  it('shows fleet sparkline chart after loading', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(() => {
+      expect(screen.getByTestId('fleet-sparkline')).toBeInTheDocument();
+    });
+  });
+
+  it('fleet sparkline has correct title', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(() => {
+      expect(screen.getByText('Fleet spend (24h)')).toBeInTheDocument();
+    });
+  });
+
+  it('fleet sparkline has x-axis labels', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(() => {
+      expect(screen.getByText('24h ago')).toBeInTheDocument();
+      expect(screen.getByText('now')).toBeInTheDocument();
     });
   });
 
@@ -91,10 +134,61 @@ describe('BudgetView', () => {
     });
   });
 
+  it('top driver rows contain sparklines', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(
+      () => {
+        const rows = screen.getAllByTestId('driver-row');
+        expect(rows.length).toBeGreaterThan(0);
+        // Each driver row should have a sparkline SVG
+        const firstRow = rows[0]!;
+        expect(firstRow.querySelector('.niuu-sparkline')).toBeTruthy();
+      },
+      { timeout: 3000 },
+    );
+  });
+
   it('shows recommended changes when ravens need attention', async () => {
     render(<BudgetView />, { wrapper: wrap(services) });
     await waitFor(() => expect(screen.getByTestId('recommended-changes')).toBeInTheDocument(), {
       timeout: 3000,
     });
+  });
+
+  it('recommendation rows show action buttons', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(
+      () => {
+        const buttons = screen.getAllByTestId('rec-action');
+        expect(buttons.length).toBeGreaterThan(0);
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it('recommendation rows show attention badges', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(
+      () => {
+        // Badges are spans with aria-label "attention: ..."
+        const badges = document.querySelectorAll('[aria-label^="attention:"]');
+        expect(badges.length).toBeGreaterThan(0);
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it('recommendation action buttons have correct labels', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(
+      () => {
+        const buttons = screen.getAllByTestId('rec-action');
+        const labels = buttons.map((b) => b.textContent);
+        // The mock data produces some idle ravens → Suspend buttons
+        const validLabels = ['Apply cap', 'Reduce budget', 'Suspend'];
+        expect(labels.every((l) => validLabels.some((v) => l?.includes(v)))).toBe(true);
+      },
+      { timeout: 3000 },
+    );
   });
 });

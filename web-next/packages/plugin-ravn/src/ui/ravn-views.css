@@ -1157,6 +1157,201 @@
   color: var(--color-text-secondary);
   flex: 1;
 }
+.rv-budget-rec-row__badge {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+.rv-budget-rec-row__badge--over-cap {
+  background: color-mix(in srgb, var(--color-critical, var(--color-accent-red)) 18%, transparent);
+  color: var(--color-critical, var(--color-accent-red));
+}
+.rv-budget-rec-row__badge--burning-fast {
+  background: color-mix(in srgb, var(--color-accent-amber) 18%, transparent);
+  color: var(--color-accent-amber);
+}
+.rv-budget-rec-row__badge--idle {
+  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+  color: var(--color-text-muted);
+}
+.rv-budget-rec-row__badge--near-cap {
+  background: color-mix(in srgb, var(--color-accent-amber) 12%, transparent);
+  color: var(--color-accent-amber);
+}
+.rv-budget-rec-action {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 2px var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    color 0.12s;
+  font-family: var(--font-sans);
+}
+.rv-budget-rec-action:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+}
+.rv-budget-rec-action--over-cap {
+  border-color: color-mix(in srgb, var(--color-critical, var(--color-accent-red)) 40%, transparent);
+  color: var(--color-critical, var(--color-accent-red));
+}
+.rv-budget-rec-action--over-cap:hover {
+  background: color-mix(in srgb, var(--color-critical, var(--color-accent-red)) 10%, transparent);
+}
+.rv-budget-rec-action--burning-fast {
+  border-color: color-mix(in srgb, var(--color-accent-amber) 40%, transparent);
+  color: var(--color-accent-amber);
+}
+.rv-budget-rec-action--burning-fast:hover {
+  background: color-mix(in srgb, var(--color-accent-amber) 10%, transparent);
+}
+.rv-budget-rec-action--idle {
+  border-color: color-mix(in srgb, var(--color-text-muted) 40%, transparent);
+  color: var(--color-text-muted);
+}
+.rv-budget-rec-action--idle:hover {
+  background: color-mix(in srgb, var(--color-text-muted) 10%, transparent);
+}
+
+/* Runway bar */
+.rv-budget-runway {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.rv-budget-runway__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.rv-budget-runway__label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-muted);
+}
+.rv-budget-runway__projection {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+}
+.rv-budget-runway__track {
+  height: 8px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.rv-budget-runway__fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+.rv-budget-runway__fill--ok {
+  background: var(--color-accent-emerald);
+}
+.rv-budget-runway__fill--warn {
+  background: var(--color-accent-amber);
+}
+.rv-budget-runway__fill--crit {
+  background: var(--color-critical, var(--color-accent-red));
+}
+
+/* Burn trend badge */
+.rv-budget-hero__trend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.rv-budget-hero__trend-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-muted);
+}
+.rv-budget-burn-trend {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+}
+.rv-budget-burn-trend--accelerating {
+  color: var(--color-critical, var(--color-accent-red));
+  background: color-mix(in srgb, var(--color-critical, var(--color-accent-red)) 12%, transparent);
+}
+.rv-budget-burn-trend--steady {
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+}
+.rv-budget-burn-trend--decelerating {
+  color: var(--color-accent-emerald);
+  background: color-mix(in srgb, var(--color-accent-emerald) 12%, transparent);
+}
+
+/* KPI mono variant */
+.rv-budget-hero__kpi-value--mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  color: var(--color-text-secondary);
+}
+
+/* Fleet sparkline chart */
+.rv-budget-fleet-sparkline {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  overflow-x: auto;
+}
+.rv-budget-fleet-sparkline__title {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-3);
+  font-weight: 600;
+}
+.rv-budget-fleet-sparkline__chart {
+  display: flex;
+  gap: var(--space-3);
+  align-items: stretch;
+}
+.rv-budget-fleet-sparkline__y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  text-align: right;
+  flex-shrink: 0;
+  padding-bottom: 2px;
+  width: 60px;
+}
+.rv-budget-fleet-sparkline__canvas {
+  flex: 1;
+  min-width: 0;
+}
+.rv-budget-fleet-sparkline__x-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+}
+
+/* Per-ravn sparkline in top drivers */
+.rv-budget-driver-row__sparkline {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
 
 .rv-budget-fleet {
   display: flex;
