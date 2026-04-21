@@ -10,6 +10,7 @@ import {
   MeshSidebar,
   MeshEventCard,
   resolveParticipantColor,
+  relTime,
 } from '@niuulabs/ui';
 import type { MeshEvent, MeshEventType, RoomParticipant } from '@niuulabs/ui';
 import { SourceLabel } from './atoms/SourceLabel';
@@ -665,6 +666,18 @@ function buildMockHunks(file: MockDiffFile): DiffHunk[] {
   ];
 }
 
+function diffStatusLetter(status: MockDiffFile['status']): string {
+  return status === 'new' ? 'A' : status === 'mod' ? 'M' : 'D';
+}
+
+function diffStatusColor(status: MockDiffFile['status']): string {
+  return status === 'new'
+    ? 'niuu-text-state-ok'
+    : status === 'mod'
+      ? 'niuu-text-state-warn'
+      : 'niuu-text-critical';
+}
+
 function DiffFileList({
   files,
   selectedPath,
@@ -692,12 +705,10 @@ function DiffFileList({
           <span
             className={cn(
               'niuu-w-4 niuu-flex-shrink-0 niuu-font-mono niuu-font-medium',
-              f.status === 'new' && 'niuu-text-state-ok',
-              f.status === 'mod' && 'niuu-text-state-warn',
-              f.status === 'del' && 'niuu-text-critical',
+              diffStatusColor(f.status),
             )}
           >
-            {f.status === 'new' ? 'A' : f.status === 'mod' ? 'M' : 'D'}
+            {diffStatusLetter(f.status)}
           </span>
           <span className="niuu-min-w-0 niuu-flex-1 niuu-truncate niuu-font-mono niuu-text-text-secondary">
             {f.path}
@@ -728,12 +739,10 @@ function DiffViewer({ file }: { file: MockDiffFile }) {
         <span
           className={cn(
             'niuu-font-mono niuu-font-medium niuu-text-xs',
-            file.status === 'new' && 'niuu-text-state-ok',
-            file.status === 'mod' && 'niuu-text-state-warn',
-            file.status === 'del' && 'niuu-text-critical',
+            diffStatusColor(file.status),
           )}
         >
-          {file.status === 'new' ? 'A' : file.status === 'mod' ? 'M' : 'D'}
+          {diffStatusLetter(file.status)}
         </span>
         <span className="niuu-font-mono niuu-text-sm niuu-text-text-primary">{file.path}</span>
         <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
@@ -892,15 +901,6 @@ function buildMockChronicle(): ChronicleEvent[] {
   ];
 }
 
-function formatRelTime(ts: number): string {
-  const diff = Date.now() - ts;
-  const min = Math.floor(diff / 60_000);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  const rem = min % 60;
-  return rem > 0 ? `${hr}h ${rem}m ago` : `${hr}h ago`;
-}
-
 function ChronicleEventRow({ event }: { event: ChronicleEvent }) {
   const colorClass = CHRONICLE_TYPE_COLORS[event.type];
   const typeLabel = CHRONICLE_TYPE_LABELS[event.type];
@@ -911,7 +911,7 @@ function ChronicleEventRow({ event }: { event: ChronicleEvent }) {
       data-testid={`chronicle-event-${event.type}`}
     >
       <span className="niuu-mt-0.5 niuu-w-10 niuu-flex-shrink-0 niuu-font-mono niuu-text-[10px] niuu-text-text-faint">
-        {formatRelTime(event.ts)}
+        {relTime(event.ts)}
       </span>
       <span
         className={cn(
@@ -945,24 +945,25 @@ function ChronicleEventRow({ event }: { event: ChronicleEvent }) {
             )}
           </>
         ) : event.type === 'file' ? (
-          <>
-            <span className="niuu-font-mono niuu-text-text-secondary">
-              {event.label.split(' · ')[0]}
-            </span>
-            {event.label.split(' · ')[1] && (
-              <span className="niuu-text-text-muted">{event.label.split(' · ')[1]}</span>
-            )}
-            {(event.ins !== undefined || event.del !== undefined) && (
-              <span className="niuu-font-mono niuu-text-[10px]">
-                {event.ins !== undefined && (
-                  <span className="niuu-text-state-ok">+{event.ins}</span>
+          (() => {
+            const [filePath, desc] = event.label.split(' · ');
+            return (
+              <>
+                <span className="niuu-font-mono niuu-text-text-secondary">{filePath}</span>
+                {desc && <span className="niuu-text-text-muted">{desc}</span>}
+                {(event.ins !== undefined || event.del !== undefined) && (
+                  <span className="niuu-font-mono niuu-text-[10px]">
+                    {event.ins !== undefined && (
+                      <span className="niuu-text-state-ok">+{event.ins}</span>
+                    )}
+                    {event.del !== undefined && (
+                      <span className="niuu-ml-1 niuu-text-critical">-{event.del}</span>
+                    )}
+                  </span>
                 )}
-                {event.del !== undefined && (
-                  <span className="niuu-ml-1 niuu-text-critical">-{event.del}</span>
-                )}
-              </span>
-            )}
-          </>
+              </>
+            );
+          })()
         ) : (
           <span className="niuu-text-text-secondary">{event.label}</span>
         )}
