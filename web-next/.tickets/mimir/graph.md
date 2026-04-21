@@ -17,30 +17,35 @@ Web2 uses a radial category-grouped layout with sine jitter for node positioning
 ## Required changes
 
 ### 1. Force-directed / category-radial layout
+
 **Web2 spec**: Nodes are grouped by category into radial clusters. Each category occupies a sector of the circle. Within each sector, nodes are offset with a sine-based jitter to avoid overlap. This creates a visually organic, clustered graph rather than a uniform circle.
 **Web-next currently**: All nodes are placed in a simple circle with equal angular spacing, regardless of category. No clustering or grouping.
 **What to do:** Replace `layoutCircle()` with a `layoutCategoryRadial()` function that:
-  1. Groups nodes by category
-  2. Assigns each category a sector of the full circle (proportional to node count)
-  3. Within each sector, distributes nodes with radial jitter (randomized offset from the sector's center radius, seeded by node index for determinism)
-  4. Keeps the same SVG viewBox (600x440) and center point (300, 220)
 
-  This does not need to be a full physics simulation — the deterministic radial-cluster layout from web2 is sufficient. The layout should be stable across re-renders (no animation/physics loop).
+1. Groups nodes by category
+2. Assigns each category a sector of the full circle (proportional to node count)
+3. Within each sector, distributes nodes with radial jitter (randomized offset from the sector's center radius, seeded by node index for determinism)
+4. Keeps the same SVG viewBox (600x440) and center point (300, 220)
+
+This does not need to be a full physics simulation — the deterministic radial-cluster layout from web2 is sufficient. The layout should be stable across re-renders (no animation/physics loop).
 **Files to modify:** `packages/plugin-mimir/src/ui/GraphPage.tsx`
 
 ### 2. Hover glow effect on nodes
+
 **Web2 spec**: Hovering a node applies a glow effect — an SVG filter (`feGaussianBlur` + `feComposite`) that creates a soft colored halo around the node circle matching its category color. The glow is 3-4px spread.
 **Web-next currently**: No hover effect on nodes (only cursor changes to pointer via the `role="button"`).
 **What to do:** Add an SVG `<defs>` section with a glow filter. On hover (CSS `:hover` on the node `<g>`), apply the filter via a class. The glow color should match the node's category fill. Since SVG filters can't easily use dynamic colors via CSS alone, use a single white/light glow filter and rely on `opacity` + the existing fill for the visual effect.
 **Files to modify:** `packages/plugin-mimir/src/ui/GraphPage.tsx`
 
 ### 3. Edge rendering improvements
+
 **Web2 spec**: Edges in web2 have a subtle gradient opacity (stronger near source, fading toward target) and are rendered behind nodes with a low opacity (0.15-0.2). Focused-node edges are highlighted brighter.
 **Web-next currently**: Edges are simple lines with a uniform class `.graph-page__edge` (likely a single stroke color/opacity).
 **What to do:** Add opacity differentiation: default edges at ~0.15 opacity, edges connected to the focused node at ~0.5 opacity. Optionally add a gradient stroke if it improves visual match. Implement via conditional class or inline style on focused edges.
 **Files to modify:** `packages/plugin-mimir/src/ui/GraphPage.tsx`
 
 ### 4. Migrate GraphPage.css to Tailwind
+
 **Web2 spec**: N/A — code-quality requirement.
 **Web-next currently**: Graph page uses `GraphPage.css` with BEM classes (`.graph-page`, `.graph-page__svg`, `.graph-page__edge`, `.graph-page__node`, etc.).
 **What to do:** Replace class-based styling with Tailwind utilities using `niuu-` prefix. For SVG-specific styling that Tailwind cannot express (e.g. stroke, fill, filter), use a minimal co-located `.css` file with `@apply` or CSS custom properties — but prefer inline Tailwind where possible. Delete `GraphPage.css`.
