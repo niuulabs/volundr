@@ -53,13 +53,11 @@ const BTN_BASE =
 const BTN_SECONDARY = `${BTN_BASE} niuu-bg-bg-secondary niuu-border-border niuu-text-text-primary hover:niuu-bg-bg-tertiary`;
 const BTN_FIX = `${BTN_BASE} niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-medium hover:niuu-opacity-[0.88]`;
 
-// F8: shared base class for sidebar check rows (All + per-rule)
 const CHECK_ROW_BASE =
   'niuu-grid niuu-grid-cols-[52px_1fr_28px] niuu-items-center niuu-gap-2 niuu-py-2 niuu-px-3 ' +
   'niuu-border-0 niuu-border-b niuu-border-solid niuu-border-border-subtle ' +
   'niuu-cursor-pointer niuu-text-left niuu-w-full niuu-transition-colors';
 
-// F2/F3/F4/F5: shared KPI typography constants
 const KPI_CARD_BASE =
   'niuu-flex niuu-flex-col niuu-gap-[2px] niuu-py-3 niuu-px-4 niuu-bg-bg-secondary niuu-border niuu-rounded-md niuu-min-w-[80px]';
 const KPI_LBL = 'niuu-text-[10px] niuu-uppercase niuu-tracking-[0.07em] niuu-text-text-muted';
@@ -69,7 +67,6 @@ export function LintPage() {
   const { issues, summary, isLoading, isError, error, runAutoFix, isFixing } = useLint();
   const [selectedRule, setSelectedRule] = useState<LintRule | null>(null);
 
-  // F7: single-pass reduce for all three per-rule maps
   const { countByRule, severityByRule, autoFixByRule } = issues.reduce<{
     countByRule: Record<string, number>;
     severityByRule: Record<string, IssueSeverity>;
@@ -93,12 +90,11 @@ export function LintPage() {
 
   const rules = Object.keys(RULE_DESCRIPTIONS) as LintRule[];
   const filtered = selectedRule ? issues.filter((i) => i.rule === selectedRule) : issues;
-  // F1: auto-fixable KPI always shows global count; filtered ids drive the Fix-all button
+  // auto-fixable KPI always shows global count; filtered ids drive the Fix-all button
   const totalAutoFixable = issues.filter((i) => i.autoFix).length;
   const autoFixableIds = filtered.filter((i) => i.autoFix).map((i) => i.id);
   const totalLint = summary.error + summary.warn + summary.info;
 
-  // F9: KPI config array — avoids repeated card markup
   const kpis = [
     {
       label: 'total issues',
@@ -118,7 +114,6 @@ export function LintPage() {
       valueCls: `${KPI_VAL_BASE} niuu-text-status-amber`,
       cardBorder: 'niuu-border-border-subtle',
     },
-    // F6: auto-fixable uses brand-300, not status-cyan
     {
       label: 'auto-fixable',
       value: totalAutoFixable,
