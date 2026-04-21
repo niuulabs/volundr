@@ -9,14 +9,30 @@
 
 /* ── Legend dot colors ─────────────────────────────────────────────────────── */
 
-.niuu-graph-legend-dot[data-color-idx='0'] { background: var(--color-accent-cyan); }
-.niuu-graph-legend-dot[data-color-idx='1'] { background: var(--color-accent-indigo); }
-.niuu-graph-legend-dot[data-color-idx='2'] { background: var(--color-accent-emerald); }
-.niuu-graph-legend-dot[data-color-idx='3'] { background: var(--color-accent-purple); }
-.niuu-graph-legend-dot[data-color-idx='4'] { background: var(--color-accent-amber); }
-.niuu-graph-legend-dot[data-color-idx='5'] { background: var(--color-accent-orange); }
-.niuu-graph-legend-dot[data-color-idx='6'] { background: var(--color-accent-red); }
-.niuu-graph-legend-dot[data-color-idx='7'] { background: var(--color-text-secondary); }
+.niuu-graph-legend-dot[data-color-idx='0'] {
+  background: var(--color-accent-cyan);
+}
+.niuu-graph-legend-dot[data-color-idx='1'] {
+  background: var(--color-accent-indigo);
+}
+.niuu-graph-legend-dot[data-color-idx='2'] {
+  background: var(--color-accent-emerald);
+}
+.niuu-graph-legend-dot[data-color-idx='3'] {
+  background: var(--color-accent-purple);
+}
+.niuu-graph-legend-dot[data-color-idx='4'] {
+  background: var(--color-accent-amber);
+}
+.niuu-graph-legend-dot[data-color-idx='5'] {
+  background: var(--color-accent-orange);
+}
+.niuu-graph-legend-dot[data-color-idx='6'] {
+  background: var(--color-accent-red);
+}
+.niuu-graph-legend-dot[data-color-idx='7'] {
+  background: var(--color-text-secondary);
+}
 
 /* ── SVG node hover glow ───────────────────────────────────────────────────── */
 
