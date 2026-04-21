@@ -56,11 +56,11 @@ export function StageProgressRail({ phases }: StageProgressRailProps) {
                 <Fragment key={phase.id}>
                   <div
                     role="listitem"
-                    aria-label={`Stage ${i + 1}: ${phase.name}, ${dotStatusLabel(phase.status)}`}
+                    aria-label={`Stage ${phase.number}: ${phase.name}, ${dotStatusLabel(phase.status)}`}
                     data-status={phase.status}
                     className={dotClassName(phase.status)}
                   >
-                    {i + 1}
+                    {phase.number}
                   </div>
                   {i < phases.length - 1 && (
                     <div className={barClassName(phase.status)} aria-hidden="true" />

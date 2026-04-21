@@ -78,5 +78,6 @@ describe('ConfidenceDriftCard', () => {
     // due to the hash-based seed — this is a sanity check for determinism.
     expect(firstStart).not.toBeUndefined();
     expect(secondStart).not.toBeUndefined();
+    expect(firstStart).not.toEqual(secondStart);
   });
 });
