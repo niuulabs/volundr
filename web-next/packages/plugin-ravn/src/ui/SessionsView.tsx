@@ -346,7 +346,7 @@ function Transcript({
   const filtered = filterMessages(messages, filter);
 
   return (
-    <div className="rv-transcript" role="log" aria-label={`transcript for ${session.personaName}`}>
+    <div className="rv-transcript" role="log" aria-label={`transcript: ${session.personaName}`}>
       <TranscriptHeader session={session} />
       <SegmentedFilter
         options={FILTER_OPTIONS}

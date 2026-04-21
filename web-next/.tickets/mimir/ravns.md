@@ -17,30 +17,35 @@ The Ravns page shows a warden directory (card grid) and a profile detail view. K
 ## Required changes
 
 ### 1. Bio text in directory cards
+
 **Web2 spec**: Each warden card shows a 1-2 line bio below the head row (name, state, persona). The bio is a brief description of the ravn's function (e.g. "Synthesises infrastructure documentation from git commits and runbooks").
 **Web-next currently**: Cards show: avatar + identity (name, state) → role chip → mount chips → dream stats. No bio text.
 **What to do:** Add a bio paragraph between the role chip row and the mount chips row. Source from `RavnBinding.bio` (extend domain model if the field does not exist). Style as `text-xs text-text-secondary` with 2-line clamp.
 **Files to modify:** `packages/plugin-mimir/src/ui/RavnsPage.tsx`, `packages/plugin-mimir/src/domain/ravn-binding.ts`
 
 ### 2. Pages-touched metric in directory cards
+
 **Web2 spec**: Each card shows `<N> pages touched` in a metrics row along with `last dream <timestamp>`.
 **Web-next currently**: Cards show last dream cycle stats (pages updated, entities created, duration) but not a cumulative pages-touched count.
 **What to do:** Add a metrics row below the mount chips showing: `<pagesTouched> pages touched` and `last dream <timestamp>`. These are aggregate lifetime stats, distinct from the single-cycle dream stats.
 **Files to modify:** `packages/plugin-mimir/src/ui/RavnsPage.tsx`, `packages/plugin-mimir/src/domain/ravn-binding.ts`
 
 ### 3. Expertise chips in profile view
+
 **Web2 spec**: The ravn profile shows an "Areas of expertise" panel with a flex-wrap row of accent-colored chips (e.g. "kubernetes", "networking", "observability").
 **Web-next currently**: Profile shows mount bindings section and last dream stats section. No expertise section.
 **What to do:** Add an "Areas of expertise" section to `RavnProfile` between mount bindings and dream stats. Render `ravn.expertise` (string array) as accent-toned `Chip` components. Extend `RavnBinding` domain model with `expertise: string[]` if not present.
 **Files to modify:** `packages/plugin-mimir/src/ui/RavnsPage.tsx`, `packages/plugin-mimir/src/domain/ravn-binding.ts`
 
 ### 4. Tools list in profile view
+
 **Web2 spec**: The profile shows the ravn's tool list in a mono-font row (e.g. "tools: search · compile · lint-fix").
 **Web-next currently**: No tools display in the profile.
 **What to do:** Add a tools row to the profile hero section (below the state pill). Show as mono text: "tools: " followed by tool names joined by " · ". Source from `RavnBinding.tools` (extend model if needed).
 **Files to modify:** `packages/plugin-mimir/src/ui/RavnsPage.tsx`, `packages/plugin-mimir/src/domain/ravn-binding.ts`
 
 ### 5. Migrate RavnsPage.css to Tailwind
+
 **Web2 spec**: N/A — code-quality requirement.
 **Web-next currently**: Uses `RavnsPage.css` with BEM classes (`.ravns-page`, `.ravn-card`, `.ravn-profile`, etc.).
 **What to do:** Replace all class-based styling with Tailwind utilities using `niuu-` prefix. Delete `RavnsPage.css`. Ensure the card grid uses `niuu-grid niuu-grid-cols-[repeat(auto-fill,minmax(280px,1fr))]` or similar.

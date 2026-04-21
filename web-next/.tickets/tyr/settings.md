@@ -19,6 +19,7 @@ Web2's Tyr settings surface has 8 sections: General, Dispatch rules, Integration
 ### 1. Add "General" section
 
 **Web2 spec**: `tyr.general` section (lines 73-85) shows core service bindings:
+
 - Service URL: `https://tyr.niuu.internal`
 - Event backbone: `sleipnir · nats`
 - Knowledge store: `mimir · qdrant:/niuu`
@@ -31,6 +32,7 @@ Each displayed as a key-value row with monospace values.
 **What to do**: Create a `GeneralSection` component that renders read-only KV rows for service bindings. Data comes from runtime config or a mock. Add it to the settings navigation and page switch.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/settings/GeneralSection.tsx` — new component
 - `packages/plugin-tyr/src/ui/settings/GeneralSection.test.tsx` — tests
 - `packages/plugin-tyr/src/ui/settings/SettingsPage.tsx` — add to section list and switch
@@ -40,6 +42,7 @@ Each displayed as a key-value row with monospace values.
 ### 2. Add "Integrations" section
 
 **Web2 spec**: `tyr.integrations` section (lines 103-127) shows a list of integration cards:
+
 - Linear (connected), GitHub (connected), Jira (disconnected), Slack (connected), PagerDuty (disconnected)
 - Each card has: logo letter, name, status line (api key ending or "not connected"), and Connect/Disconnect button
 
@@ -48,6 +51,7 @@ Each displayed as a key-value row with monospace values.
 **What to do**: Create an `IntegrationsSection` component showing integration cards in a list. Each card shows the integration name, connection status, and a toggle button. Use mock data for the 5 integrations.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/settings/IntegrationsSection.tsx` — new component
 - `packages/plugin-tyr/src/ui/settings/IntegrationsSection.test.tsx` — tests
 - `packages/plugin-tyr/src/ui/settings/SettingsPage.tsx` — add to section list and switch
@@ -57,6 +61,7 @@ Each displayed as a key-value row with monospace values.
 ### 3. Add "Gates & Reviewers" section
 
 **Web2 spec**: `tyr.gates` section (lines 150-162) shows gate reviewer routing:
+
 - List of reviewers (emails) with routing rules: "all gates · auto-forward after 30m"
 - Simple KV layout
 
@@ -65,6 +70,7 @@ Each displayed as a key-value row with monospace values.
 **What to do**: Create a `GatesReviewersSection` showing a list of reviewer email addresses with their routing configuration. Read-only display with mock data.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/settings/GatesReviewersSection.tsx` — new component
 - `packages/plugin-tyr/src/ui/settings/GatesReviewersSection.test.tsx` — tests
 - `packages/plugin-tyr/src/ui/settings/SettingsPage.tsx` — add to section list and switch
@@ -74,6 +80,7 @@ Each displayed as a key-value row with monospace values.
 ### 4. Add "Advanced" section (danger zone)
 
 **Web2 spec**: `tyr.advanced` section (lines 178-189) shows destructive actions:
+
 - Flush queue: danger button
 - Reset dispatcher: danger button
 - Rebuild confidence scores: normal button
@@ -83,6 +90,7 @@ Each displayed as a key-value row with monospace values.
 **What to do**: Create an `AdvancedSection` with danger-zone actions. Buttons should use critical/danger styling. Consider adding a confirmation dialog before destructive actions.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/settings/AdvancedSection.tsx` — new component
 - `packages/plugin-tyr/src/ui/settings/AdvancedSection.test.tsx` — tests
 - `packages/plugin-tyr/src/ui/settings/SettingsPage.tsx` — add to section list and switch
@@ -96,6 +104,7 @@ Each displayed as a key-value row with monospace values.
 **Web-next currently**: Labels are "Personas", "Flock Config", "Dispatch Defaults", "Notifications", "Audit Log".
 
 **What to do**: Rename to match web2 where the concepts overlap:
+
 - "Personas" -> "Persona overrides" (matches web2 label)
 - "Dispatch Defaults" -> "Dispatch rules" (matches web2 label)
 - "Flock Config" — keep as-is (web2 doesn't have an equivalent; it's a web-next addition)
@@ -104,6 +113,7 @@ Each displayed as a key-value row with monospace values.
 Update the `SECTION_ITEMS` array labels and descriptions accordingly.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/settings/SettingsPage.tsx` — rename labels in SECTION_ITEMS
 
 ---
@@ -111,6 +121,7 @@ Update the `SECTION_ITEMS` array labels and descriptions accordingly.
 ### 6. Add editable form inputs to Dispatch rules section
 
 **Web2 spec**: The dispatch rules section (lines 88-100) shows editable inputs:
+
 - Confidence threshold: `<input defaultValue="0.70">`
 - Max concurrent raids: `<input defaultValue="5">`
 - Auto-continue phases: `<Switch on={true}>`
@@ -123,6 +134,7 @@ Update the `SECTION_ITEMS` array labels and descriptions accordingly.
 **What to do**: Ensure all 6 fields from web2 are present with editable inputs. Add "Quiet hours" and "Escalate after" fields if missing. Use Switch component for auto-continue toggle.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/settings/DispatchDefaultsSection.tsx` — add missing fields, ensure editable inputs
 - Tests — update to cover all fields
 
@@ -137,6 +149,7 @@ Update the `SECTION_ITEMS` array labels and descriptions accordingly.
 **What to do**: Add budget and model chip badges to each persona row, plus an "Edit" button on the right. Data comes from persona config (mock values acceptable).
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/settings/PersonasSection.tsx` — add budget/model chips + Edit button
 - Tests — verify chip rendering
 
@@ -151,6 +164,7 @@ Update the `SECTION_ITEMS` array labels and descriptions accordingly.
 **What to do**: Reorder SECTION_ITEMS to: General, Dispatch rules (renamed), Integrations, Persona overrides (renamed), Gates & reviewers, Flock Config, Notifications, Advanced, Audit Log. Web-next additions (Flock Config, Audit Log) go after the web2 sections.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/settings/SettingsPage.tsx` — reorder SECTION_ITEMS
 - `packages/plugin-tyr/src/ui/settings/SettingsRail.tsx` — ensure nav renders in correct order
 

@@ -22,6 +22,7 @@ The Overview page has the same conceptual structure as web2 (4 KPIs, active rave
 **Web-next currently**: Uses `grid-template-columns: 3fr 2fr` making the left column 60% and right 40%.
 **What to do:** Change `.rv-overview__grid` to use `grid-template-columns: 1fr 1fr`.
 **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/OverviewPage.css`
 
 ### 2. Add recent activity log (9 rows)
@@ -29,11 +30,13 @@ The Overview page has the same conceptual structure as web2 (4 KPIs, active rave
 **Web2 spec** (overview.jsx): Right column includes a "Recent activity" section below the top spenders, showing 9 rows with columns: timestamp, kind badge (session/trigger/emit), ravn ID (truncated), and message text.
 **Web-next currently**: No activity log section exists. The right column ends after the top spenders list.
 **What to do:**
+
 1. Add a `useActivityLog()` hook (or derive from sessions/messages) that returns recent events across the fleet.
 2. Add an `ActivityLog` section component below the spenders list rendering a table of 9 rows.
 3. Each row: `<timestamp> <kind-badge> <ravn-id-short> <message-text>`.
 4. Style with `.rv-activity-log` classes matching web2 spacing (compact rows, monospace timestamps, colored kind badges).
-**Files to modify:**
+   **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/OverviewPage.tsx`
 - `packages/plugin-ravn/src/ui/OverviewPage.css`
 - `packages/plugin-ravn/src/ui/hooks/` (new or extended hook for activity data)
@@ -43,10 +46,12 @@ The Overview page has the same conceptual structure as web2 (4 KPIs, active rave
 **Web2 spec** (overview.jsx): Each row in the active ravens list shows a small persona avatar (colored circle with letter) to the left of the StateDot.
 **Web-next currently**: Rows show only `StateDot` + personaName + model. No avatar.
 **What to do:**
+
 1. Import `PersonaAvatar` from `@niuulabs/ui`.
 2. Add `<PersonaAvatar role={r.role} letter={r.letter} size={16} />` before the StateDot in each `rv-active-row`.
 3. Requires the `Ravn` domain model to expose `role` and `letter` fields (check if already available or needs extending).
-**Files to modify:**
+   **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/OverviewPage.tsx`
 - `packages/plugin-ravn/src/domain/ravn.ts` (if `role`/`letter` not yet on model)
 
@@ -56,6 +61,7 @@ The Overview page has the same conceptual structure as web2 (4 KPIs, active rave
 **Web-next currently**: Uses `accent-cyan` (mapped to `var(--color-accent-cyan)`).
 **What to do:** Change `.rv-loc-bar-fill` background-color from the cyan accent to `var(--brand-300)`.
 **Files to modify:**
+
 - `packages/plugin-ravn/src/ui/OverviewPage.css`
 
 ---

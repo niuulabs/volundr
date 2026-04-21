@@ -17,12 +17,14 @@ The Entities page is a NEW page in web-next that does not exist in web2. There i
 ## Required changes
 
 ### 1. Migrate EntitiesPage.css to Tailwind
+
 **Web2 spec**: N/A — this page has no web2 equivalent.
 **Web-next currently**: Uses `EntitiesPage.css` with BEM classes (`.entities-page`, `.entities-page__title`, `.entities-page__filter`, `.entities-page__filter-btn`, `.entities-page__group`, `.entities-page__item`, etc.).
 **What to do:** Replace all class-based styling with Tailwind utilities using `niuu-` prefix. Delete `EntitiesPage.css` once migration is complete. Ensure filter buttons active state uses token-backed colors (brand/cyan for active, bg-secondary for inactive).
 **Files to modify:** `packages/plugin-mimir/src/ui/EntitiesPage.tsx`, `packages/plugin-mimir/src/ui/EntitiesPage.css` (delete)
 
 ### 2. Visual consistency with other Mimir pages
+
 **Web2 spec**: N/A.
 **Web-next currently**: Uses the same general visual language (heading, subtitle, filter bar, card list) but the specific spacing and typography should match the patterns established in other Mimir pages.
 **What to do:** Ensure the page title uses the same heading style as other pages (e.g. `niuu-text-xl niuu-font-semibold niuu-text-text-primary`). Ensure filter buttons match the mode toggle pattern used in SearchPage. Ensure entity list items have the same card border/padding/radius as lint issue rows and search result rows.

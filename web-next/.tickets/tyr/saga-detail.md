@@ -25,6 +25,7 @@ The standalone Saga Detail route (`/tyr/sagas/:id`) shares the same underlying c
 **What to do**: Add the raid identifier (e.g., `NIU-214.2`) to each raid row, displayed in monospace text between the StatusBadge and the raid name. This matches web2's information density. The expand/collapse behavior is a web-next improvement and should remain, but the collapsed row should show all the metadata web2 shows.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/SagaDetailPage.tsx` — add `raid.trackerId` to collapsed row
 - `packages/plugin-tyr/src/domain/saga.ts` — ensure `Raid` has `trackerId` field
 
@@ -39,6 +40,7 @@ The standalone Saga Detail route (`/tyr/sagas/:id`) shares the same underlying c
 **What to do**: Add a `<StateDot state={phase.status} pulse={phase.status === 'active'} />` before the phase number label.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/SagaDetailPage.tsx` — add StateDot to phase header
 
 ---
@@ -52,6 +54,7 @@ The standalone Saga Detail route (`/tyr/sagas/:id`) shares the same underlying c
 **What to do**: Add the base branch to the subline: `{saga.trackerId} · {saga.featureBranch} -> {saga.baseBranch}`. The `Saga` domain model needs a `baseBranch` field (defaulting to `main`).
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/domain/saga.ts` — add `baseBranch` field
 - `packages/plugin-tyr/src/ui/SagaDetailPage.tsx` — update subline text
 - Mock adapter — supply baseBranch values
@@ -67,6 +70,7 @@ The standalone Saga Detail route (`/tyr/sagas/:id`) shares the same underlying c
 **What to do**: Same as sagas-list ticket items 1-4. When `SagaDetailPage` is used standalone (not embedded via `hideBackButton`), render the 2-column layout with the cards on the right.
 
 **Files to modify:**
+
 - Same as sagas-list ticket — the component is shared
 
 ---
@@ -80,6 +84,7 @@ The standalone Saga Detail route (`/tyr/sagas/:id`) shares the same underlying c
 **What to do**: Add a lightweight confirmation modal matching web2: "New sagas start from a prompt... Want to go there now?" with Cancel and "Go to Plan ->" buttons. Use a shared Modal component from `@niuulabs/ui` or create one if not available.
 
 **Files to modify:**
+
 - `packages/plugin-tyr/src/ui/SagasPage.tsx` — add modal state and render
 - Possibly `packages/ui/src/Modal/` — if no modal exists yet
 
