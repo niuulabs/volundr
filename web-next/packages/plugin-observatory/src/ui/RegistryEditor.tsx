@@ -177,7 +177,13 @@ function TypesTab({ registry, selectedId, onSelect, search }: TypesTabProps) {
                   </span>
                 </div>
                 <div className="type-meta">
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--brand-300)' }}>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
+                      color: 'var(--brand-300)',
+                    }}
+                  >
                     {t.id}
                   </div>
                   <div>
@@ -308,7 +314,6 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
           data-dragging={isDragging ? 'true' : undefined}
           draggable
           className="registry-tree-node"
-          style={{ '--tree-depth': depth } as React.CSSProperties}
           onDragStart={(e) => handleDragStart(e, t.id)}
           onDragOver={(e) => handleDragOver(e, t.id)}
           onDragLeave={(e) => handleDragLeave(e, t.id)}
@@ -333,18 +338,20 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
             {t.id}
           </span>
         </div>
-        {children.length > 0 && <div>{children.map((c) => renderNode(c, depth + 1))}</div>}
+        {children.length > 0 && (
+          <div className="registry-tree-children">
+            {children.map((c) => renderNode(c, depth + 1))}
+          </div>
+        )}
       </div>
     );
   };
 
   return (
     <div>
-      <p className="niuu-m-0 niuu-mb-4 niuu-text-sm niuu-text-text-muted niuu-leading-[1.5]">
-        <strong>Drag</strong> a type onto another to reparent it. The{' '}
-        <code className="niuu-font-mono niuu-text-[11px]">canContain</code> edge moves to the new
-        parent; <code className="niuu-font-mono niuu-text-[11px]">parentTypes</code> on the child
-        updates. Cycles are blocked.
+      <p className="containment-hint">
+        <strong>Drag</strong> a type onto another to reparent it. The <code>canContain</code> edge
+        moves to the new parent; <code>parentTypes</code> on the child updates. Cycles are blocked.
       </p>
 
       <div data-testid="containment-tree">{roots.map((r) => renderNode(r))}</div>
@@ -352,9 +359,9 @@ function ContainmentTab({ registry, selectedId, onSelect, tryReparent }: Contain
       {orphans.length > 0 && (
         <div
           data-testid="orphans-section"
-          className="niuu-mt-6 niuu-pt-4 niuu-border-t niuu-border-border-subtle"
+          className="niuu-mt-4 niuu-pt-3 niuu-border-t niuu-border-dashed niuu-border-border-subtle"
         >
-          <div className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted niuu-uppercase niuu-tracking-[0.07em] niuu-mb-2">
+          <div className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted niuu-uppercase niuu-tracking-[0.08em] niuu-mb-1">
             orphans — parent missing
           </div>
           {orphans.map((o) => renderNode(o))}
@@ -480,7 +487,12 @@ export function RegistryEditor({ registry: initialRegistry }: RegistryEditorProp
         {/* Tab content */}
         <div role="tabpanel" className="niuu-flex-1 niuu-overflow-y-auto niuu-py-5 niuu-px-6">
           {activeTab === 'types' && (
-            <TypesTab registry={registry} selectedId={selectedId} onSelect={select} search={search} />
+            <TypesTab
+              registry={registry}
+              selectedId={selectedId}
+              onSelect={select}
+              search={search}
+            />
           )}
           {activeTab === 'containment' && (
             <ContainmentTab
@@ -495,9 +507,7 @@ export function RegistryEditor({ registry: initialRegistry }: RegistryEditorProp
       </div>
 
       {/* Drawer */}
-      {showDrawer && (
-        <TypePreviewDrawer type={selectedType} onClose={() => select(null)} />
-      )}
+      {showDrawer && <TypePreviewDrawer type={selectedType} onClose={() => select(null)} />}
     </div>
   );
 }
