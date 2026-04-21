@@ -2,33 +2,63 @@ import { useState } from 'react';
 import { countLeaves } from '../../domain';
 import { PageTypeGlyph } from './PageTypeGlyph';
 import type { FileTreeItem } from '../../domain/tree';
+import type { PageMeta } from '../../domain/page';
 
-/** Multiplier for each depth level's left-indent (in px, matches --mm-tree-indent-step CSS var). */
-const TREE_INDENT_STEP = 12;
+/** Indent step in px per depth level — matches the CSS variable default. */
+const TREE_INDENT_STEP_PX = 12;
 
 interface TreeNodeProps {
   node: FileTreeItem;
   depth: number;
   selectedPath: string | null;
   onSelect: (path: string) => void;
+  allPages: PageMeta[];
 }
 
-export function TreeNode({ node, depth, selectedPath, onSelect }: TreeNodeProps) {
+/** Returns true when at least one of the page's related slugs cannot be resolved. */
+function pageHasBrokenLinks(page: PageMeta, allPages: PageMeta[]): boolean {
+  if (!page.related || page.related.length === 0) return false;
+  return page.related.some(
+    (slug) => !allPages.some((p) => p.path === `/${slug}` || p.path === slug),
+  );
+}
+
+export function TreeNode({ node, depth, selectedPath, onSelect, allPages }: TreeNodeProps) {
   const [open, setOpen] = useState(depth <= 1);
 
   if (!node.isDir) {
     const conf = node.page.confidence;
+    const hasBrokenLinks = pageHasBrokenLinks(node.page, allPages);
+    const isActive = selectedPath === node.path;
+
     return (
       <button
         type="button"
-        className={`mm-tree-leaf${selectedPath === node.path ? ' mm-tree-leaf--active' : ''}`}
-        style={{ '--mm-tree-depth': depth } as React.CSSProperties}
+        className={[
+          'niuu-flex niuu-items-center niuu-gap-2 niuu-py-[3px] niuu-pr-3',
+          'niuu-text-xs niuu-text-text-secondary',
+          'niuu-cursor-pointer niuu-border-none niuu-bg-transparent niuu-w-full niuu-text-left',
+          'hover:niuu-bg-bg-tertiary hover:niuu-text-text-primary',
+          isActive ? 'niuu-bg-bg-tertiary niuu-text-text-primary' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        style={{ paddingLeft: `calc(${depth * TREE_INDENT_STEP_PX}px + var(--space-3))` }}
         onClick={() => onSelect(node.path)}
-        aria-current={selectedPath === node.path ? 'page' : undefined}
+        aria-current={isActive ? 'page' : undefined}
       >
         <span className={`mm-conf-dot mm-conf-dot--${conf}`} aria-label={`confidence: ${conf}`} />
-        <span className="mm-tree-leaf__name">{node.name}</span>
-        <PageTypeGlyph type={node.page.type} size={TREE_INDENT_STEP - 1} />
+        <span className="niuu-flex-1 niuu-overflow-hidden niuu-text-ellipsis niuu-whitespace-nowrap">
+          {node.name}
+        </span>
+        {hasBrokenLinks && (
+          <span
+            className="niuu-inline-block niuu-w-1.5 niuu-h-1.5 niuu-rounded-full niuu-bg-status-amber niuu-flex-shrink-0"
+            aria-label="page has broken wikilinks"
+            title="This page has broken wikilinks"
+          />
+        )}
+        <PageTypeGlyph type={node.page.type} size={TREE_INDENT_STEP_PX - 1} />
       </button>
     );
   }
@@ -36,19 +66,21 @@ export function TreeNode({ node, depth, selectedPath, onSelect }: TreeNodeProps)
   const childCount = countLeaves(node);
 
   return (
-    <div className="mm-tree-dir">
+    <div className="niuu-select-none">
       <div
-        className="mm-tree-dir-head"
-        style={{ '--mm-tree-depth': depth } as React.CSSProperties}
+        className="niuu-flex niuu-items-center niuu-gap-1 niuu-py-[3px] niuu-pr-3 niuu-text-xs niuu-text-text-muted niuu-cursor-pointer hover:niuu-text-text-secondary"
+        style={{ paddingLeft: `calc(${depth * TREE_INDENT_STEP_PX}px + 4px)` }}
         onClick={() => setOpen((o) => !o)}
         role="button"
         aria-expanded={open}
         tabIndex={0}
         onKeyDown={(e) => e.key === 'Enter' && setOpen((o) => !o)}
       >
-        <span className="mm-tree-caret">{open ? '▾' : '▸'}</span>
+        <span className="niuu-text-[8px] niuu-w-[10px] niuu-text-center">{open ? '▾' : '▸'}</span>
         <span>{node.name}/</span>
-        <span className="mm-tree-dir-count">{childCount}</span>
+        <span className="niuu-ml-auto niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+          {childCount}
+        </span>
       </div>
       {open &&
         Object.values(node.children).map((child) => (
@@ -58,6 +90,7 @@ export function TreeNode({ node, depth, selectedPath, onSelect }: TreeNodeProps)
             depth={depth + 1}
             selectedPath={selectedPath}
             onSelect={onSelect}
+            allPages={allPages}
           />
         ))}
     </div>
