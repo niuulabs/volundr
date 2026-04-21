@@ -62,6 +62,22 @@ export function PlanRaiding({ error, onBack }: PlanRaidingProps) {
           />
         ))}
       </div>
+
+      <div
+        aria-live="polite"
+        className="niuu-flex niuu-flex-col niuu-gap-1 niuu-text-center"
+        aria-label="Raven activity"
+      >
+        <p className="niuu-text-xs niuu-text-text-muted niuu-font-mono">
+          ᚱ · decomposer — analyzing brief
+        </p>
+        <p className="niuu-text-xs niuu-text-text-muted niuu-font-mono">
+          ᚱ · investigator — probing repo for affected modules
+        </p>
+        <p className="niuu-text-xs niuu-text-text-muted niuu-font-mono">
+          ᚱ · mimir-indexer — pulling in prior-art sagas
+        </p>
+      </div>
     </div>
   );
 }

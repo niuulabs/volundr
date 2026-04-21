@@ -50,6 +50,7 @@ type Action =
   | { type: 'APPROVE_DONE'; saga: Saga }
   | { type: 'APPROVE_ERROR'; error: string }
   | { type: 'BACK' }
+  | { type: 'REPLAN' }
   | { type: 'EDIT_PHASE'; phaseIndex: number; name: string }
   | { type: 'CLEAR_ERROR' };
 
@@ -132,6 +133,11 @@ function reducer(state: PlanWizardState, action: Action): PlanWizardState {
       return { ...state, step, loading: false, error: null };
     }
 
+    case 'REPLAN': {
+      const step = planTransition(state.step, 'raiding');
+      return { ...state, step, structure: null, phases: [], loading: false, error: null };
+    }
+
     case 'EDIT_PHASE': {
       if (!state.structure?.structure) return state;
       const phases = state.structure.structure.phases.map((p, i) =>
@@ -206,6 +212,10 @@ export interface PlanWizardActions {
   editPhase(phaseIndex: number, name: string): void;
   back(): void;
   clearError(): void;
+  /** Re-run decomposition with the same prompt and answers. */
+  replan(): void;
+  /** Persist the current draft state without creating the saga. */
+  saveDraft(): void;
 }
 
 export function usePlanWizard(): { state: PlanWizardState } & PlanWizardActions {
@@ -289,5 +299,13 @@ export function usePlanWizard(): { state: PlanWizardState } & PlanWizardActions 
     dispatch({ type: 'CLEAR_ERROR' });
   }
 
-  return { state, submitPrompt, submitAnswers, approveDraft, editPhase, back, clearError };
+  function replan() {
+    dispatch({ type: 'REPLAN' });
+  }
+
+  function saveDraft() {
+    // No backend persistence yet — acknowledged as a no-op.
+  }
+
+  return { state, submitPrompt, submitAnswers, approveDraft, editPhase, back, clearError, replan, saveDraft };
 }

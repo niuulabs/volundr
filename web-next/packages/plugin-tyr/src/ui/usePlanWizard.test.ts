@@ -308,3 +308,63 @@ describe('usePlanWizard — decompose error', () => {
     expect(result.current.state.step).toBe('raiding');
   });
 });
+
+describe('usePlanWizard — replan', () => {
+  async function advanceToDraft(svc: Partial<ITyrService>) {
+    const { result } = renderHook(() => usePlanWizard(), { wrapper: makeWrapper(svc) });
+    await act(async () => {
+      await result.current.submitPrompt('Build auth', 'repo');
+    });
+    act(() => result.current.submitAnswers({}));
+    await waitFor(() => expect(result.current.state.step).toBe('draft'));
+    return result;
+  }
+
+  it('transitions from draft back to raiding', async () => {
+    const svc = makeMockService();
+    const result = await advanceToDraft(svc);
+
+    act(() => result.current.replan());
+
+    expect(result.current.state.step).toBe('raiding');
+  });
+
+  it('clears structure and phases on replan', async () => {
+    const svc = makeMockService();
+    const result = await advanceToDraft(svc);
+
+    act(() => result.current.replan());
+
+    expect(result.current.state.structure).toBeNull();
+    expect(result.current.state.phases).toHaveLength(0);
+  });
+
+  it('auto-decomposes again after replan', async () => {
+    const svc = makeMockService();
+    const result = await advanceToDraft(svc);
+
+    act(() => result.current.replan());
+
+    await waitFor(() => expect(result.current.state.step).toBe('draft'));
+    // decompose called twice: once initially, once after replan
+    expect(svc.decompose).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('usePlanWizard — saveDraft', () => {
+  it('does not change step or clear state', async () => {
+    const svc = makeMockService();
+    const { result } = renderHook(() => usePlanWizard(), { wrapper: makeWrapper(svc) });
+
+    await act(async () => {
+      await result.current.submitPrompt('Build auth', 'repo');
+    });
+    act(() => result.current.submitAnswers({}));
+    await waitFor(() => expect(result.current.state.step).toBe('draft'));
+
+    const stepBefore = result.current.state.step;
+    act(() => result.current.saveDraft());
+
+    expect(result.current.state.step).toBe(stepBefore);
+  });
+});

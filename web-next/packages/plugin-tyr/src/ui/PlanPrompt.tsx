@@ -6,6 +6,21 @@ interface PlanPromptProps {
   error: string | null;
 }
 
+const HINT_CHIPS = [
+  {
+    label: '+ Example: subscription validation',
+    text: 'NIU-214: subscription validation — surface dead-letter warnings when a persona in a workflow has no downstream consumer for any of its produced event types.',
+  },
+  {
+    label: '+ Example: simple endpoint',
+    text: 'Add a health check endpoint to the Tyr service that reports queue depth and active raid counts.',
+  },
+  {
+    label: '+ Example: OIDC auth',
+    text: 'Add OIDC authentication with Keycloak, including silent token refresh and PAT support for headless agents.',
+  },
+];
+
 /**
  * Step 1 of the Plan wizard — capture the human‐language goal and target repo.
  */
@@ -58,6 +73,18 @@ export function PlanPrompt({ onSubmit, loading, error }: PlanPromptProps) {
           aria-describedby={error ? 'plan-prompt-error' : undefined}
           className="niuu-w-full niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-secondary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary niuu-placeholder-text-muted niuu-resize-y focus:niuu-outline-none focus:niuu-ring-2 focus:niuu-ring-brand-500/40"
         />
+        <div className="niuu-flex niuu-flex-wrap niuu-gap-2 niuu-mt-2" aria-label="Example prompts">
+          {HINT_CHIPS.map((chip) => (
+            <button
+              key={chip.label}
+              type="button"
+              onClick={() => setPrompt(chip.text)}
+              className="niuu-rounded-full niuu-bg-bg-elevated niuu-border niuu-border-border niuu-px-3 niuu-py-1 niuu-text-xs niuu-text-text-secondary hover:niuu-bg-bg-tertiary hover:niuu-text-text-primary niuu-transition-colors"
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="niuu-flex niuu-flex-col niuu-gap-1">
