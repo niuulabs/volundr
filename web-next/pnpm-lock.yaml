@@ -475,6 +475,9 @@ importers:
       '@niuulabs/query':
         specifier: workspace:*
         version: link:../query
+      '@niuulabs/shell':
+        specifier: workspace:*
+        version: link:../shell
       '@niuulabs/ui':
         specifier: workspace:*
         version: link:../ui
@@ -549,6 +552,9 @@ importers:
       '@niuulabs/query':
         specifier: workspace:*
         version: link:../query
+      '@niuulabs/shell':
+        specifier: workspace:*
+        version: link:../shell
       '@niuulabs/ui':
         specifier: workspace:*
         version: link:../ui
