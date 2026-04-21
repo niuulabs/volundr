@@ -156,9 +156,7 @@ describe('LintPage', () => {
     wrap(<LintPage />);
     await waitFor(() => expect(screen.getAllByTestId('check-row').length).toBeGreaterThan(0));
     fireEvent.click(screen.getAllByTestId('check-row')[0]!);
-    await waitFor(() =>
-      expect(screen.getByTestId('rule-description')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId('rule-description')).toBeInTheDocument());
   });
 
   it('rule description box shows rule id, description, and fix hint', async () => {
@@ -177,8 +175,6 @@ describe('LintPage', () => {
     fireEvent.click(row);
     await waitFor(() => expect(screen.getByTestId('rule-description')).toBeInTheDocument());
     fireEvent.click(row);
-    await waitFor(() =>
-      expect(screen.queryByTestId('rule-description')).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByTestId('rule-description')).not.toBeInTheDocument());
   });
 });

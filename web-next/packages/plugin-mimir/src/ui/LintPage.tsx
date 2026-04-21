@@ -50,10 +50,8 @@ const ISSUE_BORDER_CLS: Record<IssueSeverity, string> = {
 
 const BTN_BASE =
   'niuu-py-1 niuu-px-3 niuu-rounded-md niuu-font-sans niuu-text-xs niuu-cursor-pointer niuu-whitespace-nowrap niuu-border disabled:niuu-opacity-50 disabled:niuu-cursor-not-allowed';
-const BTN_SECONDARY =
-  `${BTN_BASE} niuu-bg-bg-secondary niuu-border-border niuu-text-text-primary hover:niuu-bg-bg-tertiary`;
-const BTN_FIX =
-  `${BTN_BASE} niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-medium hover:niuu-opacity-[0.88]`;
+const BTN_SECONDARY = `${BTN_BASE} niuu-bg-bg-secondary niuu-border-border niuu-text-text-primary hover:niuu-bg-bg-tertiary`;
+const BTN_FIX = `${BTN_BASE} niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-medium hover:niuu-opacity-[0.88]`;
 
 export function LintPage() {
   const { issues, summary, isLoading, isError, error, runAutoFix, isFixing } = useLint();
@@ -288,8 +286,7 @@ export function LintPage() {
                 {autoFixByRule[selectedRule] && (
                   <span className="niuu-text-status-emerald">
                     {' '}
-                    Auto-fixable via{' '}
-                    <code className="niuu-font-mono">mimir_lint --fix</code>.
+                    Auto-fixable via <code className="niuu-font-mono">mimir_lint --fix</code>.
                   </span>
                 )}
               </p>
