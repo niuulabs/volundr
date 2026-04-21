@@ -46,7 +46,7 @@ describe('SettingsIndexPage', () => {
     expect(screen.getByText('Tyr Settings')).toBeInTheDocument();
   });
 
-  it('shows all 5 setting section links', () => {
+  it('shows all 9 setting section links', () => {
     const client = new QueryClient();
     render(
       <QueryClientProvider client={client}>
@@ -55,20 +55,31 @@ describe('SettingsIndexPage', () => {
         </ServicesProvider>
       </QueryClientProvider>,
     );
-    expect(screen.getByText('Personas')).toBeInTheDocument();
+    expect(screen.getByText('General')).toBeInTheDocument();
+    expect(screen.getByText('Dispatch rules')).toBeInTheDocument();
+    expect(screen.getByText('Integrations')).toBeInTheDocument();
+    expect(screen.getByText('Persona overrides')).toBeInTheDocument();
+    expect(screen.getByText('Gates & reviewers')).toBeInTheDocument();
     expect(screen.getByText('Flock Config')).toBeInTheDocument();
-    expect(screen.getByText('Dispatch Defaults')).toBeInTheDocument();
     expect(screen.getByText('Notifications')).toBeInTheDocument();
+    expect(screen.getByText('Advanced')).toBeInTheDocument();
     expect(screen.getByText('Audit Log')).toBeInTheDocument();
   });
 });
 
 describe('SettingsPage', () => {
+  it('renders GeneralSection for "general" section', () => {
+    render(<SettingsPage section="general" />, {
+      wrapper: wrap(defaultServices()),
+    });
+    expect(screen.getByText('General')).toBeInTheDocument();
+  });
+
   it('renders PersonasSection for "personas" section', async () => {
     render(<SettingsPage section="personas" />, {
       wrapper: wrap(defaultServices()),
     });
-    await waitFor(() => expect(screen.getByText('Personas')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Persona overrides')).toBeInTheDocument());
   });
 
   it('renders FlockConfigSection for "flock" section', async () => {
@@ -82,7 +93,7 @@ describe('SettingsPage', () => {
     render(<SettingsPage section="dispatch" />, {
       wrapper: wrap(defaultServices()),
     });
-    await waitFor(() => expect(screen.getByText('Dispatch Defaults')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Dispatch rules')).toBeInTheDocument());
   });
 
   it('renders NotificationsSection for "notifications" section', async () => {
@@ -97,5 +108,26 @@ describe('SettingsPage', () => {
       wrapper: wrap(defaultServices()),
     });
     await waitFor(() => expect(screen.getByText('Audit Log')).toBeInTheDocument());
+  });
+
+  it('renders IntegrationsSection for "integrations" section', () => {
+    render(<SettingsPage section="integrations" />, {
+      wrapper: wrap(defaultServices()),
+    });
+    expect(screen.getByText('Integrations')).toBeInTheDocument();
+  });
+
+  it('renders GatesReviewersSection for "gates" section', () => {
+    render(<SettingsPage section="gates" />, {
+      wrapper: wrap(defaultServices()),
+    });
+    expect(screen.getByText('Gates & reviewers')).toBeInTheDocument();
+  });
+
+  it('renders AdvancedSection for "advanced" section', () => {
+    render(<SettingsPage section="advanced" />, {
+      wrapper: wrap(defaultServices()),
+    });
+    expect(screen.getByText('Advanced')).toBeInTheDocument();
   });
 });

@@ -56,13 +56,8 @@ export const tyrPlugin = definePlugin({
     }),
     createRoute({
       getParentRoute: () => rootRoute,
-      path: '/tyr/settings/personas',
-      component: () => SettingsPage({ section: 'personas' }),
-    }),
-    createRoute({
-      getParentRoute: () => rootRoute,
-      path: '/tyr/settings/flock',
-      component: () => SettingsPage({ section: 'flock' }),
+      path: '/tyr/settings/general',
+      component: () => SettingsPage({ section: 'general' }),
     }),
     createRoute({
       getParentRoute: () => rootRoute,
@@ -71,8 +66,33 @@ export const tyrPlugin = definePlugin({
     }),
     createRoute({
       getParentRoute: () => rootRoute,
+      path: '/tyr/settings/integrations',
+      component: () => SettingsPage({ section: 'integrations' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/personas',
+      component: () => SettingsPage({ section: 'personas' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/gates',
+      component: () => SettingsPage({ section: 'gates' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/flock',
+      component: () => SettingsPage({ section: 'flock' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
       path: '/tyr/settings/notifications',
       component: () => SettingsPage({ section: 'notifications' }),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/tyr/settings/advanced',
+      component: () => SettingsPage({ section: 'advanced' }),
     }),
     createRoute({
       getParentRoute: () => rootRoute,

@@ -23,8 +23,27 @@ function PersonaRow({ persona, selected, onSelect }: PersonaRowProps) {
       onClick={() => onSelect(persona.name)}
       aria-pressed={selected}
     >
-      <span className="niuu-font-mono niuu-text-sm niuu-text-text-primary niuu-flex-1 niuu-truncate">
-        {persona.name}
+      <div className="niuu-flex-1 niuu-min-w-0">
+        <span className="niuu-font-mono niuu-text-sm niuu-text-text-primary niuu-truncate niuu-block">
+          {persona.name}
+        </span>
+        {persona.producesEvent && (
+          <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-block niuu-mt-0.5 niuu-truncate">
+            produces · {persona.producesEvent}
+          </span>
+        )}
+      </div>
+      <span
+        className="niuu-text-xs niuu-px-1.5 niuu-py-0.5 niuu-rounded niuu-bg-bg-secondary niuu-text-text-secondary niuu-shrink-0"
+        data-testid="budget-chip"
+      >
+        budget {persona.iterationBudget}
+      </span>
+      <span
+        className="niuu-text-xs niuu-px-1.5 niuu-py-0.5 niuu-rounded niuu-bg-bg-secondary niuu-text-text-secondary niuu-shrink-0"
+        data-testid="model-chip"
+      >
+        model · sonnet-4.5
       </span>
       {persona.isBuiltin && (
         <span className="niuu-text-xs niuu-text-text-muted niuu-shrink-0">builtin</span>
@@ -32,6 +51,13 @@ function PersonaRow({ persona, selected, onSelect }: PersonaRowProps) {
       {persona.hasOverride && (
         <span className="niuu-text-xs niuu-text-accent-amber niuu-shrink-0">overridden</span>
       )}
+      <span
+        className="niuu-text-xs niuu-px-2 niuu-py-1 niuu-rounded-md niuu-border niuu-border-border niuu-text-text-secondary hover:niuu-bg-bg-secondary niuu-transition-colors niuu-shrink-0"
+        role="link"
+        data-testid="edit-persona"
+      >
+        Edit
+      </span>
     </button>
   );
 }
@@ -87,13 +113,12 @@ export function PersonasSection() {
   const { data: personas, isLoading, isError, error } = usePersonasBrowser(filter);
 
   return (
-    <section aria-label="Personas browser">
+    <section aria-label="Persona overrides">
       <h3 className="niuu-text-base niuu-font-semibold niuu-text-text-primary niuu-mb-1">
-        Personas
+        Persona overrides
       </h3>
       <p className="niuu-text-sm niuu-text-text-secondary niuu-mb-4">
-        Browse and inspect persona configurations managed by Ravn. Select a persona to view its YAML
-        source.
+        Workspace-level defaults applied to every workflow. Workflows can override further.
       </p>
 
       {/* Filter tabs */}

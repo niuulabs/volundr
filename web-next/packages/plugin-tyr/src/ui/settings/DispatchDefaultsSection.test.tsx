@@ -27,7 +27,7 @@ describe('DispatchDefaultsSection', () => {
   it('renders form with default values after loading', async () => {
     render(<DispatchDefaultsSection />, { wrapper: wrap(defaultServices()) });
     await waitFor(() => {
-      expect(screen.getByRole('form', { name: /dispatch defaults form/i })).toBeInTheDocument();
+      expect(screen.getByRole('form', { name: /dispatch rules form/i })).toBeInTheDocument();
     });
     expect(screen.getByDisplayValue('70')).toBeInTheDocument();
     expect(screen.getByDisplayValue('3')).toBeInTheDocument();
@@ -47,7 +47,7 @@ describe('DispatchDefaultsSection', () => {
 
   it('shows section heading', async () => {
     render(<DispatchDefaultsSection />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() => expect(screen.getByText('Dispatch Defaults')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Dispatch rules')).toBeInTheDocument());
   });
 
   it('shows validation error for out-of-range confidence threshold', async () => {
@@ -56,7 +56,7 @@ describe('DispatchDefaultsSection', () => {
 
     const input = screen.getByLabelText(/confidence threshold/i);
     fireEvent.change(input, { target: { value: '150' } });
-    fireEvent.submit(screen.getByRole('form', { name: /dispatch defaults form/i }));
+    fireEvent.submit(screen.getByRole('form', { name: /dispatch rules form/i }));
 
     await waitFor(() => expect(screen.getByText(/between 0 and 100/i)).toBeInTheDocument());
   });
@@ -67,7 +67,7 @@ describe('DispatchDefaultsSection', () => {
 
     const input = screen.getByLabelText(/max concurrent raids/i);
     fireEvent.change(input, { target: { value: '0' } });
-    fireEvent.submit(screen.getByRole('form', { name: /dispatch defaults form/i }));
+    fireEvent.submit(screen.getByRole('form', { name: /dispatch rules form/i }));
 
     await waitFor(() => expect(screen.getByText(/at least 1/i)).toBeInTheDocument());
   });
@@ -78,7 +78,7 @@ describe('DispatchDefaultsSection', () => {
 
     const input = screen.getByLabelText(/batch size/i);
     fireEvent.change(input, { target: { value: '0' } });
-    fireEvent.submit(screen.getByRole('form', { name: /dispatch defaults form/i }));
+    fireEvent.submit(screen.getByRole('form', { name: /dispatch rules form/i }));
 
     await waitFor(() => expect(screen.getByText(/at least 1/i)).toBeInTheDocument());
   });
@@ -86,10 +86,10 @@ describe('DispatchDefaultsSection', () => {
   it('shows "Saved" confirmation after successful submission', async () => {
     render(<DispatchDefaultsSection />, { wrapper: wrap(defaultServices()) });
     await waitFor(() =>
-      expect(screen.getByRole('form', { name: /dispatch defaults form/i })).toBeInTheDocument(),
+      expect(screen.getByRole('form', { name: /dispatch rules form/i })).toBeInTheDocument(),
     );
 
-    fireEvent.submit(screen.getByRole('form', { name: /dispatch defaults form/i }));
+    fireEvent.submit(screen.getByRole('form', { name: /dispatch rules form/i }));
     await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
   });
 
@@ -106,7 +106,7 @@ describe('DispatchDefaultsSection', () => {
 
     const input = screen.getByLabelText(/retry delay/i);
     fireEvent.change(input, { target: { value: '-5' } });
-    fireEvent.submit(screen.getByRole('form', { name: /dispatch defaults form/i }));
+    fireEvent.submit(screen.getByRole('form', { name: /dispatch rules form/i }));
 
     await waitFor(() => expect(screen.getByText(/cannot be negative/i)).toBeInTheDocument());
   });
@@ -117,8 +117,20 @@ describe('DispatchDefaultsSection', () => {
 
     const input = screen.getByLabelText(/max retries per raid/i);
     fireEvent.change(input, { target: { value: '-1' } });
-    fireEvent.submit(screen.getByRole('form', { name: /dispatch defaults form/i }));
+    fireEvent.submit(screen.getByRole('form', { name: /dispatch rules form/i }));
 
     await waitFor(() => expect(screen.getByText(/cannot be negative/i)).toBeInTheDocument());
+  });
+
+  it('renders quiet hours field', async () => {
+    render(<DispatchDefaultsSection />, { wrapper: wrap(defaultServices()) });
+    await waitFor(() => expect(screen.getByLabelText(/quiet hours/i)).toBeInTheDocument());
+    expect(screen.getByDisplayValue('22:00–07:00 UTC')).toBeInTheDocument();
+  });
+
+  it('renders escalate after field', async () => {
+    render(<DispatchDefaultsSection />, { wrapper: wrap(defaultServices()) });
+    await waitFor(() => expect(screen.getByLabelText(/escalate after/i)).toBeInTheDocument());
+    expect(screen.getByDisplayValue('30m')).toBeInTheDocument();
   });
 });

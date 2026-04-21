@@ -58,7 +58,7 @@ describe('PersonasSection', () => {
     render(<PersonasSection />, {
       wrapper: wrap({ 'ravn.personas': makeMockPersonaStore() }),
     });
-    await waitFor(() => expect(screen.getByText('Personas')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Persona overrides')).toBeInTheDocument());
   });
 
   it('shows persona names after loading', async () => {
@@ -142,5 +142,35 @@ describe('PersonasSection', () => {
     const emptyStore = { listPersonas: async () => [] as TyrPersonaSummary[] };
     render(<PersonasSection />, { wrapper: wrap({ 'ravn.personas': emptyStore }) });
     await waitFor(() => expect(screen.getByText('No personas found.')).toBeInTheDocument());
+  });
+
+  it('shows budget chip for each persona', async () => {
+    render(<PersonasSection />, {
+      wrapper: wrap({ 'ravn.personas': makeMockPersonaStore() }),
+    });
+    await waitFor(() => expect(screen.getByText('coder')).toBeInTheDocument());
+    const budgetChips = screen.getAllByTestId('budget-chip');
+    expect(budgetChips).toHaveLength(2);
+    expect(budgetChips[0]).toHaveTextContent('budget 40');
+    expect(budgetChips[1]).toHaveTextContent('budget 10');
+  });
+
+  it('shows model chip for each persona', async () => {
+    render(<PersonasSection />, {
+      wrapper: wrap({ 'ravn.personas': makeMockPersonaStore() }),
+    });
+    await waitFor(() => expect(screen.getByText('coder')).toBeInTheDocument());
+    const modelChips = screen.getAllByTestId('model-chip');
+    expect(modelChips).toHaveLength(2);
+    expect(modelChips[0]).toHaveTextContent('model · sonnet-4.5');
+  });
+
+  it('shows Edit button for each persona', async () => {
+    render(<PersonasSection />, {
+      wrapper: wrap({ 'ravn.personas': makeMockPersonaStore() }),
+    });
+    await waitFor(() => expect(screen.getByText('coder')).toBeInTheDocument());
+    const editButtons = screen.getAllByTestId('edit-persona');
+    expect(editButtons).toHaveLength(2);
   });
 });
