@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { PersonaRole } from '@niuulabs/domain';
 
 /**
  * Live status of a Session.
@@ -20,6 +21,10 @@ export const sessionSchema = z.object({
   ravnId: z.string().min(1),
   /** Persona bound to the ravn at session start. */
   personaName: z.string().min(1),
+  /** Functional role of the persona (drives avatar shape). */
+  personaRole: z.string().optional(),
+  /** Single display letter for the persona avatar. */
+  personaLetter: z.string().optional(),
   /** Current session status. */
   status: sessionStatusSchema,
   /** LLM alias used for this session. */
@@ -30,8 +35,13 @@ export const sessionSchema = z.object({
   title: z.string().optional(),
   /** Number of messages in this session. */
   messageCount: z.number().int().nonnegative().optional(),
+  /** Total token count across all messages in this session. */
+  tokenCount: z.number().int().nonnegative().optional(),
   /** Total cost of this session in USD. */
   costUsd: z.number().nonnegative().optional(),
 });
 
 export type Session = z.infer<typeof sessionSchema>;
+
+/** Re-export for consumers that need the persona role type. */
+export type { PersonaRole };
