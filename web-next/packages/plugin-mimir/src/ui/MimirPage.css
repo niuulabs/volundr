@@ -1,3 +1,10 @@
+/* Shell for all Mimir views — fills the content area with no gaps */
+.mm-page-shell {
+  height: 100%;
+  overflow: auto;
+  background: var(--color-bg-primary);
+}
+
 .mimir-page {
   padding: var(--space-6);
   max-width: 960px;

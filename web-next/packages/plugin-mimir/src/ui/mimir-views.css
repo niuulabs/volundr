@@ -59,9 +59,9 @@
   color: var(--color-accent-cyan);
 }
 .mm-mount-chip--shared {
-  color: var(--color-accent-purple);
-  border-color: color-mix(in srgb, var(--color-accent-purple) 20%, transparent);
-  background: color-mix(in srgb, var(--color-accent-purple) 12%, transparent);
+  color: var(--brand-300, var(--color-accent-cyan));
+  border-color: color-mix(in srgb, var(--brand-300, var(--color-accent-cyan)) 20%, transparent);
+  background: color-mix(in srgb, var(--brand-300, var(--color-accent-cyan)) 12%, transparent);
 }
 .mm-mount-chip--domain {
   color: var(--color-accent-amber);

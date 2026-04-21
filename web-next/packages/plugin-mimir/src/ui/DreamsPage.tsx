@@ -27,7 +27,7 @@ const KIND_COLOR: Record<ActivityEventKind, string> = {
   write: 'niuu-text-status-cyan',
   ingest: 'niuu-text-status-indigo',
   lint: 'niuu-text-status-emerald',
-  dream: 'niuu-text-status-purple',
+  dream: 'niuu-text-brand',
   query: 'niuu-text-text-muted',
 };
 

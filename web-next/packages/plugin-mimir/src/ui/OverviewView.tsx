@@ -35,7 +35,7 @@ const FEED_KIND_COLOR: Record<string, string> = {
   write: 'niuu-text-status-cyan',
   compile: 'niuu-text-brand',
   'lint-fix': 'niuu-text-status-emerald',
-  dream: 'niuu-text-status-purple',
+  dream: 'niuu-text-brand',
 };
 
 export function OverviewView() {
