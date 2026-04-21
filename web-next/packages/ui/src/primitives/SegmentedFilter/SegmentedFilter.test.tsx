@@ -66,12 +66,7 @@ describe('SegmentedFilter', () => {
 
   it('applies custom className', () => {
     render(
-      <SegmentedFilter
-        options={OPTIONS}
-        value="all"
-        onChange={() => {}}
-        className="extra-class"
-      />,
+      <SegmentedFilter options={OPTIONS} value="all" onChange={() => {}} className="extra-class" />,
     );
     expect(screen.getByRole('group')).toHaveClass('extra-class');
   });

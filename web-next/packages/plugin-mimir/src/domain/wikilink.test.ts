@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { splitWikilinks, parseWikilinks, resolveWikilink, resolveAll, detectBrokenWikilinks } from './wikilink';
+import {
+  splitWikilinks,
+  parseWikilinks,
+  resolveWikilink,
+  resolveAll,
+  detectBrokenWikilinks,
+} from './wikilink';
 import type { PageMeta } from './page';
 
 const makePage = (path: string): PageMeta => ({

@@ -42,7 +42,9 @@ function nodeStatusLabel(status: NodeStatus): string {
   return 'cordoned';
 }
 
-function podStatusState(status: PodStatus): 'running' | 'idle' | 'observing' | 'failed' | 'healthy' {
+function podStatusState(
+  status: PodStatus,
+): 'running' | 'idle' | 'observing' | 'failed' | 'healthy' {
   if (status === 'running') return 'running';
   if (status === 'idle') return 'idle';
   if (status === 'pending') return 'observing';
@@ -267,16 +269,15 @@ function DiskResourcePanel({ disk }: DiskResourcePanelProps) {
 
       {/* Legend */}
       {totalGi > 0 && (
-        <div
-          className="niuu-flex niuu-flex-wrap niuu-gap-3 niuu-mt-1"
-          data-testid="disk-legend"
-        >
+        <div className="niuu-flex niuu-flex-wrap niuu-gap-3 niuu-mt-1" data-testid="disk-legend">
           {segments.map((seg) => (
             <span
               key={seg.label}
               className="niuu-flex niuu-items-center niuu-gap-1 niuu-text-[10px] niuu-font-mono niuu-text-text-faint"
             >
-              <span className={cn('niuu-inline-block niuu-h-2 niuu-w-2 niuu-rounded-full', seg.color)} />
+              <span
+                className={cn('niuu-inline-block niuu-h-2 niuu-w-2 niuu-rounded-full', seg.color)}
+              />
               {seg.label} {seg.value}Gi
             </span>
           ))}
@@ -299,7 +300,14 @@ interface SortableHeaderProps {
   className?: string;
 }
 
-function SortableHeader({ label, field, activeField, dir, onSort, className }: SortableHeaderProps) {
+function SortableHeader({
+  label,
+  field,
+  activeField,
+  dir,
+  onSort,
+  className,
+}: SortableHeaderProps) {
   const isActive = field === activeField;
   return (
     <button
@@ -312,9 +320,7 @@ function SortableHeader({ label, field, activeField, dir, onSort, className }: S
       data-testid={`sort-${field}`}
     >
       {label}
-      {isActive && (
-        <span className="niuu-ml-0.5">{dir === 'asc' ? '↑' : '↓'}</span>
-      )}
+      {isActive && <span className="niuu-ml-0.5">{dir === 'asc' ? '↑' : '↓'}</span>}
     </button>
   );
 }
@@ -364,7 +370,10 @@ function PodRow({ pod }: PodRowProps) {
       <div className="niuu-flex niuu-gap-1">
         <MiniBar value={memPct} label="mem" />
       </div>
-      <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint niuu-text-right" data-testid="pod-restarts">
+      <span
+        className="niuu-font-mono niuu-text-xs niuu-text-text-faint niuu-text-right"
+        data-testid="pod-restarts"
+      >
         {pod.restarts > 0 ? pod.restarts : '—'}
       </span>
     </li>
@@ -403,9 +412,7 @@ function PodsPanel({ cluster }: PodsPanelProps) {
       data-testid="pods-panel"
     >
       <div className="niuu-flex niuu-items-center niuu-justify-between">
-        <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">
-          Pods on this forge
-        </h3>
+        <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Pods on this forge</h3>
         <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint" data-testid="pod-count">
           {cluster.pods.length}
         </span>
@@ -421,14 +428,54 @@ function PodsPanel({ cluster }: PodsPanelProps) {
             className="niuu-grid niuu-grid-cols-[1fr_auto_auto_80px_80px_auto] niuu-items-center niuu-gap-3 niuu-px-2 niuu-border-b niuu-border-border-subtle niuu-pb-1"
             data-testid="pods-table-header"
           >
-            <SortableHeader label="Name" field="name" activeField={sortField} dir={sortDir} onSort={handleSort} />
-            <SortableHeader label="Status" field="status" activeField={sortField} dir={sortDir} onSort={handleSort} />
-            <SortableHeader label="Age" field="age" activeField={sortField} dir={sortDir} onSort={handleSort} />
-            <SortableHeader label="CPU" field="cpu" activeField={sortField} dir={sortDir} onSort={handleSort} />
-            <SortableHeader label="Mem" field="memory" activeField={sortField} dir={sortDir} onSort={handleSort} />
-            <SortableHeader label="Restarts" field="restarts" activeField={sortField} dir={sortDir} onSort={handleSort} className="niuu-text-right" />
+            <SortableHeader
+              label="Name"
+              field="name"
+              activeField={sortField}
+              dir={sortDir}
+              onSort={handleSort}
+            />
+            <SortableHeader
+              label="Status"
+              field="status"
+              activeField={sortField}
+              dir={sortDir}
+              onSort={handleSort}
+            />
+            <SortableHeader
+              label="Age"
+              field="age"
+              activeField={sortField}
+              dir={sortDir}
+              onSort={handleSort}
+            />
+            <SortableHeader
+              label="CPU"
+              field="cpu"
+              activeField={sortField}
+              dir={sortDir}
+              onSort={handleSort}
+            />
+            <SortableHeader
+              label="Mem"
+              field="memory"
+              activeField={sortField}
+              dir={sortDir}
+              onSort={handleSort}
+            />
+            <SortableHeader
+              label="Restarts"
+              field="restarts"
+              activeField={sortField}
+              dir={sortDir}
+              onSort={handleSort}
+              className="niuu-text-right"
+            />
           </div>
-          <ul className="niuu-flex niuu-flex-col niuu-gap-0.5 niuu-list-none niuu-p-0" aria-label="Pod list">
+          <ul
+            className="niuu-flex niuu-flex-col niuu-gap-0.5 niuu-list-none niuu-p-0"
+            aria-label="Pod list"
+          >
             {sortedPods.map((pod) => (
               <PodRow key={pod.name} pod={pod} />
             ))}

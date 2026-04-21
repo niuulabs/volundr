@@ -84,9 +84,7 @@ function InflightRow({ session, onClick }: { session: Session; onClick: () => vo
         )}
       </div>
       <div className="niuu-flex niuu-flex-col niuu-items-end niuu-gap-1.5">
-        {session.connectionType && (
-          <ConnectionTypeBadge connectionType={session.connectionType} />
-        )}
+        {session.connectionType && <ConnectionTypeBadge connectionType={session.connectionType} />}
         <div className="niuu-flex niuu-items-center niuu-gap-2">
           <Meter
             used={session.resources.cpuUsed}

@@ -368,25 +368,13 @@ export function EntityDrawer({
   if (!node) return null;
 
   return (
-    <aside
-      role="dialog"
-      aria-label={node.label}
-      className="obs-entity-drawer__panel"
-    >
-      <button
-        className="obs-entity-drawer__close-btn"
-        aria-label="Close"
-        onClick={onClose}
-      >
+    <aside role="dialog" aria-label={node.label} className="obs-entity-drawer__panel">
+      <button className="obs-entity-drawer__close-btn" aria-label="Close" onClick={onClose}>
         <span aria-hidden="true">✕</span>
       </button>
 
-      {isRealm && (
-        <RealmDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />
-      )}
-      {isCluster && (
-        <ClusterDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />
-      )}
+      {isRealm && <RealmDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />}
+      {isCluster && <ClusterDrawer node={node} topology={topology} onNodeSelect={onNodeSelect} />}
       {!isRealm && !isCluster && (
         <>
           {/* HEAD — rune · label · activity · status · timestamp */}

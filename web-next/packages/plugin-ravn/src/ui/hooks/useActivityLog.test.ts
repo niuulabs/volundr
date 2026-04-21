@@ -4,10 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { createElement } from 'react';
 import { useActivityLog } from './useActivityLog';
-import {
-  createMockSessionStream,
-  createMockTriggerStore,
-} from '../../adapters/mock';
+import { createMockSessionStream, createMockTriggerStore } from '../../adapters/mock';
 import type { Session } from '../../domain/session';
 import type { Trigger } from '../../domain/trigger';
 
