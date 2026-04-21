@@ -18,25 +18,10 @@ export function YamlView({ workflow }: YamlViewProps) {
   const yaml = workflowToYaml(workflow);
 
   return (
-    <div
-      data-testid="yaml-view"
-      style={{
-        flex: 1,
-        overflow: 'auto',
-        background: 'var(--color-bg-primary)',
-      }}
-    >
+    <div data-testid="yaml-view" className="niuu-flex-1 niuu-overflow-auto niuu-bg-bg-primary">
       <pre
         data-testid="yaml-content"
-        style={{
-          margin: 0,
-          padding: 24,
-          fontFamily: 'var(--font-mono)',
-          fontSize: 12,
-          lineHeight: 1.6,
-          color: 'var(--color-text-secondary)',
-          whiteSpace: 'pre',
-        }}
+        className="niuu-m-0 niuu-p-6 niuu-font-mono niuu-text-xs niuu-leading-relaxed niuu-text-text-secondary niuu-whitespace-pre"
       >
         {yaml}
       </pre>

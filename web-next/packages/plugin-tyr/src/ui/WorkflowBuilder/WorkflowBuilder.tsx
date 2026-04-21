@@ -12,6 +12,7 @@
  * Owner: plugin-tyr (WorkflowBuilder).
  */
 
+import { cn } from '@niuulabs/ui';
 import type { Workflow } from '../../domain/workflow';
 import { useWorkflowBuilder, type WorkflowView } from './useWorkflowBuilder';
 import { GraphView } from './GraphView';
@@ -71,56 +72,28 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
   return (
     <div
       data-testid="workflow-builder"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        minHeight: 600,
-        fontFamily: 'var(--font-sans)',
-      }}
+      className="niuu-flex niuu-flex-col niuu-h-full niuu-min-h-[600px] niuu-font-sans"
     >
       {/* Header bar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0,
-          padding: '8px 16px',
-          borderBottom: '1px solid var(--color-border)',
-          background: 'var(--color-bg-secondary)',
-          flexShrink: 0,
-        }}
-      >
-        <h3
-          style={{
-            margin: 0,
-            marginRight: 20,
-            fontSize: 14,
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-          }}
-        >
+      <div className="niuu-flex niuu-items-center niuu-py-2 niuu-px-4 niuu-border-b niuu-border-border niuu-bg-bg-secondary niuu-shrink-0">
+        <h3 className="niuu-m-0 niuu-mr-5 niuu-text-sm niuu-font-semibold niuu-text-text-primary">
           {workflow.name}
         </h3>
 
         {/* View tabs */}
-        <div style={{ display: 'flex', gap: 2 }}>
+        <div className="niuu-flex niuu-gap-0.5">
           {VIEWS.map((v) => (
             <button
               key={v}
               data-testid={`tab-${v}`}
               data-active={view === v ? 'true' : undefined}
               onClick={() => setView(v)}
-              style={{
-                background: view === v ? 'var(--color-bg-elevated)' : 'transparent',
-                border: `1px solid ${view === v ? 'var(--color-border)' : 'transparent'}`,
-                borderRadius: 4,
-                padding: '4px 12px',
-                fontSize: 12,
-                color: view === v ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-sans)',
-              }}
+              className={cn(
+                'niuu-rounded niuu-px-3 niuu-py-1 niuu-text-xs niuu-cursor-pointer niuu-font-sans niuu-border niuu-transition-colors',
+                view === v
+                  ? 'niuu-bg-bg-elevated niuu-border-border niuu-text-text-primary'
+                  : 'niuu-bg-transparent niuu-border-transparent niuu-text-text-muted',
+              )}
             >
               {VIEW_LABELS[v]}
             </button>
@@ -132,17 +105,7 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
           <button
             data-testid="save-workflow"
             onClick={handleSave}
-            style={{
-              marginLeft: 'auto',
-              background: 'var(--color-brand)',
-              color: 'white',
-              border: 'none',
-              borderRadius: 4,
-              padding: '4px 14px',
-              fontSize: 12,
-              cursor: 'pointer',
-              fontFamily: 'var(--font-sans)',
-            }}
+            className="niuu-ml-auto niuu-bg-brand niuu-text-white niuu-border-none niuu-rounded niuu-px-3.5 niuu-py-1 niuu-text-xs niuu-cursor-pointer niuu-font-sans"
           >
             Save
           </button>
@@ -150,7 +113,7 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
       </div>
 
       {/* Content area */}
-      <div style={{ flex: 1, display: 'flex', minHeight: 0, position: 'relative' }}>
+      <div className="niuu-flex-1 niuu-flex niuu-min-h-0 niuu-relative">
         {view === 'graph' && (
           <>
             <GraphView

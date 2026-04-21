@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { createElement } from 'react';
 import type { ReactNode } from 'react';
-import { useWorkflows, useWorkflow } from './useWorkflows';
+import { useWorkflows, useWorkflow, useCreateWorkflow, useDeleteWorkflow } from './useWorkflows';
 import type { Workflow } from '../domain/workflow';
 
 // ---------------------------------------------------------------------------
@@ -109,6 +109,81 @@ describe('useWorkflow', () => {
     const svc = { getWorkflow: vi.fn().mockRejectedValue(new Error('not found')) };
     const { result } = renderHook(() => useWorkflow('bad-id'), {
       wrapper: makeWrapper({ 'tyr.workflows': svc }),
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useCreateWorkflow
+// ---------------------------------------------------------------------------
+
+describe('useCreateWorkflow', () => {
+  it('calls saveWorkflow with a new blank workflow', async () => {
+    const newWf: Workflow = { id: 'new-uuid', name: 'New Workflow', nodes: [], edges: [] };
+    const svc = {
+      listWorkflows: vi.fn().mockResolvedValue([wf1]),
+      saveWorkflow: vi.fn().mockResolvedValue(newWf),
+    };
+    const { result } = renderHook(() => useCreateWorkflow(), {
+      wrapper: makeWrapper({ 'tyr.workflows': svc }),
+    });
+    await act(async () => {
+      result.current.mutate(undefined);
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(svc.saveWorkflow).toHaveBeenCalledTimes(1);
+    const arg = svc.saveWorkflow.mock.calls[0]![0] as Workflow;
+    expect(arg.name).toBe('New Workflow');
+    expect(arg.nodes).toHaveLength(0);
+    expect(arg.edges).toHaveLength(0);
+  });
+
+  it('enters error state when saveWorkflow rejects', async () => {
+    const svc = {
+      listWorkflows: vi.fn().mockResolvedValue([]),
+      saveWorkflow: vi.fn().mockRejectedValue(new Error('save failed')),
+    };
+    const { result } = renderHook(() => useCreateWorkflow(), {
+      wrapper: makeWrapper({ 'tyr.workflows': svc }),
+    });
+    await act(async () => {
+      result.current.mutate(undefined);
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useDeleteWorkflow
+// ---------------------------------------------------------------------------
+
+describe('useDeleteWorkflow', () => {
+  it('calls deleteWorkflow with the given id', async () => {
+    const svc = {
+      listWorkflows: vi.fn().mockResolvedValue([wf1]),
+      deleteWorkflow: vi.fn().mockResolvedValue(undefined),
+    };
+    const { result } = renderHook(() => useDeleteWorkflow(), {
+      wrapper: makeWrapper({ 'tyr.workflows': svc }),
+    });
+    await act(async () => {
+      result.current.mutate(wf1.id);
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(svc.deleteWorkflow).toHaveBeenCalledWith(wf1.id);
+  });
+
+  it('enters error state when deleteWorkflow rejects', async () => {
+    const svc = {
+      listWorkflows: vi.fn().mockResolvedValue([wf1]),
+      deleteWorkflow: vi.fn().mockRejectedValue(new Error('delete failed')),
+    };
+    const { result } = renderHook(() => useDeleteWorkflow(), {
+      wrapper: makeWrapper({ 'tyr.workflows': svc }),
+    });
+    await act(async () => {
+      result.current.mutate(wf1.id);
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
   });
