@@ -32,5 +32,38 @@
 @import './primitives/ToolPicker/ToolPicker.css';
 @import './primitives/SchemaEditor/SchemaEditor.css';
 
+/* ── Composites ───────────────────────────────────────────────────────────── */
+@import './composites/DeployBadge/DeployBadge.css';
+@import './composites/LifecycleBadge/LifecycleBadge.css';
+@import './composites/MountChip/MountChip.css';
+@import './composites/PersonaAvatar/PersonaAvatar.css';
+@import './composites/RavnAvatar/RavnAvatar.css';
+
+/* ── Data display ─────────────────────────────────────────────────────────── */
+@import './data/FilterBar/FilterBar.css';
+@import './data/KpiStrip/KpiStrip.css';
+@import './data/Table/Table.css';
+@import './data/states/states.css';
+
+/* ── Chat / Mesh ──────────────────────────────────────────────────────────── */
+@import './chat/components/AgentDetailPanel/AgentDetailPanel.css';
+@import './chat/components/ChatEmptyStates/ChatEmptyStates.css';
+@import './chat/components/ChatInput/ChatInput.css';
+@import './chat/components/ChatMessages/ChatMessages.css';
+@import './chat/components/MarkdownContent/MarkdownContent.css';
+@import './chat/components/MentionMenu/MentionMenu.css';
+@import './chat/components/MentionPill/MentionPill.css';
+@import './chat/components/MeshCascadePanel/MeshCascadePanel.css';
+@import './chat/components/MeshEventCard/MeshEventCard.css';
+@import './chat/components/MeshSidebar/MeshSidebar.css';
+@import './chat/components/OutcomeCard/OutcomeCard.css';
+@import './chat/components/ParticipantFilter/ParticipantFilter.css';
+@import './chat/components/RenderedContent/RenderedContent.css';
+@import './chat/components/RoomMessage/RoomMessage.css';
+@import './chat/components/SessionChat/SessionChat.css';
+@import './chat/components/SlashCommandMenu/SlashCommandMenu.css';
+@import './chat/components/ThreadGroup/ThreadGroup.css';
+@import './chat/components/ToolBlock/ToolBlock.css';
+
 @tailwind components;
 @tailwind utilities;
