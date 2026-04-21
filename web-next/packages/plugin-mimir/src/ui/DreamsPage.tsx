@@ -143,7 +143,12 @@ function ActivityRow({ event }: ActivityRowProps) {
 
 export function DreamsPage() {
   const { data: cycles, isLoading: cyclesLoading, isError: cyclesError, error } = useDreams();
-  const { data: events, isLoading: eventsLoading, isError: eventsError, error: eventsErr } = useActivityLog();
+  const {
+    data: events,
+    isLoading: eventsLoading,
+    isError: eventsError,
+    error: eventsErr,
+  } = useActivityLog();
 
   const [kindFilter, setKindFilter] = useState<ActivityEventKind | 'all'>('all');
 
@@ -230,7 +235,9 @@ export function DreamsPage() {
         {eventsError && (
           <div className={STATUS_ROW}>
             <StateDot state="failed" />
-            <span>{eventsErr instanceof Error ? eventsErr.message : 'activity log load failed'}</span>
+            <span>
+              {eventsErr instanceof Error ? eventsErr.message : 'activity log load failed'}
+            </span>
           </div>
         )}
 
