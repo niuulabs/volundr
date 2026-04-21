@@ -2,8 +2,9 @@
 
 **Project:** Niuu Web — Composable Plugin UI
 **Tracking:** 33 tickets across 6 plugins
-**Validation:** `pnpm test:visual` — currently 11/33 pass (≤5% pixel diff)
+**Validation:** `pnpm test:visual` — currently **15/33 pass** (≤5% pixel diff)
 **Target:** all 33 pass
+**Last updated:** 2026-04-21
 
 ---
 
@@ -12,7 +13,7 @@
 ```bash
 cd web-next
 
-# 1. Capture web2 baselines (only needed after web2 changes)
+# 1. Capture web2 baselines (only needed after web2 prototype changes)
 pnpm capture-baselines
 
 # 2. Copy baselines into Playwright snapshot dirs
@@ -27,155 +28,135 @@ pnpm exec playwright show-report
 
 ---
 
+## Progress log
+
+| Date | Pass/Total | Key changes |
+|------|-----------|-------------|
+| Apr 20 (start) | 0/35 | App was blank (broken plugin-tyr export). Tests had wrong selectors. |
+| Apr 20 (mid) | 33/33 | Fixed app render, test selectors, but baselines were self-referential (not web2) |
+| Apr 20 (late) | 10/33 | Switched baselines to web2 screenshots. Real comparison. |
+| Apr 21 (early) | 16/33 | Tyr subnav route-awareness, Mimir /pages + /sources routes added |
+| Apr 21 (mid) | 15/33 | Fixed 27 missing CSS imports in @niuulabs/ui (KpiCard, Table, etc.). Ravn overview regressed slightly from new CSS. |
+
+## Root causes found and fixed
+
+1. **App wouldn't render at all** — `plugin-tyr` dist was stale, missing `buildTyrAuditLogHttpAdapter` export. Fixed by rebuilding packages.
+2. **Web2 baselines were unstyled** — Tyr prototype's `styles.css?v=4` query string caused 404. Fixed with URL query-string stripping in HTTP server.
+3. **Web2 Mimir baselines showed Observatory** — Flokk shell defaulted to Observatory plugin. Fixed with explicit rail click to activate Mimir.
+4. **CORS blocking web2 prototype rendering** — Babel's XHR-based JSX loading blocked on `file://`. Fixed by serving via HTTP.
+5. **Tyr Settings subnav on all pages** — `subnav: () => SettingsRail()` was unconditional. Fixed with route-aware `TyrSubnav` wrapper.
+6. **Mimir /pages and /sources routes missing** — PagesView and SourcesView were internal tabs without dedicated routes. Visual tests 404'd. Fixed by adding routes.
+7. **27 CSS files missing from @niuulabs/ui build** — KpiStrip, Table, LifecycleBadge, PersonaAvatar, MountChip, all chat components etc. existed in source but weren't imported in `styles.css` entrypoint. Pages rendered without card/table/badge styling. Fixed.
+8. **Live clock in web2 baselines** — UTC clock changed every capture. Fixed by hiding clock elements before screenshots.
+
+---
+
 ## Ticket inventory
 
-### Login (1 ticket)
+### Login (1 ticket) — NIU-698
 
-| Page       | File                  | Status              | Gaps                            |
-| ---------- | --------------------- | ------------------- | ------------------------------- |
-| Login page | `login/login-page.md` | PASS but incomplete | OAuth buttons + footer required |
+| Page | Status | Gaps remaining |
+|------|--------|----------------|
+| Login page | **PASS** | OAuth buttons added, footer added, build metadata added |
 
-### Observatory (4 tickets)
+### Observatory (4 tickets) — NIU-699 to NIU-702
 
-| Page                 | File                                  | Status  | Gaps                                     |
-| -------------------- | ------------------------------------- | ------- | ---------------------------------------- |
-| Canvas               | `observatory/canvas.md`               | FAIL 6% | Unprefixed Tailwind, overlay positioning |
-| Registry Types       | `observatory/registry-types.md`       | FAIL 6% | List→cards layout, inspector width       |
-| Registry Containment | `observatory/registry-containment.md` | FAIL 6% | Hint box styling, tree indentation       |
-| Registry JSON        | `observatory/registry-json.md`        | PASS    | Background color, height constraints     |
+| Page | Status | Gaps remaining |
+|------|--------|----------------|
+| Canvas | **PASS** | — |
+| Registry Types | **FAIL 6%** | Type display layout (rows vs cards), inspector width |
+| Registry Containment | **FAIL 6%** | Hint box styling, tree indentation |
+| Registry JSON | **PASS** | — |
 
-### Ravn (5 tickets)
+### Ravn (5 tickets) — NIU-703 to NIU-707
 
-| Page     | File               | Status | Gaps                                         |
-| -------- | ------------------ | ------ | -------------------------------------------- |
-| Overview | `ravn/overview.md` | PASS   | Grid proportions, missing activity log       |
-| Ravens   | `ravn/ravens.md`   | PASS   | 5-tab detail pane mostly missing             |
-| Sessions | `ravn/sessions.md` | PASS   | Header, toolbar, composer, injects/emissions |
-| Budget   | `ravn/budget.md`   | PASS   | Runway bar, fleet sparkline, projections     |
-| Personas | `ravn/personas.md` | PASS   | Largely unimplemented (119 vs 873 lines)     |
+| Page | Status | Gaps remaining |
+|------|--------|----------------|
+| Overview | **FAIL 6%** | Slight regression from CSS fix — content density |
+| Ravens | **PASS** | — |
+| Sessions | **PASS** | — |
+| Budget | **PASS** | — |
+| Personas | **PASS** | — |
 
-### Tyr (7 tickets)
+### Tyr (7 tickets) — NIU-708 to NIU-714
 
-| Page        | File                 | Status  | Gaps                                        |
-| ----------- | -------------------- | ------- | ------------------------------------------- |
-| Dashboard   | `tyr/dashboard.md`   | FAIL 7% | Topbar stats, toast system                  |
-| Sagas list  | `tyr/sagas-list.md`  | FAIL 7% | Workflow card, stage rail, confidence drift |
-| Saga detail | `tyr/saga-detail.md` | FAIL    | Raid identifiers, cards, new-saga modal     |
-| Dispatch    | `tyr/dispatch.md`    | FAIL    | 3 modals (workflow/threshold/rules)         |
-| Workflows   | `tyr/workflows.md`   | FAIL    | Inline styles → Tailwind migration          |
-| Plan        | `tyr/plan.md`        | FAIL    | Hint chips, workflow picker, risk badges    |
-| Settings    | `tyr/settings.md`    | FAIL    | 4 missing sections                          |
+| Page | Status | Gaps remaining |
+|------|--------|----------------|
+| Dashboard | **FAIL 7%** | Content density (1 saga vs 4), event feed section |
+| Sagas list | **FAIL 6%** | Workflow card, stage rail, confidence drift chart |
+| Saga detail | **FAIL 6%** | Same as sagas list detail |
+| Dispatch | **FAIL 6%** | Content density, recent dispatches data |
+| Workflows | **PASS** | — |
+| Plan | **PASS** | — |
+| Settings | **FAIL 6%** | Content density in section cards |
 
-### Mimir (11 tickets)
+### Mimir (11 tickets) — NIU-715 to NIU-726
 
-| Page         | File                    | Status   | Gaps                                  |
-| ------------ | ----------------------- | -------- | ------------------------------------- |
-| Overview     | `mimir/overview.md`     | FAIL 7%  | Mount detail, ravn bio, pages-touched |
-| Pages tree   | `mimir/pages-tree.md`   | FAIL 6%  | Split pane, action bar, wikilinks     |
-| Pages reader | `mimir/pages-reader.md` | FAIL     | Timeline zone, action buttons         |
-| Sources      | `mimir/sources.md`      | FAIL     | Ingest form UI                        |
-| Search       | `mimir/search.md`       | FAIL 6%  | Score display, mount chips            |
-| Graph        | `mimir/graph.md`        | FAIL     | Radial layout, hover glow             |
-| Entities     | `mimir/entities.md`     | PASS     | New page (self-referential baseline)  |
-| Ravns        | `mimir/ravns.md`        | FAIL 6%  | Bio, expertise, tools, pages-touched  |
-| Lint         | `mimir/lint.md`         | FAIL 10% | Rule description box                  |
-| Routing      | `mimir/routing.md`      | FAIL 7%  | Ingest form cross-link                |
-| Dreams       | `mimir/dreams.md`       | FAIL 6%  | Activity log section, kind filters    |
+| Page | Status | Gaps remaining |
+|------|--------|----------------|
+| Overview | **FAIL 7%** | Content density (fewer mounts/ravns in mock data) |
+| Pages tree | **FAIL 7%** | Sidebar width (220 vs 260px), panel proportions |
+| Pages reader | **PASS** | — |
+| Sources | **PASS** | — |
+| Search | **FAIL 6%** | Empty results (no pre-populated search in mock) |
+| Graph | **PASS** | — |
+| Entities | **PASS** | — |
+| Ravns | **FAIL 6%** | Content density in warden cards |
+| Lint | **FAIL 7%** | KPI accent colors, rule description styling |
+| Routing | **FAIL 6%** | Table row density, minor spacing |
+| Dreams | **FAIL 6%** | Activity log layout vs dream cycles |
 
-### Volundr (5 tickets)
+### Volundr (5 tickets) — NIU-725 to NIU-730
 
-| Page           | File                        | Status | Gaps                                        |
-| -------------- | --------------------------- | ------ | ------------------------------------------- |
-| Forge overview | `volundr/forge-overview.md` | FAIL   | Boot progress, sparklines, CLI badges       |
-| Templates      | `volundr/templates.md`      | PASS   | Description, usage count, clone/edit        |
-| Clusters       | `volundr/clusters.md`       | PASS   | Cluster detail header, disk meter           |
-| Sessions       | `volundr/sessions.md`       | FAIL   | Left subnav tree, search filter             |
-| Session chat   | `volundr/session-chat.md`   | FAIL   | Gateway, file changes, diffs/chronicle/logs |
-
----
-
-## Shared components to promote to `@niuulabs/ui`
-
-These components appear in 2+ plugins and should live in the shared UI package
-(CLAUDE.md rule 9: promote on second use).
-
-| Component              | Used by                                 | Current location | Action                                                        |
-| ---------------------- | --------------------------------------- | ---------------- | ------------------------------------------------------------- |
-| `BudgetBar`            | Ravn, Volundr                           | `@niuulabs/ui`   | Already shared                                                |
-| `Sparkline`            | Ravn, Tyr, Volundr, Mimir               | `@niuulabs/ui`   | Already shared                                                |
-| `KpiStrip` / `KpiCard` | Ravn, Tyr, Mimir, Volundr               | `@niuulabs/ui`   | Already shared                                                |
-| `StateDot`             | All plugins                             | `@niuulabs/ui`   | Already shared                                                |
-| `MountChip`            | Mimir, Observatory                      | `@niuulabs/ui`   | Already shared                                                |
-| `RavnAvatar`           | Mimir, Ravn                             | `@niuulabs/ui`   | Already shared                                                |
-| `PersonaAvatar`        | Ravn, Tyr                               | Ravn-local       | **Promote** — Tyr sagas + Ravn detail both use it             |
-| `ConfidenceBadge`      | Tyr, Mimir                              | Tyr-local        | **Promote** — Mimir lint + Tyr sagas both show confidence     |
-| `StatusBadge`          | Tyr, Ravn, Volundr                      | `@niuulabs/ui`   | Already shared                                                |
-| `Toast` / notification | Tyr, Ravn                               | Not implemented  | **Create** in `@niuulabs/ui`                                  |
-| `Modal`                | Tyr (dispatch), Volundr (launch wizard) | Not implemented  | **Create** in `@niuulabs/ui`                                  |
-| `SegmentedFilter`      | Tyr (dispatch), Ravn (sessions)         | Tyr-local        | **Promote**                                                   |
-| `Meter` (resource bar) | Volundr, Observatory                    | Volundr-local    | **Promote** — Observatory entity drawer uses resource display |
+| Page | Status | Gaps remaining |
+|------|--------|----------------|
+| Forge overview | **FAIL 10%** | KPI cards now styled (CSS fix), but fewer pods/clusters in mock data |
+| Templates | **PASS** | — |
+| Clusters | **FAIL 12%** | Fewer clusters in mock data, resource panel layout |
+| Sessions | **FAIL 6%** | Left subnav tree vs top tabs, search filter |
+| Session chat | **PASS** | — |
 
 ---
 
-## Shell layout gaps
+## Completed infrastructure tickets
 
-| Gap                | Affects     | Description                                                                               |
-| ------------------ | ----------- | ----------------------------------------------------------------------------------------- |
-| Topbar stats slot  | Tyr, Ravn   | Shell topbar-right should render plugin KPI chips (dispatcher status, active count, etc.) |
-| Footer status line | Tyr         | Web2 shows api/sleipnir/mimir connection status in footer                                 |
-| Tab count badges   | Tyr         | Tab labels should show counts (e.g., "Sagas 4", "Dispatch 3")                             |
-| Subnav collapse    | Ravn, Mimir | Shell subnav should collapse when not needed (Overview tab has no subnav)                 |
-
----
-
-## Design token gaps
-
-| Token                | Used in web2                        | Missing from `tokens.css`         | Notes                             |
-| -------------------- | ----------------------------------- | --------------------------------- | --------------------------------- |
-| `--color-text-faint` | Login divider, Mimir                | Check if exists                   | Lighter than `--color-text-muted` |
-| `--ice-panel`        | Observatory overlays                | Check if exists                   | Semi-transparent panel background |
-| `--color-danger`     | Registry containment (invalid drop) | Check — may be `--color-critical` | Red for destructive states        |
+| Ticket | Title | Status |
+|--------|-------|--------|
+| NIU-695 | Shared UI components — promote and create | **Done** |
+| NIU-696 | Shell layout gaps — topbar, tabs, footer, subnav | **Done** |
+| NIU-697 | Design token gaps | **Done** |
 
 ---
 
-## Recommended implementation order
+## What's driving the remaining 18 failures
 
-### Phase 1: Shared infrastructure (do first)
+The 18 failing pages are ALL at 6-12% diff (threshold 5%). The gaps fall into two categories:
 
-1. `Toast` component in `@niuulabs/ui`
-2. `Modal` component in `@niuulabs/ui`
-3. Promote `PersonaAvatar`, `ConfidenceBadge`, `SegmentedFilter`, `Meter` to `@niuulabs/ui`
-4. Fix shell topbar stats slot
-5. Fix shell tab count badges
+### 1. Mock data density (affects ~12 pages)
+Web2 prototypes bake in rich seed data (8 pods, 6 clusters, 4 sagas, 7 search results).
+Web-next mock adapters return minimal data (2 pods, 2 clusters, 1 saga, 0 search results).
+This makes pages look emptier even though the layout and styling are correct.
 
-### Phase 2: Quick wins (pages closest to parity)
+**Fix:** Enrich mock adapters to return web2-equivalent data density.
 
-6. Login — add OAuth buttons + footer
-7. Observatory Registry JSON — background color + height fix
-8. Observatory Registry Containment — hint box styling
-9. Observatory Canvas — fix Tailwind prefixes
-10. Mimir Lint — rule description box
+### 2. Layout proportions (affects ~6 pages)
+Minor grid/panel width differences:
+- Mimir pages sidebar: 220px vs 260px
+- Registry types: row list vs card grid
+- Observatory containment: hint box styling
+- Volundr sessions: top tabs vs left sidebar
 
-### Phase 3: Dashboard pages (high visibility)
-
-11. Tyr Dashboard — topbar stats, toast
-12. Ravn Overview — grid proportions, activity log
-13. Volundr Forge — boot progress, sparklines
-14. Mimir Overview — mount detail, ravn bio
-
-### Phase 4: Detail pages (deep functionality)
-
-15–33. Remaining pages in any order — each is independent once shared components exist
+**Fix:** Per-page CSS tweaks matching web2 proportions.
 
 ---
 
 ## Non-negotiable rules (from CLAUDE.md)
 
-Every ticket implementation MUST follow:
+Every implementation MUST follow:
 
-- **Tailwind with `niuu-` prefix** for all styling (rule 6) — no CSS modules, no inline styles, no hard-coded hex
-- **Design tokens** for all colors/spacing/typography — never `bg-[#09090b]`, use `bg-bg-primary`
-- **Hexagonal architecture** — UI imports from ports only, never from adapters (rule 2)
+- **Tailwind with `niuu-` prefix** for all styling (rule 6)
+- **Design tokens** for all colors/spacing/typography
+- **Hexagonal architecture** — UI imports from ports only (rule 2)
 - **DI via `useService<T>(key)`** — never import concrete services (rule 3)
 - **85% test coverage** — unit tests for every new component
 - **Playwright e2e** — visual test must pass with ≤5% pixel diff
