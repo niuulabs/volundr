@@ -119,10 +119,10 @@ export function PagesView() {
   const breadcrumbs = activePagePath ? activePagePath.split('/').filter(Boolean) : [];
 
   return (
-    <div className="niuu-grid niuu-grid-cols-[220px_1fr_280px] niuu-h-full niuu-overflow-hidden">
+    <div className="niuu-grid niuu-grid-cols-[260px_1fr_360px] niuu-h-full niuu-overflow-hidden">
       {/* ── File tree sidebar ──────────────────────────────────── */}
       <aside
-        className="niuu-border-r niuu-border-border-subtle niuu-flex niuu-flex-col niuu-overflow-hidden"
+        className="niuu-bg-bg-secondary niuu-border-r niuu-border-border-subtle niuu-flex niuu-flex-col niuu-overflow-hidden"
         aria-label="page tree"
       >
         <div className="niuu-flex niuu-items-center niuu-justify-between niuu-px-4 niuu-py-3 niuu-border-b niuu-border-border-subtle niuu-flex-shrink-0">
@@ -293,13 +293,13 @@ function PageContent({
             <span className="niuu-text-border">/</span>
           </Fragment>
         ))}
-        <span className="niuu-text-text-secondary">{breadcrumbs[breadcrumbs.length - 1]}</span>
+        <span className="niuu-text-brand-300">{breadcrumbs[breadcrumbs.length - 1]}</span>
       </div>
 
-      <h1 className="niuu-text-xl niuu-font-semibold niuu-text-text-primary niuu-m-0 niuu-mb-2">
+      <h1 className="niuu-text-3xl niuu-font-semibold niuu-text-text-primary niuu-m-0 niuu-mb-2 niuu-tracking-tight">
         {page.title}
       </h1>
-      <p className="niuu-text-sm niuu-text-text-secondary niuu-m-0 niuu-mb-4">{page.summary}</p>
+      <p className="niuu-text-base niuu-leading-relaxed niuu-text-text-secondary niuu-m-0 niuu-mb-4">{page.summary}</p>
 
       {/* action bar — matches web2 layout: actions first, then chips */}
       <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-mb-4 niuu-flex-wrap">

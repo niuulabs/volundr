@@ -223,19 +223,40 @@
 .mm-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: 3px 8px;
-  border-radius: var(--radius-full);
+  gap: 6px;
+  font-family: var(--font-mono);
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: var(--color-bg-secondary);
-  color: var(--color-text-muted);
+  letter-spacing: 0.07em;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-muted);
+  background: var(--color-bg-secondary);
   white-space: nowrap;
 }
 .mm-chip-k {
-  color: var(--color-text-muted);
+  color: var(--color-text-faint);
+}
+.mm-chip.accent {
+  color: var(--brand-300);
+  border-color: color-mix(in srgb, var(--brand-300) 30%, transparent);
+  background: color-mix(in srgb, var(--brand-300) 12%, var(--color-bg-secondary));
+}
+.mm-chip.ok {
+  color: var(--brand-200);
+  border-color: color-mix(in srgb, var(--brand-200) 35%, transparent);
+  background: color-mix(in srgb, var(--brand-200) 15%, var(--color-bg-secondary));
+}
+.mm-chip.warn {
+  color: var(--brand-400);
+  border-color: color-mix(in srgb, var(--brand-400) 35%, transparent);
+  background: color-mix(in srgb, var(--brand-400) 15%, var(--color-bg-secondary));
+}
+.mm-chip.err {
+  color: var(--color-critical-fg);
+  border-color: color-mix(in srgb, var(--color-critical-fg) 30%, transparent);
+  background: color-mix(in srgb, var(--color-critical-fg) 10%, var(--color-bg-secondary));
 }
 /* ── Zones (layout migrated to Tailwind — see ZoneBlock.tsx / ZoneRenderers.tsx) ──── */
 .mm-save-banner {
@@ -268,29 +289,61 @@
   background: var(--color-bg-secondary);
   border-left: 1px solid var(--color-border-subtle);
 }
-.mm-meta-block {
+.mm-meta-head {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
-.mm-meta-block h5 {
-  font-size: var(--text-xs);
+.mm-meta-head h4 {
+  margin: 0;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--color-text-muted);
+  font-weight: 500;
+}
+.mm-meta-block {
+}
+.mm-meta-block h5 {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-muted);
+  font-weight: 500;
   margin: 0 0 var(--space-2);
 }
 .mm-meta-row {
-  display: flex;
-  align-items: baseline;
+  display: grid;
+  grid-template-columns: 80px 1fr;
   gap: var(--space-2);
-  padding: 3px 0;
-  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
 }
 .mm-meta-k {
   color: var(--color-text-muted);
-  min-width: 60px;
 }
 .mm-meta-v {
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
   font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mm-backlink {
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  background: none;
+  border: none;
+  text-align: left;
+  width: 100%;
+  font-family: var(--font-sans);
+}
+.mm-backlink:hover {
+  color: var(--color-text-primary);
 }
 .mm-source-pill {
   display: flex;

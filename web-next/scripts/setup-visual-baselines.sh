@@ -64,7 +64,7 @@ copy "$WEB2/mimir/search.png"      "$DST" "mimir-search"
 copy "$WEB2/mimir/graph.png"       "$DST" "mimir-graph"
 copy "$WEB2/mimir/ravns.png"       "$DST" "mimir-ravns"
 copy "$WEB2/mimir/lint.png"        "$DST" "mimir-lint"
-copy "$WEB2/mimir/ingest.png"      "$DST" "mimir-routing"
+copy "$WEB2/mimir/ingest.png"      "$DST" "mimir-ingest"
 copy "$WEB2/mimir/log.png"         "$DST" "mimir-dreams"
 
 echo "=== Volundr ==="

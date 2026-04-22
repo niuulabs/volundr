@@ -88,12 +88,12 @@ test('mimir lint matches web2', async ({ page }) => {
   await expect(page).toHaveScreenshot('mimir-lint.png');
 });
 
-// ── Routing (ingest rules in web2) ────────────────────────────────────────────
+// ── Ingest ───────────────────────────────────────────────────────────────────
 
-test('mimir routing matches web2', async ({ page }) => {
-  await page.goto('/mimir/routing');
+test('mimir ingest matches web2', async ({ page }) => {
+  await page.goto('/mimir/ingest');
   await page.waitForLoadState('networkidle');
-  await expect(page).toHaveScreenshot('mimir-routing.png');
+  await expect(page).toHaveScreenshot('mimir-ingest.png');
 });
 
 // ── Dreams (log / dream-cycle history in web2) ────────────────────────────────

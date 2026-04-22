@@ -34,11 +34,11 @@ export function TreeNode({ node, depth, selectedPath, onSelect, knownPaths }: Tr
       <button
         type="button"
         className={[
-          'niuu-flex niuu-items-center niuu-gap-2 niuu-py-[3px] niuu-pr-3',
-          'niuu-text-xs niuu-text-text-secondary',
+          'niuu-flex niuu-items-center niuu-gap-1.5 niuu-py-[2px] niuu-pr-2',
+          'niuu-text-[11px] niuu-font-mono niuu-text-text-secondary',
           'niuu-cursor-pointer niuu-border-none niuu-bg-transparent niuu-w-full niuu-text-left',
           'hover:niuu-bg-bg-tertiary hover:niuu-text-text-primary',
-          isActive ? 'niuu-bg-bg-tertiary niuu-text-text-primary' : '',
+          isActive ? 'niuu-bg-[color-mix(in_srgb,var(--brand-300)_14%,transparent)] niuu-text-text-primary' : '',
         ]
           .filter(Boolean)
           .join(' ')}
@@ -67,7 +67,7 @@ export function TreeNode({ node, depth, selectedPath, onSelect, knownPaths }: Tr
   return (
     <div className="niuu-select-none">
       <div
-        className="niuu-flex niuu-items-center niuu-gap-1 niuu-py-[3px] niuu-pr-3 niuu-text-xs niuu-text-text-muted niuu-cursor-pointer hover:niuu-text-text-secondary"
+        className="niuu-flex niuu-items-center niuu-gap-1.5 niuu-py-[2px] niuu-pr-2 niuu-text-[11px] niuu-font-mono niuu-text-text-muted niuu-font-medium niuu-cursor-pointer hover:niuu-text-text-secondary"
         style={{ paddingLeft: `calc(${depth * TREE_INDENT_STEP_PX}px + 4px)` }}
         onClick={() => setOpen((o) => !o)}
         role="button"
@@ -77,7 +77,7 @@ export function TreeNode({ node, depth, selectedPath, onSelect, knownPaths }: Tr
       >
         <span className="niuu-text-[8px] niuu-w-[10px] niuu-text-center">{open ? '▾' : '▸'}</span>
         <span>{node.name}/</span>
-        <span className="niuu-ml-auto niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+        <span className="niuu-ml-auto niuu-font-mono niuu-text-[9px] niuu-text-text-faint">
           {childCount}
         </span>
       </div>

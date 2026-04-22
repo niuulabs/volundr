@@ -3,12 +3,13 @@
  *
  * Sections:
  *   1. Mount picker — "all mounts" + per-mount rows with status dots
- *   2. Navigation items — Overview / Pages / Search / Graph / Wardens / Routing / Lint / Dreams
- *   3. Quick filters — Errors / Flagged / Low confidence
- *   4. Wardens roster — top-6 ravns with initials + state dot
+ *   2. Quick filters — Errors / Flagged / Low confidence
+ *   3. Wardens roster — top-6 ravns with initials + state dot
+ *
+ * Navigation tabs live in the topbar (plugin descriptor `tabs` array).
  */
 
-import { useNavigate, useLocation } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { StateDot } from '@niuulabs/ui';
 import type { PluginCtx } from '@niuulabs/plugin-sdk';
 import { useMimirMounts } from './useMimirMounts';
@@ -18,22 +19,12 @@ import { useRavns } from '../application/useRavns';
 import { RAVN_DOT_STATE, MOUNT_DOT_STATE } from './mimir.constants';
 import './MimirSubnav.css';
 
-interface NavItem {
-  id: string;
-  label: string;
-  path: string;
-  glyph: string;
-  count?: number | null;
-  countRed?: boolean;
-}
-
 interface MimirSubnavProps {
   ctx: PluginCtx;
 }
 
 export function MimirSubnav({ ctx }: MimirSubnavProps) {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
 
   const activeMount = (ctx.tweaks.activeMount as string | undefined) ?? 'all';
   const setActiveMount = (m: string) => ctx.setTweak('activeMount', m);
@@ -43,29 +34,9 @@ export function MimirSubnav({ ctx }: MimirSubnavProps) {
   const { summary: lintSummary } = useLint();
   const { data: ravns = [] } = useRavns();
 
-  const totalPages = pages.length;
-  const lintCount = lintSummary.error + lintSummary.warn + lintSummary.info;
   const errorCount = lintSummary.error;
   const flaggedCount = pages.filter((p) => p.flagged).length;
   const lowConfidenceCount = pages.filter((p) => p.confidence === 'low').length;
-
-  const navItems: NavItem[] = [
-    { id: 'home', label: 'Overview', glyph: '◎', path: '/mimir' },
-    { id: 'pages', label: 'Pages', glyph: '❑', path: '/mimir/pages', count: totalPages },
-    { id: 'search', label: 'Search', glyph: '⌕', path: '/mimir/search' },
-    { id: 'graph', label: 'Graph', glyph: '⌖', path: '/mimir/graph' },
-    { id: 'ravns', label: 'Wardens', glyph: 'ᚢ', path: '/mimir/ravns', count: ravns.length },
-    { id: 'routing', label: 'Routing', glyph: '↧', path: '/mimir/routing' },
-    {
-      id: 'lint',
-      label: 'Lint',
-      glyph: '⚠',
-      path: '/mimir/lint',
-      count: lintCount,
-      countRed: lintCount > 0,
-    },
-    { id: 'dreams', label: 'Dreams', glyph: '≡', path: '/mimir/dreams' },
-  ];
 
   return (
     <nav className="mm-subnav" aria-label="Mímir navigation">
@@ -102,36 +73,6 @@ export function MimirSubnav({ ctx }: MimirSubnavProps) {
             </button>
           ))}
         </div>
-      </div>
-
-      {/* ── Navigation items ──────────────────────────────────────── */}
-      <div className="mm-subnav-block">
-        <div className="mm-subnav-label">Navigation</div>
-        {navItems.map((item) => {
-          const isActive =
-            item.path === '/mimir' ? pathname === '/mimir' : pathname.startsWith(item.path);
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className={`mm-subnav-btn${isActive ? ' mm-subnav-btn--active' : ''}`}
-              onClick={() => navigate({ to: item.path })}
-              aria-current={isActive ? 'page' : undefined}
-            >
-              <span className="mm-subnav-btn__glyph" aria-hidden>
-                {item.glyph}
-              </span>
-              <span className="mm-subnav-btn__label">{item.label}</span>
-              {item.count != null && (
-                <span
-                  className={`mm-subnav-btn__count${item.countRed ? ' mm-subnav-btn__count--red' : ''}`}
-                >
-                  {item.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
       </div>
 
       {/* ── Quick filters ─────────────────────────────────────────── */}

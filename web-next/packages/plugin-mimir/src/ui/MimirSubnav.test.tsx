@@ -4,10 +4,9 @@ import { MimirSubnav } from './MimirSubnav';
 import { renderWithMimir } from '../testing/renderWithMimir';
 import type { PluginCtx } from '@niuulabs/plugin-sdk';
 
-// Mock TanStack Router hooks — subnav uses useNavigate + useLocation
+// Mock TanStack Router hooks — subnav uses useNavigate
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
-  useLocation: () => ({ pathname: '/mimir' }),
 }));
 
 const mockCtx: PluginCtx = {
@@ -22,11 +21,6 @@ describe('MimirSubnav', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the navigation label', () => {
-    wrap();
-    expect(screen.getByText('Navigation')).toBeInTheDocument();
-  });
-
   it('renders the mount focus section', () => {
     wrap();
     expect(screen.getByText('Mount focus')).toBeInTheDocument();
@@ -37,16 +31,9 @@ describe('MimirSubnav', () => {
     expect(screen.getByText('All mounts')).toBeInTheDocument();
   });
 
-  it('renders all nav items: Overview, Pages, Search, etc.', () => {
+  it('does not render a Navigation section (tabs are in topbar)', () => {
     wrap();
-    expect(screen.getByText('Overview')).toBeInTheDocument();
-    expect(screen.getByText('Pages')).toBeInTheDocument();
-    expect(screen.getByText('Search')).toBeInTheDocument();
-    expect(screen.getByText('Graph')).toBeInTheDocument();
-    expect(screen.getByText('Wardens')).toBeInTheDocument();
-    expect(screen.getByText('Routing')).toBeInTheDocument();
-    expect(screen.getByText('Lint')).toBeInTheDocument();
-    expect(screen.getByText('Dreams')).toBeInTheDocument();
+    expect(screen.queryByText('Navigation')).not.toBeInTheDocument();
   });
 
   it('renders quick filters section', () => {
@@ -81,11 +68,5 @@ describe('MimirSubnav', () => {
     wrap({ tweaks: { activeMount: 'all' }, setTweak: vi.fn() });
     const allBtn = screen.getByText('All mounts').closest('button');
     expect(allBtn).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  it('Overview nav item is active when pathname is /mimir', () => {
-    wrap();
-    const overviewBtn = screen.getByText('Overview').closest('button');
-    expect(overviewBtn).toHaveAttribute('aria-current', 'page');
   });
 });

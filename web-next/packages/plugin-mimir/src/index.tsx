@@ -6,7 +6,7 @@ import { SearchPage } from './ui/SearchPage';
 import { GraphPage } from './ui/GraphPage';
 import { EntitiesPage } from './ui/EntitiesPage';
 import { RavnsPage } from './ui/RavnsPage';
-import { RoutingPage } from './ui/RoutingPage';
+import { IngestPage } from './ui/IngestPage';
 import { LintPage } from './ui/LintPage';
 import { DreamsPage } from './ui/DreamsPage';
 import { MimirSubnav } from './ui/MimirSubnav';
@@ -23,7 +23,7 @@ export const mimirPlugin = definePlugin({
     { id: 'search', label: 'Search', rune: '⌕', path: '/mimir/search' },
     { id: 'graph', label: 'Graph', rune: '⌖', path: '/mimir/graph' },
     { id: 'wardens', label: 'Wardens', rune: 'ᚢ', path: '/mimir/ravns' },
-    { id: 'routing', label: 'Routing', rune: '↧', path: '/mimir/routing' },
+    { id: 'ingest', label: 'Ingest', rune: '↧', path: '/mimir/ingest' },
     { id: 'lint', label: 'Lint', rune: '⚠', path: '/mimir/lint' },
     { id: 'dreams', label: 'Dreams', rune: '≡', path: '/mimir/dreams' },
   ],
@@ -65,8 +65,8 @@ export const mimirPlugin = definePlugin({
     }),
     createRoute({
       getParentRoute: () => rootRoute,
-      path: '/mimir/routing',
-      component: RoutingPage,
+      path: '/mimir/ingest',
+      component: IngestPage,
     }),
     createRoute({
       getParentRoute: () => rootRoute,

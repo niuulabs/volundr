@@ -1,4 +1,4 @@
-import { Chip, StateDot } from '@niuulabs/ui';
+import { StateDot } from '@niuulabs/ui';
 import { useSearch } from '../application/useSearch';
 import type { SearchMode } from '../ports';
 import './mimir-views.css';
@@ -50,11 +50,12 @@ export function SearchPage() {
   const { query, mode, setQuery, setMode, results, isLoading, isError, error } = useSearch();
 
   return (
-    <div className="niuu-p-5 niuu-flex niuu-flex-col niuu-gap-4 niuu-h-full">
-      {/* Search input + mode buttons on same row */}
-      <div className="niuu-flex niuu-items-center niuu-gap-3">
+    <div className="niuu-flex niuu-flex-col niuu-h-full">
+      {/* Search header bar */}
+      <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-px-5 niuu-py-4 niuu-border-b niuu-border-border-subtle">
         <input
-          className="niuu-flex-1 niuu-px-4 niuu-py-2 niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded-sm niuu-text-text-primary niuu-font-mono niuu-text-sm niuu-outline-none focus:niuu-border-brand niuu-box-border"
+          className="niuu-flex-1 niuu-px-3 niuu-py-2 niuu-bg-bg-secondary niuu-rounded-sm niuu-text-text-primary niuu-font-mono niuu-text-[13px] niuu-outline-none"
+          style={{ border: 'none' }}
           type="search"
           placeholder="Search pages across all mounts…"
           value={query}
@@ -62,15 +63,19 @@ export function SearchPage() {
           aria-label="Search query"
         />
 
-        <div className="niuu-flex niuu-items-center niuu-gap-1" role="group" aria-label="Search mode">
+        <div
+          className="niuu-flex niuu-items-center niuu-gap-[2px] niuu-bg-bg-tertiary niuu-p-[2px] niuu-rounded-sm niuu-border niuu-border-border-subtle"
+          role="group"
+          aria-label="Search mode"
+        >
           {MODES.map((m) => (
             <button
               key={m}
               className={[
-                'niuu-px-3 niuu-py-1 niuu-rounded-sm niuu-font-mono niuu-text-[11px] niuu-tracking-wider niuu-cursor-pointer niuu-border niuu-transition-colors',
+                'niuu-px-2.5 niuu-py-1 niuu-rounded-[calc(var(--radius-sm)-2px)] niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-wider niuu-cursor-pointer niuu-border-none niuu-transition-colors',
                 m === mode
-                  ? 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-bold'
-                  : 'niuu-bg-transparent niuu-border-transparent niuu-text-text-muted hover:niuu-text-text-secondary',
+                  ? 'niuu-bg-bg-elevated niuu-text-brand-300'
+                  : 'niuu-bg-transparent niuu-text-text-muted hover:niuu-text-text-secondary',
               ].join(' ')}
               onClick={() => setMode(m)}
               aria-pressed={m === mode}
@@ -79,23 +84,21 @@ export function SearchPage() {
               {MODE_LABELS[m]}
             </button>
           ))}
-          {results.length > 0 && (
-            <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted niuu-ml-2">
-              {results.length} results
-            </span>
-          )}
         </div>
+        <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+          {results.length} results
+        </span>
       </div>
 
       {isLoading && (
-        <div className="niuu-flex niuu-items-center niuu-gap-2">
+        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-p-5">
           <StateDot state="processing" pulse />
           <span className="niuu-text-sm niuu-text-text-secondary">searching…</span>
         </div>
       )}
 
       {isError && (
-        <div className="niuu-flex niuu-items-center niuu-gap-2">
+        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-p-5">
           <StateDot state="failed" />
           <span className="niuu-text-sm niuu-text-text-secondary">
             {error instanceof Error ? error.message : 'search failed'}
@@ -104,55 +107,52 @@ export function SearchPage() {
       )}
 
       {!isLoading && query.trim().length > 0 && results.length === 0 && !isError && (
-        <p className="niuu-text-sm niuu-text-text-muted">
+        <p className="niuu-text-sm niuu-text-text-muted niuu-p-5">
           No results found for &ldquo;{query}&rdquo;
         </p>
       )}
 
-      {/* Results list — borderless rows with bottom separator */}
+      {/* Results list */}
       {results.length > 0 && (
-        <div className="niuu-flex niuu-flex-col niuu-overflow-y-auto" aria-label="Search results">
+        <div className="niuu-flex niuu-flex-col niuu-overflow-y-auto niuu-flex-1" aria-label="Search results">
           {results.map((result) => (
             <div
               key={result.path}
-              className="niuu-py-4 niuu-border-b niuu-border-border-subtle"
+              className="niuu-py-3 niuu-px-5 niuu-border-b niuu-border-border-subtle niuu-cursor-pointer hover:niuu-bg-bg-tertiary"
               data-testid="search-result"
             >
-              {/* Title row + chips + score */}
-              <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-mb-1">
-                <span className="niuu-font-semibold niuu-text-sm niuu-text-text-primary">
+              {/* Title + score */}
+              <div className="niuu-flex niuu-items-baseline niuu-gap-3">
+                <span className="niuu-font-medium niuu-text-sm niuu-text-text-primary niuu-flex-1">
                   {highlightText(result.title, query)}
                 </span>
-                <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
-                  {result.path}
-                </span>
-                <div className="niuu-ml-auto niuu-flex niuu-items-center niuu-gap-2 niuu-shrink-0">
-                  {result.score !== undefined && (
-                    <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
-                      score {result.score.toFixed(2)}
-                    </span>
-                  )}
-                </div>
+                {result.score !== undefined && (
+                  <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint niuu-shrink-0">
+                    score {result.score.toFixed(2)}
+                  </span>
+                )}
+              </div>
+
+              {/* Path on its own line */}
+              <div className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted niuu-mt-[2px]">
+                {result.path}
               </div>
 
               {/* Summary */}
-              <p className="niuu-text-sm niuu-text-text-secondary niuu-m-0 niuu-mb-2">
+              <p className="niuu-text-xs niuu-leading-normal niuu-text-text-secondary niuu-m-0 niuu-mt-1">
                 {highlightText(result.summary, query)}
               </p>
 
               {/* Chips row */}
-              <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-flex-wrap">
-                <span className="niuu-font-mono niuu-text-[10px] niuu-tracking-wider niuu-uppercase niuu-px-2 niuu-py-[1px] niuu-rounded-sm niuu-border niuu-border-brand-300 niuu-text-brand-300">
-                  TYPE {result.type?.toUpperCase() ?? result.category?.toUpperCase()}
+              <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-mt-1.5">
+                <span className="mm-chip accent">
+                  <span className="mm-chip-k">type</span> {result.type?.toUpperCase() ?? result.category?.toUpperCase()}
                 </span>
-                <span className="niuu-font-mono niuu-text-[10px] niuu-tracking-wider niuu-uppercase niuu-px-2 niuu-py-[1px] niuu-rounded-sm niuu-bg-text-primary niuu-text-bg-primary niuu-font-bold">
-                  CONF {result.confidence?.toUpperCase()}
+                <span className={`mm-chip ${result.confidence === 'high' ? 'ok' : result.confidence === 'medium' ? 'warn' : 'err'}`}>
+                  <span className="mm-chip-k">conf</span> <strong>{result.confidence?.toUpperCase()}</strong>
                 </span>
                 {result.mounts?.map((mount) => (
-                  <span
-                    key={mount}
-                    className="niuu-font-mono niuu-text-[10px] niuu-tracking-wider niuu-uppercase niuu-px-2 niuu-py-[1px] niuu-rounded-sm niuu-border niuu-border-border-subtle niuu-text-text-muted"
-                  >
+                  <span key={mount} className="mm-chip">
                     {mount}
                   </span>
                 ))}

@@ -15,6 +15,10 @@ export function MetaPanel({ page, sources, allPages, onNavigate }: MetaPanelProp
 
   return (
     <div className="mm-rightpanel">
+      <div className="mm-meta-head">
+        <h4>Page detail</h4>
+      </div>
+
       <div className="mm-meta-block">
         <h5>Provenance</h5>
         <div className="mm-meta-row">
@@ -37,7 +41,7 @@ export function MetaPanel({ page, sources, allPages, onNavigate }: MetaPanelProp
         </div>
         <div className="mm-meta-row">
           <span className="mm-meta-k">by</span>
-          <span className="mm-meta-v">{page.updatedBy}</span>
+          <span className="mm-meta-v" style={{ color: 'var(--brand-300)', cursor: 'pointer' }}>{page.updatedBy}</span>
         </div>
       </div>
 
@@ -71,7 +75,7 @@ export function MetaPanel({ page, sources, allPages, onNavigate }: MetaPanelProp
             <button
               key={p.path}
               type="button"
-              className="mm-btn mm-btn--block"
+              className="mm-backlink"
               onClick={() => onNavigate(p.path)}
             >
               ↩ {p.title}
