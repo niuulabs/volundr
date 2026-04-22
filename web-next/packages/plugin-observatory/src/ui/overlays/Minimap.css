@@ -3,13 +3,31 @@
   bottom: var(--space-4);
   right: var(--space-4);
   z-index: 40;
-  width: 160px;
-  height: 120px;
   background: color-mix(in srgb, var(--color-bg-secondary) 90%, transparent);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
   overflow: hidden;
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.obs-minimap__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.obs-minimap__count {
+  color: var(--color-text-secondary);
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .obs-minimap--empty {

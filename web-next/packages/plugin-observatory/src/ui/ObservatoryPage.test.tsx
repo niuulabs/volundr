@@ -130,11 +130,6 @@ describe('ObservatoryPage', () => {
     expect(screen.getByRole('dialog', { name: /valask/i })).toBeInTheDocument();
   });
 
-  it('renders the ConnectionLegend overlay', () => {
-    wrap(<ObservatoryPage />);
-    expect(screen.getByRole('list', { name: /connection types/i })).toBeInTheDocument();
-  });
-
   it('renders the EventLog overlay', () => {
     wrap(<ObservatoryPage />);
     expect(screen.getByTestId('event-log')).toBeInTheDocument();

@@ -1,15 +1,22 @@
-import { StateDot, Chip } from '@niuulabs/ui';
+/**
+ * GraphPage — full-bleed knowledge graph canvas with floating overlays.
+ *
+ * Matches web2 layout: graph fills the content area, category legend floats
+ * top-left, graph info card floats top-right. No visible controls — click
+ * a node to focus, click again to deselect.
+ */
+
+import { StateDot } from '@niuulabs/ui';
 import { useGraph } from '../application/useGraph';
 import type { MimirGraph, GraphNode } from '../domain/api-types';
 import './GraphPage.css';
 
-const MAX_HOPS = 4;
-const MIN_HOPS = 1;
-const SVG_CX = 300;
-const SVG_CY = 220;
-const SVG_R = 170;
+const SVG_W = 1100;
+const SVG_H = 750;
+const SVG_CX = SVG_W / 2;
+const SVG_CY = SVG_H / 2;
+const SVG_R = 300;
 
-// Category color palette (maps to CSS tokens in order)
 const CATEGORY_COLORS = [
   'var(--brand-300)',
   'var(--brand-400)',
@@ -40,12 +47,6 @@ interface NodePosition {
   y: number;
 }
 
-/**
- * Category-radial layout: groups nodes by category into radial sectors.
- * Each category occupies a sector proportional to its node count. Within
- * each sector, nodes are offset with sine-based jitter (seeded by index)
- * for a visually organic, deterministic layout matching the web2 prototype.
- */
 export function layoutCategoryRadial(
   nodes: GraphNode[],
   cx = SVG_CX,
@@ -64,7 +65,7 @@ export function layoutCategoryRadial(
   }
 
   const result: NodePosition[] = [];
-  let sectorStart = -Math.PI / 2; // start from top of circle
+  let sectorStart = -Math.PI / 2;
 
   for (const cat of categories) {
     const catNodes = byCategory.get(cat) ?? [];
@@ -107,10 +108,11 @@ function GraphSvg({ graph, focusId, onNodeClick, categories }: GraphSvgProps) {
 
   return (
     <svg
-      className="niuu-w-full niuu-max-w-[600px] niuu-h-auto niuu-border niuu-border-border-subtle niuu-rounded-lg niuu-bg-bg-secondary niuu-block"
-      viewBox="0 0 600 440"
+      className="niuu-graph-canvas"
+      viewBox={`0 0 ${SVG_W} ${SVG_H}`}
       role="img"
       aria-label="Knowledge graph"
+      preserveAspectRatio="xMidYMid meet"
     >
       <defs>
         <filter id="niuu-node-glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -129,6 +131,7 @@ function GraphSvg({ graph, focusId, onNodeClick, categories }: GraphSvgProps) {
           if (!src || !tgt) return null;
           const isFocusEdge =
             focusId !== null && (edge.source === focusId || edge.target === focusId);
+          const isWikilink = edge.type === 'wikilink';
           return (
             <line
               key={`${edge.source}-${edge.target}`}
@@ -137,7 +140,8 @@ function GraphSvg({ graph, focusId, onNodeClick, categories }: GraphSvgProps) {
               x2={tgt.x}
               y2={tgt.y}
               stroke="var(--color-border)"
-              strokeWidth={1.5}
+              strokeWidth={1}
+              strokeDasharray={isWikilink ? '4 3' : undefined}
               className={isFocusEdge ? 'niuu-opacity-50' : 'niuu-opacity-15'}
             />
           );
@@ -164,20 +168,12 @@ function GraphSvg({ graph, focusId, onNodeClick, categories }: GraphSvgProps) {
               }}
             >
               <circle
-                r={isFocus ? 14 : 10}
+                r={isFocus ? 8 : 5}
                 className="niuu-graph-node-circle"
                 fill={fill}
-                stroke={isFocus ? fill : 'var(--color-border)'}
-                strokeWidth={1.5}
+                stroke={isFocus ? fill : 'none'}
+                strokeWidth={1}
               />
-              <text
-                dy={isFocus ? 26 : 22}
-                textAnchor="middle"
-                fill="var(--color-text-secondary)"
-                className="niuu-text-xs niuu-font-sans niuu-pointer-events-none"
-              >
-                {node.title.length > 20 ? `${node.title.slice(0, 18)}…` : node.title}
-              </text>
             </g>
           );
         })}
@@ -187,7 +183,7 @@ function GraphSvg({ graph, focusId, onNodeClick, categories }: GraphSvgProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Legend
+// Legend overlay (top-left)
 // ---------------------------------------------------------------------------
 
 interface LegendProps {
@@ -197,25 +193,68 @@ interface LegendProps {
 function GraphLegend({ categories }: LegendProps) {
   if (categories.length === 0) return null;
   return (
-    <div
-      className="niuu-flex niuu-flex-col niuu-gap-2 niuu-px-4 niuu-py-3 niuu-bg-bg-secondary niuu-border niuu-border-border-subtle niuu-rounded-lg niuu-min-w-[140px]"
-      aria-label="Graph legend"
-    >
-      <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-widest niuu-text-text-muted niuu-pb-1 niuu-border-b niuu-border-border-subtle">
-        Categories
+    <div className="niuu-graph-overlay niuu-graph-overlay--legend" aria-label="Graph legend">
+      <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-widest niuu-text-text-muted niuu-font-semibold niuu-mb-1">
+        Category
       </span>
       {categories.map((cat, i) => (
         <div key={cat} className="niuu-flex niuu-items-center niuu-gap-2">
           <span
-            className="niuu-graph-legend-dot niuu-w-2.5 niuu-h-2.5 niuu-rounded-full niuu-shrink-0"
+            className="niuu-graph-legend-dot niuu-w-2 niuu-h-2 niuu-rounded-full niuu-shrink-0"
             data-color-idx={String(i % CATEGORY_COLORS.length)}
             aria-hidden
           />
-          <span className="niuu-text-xs niuu-text-text-secondary niuu-whitespace-nowrap niuu-overflow-hidden niuu-text-ellipsis">
+          <span className="niuu-text-xs niuu-text-text-secondary niuu-font-mono">
             {cat}
           </span>
         </div>
       ))}
+      <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-widest niuu-text-text-muted niuu-font-semibold niuu-mt-2 niuu-mb-1">
+        Edges
+      </span>
+      <div className="niuu-flex niuu-items-center niuu-gap-2">
+        <svg width="20" height="2" className="niuu-shrink-0">
+          <line x1="0" y1="1" x2="20" y2="1" stroke="var(--color-border)" strokeWidth="1.5" />
+        </svg>
+        <span className="niuu-text-xs niuu-text-text-secondary niuu-font-mono">shared source</span>
+      </div>
+      <div className="niuu-flex niuu-items-center niuu-gap-2">
+        <svg width="20" height="2" className="niuu-shrink-0">
+          <line
+            x1="0"
+            y1="1"
+            x2="20"
+            y2="1"
+            stroke="var(--color-border)"
+            strokeWidth="1.5"
+            strokeDasharray="4 3"
+          />
+        </svg>
+        <span className="niuu-text-xs niuu-text-text-secondary niuu-font-mono">wikilink</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Info card overlay (top-right)
+// ---------------------------------------------------------------------------
+
+interface InfoCardProps {
+  nodeCount: number;
+  edgeCount: number;
+}
+
+function GraphInfo({ nodeCount, edgeCount }: InfoCardProps) {
+  return (
+    <div className="niuu-graph-overlay niuu-graph-overlay--info" data-testid="graph-info">
+      <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-widest niuu-text-text-muted niuu-font-semibold">
+        Graph
+      </span>
+      <span className="niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-font-mono">
+        {nodeCount} pages · {edgeCount} edges
+      </span>
+      <span className="niuu-text-xs niuu-text-brand-300 niuu-font-mono">all mounts</span>
     </div>
   );
 }
@@ -225,108 +264,43 @@ function GraphLegend({ categories }: LegendProps) {
 // ---------------------------------------------------------------------------
 
 export function GraphPage() {
-  const { focusedGraph, graph, focusId, hops, setFocusId, setHops, isLoading, isError, error } =
-    useGraph();
+  const { graph, focusId, setFocusId, isLoading, isError, error } = useGraph();
 
-  const displayGraph = focusedGraph ?? graph;
+  const displayGraph = graph;
   const categories = displayGraph
     ? [...new Set(displayGraph.nodes.map((n) => n.category))].filter(Boolean).sort()
     : [];
 
-  return (
-    <div className="niuu-p-6 niuu-max-w-4xl">
-      <h2 className="niuu-m-0 niuu-mb-5 niuu-text-2xl niuu-font-semibold niuu-text-text-primary">
-        Knowledge Graph
-      </h2>
-
-      <div className="niuu-flex niuu-flex-wrap niuu-gap-4 niuu-mb-4 niuu-items-end">
-        <div className="niuu-flex niuu-flex-col niuu-flex-1 niuu-min-w-[220px]">
-          <label
-            htmlFor="graph-focus-input"
-            className="niuu-block niuu-text-text-muted niuu-text-xs niuu-mb-1"
-          >
-            Focus node
-          </label>
-          <input
-            id="graph-focus-input"
-            className="niuu-px-3 niuu-py-2 niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded-md niuu-text-text-primary niuu-font-mono niuu-text-xs niuu-outline-none focus:niuu-border-brand"
-            type="text"
-            placeholder="Page path or ID…"
-            value={focusId ?? ''}
-            onChange={(e) => setFocusId(e.target.value || null)}
-            aria-label="Focus node ID"
-          />
-          {focusId && (
-            <button
-              className="niuu-mt-1 niuu-self-start niuu-bg-transparent niuu-border-0 niuu-text-text-muted niuu-text-xs niuu-cursor-pointer niuu-p-0 hover:niuu-text-text-secondary"
-              onClick={() => setFocusId(null)}
-              aria-label="Clear focus"
-            >
-              clear
-            </button>
-          )}
-        </div>
-
-        <div className="niuu-flex niuu-flex-col">
-          <label className="niuu-block niuu-text-text-muted niuu-text-xs niuu-mb-1">Hops</label>
-          <div className="niuu-flex niuu-gap-1" role="group" aria-label="Hop count">
-            {Array.from({ length: MAX_HOPS - MIN_HOPS + 1 }, (_, i) => i + MIN_HOPS).map((h) => (
-              <button
-                key={h}
-                className={[
-                  'niuu-w-8 niuu-h-7 niuu-border niuu-rounded-sm niuu-text-xs niuu-cursor-pointer',
-                  h === hops
-                    ? 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-semibold'
-                    : 'niuu-bg-bg-secondary niuu-border-border-subtle niuu-text-text-secondary',
-                ].join(' ')}
-                onClick={() => setHops(h)}
-                aria-pressed={h === hops}
-                data-hops={h}
-              >
-                {h}
-              </button>
-            ))}
-          </div>
-        </div>
+  if (isLoading) {
+    return (
+      <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-text-secondary niuu-text-sm niuu-p-6">
+        <StateDot state="processing" pulse />
+        <span>loading graph…</span>
       </div>
+    );
+  }
 
-      {isLoading && (
-        <div className="niuu-flex niuu-items-center niuu-gap-2">
-          <StateDot state="processing" pulse />
-          <span>loading graph…</span>
-        </div>
-      )}
+  if (isError) {
+    return (
+      <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-text-secondary niuu-text-sm niuu-p-6">
+        <StateDot state="failed" />
+        <span>{error instanceof Error ? error.message : 'graph load failed'}</span>
+      </div>
+    );
+  }
 
-      {isError && (
-        <div className="niuu-flex niuu-items-center niuu-gap-2">
-          <StateDot state="failed" />
-          <span>{error instanceof Error ? error.message : 'graph load failed'}</span>
-        </div>
-      )}
+  if (!displayGraph) return null;
 
-      {displayGraph && (
-        <>
-          <div className="niuu-flex niuu-gap-2 niuu-mb-4 niuu-flex-wrap">
-            <Chip tone="muted">{displayGraph.nodes.length} nodes</Chip>
-            <Chip tone="muted">{displayGraph.edges.length} edges</Chip>
-            {focusId && (
-              <Chip tone="default">
-                {hops}-hop focus: {focusId}
-              </Chip>
-            )}
-          </div>
-
-          <div className="niuu-flex niuu-gap-4 niuu-items-start niuu-flex-wrap">
-            <GraphSvg
-              graph={displayGraph}
-              focusId={focusId}
-              onNodeClick={(id) => setFocusId(focusId === id ? null : id)}
-              categories={categories}
-            />
-            <GraphLegend categories={categories} />
-          </div>
-        </>
-      )}
+  return (
+    <div className="niuu-graph-wrap">
+      <GraphLegend categories={categories} />
+      <GraphInfo nodeCount={displayGraph.nodes.length} edgeCount={displayGraph.edges.length} />
+      <GraphSvg
+        graph={displayGraph}
+        focusId={focusId}
+        onNodeClick={(id) => setFocusId(focusId === id ? null : id)}
+        categories={categories}
+      />
     </div>
   );
 }

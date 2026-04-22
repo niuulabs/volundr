@@ -118,7 +118,7 @@ export function SearchPage() {
           {results.map((result) => (
             <div
               key={result.path}
-              className="niuu-py-3 niuu-px-5 niuu-border-b niuu-border-border-subtle niuu-cursor-pointer hover:niuu-bg-bg-tertiary"
+              className="niuu-py-3 niuu-px-5 niuu-border-b niuu-border-border niuu-cursor-pointer hover:niuu-bg-bg-tertiary"
               data-testid="search-result"
             >
               {/* Title + score */}

@@ -6,7 +6,6 @@ import type { TopologyNode } from '../domain';
 import { TopologyCanvas } from './TopologyCanvas';
 import { EntityDrawer } from './overlays/EntityDrawer';
 import { EventLog } from './overlays/EventLog';
-import { ConnectionLegend } from './overlays/ConnectionLegend';
 import { Minimap } from './overlays/Minimap';
 
 /**
@@ -68,8 +67,7 @@ export function ObservatoryPage() {
         ))}
       </ul>
 
-      {/* Canvas overlays */}
-      <ConnectionLegend />
+      {/* Canvas overlays — legend is hidden to match web2 canvas view */}
       <Minimap topology={topology} selectedNodeId={selectedNode?.id} />
       <EventLog events={events} />
       <EntityDrawer

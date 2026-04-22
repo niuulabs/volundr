@@ -37,6 +37,10 @@ export function Minimap({ topology, selectedNodeId = null }: MinimapProps) {
 
   return (
     <div className="obs-minimap" aria-label="Minimap" data-testid="minimap-panel">
+      <div className="obs-minimap__header">
+        <span>Minimap</span>
+        <span className="obs-minimap__count">{topology.nodes.length} entities</span>
+      </div>
       <svg
         width={MINIMAP_W}
         height={MINIMAP_H}

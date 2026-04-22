@@ -1,15 +1,16 @@
 /**
- * LintPage — 2-column lint view (matches web2 prototype mm-lint-wrap layout).
+ * LintPage — 2-column lint view (matches web2 prototype).
  *
- * LEFT (220px): checks sidebar — All + per-rule rows with severity dot, id, name, count
- * RIGHT (1fr):  issues list filtered by selected check + bulk actions
- * DESCRIPTION:  rule info box (below issues header, shown when a rule is selected)
+ * LEFT (220px): checks sidebar — All + per-rule rows with name, count, FIX label
+ * RIGHT (1fr):  issues list filtered by selected check + Run lint / Auto-fix buttons
+ *
+ * KPI strip spans the full content width as 4 equal columns with subtitles
+ * showing which rules contribute to each count.
  */
 
 import { useState } from 'react';
 import { StateDot } from '@niuulabs/ui';
 import { useLint } from '../application/useLint';
-import { LintBadge } from './LintBadge';
 import type { LintRule, IssueSeverity } from '../domain/lint';
 
 const RULE_DESCRIPTIONS: Record<LintRule, string> = {
@@ -21,47 +22,25 @@ const RULE_DESCRIPTIONS: Record<LintRule, string> = {
   L12: 'Invalid frontmatter',
 };
 
-const RULE_FIX_HINTS: Record<LintRule, string> = {
-  L01: 'Review conflicting statements across both pages and reconcile the contradiction.',
-  L02: 'Recompile the page from its source to pull in the latest content.',
-  L05: 'Update or remove the broken wikilink.',
-  L07: 'Add inbound links from related pages, or archive if the page is no longer relevant.',
-  L11: 'Run `mimir index --rebuild` to regenerate the mount index.',
-  L12: 'Fix the YAML frontmatter syntax errors in the affected page.',
-};
-
 const SEVERITY_DOT: Record<IssueSeverity, 'failed' | 'attention' | 'observing'> = {
   error: 'failed',
   warn: 'attention',
   info: 'observing',
 };
 
-const SEVERITY_BADGE_CLS: Record<IssueSeverity, string> = {
-  error: 'niuu-text-critical niuu-border-critical',
-  warn: 'niuu-text-brand-400 niuu-border-brand-400',
-  info: 'niuu-text-brand-300 niuu-border-brand-300',
-};
-
-const ISSUE_BORDER_CLS: Record<IssueSeverity, string> = {
-  error: 'niuu-border-l-[3px] niuu-border-l-critical',
-  warn: 'niuu-border-l-[3px] niuu-border-l-brand-400',
-  info: 'niuu-border-l-[3px] niuu-border-l-brand-300',
-};
-
-const BTN_BASE =
-  'niuu-py-1 niuu-px-3 niuu-rounded-md niuu-font-sans niuu-text-xs niuu-cursor-pointer niuu-whitespace-nowrap niuu-border disabled:niuu-opacity-50 disabled:niuu-cursor-not-allowed';
-const BTN_SECONDARY = `${BTN_BASE} niuu-bg-bg-secondary niuu-border-border niuu-text-text-primary hover:niuu-bg-bg-tertiary`;
-const BTN_FIX = `${BTN_BASE} niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-medium hover:niuu-opacity-[0.88]`;
+const ACTION_BTN =
+  'niuu-bg-transparent niuu-border niuu-border-solid niuu-border-border-subtle niuu-rounded-sm ' +
+  'niuu-text-text-secondary niuu-font-sans niuu-text-xs niuu-py-[2px] niuu-px-2 niuu-cursor-pointer niuu-whitespace-nowrap ' +
+  'hover:niuu-border-border hover:niuu-text-text-primary disabled:niuu-opacity-50 disabled:niuu-cursor-not-allowed';
+const BTN_PRIMARY =
+  'niuu-py-1 niuu-px-3 niuu-rounded-md niuu-font-sans niuu-text-xs niuu-cursor-pointer niuu-whitespace-nowrap ' +
+  'niuu-border niuu-bg-brand niuu-border-brand niuu-text-bg-primary niuu-font-medium hover:niuu-opacity-[0.88] ' +
+  'disabled:niuu-opacity-50 disabled:niuu-cursor-not-allowed';
 
 const CHECK_ROW_BASE =
-  'niuu-grid niuu-grid-cols-[52px_1fr_28px] niuu-items-center niuu-gap-2 niuu-py-2 niuu-px-3 ' +
+  'niuu-grid niuu-grid-cols-[1fr_28px] niuu-items-center niuu-gap-2 niuu-py-2 niuu-px-3 ' +
   'niuu-border-0 niuu-border-b niuu-border-solid niuu-border-border-subtle ' +
   'niuu-cursor-pointer niuu-text-left niuu-w-full niuu-transition-colors';
-
-const KPI_CARD_BASE =
-  'niuu-flex niuu-flex-col niuu-gap-[2px] niuu-py-3 niuu-px-4 niuu-bg-bg-secondary niuu-border niuu-rounded-md niuu-min-w-[80px]';
-const KPI_LBL = 'niuu-text-[10px] niuu-uppercase niuu-tracking-[0.07em] niuu-text-text-muted';
-const KPI_VAL_BASE = 'niuu-text-2xl niuu-font-medium niuu-font-mono niuu-tracking-[-0.01em]';
 
 export function LintPage() {
   const { issues, summary, isLoading, isError, error, runAutoFix, isFixing } = useLint();
@@ -90,37 +69,20 @@ export function LintPage() {
 
   const rules = Object.keys(RULE_DESCRIPTIONS) as LintRule[];
   const filtered = selectedRule ? issues.filter((i) => i.rule === selectedRule) : issues;
-  // auto-fixable KPI always shows global count; filtered ids drive the Fix-all button
   const totalAutoFixable = issues.filter((i) => i.autoFix).length;
   const autoFixableIds = filtered.filter((i) => i.autoFix).map((i) => i.id);
   const totalLint = summary.error + summary.warn + summary.info;
 
-  const kpis = [
-    {
-      label: 'total issues',
-      value: totalLint,
-      valueCls: `${KPI_VAL_BASE} niuu-text-brand-400`,
-      cardBorder: 'niuu-border-brand-400',
-    },
-    {
-      label: 'errors',
-      value: summary.error,
-      valueCls: `${KPI_VAL_BASE} ${summary.error > 0 ? 'niuu-text-critical-fg' : 'niuu-text-text-muted'}`,
-      cardBorder: 'niuu-border-border-subtle',
-    },
-    {
-      label: 'warnings',
-      value: summary.warn,
-      valueCls: `${KPI_VAL_BASE} niuu-text-brand-400`,
-      cardBorder: 'niuu-border-border-subtle',
-    },
-    {
-      label: 'auto-fixable',
-      value: totalAutoFixable,
-      valueCls: `${KPI_VAL_BASE} niuu-text-brand-300`,
-      cardBorder: 'niuu-border-brand-300',
-    },
-  ];
+  // Build subtitle strings showing which rules contribute to each KPI
+  const rulesByseverity = (sev: IssueSeverity) =>
+    [...new Set(issues.filter((i) => i.severity === sev).map((i) => i.rule))].sort().join(' · ');
+  const autoFixRules = [...new Set(issues.filter((i) => i.autoFix).map((i) => i.rule))]
+    .sort()
+    .join(' · ');
+
+  const KPI_LBL = 'niuu-text-[10px] niuu-uppercase niuu-tracking-[0.07em] niuu-text-text-muted';
+  const KPI_VAL = 'niuu-text-2xl niuu-font-medium niuu-font-mono niuu-tracking-[-0.01em]';
+  const KPI_SUB = 'niuu-text-[10px] niuu-text-text-muted niuu-font-mono niuu-whitespace-nowrap niuu-overflow-hidden niuu-text-ellipsis';
 
   if (isLoading) {
     return (
@@ -142,14 +104,30 @@ export function LintPage() {
 
   return (
     <div className="niuu-p-6 niuu-flex niuu-flex-col niuu-gap-4 niuu-h-full niuu-box-border">
-      {/* ── KPI strip ───────────────────────────────────────────── */}
-      <div className="niuu-flex niuu-gap-4 niuu-flex-wrap">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className={`${KPI_CARD_BASE} ${kpi.cardBorder}`}>
-            <span className={KPI_LBL}>{kpi.label}</span>
-            <span className={kpi.valueCls}>{kpi.value}</span>
-          </div>
-        ))}
+      {/* ── KPI strip — full-width 4-column grid ────────────────── */}
+      <div className="niuu-grid niuu-grid-cols-4 niuu-border niuu-border-border-subtle niuu-rounded-md niuu-overflow-hidden">
+        <div className="niuu-flex niuu-flex-col niuu-gap-[2px] niuu-py-3 niuu-px-4 niuu-bg-bg-secondary niuu-border-r niuu-border-border-subtle">
+          <span className={KPI_LBL}>total issues</span>
+          <span className={`${KPI_VAL} niuu-text-brand-400`}>{totalLint}</span>
+          <span className={KPI_SUB}>across all mounts</span>
+        </div>
+        <div className="niuu-flex niuu-flex-col niuu-gap-[2px] niuu-py-3 niuu-px-4 niuu-bg-bg-secondary niuu-border-r niuu-border-border-subtle">
+          <span className={KPI_LBL}>errors</span>
+          <span className={`${KPI_VAL} ${summary.error > 0 ? 'niuu-text-critical-fg' : 'niuu-text-text-muted'}`}>
+            {summary.error}
+          </span>
+          <span className={KPI_SUB}>{rulesByseverity('error') || '—'}</span>
+        </div>
+        <div className="niuu-flex niuu-flex-col niuu-gap-[2px] niuu-py-3 niuu-px-4 niuu-bg-bg-secondary niuu-border-r niuu-border-border-subtle">
+          <span className={KPI_LBL}>warnings</span>
+          <span className={`${KPI_VAL} niuu-text-brand-400`}>{summary.warn}</span>
+          <span className={KPI_SUB}>{rulesByseverity('warn') || '—'}</span>
+        </div>
+        <div className="niuu-flex niuu-flex-col niuu-gap-[2px] niuu-py-3 niuu-px-4 niuu-bg-bg-secondary">
+          <span className={KPI_LBL}>auto-fixable</span>
+          <span className={`${KPI_VAL} niuu-text-brand-300`}>{totalAutoFixable}</span>
+          <span className={KPI_SUB}>{autoFixRules || '—'}</span>
+        </div>
       </div>
 
       {/* ── 2-column layout ─────────────────────────────────────── */}
@@ -160,21 +138,20 @@ export function LintPage() {
           aria-label="Lint checks"
         >
           <h4 className="niuu-py-3 niuu-px-4 niuu-m-0 niuu-text-xs niuu-uppercase niuu-tracking-[0.07em] niuu-text-text-muted niuu-border-b niuu-border-border-subtle niuu-shrink-0">
-            Lint checks
+            Checks
           </h4>
-          {/* F8: both rows reuse CHECK_ROW_BASE */}
           <button
             type="button"
             className={`${CHECK_ROW_BASE} ${selectedRule === null ? 'niuu-bg-bg-elevated' : 'niuu-bg-transparent hover:niuu-bg-bg-tertiary'}`}
             onClick={() => setSelectedRule(null)}
             aria-pressed={selectedRule === null}
           >
-            <span className="niuu-font-mono niuu-text-xs niuu-text-text-primary niuu-font-semibold">
-              All
-            </span>
-            <span className="niuu-text-xs niuu-text-text-secondary niuu-whitespace-nowrap niuu-overflow-hidden niuu-text-ellipsis niuu-block">
-              every issue
-            </span>
+            <div>
+              <span className="niuu-font-mono niuu-text-xs niuu-text-text-primary niuu-font-semibold">
+                All
+              </span>
+              <span className="niuu-text-xs niuu-text-text-secondary niuu-ml-2">every issue</span>
+            </div>
             <span className="niuu-font-mono niuu-text-xs niuu-text-text-primary niuu-text-right">
               {totalLint}
             </span>
@@ -182,6 +159,7 @@ export function LintPage() {
           {rules.map((rule) => {
             const count = countByRule[rule] ?? 0;
             const sev: IssueSeverity = severityByRule[rule] ?? 'info';
+            const canFix = autoFixByRule[rule];
             return (
               <button
                 key={rule}
@@ -191,16 +169,20 @@ export function LintPage() {
                 aria-pressed={selectedRule === rule}
                 data-testid="check-row"
               >
-                <div className="niuu-flex niuu-items-center niuu-gap-1">
-                  <StateDot state={SEVERITY_DOT[sev]} size={6} />
-                  <span className="niuu-font-mono niuu-text-xs niuu-text-text-primary niuu-font-semibold">
-                    {rule}
-                  </span>
-                </div>
-                <div className="niuu-overflow-hidden">
-                  <span className="niuu-text-xs niuu-text-text-secondary niuu-whitespace-nowrap niuu-overflow-hidden niuu-text-ellipsis niuu-block">
-                    {RULE_DESCRIPTIONS[rule]}
-                  </span>
+                <div className="niuu-flex niuu-flex-col niuu-gap-px">
+                  <div className="niuu-flex niuu-items-center niuu-gap-1">
+                    <span className="niuu-font-mono niuu-text-xs niuu-text-text-primary niuu-font-semibold">
+                      {rule}
+                    </span>
+                    <span className="niuu-text-xs niuu-text-text-secondary niuu-whitespace-nowrap niuu-overflow-hidden niuu-text-ellipsis">
+                      {RULE_DESCRIPTIONS[rule]}
+                    </span>
+                  </div>
+                  {canFix && (
+                    <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-muted niuu-uppercase">
+                      fix
+                    </span>
+                  )}
                 </div>
                 <span
                   className={`niuu-font-mono niuu-text-xs niuu-text-right ${
@@ -219,7 +201,6 @@ export function LintPage() {
           {/* Issues header */}
           <div className="niuu-flex niuu-items-center niuu-justify-between niuu-py-3 niuu-px-4 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-shrink-0 niuu-flex-wrap niuu-gap-2">
             <div className="niuu-flex niuu-items-center niuu-gap-2">
-              <LintBadge summary={summary} />
               <span className="niuu-text-sm niuu-font-medium niuu-text-text-primary">
                 {selectedRule
                   ? `${selectedRule} — ${RULE_DESCRIPTIONS[selectedRule]}`
@@ -230,13 +211,13 @@ export function LintPage() {
               </span>
             </div>
             <div className="niuu-flex niuu-gap-2">
-              <button type="button" className={BTN_SECONDARY} aria-label="Run lint">
+              <button type="button" className={ACTION_BTN} aria-label="Run lint">
                 Run lint
               </button>
               {autoFixableIds.length > 0 && (
                 <button
                   type="button"
-                  className={BTN_FIX}
+                  className={BTN_PRIMARY}
                   onClick={() => runAutoFix()}
                   disabled={isFixing}
                   aria-label="Fix all auto-fixable issues"
@@ -247,46 +228,6 @@ export function LintPage() {
               )}
             </div>
           </div>
-
-          {/* Rule description box — shown when a specific rule is selected */}
-          {selectedRule && (
-            <div
-              className="niuu-mx-4 niuu-mt-3 niuu-mb-1 niuu-p-3 niuu-bg-bg-secondary niuu-border niuu-border-border-subtle niuu-rounded-md niuu-shrink-0"
-              data-testid="rule-description"
-            >
-              <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-flex-wrap niuu-mb-1">
-                <code className="niuu-font-mono niuu-text-xs niuu-text-brand-300 niuu-font-semibold">
-                  {selectedRule}
-                </code>
-                <span className="niuu-text-xs niuu-text-text-secondary">—</span>
-                <span className="niuu-text-xs niuu-text-text-secondary">
-                  {RULE_DESCRIPTIONS[selectedRule]}
-                </span>
-                <span
-                  className={`niuu-font-mono niuu-text-[10px] niuu-px-2 niuu-rounded-full niuu-border ${
-                    SEVERITY_BADGE_CLS[severityByRule[selectedRule] ?? 'info']
-                  }`}
-                >
-                  {severityByRule[selectedRule] ?? 'info'}
-                </span>
-                {autoFixByRule[selectedRule] && (
-                  <span className="niuu-font-mono niuu-text-[10px] niuu-px-2 niuu-rounded-full niuu-border niuu-text-brand-200 niuu-border-brand-200">
-                    auto-fix
-                  </span>
-                )}
-              </div>
-              <p className="niuu-m-0 niuu-text-xs niuu-text-text-muted niuu-leading-relaxed">
-                <span className="niuu-font-medium niuu-text-text-secondary">How to fix: </span>
-                {RULE_FIX_HINTS[selectedRule]}
-                {autoFixByRule[selectedRule] && (
-                  <span className="niuu-text-brand-200">
-                    {' '}
-                    Auto-fixable via <code className="niuu-font-mono">mimir_lint --fix</code>.
-                  </span>
-                )}
-              </p>
-            </div>
-          )}
 
           {filtered.length === 0 && (
             <p className="niuu-p-4 niuu-text-text-muted niuu-text-sm niuu-m-0">
@@ -301,32 +242,31 @@ export function LintPage() {
             {filtered.map((issue, i) => (
               <li
                 key={`${issue.rule}-${i}`}
-                className={[
-                  'niuu-grid niuu-grid-cols-[64px_1fr_auto] niuu-gap-3 niuu-items-start niuu-py-3 niuu-px-4',
-                  'niuu-border-b niuu-border-b-border-subtle last:niuu-border-b-0',
-                  ISSUE_BORDER_CLS[issue.severity],
-                ].join(' ')}
+                className="niuu-flex niuu-items-start niuu-gap-3 niuu-py-3 niuu-px-4 niuu-border-b niuu-border-b-border-subtle last:niuu-border-b-0"
                 data-testid="lint-issue"
               >
-                <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-pt-[2px]">
-                  <code className="niuu-font-mono niuu-text-xs niuu-bg-bg-tertiary niuu-px-2 niuu-py-[2px] niuu-rounded-sm niuu-text-text-secondary">
-                    {issue.rule}
-                  </code>
-                  <StateDot state={SEVERITY_DOT[issue.severity]} size={6} />
-                </div>
-                <div className="niuu-min-w-0">
-                  <div className="niuu-font-mono niuu-text-xs niuu-text-text-secondary niuu-whitespace-nowrap niuu-overflow-hidden niuu-text-ellipsis niuu-mb-1">
-                    {issue.page}
+                <code className="niuu-font-mono niuu-text-xs niuu-bg-bg-tertiary niuu-px-2 niuu-py-[2px] niuu-rounded-sm niuu-text-text-secondary niuu-shrink-0 niuu-mt-[2px]">
+                  {issue.rule}
+                </code>
+                <div className="niuu-min-w-0 niuu-flex-1">
+                  <div className="niuu-flex niuu-items-center niuu-gap-1">
+                    <span className="niuu-font-mono niuu-text-xs niuu-text-text-primary niuu-whitespace-nowrap niuu-overflow-hidden niuu-text-ellipsis">
+                      {issue.page}
+                    </span>
+                    <span className="niuu-text-[10px] niuu-text-text-muted">·</span>
+                    <span className="niuu-text-[10px] niuu-text-text-muted niuu-whitespace-nowrap">
+                      {issue.mount}
+                    </span>
                   </div>
-                  <div className="niuu-text-sm niuu-text-text-secondary niuu-break-words">
+                  <div className="niuu-text-xs niuu-text-text-secondary niuu-mt-0.5">
                     {issue.message}
                   </div>
                 </div>
-                <div className="niuu-flex niuu-flex-col niuu-items-end niuu-gap-1">
+                <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-shrink-0">
                   {issue.autoFix && (
                     <button
                       type="button"
-                      className={BTN_SECONDARY}
+                      className={ACTION_BTN}
                       onClick={() => runAutoFix([issue.id])}
                       disabled={isFixing}
                       aria-label={`Auto-fix issue ${issue.id}`}
@@ -335,9 +275,9 @@ export function LintPage() {
                       {isFixing ? '…' : 'Fix'}
                     </button>
                   )}
-                  <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted niuu-whitespace-nowrap">
-                    {issue.mount}
-                  </span>
+                  <button type="button" className={ACTION_BTN} aria-label={`Open ${issue.page}`}>
+                    Open
+                  </button>
                 </div>
               </li>
             ))}

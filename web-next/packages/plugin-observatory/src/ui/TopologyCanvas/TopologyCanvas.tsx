@@ -367,8 +367,27 @@ export function TopologyCanvas({
         onClick={handleClick}
       />
 
-      {/* Camera controls — top-right overlay */}
-      <div data-testid="camera-controls" className="camera-controls">
+      {/* Camera controls — vertical pill stack, top-right (web2 parity) */}
+      <div
+        data-testid="camera-controls"
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          background: 'rgba(9,9,11,0.82)',
+          border: '1px solid rgba(147,197,253,0.2)',
+          borderRadius: 8,
+          fontFamily: 'var(--font-mono, monospace)',
+          fontSize: 11,
+          color: 'rgba(186,230,253,0.8)',
+          userSelect: 'none',
+          overflow: 'hidden',
+          zIndex: 40,
+        }}
+      >
         <button aria-label="Zoom in" onClick={zoomIn} className="camera-btn">
           +
         </button>
