@@ -50,7 +50,7 @@ export function PlanApproved({ saga, onNewPlan }: PlanApprovedProps) {
       <div className="niuu-flex niuu-gap-3">
         <a
           href="/tyr"
-          className="niuu-rounded-md niuu-bg-brand-500 niuu-px-4 niuu-py-2 niuu-text-sm niuu-font-medium niuu-text-white hover:niuu-bg-brand-600 niuu-transition-colors"
+          className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs"
         >
           Open in Sagas →
         </a>

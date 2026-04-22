@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
-import { KpiStrip, KpiCard, StateDot, LoadingState, Meter, relTime, Sparkline } from '@niuulabs/ui';
+import { KpiStrip, KpiCard, StateDot, LoadingState, Sparkline } from '@niuulabs/ui';
 import { useVolundrStats } from './useVolundrSessions';
 import { useVolundrClusters } from './hooks/useVolundrClusters';
 import { useSessionList } from './hooks/useSessionStore';
@@ -8,6 +8,7 @@ import { MiniBar, ConnectionTypeBadge } from './atoms';
 import { tokens, money } from './utils/formatters';
 import type { Session } from '../domain/session';
 import type { Cluster } from '../domain/cluster';
+import type { ClusterKind } from '../domain/cluster';
 import type { Template } from '../domain/template';
 
 // ---------------------------------------------------------------------------
@@ -16,91 +17,112 @@ import type { Template } from '../domain/template';
 
 function InflightRow({ session, onClick }: { session: Session; onClick: () => void }) {
   const isBooting = session.state === 'provisioning' || session.state === 'requested';
+  const totalTokens = (session.tokensIn ?? 0) + (session.tokensOut ?? 0);
+  const cpuPct =
+    session.resources.cpuLimit > 0 ? session.resources.cpuUsed / session.resources.cpuLimit : 0;
+  const memPct =
+    session.resources.memLimitMi > 0
+      ? session.resources.memUsedMi / session.resources.memLimitMi
+      : 0;
 
-  if (isBooting) {
-    const progress = session.bootProgress ?? 0.1;
-    return (
-      <button
-        className="niuu-relative niuu-flex niuu-w-full niuu-flex-col niuu-overflow-hidden niuu-rounded niuu-px-3 niuu-py-2 niuu-text-left hover:niuu-bg-bg-tertiary"
-        onClick={onClick}
-        data-testid="inflight-row"
-      >
-        <div className="niuu-flex niuu-w-full niuu-items-center niuu-gap-3">
-          <StateDot state="processing" pulse />
-          <div className="niuu-flex-1">
-            <div className="niuu-font-mono niuu-text-sm niuu-text-text-primary">{session.id}</div>
-            <div className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-              {session.personaName}
-            </div>
-          </div>
-          {session.connectionType && (
-            <ConnectionTypeBadge connectionType={session.connectionType} />
+  return (
+    <button
+      className="niuu-relative niuu-flex niuu-w-full niuu-items-start niuu-gap-3 niuu-rounded niuu-px-3 niuu-py-2 niuu-text-left hover:niuu-bg-bg-tertiary"
+      onClick={onClick}
+      data-testid="inflight-row"
+    >
+      <StateDot
+        state={isBooting ? 'processing' : session.state === 'idle' ? 'idle' : 'running'}
+        pulse={isBooting || session.state === 'running'}
+      />
+      <div className="niuu-flex-1 niuu-min-w-0">
+        <div className="niuu-font-mono niuu-text-sm niuu-font-medium niuu-text-text-primary niuu-truncate">
+          {session.id}
+        </div>
+        <div className="niuu-text-xs niuu-text-text-faint">
+          {session.personaName} · {session.clusterId}
+        </div>
+      </div>
+
+      {/* Preview / activity text */}
+      {session.preview && !isBooting && (
+        <div
+          className="niuu-flex-[2] niuu-min-w-0 niuu-font-mono niuu-text-xs niuu-text-text-muted niuu-truncate"
+          data-testid="inflight-preview"
+          title={session.preview}
+        >
+          {session.preview}
+        </div>
+      )}
+      {isBooting && (
+        <div className="niuu-flex-[2] niuu-min-w-0 niuu-font-mono niuu-text-xs niuu-text-text-muted">
+          {session.state === 'provisioning' ? 'provisioning…' : 'requested'}
+        </div>
+      )}
+
+      {/* Inline resource bars */}
+      {!isBooting && (
+        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-w-36">
+          <MiniBar value={cpuPct} label="cpu" />
+          <MiniBar value={memPct} label="mem" />
+          {session.resources.gpuCount > 0 && <MiniBar value={0} label="gpu" />}
+        </div>
+      )}
+
+      {/* Token + cost */}
+      {!isBooting && (totalTokens > 0 || session.costCents !== undefined) && (
+        <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-font-mono niuu-text-[10px] niuu-text-text-muted niuu-whitespace-nowrap">
+          {totalTokens > 0 && <span data-testid="token-stat">{tokens(totalTokens)}</span>}
+          {totalTokens > 0 && session.costCents !== undefined && (
+            <span className="niuu-text-text-faint">·</span>
+          )}
+          {session.costCents !== undefined && (
+            <span data-testid="cost-stat">{money(session.costCents)}</span>
           )}
         </div>
-        {/* Boot progress bar */}
+      )}
+
+      {/* Connection type icon */}
+      {session.connectionType && <ConnectionTypeBadge connectionType={session.connectionType} />}
+
+      {/* Boot progress bar */}
+      {isBooting && (
         <div
           className="niuu-absolute niuu-bottom-0 niuu-left-0 niuu-h-0.5 niuu-w-full niuu-bg-bg-elevated"
           aria-hidden="true"
         >
           <div
             className="niuu-h-full niuu-bg-brand niuu-transition-all niuu-duration-500"
-            style={{ width: `${Math.round(progress * 100)}%` }}
+            style={{ width: `${Math.round((session.bootProgress ?? 0.1) * 100)}%` }}
             data-testid="boot-progress-bar"
           />
         </div>
-      </button>
-    );
-  }
-
-  const totalTokens = (session.tokensIn ?? 0) + (session.tokensOut ?? 0);
-
-  return (
-    <button
-      className="niuu-flex niuu-w-full niuu-items-start niuu-gap-3 niuu-rounded niuu-px-3 niuu-py-2 niuu-text-left hover:niuu-bg-bg-tertiary"
-      onClick={onClick}
-      data-testid="inflight-row"
-    >
-      <StateDot
-        state={session.state === 'idle' ? 'idle' : 'running'}
-        pulse={session.state === 'running'}
-      />
-      <div className="niuu-flex-1 niuu-min-w-0">
-        <div className="niuu-font-mono niuu-text-sm niuu-text-text-primary niuu-truncate">
-          {session.id}
-        </div>
-        <div className="niuu-text-xs niuu-text-text-faint">
-          {session.personaName} · {session.clusterId}
-        </div>
-        {(totalTokens > 0 || session.costCents !== undefined) && (
-          <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
-            {totalTokens > 0 && <span data-testid="token-stat">{tokens(totalTokens)}</span>}
-            {totalTokens > 0 && session.costCents !== undefined && (
-              <span className="niuu-text-text-faint">·</span>
-            )}
-            {session.costCents !== undefined && (
-              <span data-testid="cost-stat">{money(session.costCents)}</span>
-            )}
-          </div>
-        )}
-      </div>
-      <div className="niuu-flex niuu-flex-col niuu-items-end niuu-gap-1.5">
-        {session.connectionType && <ConnectionTypeBadge connectionType={session.connectionType} />}
-        <div className="niuu-flex niuu-items-center niuu-gap-2">
-          <Meter
-            used={session.resources.cpuUsed}
-            limit={session.resources.cpuLimit}
-            label="cpu"
-            className="niuu-w-16"
-          />
-          <Meter
-            used={session.resources.memUsedMi}
-            limit={session.resources.memLimitMi}
-            label="mem"
-            className="niuu-w-16"
-          />
-        </div>
-      </div>
+      )}
     </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cluster kind badge
+// ---------------------------------------------------------------------------
+
+const KIND_BG: Record<ClusterKind, string> = {
+  primary: 'niuu-bg-brand niuu-text-bg-primary',
+  gpu: 'niuu-bg-state-warn niuu-text-bg-primary',
+  edge: 'niuu-bg-bg-elevated niuu-text-text-secondary',
+  local: 'niuu-bg-bg-elevated niuu-text-text-secondary',
+  observ: 'niuu-bg-bg-elevated niuu-text-text-secondary',
+  media: 'niuu-bg-bg-elevated niuu-text-text-secondary',
+};
+
+function ClusterKindBadge({ kind }: { kind: ClusterKind }) {
+  return (
+    <span
+      className={`niuu-inline-flex niuu-items-center niuu-rounded niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-font-semibold niuu-uppercase ${KIND_BG[kind] ?? KIND_BG.edge}`}
+      data-testid="cluster-kind-badge"
+    >
+      {kind}
+    </span>
   );
 }
 
@@ -115,23 +137,25 @@ function ClusterLoadRow({ cluster }: { cluster: Cluster }) {
 
   return (
     <div
-      className="niuu-flex niuu-items-center niuu-gap-3 niuu-py-2"
+      className="niuu-flex niuu-flex-col niuu-gap-1 niuu-py-2"
       data-testid="cluster-load-row"
     >
-      <div className="niuu-flex-1 niuu-min-w-0">
-        <div className="niuu-flex niuu-items-center niuu-gap-2">
-          <span className="niuu-font-medium niuu-text-sm niuu-text-text-primary">
-            {cluster.name}
-          </span>
-          <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-            · {cluster.realm}
-          </span>
-        </div>
-        <div className="niuu-text-xs niuu-text-text-muted">
-          {cluster.runningSessions} pod{cluster.runningSessions !== 1 ? 's' : ''}
-        </div>
+      {/* Name + realm */}
+      <div className="niuu-flex niuu-items-center niuu-gap-1">
+        <span className="niuu-font-medium niuu-text-sm niuu-text-text-primary">
+          {cluster.name}
+        </span>
+        <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">· {cluster.realm}</span>
       </div>
-      <div className="niuu-flex niuu-gap-2 niuu-w-48">
+      {/* Kind badge + pod count */}
+      <div className="niuu-flex niuu-items-center niuu-gap-2">
+        <ClusterKindBadge kind={cluster.kind} />
+        <span className="niuu-text-xs niuu-text-text-muted">
+          {cluster.runningSessions} pod{cluster.runningSessions !== 1 ? 's' : ''}
+        </span>
+      </div>
+      {/* Full-width resource bars */}
+      <div className="niuu-flex niuu-gap-3 niuu-mt-0.5">
         <MiniBar value={cpuPct} label="cpu" />
         <MiniBar value={memPct} label="mem" />
         {cluster.capacity.gpu > 0 ? (
@@ -139,9 +163,7 @@ function ClusterLoadRow({ cluster }: { cluster: Cluster }) {
         ) : (
           <div className="niuu-flex niuu-flex-col niuu-gap-0.5 niuu-flex-1">
             <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint">gpu</span>
-            <div className="niuu-h-1 niuu-rounded-full niuu-bg-bg-elevated">
-              <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint">—</span>
-            </div>
+            <div className="niuu-h-1 niuu-rounded-full niuu-bg-bg-elevated" />
           </div>
         )}
       </div>
@@ -153,36 +175,68 @@ function ClusterLoadRow({ cluster }: { cluster: Cluster }) {
 // Quick launch card
 // ---------------------------------------------------------------------------
 
-function QuickLaunchCard({ template, onClick }: { template: Template; onClick: () => void }) {
+function QuickLaunchCard({
+  template,
+  isDefault,
+  onClick,
+}: {
+  template: Template;
+  isDefault?: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       className="niuu-relative niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-3 niuu-text-left hover:niuu-border-brand"
       onClick={onClick}
       data-testid="quick-launch-card"
     >
+      {/* Tool badge row */}
       <div className="niuu-flex niuu-items-center niuu-gap-2">
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-secondary">
-          {template.name}
+        <span className="niuu-inline-flex niuu-items-center niuu-gap-1 niuu-rounded niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-secondary">
+          <span aria-hidden="true">⊡</span> Claude Code
         </span>
-      </div>
-      <div className="niuu-text-xs niuu-text-text-muted niuu-line-clamp-2">
-        {template.spec.image}:{template.spec.tag}
-      </div>
-      <div className="niuu-flex niuu-items-end niuu-justify-between niuu-gap-2">
-        <div className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-          {template.spec.resources.cpuRequest}c · {template.spec.resources.memRequestMi}Mi
-          {template.spec.resources.gpuCount > 0 && ` · gpu ${template.spec.resources.gpuCount}`}
-        </div>
-        {template.usageCount !== undefined && (
-          <span
-            className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint"
-            data-testid="usage-count"
-          >
-            {template.usageCount}×
+        {isDefault && (
+          <span className="niuu-rounded niuu-bg-brand niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-font-semibold niuu-text-bg-primary niuu-uppercase">
+            default
           </span>
         )}
       </div>
+      {/* Template name */}
+      <div className="niuu-font-mono niuu-text-sm niuu-font-medium niuu-text-text-primary">
+        {template.name}
+      </div>
+      {/* Description */}
+      {template.description && (
+        <div className="niuu-text-xs niuu-text-text-muted niuu-line-clamp-2">
+          {template.description}
+        </div>
+      )}
+      {/* Spec line */}
+      <div className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+        {template.spec.resources.cpuRequest}c · {template.spec.resources.memRequestMi}Mi
+        {template.usageCount !== undefined && (
+          <span data-testid="usage-count"> {template.usageCount}×</span>
+        )}
+      </div>
     </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// GPU heatmap — colored blocks showing GPU utilization
+// ---------------------------------------------------------------------------
+
+function GpuHeatmap({ used, total }: { used: number; total: number }) {
+  const blocks = Array.from({ length: total }, (_, i) => i < used);
+  return (
+    <div className="niuu-flex niuu-items-center niuu-gap-0.5" data-testid="gpu-heatmap">
+      {blocks.map((active, i) => (
+        <div
+          key={i}
+          className={`niuu-h-3 niuu-w-2.5 niuu-rounded-sm ${active ? 'niuu-bg-brand' : 'niuu-bg-bg-elevated'}`}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -207,15 +261,6 @@ export function ForgePage() {
   );
   const erroredSessions = allSessions.filter((s) => s.state === 'failed');
   const inflightSessions = [...bootingSessions, ...activeSessions].slice(0, 6);
-
-  // Recent sessions sorted by last activity
-  const recentSessions = [...allSessions]
-    .filter((s) => s.lastActivityAt)
-    .sort(
-      (a, b) =>
-        new Date(b.lastActivityAt ?? 0).getTime() - new Date(a.lastActivityAt ?? 0).getTime(),
-    )
-    .slice(0, 8);
 
   // Cluster aggregates
   const totalGpuCap = clusters.data?.reduce((s, c) => s + c.capacity.gpu, 0) ?? 0;
@@ -247,10 +292,9 @@ export function ForgePage() {
                 sparklines?.activePods ? (
                   <Sparkline
                     values={sparklines.activePods}
-                    width={48}
-                    height={16}
-                    fill={false}
-                    className="niuu-opacity-50"
+                    width={200}
+                    height={40}
+                    fill
                   />
                 ) : undefined
               }
@@ -258,169 +302,121 @@ export function ForgePage() {
             <KpiCard
               label="tokens today"
               value={stats.data ? tokens(stats.data.tokensToday) : '—'}
-              delta="burn rate"
-              deltaTrend="neutral"
-              sparkline={
-                sparklines?.tokensToday ? (
-                  <Sparkline
-                    values={sparklines.tokensToday}
-                    width={48}
-                    height={16}
-                    fill={false}
-                    className="niuu-opacity-50"
-                  />
-                ) : undefined
+              delta={
+                stats.data
+                  ? `${tokens(Math.round(stats.data.tokensToday / 24))}/s · 5m avg`
+                  : 'burn rate'
               }
+              deltaTrend="neutral"
             />
             <KpiCard
               label="cost today"
               value={stats.data ? `$${stats.data.costToday.toFixed(2)}` : '—'}
-              delta="projected 24h"
-              deltaTrend="neutral"
-              sparkline={
-                sparklines?.costToday ? (
-                  <Sparkline
-                    values={sparklines.costToday}
-                    width={48}
-                    height={16}
-                    fill={false}
-                    className="niuu-opacity-50"
-                  />
-                ) : undefined
+              delta={
+                stats.data
+                  ? `$${Math.round(stats.data.costToday * 1.25)} projected 24h`
+                  : 'projected 24h'
               }
+              deltaTrend="neutral"
             />
             <KpiCard
               label="GPUs"
               value={`${totalGpuUsed}/${totalGpuCap}`}
               delta={`across ${clusters.data?.length ?? 0} clusters`}
               deltaTrend="neutral"
-              sparkline={
-                sparklines?.gpus ? (
-                  <Sparkline
-                    values={sparklines.gpus}
-                    width={48}
-                    height={16}
-                    fill={false}
-                    className="niuu-opacity-50"
-                  />
-                ) : undefined
-              }
+              sparkline={<GpuHeatmap used={totalGpuUsed} total={totalGpuCap} />}
             />
           </KpiStrip>
         )}
       </section>
 
-      {/* Body grid */}
-      <div className="niuu-grid niuu-grid-cols-3 niuu-gap-6">
-        {/* In-flight pods */}
-        <section
-          className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
-          aria-label="In-flight pods"
-          data-testid="inflight-panel"
-        >
-          <div className="niuu-flex niuu-items-center niuu-justify-between">
-            <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">In-flight pods</h2>
-            <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-              {inflightSessions.length}
-            </span>
-          </div>
-          {inflightSessions.length === 0 && (
-            <p className="niuu-text-xs niuu-text-text-muted">No active pods.</p>
-          )}
-          {inflightSessions.map((s) => (
-            <InflightRow key={s.id} session={s} onClick={() => handleOpenSession(s.id)} />
-          ))}
-        </section>
+      {/* Body grid — 2-column: left (inflight + quick launch), right (forge load) */}
+      <div className="niuu-grid niuu-grid-cols-[3fr_2fr] niuu-gap-6">
+        {/* Left column */}
+        <div className="niuu-flex niuu-flex-col niuu-gap-6">
+          {/* In-flight pods */}
+          <section
+            className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
+            aria-label="In-flight pods"
+            data-testid="inflight-panel"
+          >
+            <div className="niuu-flex niuu-items-center niuu-justify-between">
+              <div className="niuu-flex niuu-items-baseline niuu-gap-2">
+                <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">
+                  In-flight pods
+                </h2>
+                <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+                  {inflightSessions.length}
+                </span>
+              </div>
+              <button
+                className="niuu-text-xs niuu-text-text-muted hover:niuu-text-text-primary"
+                onClick={() => void navigate({ to: '/volundr/sessions' })}
+                data-testid="all-sessions-link"
+              >
+                all sessions ›
+              </button>
+            </div>
+            {inflightSessions.length === 0 && (
+              <p className="niuu-text-xs niuu-text-text-muted">No active pods.</p>
+            )}
+            {inflightSessions.map((s) => (
+              <InflightRow key={s.id} session={s} onClick={() => handleOpenSession(s.id)} />
+            ))}
+          </section>
 
-        {/* Forge load */}
+          {/* Quick launch */}
+          <section
+            className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
+            aria-label="Quick launch"
+            data-testid="quick-launch-panel"
+          >
+            <div className="niuu-flex niuu-items-baseline niuu-gap-2">
+              <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Quick launch</h2>
+              <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+                from a template
+              </span>
+            </div>
+            <div className="niuu-grid niuu-grid-cols-2 niuu-gap-2">
+              {templates.data?.slice(0, 4).map((t, i) => (
+                <QuickLaunchCard
+                  key={t.id}
+                  template={t}
+                  isDefault={i === 0}
+                  onClick={() => void navigate({ to: '/volundr/templates' })}
+                />
+              ))}
+            </div>
+          </section>
+        </div>
+
+        {/* Right column — Forge load */}
         <section
           className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
           aria-label="Forge load"
           data-testid="forge-load-panel"
         >
           <div className="niuu-flex niuu-items-center niuu-justify-between">
-            <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Forge load</h2>
-            <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-              {clusters.data?.length ?? 0} clusters
-            </span>
+            <div className="niuu-flex niuu-items-baseline niuu-gap-2">
+              <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Forge load</h2>
+              <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+                {clusters.data?.length ?? 0} clusters
+              </span>
+            </div>
+            <button
+              className="niuu-text-xs niuu-text-text-muted hover:niuu-text-text-primary"
+              onClick={() => void navigate({ to: '/volundr/clusters' })}
+              data-testid="cluster-details-link"
+            >
+              details ›
+            </button>
           </div>
           {clusters.isLoading && <LoadingState label="Loading clusters…" />}
           {clusters.data?.map((c) => (
             <ClusterLoadRow key={c.id} cluster={c} />
           ))}
         </section>
-
-        {/* Quick launch */}
-        <section
-          className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
-          aria-label="Quick launch"
-          data-testid="quick-launch-panel"
-        >
-          <div className="niuu-flex niuu-items-center niuu-justify-between">
-            <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Quick launch</h2>
-            <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-              from a template
-            </span>
-          </div>
-          <div className="niuu-grid niuu-grid-cols-2 niuu-gap-2">
-            {templates.data?.slice(0, 4).map((t) => (
-              <QuickLaunchCard
-                key={t.id}
-                template={t}
-                onClick={() => void navigate({ to: '/volundr/templates' })}
-              />
-            ))}
-          </div>
-        </section>
       </div>
-
-      {/* Chronicle tail */}
-      {recentSessions.length > 0 && (
-        <section
-          className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
-          aria-label="Recent across fleet"
-          data-testid="chronicle-tail"
-        >
-          <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">
-            Recent across fleet
-          </h2>
-          <ol className="niuu-flex niuu-flex-col niuu-gap-1">
-            {recentSessions.map((s) => (
-              <li key={s.id} className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-xs">
-                <span className="niuu-font-mono niuu-text-text-faint niuu-w-12 niuu-text-right">
-                  {relTime(new Date(s.lastActivityAt ?? s.startedAt).getTime())}
-                </span>
-                <StateDot
-                  state={
-                    s.state === 'idle'
-                      ? 'idle'
-                      : s.state === 'running'
-                        ? 'running'
-                        : s.state === 'failed'
-                          ? 'failed'
-                          : 'unknown'
-                  }
-                />
-                <span className="niuu-font-mono niuu-text-text-primary">{s.id}</span>
-                <span className="niuu-text-text-faint">·</span>
-                <span className="niuu-text-text-muted niuu-truncate">{s.personaName}</span>
-                {s.preview && (
-                  <>
-                    <span className="niuu-text-text-faint">·</span>
-                    <span
-                      className="niuu-text-text-faint niuu-truncate niuu-max-w-[20rem]"
-                      data-testid="chronicle-preview"
-                      title={s.preview}
-                    >
-                      {s.preview.length > 80 ? `${s.preview.slice(0, 80)}…` : s.preview}
-                    </span>
-                  </>
-                )}
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
 
       {/* Error strip */}
       {erroredSessions.length > 0 && (
@@ -439,7 +435,7 @@ export function ForgePage() {
                   {s.events[s.events.length - 1]?.body ?? 'unknown error'}
                 </div>
               </div>
-              <button className="niuu-rounded niuu-bg-brand niuu-px-3 niuu-py-1 niuu-text-xs niuu-font-medium niuu-text-bg-primary">
+              <button className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs">
                 retry
               </button>
             </div>

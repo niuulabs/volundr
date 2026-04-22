@@ -135,7 +135,7 @@ function ClusterDetailHeader({ cluster }: ClusterDetailHeaderProps) {
           </button>
           <button
             type="button"
-            className="niuu-rounded niuu-bg-brand niuu-px-3 niuu-py-1.5 niuu-text-xs niuu-font-medium niuu-text-bg-primary hover:niuu-opacity-90 niuu-transition-opacity"
+            className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs"
             data-testid="forge-here-btn"
           >
             Forge Here

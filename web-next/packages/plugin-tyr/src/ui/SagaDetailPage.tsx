@@ -107,7 +107,7 @@ function RaidPanel({ raid, onClose, onOpenSession }: RaidPanelProps) {
         <div className="niuu-pt-2">
           <button
             type="button"
-            className="niuu-px-4 niuu-py-2 niuu-rounded-md niuu-bg-brand niuu-text-bg-primary niuu-text-sm niuu-font-medium niuu-cursor-pointer"
+            className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs"
             onClick={() => onOpenSession(raid.sessionId!)}
             aria-label={`Open Völundr session for ${raid.name}`}
           >

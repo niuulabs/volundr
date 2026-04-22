@@ -87,7 +87,7 @@ export function ExecTab({ exec }: ExecTabProps) {
         <button
           type="submit"
           disabled={!cmd.trim() || exec.isRunning}
-          className="niuu-rounded-md niuu-bg-brand niuu-px-3 niuu-py-1.5 niuu-text-sm niuu-font-medium niuu-text-bg-primary niuu-transition-fast disabled:niuu-cursor-not-allowed disabled:niuu-opacity-40"
+          className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs disabled:niuu-cursor-not-allowed disabled:niuu-opacity-50"
           data-testid="exec-run-btn"
         >
           {exec.isRunning ? 'running…' : 'Run'}

@@ -114,7 +114,7 @@ export function PlanPrompt({ onSubmit, loading, error }: PlanPromptProps) {
         <button
           type="submit"
           disabled={!canSubmit}
-          className="niuu-rounded-md niuu-bg-brand-500 niuu-px-4 niuu-py-2 niuu-text-sm niuu-font-medium niuu-text-white disabled:niuu-opacity-40 disabled:niuu-cursor-not-allowed hover:niuu-bg-brand-600 niuu-transition-colors"
+          className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs disabled:niuu-opacity-50 disabled:niuu-cursor-not-allowed"
         >
           {loading ? 'Starting…' : 'Next →'}
         </button>

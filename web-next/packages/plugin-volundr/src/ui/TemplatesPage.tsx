@@ -547,7 +547,7 @@ export function TemplatesPage() {
                     </button>
                     <button
                       type="button"
-                      className="niuu-rounded niuu-bg-brand niuu-px-3 niuu-py-1 niuu-text-sm niuu-font-medium niuu-text-bg-primary niuu-transition-colors hover:niuu-opacity-90"
+                      className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs"
                       aria-label={`Edit template ${selectedTemplate.name}`}
                     >
                       edit

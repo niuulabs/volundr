@@ -550,7 +550,7 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
             )}
             {step === 'booting' ? (
               <button
-                className="niuu-rounded niuu-bg-brand niuu-px-4 niuu-py-2 niuu-text-sm niuu-font-medium niuu-text-bg-primary disabled:niuu-opacity-50"
+                className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs disabled:niuu-opacity-50"
                 disabled={bootProgress < 1}
                 onClick={() => onOpenChange(false)}
                 data-testid="wizard-open-pod"
@@ -559,7 +559,7 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
               </button>
             ) : (
               <button
-                className="niuu-rounded niuu-bg-brand niuu-px-4 niuu-py-2 niuu-text-sm niuu-font-medium niuu-text-bg-primary"
+                className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs"
                 onClick={handleNext}
                 data-testid="wizard-next"
               >

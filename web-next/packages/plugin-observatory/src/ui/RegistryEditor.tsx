@@ -323,7 +323,7 @@ function TypePreviewDrawer({ type, registry, onClose, onUpdate }: TypePreviewDra
         ))}
         <button
           type="button"
-          className="niuu-bg-bg-tertiary niuu-border niuu-border-border niuu-rounded-sm niuu-text-text-secondary niuu-text-xs niuu-font-mono niuu-py-1 niuu-px-3 niuu-cursor-pointer niuu-mt-1 hover:niuu-bg-bg-elevated"
+          className="niuu-py-1 niuu-px-3 niuu-bg-bg-secondary niuu-text-text-secondary niuu-border niuu-border-border niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs niuu-mt-1"
           onClick={() =>
             onUpdate(type.id, {
               fields: [...type.fields, { key: 'new_field', label: 'New field', type: 'string' }],
@@ -707,7 +707,7 @@ export function RegistryEditor({ registry: initialRegistry }: RegistryEditorProp
                 type="button"
                 onClick={createType}
                 data-testid="create-type-btn"
-                className="niuu-h-8 niuu-px-3 niuu-bg-brand niuu-border niuu-border-brand niuu-rounded-sm niuu-text-bg-primary niuu-text-xs niuu-font-medium niuu-cursor-pointer niuu-whitespace-nowrap"
+                className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs niuu-whitespace-nowrap"
               >
                 + New type
               </button>
