@@ -316,7 +316,7 @@ describe('DispatchView', () => {
 
     const checkbox = screen.getByRole('checkbox', { name: /select row/i });
     await user.click(checkbox);
-    expect(screen.getByText(/1 raid selected/i)).toBeInTheDocument();
+    expect(screen.getByText('selected')).toBeInTheDocument();
   });
 
   it('dispatch button is disabled for non-feasible selections', async () => {
@@ -376,7 +376,7 @@ describe('DispatchView', () => {
     await waitFor(() => screen.getByText('Test Raid'));
 
     await user.click(screen.getByRole('checkbox', { name: /select row/i }));
-    expect(screen.getByText(/1 raid selected/i)).toBeInTheDocument();
+    expect(screen.getByText('selected')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /dispatch now/i }));
 

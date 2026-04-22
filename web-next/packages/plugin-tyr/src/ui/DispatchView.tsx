@@ -129,13 +129,15 @@ function BatchDispatchBar({
 
   return (
     <div
-      className="niuu-fixed niuu-bottom-6 niuu-left-1/2 niuu--translate-x-1/2 niuu-flex niuu-items-center niuu-gap-3 niuu-rounded-xl niuu-border niuu-border-border niuu-bg-bg-elevated niuu-px-5 niuu-py-3 niuu-shadow-lg"
+      className="niuu-flex niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-2 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary"
       role="status"
       aria-live="polite"
     >
       <span className="niuu-text-sm niuu-font-medium niuu-text-text-primary">
-        {selectedCount} raid{selectedCount !== 1 ? 's' : ''} selected
+        {selectedCount}
       </span>
+      <span className="niuu-text-sm niuu-text-text-secondary">selected</span>
+      <span className="niuu-flex-1" />
       {onApplyWorkflow && (
         <button
           type="button"
@@ -185,11 +187,13 @@ function SagaGroupHeader({
   trackerId,
   featureBranch,
   raidCount,
+  workflowName,
 }: {
   sagaName: string;
   trackerId: string;
   featureBranch: string;
   raidCount: number;
+  workflowName?: string;
 }) {
   return (
     <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-px-4 niuu-py-2 niuu-bg-bg-tertiary niuu-border-b niuu-border-border-subtle niuu-sticky niuu-top-0 niuu-z-10">
@@ -197,8 +201,14 @@ function SagaGroupHeader({
         {trackerId}
       </span>
       <span className="niuu-text-sm niuu-font-medium niuu-text-text-primary">{sagaName}</span>
-      <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-ml-auto">
-        {raidCount} queued · {featureBranch}
+      <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-ml-auto niuu-flex niuu-items-center niuu-gap-2">
+        <span>{raidCount} queued · {featureBranch}</span>
+        {workflowName && (
+          <>
+            <span className="niuu-w-px niuu-h-[10px] niuu-bg-border" />
+            <span>workflow <span className="niuu-text-text-secondary">{workflowName}</span></span>
+          </>
+        )}
       </span>
     </div>
   );
@@ -219,23 +229,38 @@ function RaidRow({
   onToggle: () => void;
   workflowName?: string;
 }) {
+  const waitMin = entry.raid.waitMinutes ?? 0;
+  const waitLabel = waitMin === 0 ? 'now' : `${waitMin}m wait`;
+
   return (
     <div
       className={cn(
-        'niuu-flex niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-2.5 niuu-border-b niuu-border-border-subtle',
+        'niuu-flex niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-2.5 niuu-border-b niuu-border-border-subtle niuu-cursor-pointer',
         isSelected ? 'niuu-bg-bg-secondary' : 'hover:niuu-bg-bg-secondary',
       )}
+      onClick={onToggle}
     >
-      <input
-        type="checkbox"
-        checked={isSelected}
-        onChange={onToggle}
-        className="niuu-w-4 niuu-h-4 niuu-rounded-sm niuu-border niuu-border-border niuu-bg-bg-tertiary niuu-accent-brand niuu-cursor-pointer niuu-shrink-0"
-        aria-label="Select row"
-      />
+      <label
+        className={cn(
+          'niuu-w-5 niuu-h-5 niuu-rounded-sm niuu-border niuu-flex niuu-items-center niuu-justify-center niuu-shrink-0 niuu-text-[10px] niuu-cursor-pointer',
+          isSelected
+            ? 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary'
+            : 'niuu-bg-bg-tertiary niuu-border-border',
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onToggle}
+          className="niuu-sr-only"
+          aria-label="Select row"
+        />
+        {isSelected && '✓'}
+      </label>
       <div className="niuu-flex-1 niuu-min-w-0">
-        <div className="niuu-text-sm niuu-text-text-primary niuu-truncate">{entry.raid.name}</div>
-        <div className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-mt-0.5">
+        <div className="niuu-text-sm niuu-font-medium niuu-text-text-primary niuu-truncate">{entry.raid.name}</div>
+        <div className="niuu-text-[10px] niuu-font-mono niuu-text-text-muted niuu-mt-0.5">
           {entry.raid.trackerId}
           {entry.raid.estimateHours != null && ` · est ${entry.raid.estimateHours}h`}
           {entry.raid.retryCount != null && entry.raid.retryCount > 0 && ` · retry ${entry.raid.retryCount}`}
@@ -244,33 +269,33 @@ function RaidRow({
       <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-shrink-0">
         {workflowName && (
           <span
-            className="niuu-rounded niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-xs niuu-text-brand niuu-border niuu-border-brand/30"
+            className="niuu-rounded-sm niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-xs niuu-text-brand niuu-border niuu-border-brand/30"
             aria-label={`workflow override: ${workflowName}`}
           >
             {workflowName}
           </span>
         )}
-        <StatusBadge
-          status={entry.effectiveStatus as Parameters<typeof StatusBadge>[0]['status']}
-          pulse={entry.effectiveStatus === 'running'}
-        />
         {entry.feasibility.feasible ? (
-          <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-rounded">
+          <span className="niuu-inline-flex niuu-items-center niuu-rounded-sm niuu-border niuu-border-emerald-600/50 niuu-bg-transparent niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-font-mono niuu-text-emerald-400 niuu-uppercase">
             ready
           </span>
         ) : (
-          <GateChips gates={entry.feasibility.gates} />
-        )}
-        <div className="niuu-flex niuu-items-center niuu-gap-1.5 niuu-w-[80px]">
-          <ConfidenceBar
-            level={
-              entry.raid.confidence >= 80 ? 'high' : entry.raid.confidence >= 50 ? 'medium' : 'low'
-            }
-          />
-          <span className="niuu-text-xs niuu-font-mono niuu-text-text-secondary">
-            {entry.raid.confidence}%
+          <span className="niuu-inline-flex niuu-items-center niuu-rounded-sm niuu-border niuu-border-purple-500/50 niuu-bg-transparent niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-font-mono niuu-text-purple-400 niuu-uppercase">
+            blocked{entry.feasibility.gates.filter((g) => !g.passed).length > 0 &&
+              ` · ${entry.feasibility.gates.filter((g) => !g.passed).map((g) => GATE_LABELS[g.name] ?? g.name).join(', ')}`}
           </span>
-        </div>
+        )}
+        <ConfidenceBar
+          level={
+            entry.raid.confidence >= 80 ? 'high' : entry.raid.confidence >= 50 ? 'medium' : 'low'
+          }
+        />
+        <span className="niuu-text-xs niuu-font-mono niuu-text-text-secondary niuu-w-8 niuu-text-right">
+          {entry.raid.confidence}%
+        </span>
+        <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-muted niuu-w-[60px] niuu-text-right">
+          {waitLabel}
+        </span>
       </div>
     </div>
   );
@@ -473,7 +498,7 @@ function DispatchViewContent() {
   const groupedBySaga = useMemo(() => {
     const map = new Map<
       string,
-      { sagaName: string; trackerId: string; featureBranch: string; entries: EnrichedEntry[] }
+      { sagaName: string; trackerId: string; featureBranch: string; workflowName: string; entries: EnrichedEntry[] }
     >();
     for (const entry of filtered) {
       const existing = map.get(entry.saga.id);
@@ -484,6 +509,7 @@ function DispatchViewContent() {
           sagaName: entry.saga.name,
           trackerId: entry.saga.trackerId,
           featureBranch: entry.saga.featureBranch,
+          workflowName: entry.saga.workflow ?? 'ship',
           entries: [entry],
         });
       }
@@ -661,6 +687,16 @@ function DispatchViewContent() {
             />
           </div>
 
+          {/* Inline batch dispatch bar */}
+          <BatchDispatchBar
+            selectedCount={selectedIds.size}
+            canDispatch={allSelectedFeasible}
+            onDispatch={handleDispatch}
+            isDispatching={isDispatching}
+            onApplyWorkflow={() => setShowWorkflowModal(true)}
+            onOverrideThreshold={() => setShowThresholdModal(true)}
+          />
+
           {/* Grouped queue */}
           <div className="niuu-flex-1 niuu-overflow-y-auto" role="list" aria-label="Dispatch queue">
             {groupedBySaga.length === 0 ? (
@@ -675,6 +711,7 @@ function DispatchViewContent() {
                     trackerId={group.trackerId}
                     featureBranch={group.featureBranch}
                     raidCount={group.entries.length}
+                    workflowName={group.workflowName}
                   />
                   {group.entries.map((entry) => (
                     <RaidRow
@@ -707,16 +744,6 @@ function DispatchViewContent() {
           ) : null}
         </div>
       </div>
-
-      {/* Batch dispatch bar */}
-      <BatchDispatchBar
-        selectedCount={selectedIds.size}
-        canDispatch={allSelectedFeasible}
-        onDispatch={handleDispatch}
-        isDispatching={isDispatching}
-        onApplyWorkflow={() => setShowWorkflowModal(true)}
-        onOverrideThreshold={() => setShowThresholdModal(true)}
-      />
 
       {/* Modals — workflow modal only mounts when open to avoid eager service calls */}
       {showWorkflowModal && (
