@@ -28,14 +28,14 @@ test('observatory canvas matches web2', async ({ page }) => {
 // ── Registry ──────────────────────────────────────────────────────────────────
 
 test('observatory registry — types tab matches web2', async ({ page }) => {
-  await page.goto('/registry');
+  await page.goto('/observatory/registry');
   await page.waitForSelector('[data-testid="tab-types"]', { timeout: 10_000 });
   await page.waitForLoadState('networkidle');
   await expect(page).toHaveScreenshot('observatory-registry-types.png');
 });
 
 test('observatory registry — containment tab matches web2', async ({ page }) => {
-  await page.goto('/registry');
+  await page.goto('/observatory/registry');
   await page.waitForSelector('[data-testid="tab-containment"]', { timeout: 10_000 });
   await page.click('[data-testid="tab-containment"]');
   await page.waitForTimeout(300);
@@ -43,7 +43,7 @@ test('observatory registry — containment tab matches web2', async ({ page }) =
 });
 
 test('observatory registry — JSON tab matches web2', async ({ page }) => {
-  await page.goto('/registry');
+  await page.goto('/observatory/registry');
   await page.waitForSelector('[data-testid="tab-json"]', { timeout: 10_000 });
   await page.click('[data-testid="tab-json"]');
   await page.waitForTimeout(300);

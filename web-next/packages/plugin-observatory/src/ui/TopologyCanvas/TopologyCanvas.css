@@ -43,6 +43,7 @@
   padding: 8px 12px;
   width: 100%;
   text-align: center;
+  outline: none;
 }
 
 .camera-btn:hover {

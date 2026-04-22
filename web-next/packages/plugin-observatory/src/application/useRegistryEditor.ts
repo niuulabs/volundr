@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import type { Registry } from '../domain';
+import type { Registry, EntityType } from '../domain';
+import type { EntityShape, EntityCategory } from '@niuulabs/domain';
 import { isDescendant, reparent } from '../domain/containment';
 
 export interface RegistryEditorState {
@@ -12,6 +13,10 @@ export interface RegistryEditorState {
    * if childId === newParentId.
    */
   tryReparent: (childId: string, newParentId: string) => boolean;
+  /** Update a field on the selected entity type. */
+  updateType: (id: string, patch: Partial<EntityType>) => void;
+  /** Create a new entity type and select it. */
+  createType: () => void;
 }
 
 export function useRegistryEditor(initial: Registry): RegistryEditorState {
@@ -27,10 +32,47 @@ export function useRegistryEditor(initial: Registry): RegistryEditorState {
     return true;
   };
 
+  const updateType = (id: string, patch: Partial<EntityType>) => {
+    setRegistry((r) => ({
+      ...r,
+      version: r.version + 1,
+      updatedAt: new Date().toISOString(),
+      types: r.types.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+    }));
+  };
+
+  const createType = () => {
+    const newId = `new-type-${Date.now()}`;
+    const newType: EntityType = {
+      id: newId,
+      label: 'New Type',
+      category: 'topology' as EntityCategory,
+      rune: '◇',
+      shape: 'ring' as EntityShape,
+      color: 'brand',
+      description: '',
+      parentTypes: [],
+      canContain: [],
+      icon: '',
+      size: 18,
+      border: 'solid',
+      fields: [],
+    };
+    setRegistry((r) => ({
+      ...r,
+      version: r.version + 1,
+      updatedAt: new Date().toISOString(),
+      types: [...r.types, newType],
+    }));
+    setSelectedId(newId);
+  };
+
   return {
     registry,
     selectedId,
     select: setSelectedId,
     tryReparent,
+    updateType,
+    createType,
   };
 }

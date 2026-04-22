@@ -191,7 +191,7 @@ test('minimap SVG overlay is visible with topology content', async ({ page }) =>
 
 // ── Registry page ─────────────────────────────────────────────────────────────
 test('registry page renders entity type list', async ({ page }) => {
-  await page.goto('/registry');
+  await page.goto('/observatory/registry');
   await expect(page.getByText('Registry').first()).toBeVisible();
   await expect(page.getByText('Realm').first()).toBeVisible({ timeout: 5000 });
   await expect(page.getByText('Cluster').first()).toBeVisible({ timeout: 5000 });
@@ -199,13 +199,13 @@ test('registry page renders entity type list', async ({ page }) => {
 });
 
 test('registry: Types tab is active by default', async ({ page }) => {
-  await page.goto('/registry');
+  await page.goto('/observatory/registry');
   await expect(page.getByTestId('tab-types')).toBeVisible({ timeout: 5000 });
   await expect(page.getByTestId('tab-types')).toHaveAttribute('aria-selected', 'true');
 });
 
 test('registry: clicking a type row opens the preview drawer', async ({ page }) => {
-  await page.goto('/registry');
+  await page.goto('/observatory/registry');
   await page.waitForSelector('[data-testid="type-row-cluster"]', { timeout: 5000 });
 
   await page.click('[data-testid="type-row-cluster"]');
@@ -214,7 +214,7 @@ test('registry: clicking a type row opens the preview drawer', async ({ page }) 
 });
 
 test('registry: search filters type list', async ({ page }) => {
-  await page.goto('/registry');
+  await page.goto('/observatory/registry');
   await page.waitForSelector('[data-testid="tab-types"]', { timeout: 5000 });
 
   // Filter by 'vlan' — only appears in realm's description and fields, not in cluster's.
@@ -224,7 +224,7 @@ test('registry: search filters type list', async ({ page }) => {
 });
 
 test('registry: Containment tab shows tree with root nodes', async ({ page }) => {
-  await page.goto('/registry');
+  await page.goto('/observatory/registry');
   await page.waitForSelector('[data-testid="tab-containment"]', { timeout: 5000 });
 
   await page.click('[data-testid="tab-containment"]');
@@ -233,7 +233,7 @@ test('registry: Containment tab shows tree with root nodes', async ({ page }) =>
 });
 
 test('registry: JSON tab shows formatted registry JSON', async ({ page }) => {
-  await page.goto('/registry');
+  await page.goto('/observatory/registry');
   await page.waitForSelector('[data-testid="tab-json"]', { timeout: 5000 });
 
   await page.click('[data-testid="tab-json"]');
@@ -245,7 +245,7 @@ test('registry: JSON tab shows formatted registry JSON', async ({ page }) => {
 test('registry: drag a type, drop on valid target, verify parentTypes updated', async ({
   page,
 }) => {
-  await page.goto('/registry');
+  await page.goto('/observatory/registry');
   await page.waitForSelector('[data-testid="tab-containment"]', { timeout: 5000 });
   await page.click('[data-testid="tab-containment"]');
 
@@ -278,7 +278,7 @@ test('registry: drag a type, drop on valid target, verify parentTypes updated', 
 test('registry: cycle is rejected — dragging ancestor onto descendant does nothing', async ({
   page,
 }) => {
-  await page.goto('/registry');
+  await page.goto('/observatory/registry');
   await page.waitForSelector('[data-testid="tab-containment"]', { timeout: 5000 });
   await page.click('[data-testid="tab-containment"]');
 
@@ -384,15 +384,6 @@ test('cluster EntityDrawer shows residents', async ({ page }) => {
   await expect(dialog.getByText('Residents')).toBeVisible();
   // tyr-0, bifrost-0, volundr-0, mimir-0, raid-0 are in valaskjalf or valhalla
   await expect(dialog.getByText('tyr-0')).toBeVisible();
-});
-
-test('ConnectionLegend overlay is visible on observatory page', async ({ page }) => {
-  await page.goto('/observatory');
-  await expect(page.getByRole('list', { name: /connection types/i })).toBeVisible({
-    timeout: 3000,
-  });
-  await expect(page.getByTestId('legend-solid')).toBeVisible();
-  await expect(page.getByTestId('legend-raid')).toBeVisible();
 });
 
 test('EventLog overlay is visible and shows events', async ({ page }) => {

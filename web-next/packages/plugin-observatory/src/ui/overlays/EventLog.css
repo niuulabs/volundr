@@ -15,13 +15,13 @@
   pointer-events: none;
 }
 
-/* Inner panel: inset from left and offset 320px from right to clear the drawer */
+/* Inner panel: inset from left, clear minimap (200px) + drawer (320px) on right */
 .obs-event-log__inner {
   position: absolute;
   left: var(--space-4);
-  right: 320px;
+  right: 200px;
   bottom: var(--space-3);
-  height: 80px;
+  height: 90px;
   overflow: hidden;
   background: color-mix(in srgb, var(--color-bg-secondary) 90%, transparent);
   border: 1px solid var(--color-border-subtle);
@@ -80,8 +80,19 @@
 .obs-event-log__type--bifrost {
   color: var(--color-accent-emerald);
 }
+.obs-event-log__header {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+  flex-shrink: 0;
+}
 .obs-event-log__subject {
-  color: var(--color-text-secondary);
+  color: var(--brand-300, var(--color-accent-cyan));
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

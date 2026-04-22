@@ -10,6 +10,10 @@ export const observatoryPlugin = definePlugin({
   rune: 'ᚠ',
   title: 'Observatory',
   subtitle: 'live topology · registry',
+  tabs: [
+    { id: 'topology', label: 'Topology', rune: '◎', path: '/observatory' },
+    { id: 'registry', label: 'Registry', rune: 'ᛗ', path: '/observatory/registry' },
+  ],
   routes: (rootRoute) => [
     createRoute({
       getParentRoute: () => rootRoute,
@@ -18,7 +22,7 @@ export const observatoryPlugin = definePlugin({
     }),
     createRoute({
       getParentRoute: () => rootRoute,
-      path: '/registry',
+      path: '/observatory/registry',
       component: RegistryPage,
     }),
   ],

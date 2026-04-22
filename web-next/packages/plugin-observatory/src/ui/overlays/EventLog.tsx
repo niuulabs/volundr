@@ -29,6 +29,7 @@ export function EventLog({ events, 'data-testid': testId }: EventLogProps) {
     // pointer-events: none lets canvas clicks pass through the wrapper (set in EventLog.css)
     <div className="obs-event-log" data-testid={testId ?? 'event-log'}>
       <div className="obs-event-log__inner" ref={scrollRef}>
+        <div className="obs-event-log__header">Event stream</div>
         {events.length === 0 ? (
           <span className="obs-event-log__empty">no events</span>
         ) : (
