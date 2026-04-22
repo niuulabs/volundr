@@ -140,16 +140,16 @@ function BatchDispatchBar({
         <button
           type="button"
           onClick={onApplyWorkflow}
-          className="niuu-px-3 niuu-py-1.5 niuu-text-xs niuu-border niuu-border-border niuu-rounded-md niuu-text-text-secondary hover:niuu-text-text-primary niuu-bg-transparent niuu-transition-colors"
+          className="niuu-py-1 niuu-px-3 niuu-bg-bg-secondary niuu-text-text-secondary niuu-border niuu-border-border niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs"
         >
-          Apply workflow
+          Apply workflow…
         </button>
       )}
       {onOverrideThreshold && (
         <button
           type="button"
           onClick={onOverrideThreshold}
-          className="niuu-px-3 niuu-py-1.5 niuu-text-xs niuu-border niuu-border-border niuu-rounded-md niuu-text-text-secondary hover:niuu-text-text-primary niuu-bg-transparent niuu-transition-colors"
+          className="niuu-py-1 niuu-px-3 niuu-bg-bg-secondary niuu-text-text-secondary niuu-border niuu-border-border niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs"
         >
           Override threshold
         </button>
@@ -162,14 +162,14 @@ function BatchDispatchBar({
             onDispatch();
           }}
           className={cn(
-            'niuu-rounded-md niuu-px-4 niuu-py-1.5 niuu-text-sm niuu-font-medium niuu-transition-colors',
+            'niuu-py-1 niuu-px-3 niuu-rounded-sm niuu-font-mono niuu-text-xs niuu-border niuu-cursor-pointer',
             canDispatch && !isDispatching
-              ? 'niuu-bg-brand niuu-text-bg-primary hover:niuu-bg-brand-600'
-              : 'niuu-cursor-not-allowed niuu-opacity-50 niuu-bg-bg-tertiary niuu-text-text-muted',
+              ? 'niuu-bg-brand niuu-text-bg-primary niuu-border-brand'
+              : 'niuu-cursor-not-allowed niuu-opacity-50 niuu-bg-bg-tertiary niuu-text-text-muted niuu-border-border-subtle',
           )}
           aria-disabled={!canDispatch || isDispatching}
         >
-          {isDispatching ? 'Dispatching…' : 'Dispatch now'}
+          {isDispatching ? 'Dispatching…' : '⚡ Dispatch now'}
         </button>
       </Tooltip>
     </div>
@@ -184,10 +184,12 @@ function SagaGroupHeader({
   sagaName,
   trackerId,
   featureBranch,
+  raidCount,
 }: {
   sagaName: string;
   trackerId: string;
   featureBranch: string;
+  raidCount: number;
 }) {
   return (
     <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-px-4 niuu-py-2 niuu-bg-bg-tertiary niuu-border-b niuu-border-border-subtle niuu-sticky niuu-top-0 niuu-z-10">
@@ -195,8 +197,8 @@ function SagaGroupHeader({
         {trackerId}
       </span>
       <span className="niuu-text-sm niuu-font-medium niuu-text-text-primary">{sagaName}</span>
-      <span className="niuu-text-xs niuu-font-mono niuu-text-text-faint niuu-ml-auto">
-        {featureBranch}
+      <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-ml-auto">
+        {raidCount} queued · {featureBranch}
       </span>
     </div>
   );
@@ -228,14 +230,15 @@ function RaidRow({
         type="checkbox"
         checked={isSelected}
         onChange={onToggle}
-        className="niuu-rounded niuu-border-border"
+        className="niuu-w-4 niuu-h-4 niuu-rounded-sm niuu-border niuu-border-border niuu-bg-bg-tertiary niuu-accent-brand niuu-cursor-pointer niuu-shrink-0"
         aria-label="Select row"
       />
       <div className="niuu-flex-1 niuu-min-w-0">
         <div className="niuu-text-sm niuu-text-text-primary niuu-truncate">{entry.raid.name}</div>
         <div className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-mt-0.5">
           {entry.raid.trackerId}
-          {entry.raid.estimateHours != null && ` · ~${entry.raid.estimateHours}h`}
+          {entry.raid.estimateHours != null && ` · est ${entry.raid.estimateHours}h`}
+          {entry.raid.retryCount != null && entry.raid.retryCount > 0 && ` · retry ${entry.raid.retryCount}`}
         </div>
       </div>
       <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-shrink-0">
@@ -291,12 +294,11 @@ function DispatchRulesPanel({
   onEdit: () => void;
 }) {
   const rules = [
-    { label: 'Confidence threshold', value: `${threshold}%` },
-    { label: 'Concurrent cap', value: String(maxConcurrentRaids) },
+    { label: 'Confidence threshold', value: `≥ ${(threshold / 100).toFixed(2)}` },
+    { label: 'Max concurrent', value: String(maxConcurrentRaids) },
     { label: 'Auto-continue', value: autoContinue ? 'on' : 'off' },
-    { label: 'Retries', value: String(retryCount) },
-    { label: 'Quiet hours', value: 'none' },
-    { label: 'Escalation', value: 'notify' },
+    { label: 'Retry on fail', value: `up to ${retryCount}` },
+    { label: 'Quiet hours', value: '22:00 – 07:00' },
   ];
 
   return (
@@ -313,16 +315,16 @@ function DispatchRulesPanel({
           <button
             type="button"
             onClick={onEdit}
-            className="niuu-text-xs niuu-border niuu-border-border niuu-rounded-md niuu-px-2 niuu-py-1 niuu-text-text-secondary hover:niuu-text-text-primary niuu-bg-transparent niuu-transition-colors"
+            className="niuu-py-1 niuu-px-3 niuu-bg-bg-secondary niuu-text-text-secondary niuu-border niuu-border-border niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs"
           >
             Edit
           </button>
         </div>
-        <dl className="niuu-grid niuu-grid-cols-2 niuu-gap-x-4 niuu-gap-y-2 niuu-text-xs niuu-m-0">
+        <dl className="niuu-flex niuu-flex-col niuu-gap-2 niuu-text-xs niuu-m-0">
           {rules.map((r) => (
-            <div key={r.label}>
-              <dt className="niuu-text-text-muted niuu-mb-0.5">{r.label}</dt>
-              <dd className="niuu-m-0 niuu-font-mono niuu-text-text-primary">{r.value}</dd>
+            <div key={r.label} className="niuu-flex niuu-justify-between niuu-items-baseline">
+              <dt className="niuu-text-text-muted">{r.label}</dt>
+              <dd className="niuu-m-0 niuu-font-mono niuu-text-text-primary niuu-font-semibold">{r.value}</dd>
             </div>
           ))}
         </dl>
@@ -672,6 +674,7 @@ function DispatchViewContent() {
                     sagaName={group.sagaName}
                     trackerId={group.trackerId}
                     featureBranch={group.featureBranch}
+                    raidCount={group.entries.length}
                   />
                   {group.entries.map((entry) => (
                     <RaidRow
