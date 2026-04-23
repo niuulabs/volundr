@@ -55,5 +55,8 @@ test('ravn budget matches web2', async ({ page }) => {
 test('ravn personas matches web2', async ({ page }) => {
   await page.getByTestId('ravn-tab-personas').click();
   await page.waitForSelector('[data-testid="personas-page"]', { timeout: 5_000 });
+  // Select "reviewer" persona to show the form (matches web2 baseline)
+  await page.getByText('reviewer', { exact: true }).first().click();
+  await page.waitForTimeout(300);
   await expect(page).toHaveScreenshot('ravn-personas.png');
 });
