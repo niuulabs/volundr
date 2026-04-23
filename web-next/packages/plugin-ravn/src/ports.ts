@@ -68,6 +68,7 @@ export interface PersonaDetail extends PersonaSummary {
   fanIn?: PersonaFanIn;
   mimirWriteRouting?: 'local' | 'shared' | 'domain';
   yamlSource: string;
+  overrideSource?: string;
 }
 
 export interface PersonaCreateRequest {

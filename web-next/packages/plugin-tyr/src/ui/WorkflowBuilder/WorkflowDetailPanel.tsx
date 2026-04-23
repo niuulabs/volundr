@@ -24,13 +24,18 @@ export function WorkflowDetailPanel({ workflow, errorCount, warnCount }: Workflo
   return (
     <div
       data-testid="workflow-detail-panel"
-      className="niuu-w-[260px] niuu-shrink-0 niuu-border-l niuu-border-border niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-y-auto"
+      className="niuu-w-[280px] niuu-shrink-0 niuu-border-l niuu-border-border niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-y-auto"
     >
       {/* Header */}
       <div className="niuu-px-4 niuu-pt-3 niuu-pb-2 niuu-border-b niuu-border-border">
-        <span className="niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-font-sans">
-          Workflow
-        </span>
+        <div className="niuu-flex niuu-flex-col niuu-gap-0.5">
+          <span className="niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-font-sans">
+            Workflow
+          </span>
+          <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-faint">
+            Inspector and release summary
+          </span>
+        </div>
       </div>
 
       <div className="niuu-px-4 niuu-py-3 niuu-flex niuu-flex-col niuu-gap-4">
@@ -98,6 +103,26 @@ export function WorkflowDetailPanel({ workflow, errorCount, warnCount }: Workflo
                 {warnCount} WARN
               </span>
             )}
+          </div>
+        </div>
+
+        <div>
+          <label className="niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-widest niuu-text-text-muted niuu-font-sans niuu-block niuu-mb-1">
+            OPERATIONS
+          </label>
+          <div className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-px-3 niuu-py-2.5 niuu-flex niuu-flex-col niuu-gap-2">
+            <div className="niuu-flex niuu-items-center niuu-justify-between niuu-text-[10px] niuu-font-mono niuu-text-text-faint">
+              <span>default lane</span>
+              <span>ship/mainline</span>
+            </div>
+            <div className="niuu-flex niuu-items-center niuu-justify-between niuu-text-[10px] niuu-font-mono niuu-text-text-faint">
+              <span>validation</span>
+              <span>{errorCount > 0 ? 'blocked' : warnCount > 0 ? 'review' : 'ready'}</span>
+            </div>
+            <div className="niuu-flex niuu-items-center niuu-justify-between niuu-text-[10px] niuu-font-mono niuu-text-text-faint">
+              <span>last saved</span>
+              <span>mock fixture</span>
+            </div>
           </div>
         </div>
       </div>

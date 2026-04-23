@@ -54,7 +54,7 @@ export function SearchPage() {
       {/* Search header bar */}
       <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-px-5 niuu-py-4 niuu-border-b niuu-border-border-subtle">
         <input
-          className="niuu-flex-1 niuu-px-3 niuu-py-2 niuu-bg-bg-secondary niuu-rounded-sm niuu-text-text-primary niuu-font-mono niuu-text-[13px] niuu-outline-none"
+          className="niuu-flex-1 niuu-px-3 niuu-py-2.5 niuu-bg-bg-secondary niuu-rounded-sm niuu-text-text-primary niuu-font-mono niuu-text-[13px] niuu-outline-none"
           style={{ border: 'none' }}
           type="search"
           placeholder="Search pages across all mounts…"
@@ -85,9 +85,14 @@ export function SearchPage() {
             </button>
           ))}
         </div>
-        <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
-          {results.length} results
-        </span>
+        <div className="niuu-flex niuu-flex-col niuu-items-end niuu-gap-0.5">
+          <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+            {results.length} results
+          </span>
+          <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint">
+            mount-aware ranking
+          </span>
+        </div>
       </div>
 
       {isLoading && (

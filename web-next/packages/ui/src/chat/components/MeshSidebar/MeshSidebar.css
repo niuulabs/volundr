@@ -1,7 +1,7 @@
 .niuu-chat-mesh-sidebar {
   display: flex;
   flex-direction: column;
-  width: 200px;
+  width: 228px;
   min-width: 0;
   background-color: var(--color-bg-secondary);
   border-right: 1px solid var(--color-border-subtle);
@@ -45,21 +45,21 @@
 }
 
 .niuu-chat-peer-card {
-  padding: var(--space-2) var(--space-3);
+  padding: calc(var(--space-2) + 2px) var(--space-3);
   border-radius: var(--radius-sm);
-  border: 1px solid transparent;
+  border: 1px solid var(--color-border-subtle);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
 .niuu-chat-peer-card:hover {
   background-color: var(--color-bg-elevated);
-  border-color: var(--color-border-subtle);
+  border-color: var(--color-border);
 }
 
 .niuu-chat-peer-card--selected {
-  background-color: color-mix(in srgb, var(--color-brand) 10%, transparent);
-  border-color: color-mix(in srgb, var(--color-brand) 30%, transparent);
+  background-color: color-mix(in srgb, var(--color-brand) 10%, var(--color-bg-elevated));
+  border-color: color-mix(in srgb, var(--color-brand) 30%, var(--color-border-subtle));
 }
 
 .niuu-chat-peer-header {
@@ -91,7 +91,7 @@
 .niuu-chat-peer-name {
   font-size: var(--text-xs);
   font-family: var(--font-mono);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -102,7 +102,7 @@
 .niuu-chat-peer-status-label {
   font-size: 10px;
   font-family: var(--font-mono);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   flex-shrink: 0;
 }
 

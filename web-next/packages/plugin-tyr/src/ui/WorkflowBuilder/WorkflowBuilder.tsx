@@ -45,7 +45,7 @@ const VIEW_LABELS: Record<WorkflowView, string> = {
 };
 
 const ACTION_BTN =
-  'niuu-bg-transparent niuu-border niuu-border-solid niuu-border-border-subtle niuu-rounded niuu-text-text-secondary niuu-font-sans niuu-text-xs niuu-py-1 niuu-px-2.5 niuu-cursor-pointer niuu-whitespace-nowrap hover:niuu-border-border hover:niuu-text-text-primary niuu-transition-colors';
+  'niuu-bg-transparent niuu-border niuu-border-solid niuu-border-border-subtle niuu-rounded-md niuu-text-text-secondary niuu-font-sans niuu-text-xs niuu-py-1.5 niuu-px-3 niuu-cursor-pointer niuu-whitespace-nowrap hover:niuu-border-border hover:niuu-text-text-primary niuu-transition-colors';
 
 export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowBuilderProps) {
   const builder = useWorkflowBuilder(initialWorkflow);
@@ -92,13 +92,18 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
       {/* Center: header + action bar + canvas + bottom bar */}
       <div className="niuu-flex-1 niuu-flex niuu-flex-col niuu-min-w-0">
         {/* Header bar */}
-        <div className="niuu-flex niuu-items-center niuu-py-2 niuu-px-4 niuu-border-b niuu-border-border niuu-bg-bg-secondary niuu-shrink-0 niuu-gap-3">
-          <h3
-            className="niuu-m-0 niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-whitespace-nowrap"
-            data-testid="builder-title"
-          >
-            {workflow.name}
-          </h3>
+        <div className="niuu-flex niuu-items-start niuu-py-3 niuu-px-4 niuu-border-b niuu-border-border niuu-bg-bg-secondary niuu-shrink-0 niuu-gap-3">
+          <div className="niuu-flex niuu-flex-col niuu-gap-0.5 niuu-min-w-0">
+            <h3
+              className="niuu-m-0 niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-whitespace-nowrap"
+              data-testid="builder-title"
+            >
+              {workflow.name}
+            </h3>
+            <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-faint niuu-max-w-[320px] niuu-truncate">
+              {workflow.description || 'Release automation workflow'}
+            </span>
+          </div>
 
           {workflow.version && (
             <span
@@ -110,7 +115,7 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
           )}
 
           {/* View tabs */}
-          <div className="niuu-flex niuu-gap-0.5">
+          <div className="niuu-flex niuu-gap-1 niuu-self-center">
             {VIEWS.map((v) => (
               <button
                 key={v}
@@ -118,10 +123,10 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
                 data-active={view === v ? 'true' : undefined}
                 onClick={() => setView(v)}
                 className={cn(
-                  'niuu-rounded niuu-px-3 niuu-py-1 niuu-text-xs niuu-cursor-pointer niuu-font-sans niuu-border niuu-transition-colors',
+                  'niuu-rounded-md niuu-px-3.5 niuu-py-1.5 niuu-text-xs niuu-cursor-pointer niuu-font-sans niuu-border niuu-transition-colors',
                   view === v
                     ? 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary'
-                    : 'niuu-bg-transparent niuu-border-transparent niuu-text-text-muted',
+                    : 'niuu-bg-transparent niuu-border-border-subtle niuu-text-text-muted',
                 )}
               >
                 {VIEW_LABELS[v]}
@@ -130,7 +135,7 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
           </div>
 
           {/* Spacer + toolbar buttons */}
-          <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-ml-auto">
+          <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-ml-auto niuu-self-center">
             <button
               type="button"
               className="niuu-bg-transparent niuu-border-none niuu-text-text-muted niuu-cursor-pointer niuu-text-sm niuu-p-1 hover:niuu-text-text-secondary"
@@ -155,7 +160,7 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
 
         {/* Action bar */}
         <div
-          className="niuu-flex niuu-items-center niuu-gap-2 niuu-py-1.5 niuu-px-4 niuu-border-b niuu-border-border niuu-bg-bg-secondary niuu-shrink-0"
+          className="niuu-flex niuu-items-center niuu-gap-2 niuu-py-2 niuu-px-4 niuu-border-b niuu-border-border niuu-bg-bg-secondary niuu-shrink-0"
           data-testid="action-bar"
         >
           <button type="button" className={ACTION_BTN}>
@@ -168,14 +173,14 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
           )}
           <button
             type="button"
-            className="niuu-bg-transparent niuu-border niuu-border-solid niuu-border-brand niuu-rounded niuu-text-brand niuu-font-sans niuu-text-xs niuu-py-1 niuu-px-2.5 niuu-cursor-pointer niuu-whitespace-nowrap hover:niuu-bg-brand/10 niuu-transition-colors niuu-flex niuu-items-center niuu-gap-1"
+            className="niuu-bg-transparent niuu-border niuu-border-solid niuu-border-brand niuu-rounded-md niuu-text-brand niuu-font-sans niuu-text-xs niuu-py-1.5 niuu-px-3 niuu-cursor-pointer niuu-whitespace-nowrap hover:niuu-bg-brand/10 niuu-transition-colors niuu-flex niuu-items-center niuu-gap-1"
             data-testid="btn-test"
           >
             <span>▶</span> Test
           </button>
           <button
             type="button"
-            className="niuu-bg-transparent niuu-border niuu-border-solid niuu-border-status-amber niuu-rounded niuu-text-status-amber niuu-font-sans niuu-text-xs niuu-py-1 niuu-px-2.5 niuu-cursor-pointer niuu-whitespace-nowrap hover:niuu-bg-status-amber/10 niuu-transition-colors niuu-flex niuu-items-center niuu-gap-1"
+            className="niuu-bg-transparent niuu-border niuu-border-solid niuu-border-status-amber niuu-rounded-md niuu-text-status-amber niuu-font-sans niuu-text-xs niuu-py-1.5 niuu-px-3 niuu-cursor-pointer niuu-whitespace-nowrap hover:niuu-bg-status-amber/10 niuu-transition-colors niuu-flex niuu-items-center niuu-gap-1"
             data-testid="btn-dispatch"
           >
             <span>⚡</span> Dispatch

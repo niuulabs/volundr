@@ -58,19 +58,22 @@ function PodEntry({
       onClick={onSelect}
       data-testid={`pod-entry-${session.id}`}
       className={cn(
-        'niuu-flex niuu-w-full niuu-items-center niuu-gap-2 niuu-border-l-2 niuu-px-3 niuu-py-2 niuu-text-left niuu-transition-colors',
+        'niuu-flex niuu-w-full niuu-items-start niuu-gap-2.5 niuu-border-l-2 niuu-px-3 niuu-py-2.5 niuu-text-left niuu-transition-colors',
         selected
           ? 'niuu-border-brand niuu-bg-brand-subtle'
           : 'niuu-border-transparent hover:niuu-bg-bg-tertiary',
       )}
     >
       <StateDot state={SESSION_DOT[session.state]} pulse={session.state === 'running'} />
-      <div className="niuu-flex-1 niuu-min-w-0">
+      <div className="niuu-flex-1 niuu-min-w-0 niuu-flex niuu-flex-col niuu-gap-0.5">
         <div className="niuu-font-mono niuu-text-xs niuu-font-medium niuu-text-text-primary niuu-truncate">
           {session.id}
         </div>
         <div className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted niuu-truncate">
           {session.personaName} · {relTime(new Date(session.lastActivityAt ?? session.startedAt).getTime())}
+        </div>
+        <div className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint niuu-truncate">
+          {session.templateId} · {session.clusterId}
         </div>
       </div>
       {session.connectionType && (
@@ -99,7 +102,7 @@ function PodGroup({
 
   return (
     <div data-testid={`pod-group-${label.toLowerCase()}`}>
-      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-px-3 niuu-py-1.5 niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-wider niuu-text-text-muted">
+      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-px-3 niuu-py-1.5 niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-wider niuu-text-text-muted niuu-bg-bg-secondary/60">
         <span>{label}</span>
         <span className="niuu-font-mono niuu-text-text-faint" data-testid={`pod-group-${label.toLowerCase()}-count`}>
           {sessions.length}
@@ -166,12 +169,12 @@ export function SessionsPage() {
     <div className="niuu-flex niuu-h-full" data-testid="sessions-page">
       {/* ── Left sidebar: pod list ─────────────────────────────── */}
       <nav
-        className="niuu-flex niuu-w-64 niuu-shrink-0 niuu-flex-col niuu-border-r niuu-border-border-subtle niuu-bg-bg-secondary"
+        className="niuu-flex niuu-w-[280px] niuu-shrink-0 niuu-flex-col niuu-border-r niuu-border-border-subtle niuu-bg-bg-secondary"
         aria-label="Session list"
         data-testid="pod-list-sidebar"
       >
         {/* Header */}
-        <div className="niuu-px-3 niuu-pt-3 niuu-pb-1">
+        <div className="niuu-px-3 niuu-pt-3 niuu-pb-2">
           <div className="niuu-flex niuu-items-baseline niuu-gap-2">
             <h2 className="niuu-text-sm niuu-font-semibold niuu-text-text-primary">Pods</h2>
             <span
@@ -181,8 +184,8 @@ export function SessionsPage() {
               {allSessions.length}
             </span>
           </div>
-          <p className="niuu-text-[10px] niuu-text-text-faint">
-            filter in header · click to open
+          <p className="niuu-text-[10px] niuu-font-mono niuu-text-text-faint">
+            operator sessions · grouped by lifecycle
           </p>
         </div>
 

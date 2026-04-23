@@ -1864,6 +1864,13 @@
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
 }
+.rv-pr-head__override {
+  color: var(--color-accent-amber);
+  font-weight: 600;
+}
+.rv-pr-head__origin-path--override {
+  color: var(--color-accent-amber);
+}
 .rv-pr-head__right {
   display: flex;
   align-items: center;

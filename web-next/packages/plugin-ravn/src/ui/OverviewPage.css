@@ -74,17 +74,23 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  padding: calc(var(--space-2) + 2px) var(--space-3);
   background: var(--color-bg-secondary);
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
 }
 
+.rv-active-row__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 132px;
+  flex-shrink: 0;
+}
+
 .rv-active-row__name {
   font-size: var(--text-sm);
   font-weight: 600;
-  width: 90px;
-  flex-shrink: 0;
 }
 
 .rv-active-row__role {
@@ -111,7 +117,7 @@
 }
 
 .rv-active-row__bar {
-  width: 100px;
+  width: 120px;
   flex-shrink: 0;
 }
 

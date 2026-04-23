@@ -208,7 +208,10 @@ export function OverviewPage() {
                       {r.role && r.letter && (
                         <PersonaAvatar role={r.role} letter={r.letter} size={16} />
                       )}
-                      <span className="rv-active-row__name">{r.personaName}</span>
+                      <div className="rv-active-row__identity">
+                        <span className="rv-active-row__name">{r.personaName}</span>
+                        <span className="rv-active-row__model">{r.model}</span>
+                      </div>
                       <span className="rv-active-row__role">{r.role ?? ''}</span>
                       <span className="rv-active-row__loc">@ {r.location ?? '—'}</span>
                       <span className="rv-active-row__sessions">{ravnSessions} open</span>

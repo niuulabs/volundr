@@ -52,6 +52,12 @@ function PersonaDetailPane({ name, activeTab, onTabChange }: PersonaDetailPanePr
                 role: <strong>{persona.role}</strong>
                 <span className="rv-pr-head__sep">·</span>
                 {persona.isBuiltin ? 'builtin' : 'user-defined'}
+                {persona.hasOverride && (
+                  <>
+                    <span className="rv-pr-head__sep">·</span>
+                    <span className="rv-pr-head__override">override applied</span>
+                  </>
+                )}
               </div>
               <div className="rv-pr-head__origin">
                 <span className="rv-pr-head__origin-label">loaded from</span>
@@ -60,6 +66,14 @@ function PersonaDetailPane({ name, activeTab, onTabChange }: PersonaDetailPanePr
                     ? `volundr/src/ravn/personas/${persona.name}.yaml`
                     : persona.yamlSource}
                 </code>
+                {persona.overrideSource && (
+                  <>
+                    <span className="rv-pr-head__origin-label">then overridden by</span>
+                    <code className="rv-pr-head__origin-path rv-pr-head__origin-path--override">
+                      {persona.overrideSource}
+                    </code>
+                  </>
+                )}
               </div>
             </div>
           </div>

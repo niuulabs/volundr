@@ -43,7 +43,12 @@ function RavnListRow({
         pulse={ravn.status === 'active'}
         size={8}
       />
-      <span className="rv-list-row__name">{ravn.personaName}</span>
+      <div className="rv-list-row__copy">
+        <span className="rv-list-row__name">{ravn.personaName}</span>
+        <span className="rv-list-row__meta">
+          {ravn.role} · {ravn.location ?? 'unknown'} · {ravn.model}
+        </span>
+      </div>
       {budgetCap != null && budgetSpent != null && (
         <div className="rv-list-row__budget">
           <BudgetBar

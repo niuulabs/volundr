@@ -9,7 +9,7 @@
 }
 
 .mm-subnav-block {
-  padding: var(--space-3) var(--space-4);
+  padding: calc(var(--space-3) + 2px) var(--space-4);
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
@@ -45,10 +45,10 @@
   grid-template-columns: 8px 1fr auto;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 7px 9px;
   border-radius: var(--radius-sm);
   background: transparent;
-  border: 1px solid transparent;
+  border: 1px solid var(--color-border-subtle);
   color: var(--color-text-secondary);
   font-size: 12px;
   font-family: var(--font-mono);
@@ -60,6 +60,7 @@
 
 .mm-mount-row:hover {
   background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
 }
 
 .mm-mount-row--active {
@@ -118,10 +119,10 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 8px;
+  padding: 7px 9px;
   margin: 0;
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
   text-align: left;
   color: var(--color-text-secondary);
@@ -133,6 +134,7 @@
 .mm-subnav-btn:hover {
   background: var(--color-bg-tertiary);
   color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
 }
 
 .mm-subnav-btn--active {

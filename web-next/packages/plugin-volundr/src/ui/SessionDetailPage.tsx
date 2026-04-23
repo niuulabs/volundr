@@ -149,20 +149,22 @@ function SessionHeader({ session, readOnly }: { session: Session; readOnly: bool
   return (
     <header data-testid="session-header">
       {/* Main row */}
-      <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2">
+      <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2.5">
         <LifecycleBadge state={toLifecycleState(session.state)} />
-        <h1
-          className="niuu-font-mono niuu-text-sm niuu-font-medium niuu-text-text-primary"
-          data-testid="session-name"
-        >
-          {session.personaName}
-        </h1>
-        <span
-          className="niuu-font-mono niuu-text-xs niuu-text-text-muted"
-          data-testid="session-id-label"
-        >
-          {session.id}
-        </span>
+        <div className="niuu-flex niuu-flex-col niuu-gap-0.5">
+          <h1
+            className="niuu-font-mono niuu-text-sm niuu-font-medium niuu-text-text-primary"
+            data-testid="session-name"
+          >
+            {session.personaName}
+          </h1>
+          <span
+            className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted"
+            data-testid="session-id-label"
+          >
+            {session.id}
+          </span>
+        </div>
 
         {session.sagaId && (
           <a
@@ -261,7 +263,10 @@ function ThinkingBlock({ turn, peer }: { turn: ChatTurn; peer: PeerMeta | undefi
   const color = resolveParticipantColor(peer?.peerId ?? '');
 
   return (
-    <div className="niuu-my-1" data-testid="thinking-block">
+    <div
+      className="niuu-my-1.5 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary/60 niuu-px-3 niuu-py-2"
+      data-testid="thinking-block"
+    >
       <button
         className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-left niuu-text-xs"
         onClick={() => setOpen((v) => !v)}
@@ -295,7 +300,7 @@ function ToolRunBlock({ turns, room }: { turns: ChatTurn[]; room: MockRoom }) {
 
   return (
     <div
-      className="niuu-my-1 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary"
+      className="niuu-my-1.5 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary"
       data-testid="tool-run"
     >
       <button
@@ -322,7 +327,7 @@ function ToolRunBlock({ turns, room }: { turns: ChatTurn[]; room: MockRoom }) {
         )}
       </button>
       {open && (
-        <div className="niuu-border-t niuu-border-border-subtle niuu-px-3 niuu-py-2">
+        <div className="niuu-border-t niuu-border-border-subtle niuu-px-3 niuu-py-2.5">
           {turns.map((t) => (
             <div
               key={t.id}
@@ -352,7 +357,7 @@ function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
 
   if (turn.role === 'user') {
     return (
-      <div className="niuu-my-2 niuu-flex niuu-gap-3" data-testid="chat-turn-user">
+      <div className="niuu-my-2.5 niuu-flex niuu-gap-3" data-testid="chat-turn-user">
         <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">you</span>
         <div className="niuu-flex-1">
           {turn.directedTo && turn.directedTo.length > 0 && (
@@ -376,7 +381,7 @@ function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
 
   // assistant turn
   return (
-    <div className="niuu-my-2 niuu-flex niuu-gap-3" data-testid="chat-turn-assistant">
+    <div className="niuu-my-2.5 niuu-flex niuu-gap-3" data-testid="chat-turn-assistant">
       <span
         className="niuu-flex niuu-h-6 niuu-w-6 niuu-flex-shrink-0 niuu-items-center niuu-justify-center niuu-rounded-full niuu-font-mono niuu-text-xs"
         style={{ backgroundColor: color, color: '#000' }}
@@ -404,7 +409,7 @@ function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
         <div className="niuu-text-sm niuu-text-text-primary">{turn.content}</div>
         {turn.outcome && (
           <div
-            className="niuu-mt-2 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-p-2"
+            className="niuu-mt-2 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-p-2.5"
             data-testid="outcome-card"
           >
             <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-xs">
@@ -441,7 +446,7 @@ function ChatInput({ participants }: { participants: RoomParticipant[] }) {
   const [permission, setPermission] = useState<'restricted' | 'open'>('restricted');
 
   return (
-    <div className="niuu-border-t niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2 niuu-shrink-0">
+    <div className="niuu-border-t niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2.5 niuu-shrink-0">
       {/* Direct-to chips */}
       <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-mb-1.5 niuu-text-[10px] niuu-text-text-muted">
         <span className="niuu-uppercase niuu-tracking-wider">direct to</span>
@@ -501,10 +506,10 @@ function ChatStream({ groups, room }: { groups: TurnGroup[]; room: MockRoom }) {
 
   return (
     <div
-      className="niuu-flex niuu-flex-1 niuu-flex-col niuu-overflow-hidden"
+      className="niuu-flex niuu-flex-1 niuu-flex-col niuu-overflow-hidden niuu-border-x niuu-border-border-subtle"
       data-testid="chat-stream"
     >
-      <div className="niuu-flex-1 niuu-overflow-y-auto niuu-px-4 niuu-py-2" ref={scrollRef}>
+      <div className="niuu-flex-1 niuu-overflow-y-auto niuu-px-5 niuu-py-3" ref={scrollRef}>
         {groups.map((g, i) => {
           if (g.kind === 'toolrun') {
             return <ToolRunBlock key={i} turns={g.turns} room={room} />;
@@ -552,10 +557,10 @@ function MeshCascade({
 
   return (
     <div
-      className="niuu-flex niuu-w-56 niuu-flex-col niuu-border-l niuu-border-border-subtle niuu-bg-bg-secondary"
+      className="niuu-flex niuu-w-[272px] niuu-flex-col niuu-border-l niuu-border-border-subtle niuu-bg-bg-secondary"
       data-testid="mesh-cascade"
     >
-      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-px-3 niuu-py-2">
+      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-px-3 niuu-py-2.5">
         <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-wider niuu-text-text-muted">
           mesh cascade
         </span>
@@ -569,7 +574,7 @@ function MeshCascade({
           <button
             key={f.id}
             className={cn(
-              'niuu-rounded niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-[10px]',
+              'niuu-rounded-md niuu-px-2 niuu-py-1 niuu-font-mono niuu-text-[10px]',
               filter === f.id
                 ? 'niuu-bg-bg-elevated niuu-text-brand'
                 : 'niuu-text-text-muted hover:niuu-text-text-secondary',
@@ -640,7 +645,7 @@ function ChatTab({ session }: { session: Session }) {
   }
 
   return (
-    <div className="niuu-flex niuu-h-full" data-testid="chat-tab">
+    <div className="niuu-flex niuu-h-full niuu-bg-bg-primary" data-testid="chat-tab">
       <MeshSidebar
         participants={participantMap}
         selectedPeerId={focusPeer}
@@ -1305,8 +1310,8 @@ export function SessionDetailPage({
               onClick={() => setActiveTab(tab.id)}
               className={
                 activeTab === tab.id
-                  ? 'niuu-border-b-2 niuu-border-brand niuu-px-4 niuu-py-2 niuu-text-sm niuu-font-medium niuu-text-brand'
-                  : 'niuu-border-b-2 niuu-border-transparent niuu-px-4 niuu-py-2 niuu-text-sm niuu-text-text-muted hover:niuu-text-text-secondary'
+                  ? 'niuu-border-b-2 niuu-border-brand niuu-px-4 niuu-py-2.5 niuu-text-sm niuu-font-medium niuu-text-brand'
+                  : 'niuu-border-b-2 niuu-border-transparent niuu-px-4 niuu-py-2.5 niuu-text-sm niuu-text-text-muted hover:niuu-text-text-secondary'
               }
             >
               {tab.label}

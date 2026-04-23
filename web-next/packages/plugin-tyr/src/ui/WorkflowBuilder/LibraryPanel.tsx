@@ -49,6 +49,15 @@ const ROLE_INITIALS: Record<string, string> = {
   ship: 'S',
 };
 
+const ROLE_HINTS: Record<string, string> = {
+  plan: 'goal decomposition',
+  build: 'implementation crew',
+  verify: 'checks and evidence',
+  review: 'release scrutiny',
+  gate: 'human approvals',
+  ship: 'handoff and release',
+};
+
 const ROLE_BG: Record<string, string> = {
   plan: 'niuu-border-status-cyan niuu-text-status-cyan',
   build: 'niuu-border-brand niuu-text-brand',
@@ -82,13 +91,18 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
   return (
     <div
       data-testid="library-panel"
-      className="niuu-w-[220px] niuu-shrink-0 niuu-border-r niuu-border-border niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-hidden"
+      className="niuu-w-[244px] niuu-shrink-0 niuu-border-r niuu-border-border niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-hidden"
     >
       {/* Header */}
-      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-px-4 niuu-pt-3 niuu-pb-2">
-        <span className="niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-font-sans">
-          Library
-        </span>
+      <div className="niuu-flex niuu-items-start niuu-justify-between niuu-px-4 niuu-pt-3 niuu-pb-2">
+        <div className="niuu-flex niuu-flex-col niuu-gap-0.5">
+          <span className="niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-font-sans">
+            Library
+          </span>
+          <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-faint">
+            Blocks, personas, lane starters
+          </span>
+        </div>
         <button
           type="button"
           className="niuu-bg-transparent niuu-border-none niuu-text-text-muted niuu-cursor-pointer niuu-text-sm niuu-p-0 hover:niuu-text-text-secondary"
@@ -105,7 +119,7 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           data-testid="library-search"
-          className="niuu-w-full niuu-py-1.5 niuu-px-2.5 niuu-bg-bg-tertiary niuu-border niuu-border-solid niuu-border-border-subtle niuu-rounded niuu-text-text-secondary niuu-font-sans niuu-text-xs niuu-outline-none niuu-box-border"
+          className="niuu-w-full niuu-py-2 niuu-px-2.5 niuu-bg-bg-tertiary niuu-border niuu-border-solid niuu-border-border-subtle niuu-rounded-md niuu-text-text-secondary niuu-font-sans niuu-text-xs niuu-outline-none niuu-box-border"
         />
       </div>
 
@@ -114,18 +128,25 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
         {/* Blocks */}
         {!search && (
           <>
-            <div className="niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-widest niuu-text-text-muted niuu-font-sans niuu-mb-1 niuu-mt-1">
+            <div className="niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-[0.24em] niuu-text-text-muted niuu-font-sans niuu-mb-1 niuu-mt-1">
               BLOCKS
             </div>
-            <div className="niuu-flex niuu-flex-col niuu-gap-0.5 niuu-mb-3">
+            <div className="niuu-flex niuu-flex-col niuu-gap-1 niuu-mb-3">
               {BLOCKS.map((b) => (
                 <div
                   key={b.id}
                   draggable
-                  className="niuu-py-1.5 niuu-px-2.5 niuu-bg-bg-elevated niuu-rounded niuu-cursor-grab niuu-text-xs niuu-text-text-primary niuu-font-sans niuu-select-none niuu-flex niuu-items-center niuu-gap-2"
+                  className="niuu-py-2 niuu-px-3 niuu-bg-bg-elevated niuu-rounded-md niuu-border niuu-border-border-subtle niuu-cursor-grab niuu-text-xs niuu-text-text-primary niuu-font-sans niuu-select-none niuu-flex niuu-items-center niuu-gap-2.5"
                 >
-                  <span className="niuu-text-text-muted niuu-text-xs">{b.icon}</span>
-                  <span>{b.label}</span>
+                  <span className="niuu-inline-flex niuu-items-center niuu-justify-center niuu-w-6 niuu-h-6 niuu-rounded-sm niuu-bg-bg-tertiary niuu-text-text-muted niuu-text-xs">
+                    {b.icon}
+                  </span>
+                  <div className="niuu-flex niuu-flex-col niuu-leading-tight">
+                    <span className="niuu-font-semibold">{b.label}</span>
+                    <span className="niuu-text-[10px] niuu-text-text-faint niuu-font-mono">
+                      drag to stage
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -135,15 +156,20 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
         {/* Persona groups */}
         {groups.map(([role, entries]) => (
           <div key={role}>
-            <div className="niuu-flex niuu-items-center niuu-justify-between niuu-mb-1 niuu-mt-2">
-              <span className="niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-widest niuu-text-text-muted niuu-font-sans">
-                {role}
-              </span>
-              <span className="niuu-text-[10px] niuu-text-text-faint niuu-font-mono">
+            <div className="niuu-flex niuu-items-start niuu-justify-between niuu-gap-2 niuu-mb-1 niuu-mt-2 niuu-px-0.5">
+              <div className="niuu-flex niuu-flex-col niuu-gap-0.5">
+                <span className="niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-[0.24em] niuu-text-text-muted niuu-font-sans">
+                  {role}
+                </span>
+                <span className="niuu-text-[10px] niuu-text-text-faint niuu-font-mono">
+                  {ROLE_HINTS[role] ?? 'workflow participants'}
+                </span>
+              </div>
+              <span className="niuu-text-[10px] niuu-text-text-faint niuu-font-mono niuu-mt-0.5">
                 {entries.length}
               </span>
             </div>
-            <div className="niuu-flex niuu-flex-col niuu-gap-0.5">
+            <div className="niuu-flex niuu-flex-col niuu-gap-1">
               {entries.map((persona) => (
                 <div
                   key={persona.id}
@@ -153,20 +179,24 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
                     e.dataTransfer.setData('application/niuu-persona-id', persona.id);
                     e.dataTransfer.effectAllowed = 'copy';
                   }}
-                  className="niuu-py-1.5 niuu-px-2.5 niuu-bg-bg-elevated niuu-rounded niuu-cursor-grab niuu-text-xs niuu-text-text-primary niuu-font-sans niuu-select-none niuu-flex niuu-items-center niuu-gap-2"
+                  className="niuu-py-2 niuu-px-3 niuu-bg-bg-elevated niuu-rounded-md niuu-border niuu-border-border-subtle niuu-cursor-grab niuu-text-xs niuu-text-text-primary niuu-font-sans niuu-select-none niuu-flex niuu-items-start niuu-gap-2.5"
                 >
                   <span
-                    className={`niuu-inline-flex niuu-items-center niuu-justify-center niuu-w-5 niuu-h-5 niuu-rounded-full niuu-border niuu-text-[9px] niuu-font-bold niuu-shrink-0 niuu-bg-transparent ${ROLE_BG[persona.role] ?? 'niuu-border-border niuu-text-text-muted'}`}
+                    className={`niuu-inline-flex niuu-items-center niuu-justify-center niuu-w-6 niuu-h-6 niuu-rounded-full niuu-border niuu-text-[9px] niuu-font-bold niuu-shrink-0 niuu-bg-transparent niuu-mt-0.5 ${ROLE_BG[persona.role] ?? 'niuu-border-border niuu-text-text-muted'}`}
                   >
                     {ROLE_INITIALS[persona.role] ?? persona.role.charAt(0).toUpperCase()}
                   </span>
-                  <div className="niuu-flex niuu-flex-col niuu-leading-tight">
-                    <span className="niuu-text-text-primary niuu-font-semibold">
+                  <div className="niuu-flex niuu-flex-col niuu-leading-tight niuu-min-w-0 niuu-flex-1">
+                    <span className="niuu-text-text-primary niuu-font-semibold niuu-truncate">
                       {persona.label}
                     </span>
-                    <span className="niuu-text-[10px] niuu-text-text-muted">{persona.role}</span>
+                    <span className="niuu-text-[10px] niuu-text-text-muted niuu-font-mono">
+                      {persona.role} lane
+                    </span>
                   </div>
-                  <span className="niuu-ml-auto niuu-text-text-faint niuu-text-[10px]">⇔</span>
+                  <span className="niuu-ml-auto niuu-text-text-faint niuu-text-[10px] niuu-font-mono niuu-mt-0.5">
+                    ⇔
+                  </span>
                 </div>
               ))}
             </div>

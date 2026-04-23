@@ -207,6 +207,7 @@ export function buildMockTurns(_session: Session, room: MockRoom): ChatTurn[] {
       role: 'user',
       peerId: 'human',
       content: 'Run the tests to make sure everything passes',
+      directedTo: [mainPeer.peerId, 'reviewer-1'],
       ts: now - 400_000,
     },
     {
@@ -233,6 +234,42 @@ export function buildMockTurns(_session: Session, room: MockRoom): ChatTurn[] {
         verdict: 'pass',
         eventType: 'test.result',
         summary: 'All tests passing',
+      },
+    },
+    {
+      id: 't-9',
+      role: 'thinking',
+      peerId: 'reviewer-1',
+      content:
+        'Tests passed. I should verify the auth handler also checks issuer and audience before approving this change.',
+      ms: 680,
+      ts: now - 300_000,
+    },
+    {
+      id: 't-10',
+      role: 'tool',
+      peerId: 'reviewer-1',
+      content: '',
+      tool: 'search_files',
+      args: 'issuer audience src/auth',
+      output: 'src/auth/jwt.ts: validates exp, iss, aud',
+      status: 'ok',
+      dur: '61ms',
+      ts: now - 292_000,
+    },
+    {
+      id: 't-11',
+      role: 'assistant',
+      peerId: 'reviewer-1',
+      content:
+        'Reviewer pass: issuer and audience checks are present, and the test run covered the JWT path without regressions.',
+      tokens: 218,
+      ms: 1040,
+      ts: now - 284_000,
+      outcome: {
+        verdict: 'verified',
+        eventType: 'outcome.review',
+        summary: 'Reviewer verified issuer and audience coverage',
       },
     },
   ];

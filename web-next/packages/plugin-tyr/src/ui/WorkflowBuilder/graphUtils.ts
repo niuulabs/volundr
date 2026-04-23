@@ -12,13 +12,13 @@ import type { WorkflowNode, WorkflowEdge } from '../../domain/workflow';
 // Node geometry constants
 // ---------------------------------------------------------------------------
 
-export const STAGE_WIDTH = 140;
-export const STAGE_HEIGHT = 56;
-export const GATE_SIZE = 64; // diamond bounding box
-export const COND_RADIUS = 30; // circle radius
+export const STAGE_WIDTH = 172;
+export const STAGE_HEIGHT = 68;
+export const GATE_SIZE = 76; // diamond bounding box
+export const COND_RADIUS = 34; // circle radius
 
 /** Default bezier control-point offset (pixels). */
-const CP_OFFSET = 80;
+const CP_OFFSET = 92;
 
 // ---------------------------------------------------------------------------
 // ID generation
