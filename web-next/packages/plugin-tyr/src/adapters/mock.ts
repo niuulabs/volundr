@@ -37,10 +37,111 @@ import type { TrackerProject, TrackerMilestone, TrackerIssue } from '../domain/t
 import type { Workflow } from '../domain/workflow';
 
 // ---------------------------------------------------------------------------
+// Seed helpers
+// ---------------------------------------------------------------------------
+
+let _raidSeq = 0;
+function mkRaid(overrides: Partial<Raid> & Pick<Raid, 'id' | 'phaseId' | 'name' | 'status'>): Raid {
+  _raidSeq++;
+  // Varied defaults matching web2 prototype data
+  const confidencePool = [92, 85, 78, 55, 72, 68, 44, 80, 61, 90];
+  const estimatePool = [1, 0.25, 0.5, 2, 3, 1.5, 4, 0.5, 1, 2];
+  const waitPool = [2, 0, 14, 48, 0, 6, 0, 22, 0, 3];
+  const idx = (_raidSeq - 1) % 10;
+  const now = new Date();
+  const updatedAt = new Date(now.getTime() - (waitPool[idx]! * 60_000)).toISOString();
+  // Derive per-raid tracker ID from parent saga's trackerId if not provided
+  const parentTrackerId = overrides.trackerId || '';
+  return {
+    trackerId: parentTrackerId,
+    description: '',
+    acceptanceCriteria: [],
+    declaredFiles: [],
+    estimateHours: estimatePool[idx]!,
+    confidence: confidencePool[idx]!,
+    sessionId: null,
+    reviewerSessionId: null,
+    reviewRound: 0,
+    branch: null,
+    chronicleSummary: null,
+    retryCount: 0,
+    createdAt: '2026-01-15T00:00:00Z',
+    updatedAt,
+    ...overrides,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Seed data
 // ---------------------------------------------------------------------------
 
 const SEED_SAGAS: Saga[] = [
+  // ── Dashboard-visible active sagas (web2 baseline) ──
+  {
+    id: '00000000-0000-0000-0000-000000000004',
+    trackerId: 'NIU-214',
+    trackerType: 'linear',
+    slug: 'flokk-subscription-validation',
+    name: 'Flokk subscription validation',
+    repos: ['niuulabs/volundr'],
+    featureBranch: 'feat/flokk-subs',
+    baseBranch: 'main',
+    status: 'active',
+    confidence: 82,
+    createdAt: '2026-01-20T05:00:00Z',
+    phaseSummary: { total: 4, completed: 1 },
+    workflow: 'ship',
+    workflowVersion: '1.4.2',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000005',
+    trackerId: 'NIU-199',
+    trackerType: 'linear',
+    slug: 'observatory-canvas-realms',
+    name: 'Observatory canvas realms overlay',
+    repos: ['niuulabs/volundr'],
+    featureBranch: 'feat/canvas-realms',
+    baseBranch: 'main',
+    status: 'active',
+    confidence: 71,
+    createdAt: '2026-01-19T05:00:00Z',
+    phaseSummary: { total: 3, completed: 1 },
+    workflow: 'ship',
+    workflowVersion: '1.4.2',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000006',
+    trackerId: 'NIU-183',
+    trackerType: 'linear',
+    slug: 'mimir-chronicle-indexing',
+    name: 'Mimir chronicle indexing pipeline',
+    repos: ['niuulabs/volundr'],
+    featureBranch: 'feat/chronicle-indexing',
+    baseBranch: 'main',
+    status: 'active',
+    confidence: 68,
+    createdAt: '2026-01-18T05:00:00Z',
+    phaseSummary: { total: 3, completed: 2 },
+    workflow: 'ship',
+    workflowVersion: '1.4.2',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000007',
+    trackerId: 'NIU-148',
+    trackerType: 'linear',
+    slug: 'bifrost-rate-limit',
+    name: 'Bifröst rate-limit per-model',
+    repos: ['niuulabs/volundr'],
+    featureBranch: 'feat/rate-limit',
+    baseBranch: 'main',
+    status: 'active',
+    confidence: 31,
+    createdAt: '2026-01-17T05:00:00Z',
+    phaseSummary: { total: 2, completed: 2 },
+    workflow: 'ship',
+    workflowVersion: '1.4.2',
+  },
+  // ── Original sagas (Auth Rewrite now complete) ──
   {
     id: '00000000-0000-0000-0000-000000000001',
     trackerId: 'NIU-500',
@@ -50,7 +151,7 @@ const SEED_SAGAS: Saga[] = [
     repos: ['niuulabs/volundr'],
     featureBranch: 'feat/auth-rewrite',
     baseBranch: 'main',
-    status: 'active',
+    status: 'complete',
     confidence: 82,
     createdAt: '2026-01-10T09:00:00Z',
     phaseSummary: { total: 3, completed: 1 },
@@ -121,7 +222,7 @@ const SEED_RAIDS: Raid[] = [
     acceptanceCriteria: ['PATs can be created and revoked', 'Envoy validates PATs'],
     declaredFiles: ['src/niuu/pat.ts'],
     estimateHours: 4,
-    status: 'running',
+    status: 'merged',
     confidence: 65,
     sessionId: 'sess-002',
     reviewerSessionId: null,
@@ -228,11 +329,117 @@ const SEED_PHASES: Phase[] = [
   },
 ];
 
+// ── Dashboard saga phases (web2 baseline data) ──────────────────────────────
+
+const SEED_FLOKK_PHASES: Phase[] = [
+  {
+    id: '00000000-0000-0000-0000-000000000200', sagaId: '00000000-0000-0000-0000-000000000004',
+    trackerId: 'NIU-M4', number: 1, name: 'Phase 1: Setup', status: 'complete', confidence: 90,
+    raids: [
+      mkRaid({ id: '00000000-0000-0000-0000-000000000020', phaseId: '00000000-0000-0000-0000-000000000200', name: 'Bootstrap Flokk schema', status: 'merged' }),
+      mkRaid({ id: '00000000-0000-0000-0000-000000000021', phaseId: '00000000-0000-0000-0000-000000000200', name: 'Subscription port', status: 'merged' }),
+    ],
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000201', sagaId: '00000000-0000-0000-0000-000000000004',
+    trackerId: 'NIU-M5', number: 2, name: 'Phase 2: Validation', status: 'active', confidence: 72,
+    raids: [
+      mkRaid({ id: '00000000-0000-0000-0000-000000000022', phaseId: '00000000-0000-0000-0000-000000000201', trackerId: 'NIU-214.4', name: 'Integration tests for graph validator', status: 'running', estimateHours: 1, confidence: 92 }),
+    ],
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000202', sagaId: '00000000-0000-0000-0000-000000000004',
+    trackerId: 'NIU-M6', number: 3, name: 'Phase 3: Webhooks', status: 'pending', confidence: 50,
+    raids: [
+      mkRaid({ id: '00000000-0000-0000-0000-000000000023', phaseId: '00000000-0000-0000-0000-000000000202', trackerId: 'NIU-214.5', name: 'Release cut', status: 'pending', estimateHours: 0.25, confidence: 55 }),
+    ],
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000203', sagaId: '00000000-0000-0000-0000-000000000004',
+    trackerId: 'NIU-M7', number: 4, name: 'Phase 4: Metrics', status: 'pending', confidence: 40,
+    raids: [
+      mkRaid({ id: '00000000-0000-0000-0000-000000000024', phaseId: '00000000-0000-0000-0000-000000000203', trackerId: 'NIU-214.6', name: 'Subscription metrics', status: 'pending', estimateHours: 2, confidence: 68 }),
+    ],
+  },
+];
+
+const SEED_OBSERVATORY_PHASES: Phase[] = [
+  {
+    id: '00000000-0000-0000-0000-000000000210', sagaId: '00000000-0000-0000-0000-000000000005',
+    trackerId: 'NIU-M8', number: 1, name: 'Phase 1: Canvas', status: 'complete', confidence: 88,
+    raids: [
+      mkRaid({ id: '00000000-0000-0000-0000-000000000030', phaseId: '00000000-0000-0000-0000-000000000210', name: 'Canvas renderer', status: 'merged' }),
+      mkRaid({ id: '00000000-0000-0000-0000-000000000031', phaseId: '00000000-0000-0000-0000-000000000210', name: 'Realm boundaries', status: 'merged' }),
+      mkRaid({ id: '00000000-0000-0000-0000-000000000032', phaseId: '00000000-0000-0000-0000-000000000210', name: 'Node layout', status: 'merged' }),
+    ],
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000211', sagaId: '00000000-0000-0000-0000-000000000005',
+    trackerId: 'NIU-M9', number: 2, name: 'Phase 2: Overlays', status: 'active', confidence: 60,
+    raids: [
+      mkRaid({ id: '00000000-0000-0000-0000-000000000033', phaseId: '00000000-0000-0000-0000-000000000211', trackerId: 'NIU-199.3', name: 'Realm colour ramp tokens', status: 'running', estimateHours: 1, confidence: 85 }),
+      mkRaid({ id: '00000000-0000-0000-0000-000000000034', phaseId: '00000000-0000-0000-0000-000000000211', trackerId: 'NIU-199.4', name: 'Review arbitration', status: 'escalated', estimateHours: 0.5, confidence: 44 }),
+    ],
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000212', sagaId: '00000000-0000-0000-0000-000000000005',
+    trackerId: 'NIU-M10', number: 3, name: 'Phase 3: Interaction', status: 'pending', confidence: 40,
+    raids: [
+      mkRaid({ id: '00000000-0000-0000-0000-000000000035', phaseId: '00000000-0000-0000-0000-000000000212', trackerId: 'NIU-199.5', name: 'Click-to-select', status: 'pending', estimateHours: 1.5, confidence: 72 }),
+    ],
+  },
+];
+
+const SEED_MIMIR_PHASES: Phase[] = [
+  {
+    id: '00000000-0000-0000-0000-000000000220', sagaId: '00000000-0000-0000-0000-000000000006',
+    trackerId: 'NIU-M11', number: 1, name: 'Phase 1: Schema', status: 'complete', confidence: 95,
+    raids: [
+      mkRaid({ id: '00000000-0000-0000-0000-000000000040', phaseId: '00000000-0000-0000-0000-000000000220', name: 'Chronicle schema', status: 'merged' }),
+      mkRaid({ id: '00000000-0000-0000-0000-000000000041', phaseId: '00000000-0000-0000-0000-000000000220', name: 'Index strategy', status: 'merged' }),
+    ],
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000221', sagaId: '00000000-0000-0000-0000-000000000006',
+    trackerId: 'NIU-M12', number: 2, name: 'Phase 2: Ingestion', status: 'complete', confidence: 85,
+    raids: [
+      mkRaid({ id: '00000000-0000-0000-0000-000000000042', phaseId: '00000000-0000-0000-0000-000000000221', name: 'Ingest pipeline', status: 'merged' }),
+      mkRaid({ id: '00000000-0000-0000-0000-000000000043', phaseId: '00000000-0000-0000-0000-000000000221', name: 'Batch writer', status: 'merged' }),
+    ],
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000222', sagaId: '00000000-0000-0000-0000-000000000006',
+    trackerId: 'NIU-M13', number: 3, name: 'Phase 3: Query', status: 'active', confidence: 55,
+    raids: [
+      mkRaid({ id: '00000000-0000-0000-0000-000000000044', phaseId: '00000000-0000-0000-0000-000000000222', trackerId: 'NIU-183.4', name: 'Arbitrated review', status: 'review', estimateHours: 1, confidence: 55, retryCount: 1 }),
+      mkRaid({ id: '00000000-0000-0000-0000-000000000045', phaseId: '00000000-0000-0000-0000-000000000222', trackerId: 'NIU-183.5', name: 'Result ranking', status: 'escalated', estimateHours: 2, confidence: 38 }),
+    ],
+  },
+];
+
+const SEED_BIFROST_PHASES: Phase[] = [
+  {
+    id: '00000000-0000-0000-0000-000000000230', sagaId: '00000000-0000-0000-0000-000000000007',
+    trackerId: 'NIU-M14', number: 1, name: 'Phase 1: Limiter', status: 'complete', confidence: 90,
+    raids: [
+      mkRaid({ id: '00000000-0000-0000-0000-000000000050', phaseId: '00000000-0000-0000-0000-000000000230', name: 'Token bucket limiter', status: 'merged' }),
+    ],
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000231', sagaId: '00000000-0000-0000-0000-000000000007',
+    trackerId: 'NIU-M15', number: 2, name: 'Phase 2: Per-model', status: 'complete', confidence: 25,
+    raids: [
+      mkRaid({ id: '00000000-0000-0000-0000-000000000051', phaseId: '00000000-0000-0000-0000-000000000231', name: 'Model quota config', status: 'review' }),
+      mkRaid({ id: '00000000-0000-0000-0000-000000000052', phaseId: '00000000-0000-0000-0000-000000000231', name: 'Quota enforcement', status: 'failed' }),
+    ],
+  },
+];
+
 const SEED_DISPATCHER_STATE: DispatcherState = {
   id: '00000000-0000-0000-0000-000000000999',
   running: true,
   threshold: 70,
-  maxConcurrentRaids: 3,
+  maxConcurrentRaids: 5,
   autoContinue: false,
   updatedAt: '2026-01-13T11:00:00Z',
 };
@@ -557,6 +764,10 @@ const SEED_INTEGRATIONS: IntegrationConnection[] = [
 export function createMockTyrService(): ITyrService {
   const sagas = new Map<string, Saga>(SEED_SAGAS.map((s) => [s.id, s]));
   const phasesBySaga = new Map<string, Phase[]>([
+    ['00000000-0000-0000-0000-000000000004', SEED_FLOKK_PHASES],
+    ['00000000-0000-0000-0000-000000000005', SEED_OBSERVATORY_PHASES],
+    ['00000000-0000-0000-0000-000000000006', SEED_MIMIR_PHASES],
+    ['00000000-0000-0000-0000-000000000007', SEED_BIFROST_PHASES],
     ['00000000-0000-0000-0000-000000000001', [...SEED_PHASES]],
   ]);
 

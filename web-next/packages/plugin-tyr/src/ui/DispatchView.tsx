@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { useService } from '@niuulabs/plugin-sdk';
 import {
   StateDot,
-  StatusBadge,
   ConfidenceBar,
   Tooltip,
   TooltipProvider,
@@ -17,7 +16,6 @@ import type { RaidStatus } from '../domain/saga';
 import type { Workflow } from '../domain/workflow';
 import {
   checkFeasibility,
-  type FeasibilityGate,
   type FeasibilityResult,
 } from '../application/dispatch-feasibility';
 import { useDispatcherState } from './useDispatcherState';
@@ -75,22 +73,6 @@ const GATE_LABELS: Record<string, string> = {
   upstream_blocked: 'upstream',
   cluster_healthy: 'cluster',
 };
-
-function GateChips({ gates }: { gates: FeasibilityGate[] }) {
-  const failing = gates.filter((g) => !g.passed);
-  if (failing.length === 0) return null;
-  return (
-    <div className="niuu-flex niuu-flex-wrap niuu-gap-1">
-      {failing.map((gate) => (
-        <Tooltip key={gate.name} content={gate.reason} side="top">
-          <span className="niuu-inline-flex niuu-items-center niuu-gap-1 niuu-rounded-full niuu-border niuu-border-critical-bo niuu-bg-critical-bg niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-text-critical niuu-cursor-default">
-            {GATE_LABELS[gate.name] ?? gate.name}
-          </span>
-        </Tooltip>
-      ))}
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Filter options builder
@@ -229,8 +211,8 @@ function RaidRow({
   onToggle: () => void;
   workflowName?: string;
 }) {
-  const waitMin = entry.raid.waitMinutes ?? 0;
-  const waitLabel = waitMin === 0 ? 'now' : `${waitMin}m wait`;
+  const waitMin = Math.round((Date.now() - new Date(entry.raid.updatedAt).getTime()) / 60_000);
+  const waitLabel = waitMin <= 1 ? 'now' : `${waitMin}m wait`;
 
   return (
     <div
@@ -295,6 +277,7 @@ function RaidRow({
           level={
             entry.raid.confidence >= 80 ? 'high' : entry.raid.confidence >= 50 ? 'medium' : 'low'
           }
+          hideLabel
         />
         <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-w-6 niuu-text-right">
           {entry.raid.confidence}

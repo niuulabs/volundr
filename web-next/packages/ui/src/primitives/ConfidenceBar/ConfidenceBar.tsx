@@ -7,10 +7,12 @@ const LEVEL_VALUE: Record<ConfidenceLevel, number> = { high: 100, medium: 60, lo
 
 export interface ConfidenceBarProps {
   level: ConfidenceLevel;
+  /** Hide the text label — show only the bar. */
+  hideLabel?: boolean;
   className?: string;
 }
 
-export function ConfidenceBar({ level, className }: ConfidenceBarProps) {
+export function ConfidenceBar({ level, hideLabel, className }: ConfidenceBarProps) {
   return (
     <span
       className={cn('niuu-conf-bar', `niuu-conf-bar--${level}`, className)}
@@ -23,7 +25,7 @@ export function ConfidenceBar({ level, className }: ConfidenceBarProps) {
       <span className="niuu-conf-bar__track" aria-hidden="true">
         <span className="niuu-conf-bar__fill" />
       </span>
-      <span className="niuu-conf-bar__label">{level}</span>
+      {!hideLabel && <span className="niuu-conf-bar__label">{level}</span>}
     </span>
   );
 }
