@@ -63,6 +63,21 @@ function formatTimestamp(ts: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+function tabCount(tab: SessionTab, session: Session): number | undefined {
+  switch (tab) {
+    case 'chat': return session.events.length;
+    case 'diffs': return (session.files?.added ?? 0) + (session.files?.modified ?? 0) + (session.files?.deleted ?? 0);
+    case 'chronicle': return session.events.length;
+    default: return undefined;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Stat helper
 // ---------------------------------------------------------------------------
@@ -180,7 +195,9 @@ function SessionHeader({ session, readOnly }: { session: Session; readOnly: bool
 
         <div className="niuu-flex niuu-items-center niuu-gap-4" data-testid="session-stats">
           <Stat label="uptime" value={duration} />
-          <Stat label="events" value={session.events.length} />
+          <Stat label="msgs" value={session.events.length} />
+          <Stat label="tokens" value={formatTokens((session.tokensIn ?? 0) + (session.tokensOut ?? 0))} />
+          <Stat label="cost" value={`$${((session.costCents ?? 0) / 100).toFixed(2)}`} />
         </div>
 
         <button
@@ -394,12 +411,12 @@ function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
               <span className="niuu-font-mono niuu-text-text-muted">---outcome---</span>
               <span
                 className={cn(
-                  'niuu-font-mono niuu-font-medium',
+                  'niuu-font-mono niuu-font-semibold niuu-text-xs niuu-uppercase niuu-px-1.5 niuu-py-0.5 niuu-rounded-sm',
                   turn.outcome.verdict === 'pass' || turn.outcome.verdict === 'verified'
-                    ? 'niuu-text-state-ok'
+                    ? 'niuu-text-state-ok niuu-bg-state-ok/10'
                     : turn.outcome.verdict === 'fail' || turn.outcome.verdict === 'blocked'
-                      ? 'niuu-text-critical'
-                      : 'niuu-text-state-warn',
+                      ? 'niuu-text-critical niuu-bg-critical-bg'
+                      : 'niuu-text-state-warn niuu-bg-state-warn/10',
                 )}
               >
                 {turn.outcome.verdict}
@@ -415,6 +432,59 @@ function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
       <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
         {formatTimestamp(turn.ts)}
       </span>
+    </div>
+  );
+}
+
+function ChatInput({ participants }: { participants: RoomParticipant[] }) {
+  const [value, setValue] = useState('');
+  const [permission, setPermission] = useState<'restricted' | 'open'>('restricted');
+
+  return (
+    <div className="niuu-border-t niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2 niuu-shrink-0">
+      {/* Direct-to chips */}
+      <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-mb-1.5 niuu-text-[10px] niuu-text-text-muted">
+        <span className="niuu-uppercase niuu-tracking-wider">direct to</span>
+        {participants.filter((p) => p.participantType === 'ravn').map((p) => (
+          <span key={p.peerId} className="niuu-flex niuu-items-center niuu-gap-1 niuu-rounded-sm niuu-bg-bg-tertiary niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-text-secondary">
+            <span className="niuu-w-1.5 niuu-h-1.5 niuu-rounded-full niuu-bg-brand" />
+            {p.displayName ?? p.persona}
+          </span>
+        ))}
+        <span className="niuu-text-text-muted">(broadcast · all participants receive)</span>
+      </div>
+      {/* Input row */}
+      <div className="niuu-flex niuu-items-end niuu-gap-2">
+        <textarea
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="broadcast to room...  (⌘↵ send · / commands · @ mention files)"
+          className="niuu-flex-1 niuu-bg-bg-tertiary niuu-border niuu-border-border niuu-rounded-md niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary niuu-font-sans niuu-resize-y niuu-min-h-[36px] niuu-max-h-[120px] niuu-outline-none focus:niuu-border-brand"
+          rows={1}
+          data-testid="chat-input"
+        />
+        <div className="niuu-flex niuu-items-center niuu-gap-2">
+          <span className="niuu-text-[10px] niuu-text-text-muted">@</span>
+          <span className="niuu-text-[10px] niuu-text-text-muted">/</span>
+          <span className="niuu-text-[10px] niuu-text-text-muted">📎</span>
+          <span className="niuu-text-xs niuu-text-text-muted">permission:</span>
+          <select
+            value={permission}
+            onChange={(e) => setPermission(e.target.value as 'restricted' | 'open')}
+            className="niuu-bg-bg-tertiary niuu-border niuu-border-border niuu-rounded-sm niuu-text-xs niuu-text-text-primary niuu-font-mono niuu-py-1 niuu-px-2"
+          >
+            <option value="restricted">restricted</option>
+            <option value="open">open</option>
+          </select>
+          <button
+            type="button"
+            className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs niuu-flex niuu-items-center niuu-gap-1"
+            data-testid="chat-send-btn"
+          >
+            send <span className="niuu-text-[10px] niuu-opacity-60">⌘↵</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -450,6 +520,8 @@ function ChatStream({ groups, room }: { groups: TurnGroup[]; room: MockRoom }) {
           </div>
         )}
       </div>
+      {/* Chat input bar (web2 parity) */}
+      <ChatInput participants={room.participants} />
     </div>
   );
 }
@@ -762,7 +834,7 @@ function DiffViewer({ file }: { file: MockDiffFile }) {
                 className={cn(
                   'niuu-flex niuu-gap-2 niuu-px-4 niuu-py-px',
                   line.type === 'add' &&
-                    'niuu-bg-[color-mix(in_srgb,var(--color-accent-emerald)_8%,transparent)]',
+                    'niuu-bg-[color-mix(in_srgb,var(--color-brand)_8%,transparent)]',
                   line.type === 'remove' &&
                     'niuu-bg-[color-mix(in_srgb,var(--color-critical)_8%,transparent)]',
                 )}
@@ -1222,22 +1294,28 @@ export function SessionDetailPage({
         role="tablist"
         aria-label="Session tabs"
       >
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            data-testid={`tab-${tab.id}`}
-            onClick={() => setActiveTab(tab.id)}
-            className={
-              activeTab === tab.id
-                ? 'niuu-border-b-2 niuu-border-brand niuu-px-4 niuu-py-2 niuu-text-sm niuu-font-medium niuu-text-brand'
-                : 'niuu-border-b-2 niuu-border-transparent niuu-px-4 niuu-py-2 niuu-text-sm niuu-text-text-muted hover:niuu-text-text-secondary'
-            }
-          >
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map((tab) => {
+          const count = session ? tabCount(tab.id, session) : undefined;
+          return (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              data-testid={`tab-${tab.id}`}
+              onClick={() => setActiveTab(tab.id)}
+              className={
+                activeTab === tab.id
+                  ? 'niuu-border-b-2 niuu-border-brand niuu-px-4 niuu-py-2 niuu-text-sm niuu-font-medium niuu-text-brand'
+                  : 'niuu-border-b-2 niuu-border-transparent niuu-px-4 niuu-py-2 niuu-text-sm niuu-text-text-muted hover:niuu-text-text-secondary'
+              }
+            >
+              {tab.label}
+              {count != null && count > 0 && (
+                <span className="niuu-ml-1 niuu-font-mono niuu-text-xs niuu-opacity-60">{count}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab panels */}
