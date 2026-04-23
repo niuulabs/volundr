@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { ShapeSvg, Chip, type ShapeColor } from '@niuulabs/ui';
+import { ShapeSvg, type ShapeColor } from '@niuulabs/ui';
 import type { Registry, EntityType } from '../domain';
 import type { EntityShape, EntityCategory } from '@niuulabs/domain';
 import { isDescendant } from '../domain/containment';

@@ -61,9 +61,9 @@ describe('TyrTopbar', () => {
   it('shows concurrent raids value', async () => {
     mockPathname = '/tyr/sagas';
     render(<TyrTopbar />, { wrapper: wrap(createMockDispatcherService()) });
-    // Mock maxConcurrentRaids is 3
+    // Mock maxConcurrentRaids is 5
     await waitFor(() => {
-      expect(screen.getByTestId('tyr-chip-concurrent-3')).toBeInTheDocument();
+      expect(screen.getByTestId('tyr-chip-concurrent-5')).toBeInTheDocument();
     });
   });
 

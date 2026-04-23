@@ -9,15 +9,24 @@
 import type { EventCatalog, ToolRegistry, PersonaRole } from '@niuulabs/domain';
 
 export const PERSONA_ROLE_ORDER: PersonaRole[] = [
-  'plan',
+  'arbiter',
+  'autonomy',
   'build',
-  'verify',
-  'review',
-  'gate',
-  'audit',
-  'ship',
-  'index',
+  'coord',
+  'investigate',
+  'knowledge',
+  'observe',
+  'plan',
+  'qa',
   'report',
+  'review',
+  'write',
+  // Legacy roles — kept for backward compatibility with Tyr / Observatory
+  'audit',
+  'gate',
+  'index',
+  'ship',
+  'verify',
 ];
 
 export const SEED_EVENT_CATALOG: EventCatalog = [

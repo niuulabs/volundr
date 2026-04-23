@@ -57,7 +57,7 @@
 }
 
 .niuu-chat-cascade-status-dot[data-verdict='pass'] {
-  background-color: var(--color-accent-emerald);
+  background-color: var(--color-brand);
 }
 
 .niuu-chat-cascade-status-dot[data-verdict='fail'] {

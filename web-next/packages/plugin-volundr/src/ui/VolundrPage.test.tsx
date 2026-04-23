@@ -53,7 +53,8 @@ describe('VolundrPage (Overview)', () => {
 
   it('renders the cluster health section', async () => {
     wrap();
-    await waitFor(() => expect(screen.getByText('Eitri')).toBeInTheDocument());
+    // 'Eitri' appears in both the cluster card and the active sessions table (clusterId).
+    await waitFor(() => expect(screen.getAllByText('Eitri').length).toBeGreaterThan(0));
     expect(screen.getAllByTestId('cluster-card').length).toBeGreaterThan(0);
   });
 

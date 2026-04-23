@@ -17,14 +17,14 @@ describe('createMockTyrService', () => {
   it('returns 3 seed sagas', async () => {
     const svc = createMockTyrService();
     const sagas = await svc.getSagas();
-    expect(sagas).toHaveLength(3);
+    expect(sagas).toHaveLength(7);
   });
 
   it('getSaga returns correct saga', async () => {
     const svc = createMockTyrService();
     const saga = await svc.getSaga('00000000-0000-0000-0000-000000000001');
     expect(saga?.name).toBe('Auth Rewrite');
-    expect(saga?.status).toBe('active');
+    expect(saga?.status).toBe('complete');
   });
 
   it('getSaga returns null for unknown id', async () => {
@@ -52,7 +52,7 @@ describe('createMockTyrService', () => {
     expect(newSaga.name).toBe('My new feature');
     expect(newSaga.status).toBe('active');
     const all = await svc.getSagas();
-    expect(all).toHaveLength(4);
+    expect(all).toHaveLength(8);
   });
 
   it('commitSaga creates a saga from request', async () => {
@@ -95,7 +95,7 @@ describe('createMockDispatcherService', () => {
     const state = await svc.getState();
     expect(state?.running).toBe(true);
     expect(state?.threshold).toBe(70);
-    expect(state?.maxConcurrentRaids).toBe(3);
+    expect(state?.maxConcurrentRaids).toBe(5);
   });
 
   it('setRunning toggles running state', async () => {

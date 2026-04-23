@@ -45,8 +45,8 @@ describe('PersonaForm', () => {
       wrapper: wrap(),
     });
     expect(screen.getByText('Identity')).toBeInTheDocument();
+    expect(screen.getByText('Runtime')).toBeInTheDocument();
     expect(screen.getByText('System prompt')).toBeInTheDocument();
-    expect(screen.getByText('LLM')).toBeInTheDocument();
     expect(screen.getByText('Tool access')).toBeInTheDocument();
     expect(screen.getByText('Produces')).toBeInTheDocument();
     expect(screen.getByText('Consumes')).toBeInTheDocument();
@@ -65,15 +65,16 @@ describe('PersonaForm', () => {
     render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
       wrapper: wrap(),
     });
-    expect(screen.getByDisplayValue('claude-sonnet-4-6')).toBeInTheDocument();
+    // LLM alias is now a select in the Runtime section
+    expect(screen.getByDisplayValue('sonnet-primary')).toBeInTheDocument();
   });
 
   it('shows save bar when a field is changed', async () => {
     render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
       wrapper: wrap(),
     });
-    const nameInput = screen.getByDisplayValue('test-persona');
-    fireEvent.change(nameInput, { target: { value: 'changed-name' } });
+    const descInput = screen.getByDisplayValue('Used in tests');
+    fireEvent.change(descInput, { target: { value: 'changed description' } });
     await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeInTheDocument());
   });
 
@@ -81,8 +82,8 @@ describe('PersonaForm', () => {
     render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
       wrapper: wrap(),
     });
-    const nameInput = screen.getByDisplayValue('test-persona');
-    fireEvent.change(nameInput, { target: { value: 'changed' } });
+    const descInput = screen.getByDisplayValue('Used in tests');
+    fireEvent.change(descInput, { target: { value: 'changed' } });
     await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('Reset'));
@@ -95,8 +96,8 @@ describe('PersonaForm', () => {
       wrapper: wrap(),
     });
 
-    const aliasInput = screen.getByDisplayValue('claude-sonnet-4-6');
-    fireEvent.change(aliasInput, { target: { value: 'claude-opus-4-6' } });
+    const aliasSelect = screen.getByDisplayValue('sonnet-primary');
+    fireEvent.change(aliasSelect, { target: { value: 'claude-opus-4-6' } });
 
     await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save persona/i }));
@@ -134,11 +135,12 @@ describe('PersonaForm', () => {
     });
   });
 
-  it('shows thinking checkbox', () => {
+  it('shows thinking toggle in runtime section', () => {
     render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
       wrapper: wrap(),
     });
-    expect(screen.getByText('Enable extended thinking')).toBeInTheDocument();
+    // Thinking is now a toggle button showing true/false
+    expect(screen.getByText('llm.thinking')).toBeInTheDocument();
   });
 
   it('shows add consumed event button', () => {

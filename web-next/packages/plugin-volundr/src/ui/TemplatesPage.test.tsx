@@ -319,20 +319,20 @@ describe('TemplatesPage', () => {
   it('clone button label includes selected template name', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    expect(screen.getByRole('button', { name: /clone template default/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /clone template niuu-platform/i })).toBeInTheDocument();
   });
 
   it('edit button label includes selected template name', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    expect(screen.getByRole('button', { name: /edit template default/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /edit template niuu-platform/i })).toBeInTheDocument();
   });
 
   it('clone button label updates when template is switched', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[1]!);
+    fireEvent.click(cards[3]!);
     await waitFor(() =>
       expect(
         screen.getByRole('button', { name: /clone template gpu-workload/i }),
@@ -356,7 +356,7 @@ describe('TemplatesPage', () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[1]!);
+    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     expect(screen.getByText('python')).toBeInTheDocument();
     expect(screen.getByText('jupyter')).toBeInTheDocument();
@@ -366,7 +366,7 @@ describe('TemplatesPage', () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[1]!);
+    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     expect(screen.getByText('uvx mcp-python')).toBeInTheDocument();
   });
@@ -375,7 +375,7 @@ describe('TemplatesPage', () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[1]!);
+    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     expect(screen.getAllByText('stdio').length).toBeGreaterThanOrEqual(1);
   });
@@ -384,7 +384,7 @@ describe('TemplatesPage', () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[1]!);
+    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     expect(screen.queryByTestId('mcp-tool-chip')).not.toBeInTheDocument();
   });
@@ -393,7 +393,7 @@ describe('TemplatesPage', () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[1]!);
+    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     // Expand the python server card
     fireEvent.click(screen.getByRole('button', { name: /^python$/i }));
@@ -405,7 +405,7 @@ describe('TemplatesPage', () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[1]!);
+    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     const pythonBtn = screen.getByRole('button', { name: /^python$/i });
     fireEvent.click(pythonBtn); // expand
@@ -418,7 +418,7 @@ describe('TemplatesPage', () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[1]!);
+    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     expect(screen.getAllByTestId('mcp-server-card').length).toBe(2);
   });
@@ -438,7 +438,7 @@ describe('TemplatesPage', () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[1]!);
+    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /skills/i }));
     expect(screen.getByText('python')).toBeInTheDocument();
   });
@@ -458,7 +458,7 @@ describe('TemplatesPage', () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[1]!);
+    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /rules/i }));
     expect(screen.getByText('cl-eitri')).toBeInTheDocument();
   });
@@ -499,7 +499,7 @@ describe('TemplatesPage', () => {
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     // The gpu-workload card should have a "GPU" chip
     const cards = screen.getAllByTestId('template-card');
-    const gpuCard = cards[1]!;
+    const gpuCard = cards[3]!;
     expect(gpuCard.textContent).toContain('GPU');
   });
 

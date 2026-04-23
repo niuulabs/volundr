@@ -37,8 +37,8 @@ describe('TriggersView', () => {
   it('shows persona names in rows', async () => {
     render(<TriggersView />, { wrapper: wrap(services) });
     await waitFor(() => {
-      expect(screen.getByText('health-auditor')).toBeInTheDocument();
-      expect(screen.getByText('reviewer')).toBeInTheDocument();
+      expect(screen.getByText('eir')).toBeInTheDocument();
+      expect(screen.getByText('fjölnir')).toBeInTheDocument();
     });
   });
 

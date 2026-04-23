@@ -1,7 +1,7 @@
 const PARTICIPANT_COLORS = [
   '#38bdf8', // sky-400
   '#a78bfa', // violet-400
-  '#34d399', // emerald-400
+  '#818cf8', // indigo-400
   '#f472b6', // pink-400
   '#fb923c', // orange-400
   '#facc15', // yellow-400

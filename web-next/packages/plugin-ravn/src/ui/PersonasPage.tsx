@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Rune } from '@niuulabs/ui';
+import { Rune, PersonaAvatar } from '@niuulabs/ui';
 import type { PersonaCreateRequest } from '../ports';
 import { PersonaForm } from './PersonaForm';
 import { PersonaYaml } from './PersonaYaml';
 import { PersonaSubs } from './PersonaSubs';
 import { usePersona, useUpdatePersona } from './usePersona';
 import { loadStorage, saveStorage } from './storage';
+import './ravn-views.css';
 
 const PERSONA_STORAGE_KEY = 'ravn.persona';
 
@@ -31,34 +32,59 @@ function PersonaDetailPane({ name, activeTab, onTabChange }: PersonaDetailPanePr
   );
 
   const tabs: { id: TabId; label: string }[] = [
-    { id: 'form', label: 'Form' },
-    { id: 'yaml', label: 'YAML' },
-    { id: 'subs', label: 'Subs' },
+    { id: 'form', label: 'form' },
+    { id: 'yaml', label: 'yaml' },
+    { id: 'subs', label: 'subscriptions' },
   ];
 
   return (
     <div className="niuu-flex niuu-flex-col niuu-h-full" data-testid="persona-detail">
-      {/* Tab bar */}
-      <div className="niuu-flex niuu-items-center niuu-border-b niuu-border-border niuu-px-4 niuu-shrink-0">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            onClick={() => onTabChange(tab.id)}
-            className={[
-              'niuu-px-4 niuu-py-2.5 niuu-text-sm niuu-font-sans niuu-border-0 niuu-bg-transparent niuu-cursor-pointer',
-              'niuu-border-b-2 niuu-transition-colors',
-              activeTab === tab.id
-                ? 'niuu-text-text-primary niuu-border-brand'
-                : 'niuu-text-text-muted niuu-border-transparent hover:niuu-text-text-secondary hover:niuu-border-border',
-            ].join(' ')}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Persona header — matches web2 pr-head */}
+      {persona && (
+        <div className="rv-pr-head">
+          <div className="rv-pr-head__left">
+            {persona.role && persona.letter && (
+              <PersonaAvatar role={persona.role} letter={persona.letter} size={40} />
+            )}
+            <div className="rv-pr-head__info">
+              <div className="rv-pr-head__name">{persona.name}</div>
+              <div className="rv-pr-head__sub">
+                role: <strong>{persona.role}</strong>
+                <span className="rv-pr-head__sep">·</span>
+                {persona.isBuiltin ? 'builtin' : 'user-defined'}
+              </div>
+              <div className="rv-pr-head__origin">
+                <span className="rv-pr-head__origin-label">loaded from</span>
+                <code className="rv-pr-head__origin-path">
+                  {persona.yamlSource === '[mock]'
+                    ? `volundr/src/ravn/personas/${persona.name}.yaml`
+                    : persona.yamlSource}
+                </code>
+              </div>
+            </div>
+          </div>
+          <div className="rv-pr-head__right">
+            {/* Tab segment control */}
+            <div className="rv-pr-seg">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  onClick={() => onTabChange(tab.id)}
+                  className={`rv-pr-seg__btn${activeTab === tab.id ? ' rv-pr-seg__btn--active' : ''}`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <button type="button" className="rv-pr-action-btn">+ new persona</button>
+            <button type="button" className="rv-pr-action-btn">clone as…</button>
+            <button type="button" className="rv-pr-action-btn rv-pr-action-btn--primary">save</button>
+          </div>
+        </div>
+      )}
 
       {/* Tab content */}
       <div className="niuu-flex-1 niuu-overflow-hidden">

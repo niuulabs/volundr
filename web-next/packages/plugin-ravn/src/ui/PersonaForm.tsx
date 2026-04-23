@@ -10,7 +10,7 @@ import {
 import type { FieldType, PersonaRole } from '@niuulabs/domain';
 import type { PersonaDetail, PersonaCreateRequest, PersonaConsumesEvent } from '../ports';
 import { validatePersona } from './validatePersona';
-import { SEED_EVENT_CATALOG, SEED_TOOL_REGISTRY, PERSONA_ROLE_ORDER } from '../catalog';
+import { SEED_EVENT_CATALOG, SEED_TOOL_REGISTRY } from '../catalog';
 import './PersonaForm.css';
 
 const PERMISSION_MODES = ['default', 'safe', 'loose'] as const;
@@ -168,13 +168,16 @@ interface SectionProps {
   children: React.ReactNode;
 }
 
-function Section({ title, children }: SectionProps) {
+function Section({ title, subtitle, children }: SectionProps & { subtitle?: string }) {
   return (
     <section className="niuu-border niuu-border-border-subtle niuu-rounded-lg niuu-overflow-hidden">
-      <div className="niuu-px-4 niuu-py-2 niuu-bg-bg-secondary niuu-border-b niuu-border-border-subtle">
+      <div className="niuu-px-4 niuu-py-2 niuu-bg-bg-secondary niuu-border-b niuu-border-border-subtle niuu-flex niuu-items-baseline niuu-gap-3">
         <h3 className="niuu-m-0 niuu-text-xs niuu-font-mono niuu-font-medium niuu-text-text-muted niuu-uppercase niuu-tracking-widest">
           {title}
         </h3>
+        {subtitle && (
+          <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted">{subtitle}</span>
+        )}
       </div>
       <div className="niuu-p-4 niuu-flex niuu-flex-col niuu-gap-3 niuu-bg-bg-primary">
         {children}
@@ -315,60 +318,101 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
           />
         )}
 
-        {/* Identity */}
-        <Section title="Identity">
-          <FieldRow label="Name" htmlFor="pf-name">
+        {/* Identity — full-width fields with mono labels, matching web2 */}
+        <Section title="Identity" subtitle="What this persona is for.">
+          <label className="rv-pf-field">
+            <span className="rv-pf-field__label">name</span>
             <input
-              id="pf-name"
-              className="niuu-form-control"
+              className="niuu-form-control niuu-font-mono"
               value={form.name}
-              onChange={(e) => update('name', e.target.value)}
+              readOnly
             />
-          </FieldRow>
-          <FieldRow label="Role" htmlFor="pf-role">
-            <select
-              id="pf-role"
-              className="niuu-form-control"
+          </label>
+          <label className="rv-pf-field">
+            <span className="rv-pf-field__label">role</span>
+            <input
+              className="niuu-form-control niuu-font-mono"
               value={form.role}
               onChange={(e) => update('role', e.target.value as PersonaRole)}
-            >
-              {PERSONA_ROLE_ORDER.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-          <FieldRow label="Letter" htmlFor="pf-letter">
-            <input
-              id="pf-letter"
-              className="niuu-form-control niuu-w-16"
-              value={form.letter}
-              maxLength={1}
-              onChange={(e) => update('letter', e.target.value.slice(0, 1).toUpperCase())}
             />
-          </FieldRow>
-          <FieldRow label="Summary" htmlFor="pf-summary">
+          </label>
+          <label className="rv-pf-field">
+            <span className="rv-pf-field__label">description</span>
             <input
-              id="pf-summary"
               className="niuu-form-control"
-              value={form.summary}
-              onChange={(e) => update('summary', e.target.value)}
-            />
-          </FieldRow>
-          <FieldRow label="Description" htmlFor="pf-desc">
-            <textarea
-              id="pf-desc"
-              className="niuu-form-control"
-              rows={3}
               value={form.description}
               onChange={(e) => update('description', e.target.value)}
             />
-          </FieldRow>
+          </label>
+        </Section>
+
+        {/* Runtime — combined section matching web2 (iteration_budget + permission_mode + LLM) */}
+        <Section title="Runtime" subtitle="Iteration budget, permissions and LLM config.">
+          <div className="rv-pf-grid-3">
+            <label className="rv-pf-field">
+              <span className="rv-pf-field__label">iteration_budget</span>
+              <input
+                type="number"
+                className="niuu-form-control niuu-font-mono"
+                value={form.iterationBudget}
+                min={1}
+                max={500}
+                onChange={(e) => update('iterationBudget', parseInt(e.target.value, 10) || 25)}
+              />
+            </label>
+            <label className="rv-pf-field">
+              <span className="rv-pf-field__label">permission_mode</span>
+              <select
+                className="niuu-form-control niuu-font-mono"
+                value={form.permissionMode}
+                onChange={(e) => update('permissionMode', e.target.value)}
+              >
+                {PERMISSION_MODES.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </label>
+            <label className="rv-pf-field">
+              <span className="rv-pf-field__label">llm.alias</span>
+              <select
+                className="niuu-form-control niuu-font-mono"
+                value={form.llmPrimaryAlias}
+                onChange={(e) => update('llmPrimaryAlias', e.target.value)}
+              >
+                <option value="claude-sonnet-4-6">sonnet-primary</option>
+                <option value="claude-opus-4-6">opus-primary</option>
+                <option value="claude-haiku-4-5">haiku-primary</option>
+              </select>
+            </label>
+          </div>
+          <div className="rv-pf-grid-2">
+            <label className="rv-pf-field">
+              <span className="rv-pf-field__label">llm.thinking</span>
+              <button
+                type="button"
+                className={`rv-pf-toggle ${form.llmThinkingEnabled ? 'rv-pf-toggle--on' : ''}`}
+                onClick={() => update('llmThinkingEnabled', !form.llmThinkingEnabled)}
+              >
+                <span className="rv-pf-toggle__knob" />
+                <span className="rv-pf-toggle__label">{form.llmThinkingEnabled ? 'true' : 'false'}</span>
+              </button>
+            </label>
+            <label className="rv-pf-field">
+              <span className="rv-pf-field__label">llm.max_tokens</span>
+              <input
+                type="number"
+                className="niuu-form-control niuu-font-mono"
+                value={form.llmMaxTokens}
+                min={1}
+                step={1024}
+                onChange={(e) => update('llmMaxTokens', parseInt(e.target.value, 10) || 8192)}
+              />
+            </label>
+          </div>
         </Section>
 
         {/* System prompt */}
-        <Section title="System prompt">
+        <Section title="System prompt" subtitle="Jinja2 template rendered at session start.">
           <FieldRow label="Template" htmlFor="pf-system-prompt">
             <textarea
               id="pf-system-prompt"
@@ -405,77 +449,11 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
           )}
         </Section>
 
-        {/* LLM */}
-        <Section title="LLM">
-          <FieldRow label="Model alias" htmlFor="pf-llm-alias">
-            <input
-              id="pf-llm-alias"
-              className="niuu-form-control niuu-font-mono"
-              value={form.llmPrimaryAlias}
-              onChange={(e) => update('llmPrimaryAlias', e.target.value)}
-              placeholder="claude-sonnet-4-6"
-            />
-          </FieldRow>
-          <FieldRow label="Thinking" htmlFor="pf-llm-thinking">
-            <label className="niuu-flex niuu-items-center niuu-gap-2 niuu-cursor-pointer niuu-select-none">
-              <input
-                id="pf-llm-thinking"
-                type="checkbox"
-                checked={form.llmThinkingEnabled}
-                onChange={(e) => update('llmThinkingEnabled', e.target.checked)}
-                className="niuu-w-4 niuu-h-4"
-              />
-              <span className="niuu-text-sm niuu-text-text-secondary">
-                Enable extended thinking
-              </span>
-            </label>
-          </FieldRow>
-          <FieldRow label="Max tokens" htmlFor="pf-llm-max-tokens">
-            <input
-              id="pf-llm-max-tokens"
-              type="number"
-              className="niuu-form-control niuu-w-36"
-              value={form.llmMaxTokens}
-              min={1}
-              step={1024}
-              onChange={(e) => update('llmMaxTokens', parseInt(e.target.value, 10) || 8192)}
-            />
-          </FieldRow>
-          <FieldRow label="Temperature" htmlFor="pf-llm-temp">
-            <input
-              id="pf-llm-temp"
-              type="number"
-              className="niuu-form-control niuu-w-24"
-              value={form.llmTemperature ?? ''}
-              min={0}
-              max={2}
-              step={0.1}
-              placeholder="model default"
-              onChange={(e) => {
-                const v = parseFloat(e.target.value);
-                update('llmTemperature', isNaN(v) ? undefined : v);
-              }}
-            />
-          </FieldRow>
-        </Section>
+        {/* LLM settings are now inside the Runtime section above */}
 
         {/* Tool access */}
-        <Section title="Tool access">
-          <FieldRow label="Permission mode" htmlFor="pf-perm">
-            <select
-              id="pf-perm"
-              className="niuu-form-control niuu-w-40"
-              value={form.permissionMode}
-              onChange={(e) => update('permissionMode', e.target.value)}
-            >
-              {PERMISSION_MODES.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-          <FieldRow label="Allow list">
+        <Section title="Tool access" subtitle={`Enforced at dispatch. Destructive tools (${form.allowedTools.filter(t => SEED_TOOL_REGISTRY.find(r => r.id === t)?.destructive).length} granted) require permission_mode ≥ normal.`}>
+          <FieldRow label={`allowed (${form.allowedTools.length})`}>
             <div className="niuu-flex niuu-flex-wrap niuu-gap-1 niuu-mb-2">
               {form.allowedTools.map((toolId) => {
                 const tool = SEED_TOOL_REGISTRY.find((t) => t.id === toolId);
@@ -515,10 +493,10 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
               onClick={() => setShowAllowPicker(true)}
               className="niuu-text-sm niuu-text-text-secondary niuu-border niuu-border-dashed niuu-border-border niuu-px-2 niuu-py-0.5 niuu-rounded niuu-cursor-pointer hover:niuu-border-brand hover:niuu-text-text-primary niuu-bg-transparent"
             >
-              + Add tool
+              + grant tool
             </button>
           </FieldRow>
-          <FieldRow label="Deny list">
+          <FieldRow label={`forbidden (${form.forbiddenTools.length})`}>
             <div className="niuu-flex niuu-flex-wrap niuu-gap-1 niuu-mb-2">
               {form.forbiddenTools.map((toolId) => (
                 <span
@@ -547,13 +525,13 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
               onClick={() => setShowDenyPicker(true)}
               className="niuu-text-sm niuu-text-text-secondary niuu-border niuu-border-dashed niuu-border-border niuu-px-2 niuu-py-0.5 niuu-rounded niuu-cursor-pointer hover:niuu-border-brand hover:niuu-text-text-primary niuu-bg-transparent"
             >
-              + Add tool
+              + deny tool
             </button>
           </FieldRow>
         </Section>
 
         {/* Produces */}
-        <Section title="Produces">
+        <Section title="Produces" subtitle="The event this persona emits on a successful iteration.">
           <FieldRow label="Event">
             <EventPicker
               value={form.producesEventType}
@@ -574,7 +552,7 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
         </Section>
 
         {/* Consumes */}
-        <Section title="Consumes">
+        <Section title="Consumes" subtitle="Events this persona listens for, and the context it wants loaded.">
           <div className="niuu-flex niuu-flex-col niuu-gap-3">
             {form.consumesEvents.map((ev, i) => (
               <div
@@ -638,7 +616,7 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
         </Section>
 
         {/* Fan-in */}
-        <Section title="Fan-in">
+        <Section title="Fan-in" subtitle="How Týr combines this persona's output with others emitting the same event.">
           <div className="rv-fanin-grid" data-testid="fanin-cards">
             {FAN_IN_STRATEGIES.map((s) => {
               const isActive = form.fanInStrategy === s;
@@ -763,20 +741,7 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
           </FieldRow>
         </Section>
 
-        {/* Iteration budget */}
-        <Section title="Iteration budget">
-          <FieldRow label="Max iterations" htmlFor="pf-budget">
-            <input
-              id="pf-budget"
-              type="number"
-              className="niuu-form-control niuu-w-24"
-              value={form.iterationBudget}
-              min={1}
-              max={500}
-              onChange={(e) => update('iterationBudget', parseInt(e.target.value, 10) || 25)}
-            />
-          </FieldRow>
-        </Section>
+        {/* Iteration budget is now inside Runtime section */}
       </div>
 
       {/* ToolPicker modals */}

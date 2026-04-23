@@ -76,8 +76,8 @@ describe('RavnSubnav — personas route', () => {
 
   it('shows persona count', async () => {
     render(<RavnSubnav />, { wrapper: wrapWithServices(services()) });
-    // Mock has 21 personas
-    await waitFor(() => expect(screen.getByText('21')).toBeInTheDocument());
+    // Mock has 16 personas
+    await waitFor(() => expect(screen.getByText('16')).toBeInTheDocument());
   });
 
   it('shows persona items grouped by role', async () => {
@@ -132,10 +132,10 @@ describe('RavnSubnav — sessions route', () => {
 
   it('shows active/closed counts in subtitle', async () => {
     render(<RavnSubnav />, { wrapper: wrapWithServices(services()) });
-    // Mock has 3 running (active) + 3 non-running (closed) sessions
+    // Mock has 10 running (active) + 2 non-running (closed) sessions
     await waitFor(() => {
-      expect(screen.getByText(/3 active/)).toBeInTheDocument();
-      expect(screen.getByText(/3 closed/)).toBeInTheDocument();
+      expect(screen.getByText(/10 active/)).toBeInTheDocument();
+      expect(screen.getByText(/2 closed/)).toBeInTheDocument();
     });
   });
 

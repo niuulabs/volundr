@@ -134,7 +134,7 @@
 }
 
 .niuu-chat-agent-event[data-type='tool_result'] {
-  border-color: color-mix(in srgb, var(--color-accent-emerald) 20%, transparent);
+  border-color: color-mix(in srgb, var(--color-brand) 20%, transparent);
 }
 
 .niuu-chat-agent-event-label {

@@ -72,6 +72,7 @@ export interface GraphNode {
 export interface GraphEdge {
   source: string;
   target: string;
+  type?: string;
 }
 
 export interface MimirGraph {

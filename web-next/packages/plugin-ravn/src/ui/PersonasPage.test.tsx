@@ -46,7 +46,7 @@ describe('PersonasPage', () => {
     expect(screen.getByTestId('personas-empty-state')).toBeInTheDocument();
 
     act(() => {
-      window.dispatchEvent(new CustomEvent('ravn:persona-selected', { detail: 'coding-agent' }));
+      window.dispatchEvent(new CustomEvent('ravn:persona-selected', { detail: 'coder' }));
     });
 
     await waitFor(() => expect(screen.getByTestId('persona-detail')).toBeInTheDocument());
@@ -75,7 +75,7 @@ describe('PersonasPage', () => {
     render(<PersonasPage />, { wrapper: wrapWithServices(allServices()) });
 
     act(() => {
-      window.dispatchEvent(new CustomEvent('ravn:persona-selected', { detail: 'coding-agent' }));
+      window.dispatchEvent(new CustomEvent('ravn:persona-selected', { detail: 'coder' }));
     });
 
     await waitFor(() => {
@@ -89,7 +89,7 @@ describe('PersonasPage', () => {
     unmount();
     // No error should occur if we dispatch after unmount
     expect(() => {
-      window.dispatchEvent(new CustomEvent('ravn:persona-selected', { detail: 'coding-agent' }));
+      window.dispatchEvent(new CustomEvent('ravn:persona-selected', { detail: 'coder' }));
     }).not.toThrow();
   });
 });

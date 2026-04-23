@@ -1,4 +1,3 @@
-import { createMockHelloService, buildHelloHttpAdapter } from '@niuulabs/plugin-hello';
 import {
   createMockPersonaStore,
   createMockRavenStream,
@@ -68,7 +67,6 @@ function hasWsBackend(svc: ServiceConfig | undefined): svc is ServiceConfig & { 
 }
 
 export function buildServices(config: NiuuConfig): ServicesMap {
-  const helloSvc = config.services['hello'];
   const ravnSvc = config.services['ravn'];
   const tyrSvc = config.services['tyr'];
   const mimirSvc = config.services['mimir'];
@@ -78,11 +76,6 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const obsRegistrySvc = config.services['observatory.registry'];
   const obsTopologySvc = config.services['observatory.topology'];
   const obsEventsSvc = config.services['observatory.events'];
-
-  // ── Hello ──
-  const hello = hasHttpBackend(helloSvc)
-    ? buildHelloHttpAdapter(createApiClient(helloSvc.baseUrl))
-    : createMockHelloService();
 
   // ── Ravn: all five sub-services share one HTTP base URL when configured ──
   const ravnClient = hasHttpBackend(ravnSvc) ? createApiClient(ravnSvc.baseUrl) : null;
@@ -144,7 +137,6 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     : createMockAuditLogService();
 
   return {
-    hello,
     tyr: tyrService,
     'tyr.dispatcher': dispatcherService,
     'tyr.sessions': tyrSessionService,

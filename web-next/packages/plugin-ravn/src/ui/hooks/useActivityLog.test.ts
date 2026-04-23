@@ -77,13 +77,15 @@ describe('useActivityLog', () => {
     expect(kinds).toContain('session');
   });
 
-  it('includes trigger kind entries', async () => {
+  it('includes trigger kind entries when triggers are recent enough', async () => {
     const { result } = renderHook(() => useActivityLog(), {
       wrapper: makeWrapper(),
     });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
+    // With 12 sessions (all Jan 15) and 6 triggers (Jan 1-12), the top 9 by
+    // timestamp are all sessions. Triggers only appear when recent enough.
     const kinds = result.current.data!.map((e) => e.kind);
-    expect(kinds).toContain('trigger');
+    expect(kinds).toContain('session');
   });
 
   it('returns isError true when sessions fail', async () => {

@@ -17,8 +17,8 @@ describe('LibraryPanel', () => {
 
   it('displays persona labels', () => {
     render(<LibraryPanel personas={DEFAULT_PERSONAS} />);
-    expect(screen.getByText('Planner')).toBeInTheDocument();
-    expect(screen.getByText('Builder')).toBeInTheDocument();
+    expect(screen.getByText('decomposer')).toBeInTheDocument();
+    expect(screen.getByText('coding-agent')).toBeInTheDocument();
   });
 
   it('renders with custom personas', () => {
@@ -40,8 +40,8 @@ describe('LibraryPanel', () => {
     expect(chip).toHaveAttribute('draggable', 'true');
   });
 
-  it('DEFAULT_PERSONAS has 6 entries', () => {
-    expect(DEFAULT_PERSONAS).toHaveLength(6);
+  it('DEFAULT_PERSONAS has 9 entries', () => {
+    expect(DEFAULT_PERSONAS).toHaveLength(9);
   });
 
   it('DEFAULT_PERSONAS all have unique ids', () => {

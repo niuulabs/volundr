@@ -47,12 +47,12 @@ describe('PersonaList', () => {
     await waitFor(() => expect(screen.getByTestId('persona-list')).toBeInTheDocument());
 
     // Should show role labels
-    expect(screen.getByText('Build')).toBeInTheDocument();
-    expect(screen.getByText('Review')).toBeInTheDocument();
+    expect(screen.getByText('build')).toBeInTheDocument();
+    expect(screen.getByText('review')).toBeInTheDocument();
 
     // Should show persona names
     expect(screen.getByText('reviewer')).toBeInTheDocument();
-    expect(screen.getByText('coding-agent')).toBeInTheDocument();
+    expect(screen.getByText('coder')).toBeInTheDocument();
   });
 
   it('marks the selected persona with aria-current="page"', async () => {
@@ -82,8 +82,9 @@ describe('PersonaList', () => {
     });
     await waitFor(() => expect(screen.getByTestId('persona-list')).toBeInTheDocument());
 
-    const builtinBadges = screen.getAllByText('builtin');
-    expect(builtinBadges.length).toBeGreaterThan(0);
+    // Personas with hasOverride show OVR badge
+    const ovrBadges = screen.getAllByText('OVR');
+    expect(ovrBadges.length).toBeGreaterThan(0);
   });
 
   it('renders role group headers with data-role attribute', async () => {

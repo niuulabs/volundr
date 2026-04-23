@@ -7,6 +7,8 @@ export { ValidationPanel } from './ValidationPanel';
 export { NodeInspector } from './NodeInspector';
 export { LibraryPanel, DEFAULT_PERSONAS } from './LibraryPanel';
 export type { PersonaEntry } from './LibraryPanel';
+export { WorkflowDetailPanel } from './WorkflowDetailPanel';
+export type { WorkflowDetailPanelProps } from './WorkflowDetailPanel';
 export { useWorkflowBuilder } from './useWorkflowBuilder';
 export type {
   WorkflowView,

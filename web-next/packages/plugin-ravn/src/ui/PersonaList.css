@@ -37,3 +37,18 @@
   border-left: 3px solid var(--brand-400);
   padding-left: calc(var(--space-3) - 3px);
 }
+
+/* OVR (override) badge */
+.rv-persona-ovr-badge {
+  font-size: 9px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-accent-amber) 20%, transparent);
+  color: var(--color-accent-amber);
+  border: 1px solid color-mix(in srgb, var(--color-accent-amber) 30%, transparent);
+  flex-shrink: 0;
+}

@@ -8,15 +8,14 @@ import { renderWithMimir } from '../testing/renderWithMimir';
 const wrap = renderWithMimir;
 
 describe('SearchPage', () => {
-  it('renders the search input and title', () => {
+  it('renders the search input', () => {
     wrap(<SearchPage />);
-    expect(screen.getByRole('heading', { name: /search/i })).toBeInTheDocument();
     expect(screen.getByRole('searchbox')).toBeInTheDocument();
   });
 
   it('renders all three mode toggle buttons', () => {
     wrap(<SearchPage />);
-    expect(screen.getByRole('button', { name: /full-text/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /fts/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /semantic/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /hybrid/i })).toBeInTheDocument();
   });
@@ -29,7 +28,7 @@ describe('SearchPage', () => {
 
   it('clicking a mode button marks it active', () => {
     wrap(<SearchPage />);
-    const ftsBtn = screen.getByRole('button', { name: /full-text/i });
+    const ftsBtn = screen.getByRole('button', { name: /fts/i });
     fireEvent.click(ftsBtn);
     expect(ftsBtn).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /hybrid/i })).toHaveAttribute(
@@ -72,32 +71,32 @@ describe('SearchPage', () => {
     await waitFor(() => expect(screen.getByText('search service down')).toBeInTheDocument());
   });
 
-  it('each result shows title, category and path', async () => {
+  it('each result shows title and path', async () => {
     wrap(<SearchPage />);
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'architecture' } });
     await waitFor(() => expect(screen.getAllByTestId('search-result').length).toBeGreaterThan(0));
-    const results = screen.getAllByTestId('search-result');
-    const first = results[0]!;
-    expect(first.querySelector('[data-testid="result-title"]')).toBeTruthy();
-    expect(first.querySelector('[data-testid="result-path"]')).toBeTruthy();
+    const first = screen.getAllByTestId('search-result')[0]!;
+    // Title text is rendered inline (no dedicated testid)
+    expect(first.textContent).toContain('Architecture');
+    // Path is rendered in a mono line
+    expect(first.textContent).toContain('/arch/overview');
   });
 
   it('each result shows a numeric score', async () => {
     wrap(<SearchPage />);
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'architecture' } });
     await waitFor(() => expect(screen.getAllByTestId('search-result').length).toBeGreaterThan(0));
-    const scoreEl = screen.getAllByTestId('result-score')[0]!;
-    expect(scoreEl.textContent).toMatch(/score \d+\.\d+/);
+    const first = screen.getAllByTestId('search-result')[0]!;
+    expect(first.textContent).toMatch(/score \d+\.\d+/);
   });
 
   it('each result shows mount chips', async () => {
     wrap(<SearchPage />);
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'architecture' } });
     await waitFor(() => expect(screen.getAllByTestId('search-result').length).toBeGreaterThan(0));
-    // Mount chips use aria-label="mount: <name>"
-    const mountChips = screen
-      .getAllByRole('generic', { hidden: false })
-      .filter((el) => el.getAttribute('aria-label')?.startsWith('mount:'));
-    expect(mountChips.length).toBeGreaterThan(0);
+    const first = screen.getAllByTestId('search-result')[0]!;
+    // Mount chips render as .mm-chip spans — first result has mounts ['local', 'shared']
+    expect(first.textContent).toContain('local');
+    expect(first.textContent).toContain('shared');
   });
 });

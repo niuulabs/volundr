@@ -6,8 +6,8 @@ import { createElement, type ReactNode } from 'react';
 import { useFleetBudget, useRavnBudget, useRavnBudgets } from './useBudget';
 import type { BudgetState } from '@niuulabs/domain';
 
-const BUDGET: BudgetState = { spentUsd: 1.24, capUsd: 5.0, warnAt: 0.8 };
-const FLEET_BUDGET: BudgetState = { spentUsd: 6.61, capUsd: 22.0, warnAt: 0.8 };
+const BUDGET: BudgetState = { spentUsd: 3.61, capUsd: 5.0, warnAt: 0.7 };
+const FLEET_BUDGET: BudgetState = { spentUsd: 10.34, capUsd: 20.7, warnAt: 0.7 };
 
 function makeWrapper(services: Record<string, unknown>) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -28,7 +28,7 @@ describe('useFleetBudget', () => {
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.spentUsd).toBe(6.61);
+    expect(result.current.data?.spentUsd).toBe(10.34);
   });
 
   it('enters error state when service rejects', async () => {
@@ -52,7 +52,7 @@ describe('useRavnBudget', () => {
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.spentUsd).toBe(1.24);
+    expect(result.current.data?.spentUsd).toBe(3.61);
     expect(svc.getBudget).toHaveBeenCalledWith('ravn-id-1');
   });
 
@@ -78,8 +78,8 @@ describe('useRavnBudgets', () => {
     });
 
     await waitFor(() => expect(Object.keys(result.current).length).toBe(2));
-    expect(result.current['id-1']?.spentUsd).toBe(1.24);
-    expect(result.current['id-2']?.spentUsd).toBe(1.24);
+    expect(result.current['id-1']?.spentUsd).toBe(3.61);
+    expect(result.current['id-2']?.spentUsd).toBe(3.61);
   });
 
   it('returns empty record for empty ids list', async () => {

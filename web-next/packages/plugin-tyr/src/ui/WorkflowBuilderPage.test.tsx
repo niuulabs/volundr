@@ -66,7 +66,7 @@ describe('WorkflowBuilderPage', () => {
   it('shows loading state initially', () => {
     const svc = { listWorkflows: vi.fn().mockReturnValue(new Promise(() => undefined)) };
     render(<WorkflowBuilderPage />, { wrapper: wrap({ 'tyr.workflows': svc }) });
-    expect(screen.getByText(/loading workflows/i)).toBeInTheDocument();
+    expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
 
   it('renders workflow tabs after loading', async () => {

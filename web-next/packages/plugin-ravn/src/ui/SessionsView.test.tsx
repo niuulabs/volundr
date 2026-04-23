@@ -23,14 +23,14 @@ describe('SessionsView', () => {
 
   it('shows session list after loading', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    await waitFor(() => expect(screen.getAllByText('coding-agent').length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText('sindri').length).toBeGreaterThan(0));
   });
 
   it('shows session count', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
     await waitFor(() => {
-      // '6' appears in both the list-count badge and sidebar msg-count
-      expect(screen.getAllByText('6').length).toBeGreaterThan(0);
+      // '12' appears in the list-count badge
+      expect(screen.getAllByText('12').length).toBeGreaterThan(0);
     });
   });
 
@@ -39,8 +39,8 @@ describe('SessionsView', () => {
     await waitFor(() => {
       const buttons = screen.getAllByRole('button', { name: /session/ });
       const names = buttons.map((b) => b.textContent ?? '');
-      expect(names.some((n) => n.includes('coding-agent'))).toBe(true);
-      expect(names.some((n) => n.includes('reviewer'))).toBe(true);
+      expect(names.some((n) => n.includes('sindri'))).toBe(true);
+      expect(names.some((n) => n.includes('fjölnir'))).toBe(true);
     });
   });
 
@@ -111,16 +111,16 @@ describe('SessionsView', () => {
     act(() => {
       window.dispatchEvent(
         new CustomEvent('ravn:session-selected', {
-          detail: '10000001-0000-4000-8000-000000000002',
+          detail: '10000001-0000-4000-8000-000000000005',
         }),
       );
     });
 
     await waitFor(() => {
-      // reviewer session should be selected (ID ends in 002)
+      // fjölnir session should be selected (ID ends in 005)
       const items = screen.getAllByRole('button', { name: /session/ });
-      const reviewerItem = items.find((el) => el.textContent?.includes('reviewer'));
-      expect(reviewerItem).toHaveAttribute('aria-pressed', 'true');
+      const fjolnirItem = items.find((el) => el.textContent?.includes('fjölnir'));
+      expect(fjolnirItem).toHaveAttribute('aria-pressed', 'true');
     });
   });
 
@@ -154,8 +154,8 @@ describe('TranscriptHeader', () => {
   it('shows session title in header', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
     await waitFor(() =>
-      // First session is coding-agent "Implement login form"
-      expect(screen.getByText('Implement login form')).toBeInTheDocument(),
+      // Newest session (höðr) is auto-selected: "Run integration tests"
+      expect(screen.getByText('Run integration tests')).toBeInTheDocument(),
     );
   });
 
@@ -177,7 +177,7 @@ describe('TranscriptHeader', () => {
   it('pause and abort buttons are enabled for running sessions', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
     await waitFor(() => {
-      // coding-agent is 'running'
+      // sindri is 'running'
       const pause = screen.getByRole('button', { name: /pause session/i });
       const abort = screen.getByRole('button', { name: /abort session/i });
       expect(pause).not.toBeDisabled();
@@ -190,11 +190,11 @@ describe('TranscriptHeader', () => {
     await waitFor(() =>
       expect(screen.getAllByRole('button', { name: /session/ }).length).toBeGreaterThan(0),
     );
-    // select the 'investigator' session which is 'stopped'
+    // select the nótt session which is 'idle'
     act(() => {
       window.dispatchEvent(
         new CustomEvent('ravn:session-selected', {
-          detail: '10000001-0000-4000-8000-000000000005',
+          detail: '10000001-0000-4000-8000-000000000011',
         }),
       );
     });
@@ -209,16 +209,16 @@ describe('TranscriptHeader', () => {
   it('shows token count in metrics when available', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
     await waitFor(() => {
-      // coding-agent has 4820 tokens → "4.8k"
-      expect(screen.getByText('4.8k')).toBeInTheDocument();
+      // höðr (newest, auto-selected) has 900 tokens
+      expect(screen.getByText('900')).toBeInTheDocument();
     });
   });
 
   it('shows cost in metrics when available', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
     await waitFor(() =>
-      // coding-agent has costUsd: 0.18
-      expect(screen.getByText('$0.18')).toBeInTheDocument(),
+      // höðr has costUsd: 0.03
+      expect(screen.getByText('$0.03')).toBeInTheDocument(),
     );
   });
 });
@@ -262,9 +262,17 @@ describe('FilterToolbar', () => {
   it('filtering to User shows only user messages', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
     await waitFor(() => expect(screen.getByRole('button', { name: 'User' })).toBeInTheDocument());
+    // Select sindri session (001) which has messages
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('ravn:session-selected', {
+          detail: '10000001-0000-4000-8000-000000000001',
+        }),
+      );
+    });
     // wait for messages to load
     await waitFor(() => expect(screen.getByRole('log')).toBeInTheDocument(), { timeout: 3000 });
-    // wait for message rows to appear (coding-agent session has 6 messages)
+    // wait for message rows to appear (sindri session has 6 messages)
     await waitFor(
       () => expect(document.querySelectorAll('[data-kind]').length).toBeGreaterThan(0),
       { timeout: 3000 },
@@ -283,7 +291,7 @@ describe('Composer', () => {
   it('shows composer for running sessions', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
     await waitFor(() =>
-      // coding-agent is 'running'
+      // sindri is 'running'
       expect(screen.getByTestId('composer')).toBeInTheDocument(),
     );
   });
@@ -296,7 +304,7 @@ describe('Composer', () => {
     act(() => {
       window.dispatchEvent(
         new CustomEvent('ravn:session-selected', {
-          detail: '10000001-0000-4000-8000-000000000005',
+          detail: '10000001-0000-4000-8000-000000000011',
         }),
       );
     });
@@ -359,7 +367,7 @@ describe('Composer', () => {
     act(() => {
       window.dispatchEvent(
         new CustomEvent('ravn:session-selected', {
-          detail: '10000001-0000-4000-8000-000000000005',
+          detail: '10000001-0000-4000-8000-000000000011',
         }),
       );
     });
@@ -376,7 +384,7 @@ describe('ContextSidebar — Injects', () => {
   it('shows "no injected context" when no system messages', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
     await waitFor(() => {
-      // The mock session 1 (coding-agent) has no system messages in SEED_MESSAGES
+      // The mock session 1 (sindri) has no system messages in SEED_MESSAGES
       const injectsSection = screen.getByTestId('ctx-injects');
       expect(injectsSection).toBeInTheDocument();
     });
@@ -392,7 +400,7 @@ describe('ContextSidebar — Emissions', () => {
   it('shows emit message in emissions when present', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
     await waitFor(() => expect(screen.getByTestId('ctx-emissions')).toBeInTheDocument());
-    // coding-agent session has an emit message with 'code.changed' event
+    // sindri session has an emit message with 'code.changed' event
     await waitFor(
       () => {
         const emissionsList = document.querySelector('[data-testid="emissions-list"]');
@@ -412,13 +420,13 @@ describe('ContextSidebar — Emissions', () => {
         {
           id: '10000001-0000-4000-8000-000000000002',
           ravnId: 'b7e2c9d1-3a4f-4b8e-a1c6-5d7f8e9a0b2c',
-          personaName: 'reviewer',
-          personaRole: 'review',
-          personaLetter: 'R',
+          personaName: 'víðar',
+          personaRole: 'build',
+          personaLetter: 'V',
           status: 'running' as const,
-          model: 'claude-opus-4-6',
+          model: 'claude-4-sonnet',
           createdAt: '2026-04-15T08:45:11Z',
-          title: 'Review PR #142',
+          title: 'Autonomous refactor — auth module',
           messageCount: 4,
           costUsd: 0.42,
         },
@@ -458,7 +466,7 @@ describe('ContextSidebar — Timeline enrichment', () => {
 
   it('timeline shows tool_call events from messages', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
-    // coding-agent session has a tool_call for file.read
+    // sindri session has a tool_call for file.read
     await waitFor(
       () => {
         const toolEvent = document.querySelector('[data-testid="timeline-event-tool_call"]');
@@ -496,7 +504,7 @@ describe('ContextSidebar — Timeline enrichment', () => {
     act(() => {
       window.dispatchEvent(
         new CustomEvent('ravn:session-selected', {
-          detail: '10000001-0000-4000-8000-000000000005',
+          detail: '10000001-0000-4000-8000-000000000011',
         }),
       );
     });
@@ -526,7 +534,7 @@ describe('SessionsView — additional branch coverage', () => {
         {
           id: '10000001-0000-4000-8000-000000000001',
           ravnId: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
-          personaName: 'coding-agent',
+          personaName: 'coder',
           personaRole: 'build',
           personaLetter: 'C',
           status: 'running' as const,
@@ -579,7 +587,7 @@ describe('SessionsView — additional branch coverage', () => {
         {
           id: '10000001-0000-4000-8000-000000000001',
           ravnId: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
-          personaName: 'coding-agent',
+          personaName: 'coder',
           personaRole: 'build',
           personaLetter: 'C',
           status: 'running' as const,
@@ -605,7 +613,7 @@ describe('SessionsView — additional branch coverage', () => {
   it('shows ratio in stats when messageCount > 0 and costUsd present', async () => {
     render(<SessionsView />, { wrapper: wrap(services) });
     await waitFor(() =>
-      // coding-agent has 6 messages and cost $0.18 → ratio = $0.030
+      // sindri has 6 messages and cost $0.18 → ratio = $0.030
       expect(screen.getByTestId('ctx-stats')).toBeInTheDocument(),
     );
     // The ratio dd element should appear (Cost/msg row)
@@ -621,7 +629,7 @@ describe('SessionsView — additional branch coverage', () => {
         {
           id: '10000001-0000-4000-8000-000000000001',
           ravnId: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
-          personaName: 'coding-agent',
+          personaName: 'coder',
           personaRole: 'build',
           personaLetter: 'C',
           status: 'running' as const,
@@ -747,7 +755,7 @@ describe('SessionsView — additional branch coverage', () => {
         {
           id: '10000001-0000-4000-8000-000000000001',
           ravnId: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
-          personaName: 'coding-agent',
+          personaName: 'coder',
           personaRole: 'build',
           personaLetter: 'C',
           status: 'idle' as const,
@@ -786,7 +794,7 @@ describe('SessionsView — additional branch coverage', () => {
     act(() => {
       window.dispatchEvent(
         new CustomEvent('ravn:session-selected', {
-          detail: '10000001-0000-4000-8000-000000000005',
+          detail: '10000001-0000-4000-8000-000000000011',
         }),
       );
     });
@@ -801,7 +809,7 @@ describe('SessionsView — additional branch coverage', () => {
         {
           id: '10000001-0000-4000-8000-000000000001',
           ravnId: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
-          personaName: 'coding-agent',
+          personaName: 'coder',
           personaRole: 'build',
           personaLetter: 'C',
           status: 'running' as const,
@@ -841,7 +849,7 @@ describe('SessionsView — additional branch coverage', () => {
         {
           id: '10000001-0000-4000-8000-000000000001',
           ravnId: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
-          personaName: 'coding-agent',
+          personaName: 'coder',
           personaRole: 'build',
           personaLetter: 'C',
           status: 'running' as const,

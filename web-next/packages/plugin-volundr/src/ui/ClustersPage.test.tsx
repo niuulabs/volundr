@@ -106,7 +106,7 @@ describe('ClustersPage', () => {
 
   it('renders a card for each seed cluster', async () => {
     renderWithVolundr(<ClustersPage />);
-    await waitFor(() => expect(screen.getAllByTestId('cluster-card').length).toBe(2));
+    await waitFor(() => expect(screen.getAllByTestId('cluster-card').length).toBe(6));
   });
 
   it('shows cluster names via ClusterChip', async () => {
@@ -117,8 +117,9 @@ describe('ClustersPage', () => {
 
   it('shows realm in the detail header', async () => {
     renderWithVolundr(<ClustersPage />);
-    await waitFor(() => expect(screen.getByText('asgard')).toBeInTheDocument());
-    expect(screen.getByText('midgard')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('asgard').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('midgard').length).toBeGreaterThan(0);
+    expect(screen.getByText('jotunheim')).toBeInTheDocument();
   });
 
   it('renders running session counts', async () => {
@@ -145,14 +146,14 @@ describe('ClustersPage', () => {
 
   it('renders detail header for each cluster', async () => {
     renderWithVolundr(<ClustersPage />);
-    await waitFor(() => expect(screen.getAllByTestId('cluster-detail-header').length).toBe(2));
+    await waitFor(() => expect(screen.getAllByTestId('cluster-detail-header').length).toBe(6));
   });
 
   it('shows kind badges', async () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
       const badges = screen.getAllByTestId('kind-badge');
-      expect(badges.length).toBe(2);
+      expect(badges.length).toBe(6);
       expect(badges[0]!.textContent).toBe('primary');
       expect(badges[1]!.textContent).toBe('edge');
     });
@@ -162,7 +163,7 @@ describe('ClustersPage', () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
       const badges = screen.getAllByTestId('realm-badge');
-      expect(badges.length).toBe(2);
+      expect(badges.length).toBe(6);
     });
   });
 
@@ -170,10 +171,10 @@ describe('ClustersPage', () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
       const indicators = screen.getAllByTestId('status-indicator');
-      expect(indicators.length).toBe(2);
+      expect(indicators.length).toBe(6);
     });
-    // Eitri is healthy, Brokkr is warning
-    expect(screen.getByText('healthy')).toBeInTheDocument();
+    // 5 clusters are healthy, Brokkr is warning
+    expect(screen.getAllByText('healthy').length).toBe(5);
     expect(screen.getByText('warning')).toBeInTheDocument();
   });
 
@@ -181,11 +182,11 @@ describe('ClustersPage', () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
       const actionGroups = screen.getAllByTestId('action-buttons');
-      expect(actionGroups.length).toBe(2);
+      expect(actionGroups.length).toBe(6);
     });
-    expect(screen.getAllByTestId('cordon-btn').length).toBe(2);
-    expect(screen.getAllByTestId('drain-btn').length).toBe(2);
-    expect(screen.getAllByTestId('forge-here-btn').length).toBe(2);
+    expect(screen.getAllByTestId('cordon-btn').length).toBe(6);
+    expect(screen.getAllByTestId('drain-btn').length).toBe(6);
+    expect(screen.getAllByTestId('forge-here-btn').length).toBe(6);
   });
 
   it('renders Cordon button with warning styling', async () => {
@@ -232,8 +233,8 @@ describe('ClustersPage', () => {
   it('renders resource panels for CPU, Memory, GPU, and Disk on each cluster', async () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
-      // Each cluster has CPU + Memory + GPU + Disk = 4 panels, 2 clusters = 8
-      expect(screen.getAllByTestId(/^resource-panel-/).length).toBe(8);
+      // Each cluster has CPU + Memory + GPU + Disk = 4 panels, 6 clusters = 24
+      expect(screen.getAllByTestId(/^resource-panel-/).length).toBe(24);
     });
   });
 
@@ -249,7 +250,7 @@ describe('ClustersPage', () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
       const cpuPanels = screen.getAllByTestId('resource-panel-cpu');
-      expect(cpuPanels.length).toBe(2);
+      expect(cpuPanels.length).toBe(6);
     });
   });
 
@@ -275,7 +276,7 @@ describe('ClustersPage', () => {
   it('renders disk resource panels for each cluster', async () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
-      expect(screen.getAllByTestId('resource-panel-disk').length).toBe(2);
+      expect(screen.getAllByTestId('resource-panel-disk').length).toBe(6);
     });
   });
 
@@ -283,16 +284,16 @@ describe('ClustersPage', () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
       const bars = screen.getAllByTestId('disk-segmented-bar');
-      expect(bars.length).toBe(2);
+      expect(bars.length).toBe(6);
     });
   });
 
   it('renders system/pods/logs segments in the disk bar', async () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
-      expect(screen.getAllByTestId('disk-segment-system').length).toBe(2);
-      expect(screen.getAllByTestId('disk-segment-pods').length).toBe(2);
-      expect(screen.getAllByTestId('disk-segment-logs').length).toBe(2);
+      expect(screen.getAllByTestId('disk-segment-system').length).toBe(6);
+      expect(screen.getAllByTestId('disk-segment-pods').length).toBe(6);
+      expect(screen.getAllByTestId('disk-segment-logs').length).toBe(6);
     });
   });
 
@@ -300,7 +301,7 @@ describe('ClustersPage', () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
       const legends = screen.getAllByTestId('disk-legend');
-      expect(legends.length).toBe(2);
+      expect(legends.length).toBe(6);
     });
     // Check legend text for Eitri: system 120Gi, pods 580Gi, logs 120Gi
     expect(screen.getByText(/system 120Gi/)).toBeInTheDocument();
@@ -333,7 +334,7 @@ describe('ClustersPage', () => {
   it('renders pods panel for each cluster', async () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
-      expect(screen.getAllByTestId('pods-panel').length).toBe(2);
+      expect(screen.getAllByTestId('pods-panel').length).toBe(6);
     });
   });
 
@@ -383,17 +384,21 @@ describe('ClustersPage', () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
       const counts = screen.getAllByTestId('pod-count');
-      expect(counts.length).toBe(2);
-      // Eitri has 1 pod, Brokkr has 2
+      expect(counts.length).toBe(6);
+      // Eitri has 1 pod, Brokkr has 2, rest have 0
       expect(counts[0]).toHaveTextContent('1');
       expect(counts[1]).toHaveTextContent('2');
+      expect(counts[2]).toHaveTextContent('0');
+      expect(counts[3]).toHaveTextContent('0');
+      expect(counts[4]).toHaveTextContent('0');
+      expect(counts[5]).toHaveTextContent('0');
     });
   });
 
   it('shows "Pods on this forge" heading in pods panel', async () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
-      expect(screen.getAllByText('Pods on this forge').length).toBe(2);
+      expect(screen.getAllByText('Pods on this forge').length).toBe(6);
     });
   });
 
@@ -498,22 +503,22 @@ describe('ClustersPage', () => {
   it('renders nodes panel for each cluster', async () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
-      expect(screen.getAllByTestId('nodes-panel').length).toBe(2);
+      expect(screen.getAllByTestId('nodes-panel').length).toBe(6);
     });
   });
 
   it('renders nodes grid with node cards', async () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
-      expect(screen.getAllByTestId('nodes-grid').length).toBe(2);
+      expect(screen.getAllByTestId('nodes-grid').length).toBe(6);
     });
   });
 
   it('renders a node card per node', async () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
-      // Eitri has 2 nodes + Brokkr has 3 nodes = 5
-      expect(screen.getAllByTestId('cluster-node').length).toBe(5);
+      // Eitri 2 + Brokkr 3 + Valhalla 1 + Nóatún 1 + Glitnir 1 + Járnviðr 1 = 9
+      expect(screen.getAllByTestId('cluster-node').length).toBe(9);
     });
   });
 
@@ -530,7 +535,7 @@ describe('ClustersPage', () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
       // All test nodes have role "worker"
-      expect(screen.getAllByText('worker').length).toBe(5);
+      expect(screen.getAllByText('worker').length).toBe(9);
     });
   });
 
@@ -548,8 +553,8 @@ describe('ClustersPage', () => {
     await waitFor(() => {
       // Ready nodes show cpu+mem mini bars via node-meters testid
       const meterGroups = screen.getAllByTestId('node-meters');
-      // 3 ready nodes (2 from Eitri + 1 from Brokkr)
-      expect(meterGroups.length).toBe(3);
+      // 7 ready nodes (2 Eitri + 1 Brokkr + 1 Valhalla + 1 Nóatún + 1 Glitnir + 1 Járnviðr)
+      expect(meterGroups.length).toBe(7);
     });
   });
 
@@ -557,7 +562,7 @@ describe('ClustersPage', () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
       const nodeCards = screen.getAllByTestId('cluster-node');
-      expect(nodeCards.length).toBe(5);
+      expect(nodeCards.length).toBe(9);
     });
 
     // Brokkr n-4 (notready) and n-5 (cordoned) should not have mini bars
@@ -590,7 +595,7 @@ describe('ClustersPage', () => {
     renderWithVolundr(<ClustersPage />);
     await waitFor(() => {
       const articles = screen.getAllByRole('article');
-      expect(articles.length).toBe(2);
+      expect(articles.length).toBe(6);
     });
   });
 

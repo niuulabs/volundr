@@ -236,14 +236,14 @@ describe('ForgePage', () => {
     expect(counts[0]?.textContent).toMatch(/\d+×/);
   });
 
-  it('renders preview text on chronicle entries', async () => {
+  it('renders preview text on inflight rows', async () => {
     const session: Session = {
-      id: 'chron-sess',
-      ravnId: 'r-chron',
+      id: 'prev-sess',
+      ravnId: 'r-prev',
       personaName: 'chronicler',
       templateId: 'tpl-default',
       clusterId: 'cl-eitri',
-      state: 'idle',
+      state: 'running',
       startedAt: new Date(Date.now() - 7_200_000).toISOString(),
       lastActivityAt: new Date(Date.now() - 600_000).toISOString(),
       preview: 'Implement the new batch import pipeline for the analytics service',
@@ -271,54 +271,27 @@ describe('ForgePage', () => {
     };
 
     wrap(createMockVolundrService(), createMockClusterAdapter(), overriddenStore);
-    await waitFor(() => expect(screen.getByTestId('chronicle-preview')).toBeInTheDocument());
-    expect(screen.getByTestId('chronicle-preview').textContent).toBe(
+    await waitFor(() => expect(screen.getByTestId('inflight-preview')).toBeInTheDocument());
+    expect(screen.getByTestId('inflight-preview').textContent).toBe(
       'Implement the new batch import pipeline for the analytics service',
     );
   });
 
-  it('truncates chronicle preview at 80 chars', async () => {
-    const longPreview =
-      'This is a very long preview message that should be truncated to eighty characters because it is way too long to display in the chronicle tail without ellipsis';
+  it('renders all sessions link in inflight header', async () => {
+    wrap();
+    await waitFor(() => expect(screen.getByTestId('all-sessions-link')).toBeInTheDocument());
+    expect(screen.getByTestId('all-sessions-link').textContent).toContain('all sessions');
+  });
 
-    const session: Session = {
-      id: 'chron-long',
-      ravnId: 'r-long',
-      personaName: 'bard',
-      templateId: 'tpl-default',
-      clusterId: 'cl-eitri',
-      state: 'idle',
-      startedAt: new Date(Date.now() - 7_200_000).toISOString(),
-      lastActivityAt: new Date(Date.now() - 300_000).toISOString(),
-      preview: longPreview,
-      resources: {
-        cpuRequest: 1,
-        cpuLimit: 2,
-        cpuUsed: 0.1,
-        memRequestMi: 512,
-        memLimitMi: 1_024,
-        memUsedMi: 100,
-        gpuCount: 0,
-      },
-      env: {},
-      events: [],
-    };
+  it('renders cluster kind badges', async () => {
+    wrap();
+    await waitFor(() => expect(screen.getByText('Eitri')).toBeInTheDocument());
+    expect(screen.getAllByTestId('cluster-kind-badge').length).toBeGreaterThan(0);
+  });
 
-    const store = createMockSessionStore();
-    const overriddenStore: ISessionStore = {
-      ...store,
-      listSessions: async () => [session],
-      subscribe: (cb) => {
-        cb([session]);
-        return () => {};
-      },
-    };
-
-    wrap(createMockVolundrService(), createMockClusterAdapter(), overriddenStore);
-    await waitFor(() => expect(screen.getByTestId('chronicle-preview')).toBeInTheDocument());
-    const displayed = screen.getByTestId('chronicle-preview').textContent ?? '';
-    expect(displayed.endsWith('…')).toBe(true);
-    // 80 chars + ellipsis
-    expect(displayed.length).toBe(81);
+  it('renders details link in forge load header', async () => {
+    wrap();
+    await waitFor(() => expect(screen.getByTestId('cluster-details-link')).toBeInTheDocument());
+    expect(screen.getByTestId('cluster-details-link').textContent).toContain('details');
   });
 });

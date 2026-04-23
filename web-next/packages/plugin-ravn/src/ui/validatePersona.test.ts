@@ -62,17 +62,25 @@ describe('validatePersona', () => {
       expect(errors.find((e) => e.field === 'role')?.message).toContain('unknown-role');
     });
 
-    it('accepts all nine canonical roles', () => {
+    it('accepts all canonical roles', () => {
       const roles = [
-        'plan',
-        'build',
-        'verify',
-        'review',
-        'gate',
+        'arbiter',
         'audit',
-        'ship',
+        'autonomy',
+        'build',
+        'coord',
+        'gate',
         'index',
+        'investigate',
+        'knowledge',
+        'observe',
+        'plan',
+        'qa',
         'report',
+        'review',
+        'ship',
+        'verify',
+        'write',
       ] as const;
       for (const role of roles) {
         const errors = validatePersona(makeReq({ role }), CATALOG);

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Chip } from '@niuulabs/ui';
 import { useRouting } from '../application/useRouting';
 import { useMimirSources } from './useMimirSources';
-import { formatDate } from './format';
 
 const INPUT_CLS =
   'niuu-w-full niuu-py-2 niuu-px-3 niuu-bg-bg-secondary niuu-border niuu-border-solid niuu-border-border ' +

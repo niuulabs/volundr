@@ -48,7 +48,7 @@
 }
 
 .niuu-chat-mesh-verdict-icon[data-verdict='pass'] {
-  color: var(--color-accent-emerald);
+  color: var(--color-brand);
 }
 
 .niuu-chat-mesh-verdict-icon[data-verdict='fail'] {
@@ -86,7 +86,7 @@
 }
 
 .niuu-chat-mesh-verdict[data-verdict='pass'] {
-  color: var(--color-accent-emerald);
+  color: var(--color-brand);
 }
 .niuu-chat-mesh-verdict[data-verdict='fail'] {
   color: var(--color-accent-red);

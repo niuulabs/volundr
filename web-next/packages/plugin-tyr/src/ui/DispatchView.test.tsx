@@ -536,12 +536,12 @@ describe('DispatchView', () => {
     await waitFor(() => screen.getByText('Apply workflow override'));
 
     // Click the first workflow in the list
-    await user.click(screen.getByRole('button', { name: /Auth Rewrite Workflow/i }));
+    await user.click(screen.getByRole('button', { name: /ship — default release cycle/i }));
     await waitFor(() =>
       expect(screen.queryByText('Apply workflow override')).not.toBeInTheDocument(),
     );
     await waitFor(() =>
-      expect(screen.getByText(/Applied "Auth Rewrite Workflow" to 1 raid/i)).toBeInTheDocument(),
+      expect(screen.getByText(/Applied "ship — default release cycle" to 1 raid/i)).toBeInTheDocument(),
     );
   });
 
@@ -553,11 +553,11 @@ describe('DispatchView', () => {
     await user.click(screen.getByRole('checkbox', { name: /select row/i }));
     await user.click(screen.getByRole('button', { name: /apply workflow/i }));
     await waitFor(() => screen.getByText('Apply workflow override'));
-    await user.click(screen.getByRole('button', { name: /Auth Rewrite Workflow/i }));
+    await user.click(screen.getByRole('button', { name: /ship — default release cycle/i }));
 
     await waitFor(() =>
       expect(
-        screen.getByRole('generic', { name: /workflow override: Auth Rewrite Workflow/i }),
+        screen.getByRole('generic', { name: /workflow override: ship — default release cycle/i }),
       ).toBeInTheDocument(),
     );
   });

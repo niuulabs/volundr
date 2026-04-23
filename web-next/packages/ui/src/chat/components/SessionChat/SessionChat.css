@@ -75,7 +75,7 @@
 }
 
 .niuu-chat-status-indicator[data-connected='true'] {
-  color: var(--color-accent-emerald);
+  color: var(--color-brand);
 }
 
 .niuu-chat-status-icon {

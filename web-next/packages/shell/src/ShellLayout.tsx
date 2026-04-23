@@ -24,6 +24,11 @@ export function ShellLayout() {
 
   // System plugins (e.g. login) register routes but stay out of the nav rail.
   const navPlugins = useMemo(() => enabled.filter((p) => !p.system), [enabled]);
+  const topPlugins = useMemo(() => navPlugins.filter((p) => p.position !== 'bottom'), [navPlugins]);
+  const bottomPlugins = useMemo(
+    () => navPlugins.filter((p) => p.position === 'bottom'),
+    [navPlugins],
+  );
 
   const activeId = activePluginId(
     pathname,
@@ -72,7 +77,7 @@ export function ShellLayout() {
         <div className="niuu-shell__rail-brand" title="Niuu">
           {brand}
         </div>
-        {navPlugins.map((p) => (
+        {topPlugins.map((p) => (
           <button
             key={p.id}
             type="button"
@@ -88,6 +93,21 @@ export function ShellLayout() {
           </button>
         ))}
         <div className="niuu-shell__rail-spacer" />
+        {bottomPlugins.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className={clsx(
+              'niuu-shell__rail-item',
+              active?.id === p.id && 'niuu-shell__rail-item--active',
+            )}
+            title={`${p.title} · ${p.subtitle}`}
+            aria-label={p.title}
+            onClick={() => handleSelect(p.id)}
+          >
+            {p.rune}
+          </button>
+        ))}
         <div className="niuu-shell__rail-foot">v{version}</div>
       </aside>
 

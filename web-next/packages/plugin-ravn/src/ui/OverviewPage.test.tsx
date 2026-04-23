@@ -56,9 +56,9 @@ describe('OverviewPage', () => {
   it('shows raven total count', async () => {
     render(<OverviewPage />, { wrapper: wrap() });
     await waitFor(() => expect(screen.getByTestId('kpi-ravens')).toBeInTheDocument());
-    // Mock has 6 ravens
+    // Mock has 12 ravens
     const ravensKpi = screen.getByTestId('kpi-ravens');
-    expect(ravensKpi.textContent).toContain('6');
+    expect(ravensKpi.textContent).toContain('12');
   });
 
   it('renders the active ravens list', async () => {
@@ -145,9 +145,9 @@ describe('OverviewPage', () => {
   it('shows open session count in KPI', async () => {
     render(<OverviewPage />, { wrapper: wrap() });
     await waitFor(() => expect(screen.getByTestId('kpi-sessions')).toBeInTheDocument());
-    // 3 running sessions in mock data
+    // 10 running sessions in mock data
     const sessionsKpi = screen.getByTestId('kpi-sessions');
-    expect(sessionsKpi.textContent).toContain('3');
+    expect(sessionsKpi.textContent).toContain('10');
   });
 
   it('shows spend KPI', async () => {

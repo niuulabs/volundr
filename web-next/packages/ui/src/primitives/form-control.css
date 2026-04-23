@@ -1,5 +1,7 @@
 /* Shared base class for all form control elements (input, textarea, select trigger, combobox input). */
 .niuu-form-control {
+  appearance: none;
+  -webkit-appearance: none;
   display: block;
   width: 100%;
   padding: var(--space-2) var(--space-3);

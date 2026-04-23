@@ -1,12 +1,14 @@
 /**
- * LibraryPanel — draggable persona chips for assignment to stage nodes.
+ * LibraryPanel — block palette + categorised persona library.
  *
- * Personas can be dragged from this panel onto a stage node in the GraphView
- * to add them to `personaIds`. The drag payload is the persona ID (string),
- * transferred via DataTransfer.
+ * Sits on the left side of the canvas (between the templates sidebar and
+ * the graph). Contains structural block types (Stage, Condition, Human gate,
+ * End) and categorised persona entries grouped by role.
  *
  * Owner: plugin-tyr (WorkflowBuilder).
  */
+
+import { useState } from 'react';
 
 export interface PersonaEntry {
   id: string;
@@ -20,39 +22,154 @@ export interface LibraryPanelProps {
 
 // Default mock persona library — used when no personas are passed.
 export const DEFAULT_PERSONAS: PersonaEntry[] = [
-  { id: 'persona-plan', label: 'Planner', role: 'plan' },
-  { id: 'persona-build', label: 'Builder', role: 'build' },
-  { id: 'persona-verify', label: 'Verifier', role: 'verify' },
-  { id: 'persona-review', label: 'Reviewer', role: 'review' },
-  { id: 'persona-gate', label: 'Gatekeeper', role: 'gate' },
-  { id: 'persona-ship', label: 'Shipper', role: 'ship' },
+  { id: 'persona-decomposer', label: 'decomposer', role: 'plan' },
+  { id: 'persona-investigator', label: 'investigator', role: 'plan' },
+  { id: 'persona-coding-agent', label: 'coding-agent', role: 'build' },
+  { id: 'persona-coder', label: 'coder', role: 'build' },
+  { id: 'persona-raid-executor', label: 'raid-executor', role: 'build' },
+  { id: 'persona-qa', label: 'qa-agent', role: 'verify' },
+  { id: 'persona-verifier', label: 'verifier', role: 'verify' },
+  { id: 'persona-reviewer', label: 'reviewer', role: 'review' },
+  { id: 'persona-gatekeeper', label: 'gatekeeper', role: 'gate' },
 ];
 
+const BLOCKS = [
+  { id: 'stage', icon: '◆', label: 'Stage' },
+  { id: 'cond', icon: '?', label: 'Condition' },
+  { id: 'gate', icon: '⌘', label: 'Human gate' },
+  { id: 'end', icon: '●', label: 'End' },
+];
+
+const ROLE_INITIALS: Record<string, string> = {
+  plan: 'P',
+  build: 'C',
+  verify: 'V',
+  review: 'R',
+  gate: 'G',
+  ship: 'S',
+};
+
+const ROLE_BG: Record<string, string> = {
+  plan: 'niuu-border-status-cyan niuu-text-status-cyan',
+  build: 'niuu-border-brand niuu-text-brand',
+  verify: 'niuu-border-status-amber niuu-text-status-amber',
+  review: 'niuu-border-status-emerald niuu-text-status-emerald',
+  gate: 'niuu-border-status-purple niuu-text-status-purple',
+  ship: 'niuu-border-text-secondary niuu-text-text-secondary',
+};
+
+function groupByRole(personas: PersonaEntry[]): [string, PersonaEntry[]][] {
+  const groups = new Map<string, PersonaEntry[]>();
+  for (const p of personas) {
+    const list = groups.get(p.role) ?? [];
+    list.push(p);
+    groups.set(p.role, list);
+  }
+  return [...groups.entries()];
+}
+
 export function LibraryPanel({ personas }: LibraryPanelProps) {
+  const [search, setSearch] = useState('');
+  const filtered = search
+    ? personas.filter(
+        (p) =>
+          p.label.toLowerCase().includes(search.toLowerCase()) ||
+          p.role.toLowerCase().includes(search.toLowerCase()),
+      )
+    : personas;
+  const groups = groupByRole(filtered);
+
   return (
     <div
       data-testid="library-panel"
-      className="niuu-w-[140px] niuu-shrink-0 niuu-border-l niuu-border-border niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-hidden"
+      className="niuu-w-[220px] niuu-shrink-0 niuu-border-r niuu-border-border niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-hidden"
     >
-      <div className="niuu-px-2.5 niuu-pt-2.5 niuu-pb-1.5 niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-widest niuu-text-text-muted niuu-font-sans niuu-border-b niuu-border-border">
-        Personas
+      {/* Header */}
+      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-px-4 niuu-pt-3 niuu-pb-2">
+        <span className="niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-font-sans">
+          Library
+        </span>
+        <button
+          type="button"
+          className="niuu-bg-transparent niuu-border-none niuu-text-text-muted niuu-cursor-pointer niuu-text-sm niuu-p-0 hover:niuu-text-text-secondary"
+        >
+          +
+        </button>
       </div>
-      <div className="niuu-p-2 niuu-flex niuu-flex-col niuu-gap-1 niuu-overflow-y-auto">
-        {personas.map((persona) => (
-          <div
-            key={persona.id}
-            data-testid={`persona-chip-${persona.id}`}
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData('application/niuu-persona-id', persona.id);
-              e.dataTransfer.effectAllowed = 'copy';
-            }}
-            className="niuu-py-1.5 niuu-px-2 niuu-bg-bg-elevated niuu-border niuu-border-border niuu-rounded niuu-cursor-grab niuu-text-xs niuu-text-text-primary niuu-font-sans niuu-select-none niuu-flex niuu-items-center niuu-gap-1"
-          >
-            <span className="niuu-text-[8px] niuu-text-text-muted niuu-uppercase">
-              {persona.role}
-            </span>
-            <span>{persona.label}</span>
+
+      {/* Search */}
+      <div className="niuu-px-3 niuu-pb-2">
+        <input
+          type="text"
+          placeholder="Search personas..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          data-testid="library-search"
+          className="niuu-w-full niuu-py-1.5 niuu-px-2.5 niuu-bg-bg-tertiary niuu-border niuu-border-solid niuu-border-border-subtle niuu-rounded niuu-text-text-secondary niuu-font-sans niuu-text-xs niuu-outline-none niuu-box-border"
+        />
+      </div>
+
+      {/* Scrollable content */}
+      <div className="niuu-flex-1 niuu-overflow-y-auto niuu-px-3 niuu-pb-3">
+        {/* Blocks */}
+        {!search && (
+          <>
+            <div className="niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-widest niuu-text-text-muted niuu-font-sans niuu-mb-1 niuu-mt-1">
+              BLOCKS
+            </div>
+            <div className="niuu-flex niuu-flex-col niuu-gap-0.5 niuu-mb-3">
+              {BLOCKS.map((b) => (
+                <div
+                  key={b.id}
+                  draggable
+                  className="niuu-py-1.5 niuu-px-2.5 niuu-bg-bg-elevated niuu-rounded niuu-cursor-grab niuu-text-xs niuu-text-text-primary niuu-font-sans niuu-select-none niuu-flex niuu-items-center niuu-gap-2"
+                >
+                  <span className="niuu-text-text-muted niuu-text-xs">{b.icon}</span>
+                  <span>{b.label}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Persona groups */}
+        {groups.map(([role, entries]) => (
+          <div key={role}>
+            <div className="niuu-flex niuu-items-center niuu-justify-between niuu-mb-1 niuu-mt-2">
+              <span className="niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-widest niuu-text-text-muted niuu-font-sans">
+                {role}
+              </span>
+              <span className="niuu-text-[10px] niuu-text-text-faint niuu-font-mono">
+                {entries.length}
+              </span>
+            </div>
+            <div className="niuu-flex niuu-flex-col niuu-gap-0.5">
+              {entries.map((persona) => (
+                <div
+                  key={persona.id}
+                  data-testid={`persona-chip-${persona.id}`}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('application/niuu-persona-id', persona.id);
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  className="niuu-py-1.5 niuu-px-2.5 niuu-bg-bg-elevated niuu-rounded niuu-cursor-grab niuu-text-xs niuu-text-text-primary niuu-font-sans niuu-select-none niuu-flex niuu-items-center niuu-gap-2"
+                >
+                  <span
+                    className={`niuu-inline-flex niuu-items-center niuu-justify-center niuu-w-5 niuu-h-5 niuu-rounded-full niuu-border niuu-text-[9px] niuu-font-bold niuu-shrink-0 niuu-bg-transparent ${ROLE_BG[persona.role] ?? 'niuu-border-border niuu-text-text-muted'}`}
+                  >
+                    {ROLE_INITIALS[persona.role] ?? persona.role.charAt(0).toUpperCase()}
+                  </span>
+                  <div className="niuu-flex niuu-flex-col niuu-leading-tight">
+                    <span className="niuu-text-text-primary niuu-font-semibold">
+                      {persona.label}
+                    </span>
+                    <span className="niuu-text-[10px] niuu-text-text-muted">{persona.role}</span>
+                  </div>
+                  <span className="niuu-ml-auto niuu-text-text-faint niuu-text-[10px]">⇔</span>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>

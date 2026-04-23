@@ -13,13 +13,13 @@ import type { Ravn } from '../domain/ravn';
 
 const SAMPLE_RAVN: Ravn = {
   id: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
-  personaName: 'coding-agent',
+  personaName: 'sindri',
   status: 'active',
   model: 'claude-sonnet-4-6',
   createdAt: '2026-04-15T09:00:00Z',
   role: 'build',
-  letter: 'C',
-  summary: 'End-to-end coding agent with Mímir access.',
+  letter: 'S',
+  summary: 'Writes and edits source code across the stack.',
   iterationBudget: 40,
   writeRouting: 'local',
   cascade: 'sequential',
@@ -31,12 +31,12 @@ const SAMPLE_RAVN: Ravn = {
   ],
   mcpServers: ['filesystem', 'git', 'bash'],
   gatewayChannels: ['slack-dev', 'github-webhook'],
-  eventSubscriptions: ['code.requested', 'code.changed'],
+  eventSubscriptions: ['code.requested', 'bug.fix.requested', 'code.changed'],
 };
 
 const SAMPLE_RAVN_MINIMAL: Ravn = {
   id: 'f5a6b7c8-9d0e-4f1a-2b3c-4d5e6f7a8b9c',
-  personaName: 'health-auditor',
+  personaName: 'vör',
   status: 'idle',
   model: 'claude-sonnet-4-6',
   createdAt: '2026-04-14T18:00:00Z',
@@ -44,7 +44,7 @@ const SAMPLE_RAVN_MINIMAL: Ravn = {
 
 const SUSPENDED_RAVN: Ravn = {
   id: 'e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b',
-  personaName: 'investigator',
+  personaName: 'fjölnir',
   status: 'suspended',
   model: 'claude-opus-4-6',
   createdAt: '2026-04-14T22:00:00Z',
@@ -85,7 +85,7 @@ describe('RavnDetail', () => {
 
   it('shows the persona name in the header', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    expect(screen.getAllByText('coding-agent').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('sindri').length).toBeGreaterThan(0);
   });
 
   it('renders the tab nav with 5 tabs', () => {
@@ -160,7 +160,7 @@ describe('RavnDetail — Overview tab', () => {
 
   it('shows persona name in identity panel', async () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    await waitFor(() => expect(screen.getAllByText('coding-agent').length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText('sindri').length).toBeGreaterThan(0));
   });
 
   it('shows role badge in identity panel', () => {
@@ -170,7 +170,7 @@ describe('RavnDetail — Overview tab', () => {
 
   it('shows summary text when provided', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    expect(screen.getByText('End-to-end coding agent with Mímir access.')).toBeInTheDocument();
+    expect(screen.getByText('Writes and edits source code across the stack.')).toBeInTheDocument();
   });
 
   it('renders state with StateDot in runtime panel', () => {
@@ -521,7 +521,7 @@ describe('RavnDetail — Connectivity tab', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
     fireEvent.click(screen.getByTestId('sectab-connectivity'));
     const chips = screen.queryAllByTestId('event-subscription-chip');
-    expect(chips.length).toBe(2);
+    expect(chips.length).toBe(3);
   });
 
   it('shows "None configured" when no MCP servers', () => {

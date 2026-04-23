@@ -101,7 +101,9 @@ describe('SagasPage', () => {
     render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
     const listPanel = await screen.findByRole('list', { name: 'Sagas' });
     fireEvent.click(screen.getByRole('tab', { name: /active/i }));
-    await waitFor(() => expect(within(listPanel).getByText('Auth Rewrite')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(listPanel).getByText('Flokk subscription validation')).toBeInTheDocument(),
+    );
     expect(within(listPanel).queryByText('Plugin Ravn Scaffold')).not.toBeInTheDocument();
     expect(within(listPanel).queryByText('Observatory Topology Canvas')).not.toBeInTheDocument();
   });
@@ -113,7 +115,7 @@ describe('SagasPage', () => {
     await waitFor(() =>
       expect(within(listPanel).getByText('Plugin Ravn Scaffold')).toBeInTheDocument(),
     );
-    expect(within(listPanel).queryByText('Auth Rewrite')).not.toBeInTheDocument();
+    expect(within(listPanel).queryByText('Flokk subscription validation')).not.toBeInTheDocument();
   });
 
   it('filters to only failed sagas when "Failed" tab is clicked', async () => {
@@ -123,7 +125,7 @@ describe('SagasPage', () => {
     await waitFor(() =>
       expect(within(listPanel).getByText('Observatory Topology Canvas')).toBeInTheDocument(),
     );
-    expect(within(listPanel).queryByText('Auth Rewrite')).not.toBeInTheDocument();
+    expect(within(listPanel).queryByText('Flokk subscription validation')).not.toBeInTheDocument();
   });
 
   it('filters sagas by search term', async () => {

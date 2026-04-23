@@ -9,7 +9,7 @@ import type { Trigger } from '../../domain/trigger';
 const SAMPLE_TRIGGER: Trigger = {
   id: 'aa000001-0000-4000-8000-000000000001',
   kind: 'cron',
-  personaName: 'health-auditor',
+  personaName: 'eir',
   spec: '0 * * * *',
   enabled: true,
   createdAt: '2026-04-01T00:00:00Z',
@@ -35,7 +35,7 @@ describe('useTriggers', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(1);
-    expect(result.current.data![0]!.personaName).toBe('health-auditor');
+    expect(result.current.data![0]!.personaName).toBe('eir');
     expect(svc.listTriggers).toHaveBeenCalled();
   });
 

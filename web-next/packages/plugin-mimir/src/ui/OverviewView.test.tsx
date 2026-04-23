@@ -39,8 +39,8 @@ describe('OverviewView', () => {
 
   it('shows total page count from all mounts', async () => {
     wrap(<OverviewView />);
-    // Mock has 42 + 210 + 65 = 317 pages
-    await waitFor(() => expect(screen.getByText('317')).toBeInTheDocument());
+    // Mock mounts: 412 + 1180 + 342 + 184 = 2,118 pages
+    await waitFor(() => expect(screen.getByText('2,118')).toBeInTheDocument());
   });
 
   it('shows "clean" when no lint issues', async () => {
@@ -157,8 +157,9 @@ describe('OverviewView', () => {
   it('shows "never" for last dream when ravn has no dream cycle', async () => {
     wrap(<OverviewView />);
     await waitFor(() => expect(screen.getByText('Wardens')).toBeInTheDocument());
-    // ravn-galdra has lastDream: null
-    expect(screen.getByText('last dream never')).toBeInTheDocument();
+    // ravn-galdra and ravn-vor both have lastDream: null
+    const neverEls = screen.getAllByText(/last dream never/);
+    expect(neverEls.length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders error banner on mount fetch failure', async () => {

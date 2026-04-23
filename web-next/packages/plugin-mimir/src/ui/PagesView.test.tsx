@@ -21,7 +21,8 @@ describe('PagesView', () => {
 
   it('renders the page count badge', async () => {
     wrap(<PagesView />);
-    await waitFor(() => expect(screen.getByText('3')).toBeInTheDocument());
+    // Mock listPages returns 10 MOCK_PAGES
+    await waitFor(() => expect(screen.getByText('10')).toBeInTheDocument());
   });
 
   it('displays a page title and summary when a page is selected', async () => {

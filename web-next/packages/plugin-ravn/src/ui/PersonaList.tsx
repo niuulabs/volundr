@@ -5,15 +5,23 @@ import { PERSONA_ROLE_ORDER } from '../catalog';
 import './PersonaList.css';
 
 const ROLE_LABEL: Record<PersonaRole, string> = {
-  plan: 'Plan',
-  build: 'Build',
-  verify: 'Verify',
-  review: 'Review',
-  gate: 'Gate',
+  arbiter: 'Arbiter',
   audit: 'Audit',
-  ship: 'Ship',
+  autonomy: 'Autonomy',
+  build: 'Build',
+  coord: 'Coord',
+  gate: 'Gate',
   index: 'Index',
+  investigate: 'Investigate',
+  knowledge: 'Knowledge',
+  observe: 'Observe',
+  plan: 'Plan',
+  qa: 'QA',
   report: 'Report',
+  review: 'Review',
+  ship: 'Ship',
+  verify: 'Verify',
+  write: 'Write',
 };
 
 export interface PersonaListProps {
@@ -76,11 +84,12 @@ export function PersonaList({ selectedName, onSelect, onNew }: PersonaListProps)
         return (
           <div key={role} className="niuu-mb-3">
             <div
-              className="rv-persona-role-header niuu-py-1 niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-uppercase niuu-tracking-widest"
+              className="rv-persona-role-header niuu-py-1 niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-uppercase niuu-tracking-widest niuu-flex niuu-items-center niuu-justify-between niuu-px-3"
               data-role={role}
               data-testid={`persona-role-header-${role}`}
             >
-              {ROLE_LABEL[role]}
+              <span>{ROLE_LABEL[role].toLowerCase()}</span>
+              <span>{personas.length}</span>
             </div>
             {personas.map((p) => {
               const isSelected = p.name === selectedName;
@@ -101,9 +110,7 @@ export function PersonaList({ selectedName, onSelect, onNew }: PersonaListProps)
                 >
                   <PersonaAvatar role={p.role} letter={p.letter} size={24} />
                   <span className="niuu-truncate niuu-flex-1">{p.name}</span>
-                  {p.isBuiltin && (
-                    <span className="niuu-text-xs niuu-text-text-muted niuu-shrink-0">builtin</span>
-                  )}
+                  {p.hasOverride && <span className="rv-persona-ovr-badge">OVR</span>}
                 </button>
               );
             })}

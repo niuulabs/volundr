@@ -85,7 +85,7 @@
 }
 
 .niuu-chat-peer-status-dot[data-status='idle'] {
-  background-color: var(--color-accent-emerald);
+  background-color: var(--color-brand);
 }
 
 .niuu-chat-peer-name {
@@ -163,8 +163,8 @@
 }
 
 .niuu-chat-peer-meta-tag[data-variant='tool'] {
-  color: var(--color-accent-emerald);
-  background-color: color-mix(in srgb, var(--color-accent-emerald) 12%, transparent);
+  color: var(--color-brand);
+  background-color: color-mix(in srgb, var(--color-brand) 12%, transparent);
 }
 
 /* Gateway section */
@@ -228,7 +228,7 @@
 }
 
 .niuu-chat-peer-gw-latency--ok {
-  color: var(--color-accent-emerald);
+  color: var(--color-brand);
 }
 
 .niuu-chat-peer-gw-latency--warn {

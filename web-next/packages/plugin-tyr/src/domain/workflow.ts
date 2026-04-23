@@ -97,6 +97,10 @@ export const workflowSchema = z.object({
   id: z.string().uuid(),
   /** Display name. */
   name: z.string().min(1),
+  /** Semantic version string (e.g. "1.4.2"). */
+  version: z.string().optional(),
+  /** Human-readable description. */
+  description: z.string().optional(),
   /** Nodes in the DAG. IDs must be unique within a workflow. */
   nodes: z.array(workflowNodeSchema),
   /** Directed edges. Source and target must reference valid node IDs. */

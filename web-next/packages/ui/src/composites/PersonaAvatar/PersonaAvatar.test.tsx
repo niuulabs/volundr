@@ -6,9 +6,9 @@ import { PersonaAvatar, PERSONA_ROLE_SHAPE } from './PersonaAvatar';
 const ALL_ROLES = personaRoleSchema.options;
 
 describe('PERSONA_ROLE_SHAPE', () => {
-  it('maps every role to a distinct shape (deterministic)', () => {
+  it('maps every role to a shape (deterministic)', () => {
     const shapes = ALL_ROLES.map((role) => PERSONA_ROLE_SHAPE[role]);
-    // All 9 roles must have a shape defined
+    // All roles must have a shape defined
     expect(shapes).toHaveLength(ALL_ROLES.length);
     shapes.forEach((shape) => expect(shape).toBeTruthy());
   });
@@ -19,9 +19,11 @@ describe('PERSONA_ROLE_SHAPE', () => {
     }
   });
 
-  it('maps all 9 roles to 9 distinct shapes', () => {
+  it('uses at most 9 distinct shapes across all roles', () => {
     const unique = new Set(ALL_ROLES.map((r) => PERSONA_ROLE_SHAPE[r]));
-    expect(unique.size).toBe(ALL_ROLES.length);
+    // 9 shape primitives, some reused across related roles
+    expect(unique.size).toBeLessThanOrEqual(9);
+    expect(unique.size).toBeGreaterThan(0);
   });
 });
 

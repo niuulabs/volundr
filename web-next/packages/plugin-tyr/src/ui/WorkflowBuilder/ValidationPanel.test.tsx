@@ -76,38 +76,41 @@ function makeCyclicWorkflow(): Workflow {
 
 describe('ValidationPanel', () => {
   it('renders the validation-panel container', () => {
-    render(<ValidationPanel workflow={makeCleanWorkflow()} onSelectNode={vi.fn()} />);
+    render(<ValidationPanel workflow={makeCleanWorkflow()} onSelectNode={vi.fn()} errorCount={0} warnCount={0} />);
     expect(screen.getByTestId('validation-panel')).toBeInTheDocument();
   });
 
   it('renders the validation pill', () => {
-    render(<ValidationPanel workflow={makeCleanWorkflow()} onSelectNode={vi.fn()} />);
+    render(<ValidationPanel workflow={makeCleanWorkflow()} onSelectNode={vi.fn()} errorCount={0} warnCount={0} />);
     expect(screen.getByTestId('validation-pill')).toBeInTheDocument();
   });
 
-  it('shows "No issues" for a valid workflow', () => {
-    render(<ValidationPanel workflow={makeCleanWorkflow()} onSelectNode={vi.fn()} />);
-    expect(screen.getByTestId('validation-pill')).toHaveTextContent('No issues');
+  it('shows no error/warn badges for a valid workflow', () => {
+    render(<ValidationPanel workflow={makeCleanWorkflow()} onSelectNode={vi.fn()} errorCount={0} warnCount={0} />);
+    expect(screen.getByTestId('validation-pill')).toBeInTheDocument();
+    // No ERR or WARN badges when counts are 0
+    expect(screen.getByTestId('validation-pill').textContent).not.toMatch(/ERR/);
+    expect(screen.getByTestId('validation-pill').textContent).not.toMatch(/WARN/);
   });
 
   it('sets data-issue-count to 0 for clean workflow', () => {
-    render(<ValidationPanel workflow={makeCleanWorkflow()} onSelectNode={vi.fn()} />);
+    render(<ValidationPanel workflow={makeCleanWorkflow()} onSelectNode={vi.fn()} errorCount={0} warnCount={0} />);
     expect(screen.getByTestId('validation-pill')).toHaveAttribute('data-issue-count', '0');
   });
 
   it('shows error count for cyclic workflow', () => {
-    render(<ValidationPanel workflow={makeCyclicWorkflow()} onSelectNode={vi.fn()} />);
-    expect(screen.getByTestId('validation-pill').textContent).toMatch(/error/);
+    render(<ValidationPanel workflow={makeCyclicWorkflow()} onSelectNode={vi.fn()} errorCount={1} warnCount={0} />);
+    expect(screen.getByTestId('validation-pill').textContent).toMatch(/ERR/);
   });
 
   it('pill data-issue-count > 0 for cyclic workflow', () => {
-    render(<ValidationPanel workflow={makeCyclicWorkflow()} onSelectNode={vi.fn()} />);
+    render(<ValidationPanel workflow={makeCyclicWorkflow()} onSelectNode={vi.fn()} errorCount={1} warnCount={0} />);
     const count = Number(screen.getByTestId('validation-pill').getAttribute('data-issue-count'));
     expect(count).toBeGreaterThan(0);
   });
 
   it('expands issue list when pill is clicked', () => {
-    render(<ValidationPanel workflow={makeCyclicWorkflow()} onSelectNode={vi.fn()} />);
+    render(<ValidationPanel workflow={makeCyclicWorkflow()} onSelectNode={vi.fn()} errorCount={1} warnCount={0} />);
     // Issues not visible initially
     fireEvent.click(screen.getByTestId('validation-pill'));
     // After click, issue buttons should be visible
@@ -116,7 +119,7 @@ describe('ValidationPanel', () => {
   });
 
   it('collapses issue list on second click', () => {
-    render(<ValidationPanel workflow={makeCyclicWorkflow()} onSelectNode={vi.fn()} />);
+    render(<ValidationPanel workflow={makeCyclicWorkflow()} onSelectNode={vi.fn()} errorCount={1} warnCount={0} />);
     const pill = screen.getByTestId('validation-pill');
     fireEvent.click(pill);
     fireEvent.click(pill);
@@ -126,7 +129,7 @@ describe('ValidationPanel', () => {
 
   it('calls onSelectNode when clicking an issue with a nodeId', () => {
     const onSelectNode = vi.fn();
-    render(<ValidationPanel workflow={makeCyclicWorkflow()} onSelectNode={onSelectNode} />);
+    render(<ValidationPanel workflow={makeCyclicWorkflow()} onSelectNode={onSelectNode} errorCount={1} warnCount={0} />);
     fireEvent.click(screen.getByTestId('validation-pill'));
     const issues = screen.queryAllByTestId(/^validation-issue-/);
     // Find an issue that is not "global" (has a real nodeId)
@@ -138,7 +141,7 @@ describe('ValidationPanel', () => {
   });
 
   it('does not expand when there are no issues', () => {
-    render(<ValidationPanel workflow={makeCleanWorkflow()} onSelectNode={vi.fn()} />);
+    render(<ValidationPanel workflow={makeCleanWorkflow()} onSelectNode={vi.fn()} errorCount={0} warnCount={0} />);
     fireEvent.click(screen.getByTestId('validation-pill'));
     // No issues to show — list stays empty
     expect(screen.queryAllByTestId(/^validation-issue-/)).toHaveLength(0);

@@ -10,7 +10,7 @@ import {
 } from './budgetAttention';
 import type { BudgetState } from '@niuulabs/domain';
 
-const budget = (spentUsd: number, capUsd: number, warnAt = 0.8): BudgetState => ({
+const budget = (spentUsd: number, capUsd: number, warnAt = 0.7): BudgetState => ({
   spentUsd,
   capUsd,
   warnAt,

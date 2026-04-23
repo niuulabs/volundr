@@ -55,19 +55,19 @@ describe('RavnTopbar', () => {
     expect(screen.queryByTestId('topbar-chip-err')).not.toBeInTheDocument();
   });
 
-  it('shows 3 active ravens from mock data', async () => {
+  it('shows 10 active ravens from mock data', async () => {
     render(<RavnTopbar />, { wrapper: wrapWithServices(services()) });
-    // Mock has coding-agent, reviewer, qa-agent as active
+    // Mock has 10 active ravens (sindri, víðar, muninn, gefjon, fjölnir, saga, eir, bragi, delling, höðr)
     await waitFor(() => {
-      expect(screen.getByTestId('topbar-chip-ok').textContent).toContain('3');
+      expect(screen.getByTestId('topbar-chip-ok').textContent).toContain('10');
     });
   });
 
-  it('shows 3 running sessions from mock data', async () => {
+  it('shows 10 running sessions from mock data', async () => {
     render(<RavnTopbar />, { wrapper: wrapWithServices(services()) });
-    // Mock has coding-agent, reviewer, qa-agent sessions as running
+    // Mock has 10 running sessions
     await waitFor(() => {
-      expect(screen.getByTestId('topbar-chip-dim').textContent).toContain('3');
+      expect(screen.getByTestId('topbar-chip-dim').textContent).toContain('10');
     });
   });
 

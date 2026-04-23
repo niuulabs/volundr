@@ -9,15 +9,23 @@ import { fieldTypeSchema } from './event-catalog';
  * Consumed by: **Tyr** (workflow DAG, dispatch), **Mimir** (write-routing).
  */
 export const personaRoleSchema = z.enum([
-  'plan',
-  'build',
-  'verify',
-  'review',
-  'gate',
+  'arbiter',
   'audit',
-  'ship',
+  'autonomy',
+  'build',
+  'coord',
+  'gate',
   'index',
+  'investigate',
+  'knowledge',
+  'observe',
+  'plan',
+  'qa',
   'report',
+  'review',
+  'ship',
+  'verify',
+  'write',
 ]);
 
 export type PersonaRole = z.infer<typeof personaRoleSchema>;

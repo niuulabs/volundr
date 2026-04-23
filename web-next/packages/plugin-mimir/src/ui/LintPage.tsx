@@ -22,12 +22,6 @@ const RULE_DESCRIPTIONS: Record<LintRule, string> = {
   L12: 'Invalid frontmatter',
 };
 
-const SEVERITY_DOT: Record<IssueSeverity, 'failed' | 'attention' | 'observing'> = {
-  error: 'failed',
-  warn: 'attention',
-  info: 'observing',
-};
-
 const ACTION_BTN =
   'niuu-bg-transparent niuu-border niuu-border-solid niuu-border-border-subtle niuu-rounded-sm ' +
   'niuu-text-text-secondary niuu-font-sans niuu-text-xs niuu-py-[2px] niuu-px-2 niuu-cursor-pointer niuu-whitespace-nowrap ' +
@@ -46,25 +40,16 @@ export function LintPage() {
   const { issues, summary, isLoading, isError, error, runAutoFix, isFixing } = useLint();
   const [selectedRule, setSelectedRule] = useState<LintRule | null>(null);
 
-  const { countByRule, severityByRule, autoFixByRule } = issues.reduce<{
+  const { countByRule, autoFixByRule } = issues.reduce<{
     countByRule: Record<string, number>;
-    severityByRule: Record<string, IssueSeverity>;
     autoFixByRule: Record<string, boolean>;
   }>(
     (acc, issue) => {
       acc.countByRule[issue.rule] = (acc.countByRule[issue.rule] ?? 0) + 1;
-      const cur = acc.severityByRule[issue.rule];
-      if (
-        !cur ||
-        (issue.severity === 'error' && cur !== 'error') ||
-        (issue.severity === 'warn' && cur === 'info')
-      ) {
-        acc.severityByRule[issue.rule] = issue.severity;
-      }
       if (issue.autoFix) acc.autoFixByRule[issue.rule] = true;
       return acc;
     },
-    { countByRule: {}, severityByRule: {}, autoFixByRule: {} },
+    { countByRule: {}, autoFixByRule: {} },
   );
 
   const rules = Object.keys(RULE_DESCRIPTIONS) as LintRule[];
@@ -158,7 +143,6 @@ export function LintPage() {
           </button>
           {rules.map((rule) => {
             const count = countByRule[rule] ?? 0;
-            const sev: IssueSeverity = severityByRule[rule] ?? 'info';
             const canFix = autoFixByRule[rule];
             return (
               <button

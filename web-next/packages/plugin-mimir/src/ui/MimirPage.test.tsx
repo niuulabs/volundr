@@ -8,22 +8,20 @@ import { renderWithMimir } from '../testing/renderWithMimir';
 const wrap = renderWithMimir;
 
 describe('MimirPage', () => {
-  it('renders the rune and title', () => {
+  it('renders the overview view by default', () => {
     wrap(<MimirPage />);
-    expect(screen.getByText('Mímir')).toBeInTheDocument();
-    expect(screen.getByText('the well of knowledge')).toBeInTheDocument();
+    // MimirPage delegates title/tabs to the shell; it renders the view directly
+    expect(screen.getByText(/loading/)).toBeInTheDocument();
   });
 
-  it('renders the tab navigation', () => {
-    wrap(<MimirPage />);
-    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Pages' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Sources' })).toBeInTheDocument();
+  it('renders the pages view when defaultTab is pages', () => {
+    wrap(<MimirPage defaultTab="pages" />);
+    expect(screen.getByRole('complementary', { name: /page tree/ })).toBeInTheDocument();
   });
 
-  it('Overview tab is active by default', () => {
-    wrap(<MimirPage />);
-    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+  it('renders the sources view when defaultTab is sources', () => {
+    wrap(<MimirPage defaultTab="sources" />);
+    expect(screen.getByText(/sources/i)).toBeInTheDocument();
   });
 
   it('renders KPI metrics on the Overview tab after data loads', async () => {

@@ -44,35 +44,31 @@ test('navigating back from /volundr preserves the shell', async ({ page }) => {
 // Sessions page
 // ---------------------------------------------------------------------------
 
-test('sessions page shows state subnav', async ({ page }) => {
+test('sessions page shows pod list sidebar with state groups', async ({ page }) => {
   await page.goto('/volundr/sessions');
   await expect(page.getByTestId('sessions-page')).toBeVisible({ timeout: 8_000 });
-  await expect(page.getByTestId('state-tab-running')).toBeVisible();
-  await expect(page.getByTestId('state-tab-idle')).toBeVisible();
-  await expect(page.getByTestId('state-tab-failed')).toBeVisible();
+  await expect(page.getByTestId('pod-list-sidebar')).toBeVisible();
+  await expect(page.getByTestId('pod-group-active')).toBeVisible();
 });
 
-test('sessions page state tabs switch the displayed sessions', async ({ page }) => {
+test('sessions page auto-selects first running session and shows detail', async ({ page }) => {
   await page.goto('/volundr/sessions');
   await expect(page.getByTestId('sessions-page')).toBeVisible({ timeout: 8_000 });
 
-  // Running tab is default — ds-1 is running.
-  await expect(page.getByText('ds-1')).toBeVisible({ timeout: 5_000 });
-
-  // Switch to idle — ds-2 is idle.
-  await page.getByTestId('state-tab-idle').click();
-  await expect(page.getByText('ds-2')).toBeVisible({ timeout: 5_000 });
+  // Detail page should be embedded inline for the auto-selected session.
+  await expect(page.getByTestId('session-detail-page')).toBeVisible({ timeout: 5_000 });
 });
 
-test('clicking view on a session navigates to the detail page', async ({ page }) => {
+test('clicking a session in sidebar shows its detail inline', async ({ page }) => {
   await page.goto('/volundr/sessions');
   await expect(page.getByTestId('sessions-page')).toBeVisible({ timeout: 8_000 });
 
-  // Wait for sessions to load.
-  await expect(page.getByTestId('view-session-ds-1')).toBeVisible({ timeout: 5_000 });
-  await page.getByTestId('view-session-ds-1').click();
+  // Wait for pod entries to load and click one.
+  await expect(page.getByTestId('pod-entry-ds-1')).toBeVisible({ timeout: 5_000 });
+  await page.getByTestId('pod-entry-ds-1').click();
 
-  await expect(page).toHaveURL(/\/volundr\/session\/ds-1/, { timeout: 5_000 });
+  // Detail page should render inline (no navigation).
+  await expect(page.getByTestId('session-detail-page')).toBeVisible({ timeout: 5_000 });
 });
 
 // ---------------------------------------------------------------------------

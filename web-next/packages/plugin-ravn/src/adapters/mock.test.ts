@@ -12,10 +12,10 @@ import {
 // ---------------------------------------------------------------------------
 
 describe('createMockPersonaStore', () => {
-  it('returns the 21 seeded personas', async () => {
+  it('returns the 16 seeded personas', async () => {
     const store = createMockPersonaStore();
     const result = await store.listPersonas();
-    expect(result.length).toBe(21);
+    expect(result.length).toBe(16);
   });
 
   it('filters to builtin personas only', async () => {
@@ -33,8 +33,8 @@ describe('createMockPersonaStore', () => {
 
   it('getPersona returns a PersonaDetail', async () => {
     const store = createMockPersonaStore();
-    const detail = await store.getPersona('coding-agent');
-    expect(detail.name).toBe('coding-agent');
+    const detail = await store.getPersona('coder');
+    expect(detail.name).toBe('coder');
     expect(detail.systemPromptTemplate).toBeDefined();
     expect(detail.llm.primaryAlias).toBeDefined();
     expect(detail.fanIn.strategy).toBeDefined();
@@ -178,7 +178,7 @@ describe('createMockRavenStream', () => {
   it('getRaven returns by id', async () => {
     const stream = createMockRavenStream();
     const ravn = await stream.getRaven('a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c');
-    expect(ravn.personaName).toBe('coding-agent');
+    expect(ravn.personaName).toBe('sindri');
   });
 
   it('getRaven throws for unknown id', async () => {
@@ -203,7 +203,7 @@ describe('createMockSessionStream', () => {
   it('getSession returns by id', async () => {
     const stream = createMockSessionStream();
     const session = await stream.getSession('10000001-0000-4000-8000-000000000001');
-    expect(session.personaName).toBe('coding-agent');
+    expect(session.personaName).toBe('sindri');
   });
 
   it('getSession throws for unknown id', async () => {
@@ -237,7 +237,7 @@ describe('createMockTriggerStore', () => {
   it('returns seeded triggers', async () => {
     const store = createMockTriggerStore();
     const triggers = await store.listTriggers();
-    expect(triggers.length).toBe(5);
+    expect(triggers.length).toBe(6);
   });
 
   it('createTrigger adds a trigger and returns it', async () => {
@@ -253,14 +253,14 @@ describe('createMockTriggerStore', () => {
     expect(trigger.createdAt).toBeDefined();
 
     const all = await store.listTriggers();
-    expect(all.length).toBe(6);
+    expect(all.length).toBe(7);
   });
 
   it('deleteTrigger removes a trigger', async () => {
     const store = createMockTriggerStore();
     await store.deleteTrigger('aa000001-0000-4000-8000-000000000001');
     const all = await store.listTriggers();
-    expect(all.length).toBe(4);
+    expect(all.length).toBe(5);
   });
 });
 
@@ -274,7 +274,7 @@ describe('createMockBudgetStream', () => {
     const budget = await stream.getBudget('a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c');
     expect(budget.spentUsd).toBeGreaterThanOrEqual(0);
     expect(budget.capUsd).toBeGreaterThan(0);
-    expect(budget.warnAt).toBe(0.8);
+    expect(budget.warnAt).toBe(0.7);
   });
 
   it('getBudget returns a default for unknown ravn', async () => {
@@ -289,6 +289,6 @@ describe('createMockBudgetStream', () => {
     const fleet = await stream.getFleetBudget();
     expect(fleet.spentUsd).toBeGreaterThan(0);
     expect(fleet.capUsd).toBeGreaterThan(0);
-    expect(fleet.warnAt).toBe(0.8);
+    expect(fleet.warnAt).toBe(0.7);
   });
 });

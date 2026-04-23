@@ -16,7 +16,7 @@ import type { IPersonaStore, PersonaCreateRequest } from '../ports';
 // ---------------------------------------------------------------------------
 
 const rawSummary = {
-  name: 'coding-agent',
+  name: 'coder',
   role: 'build',
   letter: 'C',
   color: 'var(--color-accent-indigo)',
@@ -68,7 +68,7 @@ describe('listPersonas', () => {
     client.get.mockResolvedValue([rawSummary]);
     const result = await buildRavnPersonaAdapter(client).listPersonas();
     expect(result[0]).toMatchObject({
-      name: 'coding-agent',
+      name: 'coder',
       role: 'build',
       permissionMode: 'default',
       allowedTools: ['read', 'write'],
@@ -109,8 +109,8 @@ describe('getPersona', () => {
   it('calls GET /personas/:name', async () => {
     const client = makeClient();
     client.get.mockResolvedValue(rawDetail);
-    await buildRavnPersonaAdapter(client).getPersona('coding-agent');
-    expect(client.get).toHaveBeenCalledWith('/personas/coding-agent');
+    await buildRavnPersonaAdapter(client).getPersona('coder');
+    expect(client.get).toHaveBeenCalledWith('/personas/coder');
   });
 
   it('URL-encodes persona names with special characters', async () => {
@@ -123,9 +123,9 @@ describe('getPersona', () => {
   it('transforms detail response to camelCase', async () => {
     const client = makeClient();
     client.get.mockResolvedValue(rawDetail);
-    const result = await buildRavnPersonaAdapter(client).getPersona('coding-agent');
+    const result = await buildRavnPersonaAdapter(client).getPersona('coder');
     expect(result).toMatchObject({
-      name: 'coding-agent',
+      name: 'coder',
       systemPromptTemplate: 'You are a coder.',
       forbiddenTools: [],
       llm: { primaryAlias: 'claude-sonnet-4-6', thinkingEnabled: true, maxTokens: 8192 },
@@ -144,10 +144,10 @@ describe('getPersona', () => {
 describe('getPersonaYaml', () => {
   it('calls GET /personas/:name/yaml', async () => {
     const client = makeClient();
-    client.get.mockResolvedValue('name: coding-agent\n');
-    const result = await buildRavnPersonaAdapter(client).getPersonaYaml('coding-agent');
-    expect(client.get).toHaveBeenCalledWith('/personas/coding-agent/yaml');
-    expect(result).toBe('name: coding-agent\n');
+    client.get.mockResolvedValue('name: coder\n');
+    const result = await buildRavnPersonaAdapter(client).getPersonaYaml('coder');
+    expect(client.get).toHaveBeenCalledWith('/personas/coder/yaml');
+    expect(result).toBe('name: coder\n');
   });
 });
 
@@ -216,7 +216,7 @@ describe('createPersona', () => {
 
 describe('updatePersona', () => {
   const req: PersonaCreateRequest = {
-    name: 'coding-agent',
+    name: 'coder',
     role: 'build',
     letter: 'C',
     color: 'var(--color-accent-indigo)',
@@ -238,8 +238,8 @@ describe('updatePersona', () => {
   it('calls PUT /personas/:name', async () => {
     const client = makeClient();
     client.put.mockResolvedValue(rawDetail);
-    await buildRavnPersonaAdapter(client).updatePersona('coding-agent', req);
-    expect(client.put).toHaveBeenCalledWith('/personas/coding-agent', expect.any(Object));
+    await buildRavnPersonaAdapter(client).updatePersona('coder', req);
+    expect(client.put).toHaveBeenCalledWith('/personas/coder', expect.any(Object));
   });
 });
 
@@ -264,14 +264,14 @@ describe('forkPersona', () => {
   it('calls POST /personas/:name/fork', async () => {
     const client = makeClient();
     client.post.mockResolvedValue(rawDetail);
-    await buildRavnPersonaAdapter(client).forkPersona('coding-agent', { newName: 'my-fork' });
-    expect(client.post).toHaveBeenCalledWith('/personas/coding-agent/fork', expect.any(Object));
+    await buildRavnPersonaAdapter(client).forkPersona('coder', { newName: 'my-fork' });
+    expect(client.post).toHaveBeenCalledWith('/personas/coder/fork', expect.any(Object));
   });
 
   it('sends new_name in request body', async () => {
     const client = makeClient();
     client.post.mockResolvedValue(rawDetail);
-    await buildRavnPersonaAdapter(client).forkPersona('coding-agent', { newName: 'my-fork' });
+    await buildRavnPersonaAdapter(client).forkPersona('coder', { newName: 'my-fork' });
     const body = client.post.mock.calls[0][1] as Record<string, unknown>;
     expect(body.new_name).toBe('my-fork');
   });
@@ -279,10 +279,10 @@ describe('forkPersona', () => {
   it('returns a PersonaDetail for the forked persona', async () => {
     const client = makeClient();
     client.post.mockResolvedValue(rawDetail);
-    const result = await buildRavnPersonaAdapter(client).forkPersona('coding-agent', {
+    const result = await buildRavnPersonaAdapter(client).forkPersona('coder', {
       newName: 'my-fork',
     });
-    expect(result.name).toBe('coding-agent');
+    expect(result.name).toBe('coder');
   });
 });
 
@@ -310,7 +310,7 @@ describe('buildRavnPersonaAdapter', () => {
 
 const rawRavn = {
   id: '11111111-1111-4111-8111-111111111111',
-  persona_name: 'coding-agent',
+  persona_name: 'coder',
   status: 'active',
   model: 'balanced',
   created_at: '2026-04-01T12:00:00Z',
@@ -326,7 +326,7 @@ describe('buildRavnRavenAdapter', () => {
     expect(result).toEqual([
       {
         id: rawRavn.id,
-        personaName: 'coding-agent',
+        personaName: 'coder',
         status: 'active',
         model: 'balanced',
         createdAt: rawRavn.created_at,
@@ -340,7 +340,7 @@ describe('buildRavnRavenAdapter', () => {
     client.get.mockResolvedValue(rawRavn);
     const result = await buildRavnRavenAdapter(client).getRaven(rawRavn.id);
     expect(client.get).toHaveBeenCalledWith(`/ravens/${rawRavn.id}`);
-    expect(result.personaName).toBe('coding-agent');
+    expect(result.personaName).toBe('coder');
   });
 });
 
@@ -351,7 +351,7 @@ describe('buildRavnRavenAdapter', () => {
 const rawSession = {
   id: '22222222-2222-4222-8222-222222222222',
   ravn_id: '11111111-1111-4111-8111-111111111111',
-  persona_name: 'coding-agent',
+  persona_name: 'coder',
   status: 'running',
   model: 'balanced',
   created_at: '2026-04-01T12:00:00Z',
@@ -399,7 +399,7 @@ describe('buildRavnSessionAdapter', () => {
 const rawTrigger = {
   id: '44444444-4444-4444-8444-444444444444',
   kind: 'cron',
-  persona_name: 'coding-agent',
+  persona_name: 'coder',
   spec: '0 * * * *',
   enabled: true,
   created_at: '2026-04-01T12:00:00Z',
@@ -410,7 +410,7 @@ describe('buildRavnTriggerAdapter', () => {
     const client = makeClient();
     client.get.mockResolvedValue([rawTrigger]);
     const result = await buildRavnTriggerAdapter(client).listTriggers();
-    expect(result[0]!.personaName).toBe('coding-agent');
+    expect(result[0]!.personaName).toBe('coder');
   });
 
   it('creates a trigger with snake_case body', async () => {
@@ -418,13 +418,13 @@ describe('buildRavnTriggerAdapter', () => {
     client.post.mockResolvedValue(rawTrigger);
     await buildRavnTriggerAdapter(client).createTrigger({
       kind: 'cron',
-      personaName: 'coding-agent',
+      personaName: 'coder',
       spec: '0 * * * *',
       enabled: true,
     });
     expect(client.post).toHaveBeenCalledWith('/triggers', {
       kind: 'cron',
-      persona_name: 'coding-agent',
+      persona_name: 'coder',
       spec: '0 * * * *',
       enabled: true,
     });

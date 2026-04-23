@@ -13,21 +13,21 @@ const RAVENS: Ravn[] = [
   },
   {
     id: 'id-2',
-    personaName: 'reviewer',
+    personaName: 'fjölnir',
     status: 'active',
     model: 'claude-opus-4-6',
     createdAt: '2026-04-15T08:00:00Z',
   },
   {
     id: 'id-3',
-    personaName: 'security',
+    personaName: 'gefjon',
     status: 'idle',
     model: 'claude-haiku-4-5',
     createdAt: '2026-04-15T07:00:00Z',
   },
   {
     id: 'id-4',
-    personaName: 'qa-agent',
+    personaName: 'höðr',
     status: 'suspended',
     model: 'claude-sonnet-4-6',
     createdAt: '2026-04-14T20:00:00Z',
@@ -83,7 +83,7 @@ describe('groupRavens', () => {
     it('groups ravens by personaName', () => {
       const result = groupRavens(RAVENS, 'persona');
       expect(Object.keys(result)).toContain('coder');
-      expect(Object.keys(result)).toContain('reviewer');
+      expect(Object.keys(result)).toContain('fjölnir');
       expect(result.coder).toHaveLength(1);
     });
 
@@ -128,9 +128,9 @@ describe('groupRavens', () => {
 
 describe('topBudgetSpenders', () => {
   const budgets: Record<string, BudgetState> = {
-    'id-1': { spentUsd: 1.5, capUsd: 5.0, warnAt: 0.8 },
-    'id-2': { spentUsd: 3.9, capUsd: 5.0, warnAt: 0.8 },
-    'id-3': { spentUsd: 0.1, capUsd: 2.0, warnAt: 0.8 },
+    'id-1': { spentUsd: 1.5, capUsd: 5.0, warnAt: 0.7 },
+    'id-2': { spentUsd: 3.9, capUsd: 5.0, warnAt: 0.7 },
+    'id-3': { spentUsd: 0.1, capUsd: 2.0, warnAt: 0.7 },
     // id-4 has no budget entry
   };
 

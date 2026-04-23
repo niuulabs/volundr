@@ -27,7 +27,6 @@ export function KpiCard({
     <div className={cn('niuu-kpi-card', className)}>
       <div className="niuu-kpi-card__header">
         <span className="niuu-kpi-card__label">{label}</span>
-        {sparkline && <div className="niuu-kpi-card__sparkline">{sparkline}</div>}
       </div>
       <div className="niuu-kpi-card__value">{value}</div>
       {delta !== undefined && (
@@ -42,6 +41,7 @@ export function KpiCard({
           {deltaLabel && <span className="niuu-kpi-card__delta-label">{deltaLabel}</span>}
         </div>
       )}
+      {sparkline && <div className="niuu-kpi-card__sparkline">{sparkline}</div>}
     </div>
   );
 }

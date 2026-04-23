@@ -1,9 +1,8 @@
 /**
- * ValidationPanel — floating pill showing live workflow validation issues.
+ * ValidationPanel — bottom bar showing validation badges and zoom controls.
  *
- * Runs `validateWorkflowFull` on every render (synchronous, cheap for
- * typical workflow sizes). Clicking an issue calls `onSelectNode` so the
- * graph can scroll/highlight the offending node.
+ * Matches web2 layout: left side has ERR/WARN/REVIEW badges, center has
+ * help text, right side has zoom controls (+, -, %, reset, 1:1).
  *
  * Owner: plugin-tyr (WorkflowBuilder).
  */
@@ -17,6 +16,8 @@ import { validateWorkflowFull } from '../../domain/workflowValidation';
 export interface ValidationPanelProps {
   workflow: Workflow;
   onSelectNode: (id: string) => void;
+  errorCount: number;
+  warnCount: number;
 }
 
 const KIND_ICON: Record<WorkflowIssue['kind'], string> = {
@@ -29,40 +30,22 @@ const KIND_ICON: Record<WorkflowIssue['kind'], string> = {
   no_consumer: '→',
 };
 
-export function ValidationPanel({ workflow, onSelectNode }: ValidationPanelProps) {
+const ZOOM_BTN =
+  'niuu-bg-bg-elevated niuu-border niuu-border-border niuu-text-text-secondary niuu-rounded niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-cursor-pointer niuu-font-mono hover:niuu-text-text-primary niuu-transition-colors';
+
+export function ValidationPanel({ workflow, onSelectNode, errorCount, warnCount }: ValidationPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const issues = useMemo(() => validateWorkflowFull(workflow), [workflow]);
-  const errorCount = issues.filter((i) => i.severity === 'error').length;
-  const warnCount = issues.filter((i) => i.severity === 'warning').length;
-
-  const label =
-    issues.length === 0
-      ? '✓ No issues'
-      : `${errorCount > 0 ? `${errorCount} error${errorCount !== 1 ? 's' : ''}` : ''}${errorCount > 0 && warnCount > 0 ? ', ' : ''}${warnCount > 0 ? `${warnCount} warning${warnCount !== 1 ? 's' : ''}` : ''}`;
-
-  const severityClasses =
-    errorCount > 0
-      ? { text: 'niuu-text-critical', border: 'niuu-border-critical', bg: 'niuu-bg-critical' }
-      : warnCount > 0
-        ? {
-            text: 'niuu-text-status-amber',
-            border: 'niuu-border-status-amber',
-            bg: 'niuu-bg-status-amber',
-          }
-        : {
-            text: 'niuu-text-status-emerald',
-            border: 'niuu-border-status-emerald',
-            bg: 'niuu-bg-status-emerald',
-          };
+  const reviewCount = issues.filter((i) => i.kind === 'missing_persona').length;
 
   return (
     <div
       data-testid="validation-panel"
-      className="niuu-absolute niuu-bottom-[72px] niuu-left-1/2 niuu--translate-x-1/2 niuu-z-20 niuu-flex niuu-flex-col niuu-items-center niuu-gap-1 niuu-pointer-events-none"
+      className="niuu-absolute niuu-bottom-0 niuu-left-0 niuu-right-0 niuu-z-20 niuu-flex niuu-flex-col niuu-items-center"
     >
-      {/* Issue list */}
+      {/* Expanded issue list */}
       {expanded && issues.length > 0 && (
-        <div className="niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded-md niuu-py-1.5 niuu-px-1 niuu-min-w-[280px] niuu-max-w-[400px] niuu-max-h-[240px] niuu-overflow-y-auto niuu-shadow-md niuu-pointer-events-auto">
+        <div className="niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded-md niuu-py-1.5 niuu-px-1 niuu-min-w-[280px] niuu-max-w-[400px] niuu-max-h-[240px] niuu-overflow-y-auto niuu-shadow-md niuu-mb-1">
           {issues.map((issue, idx) => (
             <button
               key={idx}
@@ -94,28 +77,71 @@ export function ValidationPanel({ workflow, onSelectNode }: ValidationPanelProps
         </div>
       )}
 
-      {/* Pill toggle */}
-      <button
-        data-testid="validation-pill"
-        data-issue-count={issues.length}
-        onClick={() => setExpanded((e) => !e)}
-        className={cn(
-          'niuu-pointer-events-auto niuu-bg-bg-secondary niuu-rounded-full niuu-py-1 niuu-px-3.5 niuu-text-xs niuu-font-medium niuu-cursor-pointer niuu-shadow-sm niuu-flex niuu-items-center niuu-gap-1.5 niuu-border niuu-transition-colors',
-          severityClasses.text,
-          severityClasses.border,
-        )}
-      >
-        <span
-          className={cn(
-            'niuu-w-[7px] niuu-h-[7px] niuu-rounded-full niuu-shrink-0',
-            severityClasses.bg,
+      {/* Bottom bar */}
+      <div className="niuu-w-full niuu-flex niuu-items-center niuu-justify-between niuu-bg-bg-secondary niuu-border-t niuu-border-border niuu-px-3 niuu-py-1.5">
+        {/* Left: validation badges */}
+        <button
+          data-testid="validation-pill"
+          data-issue-count={issues.length}
+          onClick={() => setExpanded((e) => !e)}
+          className="niuu-bg-transparent niuu-border-none niuu-p-0 niuu-cursor-pointer niuu-flex niuu-items-center niuu-gap-1.5"
+        >
+          <span
+            className={cn(
+              'niuu-w-2 niuu-h-2 niuu-rounded-full niuu-shrink-0',
+              errorCount > 0
+                ? 'niuu-bg-critical'
+                : warnCount > 0
+                  ? 'niuu-bg-status-amber'
+                  : 'niuu-bg-status-emerald',
+            )}
+          />
+          {errorCount > 0 && (
+            <span className="niuu-inline-flex niuu-items-center niuu-gap-0.5 niuu-rounded niuu-border niuu-border-critical niuu-bg-critical-bg niuu-px-1.5 niuu-py-0.5 niuu-text-[10px] niuu-font-mono niuu-font-semibold niuu-text-critical">
+              ERR {errorCount}
+            </span>
           )}
-        />
-        {label}
-        {issues.length > 0 && (
-          <span className="niuu-opacity-60 niuu-text-xs">{expanded ? '▲' : '▼'}</span>
-        )}
-      </button>
+          {warnCount > 0 && (
+            <span className="niuu-inline-flex niuu-items-center niuu-gap-0.5 niuu-rounded niuu-border niuu-border-status-amber niuu-bg-status-amber/10 niuu-px-1.5 niuu-py-0.5 niuu-text-[10px] niuu-font-mono niuu-font-semibold niuu-text-status-amber">
+              WARN {warnCount}
+            </span>
+          )}
+          {reviewCount > 0 && (
+            <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-muted niuu-ml-1">
+              REVIEW
+            </span>
+          )}
+          {issues.length > 0 && (
+            <span className="niuu-opacity-60 niuu-text-[10px] niuu-text-text-muted">
+              {expanded ? '▲' : '▼'}
+            </span>
+          )}
+        </button>
+
+        {/* Center: help text */}
+        <span className="niuu-text-[10px] niuu-text-text-faint niuu-font-mono">
+          ⌘/ctrl + scroll to zoom · drag bg to pan
+        </span>
+
+        {/* Right: zoom controls */}
+        <div className="niuu-flex niuu-items-center niuu-gap-1">
+          <button type="button" className={ZOOM_BTN}>
+            +
+          </button>
+          <button type="button" className={ZOOM_BTN}>
+            −
+          </button>
+          <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-secondary niuu-px-1">
+            36%
+          </span>
+          <button type="button" className={ZOOM_BTN} title="Reset zoom">
+            ⟲
+          </button>
+          <button type="button" className={ZOOM_BTN} title="Fit to view">
+            1:1
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

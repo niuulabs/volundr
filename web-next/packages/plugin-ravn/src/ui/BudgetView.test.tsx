@@ -22,33 +22,26 @@ describe('BudgetView', () => {
     await waitFor(() => expect(screen.getByLabelText(/fleet budget/i)).toBeInTheDocument());
   });
 
-  it('shows fleet budget KPIs', async () => {
+  it('shows elapsed time header in hero', async () => {
     render(<BudgetView />, { wrapper: wrap(services) });
     await waitFor(() => {
-      expect(screen.getByText('spent')).toBeInTheDocument();
-      expect(screen.getByText('cap')).toBeInTheDocument();
-      expect(screen.getAllByText('runway').length).toBeGreaterThan(0);
+      expect(screen.getByText(/18H OF 24H ELAPSED/)).toBeInTheDocument();
     });
   });
 
-  it('shows burn rate KPI in hero card', async () => {
+  it('shows large spent value and cap in hero', async () => {
     render(<BudgetView />, { wrapper: wrap(services) });
     await waitFor(() => {
-      expect(screen.getByText('burn rate')).toBeInTheDocument();
+      expect(screen.getByText(/spent of/)).toBeInTheDocument();
     });
   });
 
-  it('shows runway bar with projection text', async () => {
+  it('shows runway bar with projection pill', async () => {
     render(<BudgetView />, { wrapper: wrap(services) });
     await waitFor(() => {
       expect(screen.getByTestId('runway-bar')).toBeInTheDocument();
-    });
-  });
-
-  it('shows burn trend badge', async () => {
-    render(<BudgetView />, { wrapper: wrap(services) });
-    await waitFor(() => {
-      expect(screen.getByTestId('burn-trend')).toBeInTheDocument();
+      expect(screen.getByText(/projecting/i)).toBeInTheDocument();
+      expect(screen.getByText(/headroom/i)).toBeInTheDocument();
     });
   });
 
@@ -57,9 +50,9 @@ describe('BudgetView', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(/budget attention/i)).toBeInTheDocument();
       expect(screen.getByLabelText('Over cap')).toBeInTheDocument();
-      expect(screen.getByLabelText('Burning fast')).toBeInTheDocument();
-      expect(screen.getByLabelText('Near cap')).toBeInTheDocument();
-      expect(screen.getByLabelText('Idle')).toBeInTheDocument();
+      expect(screen.getByLabelText('Will exceed cap by EOD')).toBeInTheDocument();
+      expect(screen.getByLabelText('Near cap (≥70%)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Accelerating')).toBeInTheDocument();
     });
   });
 
@@ -70,18 +63,10 @@ describe('BudgetView', () => {
     });
   });
 
-  it('fleet sparkline has correct title', async () => {
+  it('fleet burn has correct title', async () => {
     render(<BudgetView />, { wrapper: wrap(services) });
     await waitFor(() => {
-      expect(screen.getByText('Fleet spend (24h)')).toBeInTheDocument();
-    });
-  });
-
-  it('fleet sparkline has x-axis labels', async () => {
-    render(<BudgetView />, { wrapper: wrap(services) });
-    await waitFor(() => {
-      expect(screen.getByText('24h ago')).toBeInTheDocument();
-      expect(screen.getByText('now')).toBeInTheDocument();
+      expect(screen.getByText(/Fleet burn/i)).toBeInTheDocument();
     });
   });
 
@@ -127,6 +112,14 @@ describe('BudgetView', () => {
     });
   });
 
+  it('top drivers has correct header', async () => {
+    render(<BudgetView />, { wrapper: wrap(services) });
+    await waitFor(() => expect(screen.getByText('Top drivers today')).toBeInTheDocument(), {
+      timeout: 3000,
+    });
+    expect(screen.getByText('ravens ranked by absolute $ spent')).toBeInTheDocument();
+  });
+
   it('top drivers list has driver rows', async () => {
     render(<BudgetView />, { wrapper: wrap(services) });
     await waitFor(() => expect(screen.getAllByTestId('driver-row').length).toBeGreaterThan(0), {
@@ -140,7 +133,6 @@ describe('BudgetView', () => {
       () => {
         const rows = screen.getAllByTestId('driver-row');
         expect(rows.length).toBeGreaterThan(0);
-        // Each driver row should have a sparkline SVG
         const firstRow = rows[0]!;
         expect(firstRow.querySelector('.niuu-sparkline')).toBeTruthy();
       },
@@ -170,23 +162,8 @@ describe('BudgetView', () => {
     render(<BudgetView />, { wrapper: wrap(services) });
     await waitFor(
       () => {
-        // Badges are spans with aria-label "attention: ..."
         const badges = document.querySelectorAll('[aria-label^="attention:"]');
         expect(badges.length).toBeGreaterThan(0);
-      },
-      { timeout: 3000 },
-    );
-  });
-
-  it('recommendation action buttons have correct labels', async () => {
-    render(<BudgetView />, { wrapper: wrap(services) });
-    await waitFor(
-      () => {
-        const buttons = screen.getAllByTestId('rec-action');
-        const labels = buttons.map((b) => b.textContent);
-        // The mock data produces some idle ravens → Suspend buttons
-        const validLabels = ['Apply cap', 'Reduce budget', 'Suspend'];
-        expect(labels.every((l) => validLabels.some((v) => l?.includes(v)))).toBe(true);
       },
       { timeout: 3000 },
     );

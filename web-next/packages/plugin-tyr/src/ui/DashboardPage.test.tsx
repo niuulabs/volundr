@@ -80,7 +80,9 @@ describe('DashboardPage', () => {
 
   it('shows active saga names from seed data', async () => {
     render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('Flokk subscription validation')).toBeInTheDocument(),
+    );
   });
 
   it('renders live flock section', async () => {
@@ -104,11 +106,15 @@ describe('DashboardPage', () => {
   it('clicking a saga card calls navigate with the saga ID', async () => {
     mockNavigate.mockClear();
     render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
-    await waitFor(() => expect(screen.getByText('Auth Rewrite')).toBeInTheDocument());
-    fireEvent.click(screen.getByText('Auth Rewrite').closest('[role="button"]')!);
+    await waitFor(() =>
+      expect(screen.getByText('Flokk subscription validation')).toBeInTheDocument(),
+    );
+    fireEvent.click(
+      screen.getByText('Flokk subscription validation').closest('[role="button"]')!,
+    );
     expect(mockNavigate).toHaveBeenCalledWith({
       to: '/tyr/sagas/$sagaId',
-      params: { sagaId: '00000000-0000-0000-0000-000000000001' },
+      params: { sagaId: '00000000-0000-0000-0000-000000000004' },
     });
   });
 
@@ -161,7 +167,7 @@ describe('DashboardPage', () => {
     expect(bar).toHaveTextContent('threshold');
     expect(bar).toHaveTextContent('0.70');
     expect(bar).toHaveTextContent('concurrent');
-    expect(bar).toHaveTextContent('1/3');
+    expect(bar).toHaveTextContent('2/5');
   });
 
   it('does not render dispatcher stats bar while dispatcher is loading', () => {
@@ -191,7 +197,7 @@ describe('DashboardPage', () => {
     await waitFor(() => expect(screen.getByTestId('tyr-dispatcher-stats')).toBeInTheDocument());
     expect(screen.getByTestId('tyr-dispatcher-stats')).toHaveTextContent('off');
     expect(screen.getByTestId('tyr-dispatcher-stats')).toHaveTextContent('0.80');
-    expect(screen.getByTestId('tyr-dispatcher-stats')).toHaveTextContent('1/5');
+    expect(screen.getByTestId('tyr-dispatcher-stats')).toHaveTextContent('2/5');
   });
 
   // ---------------------------------------------------------------------------
@@ -206,15 +212,15 @@ describe('DashboardPage', () => {
     expect(linkButtons.length).toBeGreaterThanOrEqual(6);
   });
 
-  it('feed link buttons are disabled when no saga matches the subject', async () => {
+  it('feed link buttons are enabled when saga trackerIds match feed subjects', async () => {
     render(<DashboardPage />, { wrapper: wrap(defaultServices()) });
     await waitFor(() => expect(screen.getByText('Event feed')).toBeInTheDocument());
-    // Seed sagas have trackerIds NIU-500, NIU-520, NIU-600 — none match feed subjects
-    const disabledButtons = screen
-      .getAllByTitle('No linked saga')
+    // Seed sagas have trackerIds NIU-214, NIU-199, NIU-183, NIU-148 — match feed subjects
+    const enabledButtons = screen
+      .getAllByTitle(/Open NIU-/)
       .filter((el) => el.tagName === 'BUTTON');
-    expect(disabledButtons.length).toBe(6);
-    disabledButtons.forEach((btn) => expect(btn).toBeDisabled());
+    expect(enabledButtons.length).toBeGreaterThanOrEqual(1);
+    enabledButtons.forEach((btn) => expect(btn).not.toBeDisabled());
   });
 
   it('feed link button navigates to the matched saga', async () => {

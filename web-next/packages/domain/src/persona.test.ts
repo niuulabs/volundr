@@ -15,12 +15,27 @@ import {
 // ---------------------------------------------------------------------------
 
 describe('personaRoleSchema', () => {
-  it.each(['plan', 'build', 'verify', 'review', 'gate', 'audit', 'ship', 'index', 'report'])(
-    'accepts role "%s"',
-    (role) => {
-      expect(personaRoleSchema.parse(role)).toBe(role);
-    },
-  );
+  it.each([
+    'arbiter',
+    'audit',
+    'autonomy',
+    'build',
+    'coord',
+    'gate',
+    'index',
+    'investigate',
+    'knowledge',
+    'observe',
+    'plan',
+    'qa',
+    'report',
+    'review',
+    'ship',
+    'verify',
+    'write',
+  ])('accepts role "%s"', (role) => {
+    expect(personaRoleSchema.parse(role)).toBe(role);
+  });
 
   it('rejects an unknown role', () => {
     expect(() => personaRoleSchema.parse('destroy')).toThrow();

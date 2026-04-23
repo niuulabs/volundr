@@ -52,7 +52,7 @@ describe('WorkflowBuilder', () => {
 
   it('displays the workflow name in the header', () => {
     render(<WorkflowBuilder initialWorkflow={makeWorkflow()} />);
-    expect(screen.getByText('Test Workflow')).toBeInTheDocument();
+    expect(screen.getByTestId('builder-title')).toHaveTextContent('Test Workflow');
   });
 
   it('renders all three view tabs', () => {

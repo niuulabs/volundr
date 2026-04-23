@@ -25,7 +25,7 @@ describe('ravnStatusSchema', () => {
 
 const validRavn = {
   id: 'a3f1b2c4-8e7d-4a6f-9b0c-1d2e3f4a5b6c',
-  personaName: 'coding-agent',
+  personaName: 'sindri',
   status: 'active',
   model: 'claude-sonnet-4-6',
   createdAt: '2026-04-15T09:12:34Z',

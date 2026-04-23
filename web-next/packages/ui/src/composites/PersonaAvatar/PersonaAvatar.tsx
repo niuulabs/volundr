@@ -21,15 +21,25 @@ export type PersonaShapeKind =
  * without rendering the full avatar.
  */
 export const PERSONA_ROLE_SHAPE: Record<PersonaRole, PersonaShapeKind> = {
-  plan: 'chevron',
+  // Active roles (web2 baseline)
+  arbiter: 'diamond',
+  autonomy: 'triangle',
   build: 'square',
-  verify: 'ring-dashed',
-  review: 'ring',
-  gate: 'diamond',
-  audit: 'hex',
-  ship: 'triangle',
-  index: 'dot-in-ring',
+  coord: 'chevron',
+  investigate: 'ring-dashed',
+  knowledge: 'dot-in-ring',
+  observe: 'hex',
+  plan: 'chevron',
+  qa: 'ring-dashed',
   report: 'rounded',
+  review: 'ring',
+  write: 'rounded',
+  // Legacy roles — kept for backward compatibility
+  audit: 'hex',
+  gate: 'diamond',
+  index: 'dot-in-ring',
+  ship: 'triangle',
+  verify: 'ring-dashed',
 };
 
 const FILL = 'color-mix(in srgb, var(--brand-500) 14%, transparent)';

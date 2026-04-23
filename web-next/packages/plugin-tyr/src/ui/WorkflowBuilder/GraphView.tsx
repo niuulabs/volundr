@@ -588,7 +588,7 @@ export function GraphView({
       className="niuu-flex-1 niuu-relative niuu-overflow-hidden niuu-bg-bg-primary niuu-min-h-[400px]"
     >
       {/* Toolbar */}
-      <div className="niuu-absolute niuu-bottom-4 niuu-left-1/2 niuu--translate-x-1/2 niuu-flex niuu-gap-2 niuu-z-10 niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded-md niuu-py-1.5 niuu-px-2.5">
+      <div className="niuu-absolute niuu-bottom-12 niuu-left-1/2 niuu--translate-x-1/2 niuu-flex niuu-gap-2 niuu-z-10 niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded-md niuu-py-1.5 niuu-px-2.5">
         <button
           data-testid="add-stage"
           onClick={() => onAddNode('stage')}

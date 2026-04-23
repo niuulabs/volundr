@@ -13,6 +13,7 @@ import {
   ToastProvider,
   useToast,
 } from '@niuulabs/ui';
+import type { BadgeStatus } from '@niuulabs/ui';
 import type { ITyrService, Phase } from '../ports';
 import type { Saga, RaidStatus } from '../domain/saga';
 import { useSagas } from './useSagas';
@@ -39,6 +40,15 @@ function sagaPipe(phases: Phase[]): PipeCell[] {
   return phases.flatMap((p) =>
     p.raids.map((r) => ({ status: raidStatusToCell(r.status), label: r.name })),
   );
+}
+
+/** Derive the dominant badge status for a saga from its raids. */
+function deriveSagaBadge(phases: Phase[]): BadgeStatus {
+  const raids = phases.flatMap((p) => p.raids);
+  if (raids.some((r) => r.status === 'failed')) return 'failed';
+  if (raids.some((r) => r.status === 'running')) return 'running';
+  if (raids.some((r) => r.status === 'review' || r.status === 'escalated')) return 'review';
+  return 'running';
 }
 
 /** Deterministic mock throughput data (24 hours). */
@@ -174,7 +184,7 @@ function DashboardContent() {
         </div>
         <div className="tyr-kpi__sub">
           <StateDot state="running" pulse />
-          dispatched this hour: <span>{runningRaids}</span>
+          dispatched this hour: <span>{runningRaids + reviewRaids}</span>
         </div>
       </div>
 
@@ -196,7 +206,7 @@ function DashboardContent() {
         <div className="tyr-kpi__val">{reviewRaids}</div>
         <div className="tyr-kpi__sub">
           <span style={{ color: 'var(--brand-300)' }}>
-            {allRaids.filter((r) => r.status === 'escalated').length} escalated
+            {allRaids.filter((r) => r.status === 'escalated').length} escalated · oldest 18m
           </span>
         </div>
       </div>
@@ -234,15 +244,7 @@ function DashboardContent() {
               <div className="tyr-saga-card__name">{saga.name}</div>
               <div className="tyr-saga-card__meta">
                 <span>{saga.trackerId}</span>
-                <StatusBadge
-                  status={
-                    saga.status === 'active'
-                      ? 'running'
-                      : saga.status === 'complete'
-                        ? 'complete'
-                        : 'failed'
-                  }
-                />
+                <StatusBadge status={deriveSagaBadge(phases)} />
                 <ConfidenceBadge value={saga.confidence / 100} />
                 <span>{saga.repos[0]}</span>
               </div>
@@ -286,7 +288,7 @@ function DashboardContent() {
       </div>
 
       {/* ── Event feed ────────────────────────────── */}
-      <div className="tyr-dash__full">
+      <div className="tyr-dash__wide">
         <div className="tyr-sec-head">
           <span className="tyr-sec-head__title">Event feed</span>
           <span className="tyr-eyebrow" style={{ fontFamily: 'var(--font-mono)' }}>

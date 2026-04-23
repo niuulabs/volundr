@@ -61,7 +61,8 @@ describe('RavnsPage', () => {
 
   it('shows "no dream cycles yet" for ravns without dreams', async () => {
     wrap(<RavnsPage />);
-    await waitFor(() => expect(screen.getByTestId('ravn-no-dream')).toBeInTheDocument());
+    // ravn-galdra and ravn-vor both have lastDream: null
+    await waitFor(() => expect(screen.getAllByTestId('ravn-no-dream').length).toBeGreaterThan(0));
   });
 
   it('shows mount chips for each ravn', async () => {

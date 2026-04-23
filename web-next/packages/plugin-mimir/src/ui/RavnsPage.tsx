@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { StateDot, Chip } from '@niuulabs/ui';
 import { useRavns } from '../application/useRavns';
 import type { RavnBinding } from '../domain/ravn-binding';
-import { RAVN_DOT_STATE } from './mimir.constants';
 import { formatDuration, formatTimestamp } from './format';
 
 // ---------------------------------------------------------------------------

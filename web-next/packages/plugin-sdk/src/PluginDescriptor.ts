@@ -31,6 +31,13 @@ export interface PluginDescriptor {
    */
   system?: boolean;
 
+  /**
+   * Where to place this plugin in the navigation rail.
+   * `'bottom'` renders it below the spacer, pinned to the rail footer.
+   * Defaults to `'top'`.
+   */
+  position?: 'top' | 'bottom';
+
   routes?: (rootRoute: AnyRoute) => AnyRoute[];
 
   render?: (ctx: PluginCtx) => ReactNode;

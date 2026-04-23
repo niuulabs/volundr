@@ -38,6 +38,27 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+.rv-section-heading-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.rv-section-heading-row .rv-section-heading {
+  margin-bottom: 0;
+}
+.rv-section-link {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.rv-section-link:hover {
+  color: var(--color-text-secondary);
+}
+.rv-kpi-sub--warn {
+  color: var(--color-accent-amber);
+}
 
 /* Active ravens list */
 .rv-active-list {
@@ -61,8 +82,46 @@
 
 .rv-active-row__name {
   font-size: var(--text-sm);
-  font-weight: 500;
-  flex: 1;
+  font-weight: 600;
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.rv-active-row__role {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.rv-active-row__loc {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.rv-active-row__sessions {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  width: 50px;
+  flex-shrink: 0;
+}
+
+.rv-active-row__bar {
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.rv-active-row__time {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  width: 60px;
+  text-align: right;
+  flex-shrink: 0;
 }
 
 .rv-active-row__model {
@@ -173,29 +232,43 @@
 
 .rv-spender-row {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  align-items: center;
+  gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   background: var(--color-bg-secondary);
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
 }
 
-.rv-spender-row__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
 .rv-spender-row__name {
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: 600;
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.rv-spender-row__bar {
+  flex: 1;
+  min-width: 0;
+}
+
+.rv-spender-row__pct {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  width: 36px;
+  text-align: right;
+  flex-shrink: 0;
 }
 
 .rv-spender-row__amount {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
   font-family: var(--font-mono);
+  color: var(--color-text-primary);
+  width: 52px;
+  text-align: right;
+  flex-shrink: 0;
 }
 
 /* Recent activity section spacing */
