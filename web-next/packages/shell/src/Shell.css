@@ -244,6 +244,11 @@
   min-width: 0;
   border-right-color: transparent;
 }
+.niuu-shell__subnav:empty {
+  width: 0;
+  min-width: 0;
+  border-right-color: transparent;
+}
 
 /* ── Content ───────────────────────────────────────── */
 .niuu-shell__content {

@@ -7,10 +7,8 @@ import {
   ErrorState,
   cn,
   Meter,
-  MeshSidebar,
   MeshEventCard,
   resolveParticipantColor,
-  relTime,
 } from '@niuulabs/ui';
 import type { MeshEvent, MeshEventType, RoomParticipant } from '@niuulabs/ui';
 import { SourceLabel } from './atoms/SourceLabel';
@@ -42,6 +40,17 @@ const TABS: { id: SessionTab; label: string }[] = [
   { id: 'chronicle', label: 'Chronicle' },
   { id: 'logs', label: 'Logs' },
 ];
+
+function tabIcon(id: SessionTab): string {
+  switch (id) {
+    case 'chat': return '\u25AD';
+    case 'terminal': return '>_';
+    case 'diffs': return '\u296E';
+    case 'files': return '\u25F0';
+    case 'chronicle': return '\u2263';
+    case 'logs': return '\u2328';
+  }
+}
 
 export interface SessionDetailPageProps {
   sessionId: string;
@@ -124,8 +133,15 @@ function FileChangeSummary({ files }: { files: SessionFileStats }) {
 // SessionHeader
 // ---------------------------------------------------------------------------
 
-function SessionHeader({ session, readOnly }: { session: Session; readOnly: boolean }) {
-  const [showRes, setShowRes] = useState(false);
+function SessionHeader({
+  session,
+  readOnly,
+  showRes,
+}: {
+  session: Session;
+  readOnly: boolean;
+  showRes: boolean;
+}) {
   const r = session.resources;
 
   // Derive a mock source and cluster from session data
@@ -149,15 +165,24 @@ function SessionHeader({ session, readOnly }: { session: Session; readOnly: bool
   return (
     <header data-testid="session-header">
       {/* Main row */}
-      <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2.5">
-        <LifecycleBadge state={toLifecycleState(session.state)} />
-        <div className="niuu-flex niuu-flex-col niuu-gap-0.5">
+      <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2.5">
+        <LifecycleBadge
+          state={toLifecycleState(session.state)}
+          className="!niuu-px-2 !niuu-py-0.5 !niuu-text-[10px] !niuu-leading-none"
+        />
+        <div className="niuu-flex niuu-items-baseline niuu-gap-4">
           <h1
-            className="niuu-font-mono niuu-text-sm niuu-font-medium niuu-text-text-primary"
+            className="niuu-font-mono niuu-text-[16px] niuu-font-medium niuu-text-text-primary"
+            data-testid="session-id-display"
+          >
+            {session.id}
+          </h1>
+          <span
+            className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted"
             data-testid="session-name"
           >
             {session.personaName}
-          </h1>
+          </span>
           <span
             className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted"
             data-testid="session-id-label"
@@ -168,7 +193,7 @@ function SessionHeader({ session, readOnly }: { session: Session; readOnly: bool
 
         {session.sagaId && (
           <a
-            className="niuu-font-mono niuu-text-xs niuu-text-brand hover:niuu-underline"
+            className="niuu-rounded-md niuu-bg-brand-subtle niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[11px] niuu-text-brand hover:niuu-underline"
             href="#"
             data-testid="session-issue-link"
           >
@@ -178,11 +203,18 @@ function SessionHeader({ session, readOnly }: { session: Session; readOnly: bool
 
         <span className="niuu-mx-1 niuu-h-3 niuu-w-px niuu-bg-border-subtle" aria-hidden />
 
-        <SourceLabel source={source} short />
+        <div className="niuu-max-w-[320px] niuu-truncate">
+          <SourceLabel source={source} short />
+        </div>
 
         <span className="niuu-mx-1 niuu-h-3 niuu-w-px niuu-bg-border-subtle" aria-hidden />
 
-        <ClusterChip cluster={cluster} />
+        <div className="niuu-flex niuu-items-center niuu-gap-2">
+          <ClusterChip cluster={cluster} />
+          <span className="niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.12em] niuu-text-text-muted">
+            primary
+          </span>
+        </div>
 
         {readOnly && (
           <span
@@ -195,25 +227,13 @@ function SessionHeader({ session, readOnly }: { session: Session; readOnly: bool
 
         <div className="niuu-flex-1" />
 
-        <div className="niuu-flex niuu-items-center niuu-gap-4" data-testid="session-stats">
+        <div className="niuu-flex niuu-items-center niuu-gap-6" data-testid="session-stats">
           <Stat label="uptime" value={duration} />
           <Stat label="msgs" value={session.events.length} />
           <Stat label="tokens" value={formatTokens((session.tokensIn ?? 0) + (session.tokensOut ?? 0))} />
           <Stat label="cost" value={`$${((session.costCents ?? 0) / 100).toFixed(2)}`} />
         </div>
 
-        <button
-          className={cn(
-            'niuu-ml-2 niuu-rounded niuu-px-2 niuu-py-1 niuu-text-xs niuu-font-mono',
-            showRes
-              ? 'niuu-bg-bg-elevated niuu-text-brand'
-              : 'niuu-text-text-muted hover:niuu-text-text-secondary',
-          )}
-          onClick={() => setShowRes((v) => !v)}
-          data-testid="resources-toggle"
-        >
-          {showRes ? 'hide' : 'res'}
-        </button>
       </div>
 
       {/* File change summary row */}
@@ -222,7 +242,7 @@ function SessionHeader({ session, readOnly }: { session: Session; readOnly: bool
       {/* Resources row (collapsible) */}
       {showRes && (
         <div
-          className="niuu-flex niuu-items-center niuu-gap-4 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2"
+          className="niuu-flex niuu-items-center niuu-gap-4 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-5 niuu-py-2.5"
           data-testid="resources-row"
         >
           <Meter used={r.cpuUsed} limit={r.cpuLimit} unit="c" label="cpu" className="niuu-w-32" />
@@ -264,7 +284,7 @@ function ThinkingBlock({ turn, peer }: { turn: ChatTurn; peer: PeerMeta | undefi
 
   return (
     <div
-      className="niuu-my-1.5 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary/60 niuu-px-3 niuu-py-2"
+      className="niuu-my-2 niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-secondary/70 niuu-px-4 niuu-py-3"
       data-testid="thinking-block"
     >
       <button
@@ -277,12 +297,12 @@ function ThinkingBlock({ turn, peer }: { turn: ChatTurn; peer: PeerMeta | undefi
             {peer.glyph}
           </span>
         )}
-        <span className="niuu-font-mono niuu-text-text-muted">thinking</span>
+        <span className="niuu-font-mono niuu-uppercase niuu-tracking-[0.16em] niuu-text-text-muted">thinking</span>
         <span className="niuu-font-mono niuu-text-text-muted">{turn.ms}ms</span>
         {!open && <span className="niuu-text-text-muted">{truncate(firstLine, 80)}</span>}
       </button>
       {open && (
-        <pre className="niuu-ml-8 niuu-mt-1 niuu-whitespace-pre-wrap niuu-font-mono niuu-text-xs niuu-text-text-secondary">
+        <pre className="niuu-ml-8 niuu-mt-2 niuu-whitespace-pre-wrap niuu-font-mono niuu-text-xs niuu-leading-6 niuu-text-text-secondary">
           {turn.content}
         </pre>
       )}
@@ -300,11 +320,11 @@ function ToolRunBlock({ turns, room }: { turns: ChatTurn[]; room: MockRoom }) {
 
   return (
     <div
-      className="niuu-my-1.5 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary"
+      className="niuu-my-2 niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-secondary"
       data-testid="tool-run"
     >
       <button
-        className="niuu-flex niuu-w-full niuu-items-center niuu-gap-2 niuu-px-3 niuu-py-1.5 niuu-text-left niuu-text-xs"
+        className="niuu-flex niuu-w-full niuu-items-center niuu-gap-2 niuu-px-4 niuu-py-3 niuu-text-left niuu-text-xs"
         onClick={() => setOpen((v) => !v)}
       >
         <span className="niuu-text-text-muted">{open ? '\u25BC' : '\u25B6'}</span>
@@ -327,11 +347,11 @@ function ToolRunBlock({ turns, room }: { turns: ChatTurn[]; room: MockRoom }) {
         )}
       </button>
       {open && (
-        <div className="niuu-border-t niuu-border-border-subtle niuu-px-3 niuu-py-2.5">
+        <div className="niuu-border-t niuu-border-border-subtle niuu-px-4 niuu-py-3">
           {turns.map((t) => (
             <div
               key={t.id}
-              className="niuu-flex niuu-items-start niuu-gap-2 niuu-py-1 niuu-text-xs"
+              className="niuu-flex niuu-items-start niuu-gap-2 niuu-py-1.5 niuu-text-xs"
             >
               <span className="niuu-font-mono niuu-text-text-secondary">{t.tool}</span>
               <span className="niuu-font-mono niuu-text-text-muted">{t.args}</span>
@@ -357,22 +377,28 @@ function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
 
   if (turn.role === 'user') {
     return (
-      <div className="niuu-my-2.5 niuu-flex niuu-gap-3" data-testid="chat-turn-user">
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">you</span>
+      <div className="niuu-my-4 niuu-flex niuu-justify-end niuu-gap-3" data-testid="chat-turn-user">
+        <span className="niuu-order-2 niuu-font-mono niuu-text-xs niuu-text-text-muted">you</span>
         <div className="niuu-flex-1">
           {turn.directedTo && turn.directedTo.length > 0 && (
-            <div className="niuu-mb-1 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+            <div className="niuu-mb-2 niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.16em] niuu-text-text-muted">
               directed {'\u2192'}{' '}
               {turn.directedTo.map((id) => (
-                <span key={id} style={{ color: resolveParticipantColor(id) }}>
+                <span
+                  key={id}
+                  className="niuu-ml-1 niuu-rounded-md niuu-border niuu-border-brand/40 niuu-bg-brand/10 niuu-px-1.5 niuu-py-0.5"
+                  style={{ color: resolveParticipantColor(id) }}
+                >
                   {room.byId[id]?.displayName ?? id}
                 </span>
               ))}
             </div>
           )}
-          <div className="niuu-text-sm niuu-text-text-primary">{turn.content}</div>
+          <div className="niuu-ml-auto niuu-max-w-[82%] niuu-rounded-xl niuu-border niuu-border-brand/30 niuu-bg-bg-secondary niuu-px-4 niuu-py-3 niuu-text-sm niuu-leading-7 niuu-text-text-primary">
+            {turn.content}
+          </div>
         </div>
-        <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+        <span className="niuu-order-3 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
           {formatTimestamp(turn.ts)}
         </span>
       </div>
@@ -381,15 +407,15 @@ function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
 
   // assistant turn
   return (
-    <div className="niuu-my-2.5 niuu-flex niuu-gap-3" data-testid="chat-turn-assistant">
+    <div className="niuu-my-4 niuu-flex niuu-gap-4" data-testid="chat-turn-assistant">
       <span
-        className="niuu-flex niuu-h-6 niuu-w-6 niuu-flex-shrink-0 niuu-items-center niuu-justify-center niuu-rounded-full niuu-font-mono niuu-text-xs"
-        style={{ backgroundColor: color, color: '#000' }}
+        className="niuu-flex niuu-h-8 niuu-w-8 niuu-flex-shrink-0 niuu-items-center niuu-justify-center niuu-rounded-full niuu-border niuu-font-mono niuu-text-xs"
+        style={{ borderColor: color, color }}
       >
         {peer?.glyph ?? 'c'}
       </span>
       <div className="niuu-flex-1">
-        <div className="niuu-mb-1 niuu-flex niuu-items-center niuu-gap-2 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+        <div className="niuu-mb-2 niuu-flex niuu-items-center niuu-gap-2 niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
           <span style={{ color }}>{peer?.displayName ?? turn.peerId}</span>
           <span>{'\u00b7'}</span>
           <span>{peer?.persona ?? ''}</span>
@@ -406,17 +432,17 @@ function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
             </>
           )}
         </div>
-        <div className="niuu-text-sm niuu-text-text-primary">{turn.content}</div>
+        <div className="niuu-max-w-[88%] niuu-text-sm niuu-leading-7 niuu-text-text-primary">{turn.content}</div>
         {turn.outcome && (
           <div
-            className="niuu-mt-2 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-p-2.5"
+            className="niuu-mt-3 niuu-max-w-[88%] niuu-rounded-xl niuu-border niuu-border-brand/40 niuu-bg-bg-secondary niuu-p-3"
             data-testid="outcome-card"
           >
             <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-text-xs">
               <span className="niuu-font-mono niuu-text-text-muted">---outcome---</span>
               <span
                 className={cn(
-                  'niuu-font-mono niuu-font-semibold niuu-text-xs niuu-uppercase niuu-px-1.5 niuu-py-0.5 niuu-rounded-sm',
+                  'niuu-font-mono niuu-font-semibold niuu-text-xs niuu-uppercase niuu-px-2 niuu-py-0.5 niuu-rounded-md',
                   turn.outcome.verdict === 'pass' || turn.outcome.verdict === 'verified'
                     ? 'niuu-text-state-ok niuu-bg-state-ok/10'
                     : turn.outcome.verdict === 'fail' || turn.outcome.verdict === 'blocked'
@@ -428,7 +454,7 @@ function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
               </span>
               <span className="niuu-font-mono niuu-text-text-muted">{turn.outcome.eventType}</span>
             </div>
-            <div className="niuu-mt-1 niuu-text-xs niuu-text-text-secondary">
+            <div className="niuu-mt-2 niuu-text-xs niuu-leading-6 niuu-text-text-secondary">
               {turn.outcome.summary}
             </div>
           </div>
@@ -446,12 +472,12 @@ function ChatInput({ participants }: { participants: RoomParticipant[] }) {
   const [permission, setPermission] = useState<'restricted' | 'open'>('restricted');
 
   return (
-    <div className="niuu-border-t niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2.5 niuu-shrink-0">
+    <div className="niuu-border-t niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-3 niuu-shrink-0">
       {/* Direct-to chips */}
-      <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-mb-1.5 niuu-text-[10px] niuu-text-text-muted">
+      <div className="niuu-flex niuu-items-center niuu-gap-1.5 niuu-mb-2 niuu-text-[10px] niuu-text-text-muted">
         <span className="niuu-uppercase niuu-tracking-wider">direct to</span>
         {participants.filter((p) => p.participantType === 'ravn').map((p) => (
-          <span key={p.peerId} className="niuu-flex niuu-items-center niuu-gap-1 niuu-rounded-sm niuu-bg-bg-tertiary niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-text-secondary">
+          <span key={p.peerId} className="niuu-flex niuu-items-center niuu-gap-1 niuu-rounded-md niuu-bg-bg-tertiary niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-text-secondary">
             <span className="niuu-w-1.5 niuu-h-1.5 niuu-rounded-full niuu-bg-brand" />
             {p.displayName ?? p.persona}
           </span>
@@ -464,7 +490,7 @@ function ChatInput({ participants }: { participants: RoomParticipant[] }) {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="broadcast to room...  (⌘↵ send · / commands · @ mention files)"
-          className="niuu-flex-1 niuu-bg-bg-tertiary niuu-border niuu-border-border niuu-rounded-md niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary niuu-font-sans niuu-resize-y niuu-min-h-[36px] niuu-max-h-[120px] niuu-outline-none focus:niuu-border-brand"
+          className="niuu-flex-1 niuu-bg-bg-tertiary niuu-border niuu-border-border niuu-rounded-xl niuu-px-4 niuu-py-3 niuu-text-sm niuu-text-text-primary niuu-font-sans niuu-resize-y niuu-min-h-[44px] niuu-max-h-[120px] niuu-outline-none focus:niuu-border-brand"
           rows={1}
           data-testid="chat-input"
         />
@@ -476,14 +502,14 @@ function ChatInput({ participants }: { participants: RoomParticipant[] }) {
           <select
             value={permission}
             onChange={(e) => setPermission(e.target.value as 'restricted' | 'open')}
-            className="niuu-bg-bg-tertiary niuu-border niuu-border-border niuu-rounded-sm niuu-text-xs niuu-text-text-primary niuu-font-mono niuu-py-1 niuu-px-2"
+            className="niuu-bg-bg-tertiary niuu-border niuu-border-border niuu-rounded-md niuu-text-xs niuu-text-text-primary niuu-font-mono niuu-py-1.5 niuu-px-2.5"
           >
             <option value="restricted">restricted</option>
             <option value="open">open</option>
           </select>
           <button
             type="button"
-            className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs niuu-flex niuu-items-center niuu-gap-1"
+            className="niuu-flex niuu-items-center niuu-gap-1 niuu-rounded-md niuu-border niuu-border-brand niuu-bg-brand niuu-px-3 niuu-py-1.5 niuu-font-mono niuu-text-xs niuu-text-bg-primary niuu-cursor-pointer"
             data-testid="chat-send-btn"
           >
             send <span className="niuu-text-[10px] niuu-opacity-60">⌘↵</span>
@@ -509,7 +535,14 @@ function ChatStream({ groups, room }: { groups: TurnGroup[]; room: MockRoom }) {
       className="niuu-flex niuu-flex-1 niuu-flex-col niuu-overflow-hidden niuu-border-x niuu-border-border-subtle"
       data-testid="chat-stream"
     >
-      <div className="niuu-flex-1 niuu-overflow-y-auto niuu-px-5 niuu-py-3" ref={scrollRef}>
+      <div className="niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary/80 niuu-px-4 niuu-py-2">
+        <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+          <span>sast_findings 0</span>
+          <span>deps_changed 0</span>
+          <span>scope <span className="niuu-text-text-primary">frontend-only</span></span>
+        </div>
+      </div>
+      <div className="niuu-flex-1 niuu-overflow-y-auto niuu-px-4 niuu-py-3" ref={scrollRef}>
         {groups.map((g, i) => {
           if (g.kind === 'toolrun') {
             return <ToolRunBlock key={i} turns={g.turns} room={room} />;
@@ -532,6 +565,91 @@ function ChatStream({ groups, room }: { groups: TurnGroup[]; room: MockRoom }) {
 }
 
 // ---------------------------------------------------------------------------
+// PeerRail
+// ---------------------------------------------------------------------------
+
+function PeerRail({
+  room,
+  selectedPeerId,
+  onSelectPeer,
+  collapsed,
+  onToggleCollapsed,
+}: {
+  room: MockRoom;
+  selectedPeerId: string | null;
+  onSelectPeer: (id: string) => void;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+}) {
+  const peers = room.participants.filter((p) => p.participantType === 'ravn');
+  if (collapsed) {
+    return (
+      <aside className="niuu-flex niuu-w-[54px] niuu-flex-col niuu-border-r niuu-border-border-subtle niuu-bg-bg-secondary" data-testid="mesh-sidebar">
+        <button className="niuu-py-3 niuu-font-mono niuu-text-sm niuu-text-text-muted" onClick={onToggleCollapsed}>›</button>
+        <div className="niuu-flex niuu-flex-col niuu-items-center niuu-gap-3 niuu-py-3">
+          {peers.map((peer) => (
+            <button
+              key={peer.peerId}
+              onClick={() => onSelectPeer(peer.peerId)}
+              className={cn(
+                'niuu-flex niuu-h-8 niuu-w-8 niuu-items-center niuu-justify-center niuu-rounded-full niuu-border niuu-font-mono niuu-text-xs',
+                selectedPeerId === peer.peerId ? 'niuu-border-brand niuu-text-brand' : 'niuu-border-border niuu-text-text-muted',
+              )}
+              title={peer.displayName ?? peer.persona}
+            >
+              {peer.glyph}
+            </button>
+          ))}
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="niuu-flex niuu-w-[232px] niuu-flex-col niuu-border-r niuu-border-border-subtle niuu-bg-bg-secondary" data-testid="mesh-sidebar">
+      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-border-subtle niuu-px-4 niuu-py-3">
+        <span className="niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-muted">
+          participants {peers.length}
+        </span>
+        <button className="niuu-font-mono niuu-text-lg niuu-text-text-muted" onClick={onToggleCollapsed}>‹</button>
+      </div>
+      <div className="niuu-flex-1 niuu-overflow-y-auto">
+        {peers.map((peer) => (
+          <button
+            key={peer.peerId}
+            onClick={() => onSelectPeer(peer.peerId)}
+            className={cn(
+              'niuu-flex niuu-w-full niuu-items-center niuu-gap-3 niuu-border-b niuu-border-border-subtle niuu-px-4 niuu-py-3 niuu-text-left',
+              selectedPeerId === peer.peerId && 'niuu-chat-peer-card--selected niuu-bg-bg-elevated',
+            )}
+            data-testid={`peer-card-${peer.peerId}`}
+          >
+            <span
+              className="niuu-flex niuu-h-9 niuu-w-9 niuu-items-center niuu-justify-center niuu-rounded-full niuu-border niuu-font-mono niuu-text-sm"
+              style={{ color: resolveParticipantColor(peer.peerId), borderColor: resolveParticipantColor(peer.peerId) }}
+            >
+              {peer.glyph}
+            </span>
+            <span className="niuu-flex-1 niuu-min-w-0">
+              <span className="niuu-block niuu-font-mono niuu-text-[13px] niuu-font-medium niuu-text-text-primary">
+                {peer.displayName ?? peer.persona}
+              </span>
+              <span className="niuu-block niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+                {peer.status}
+              </span>
+            </span>
+            <span className="niuu-font-mono niuu-text-xl niuu-text-text-muted">›</span>
+          </button>
+        ))}
+      </div>
+      <div className="niuu-border-t niuu-border-border-subtle niuu-px-5 niuu-py-3 niuu-font-mono niuu-text-[12px] niuu-text-text-faint">
+        room · {room.roomId}
+      </div>
+    </aside>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // MeshCascade (right column of chat)
 // ---------------------------------------------------------------------------
 
@@ -541,10 +659,14 @@ function MeshCascade({
   events,
   filter,
   setFilter,
+  collapsed,
+  onToggleCollapsed,
 }: {
   events: MeshEvent[];
   filter: CascadeFilterType;
   setFilter: (f: CascadeFilterType) => void;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }) {
   const filtered = filter === 'all' ? events : events.filter((e) => e.type === filter);
 
@@ -555,29 +677,40 @@ function MeshCascade({
     { id: 'notification', label: 'notifs' },
   ];
 
+  if (collapsed) {
+    return (
+      <div className="niuu-flex niuu-w-[54px] niuu-flex-col niuu-border-l niuu-border-border-subtle niuu-bg-bg-secondary" data-testid="mesh-cascade">
+        <button className="niuu-py-3 niuu-font-mono niuu-text-sm niuu-text-text-muted" onClick={onToggleCollapsed}>‹</button>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="niuu-flex niuu-w-[272px] niuu-flex-col niuu-border-l niuu-border-border-subtle niuu-bg-bg-secondary"
+      className="niuu-flex niuu-w-[248px] niuu-flex-col niuu-border-l niuu-border-border-subtle niuu-bg-bg-secondary"
       data-testid="mesh-cascade"
     >
-      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-px-3 niuu-py-2.5">
-        <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-wider niuu-text-text-muted">
+      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-border-subtle niuu-px-4 niuu-py-3">
+        <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-muted">
           mesh cascade
         </span>
+        <div className="niuu-flex niuu-items-center niuu-gap-3">
         <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
           {filtered.length}
         </span>
+        <button className="niuu-font-mono niuu-text-lg niuu-text-text-muted" onClick={onToggleCollapsed}>›</button>
+        </div>
       </div>
 
-      <div className="niuu-flex niuu-gap-1 niuu-px-3 niuu-pb-2">
+      <div className="niuu-flex niuu-gap-1 niuu-border-b niuu-border-border-subtle niuu-px-3 niuu-py-2">
         {filterOptions.map((f) => (
           <button
             key={f.id}
             className={cn(
-              'niuu-rounded-md niuu-px-2 niuu-py-1 niuu-font-mono niuu-text-[10px]',
+              'niuu-rounded-md niuu-border niuu-px-2 niuu-py-1 niuu-font-mono niuu-text-[9px]',
               filter === f.id
-                ? 'niuu-bg-bg-elevated niuu-text-brand'
-                : 'niuu-text-text-muted hover:niuu-text-text-secondary',
+                ? 'niuu-border-brand/50 niuu-bg-bg-elevated niuu-text-brand'
+                : 'niuu-border-transparent niuu-text-text-muted hover:niuu-border-border-subtle hover:niuu-text-text-secondary',
             )}
             onClick={() => setFilter(f.id)}
             data-testid={`cascade-filter-${f.id}`}
@@ -587,9 +720,13 @@ function MeshCascade({
         ))}
       </div>
 
-      <div className="niuu-flex niuu-flex-1 niuu-flex-col niuu-gap-2 niuu-overflow-y-auto niuu-px-3 niuu-pb-3">
+      <div className="niuu-flex niuu-flex-1 niuu-flex-col niuu-gap-2 niuu-overflow-y-auto niuu-px-3 niuu-py-3">
         {filtered.map((e) => (
-          <div key={e.id} data-testid="cascade-event">
+          <div
+            key={e.id}
+            data-testid="cascade-event"
+            className="niuu-overflow-hidden niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-primary"
+          >
             <MeshEventCard event={e} />
           </div>
         ))}
@@ -613,15 +750,8 @@ function ChatTab({ session }: { session: Session }) {
   const grouped = useMemo(() => groupTurns(turns), [turns]);
   const [focusPeer, setFocusPeer] = useState<string | null>(null);
   const [cascadeFilter, setCascadeFilter] = useState<CascadeFilterType>('all');
-
-  const participantMap = useMemo(() => {
-    const map = new Map<string, RoomParticipant>();
-    if (!room) return map as ReadonlyMap<string, RoomParticipant>;
-    for (const p of room.participants) {
-      map.set(p.peerId, p);
-    }
-    return map as ReadonlyMap<string, RoomParticipant>;
-  }, [room]);
+  const [peerCollapsed, setPeerCollapsed] = useState(false);
+  const [cascadeCollapsed, setCascadeCollapsed] = useState(false);
 
   const filteredGroups = useMemo(() => {
     if (!focusPeer) return grouped;
@@ -646,13 +776,21 @@ function ChatTab({ session }: { session: Session }) {
 
   return (
     <div className="niuu-flex niuu-h-full niuu-bg-bg-primary" data-testid="chat-tab">
-      <MeshSidebar
-        participants={participantMap}
+      <PeerRail
+        room={room}
         selectedPeerId={focusPeer}
         onSelectPeer={(id) => setFocusPeer(focusPeer === id ? null : id)}
+        collapsed={peerCollapsed}
+        onToggleCollapsed={() => setPeerCollapsed((v) => !v)}
       />
       <ChatStream groups={filteredGroups} room={room} />
-      <MeshCascade events={room.meshEvents} filter={cascadeFilter} setFilter={setCascadeFilter} />
+      <MeshCascade
+        events={room.meshEvents}
+        filter={cascadeFilter}
+        setFilter={setCascadeFilter}
+        collapsed={cascadeCollapsed}
+        onToggleCollapsed={() => setCascadeCollapsed((v) => !v)}
+      />
     </div>
   );
 }
@@ -769,12 +907,17 @@ function DiffFileList({
       className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-auto"
       data-testid="diff-file-list"
     >
+      <div className="niuu-border-b niuu-border-border-subtle niuu-bg-bg-primary niuu-px-4 niuu-py-3">
+        <div className="niuu-font-mono niuu-text-[11px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-muted">
+          changed files
+        </div>
+      </div>
       {files.map((f) => (
         <button
           key={f.path}
           onClick={() => onSelect(f.path)}
           className={cn(
-            'niuu-flex niuu-items-center niuu-gap-2 niuu-px-3 niuu-py-1.5 niuu-text-left niuu-text-xs hover:niuu-bg-bg-elevated',
+            'niuu-flex niuu-items-center niuu-gap-2 niuu-border-b niuu-border-border-subtle niuu-px-4 niuu-py-2.5 niuu-text-left niuu-text-xs hover:niuu-bg-bg-elevated',
             selectedPath === f.path && 'niuu-bg-bg-elevated',
           )}
           data-testid={`diff-file-${f.status}`}
@@ -812,7 +955,7 @@ function DiffViewer({ file }: { file: MockDiffFile }) {
       className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-auto"
       data-testid="diff-viewer"
     >
-      <div className="niuu-flex niuu-flex-shrink-0 niuu-items-center niuu-gap-2 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2">
+      <div className="niuu-flex niuu-flex-shrink-0 niuu-items-center niuu-gap-2 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-3">
         <span
           className={cn(
             'niuu-font-mono niuu-font-medium niuu-text-xs',
@@ -913,24 +1056,6 @@ interface ChronicleEvent {
   exit?: number | null;
 }
 
-const CHRONICLE_TYPE_COLORS: Record<ChronicleEventType, string> = {
-  session: 'niuu-text-brand',
-  git: 'niuu-text-brand',
-  file: 'niuu-text-brand',
-  terminal: 'niuu-text-state-warn',
-  message: 'niuu-text-text-muted',
-  error: 'niuu-text-critical',
-};
-
-const CHRONICLE_TYPE_LABELS: Record<ChronicleEventType, string> = {
-  session: 'SESSION',
-  git: 'GIT',
-  file: 'FILE',
-  terminal: 'TERM',
-  message: 'MSG',
-  error: 'ERR',
-};
-
 function buildMockChronicle(): ChronicleEvent[] {
   const now = Date.now();
   return [
@@ -978,76 +1103,56 @@ function buildMockChronicle(): ChronicleEvent[] {
   ];
 }
 
-function ChronicleEventRow({ event }: { event: ChronicleEvent }) {
-  const colorClass = CHRONICLE_TYPE_COLORS[event.type];
-  const typeLabel = CHRONICLE_TYPE_LABELS[event.type];
-
-  return (
-    <li
-      className="niuu-flex niuu-items-start niuu-gap-3 niuu-py-1.5"
-      data-testid={`chronicle-event-${event.type}`}
-    >
-      <span className="niuu-mt-0.5 niuu-w-10 niuu-flex-shrink-0 niuu-font-mono niuu-text-[10px] niuu-text-text-faint">
-        {relTime(event.ts)}
-      </span>
-      <span
-        className={cn(
-          'niuu-w-14 niuu-flex-shrink-0 niuu-font-mono niuu-text-[10px] niuu-font-medium',
-          colorClass,
-        )}
-      >
-        {typeLabel}
-      </span>
-      <span className="niuu-flex niuu-min-w-0 niuu-flex-1 niuu-flex-wrap niuu-items-center niuu-gap-x-2 niuu-text-xs">
-        {event.type === 'git' && event.hash ? (
-          <>
-            <span className="niuu-font-mono niuu-text-text-muted">{event.hash.slice(0, 7)}</span>
-            <span className="niuu-text-text-primary">{event.label.replace(/^.*·\s*/, '')}</span>
-          </>
-        ) : event.type === 'terminal' ? (
-          <>
-            <span className="niuu-font-mono niuu-text-text-secondary">$ {event.label}</span>
-            {event.exit !== undefined && event.exit !== null && (
-              <span
-                className={cn(
-                  'niuu-font-mono niuu-text-[10px]',
-                  event.exit === 0 ? 'niuu-text-state-ok' : 'niuu-text-critical',
-                )}
-              >
-                exit {event.exit}
-              </span>
-            )}
-            {event.exit === null && (
-              <span className="niuu-font-mono niuu-text-[10px] niuu-text-state-warn">running…</span>
-            )}
-          </>
-        ) : event.type === 'file' ? (
-          (() => {
-            const [filePath, desc] = event.label.split(' · ');
-            return (
-              <>
-                <span className="niuu-font-mono niuu-text-text-secondary">{filePath}</span>
-                {desc && <span className="niuu-text-text-muted">{desc}</span>}
-                {(event.ins !== undefined || event.del !== undefined) && (
-                  <span className="niuu-font-mono niuu-text-[10px]">
-                    {event.ins !== undefined && (
-                      <span className="niuu-text-state-ok">+{event.ins}</span>
-                    )}
-                    {event.del !== undefined && (
-                      <span className="niuu-ml-1 niuu-text-critical">-{event.del}</span>
-                    )}
-                  </span>
-                )}
-              </>
-            );
-          })()
-        ) : (
-          <span className="niuu-text-text-secondary">{event.label}</span>
-        )}
-      </span>
-    </li>
-  );
+interface ChronicleChapterEvent {
+  time: string;
+  type: string;
+  body: string;
+  delta?: string;
+  badge?: string;
 }
+
+interface ChronicleChapter {
+  id: string;
+  label: string;
+  hash: string;
+  title: string;
+  age: string;
+  span: string;
+  count: number;
+  events: ChronicleChapterEvent[];
+}
+
+const CHRONICLE_CHAPTERS: ChronicleChapter[] = [
+    {
+      id: 'ch-1',
+      label: 'CH. 01',
+      hash: 'f2b9c1a',
+      title: 'perf: quadtree cull @ 60fps',
+      age: '2h ago',
+      span: '58m',
+      count: 6,
+      events: [
+        { time: '3h', type: 'SESSION', body: 'pod scheduled on valaskjalf-03' },
+        { time: '3h', type: 'GIT', body: 'cloned niuu/volundr@main · switch obs-perf' },
+        { time: '2h', type: 'MSG', body: 'USER the drag lags on 400-entity graphs · 38t' },
+        { time: '2h', type: 'FILE', body: 'observatory.jsx added quadtree cull', delta: '+214 -12' },
+        { time: '2h', type: 'TERM', body: '$ npm test observatory.perf.test.jsx', badge: 'exit 0' },
+      ],
+    },
+    {
+      id: 'ch-2',
+      label: 'CH. 02',
+      hash: 'a019be2',
+      title: 'perf: throttle pan to rAF',
+      age: '45m ago',
+      span: '45m',
+      count: 3,
+      events: [
+        { time: '1h', type: 'MSG', body: 'ASSISTANT frame time dropped 18ms→6ms · 420t' },
+        { time: '1h', type: 'FILE', body: 'observatory.jsx throttle pan rAF', delta: '+34 -18' },
+      ],
+    },
+  ];
 
 function ChronicleTab() {
   const events = buildMockChronicle();
@@ -1057,38 +1162,179 @@ function ChronicleTab() {
   const fileCount = new Set(
     events.filter((e) => e.type === 'file').map((e) => e.label.split(' · ')[0] ?? ''),
   ).size;
-
   return (
     <div
-      className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-auto niuu-p-4"
+      className="niuu-min-h-full niuu-bg-bg-primary"
       data-testid="chronicle-tab"
     >
-      {/* Summary stats */}
-      <div className="niuu-mb-4 niuu-flex niuu-gap-6" data-testid="chronicle-summary">
-        {[
-          { label: 'commits', value: commitCount },
-          { label: 'files touched', value: fileCount },
-          { label: 'shell runs', value: termCount },
-          { label: 'messages', value: msgCount },
-        ].map(({ label, value }) => (
-          <div key={label} className="niuu-flex niuu-flex-col niuu-items-center niuu-gap-0.5">
-            <span className="niuu-font-mono niuu-text-sm niuu-font-medium niuu-text-text-primary">
+      <div className="niuu-grid niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary" style={{ gridTemplateColumns: 'repeat(5,minmax(0,1fr))' }} data-testid="chronicle-summary">
+          {[
+            { label: 'commits', value: commitCount },
+            { label: 'files touched', value: fileCount },
+            { label: 'shell runs', value: termCount },
+            { label: 'messages', value: msgCount },
+            { label: 'total span', value: '2h 38m' },
+          ].map(({ label, value }) => (
+          <div key={label} className="niuu-flex niuu-flex-col niuu-gap-1 niuu-border-r niuu-border-border-subtle niuu-px-5 niuu-py-3 last:niuu-border-r-0">
+            <span className="niuu-font-mono niuu-text-[12px] niuu-font-medium niuu-leading-none niuu-text-text-primary">
               {value}
             </span>
-            <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint">{label}</span>
+            <span className="niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-faint">{label}</span>
           </div>
         ))}
       </div>
 
-      {/* Timeline */}
-      <div className="niuu-relative">
-        {/* Vertical spine */}
-        <div className="niuu-absolute niuu-bottom-0 niuu-left-[5.5rem] niuu-top-0 niuu-w-px niuu-bg-border-subtle" />
-        <ol className="niuu-flex niuu-flex-col niuu-gap-0" data-testid="chronicle-timeline">
-          {events.map((event) => (
-            <ChronicleEventRow key={event.id} event={event} />
+      <div className="niuu-relative niuu-p-4">
+        <div className="niuu-absolute niuu-bottom-4 niuu-left-[22px] niuu-top-4 niuu-w-px niuu-bg-border-subtle" />
+        <ol className="niuu-flex niuu-flex-col niuu-gap-4" data-testid="chronicle-timeline">
+          {CHRONICLE_CHAPTERS.map((chapter) => (
+            <li key={chapter.id} className="niuu-relative">
+              <span className="niuu-absolute niuu-left-[5px] niuu-top-6 niuu-h-4 niuu-w-4 niuu-rounded-full niuu-border-2 niuu-border-brand niuu-bg-bg-primary" />
+              <section className="niuu-ml-10 niuu-overflow-hidden niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-secondary">
+                <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-border-b niuu-border-border-subtle niuu-px-4 niuu-py-3">
+                  <span className="niuu-rounded-md niuu-border niuu-border-border niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">{chapter.label}</span>
+                  <span className="niuu-rounded-md niuu-bg-brand-subtle niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-font-medium niuu-text-brand">{chapter.hash}</span>
+                  <h3 className="niuu-m-0 niuu-text-sm niuu-font-semibold niuu-text-text-primary">{chapter.title}</h3>
+                  <div className="niuu-flex-1" />
+                  <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">{`${chapter.age}·${chapter.span}·${chapter.count} events`}</span>
+                </div>
+                <div className="niuu-divide-y niuu-divide-border-subtle">
+                  {chapter.events.map((event, index) => (
+                    <div
+                      key={index}
+                      className="niuu-grid niuu-items-center niuu-gap-4 niuu-px-4 niuu-py-3"
+                      style={{ gridTemplateColumns: '56px 96px minmax(0,1fr) auto' }}
+                      data-testid={`chronicle-event-${event.type.toLowerCase()}`}
+                    >
+                      <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">{event.time}</span>
+                      <span className="niuu-font-mono niuu-text-[11px] niuu-tracking-[0.16em] niuu-text-brand">{event.type}</span>
+                      <span className="niuu-text-xs niuu-text-text-secondary">{event.body}</span>
+                      <span className="niuu-font-mono niuu-text-[11px]">
+                        {event.delta && <span className="niuu-text-brand">{event.delta}</span>}
+                        {event.badge && <span className="niuu-rounded-md niuu-bg-brand-subtle niuu-px-2 niuu-py-0.5 niuu-text-brand">{event.badge}</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </li>
           ))}
+          <li className="niuu-relative">
+            <span className="niuu-absolute niuu-left-[5px] niuu-top-6 niuu-h-4 niuu-w-4 niuu-rounded-full niuu-border-2 niuu-border-border niuu-bg-bg-primary" />
+            <section className="niuu-ml-10 niuu-overflow-hidden niuu-rounded-xl niuu-border niuu-border-dashed niuu-border-border niuu-bg-bg-primary">
+              <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-border-b niuu-border-border-subtle niuu-px-4 niuu-py-3">
+                <span className="niuu-rounded-md niuu-border niuu-border-border niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">TAIL</span>
+                <h3 className="niuu-m-0 niuu-text-sm niuu-font-medium niuu-italic niuu-text-text-muted">in progress — 3 events since last commit</h3>
+                <div className="niuu-flex-1" />
+                <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">22m ago·18m·3 events</span>
+              </div>
+              <div className="niuu-divide-y niuu-divide-border-subtle">
+                <div className="niuu-grid niuu-items-center niuu-gap-4 niuu-px-4 niuu-py-3" style={{ gridTemplateColumns: '56px 96px minmax(0,1fr) auto' }}>
+                  <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">40m</span>
+                  <span className="niuu-font-mono niuu-text-[11px] niuu-tracking-[0.16em] niuu-text-brand">TERM</span>
+                  <span className="niuu-text-xs niuu-text-text-secondary">$ git push origin obs-perf</span>
+                  <span className="niuu-rounded-md niuu-bg-brand-subtle niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-brand">exit 0</span>
+                </div>
+                <div className="niuu-grid niuu-items-center niuu-gap-4 niuu-px-4 niuu-py-3" style={{ gridTemplateColumns: '56px 96px minmax(0,1fr) auto' }}>
+                  <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">38m</span>
+                  <span className="niuu-font-mono niuu-text-[11px] niuu-tracking-[0.16em] niuu-text-brand">SESSION</span>
+                  <span className="niuu-text-xs niuu-text-text-secondary">opened PR #248</span>
+                  <span />
+                </div>
+                <div className="niuu-grid niuu-items-center niuu-gap-4 niuu-px-4 niuu-py-3" style={{ gridTemplateColumns: '56px 96px minmax(0,1fr) auto' }}>
+                  <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">22m</span>
+                  <span className="niuu-font-mono niuu-text-[11px] niuu-tracking-[0.16em] niuu-text-brand">TERM</span>
+                  <span className="niuu-text-xs niuu-text-text-secondary">$ npm test · watch</span>
+                  <span className="niuu-rounded-md niuu-border niuu-border-border niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">running…</span>
+                </div>
+              </div>
+            </section>
+          </li>
         </ol>
+      </div>
+    </div>
+  );
+}
+
+function TerminalWorkspace({
+  sessionId,
+  stream,
+  readOnly,
+}: {
+  sessionId: string;
+  stream: IPtyStream;
+  readOnly: boolean;
+}) {
+  const [tabs, setTabs] = useState([
+    { id: 'main', label: 'main', identity: `workspace@${sessionId}` },
+    { id: 'tests', label: 'tests', identity: `tests@${sessionId}` },
+    { id: 'view-io', label: 'view', badge: 'io' as const, identity: `io@${sessionId}` },
+  ]);
+  const [activeTerminalTab, setActiveTerminalTab] = useState('main');
+  const activeTabMeta = tabs.find((tab) => tab.id === activeTerminalTab) ?? tabs[0];
+
+  return (
+    <div className="niuu-flex niuu-h-full niuu-min-h-0 niuu-flex-col niuu-bg-bg-primary">
+      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-3 niuu-py-2">
+        <div className="niuu-flex niuu-items-center niuu-gap-1.5">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTerminalTab(tab.id)}
+              className={cn(
+                'niuu-flex niuu-items-center niuu-gap-2 niuu-rounded-md niuu-border niuu-px-3 niuu-py-1.5 niuu-font-mono niuu-text-[11px]',
+                activeTerminalTab === tab.id
+                  ? 'niuu-border-border niuu-bg-bg-elevated niuu-text-text-primary'
+                  : 'niuu-border-transparent niuu-text-text-muted hover:niuu-border-border-subtle hover:niuu-text-text-secondary',
+              )}
+              data-testid={`terminal-tab-${tab.id}`}
+            >
+              <span className="niuu-text-brand">{'>_'}</span>
+              <span>{tab.label}</span>
+              {tab.badge && (
+                <span className="niuu-rounded-sm niuu-bg-brand-subtle niuu-px-1.5 niuu-py-0.5 niuu-text-[10px] niuu-text-brand">
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() =>
+              setTabs((current) => [
+                ...current,
+                {
+                  id: `term-${current.length + 1}`,
+                  label: `term-${current.length + 1}`,
+                  identity: `shell-${current.length + 1}@${sessionId}`,
+                },
+              ])
+            }
+            className="niuu-rounded-md niuu-border niuu-border-transparent niuu-px-2 niuu-py-1.5 niuu-font-mono niuu-text-[12px] niuu-text-text-muted hover:niuu-border-border-subtle hover:niuu-text-text-secondary"
+            aria-label="Add terminal tab"
+            data-testid="terminal-tab-add"
+          >
+            +
+          </button>
+        </div>
+        <div className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
+          {activeTabMeta?.identity}
+        </div>
+      </div>
+      <div className="niuu-min-h-0 niuu-flex-1 niuu-overflow-hidden">
+        <div
+          key={activeTerminalTab}
+          className="niuu-h-full niuu-min-h-0"
+          data-testid={`terminal-panel-${activeTerminalTab}`}
+        >
+          <Terminal
+            sessionId={`${sessionId}::${activeTerminalTab}`}
+            stream={stream}
+            readOnly={readOnly}
+            className="niuu-h-full"
+          />
+        </div>
       </div>
     </div>
   );
@@ -1175,16 +1421,16 @@ function LogsTab() {
   return (
     <div className="niuu-flex niuu-h-full niuu-flex-col" data-testid="logs-tab">
       {/* Filter bar */}
-      <div className="niuu-flex niuu-flex-shrink-0 niuu-items-center niuu-gap-1 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2">
+      <div className="niuu-flex niuu-flex-shrink-0 niuu-items-center niuu-gap-1 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-3">
         {(['all', 'error', 'warn', 'info', 'debug'] as const).map((lvl) => (
           <button
             key={lvl}
             onClick={() => setLevelFilter(lvl)}
             className={cn(
-              'niuu-rounded niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-xs',
+              'niuu-rounded-md niuu-border niuu-px-2.5 niuu-py-1 niuu-font-mono niuu-text-xs',
               levelFilter === lvl
-                ? 'niuu-bg-bg-elevated niuu-text-brand'
-                : 'niuu-text-text-muted hover:niuu-text-text-secondary',
+                ? 'niuu-border-brand/50 niuu-bg-bg-elevated niuu-text-brand'
+                : 'niuu-border-transparent niuu-text-text-muted hover:niuu-border-border-subtle hover:niuu-text-text-secondary',
             )}
             data-testid={`log-filter-${lvl}`}
           >
@@ -1195,13 +1441,13 @@ function LogsTab() {
 
       {/* Log body */}
       <div
-        className="niuu-flex-1 niuu-overflow-auto niuu-bg-bg-primary niuu-px-4 niuu-py-2"
+        className="niuu-flex-1 niuu-overflow-auto niuu-bg-bg-primary niuu-px-4 niuu-py-3"
         data-testid="logs-body"
       >
         {filtered.map((line) => (
           <div
             key={line.id}
-            className="niuu-flex niuu-gap-3 niuu-py-px niuu-font-mono niuu-text-xs"
+            className="niuu-flex niuu-gap-3 niuu-border-b niuu-border-border-subtle niuu-py-1.5 niuu-font-mono niuu-text-xs"
             data-testid={`log-line-${line.level}`}
           >
             <span className="niuu-w-14 niuu-flex-shrink-0 niuu-text-text-faint">{line.ts}</span>
@@ -1236,6 +1482,7 @@ export function SessionDetailPage({
   initialTab = 'chat',
 }: SessionDetailPageProps) {
   const [activeTab, setActiveTab] = useState<SessionTab>(initialTab);
+  const [showRes, setShowRes] = useState(false);
   const [activePath, setActivePath] = useState<string | undefined>(undefined);
   const [fileContent, setFileContent] = useState('');
   const [fileLoading, setFileLoading] = useState(false);
@@ -1273,7 +1520,7 @@ export function SessionDetailPage({
     <div className="niuu-flex niuu-h-full niuu-flex-col" data-testid="session-detail-page">
       {/* Header */}
       {session ? (
-        <SessionHeader session={session} readOnly={readOnly} />
+        <SessionHeader session={session} readOnly={readOnly} showRes={showRes} />
       ) : (
         <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2">
           <span
@@ -1295,7 +1542,7 @@ export function SessionDetailPage({
 
       {/* Tab bar */}
       <div
-        className="niuu-flex niuu-items-center niuu-gap-0 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary"
+        className="niuu-flex niuu-items-center niuu-gap-0 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-3"
         role="tablist"
         aria-label="Session tabs"
       >
@@ -1304,80 +1551,118 @@ export function SessionDetailPage({
           return (
             <button
               key={tab.id}
+              id={`tab-${tab.id}`}
               role="tab"
               aria-selected={activeTab === tab.id}
               data-testid={`tab-${tab.id}`}
               onClick={() => setActiveTab(tab.id)}
               className={
                 activeTab === tab.id
-                  ? 'niuu-border-b-2 niuu-border-brand niuu-px-4 niuu-py-2.5 niuu-text-sm niuu-font-medium niuu-text-brand'
-                  : 'niuu-border-b-2 niuu-border-transparent niuu-px-4 niuu-py-2.5 niuu-text-sm niuu-text-text-muted hover:niuu-text-text-secondary'
+                  ? 'niuu-flex niuu-items-center niuu-gap-2 niuu-border-b-2 niuu-border-brand niuu-px-3 niuu-py-2.5 niuu-font-mono niuu-text-[13px] niuu-font-medium niuu-text-brand'
+                  : 'niuu-flex niuu-items-center niuu-gap-2 niuu-border-b-2 niuu-border-transparent niuu-px-3 niuu-py-2.5 niuu-font-mono niuu-text-[13px] niuu-text-text-muted hover:niuu-text-text-secondary'
               }
             >
-              {tab.label}
+              <span className="niuu-inline-flex niuu-w-4 niuu-justify-center niuu-font-mono niuu-text-[11px] niuu-opacity-70">
+                {tabIcon(tab.id)}
+              </span>
+              <span>{tab.label}</span>
               {count != null && count > 0 && (
-                <span className="niuu-ml-1 niuu-font-mono niuu-text-xs niuu-opacity-60">{count}</span>
+                <span className="niuu-rounded-full niuu-bg-bg-elevated niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-opacity-80">{count}</span>
               )}
             </button>
           );
         })}
+        <div className="niuu-flex-1" />
+        <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-pr-2">
+          <button
+            type="button"
+            onClick={() => setShowRes((v) => !v)}
+            className={cn(
+              'niuu-rounded-md niuu-border niuu-border-transparent niuu-px-2.5 niuu-py-1 niuu-font-mono niuu-text-[12px]',
+              showRes
+                ? 'niuu-border-border niuu-bg-bg-elevated niuu-text-brand'
+                : 'niuu-text-text-muted hover:niuu-border-border-subtle hover:niuu-bg-bg-elevated/60',
+            )}
+            data-testid="resources-toggle"
+          >
+            res
+          </button>
+          <button
+            type="button"
+            aria-label="stop session"
+            className="niuu-rounded-md niuu-border niuu-border-transparent niuu-px-2 niuu-py-1 niuu-font-mono niuu-text-[12px] niuu-text-text-muted hover:niuu-border-border-subtle hover:niuu-bg-bg-elevated/60"
+          >
+            stop
+          </button>
+          <button
+            type="button"
+            aria-label="archive session"
+            className="niuu-rounded-md niuu-border niuu-border-transparent niuu-px-2 niuu-py-1 niuu-font-mono niuu-text-[12px] niuu-text-text-muted hover:niuu-border-border-subtle hover:niuu-bg-bg-elevated/60"
+          >
+            arc
+          </button>
+          <button
+            type="button"
+            aria-label="delete session"
+            className="niuu-rounded-md niuu-border niuu-border-transparent niuu-px-2 niuu-py-1 niuu-font-mono niuu-text-[12px] niuu-text-text-muted hover:niuu-border-critical hover:niuu-bg-critical-bg"
+          >
+            del
+          </button>
+        </div>
       </div>
 
       {/* Tab panels */}
-      <div className="niuu-min-h-0 niuu-flex-1 niuu-overflow-auto">
-        {/* Chat */}
-        <div
-          role="tabpanel"
-          aria-labelledby="tab-chat"
-          hidden={activeTab !== 'chat'}
-          className="niuu-h-full"
-        >
-          {activeTab === 'chat' && sessionQuery.isLoading && (
-            <LoadingState label="Loading session\u2026" />
-          )}
-          {activeTab === 'chat' && sessionQuery.isError && (
-            <ErrorState
-              title="Failed to load session"
-              message={
-                sessionQuery.error instanceof Error ? sessionQuery.error.message : 'Unknown error'
-              }
-            />
-          )}
-          {activeTab === 'chat' && session && <ChatTab session={session} />}
-        </div>
+      <div className="niuu-min-h-0 niuu-flex-1 niuu-overflow-hidden">
+        {activeTab === 'chat' && (
+          <div role="tabpanel" aria-labelledby="tab-chat" className="niuu-h-full niuu-min-h-0">
+            {sessionQuery.isLoading && <LoadingState label="Loading session\u2026" />}
+            {sessionQuery.isError && (
+              <ErrorState
+                title="Failed to load session"
+                message={
+                  sessionQuery.error instanceof Error ? sessionQuery.error.message : 'Unknown error'
+                }
+              />
+            )}
+            {session && <ChatTab session={session} />}
+          </div>
+        )}
 
-        {/* Terminal */}
-        <div
-          role="tabpanel"
-          aria-labelledby="tab-terminal"
-          hidden={activeTab !== 'terminal'}
-          className="niuu-h-full niuu-min-h-[300px]"
-        >
-          {activeTab === 'terminal' && (
-            <Terminal sessionId={sessionId} stream={ptyStream} readOnly={readOnly} />
-          )}
-        </div>
+        {activeTab === 'terminal' && (
+          <div role="tabpanel" aria-labelledby="tab-terminal" className="niuu-h-full niuu-min-h-0">
+            <TerminalWorkspace sessionId={sessionId} stream={ptyStream} readOnly={readOnly} />
+          </div>
+        )}
 
-        {/* Diffs */}
-        <div
-          role="tabpanel"
-          aria-labelledby="tab-diffs"
-          hidden={activeTab !== 'diffs'}
-          className="niuu-h-full"
-        >
-          {activeTab === 'diffs' && <DiffsTab />}
-        </div>
+        {activeTab === 'diffs' && (
+          <div role="tabpanel" aria-labelledby="tab-diffs" className="niuu-h-full niuu-min-h-0">
+            <DiffsTab />
+          </div>
+        )}
 
-        {/* Files */}
-        <div
-          role="tabpanel"
-          aria-labelledby="tab-files"
-          hidden={activeTab !== 'files'}
-          className="niuu-grid niuu-h-full niuu-grid-cols-[220px_1fr] niuu-gap-4 niuu-p-4"
-        >
-          {activeTab === 'files' && (
-            <>
-              <div className="niuu-overflow-auto niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary">
+        {activeTab === 'files' && (
+          <div
+            role="tabpanel"
+            aria-labelledby="tab-files"
+            className="niuu-grid niuu-h-full niuu-min-h-0 niuu-grid-cols-[260px_1fr] niuu-overflow-hidden niuu-bg-bg-primary"
+          >
+            <div className="niuu-flex niuu-min-h-0 niuu-flex-col niuu-overflow-hidden niuu-border-r niuu-border-border-subtle niuu-bg-bg-secondary">
+              <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-border-subtle niuu-bg-bg-primary niuu-px-4 niuu-py-3">
+                <div className="niuu-flex niuu-flex-col">
+                  <span className="niuu-font-mono niuu-text-[11px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-muted">
+                    workspace files
+                  </span>
+                  <span className="niuu-font-mono niuu-text-[12px] niuu-text-text-faint">
+                    upload and download supported
+                  </span>
+                </div>
+                {treeQuery.data && (
+                  <span className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-elevated niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
+                    {treeQuery.data.length} roots
+                  </span>
+                )}
+              </div>
+              <div className="niuu-min-h-0 niuu-flex-1 niuu-overflow-auto">
                 {treeQuery.isLoading && (
                   <p
                     className="niuu-p-3 niuu-text-xs niuu-text-text-muted"
@@ -1402,48 +1687,47 @@ export function SessionDetailPage({
                   />
                 )}
               </div>
+            </div>
 
-              <div className="niuu-overflow-hidden">
-                {activePath ? (
-                  <FileViewer
-                    path={activePath}
-                    content={fileContent}
-                    isLoading={fileLoading}
-                    error={fileError}
-                    onClose={() => setActivePath(undefined)}
-                  />
-                ) : (
-                  <div
-                    className="niuu-flex niuu-h-full niuu-items-center niuu-justify-center niuu-rounded-md niuu-border niuu-border-border-subtle niuu-text-sm niuu-text-text-muted"
-                    data-testid="file-viewer-placeholder"
-                  >
-                    Select a file to view its contents
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+            <div className="niuu-min-h-0 niuu-overflow-hidden">
+              {activePath ? (
+                <FileViewer
+                  path={activePath}
+                  content={fileContent}
+                  isLoading={fileLoading}
+                  error={fileError}
+                  onClose={() => setActivePath(undefined)}
+                />
+              ) : (
+                <div
+                  className="niuu-flex niuu-h-full niuu-flex-col niuu-items-center niuu-justify-center niuu-gap-3 niuu-text-sm niuu-text-text-muted"
+                  data-testid="file-viewer-placeholder"
+                >
+                  <span className="niuu-font-mono niuu-text-[11px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-faint">
+                    no file selected
+                  </span>
+                  <span>Select a file to view its contents</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
-        {/* Chronicle */}
-        <div
-          role="tabpanel"
-          aria-labelledby="tab-chronicle"
-          hidden={activeTab !== 'chronicle'}
-          className="niuu-h-full"
-        >
-          {activeTab === 'chronicle' && <ChronicleTab />}
-        </div>
+        {activeTab === 'chronicle' && (
+          <div
+            role="tabpanel"
+            aria-labelledby="tab-chronicle"
+            className="niuu-h-full niuu-min-h-0 niuu-overflow-y-auto niuu-bg-bg-primary"
+          >
+            <ChronicleTab />
+          </div>
+        )}
 
-        {/* Logs */}
-        <div
-          role="tabpanel"
-          aria-labelledby="tab-logs"
-          hidden={activeTab !== 'logs'}
-          className="niuu-h-full"
-        >
-          {activeTab === 'logs' && <LogsTab />}
-        </div>
+        {activeTab === 'logs' && (
+          <div role="tabpanel" aria-labelledby="tab-logs" className="niuu-h-full niuu-min-h-0">
+            <LogsTab />
+          </div>
+        )}
       </div>
     </div>
   );

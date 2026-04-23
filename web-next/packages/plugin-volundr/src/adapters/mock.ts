@@ -1193,9 +1193,65 @@ export function createMockTemplateStore(): ITemplateStore {
 
 export function createMockPtyStream(): IPtyStream {
   const subscribers = new Map<string, Array<(chunk: string) => void>>();
+  const buffers = new Map<string, string>();
 
   function notify(sessionId: string, chunk: string) {
     for (const cb of subscribers.get(sessionId) ?? []) cb(chunk);
+  }
+
+  function buildTranscript(sessionId: string): string {
+    const [baseSessionId, terminalId = 'main'] = sessionId.split('::');
+
+    if (baseSessionId === 'laptop-volundr-local' && terminalId === 'main') {
+      return [
+        'workspace $ git log --oneline -5',
+        'a019be2 perf: throttle pan to rAF',
+        'f2b9c1a perf: quadtree cull @ 60fps',
+        'c44001d chore: add perf test harness',
+        '7b2adb0 obs: viewport-box math',
+        '1e7bc22 obs: initial canvas skeleton',
+        'workspace $ git diff --stat HEAD~1',
+        ' observatory.jsx   | 248 ++++++++++++++++++++++++----',
+        ' canvas/quadtree.js |  96 +++++++++',
+        ' styles.css        |  10 +--',
+        ' 3 files changed, 340 insertions(+), 14 deletions(-)',
+        'workspace $ ',
+      ].join('\r\n');
+    }
+    if (baseSessionId === 'laptop-volundr-local' && terminalId === 'tests') {
+      return [
+        'tests $ pnpm test observatory.perf.test.ts',
+        ' PASS  observatory.perf.test.ts',
+        '  quadtree culls off-screen entities',
+        '  reduced motion pan stays under 8ms',
+        '',
+        ' Test Files  1 passed (1)',
+        'tests $ ',
+      ].join('\r\n');
+    }
+    if (baseSessionId === 'laptop-volundr-local' && terminalId === 'view-io') {
+      return [
+        'view $ jq . metrics/render.json',
+        '{',
+        '  "sast_findings": 0,',
+        '  "deps_changed": 0,',
+        '  "scope": "frontend-only"',
+        '}',
+        'view $ ',
+      ].join('\r\n');
+    }
+    if (baseSessionId === 'laptop-volundr-local') {
+      return [`${terminalId} $ `].join('\r\n');
+    }
+    return '$ ';
+  }
+
+  function ensureBuffer(sessionId: string): string {
+    const existing = buffers.get(sessionId);
+    if (existing !== undefined) return existing;
+    const seeded = buildTranscript(sessionId);
+    buffers.set(sessionId, seeded);
+    return seeded;
   }
 
   return {
@@ -1203,9 +1259,8 @@ export function createMockPtyStream(): IPtyStream {
       const existing = subscribers.get(sessionId) ?? [];
       existing.push(onData);
       subscribers.set(sessionId, existing);
-      // Emit a prompt after a short delay to simulate connection.
       setTimeout(() => {
-        notify(sessionId, `\x1b[1;32m[mock]\x1b[0m connected to ${sessionId}\r\n$ `);
+        notify(sessionId, ensureBuffer(sessionId));
       }, 50);
       return () => {
         const updated = (subscribers.get(sessionId) ?? []).filter((cb) => cb !== onData);
@@ -1213,12 +1268,16 @@ export function createMockPtyStream(): IPtyStream {
       };
     },
     send: (sessionId, data) => {
-      // Echo input back so the terminal shows what was typed.
       if (data === '\r') {
-        notify(sessionId, '\r\nmock-output\r\n$ ');
-      } else {
-        notify(sessionId, data);
+        const chunk = '\r\nmock-output\r\n$ ';
+        const next = `${ensureBuffer(sessionId)}${chunk}`;
+        buffers.set(sessionId, next);
+        notify(sessionId, chunk);
+        return;
       }
+      const next = `${ensureBuffer(sessionId)}${data}`;
+      buffers.set(sessionId, next);
+      notify(sessionId, data);
     },
   };
 }

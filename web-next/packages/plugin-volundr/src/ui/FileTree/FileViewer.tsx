@@ -56,31 +56,31 @@ export function FileViewer({ path, content, onClose, isLoading, error }: FileVie
 
   return (
     <div
-      className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-hidden niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary"
+      className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-hidden niuu-rounded-none niuu-border-l niuu-border-border-subtle niuu-bg-bg-secondary"
       data-testid="file-viewer"
       role="region"
       aria-label={`file viewer: ${basename}`}
     >
       {/* Header */}
-      <div className="niuu-flex niuu-shrink-0 niuu-items-center niuu-gap-2 niuu-border-b niuu-border-border-subtle niuu-px-3 niuu-py-2">
+      <div className="niuu-flex niuu-shrink-0 niuu-items-center niuu-gap-2 niuu-border-b niuu-border-border-subtle niuu-bg-bg-primary niuu-px-4 niuu-py-2.5">
         <span
-          className="niuu-flex-1 niuu-truncate niuu-font-mono niuu-text-xs niuu-text-text-secondary"
+          className="niuu-flex-1 niuu-truncate niuu-font-mono niuu-text-[12px] niuu-text-text-secondary"
           title={path}
           data-testid="file-viewer-path"
         >
           {path}
         </span>
-        <span className="niuu-shrink-0 niuu-rounded niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-xs niuu-text-text-muted">
+        <span className="niuu-shrink-0 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-elevated niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
           {language}
         </span>
         {onClose && (
           <button
-            className="niuu-ml-1 niuu-shrink-0 niuu-rounded niuu-p-0.5 niuu-text-text-muted hover:niuu-text-text-primary"
+            className="niuu-ml-1 niuu-shrink-0 niuu-rounded-md niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[11px] niuu-text-text-muted hover:niuu-bg-bg-elevated hover:niuu-text-text-primary"
             onClick={onClose}
             aria-label="close file viewer"
             data-testid="file-viewer-close"
           >
-            ✕
+            close
           </button>
         )}
       </div>
@@ -109,7 +109,7 @@ export function FileViewer({ path, content, onClose, isLoading, error }: FileVie
 
         {!isLoading && !error && html && (
           <div
-            className="niuu-h-full niuu-overflow-auto niuu-p-0 niuu-text-xs [&_pre]:niuu-m-0 [&_pre]:niuu-h-full [&_pre]:niuu-overflow-auto [&_pre]:niuu-p-4"
+            className="niuu-h-full niuu-overflow-auto niuu-p-0 niuu-text-xs [&_pre]:niuu-m-0 [&_pre]:niuu-h-full [&_pre]:niuu-overflow-auto [&_pre]:niuu-p-5"
             // Shiki renders safe, server-escaped HTML.
             dangerouslySetInnerHTML={{ __html: html }}
             data-testid="file-viewer-highlighted"
@@ -118,7 +118,7 @@ export function FileViewer({ path, content, onClose, isLoading, error }: FileVie
 
         {!isLoading && !error && !html && content && (
           <pre
-            className="niuu-m-0 niuu-overflow-auto niuu-p-4 niuu-font-mono niuu-text-xs niuu-text-text-secondary"
+            className="niuu-m-0 niuu-overflow-auto niuu-p-5 niuu-font-mono niuu-text-xs niuu-text-text-secondary"
             data-testid="file-viewer-plain"
           >
             {content}
