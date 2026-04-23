@@ -34,6 +34,14 @@ function durationMs(startedAt: string, terminatedAt: string | undefined): string
   return `${hours}h ${mins % 60}m`;
 }
 
+function formatShortDate(iso: string | undefined): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 // ---------------------------------------------------------------------------
 // HistoryPage
 // ---------------------------------------------------------------------------
@@ -56,6 +64,9 @@ export function HistoryPage() {
   });
 
   const hasFilters = Boolean(ravnId || personaName || sagaId || outcome || dateFrom || dateTo);
+  const terminatedCount = data.filter((session) => session.state === 'terminated').length;
+  const failedCount = data.filter((session) => session.state === 'failed').length;
+  const uniqueRavns = new Set(data.map((session) => session.ravnId)).size;
 
   function clearFilters() {
     setRavnId('');
@@ -68,74 +79,113 @@ export function HistoryPage() {
 
   return (
     <div className="history-page">
-      <h2 className="history-page__title">Session History</h2>
+      <header className="history-page__hero">
+        <div className="history-page__hero-copy">
+          <h2 className="history-page__title">Session History</h2>
 
-      <p className="history-page__subtitle">
-        Terminated and failed sessions — filterable by raven, persona, saga, outcome, and date.
-      </p>
+          <p className="history-page__subtitle">
+            Terminated sessions, failed runs, and archived pod lineage across ravens, templates,
+            clusters, and sagas.
+          </p>
+        </div>
+
+        <div className="history-page__summary" data-testid="history-summary">
+          <div className="history-page__summary-card">
+            <span className="history-page__summary-label">rows</span>
+            <span className="history-page__summary-value">{data.length}</span>
+          </div>
+          <div className="history-page__summary-card">
+            <span className="history-page__summary-label">terminated</span>
+            <span className="history-page__summary-value">{terminatedCount}</span>
+          </div>
+          <div className="history-page__summary-card history-page__summary-card--critical">
+            <span className="history-page__summary-label">failed</span>
+            <span className="history-page__summary-value">{failedCount}</span>
+          </div>
+          <div className="history-page__summary-card">
+            <span className="history-page__summary-label">ravens</span>
+            <span className="history-page__summary-value">{uniqueRavns}</span>
+          </div>
+        </div>
+      </header>
 
       {/* Filter bar */}
       <div className="history-page__filters" role="search" aria-label="History filters">
-        <input
-          className="history-page__filter-input"
-          type="text"
-          placeholder="Filter by raven ID…"
-          value={ravnId}
-          onChange={(e) => setRavnId(e.target.value)}
-          aria-label="Filter by raven ID"
-        />
-        <input
-          className="history-page__filter-input"
-          type="text"
-          placeholder="Filter by persona…"
-          value={personaName}
-          onChange={(e) => setPersonaName(e.target.value)}
-          aria-label="Filter by persona"
-        />
-        <input
-          className="history-page__filter-input"
-          type="text"
-          placeholder="Filter by saga ID…"
-          value={sagaId}
-          onChange={(e) => setSagaId(e.target.value)}
-          aria-label="Filter by saga"
-        />
-
-        <div className="history-page__outcome-group" role="group" aria-label="Filter by outcome">
-          {(['', 'terminated', 'failed'] as const).map((o) => (
-            <button
-              key={o || 'all'}
-              className={[
-                'history-page__outcome-btn',
-                outcome === o ? 'history-page__outcome-btn--active' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              onClick={() => setOutcome(o)}
-              aria-pressed={outcome === o}
-              data-outcome={o || 'all'}
-            >
-              {o === '' ? 'All' : o}
-            </button>
-          ))}
-        </div>
-
-        <div className="history-page__date-row">
-          <input
-            className="history-page__filter-input"
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            aria-label="From date"
-          />
-          <span className="history-page__date-sep">to</span>
-          <input
-            className="history-page__filter-input"
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            aria-label="To date"
-          />
+        <div className="history-page__filter-grid">
+          <label className="history-page__field">
+            <span className="history-page__field-label">Raven</span>
+            <input
+              className="history-page__filter-input"
+              type="text"
+              placeholder="Filter by raven ID…"
+              value={ravnId}
+              onChange={(e) => setRavnId(e.target.value)}
+              aria-label="Filter by raven ID"
+            />
+          </label>
+          <label className="history-page__field">
+            <span className="history-page__field-label">Persona</span>
+            <input
+              className="history-page__filter-input"
+              type="text"
+              placeholder="Filter by persona…"
+              value={personaName}
+              onChange={(e) => setPersonaName(e.target.value)}
+              aria-label="Filter by persona"
+            />
+          </label>
+          <label className="history-page__field">
+            <span className="history-page__field-label">Saga</span>
+            <input
+              className="history-page__filter-input"
+              type="text"
+              placeholder="Filter by saga ID…"
+              value={sagaId}
+              onChange={(e) => setSagaId(e.target.value)}
+              aria-label="Filter by saga"
+            />
+          </label>
+          <div className="history-page__field">
+            <span className="history-page__field-label">Outcome</span>
+            <div className="history-page__outcome-group" role="group" aria-label="Filter by outcome">
+              {(['', 'terminated', 'failed'] as const).map((o) => (
+                <button
+                  key={o || 'all'}
+                  className={[
+                    'history-page__outcome-btn',
+                    outcome === o ? 'history-page__outcome-btn--active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => setOutcome(o)}
+                  aria-pressed={outcome === o}
+                  data-outcome={o || 'all'}
+                >
+                  {o === '' ? 'All' : o}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="history-page__field history-page__field--date">
+            <span className="history-page__field-label">Date range</span>
+            <div className="history-page__date-row">
+              <input
+                className="history-page__filter-input"
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                aria-label="From date"
+              />
+              <span className="history-page__date-sep">to</span>
+              <input
+                className="history-page__filter-input"
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                aria-label="To date"
+              />
+            </div>
+          </div>
         </div>
 
         {hasFilters && (
@@ -169,8 +219,8 @@ export function HistoryPage() {
             <tr>
               <th scope="col">Outcome</th>
               <th scope="col">Session ID</th>
-              <th scope="col">Raven</th>
-              <th scope="col">Persona</th>
+              <th scope="col">Raven / Persona</th>
+              <th scope="col">Workload</th>
               <th scope="col">Saga</th>
               <th scope="col">Terminated</th>
               <th scope="col">Duration</th>
@@ -191,10 +241,25 @@ export function HistoryPage() {
                   </div>
                 </td>
                 <td>
-                  <span className="history-page__id">{session.id}</span>
+                  <div className="history-page__session-cell">
+                    <span className="history-page__id">{session.id}</span>
+                    <span className="history-page__session-started">
+                      started {formatShortDate(session.startedAt)}
+                    </span>
+                  </div>
                 </td>
-                <td className="history-page__ravn">{session.ravnId}</td>
-                <td>{session.personaName}</td>
+                <td>
+                  <div className="history-page__identity-cell">
+                    <span className="history-page__ravn">{session.ravnId}</span>
+                    <span className="history-page__persona">{session.personaName}</span>
+                  </div>
+                </td>
+                <td>
+                  <div className="history-page__workload-cell">
+                    <span className="history-page__template">{session.templateId}</span>
+                    <span className="history-page__cluster">{session.clusterId}</span>
+                  </div>
+                </td>
                 <td>{session.sagaId ?? '—'}</td>
                 <td className="history-page__date">{formatDate(session.terminatedAt)}</td>
                 <td className="history-page__duration">

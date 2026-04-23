@@ -826,7 +826,7 @@ function toDetail(summary: PersonaSummary, req?: PersonaCreateRequest): PersonaD
           ? {
               verdict: 'string',
               confidence: 'number',
-              findings: 'tags',
+              findings: 'array',
             }
           : {}),
     },

@@ -40,16 +40,18 @@ export function PlanPrompt({ onSubmit, loading, error }: PlanPromptProps) {
     <form
       onSubmit={handleSubmit}
       aria-label="Plan prompt form"
-      className="niuu-flex niuu-flex-col niuu-gap-4"
+      className="tyr-plan-card niuu-flex niuu-flex-col niuu-gap-4"
     >
-      <div className="niuu-flex niuu-flex-col niuu-gap-1">
-        <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">
-          Describe your goal
-        </h2>
-        <p className="niuu-text-sm niuu-text-text-secondary">
-          Tell Tyr what you want to build. The planning raven will decompose it into phases and
-          raids.
-        </p>
+      <div className="tyr-plan-step-head">
+        <div className="tyr-plan-step-index">1</div>
+        <div className="niuu-flex niuu-flex-col niuu-gap-1">
+          <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">
+            Describe your goal
+          </h2>
+          <p className="niuu-text-sm niuu-text-text-secondary">
+            Rough is fine. A tracker ID, sentence, or paragraph all work; the planning raid will sharpen it next.
+          </p>
+        </div>
       </div>
 
       <div className="niuu-flex niuu-flex-col niuu-gap-1">
@@ -71,7 +73,7 @@ export function PlanPrompt({ onSubmit, loading, error }: PlanPromptProps) {
           required
           aria-required="true"
           aria-describedby={error ? 'plan-prompt-error' : undefined}
-          className="niuu-w-full niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-secondary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary niuu-placeholder-text-muted niuu-resize-y focus:niuu-outline-none focus:niuu-ring-2 focus:niuu-ring-brand-500/40"
+          className="tyr-plan-input tyr-plan-textarea"
         />
         <div className="niuu-flex niuu-flex-wrap niuu-gap-2 niuu-mt-2" aria-label="Example prompts">
           {HINT_CHIPS.map((chip) => (
@@ -79,7 +81,7 @@ export function PlanPrompt({ onSubmit, loading, error }: PlanPromptProps) {
               key={chip.label}
               type="button"
               onClick={() => setPrompt(chip.text)}
-              className="niuu-rounded-full niuu-bg-bg-elevated niuu-border niuu-border-border niuu-px-3 niuu-py-1 niuu-text-xs niuu-text-text-secondary hover:niuu-bg-bg-tertiary hover:niuu-text-text-primary niuu-transition-colors"
+              className="tyr-plan-hint-chip"
             >
               {chip.label}
             </button>
@@ -100,7 +102,7 @@ export function PlanPrompt({ onSubmit, loading, error }: PlanPromptProps) {
           value={repo}
           onChange={(e) => setRepo(e.target.value)}
           placeholder="e.g. niuulabs/volundr"
-          className="niuu-w-full niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-secondary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary niuu-placeholder-text-muted focus:niuu-outline-none focus:niuu-ring-2 focus:niuu-ring-brand-500/40"
+          className="tyr-plan-input"
         />
       </div>
 
@@ -114,7 +116,7 @@ export function PlanPrompt({ onSubmit, loading, error }: PlanPromptProps) {
         <button
           type="submit"
           disabled={!canSubmit}
-          className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs disabled:niuu-opacity-50 disabled:niuu-cursor-not-allowed"
+          className="tyr-plan-primary-btn disabled:niuu-opacity-50 disabled:niuu-cursor-not-allowed"
         >
           {loading ? 'Starting…' : 'Next →'}
         </button>

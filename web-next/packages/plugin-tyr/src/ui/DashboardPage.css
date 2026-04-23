@@ -84,6 +84,14 @@
   gap: 8px;
   align-items: center;
 }
+.tyr-kpi__spark {
+  display: block;
+  margin-top: 12px;
+  max-width: 100%;
+}
+.tyr-kpi__spark--wide {
+  min-width: 100%;
+}
 .tyr-kpi--accent {
   border-color: color-mix(in srgb, var(--color-brand) 25%, transparent);
   background: color-mix(in srgb, var(--color-brand) 4%, var(--color-bg-secondary));

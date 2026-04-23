@@ -6,19 +6,29 @@
  * Owner: plugin-tyr (WorkflowBuilder).
  */
 
-import type { WorkflowNode, WorkflowEdge } from '../../domain/workflow';
+import type { WorkflowNode, WorkflowEdge, WorkflowStageNode } from '../../domain/workflow';
 
 // ---------------------------------------------------------------------------
 // Node geometry constants
 // ---------------------------------------------------------------------------
 
 export const STAGE_WIDTH = 172;
-export const STAGE_HEIGHT = 68;
+export const STAGE_HEIGHT = 92;
 export const GATE_SIZE = 76; // diamond bounding box
 export const COND_RADIUS = 34; // circle radius
+export const TRIGGER_WIDTH = 168;
+export const TRIGGER_HEIGHT = 58;
+export const END_RADIUS = 26;
 
 /** Default bezier control-point offset (pixels). */
 const CP_OFFSET = 92;
+
+export function normalizedStageMembers(node: WorkflowStageNode) {
+  if (node.stageMembers && node.stageMembers.length > 0) {
+    return node.stageMembers;
+  }
+  return (node.personaIds ?? []).map((personaId) => ({ personaId, budget: 40 }));
+}
 
 // ---------------------------------------------------------------------------
 // ID generation
@@ -72,15 +82,24 @@ export function defaultBezierCPs(
 // Node centre helpers
 // ---------------------------------------------------------------------------
 
+export function stageNodeHeight(node: WorkflowStageNode): number {
+  const memberCount = Math.max(normalizedStageMembers(node).length, 1);
+  return STAGE_HEIGHT + Math.max(0, memberCount - 1) * 22;
+}
+
 /** Return the centre (x, y) of a node for edge anchoring. */
 export function nodeCentre(node: WorkflowNode): { x: number; y: number } {
   switch (node.kind) {
     case 'stage':
-      return { x: node.position.x + STAGE_WIDTH / 2, y: node.position.y + STAGE_HEIGHT / 2 };
+      return { x: node.position.x + STAGE_WIDTH / 2, y: node.position.y + stageNodeHeight(node) / 2 };
     case 'gate':
       return { x: node.position.x + GATE_SIZE / 2, y: node.position.y + GATE_SIZE / 2 };
     case 'cond':
       return { x: node.position.x + COND_RADIUS, y: node.position.y + COND_RADIUS };
+    case 'trigger':
+      return { x: node.position.x + TRIGGER_WIDTH / 2, y: node.position.y + TRIGGER_HEIGHT / 2 };
+    case 'end':
+      return { x: node.position.x + END_RADIUS, y: node.position.y + END_RADIUS };
   }
 }
 
@@ -139,16 +158,35 @@ export function workflowToYaml(workflow: {
       lines.push(`    kind: ${node.kind}`);
       lines.push(`    label: ${JSON.stringify(node.label)}`);
       if (node.kind === 'stage') {
+        const stageMembers = normalizedStageMembers(node);
         lines.push(`    raidId: ${node.raidId === null ? 'null' : JSON.stringify(node.raidId)}`);
         lines.push(
           `    personaIds: ${node.personaIds.length === 0 ? '[]' : `[${node.personaIds.map((p) => JSON.stringify(p)).join(', ')}]`}`,
         );
+        if (stageMembers.length > 0) {
+          lines.push('    stageMembers:');
+          for (const member of stageMembers) {
+            lines.push(
+              `      - {personaId: ${JSON.stringify(member.personaId)}, budget: ${member.budget}}`,
+            );
+          }
+        }
+        lines.push(`    executionMode: ${node.executionMode ?? 'parallel'}`);
+        lines.push(`    maxConcurrent: ${node.maxConcurrent ?? 3}`);
+        lines.push(`    joinMode: ${node.joinMode ?? 'all'}`);
       }
       if (node.kind === 'gate') {
         lines.push(`    condition: ${JSON.stringify(node.condition)}`);
+        lines.push(
+          `    approvers: ${(node.approvers ?? []).length === 0 ? '[]' : `[${(node.approvers ?? []).map((a) => JSON.stringify(a)).join(', ')}]`}`,
+        );
+        lines.push(`    autoForwardAfter: ${JSON.stringify(node.autoForwardAfter ?? '30m')}`);
       }
       if (node.kind === 'cond') {
         lines.push(`    predicate: ${JSON.stringify(node.predicate)}`);
+      }
+      if (node.kind === 'trigger') {
+        lines.push(`    source: ${JSON.stringify(node.source ?? 'manual dispatch')}`);
       }
       lines.push(`    position: {x: ${node.position.x}, y: ${node.position.y}}`);
     }

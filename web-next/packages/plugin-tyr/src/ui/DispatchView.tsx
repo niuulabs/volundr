@@ -217,8 +217,10 @@ function RaidRow({
   return (
     <div
       className={cn(
-        'niuu-flex niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-2.5 niuu-border-b niuu-border-border-subtle niuu-cursor-pointer',
-        isSelected ? 'niuu-bg-bg-secondary' : 'hover:niuu-bg-bg-secondary',
+        'niuu-flex niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-2.5 niuu-border niuu-rounded-md niuu-cursor-pointer niuu-transition-colors',
+        isSelected
+          ? 'niuu-bg-[#1e232a] niuu-border-border'
+          : 'niuu-bg-[#171b22] niuu-border-border-subtle hover:niuu-bg-[#1b2028]',
       )}
       onClick={onToggle}
     >
@@ -687,14 +689,22 @@ function DispatchViewContent() {
           />
 
           {/* Grouped queue */}
-          <div className="niuu-flex-1 niuu-overflow-y-auto" role="list" aria-label="Dispatch queue">
+          <div
+            className="niuu-flex-1 niuu-overflow-y-auto niuu-p-2 niuu-flex niuu-flex-col niuu-gap-3"
+            role="list"
+            aria-label="Dispatch queue"
+          >
             {groupedBySaga.length === 0 ? (
               <div className="niuu-py-12 niuu-text-center niuu-text-sm niuu-text-text-muted">
                 No raids match the current filter.
               </div>
             ) : (
               groupedBySaga.map(([sagaId, group]) => (
-                <div key={sagaId} role="listitem">
+                <div
+                  key={sagaId}
+                  role="listitem"
+                  className="niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-overflow-hidden niuu-bg-bg-secondary"
+                >
                   <SagaGroupHeader
                     sagaName={group.sagaName}
                     trackerId={group.trackerId}
@@ -702,15 +712,17 @@ function DispatchViewContent() {
                     raidCount={group.entries.length}
                     workflowName={group.workflowName}
                   />
-                  {group.entries.map((entry) => (
-                    <RaidRow
-                      key={entry.raid.id}
-                      entry={entry}
-                      isSelected={selectedIds.has(entry.raid.id)}
-                      onToggle={() => toggleId(entry.raid.id)}
-                      workflowName={workflowOverride.get(entry.raid.id)?.name}
-                    />
-                  ))}
+                  <div className="niuu-p-2 niuu-flex niuu-flex-col niuu-gap-2">
+                    {group.entries.map((entry) => (
+                      <RaidRow
+                        key={entry.raid.id}
+                        entry={entry}
+                        isSelected={selectedIds.has(entry.raid.id)}
+                        onToggle={() => toggleId(entry.raid.id)}
+                        workflowName={workflowOverride.get(entry.raid.id)?.name}
+                      />
+                    ))}
+                  </div>
                 </div>
               ))
             )}

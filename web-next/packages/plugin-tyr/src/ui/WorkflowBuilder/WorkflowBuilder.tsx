@@ -23,7 +23,6 @@ import { GraphView } from './GraphView';
 import { PipelineView } from './PipelineView';
 import { YamlView } from './YamlView';
 import { ValidationPanel } from './ValidationPanel';
-import { NodeInspector } from './NodeInspector';
 import { LibraryPanel, DEFAULT_PERSONAS, type PersonaEntry } from './LibraryPanel';
 import { WorkflowDetailPanel } from './WorkflowDetailPanel';
 
@@ -54,18 +53,25 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
     view,
     selectedNodeId,
     connectingFromId,
-    inspectorNodeId,
+    connectingFromLabel,
     setView,
     selectNode,
     inspectNode,
     addNode,
+    addStageWithPersona,
     deleteNode,
+    deleteEdge,
     moveNode,
     startConnect,
     cancelConnect,
     completeConnect,
+    addPersonaToStage,
+    replacePersonaInStage,
+    updatePersonaBudget,
     removePersonaFromStage,
     updateNodeLabel,
+    updateNode,
+    updateWorkflowMeta,
     setWorkflow: _setWorkflow,
   } = builder;
 
@@ -73,8 +79,8 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
   const errorCount = issues.filter((i) => i.severity === 'error').length;
   const warnCount = issues.filter((i) => i.severity === 'warning').length;
 
-  const inspectorNode = inspectorNodeId
-    ? (workflow.nodes.find((n) => n.id === inspectorNodeId) ?? null)
+  const selectedNode = selectedNodeId
+    ? (workflow.nodes.find((n) => n.id === selectedNodeId) ?? null)
     : null;
 
   function handleSave() {
@@ -92,7 +98,7 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
       {/* Center: header + action bar + canvas + bottom bar */}
       <div className="niuu-flex-1 niuu-flex niuu-flex-col niuu-min-w-0">
         {/* Header bar */}
-        <div className="niuu-flex niuu-items-start niuu-py-3 niuu-px-4 niuu-border-b niuu-border-border niuu-bg-bg-secondary niuu-shrink-0 niuu-gap-3">
+        <div className="niuu-flex niuu-items-center niuu-py-3 niuu-px-6 niuu-border-b niuu-border-border niuu-bg-bg-secondary niuu-shrink-0 niuu-gap-6">
           <div className="niuu-flex niuu-flex-col niuu-gap-0.5 niuu-min-w-0">
             <h3
               className="niuu-m-0 niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-whitespace-nowrap"
@@ -115,7 +121,7 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
           )}
 
           {/* View tabs */}
-          <div className="niuu-flex niuu-gap-1 niuu-self-center">
+          <div className="niuu-flex niuu-gap-0 niuu-self-center niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-overflow-hidden">
             {VIEWS.map((v) => (
               <button
                 key={v}
@@ -123,10 +129,10 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
                 data-active={view === v ? 'true' : undefined}
                 onClick={() => setView(v)}
                 className={cn(
-                  'niuu-rounded-md niuu-px-3.5 niuu-py-1.5 niuu-text-xs niuu-cursor-pointer niuu-font-sans niuu-border niuu-transition-colors',
+                  'niuu-px-5 niuu-py-2 niuu-text-xs niuu-cursor-pointer niuu-font-sans niuu-border-none niuu-transition-colors',
                   view === v
-                    ? 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary'
-                    : 'niuu-bg-transparent niuu-border-border-subtle niuu-text-text-muted',
+                    ? 'niuu-bg-brand niuu-text-bg-primary'
+                    : 'niuu-bg-transparent niuu-text-text-muted',
                 )}
               >
                 {VIEW_LABELS[v]}
@@ -135,10 +141,10 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
           </div>
 
           {/* Spacer + toolbar buttons */}
-          <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-ml-auto niuu-self-center">
+          <div className="niuu-flex niuu-items-center niuu-gap-4 niuu-ml-auto niuu-self-center">
             <button
               type="button"
-              className="niuu-bg-transparent niuu-border-none niuu-text-text-muted niuu-cursor-pointer niuu-text-sm niuu-p-1 hover:niuu-text-text-secondary"
+              className="niuu-bg-transparent niuu-border-none niuu-text-text-muted niuu-cursor-pointer niuu-text-sm niuu-p-0 hover:niuu-text-text-secondary"
               title="Undo"
               aria-label="Undo"
             >
@@ -146,26 +152,27 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
             </button>
             <button
               type="button"
-              className="niuu-bg-transparent niuu-border-none niuu-text-text-muted niuu-cursor-pointer niuu-text-sm niuu-p-1 hover:niuu-text-text-secondary"
+              className="niuu-bg-transparent niuu-border-none niuu-text-text-muted niuu-cursor-pointer niuu-text-sm niuu-p-0 hover:niuu-text-text-secondary"
               title="Redo"
               aria-label="Redo"
             >
               ↻
             </button>
+            <div className="niuu-h-7 niuu-w-px niuu-bg-border" />
             <button type="button" className={ACTION_BTN} data-testid="btn-diff">
               Diff
+            </button>
+            <button type="button" className={ACTION_BTN}>
+              History
             </button>
           </div>
         </div>
 
         {/* Action bar */}
         <div
-          className="niuu-flex niuu-items-center niuu-gap-2 niuu-py-2 niuu-px-4 niuu-border-b niuu-border-border niuu-bg-bg-secondary niuu-shrink-0"
+          className="niuu-flex niuu-items-center niuu-gap-2 niuu-py-3 niuu-px-6 niuu-border-b niuu-border-border niuu-bg-bg-secondary niuu-shrink-0"
           data-testid="action-bar"
         >
-          <button type="button" className={ACTION_BTN}>
-            History
-          </button>
           {onSave && (
             <button type="button" className={ACTION_BTN} data-testid="save-workflow" onClick={handleSave}>
               Save as…
@@ -173,17 +180,17 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
           )}
           <button
             type="button"
-            className="niuu-bg-transparent niuu-border niuu-border-solid niuu-border-brand niuu-rounded-md niuu-text-brand niuu-font-sans niuu-text-xs niuu-py-1.5 niuu-px-3 niuu-cursor-pointer niuu-whitespace-nowrap hover:niuu-bg-brand/10 niuu-transition-colors niuu-flex niuu-items-center niuu-gap-1"
+            className="niuu-bg-transparent niuu-border niuu-border-solid niuu-border-brand niuu-rounded-md niuu-text-brand niuu-font-sans niuu-text-xs niuu-py-1.5 niuu-px-3 niuu-cursor-pointer niuu-whitespace-nowrap hover:niuu-bg-brand/10 niuu-transition-colors"
             data-testid="btn-test"
           >
-            <span>▶</span> Test
+            Test
           </button>
           <button
             type="button"
-            className="niuu-bg-transparent niuu-border niuu-border-solid niuu-border-status-amber niuu-rounded-md niuu-text-status-amber niuu-font-sans niuu-text-xs niuu-py-1.5 niuu-px-3 niuu-cursor-pointer niuu-whitespace-nowrap hover:niuu-bg-status-amber/10 niuu-transition-colors niuu-flex niuu-items-center niuu-gap-1"
+            className={ACTION_BTN}
             data-testid="btn-dispatch"
           >
-            <span>⚡</span> Dispatch
+            Dispatch
           </button>
         </div>
 
@@ -195,14 +202,20 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
               edges={workflow.edges}
               selectedNodeId={selectedNodeId}
               connectingFromId={connectingFromId}
+              connectingFromLabel={connectingFromLabel}
               onSelectNode={selectNode}
               onInspectNode={inspectNode}
               onAddNode={addNode}
               onDeleteNode={deleteNode}
+              onDeleteEdge={deleteEdge}
               onMoveNode={moveNode}
               onStartConnect={startConnect}
               onCancelConnect={cancelConnect}
               onCompleteConnect={completeConnect}
+              onAddPersonaToStage={addPersonaToStage}
+              onAddStageWithPersona={addStageWithPersona}
+              personas={personas ?? DEFAULT_PERSONAS}
+              issues={issues}
             />
           )}
           {view === 'pipeline' && (
@@ -228,19 +241,20 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
       {/* Detail panel — right side */}
       <WorkflowDetailPanel
         workflow={workflow}
+        selectedNode={selectedNode}
         errorCount={errorCount}
         warnCount={warnCount}
+        issues={issues}
+        personas={personas ?? DEFAULT_PERSONAS}
+        onDeleteNode={deleteNode}
+        onUpdateNode={updateNode}
+        onUpdateLabel={updateNodeLabel}
+        onUpdateWorkflowMeta={updateWorkflowMeta}
+        onAddPersona={addPersonaToStage}
+        onReplacePersona={replacePersonaInStage}
+        onUpdatePersonaBudget={updatePersonaBudget}
+        onRemovePersona={removePersonaFromStage}
       />
-
-      {/* Node Inspector dialog */}
-      {inspectorNode && (
-        <NodeInspector
-          node={inspectorNode}
-          onClose={() => inspectNode(null)}
-          onUpdateLabel={updateNodeLabel}
-          onRemovePersona={removePersonaFromStage}
-        />
-      )}
     </div>
   );
 }

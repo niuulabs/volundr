@@ -54,6 +54,20 @@ export interface WorkflowIssue {
 export function validateWorkflowFull(workflow: Workflow): WorkflowIssue[] {
   const issues: WorkflowIssue[] = [];
   const { nodes, edges } = workflow;
+  const kindLabel = (kind: Workflow['nodes'][number]['kind']) => {
+    switch (kind) {
+      case 'stage':
+        return 'Stage';
+      case 'gate':
+        return 'Gate';
+      case 'cond':
+        return 'Condition';
+      case 'trigger':
+        return 'Trigger';
+      case 'end':
+        return 'End';
+    }
+  };
 
   // ── 1. Cycle detection ────────────────────────────────────────────────────
   const cycleNodeIds = detectCycle(
@@ -115,7 +129,7 @@ export function validateWorkflowFull(workflow: Workflow): WorkflowIssue[] {
   // ── 5. Missing personas ───────────────────────────────────────────────────
   for (const node of nodes) {
     if (node.kind !== 'stage') continue;
-    if (node.personaIds.length === 0) {
+    if ((node.personaIds ?? []).length === 0) {
       issues.push({
         kind: 'missing_persona',
         nodeId: node.id,
@@ -126,16 +140,16 @@ export function validateWorkflowFull(workflow: Workflow): WorkflowIssue[] {
   }
 
   // ── 6. No-producer ────────────────────────────────────────────────────────
-  // A gate or cond node needs at least one stage producing for it.
+  // Gates, conditions, and terminal nodes should have at least one inbound connection.
   if (nodes.length > 1) {
     for (const node of nodes) {
-      if (node.kind === 'stage') continue;
+      if (node.kind === 'trigger' || node.kind === 'stage') continue;
       const hasIn = edges.some((e) => e.target === node.id);
       if (!hasIn) {
         issues.push({
           kind: 'no_producer',
           nodeId: node.id,
-          message: `${node.kind === 'gate' ? 'Gate' : 'Condition'} node has no incoming connection`,
+          message: `${kindLabel(node.kind)} node has no incoming connection`,
           severity: 'error',
         });
       }

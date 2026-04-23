@@ -9,6 +9,7 @@ import {
   Pipe,
   Rune,
   relTime,
+  ToastProvider,
   useToast,
   Modal,
 } from '@niuulabs/ui';
@@ -71,47 +72,40 @@ function SagaListRow({ saga, isSelected, onClick }: SagaListRowProps) {
       onClick={onClick}
       data-selected={isSelected || undefined}
       className={[
-        'niuu-w-full niuu-text-left niuu-p-3 niuu-border-b niuu-border-border-subtle',
-        'niuu-cursor-pointer niuu-transition-colors niuu-flex niuu-flex-col niuu-gap-2',
+        'niuu-w-full niuu-text-left niuu-p-3 niuu-border niuu-rounded-md',
+        'niuu-cursor-pointer niuu-transition-colors niuu-grid niuu-gap-3 niuu-items-center',
+        'niuu-[grid-template-columns:auto_1fr_minmax(120px,0.9fr)_auto_auto]',
         isSelected
-          ? 'niuu-bg-bg-tertiary niuu-border-l-2 niuu-border-l-brand'
-          : 'niuu-bg-transparent hover:niuu-bg-bg-secondary',
+          ? 'niuu-bg-[#191f26] niuu-border-brand'
+          : 'niuu-bg-[#131820] niuu-border-border-subtle hover:niuu-bg-[#181d25]',
       ].join(' ')}
       aria-label={`View saga ${saga.name}`}
       aria-pressed={isSelected}
     >
-      {/* Glyph + name row */}
-      <div className="niuu-flex niuu-items-center niuu-gap-2">
-        <span
-          className="niuu-font-mono niuu-text-base niuu-text-brand niuu-shrink-0"
-          aria-hidden="true"
-          title={saga.trackerId}
-        >
+      <div
+        className="niuu-font-mono niuu-text-base niuu-text-brand niuu-shrink-0 niuu-inline-flex niuu-items-center niuu-justify-center niuu-w-8 niuu-h-8 niuu-rounded-md niuu-bg-bg-secondary niuu-border niuu-border-border-subtle"
+        aria-hidden="true"
+        title={saga.trackerId}
+      >
           {sagaGlyph(saga.trackerId)}
-        </span>
+      </div>
+
+      <div className="niuu-flex niuu-flex-col niuu-gap-1 niuu-min-w-0">
         <span className="niuu-font-semibold niuu-text-sm niuu-text-text-primary niuu-truncate">
           {saga.name}
         </span>
-      </div>
-
-      {/* Meta row */}
-      <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-flex-wrap">
-        <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-rounded">
-          {saga.trackerId}
-        </span>
-        <StatusBadge status={saga.status} />
-        <ConfidenceBadge value={saga.confidence / 100} />
-        {saga.repos[0] && (
-          <span className="niuu-text-xs niuu-text-text-muted niuu-truncate niuu-max-w-[120px]">
-            {saga.repos[0]}
+        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-flex-wrap niuu-text-[10px] niuu-font-mono niuu-text-text-muted">
+          <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-rounded">
+            {saga.trackerId}
           </span>
-        )}
-        <span className="niuu-text-xs niuu-text-text-faint niuu-font-mono niuu-ml-auto">
-          {relTime(saga.createdAt)}
-        </span>
+          {saga.repos[0] && (
+            <span className="niuu-text-text-muted niuu-truncate niuu-max-w-[150px]">{saga.repos[0]}</span>
+          )}
+          <span>branch · {saga.featureBranch}</span>
+          <span>{relTime(saga.createdAt)}</span>
+        </div>
       </div>
 
-      {/* Pipe */}
       <Pipe
         cells={Array.from({ length: saga.phaseSummary.total }, (_, i) => ({
           status:
@@ -122,9 +116,15 @@ function SagaListRow({ saga, isSelected, onClick }: SagaListRowProps) {
         }))}
       />
 
-      {/* Counts */}
-      <div className="niuu-text-right niuu-font-mono niuu-text-xs niuu-text-text-muted">
-        {mergedRaids}/{totalRaids} raids
+      <StatusBadge status={saga.status} />
+      <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-justify-end">
+        <ConfidenceBadge value={saga.confidence / 100} />
+        <div className="niuu-flex niuu-flex-col niuu-items-end niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+          <span className="niuu-text-sm niuu-text-text-primary">
+            {mergedRaids}/{totalRaids}
+          </span>
+          <span>raids</span>
+        </div>
       </div>
     </button>
   );
@@ -135,6 +135,14 @@ function SagaListRow({ saga, isSelected, onClick }: SagaListRowProps) {
 // ---------------------------------------------------------------------------
 
 export function SagasPage() {
+  return (
+    <ToastProvider>
+      <SagasPageContent />
+    </ToastProvider>
+  );
+}
+
+function SagasPageContent() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const params = useParams({ strict: false }) as { sagaId?: string };
@@ -179,22 +187,21 @@ export function SagasPage() {
   }
 
   return (
-    <div className="niuu-flex niuu-h-full niuu-overflow-hidden">
-      {/* ── Left list panel ─────────────────────────────── */}
-      <div
-        className="niuu-flex niuu-flex-col niuu-border-r niuu-border-border-subtle niuu-overflow-hidden"
-        style={{ width: 420, flexShrink: 0 }}
-        aria-label="Saga list"
-      >
-        {/* Header */}
-        <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-3 niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary">
-          <Rune glyph="ᚦ" size={22} />
-          <h2 className="niuu-m-0 niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-flex-1">
-            Sagas
-          </h2>
+    <div className="niuu-flex niuu-flex-col niuu-h-full niuu-overflow-hidden niuu-p-6 niuu-gap-4">
+      <div className="niuu-flex niuu-items-start niuu-justify-between niuu-gap-4">
+        <div className="niuu-flex niuu-items-start niuu-gap-3">
+          <Rune glyph="ᚦ" size={24} />
+          <div>
+            <h2 className="niuu-m-0 niuu-text-lg niuu-font-semibold niuu-text-text-primary">Sagas</h2>
+            <p className="niuu-m-0 niuu-mt-1 niuu-text-sm niuu-text-text-secondary niuu-max-w-[720px]">
+              Every saga is a decomposed tracker issue driven by a workflow. Select one to inspect phases, raids and confidence movement.
+            </p>
+          </div>
+        </div>
+        <div className="niuu-flex niuu-items-center niuu-gap-2">
           <button
             type="button"
-            className="niuu-px-2.5 niuu-py-1 niuu-text-xs niuu-border niuu-border-border-subtle niuu-rounded niuu-text-text-secondary hover:niuu-text-text-primary niuu-bg-transparent niuu-transition-colors"
+            className="niuu-px-2.5 niuu-py-1.5 niuu-text-xs niuu-border niuu-border-border-subtle niuu-rounded niuu-text-text-secondary hover:niuu-text-text-primary niuu-bg-transparent niuu-transition-colors"
             onClick={() => {
               const data = JSON.stringify(allSagas, null, 2);
               const blob = new Blob([data], { type: 'application/json' });
@@ -211,16 +218,22 @@ export function SagasPage() {
           </button>
           <button
             type="button"
-            className="niuu-px-2.5 niuu-py-1 niuu-text-xs niuu-bg-brand niuu-text-bg-primary niuu-rounded niuu-font-medium"
+            className="niuu-px-2.5 niuu-py-1.5 niuu-text-xs niuu-bg-brand niuu-text-bg-primary niuu-rounded niuu-font-medium"
             onClick={() => setShowNewSagaModal(true)}
             aria-label="Create new saga"
           >
             + New Saga
           </button>
         </div>
+      </div>
 
-        {/* Search + status filter */}
-        <div className="niuu-flex niuu-flex-col niuu-gap-2 niuu-px-3 niuu-py-2 niuu-border-b niuu-border-border-subtle">
+      <div className="niuu-flex niuu-h-full niuu-overflow-hidden niuu-gap-4">
+        <div
+          className="niuu-flex niuu-flex-col niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-overflow-hidden"
+          style={{ width: 460, flexShrink: 0 }}
+          aria-label="Saga list"
+        >
+        <div className="niuu-flex niuu-flex-col niuu-gap-2 niuu-px-3 niuu-py-3 niuu-border-b niuu-border-border-subtle">
           <input
             type="search"
             placeholder="Search sagas…"
@@ -229,7 +242,7 @@ export function SagasPage() {
             aria-label="Search sagas"
             className="niuu-px-3 niuu-py-1.5 niuu-rounded-md niuu-bg-bg-secondary niuu-border niuu-border-border niuu-text-xs niuu-text-text-primary niuu-placeholder-text-muted niuu-outline-none niuu-w-full"
           />
-          <nav className="niuu-flex niuu-gap-1" role="tablist" aria-label="Filter sagas by status">
+          <nav className="niuu-flex niuu-gap-1 niuu-flex-wrap" role="tablist" aria-label="Filter sagas by status">
             {STATUS_TABS.map((tab) => (
               <button
                 key={tab.value}
@@ -240,8 +253,8 @@ export function SagasPage() {
                 className={[
                   'niuu-px-2.5 niuu-py-1 niuu-rounded niuu-text-xs niuu-transition-colors',
                   filter === tab.value
-                    ? 'niuu-bg-brand niuu-text-bg-primary niuu-font-medium'
-                    : 'niuu-text-text-secondary hover:niuu-text-text-primary',
+                    ? 'niuu-bg-brand/15 niuu-text-brand niuu-border niuu-border-brand/40 niuu-font-medium'
+                    : 'niuu-text-text-secondary hover:niuu-text-text-primary niuu-border niuu-border-transparent',
                 ].join(' ')}
               >
                 {tab.label}
@@ -255,10 +268,9 @@ export function SagasPage() {
           </nav>
         </div>
 
-        {/* Saga list */}
-        <div className="niuu-flex-1 niuu-overflow-y-auto" role="list" aria-label="Sagas">
+        <div className="niuu-flex-1 niuu-overflow-y-auto niuu-p-3 niuu-flex niuu-flex-col niuu-gap-2" role="list" aria-label="Sagas">
           {filtered.length === 0 ? (
-            <div className="niuu-p-4">
+            <div className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-4">
               <EmptyState
                 title="No sagas found"
                 description={
@@ -282,8 +294,7 @@ export function SagasPage() {
         </div>
       </div>
 
-      {/* ── Right detail panel ─────────────────────────── */}
-      <div className="niuu-flex-1 niuu-overflow-y-auto" aria-label="Saga detail">
+      <div className="niuu-flex-1 niuu-overflow-y-auto niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-secondary" aria-label="Saga detail">
         {selectedSagaId ? (
           <SagaDetailPage sagaId={selectedSagaId} hideBackButton />
         ) : (
@@ -295,8 +306,8 @@ export function SagasPage() {
           </div>
         )}
       </div>
+      </div>
 
-      {/* ── New saga confirmation modal ─────────────────── */}
       <Modal
         open={showNewSagaModal}
         onOpenChange={setShowNewSagaModal}

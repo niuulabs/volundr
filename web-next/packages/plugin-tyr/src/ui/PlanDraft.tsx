@@ -246,31 +246,34 @@ export function PlanDraft({
 
   return (
     <div className="niuu-flex niuu-flex-col niuu-gap-4">
-      <div className="niuu-flex niuu-flex-col niuu-gap-1">
-        <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">Review your plan</h2>
-        <p className="niuu-text-sm niuu-text-text-secondary">
-          The planning raven decomposed your goal. Edit any phase, then approve to create the saga.
-        </p>
-      </div>
-
-      <div className="niuu-rounded-lg niuu-border niuu-border-border niuu-bg-bg-elevated niuu-px-4 niuu-py-3 niuu-flex niuu-items-center niuu-justify-between">
-        <div className="niuu-flex niuu-flex-col">
-          <span className="niuu-text-sm niuu-font-semibold niuu-text-text-primary">{sagaName}</span>
-          <span className="niuu-text-xs niuu-text-text-muted">
-            {phases.length} phase{phases.length !== 1 ? 's' : ''} · {totalRaids} raid
-            {totalRaids !== 1 ? 's' : ''}
-          </span>
-        </div>
-        {totalRaids > 0 && (
-          <div className="niuu-flex niuu-items-center niuu-gap-2">
-            <ConfidenceBar level={toLevel(avgConfidence)} />
-            <span className="niuu-text-xs niuu-text-text-secondary">{avgConfidence}%</span>
+      <div className="tyr-plan-card niuu-flex niuu-flex-col niuu-gap-4">
+        <div className="tyr-plan-step-head">
+          <div className="tyr-plan-step-index">4</div>
+          <div className="niuu-flex niuu-flex-col niuu-gap-1">
+            <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">Review your plan</h2>
+            <p className="niuu-text-sm niuu-text-text-secondary">
+              Nothing is created yet. Tune the draft, remove work, or re-plan before materializing the saga.
+            </p>
           </div>
-        )}
+        </div>
+
+        <div className="tyr-plan-draft-head">
+          <div className="niuu-flex niuu-flex-col niuu-gap-1 niuu-min-w-0">
+            <span className="niuu-text-[10px] niuu-font-mono niuu-uppercase niuu-tracking-[0.22em] niuu-text-text-muted">Proposed title</span>
+            <span className="niuu-text-base niuu-font-semibold niuu-text-text-primary niuu-truncate">{sagaName}</span>
+          </div>
+          <div className="niuu-flex niuu-flex-wrap niuu-gap-2 niuu-justify-end niuu-text-[10px] niuu-font-mono niuu-text-text-muted">
+            <span>{phases.length} phases</span>
+            <span>·</span>
+            <span>{totalRaids} raids</span>
+            <span>·</span>
+            <span>{avgConfidence}% confidence</span>
+          </div>
+        </div>
       </div>
 
       {risks.length > 0 && (
-        <div className="niuu-flex niuu-flex-col niuu-gap-2">
+        <div className="tyr-plan-card niuu-flex niuu-flex-col niuu-gap-2">
           <p className="niuu-text-xs niuu-font-semibold niuu-text-text-muted niuu-uppercase niuu-tracking-wider niuu-font-mono">
             Risks flagged by planning raid
           </p>
@@ -321,7 +324,7 @@ export function PlanDraft({
           type="button"
           onClick={onBack}
           disabled={loading}
-          className="niuu-rounded-md niuu-px-4 niuu-py-2 niuu-text-sm niuu-font-medium niuu-text-text-secondary niuu-border niuu-border-border hover:niuu-bg-bg-elevated disabled:niuu-opacity-40 niuu-transition-colors"
+          className="tyr-plan-secondary-btn disabled:niuu-opacity-40"
         >
           ← Back
         </button>
@@ -330,7 +333,7 @@ export function PlanDraft({
             type="button"
             onClick={onReplan}
             disabled={loading}
-            className="niuu-rounded-md niuu-px-4 niuu-py-2 niuu-text-sm niuu-font-medium niuu-text-text-secondary niuu-border niuu-border-border hover:niuu-bg-bg-elevated disabled:niuu-opacity-40 niuu-transition-colors"
+            className="tyr-plan-secondary-btn disabled:niuu-opacity-40"
           >
             ↻ Re-plan
           </button>
@@ -351,7 +354,7 @@ export function PlanDraft({
               type="button"
               onClick={handleSaveDraft}
               disabled={loading}
-              className="niuu-rounded-md niuu-px-4 niuu-py-2 niuu-text-sm niuu-font-medium niuu-text-text-secondary niuu-border niuu-border-border hover:niuu-bg-bg-elevated disabled:niuu-opacity-40 niuu-transition-colors"
+              className="tyr-plan-secondary-btn disabled:niuu-opacity-40"
             >
               Save as draft
             </button>
@@ -361,7 +364,7 @@ export function PlanDraft({
           type="button"
           onClick={onApprove}
           disabled={loading || phases.length === 0}
-          className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs disabled:niuu-opacity-50 disabled:niuu-cursor-not-allowed"
+          className="tyr-plan-primary-btn disabled:niuu-opacity-50 disabled:niuu-cursor-not-allowed"
         >
           {loading ? 'Launching…' : 'Approve & launch →'}
         </button>
