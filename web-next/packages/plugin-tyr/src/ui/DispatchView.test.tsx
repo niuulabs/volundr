@@ -388,7 +388,7 @@ describe('DispatchView', () => {
 
   it('shows confidence level for raids', async () => {
     render(<DispatchView />, { wrapper: wrap(makeServices()) });
-    await waitFor(() => expect(screen.getByText('80%')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('80')).toBeInTheDocument());
   });
 
   // ---------------------------------------------------------------------------

@@ -276,11 +276,17 @@ function RaidRow({
           </span>
         )}
         {entry.feasibility.feasible ? (
-          <span className="niuu-inline-flex niuu-items-center niuu-rounded-sm niuu-border niuu-border-emerald-600/50 niuu-bg-transparent niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-font-mono niuu-text-emerald-400 niuu-uppercase">
+          <span
+            className="niuu-inline-flex niuu-items-center niuu-rounded-sm niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-font-mono niuu-uppercase"
+            style={{ border: '1px solid rgba(16,185,129,0.5)', color: 'rgb(52,211,153)' }}
+          >
             ready
           </span>
         ) : (
-          <span className="niuu-inline-flex niuu-items-center niuu-rounded-sm niuu-border niuu-border-purple-500/50 niuu-bg-transparent niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-font-mono niuu-text-purple-400 niuu-uppercase">
+          <span
+            className="niuu-inline-flex niuu-items-center niuu-rounded-sm niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-font-mono niuu-uppercase"
+            style={{ border: '1px solid rgba(168,85,247,0.5)', color: 'rgb(192,132,252)' }}
+          >
             blocked{entry.feasibility.gates.filter((g) => !g.passed).length > 0 &&
               ` · ${entry.feasibility.gates.filter((g) => !g.passed).map((g) => GATE_LABELS[g.name] ?? g.name).join(', ')}`}
           </span>
@@ -290,8 +296,8 @@ function RaidRow({
             entry.raid.confidence >= 80 ? 'high' : entry.raid.confidence >= 50 ? 'medium' : 'low'
           }
         />
-        <span className="niuu-text-xs niuu-font-mono niuu-text-text-secondary niuu-w-8 niuu-text-right">
-          {entry.raid.confidence}%
+        <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-w-6 niuu-text-right">
+          {entry.raid.confidence}
         </span>
         <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-muted niuu-w-[60px] niuu-text-right">
           {waitLabel}
