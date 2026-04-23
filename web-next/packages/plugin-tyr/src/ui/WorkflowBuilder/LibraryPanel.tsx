@@ -145,44 +145,44 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
   return (
     <div
       data-testid="library-panel"
-      className="niuu-w-[256px] niuu-shrink-0 niuu-border-r niuu-border-border niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-hidden"
+      className="niuu-w-[212px] niuu-shrink-0 niuu-border-r niuu-border-border niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-hidden"
     >
       {/* Header */}
-      <div className="niuu-flex niuu-items-start niuu-justify-between niuu-px-5 niuu-pt-4 niuu-pb-4 niuu-border-b niuu-border-border">
+      <div className="niuu-flex niuu-items-start niuu-justify-between niuu-px-4 niuu-pt-3 niuu-pb-3 niuu-border-b niuu-border-border">
         <div className="niuu-flex niuu-flex-col niuu-gap-0.5">
-          <span className="niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-font-sans">
+          <span className="niuu-text-[12px] niuu-font-semibold niuu-text-text-primary niuu-font-sans">
             Library
           </span>
         </div>
         <button
           type="button"
-          className="niuu-bg-transparent niuu-border-none niuu-text-text-muted niuu-cursor-pointer niuu-text-sm niuu-p-0 hover:niuu-text-text-secondary"
+          className="niuu-bg-transparent niuu-border-none niuu-text-text-muted niuu-cursor-pointer niuu-text-xs niuu-p-0 hover:niuu-text-text-secondary"
         >
           +
         </button>
       </div>
 
       {/* Search */}
-      <div className="niuu-px-5 niuu-py-4 niuu-border-b niuu-border-border">
+      <div className="niuu-px-4 niuu-py-3 niuu-border-b niuu-border-border">
         <input
           type="text"
           placeholder="Search personas..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           data-testid="library-search"
-          className="niuu-w-full niuu-py-3 niuu-px-4 niuu-bg-bg-tertiary niuu-border niuu-border-solid niuu-border-border-subtle niuu-rounded-xl niuu-text-text-secondary niuu-font-sans niuu-text-sm niuu-outline-none niuu-box-border"
+          className="niuu-w-full niuu-py-2.5 niuu-px-3.5 niuu-bg-bg-tertiary niuu-border niuu-border-solid niuu-border-border-subtle niuu-rounded-lg niuu-text-text-secondary niuu-font-sans niuu-text-[11px] niuu-outline-none niuu-box-border"
         />
       </div>
 
       {/* Scrollable content */}
-      <div className="niuu-flex-1 niuu-overflow-y-auto niuu-px-5 niuu-pb-5">
+      <div className="niuu-flex-1 niuu-overflow-y-auto niuu-px-4 niuu-pb-4">
         {/* Blocks */}
         {!search && (
           <>
-            <div className="niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-[0.24em] niuu-text-text-faint niuu-font-mono niuu-mb-3 niuu-mt-4">
+            <div className="niuu-text-[9px] niuu-font-semibold niuu-uppercase niuu-tracking-[0.22em] niuu-text-text-faint niuu-font-mono niuu-mb-2 niuu-mt-3">
               BLOCKS
             </div>
-            <div className="niuu-flex niuu-flex-col niuu-gap-2 niuu-mb-5">
+            <div className="niuu-flex niuu-flex-col niuu-gap-1.5 niuu-mb-4">
               {BLOCKS.map((b) => (
                 <div
                   key={b.id}
@@ -191,10 +191,10 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
                     e.dataTransfer.setData('application/niuu-node-kind', b.id);
                     e.dataTransfer.effectAllowed = 'copy';
                   }}
-                  className="niuu-py-3 niuu-px-5 niuu-bg-bg-elevated niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-cursor-grab niuu-text-xs niuu-text-text-primary niuu-font-sans niuu-select-none niuu-flex niuu-items-center niuu-gap-3"
+                  className="niuu-py-2.5 niuu-px-3.5 niuu-bg-bg-elevated niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-cursor-grab niuu-text-xs niuu-text-text-primary niuu-font-sans niuu-select-none niuu-flex niuu-items-center niuu-gap-2.5"
                 >
-                  <span className="niuu-text-[16px] niuu-text-text-primary">{b.glyph}</span>
-                  <span className="niuu-font-semibold niuu-text-[15px]">{b.label}</span>
+                  <span className="niuu-text-[13px] niuu-text-text-primary">{b.glyph}</span>
+                  <span className="niuu-font-semibold niuu-text-[11px]">{b.label}</span>
                 </div>
               ))}
             </div>
@@ -204,17 +204,17 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
         {/* Persona groups */}
         {groups.map(([role, entries]) => (
           <div key={role}>
-            <div className="niuu-flex niuu-items-start niuu-justify-between niuu-gap-2 niuu-mb-2 niuu-mt-5 niuu-px-0.5">
+            <div className="niuu-flex niuu-items-start niuu-justify-between niuu-gap-2 niuu-mb-1.5 niuu-mt-4 niuu-px-0.5">
               <div className="niuu-flex niuu-flex-col niuu-gap-0.5">
-                <span className="niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-[0.24em] niuu-text-text-faint niuu-font-mono">
+                <span className="niuu-text-[9px] niuu-font-semibold niuu-uppercase niuu-tracking-[0.22em] niuu-text-text-faint niuu-font-mono">
                   {role}
                 </span>
               </div>
-              <span className="niuu-text-[10px] niuu-text-text-faint niuu-font-mono niuu-mt-0.5">
+              <span className="niuu-text-[9px] niuu-text-text-faint niuu-font-mono niuu-mt-0.5">
                 {entries.length}
               </span>
             </div>
-            <div className="niuu-flex niuu-flex-col niuu-gap-2">
+            <div className="niuu-flex niuu-flex-col niuu-gap-1.5">
               {entries.map((persona) => (
                 <div
                   key={persona.id}
@@ -224,40 +224,40 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
                     e.dataTransfer.setData('application/niuu-persona-id', persona.id);
                     e.dataTransfer.effectAllowed = 'copy';
                   }}
-                  className="niuu-py-3 niuu-px-4 niuu-bg-bg-elevated niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-cursor-grab niuu-text-xs niuu-text-text-primary niuu-font-sans niuu-select-none niuu-flex niuu-items-start niuu-gap-3"
+                  className="niuu-py-2.5 niuu-px-3 niuu-bg-bg-elevated niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-cursor-grab niuu-text-xs niuu-text-text-primary niuu-font-sans niuu-select-none niuu-flex niuu-items-start niuu-gap-2.5"
                 >
                   {(() => {
                     const glyph = personaGlyph(persona.role);
                     if (glyph.shape === 'dashed-circle') {
                       return (
-                        <div className="niuu-flex niuu-h-9 niuu-w-9 niuu-items-center niuu-justify-center niuu-rounded-full niuu-border-2 niuu-border-dashed niuu-border-[#aeddff] niuu-text-[#d6efff] niuu-font-mono niuu-text-base">
+                        <div className="niuu-flex niuu-h-7 niuu-w-7 niuu-items-center niuu-justify-center niuu-rounded-full niuu-border niuu-border-dashed niuu-border-[#aeddff] niuu-text-[#d6efff] niuu-font-mono niuu-text-[11px]">
                           {glyph.text}
                         </div>
                       );
                     }
                     if (glyph.shape === 'triangle') {
                       return (
-                        <div className="niuu-relative niuu-h-9 niuu-w-9">
-                          <div className="niuu-absolute niuu-inset-0 niuu-flex niuu-items-center niuu-justify-center niuu-text-[#d6efff] niuu-font-mono niuu-text-base">△</div>
-                          <div className="niuu-absolute niuu-inset-0 niuu-flex niuu-items-center niuu-justify-center niuu-text-[#d6efff] niuu-font-mono niuu-text-[10px]">{glyph.text}</div>
+                        <div className="niuu-relative niuu-h-7 niuu-w-7">
+                          <div className="niuu-absolute niuu-inset-0 niuu-flex niuu-items-center niuu-justify-center niuu-text-[#d6efff] niuu-font-mono niuu-text-[11px]">△</div>
+                          <div className="niuu-absolute niuu-inset-0 niuu-flex niuu-items-center niuu-justify-center niuu-text-[#d6efff] niuu-font-mono niuu-text-[8px]">{glyph.text}</div>
                         </div>
                       );
                     }
                     return (
-                      <div className="niuu-flex niuu-h-9 niuu-w-9 niuu-items-center niuu-justify-center niuu-rounded-lg niuu-border-2 niuu-border-[#aeddff] niuu-text-[#d6efff] niuu-font-mono niuu-text-base">
+                      <div className="niuu-flex niuu-h-7 niuu-w-7 niuu-items-center niuu-justify-center niuu-rounded-md niuu-border niuu-border-[#aeddff] niuu-text-[#d6efff] niuu-font-mono niuu-text-[11px]">
                         {glyph.text}
                       </div>
                     );
                   })()}
                   <div className="niuu-flex niuu-flex-col niuu-leading-tight niuu-min-w-0 niuu-flex-1">
-                    <span className="niuu-text-text-primary niuu-font-semibold niuu-truncate niuu-text-[14px]">
+                    <span className="niuu-text-text-primary niuu-font-semibold niuu-truncate niuu-text-[11px]">
                       {persona.label}
                     </span>
-                    <span className="niuu-text-[10px] niuu-text-text-faint niuu-font-mono">
+                    <span className="niuu-text-[9px] niuu-text-text-faint niuu-font-mono">
                       {persona.role}
                     </span>
                   </div>
-                  <span className="niuu-ml-auto niuu-text-text-faint niuu-text-xs niuu-font-mono niuu-mt-0.5">
+                  <span className="niuu-ml-auto niuu-text-text-faint niuu-text-[9px] niuu-font-mono niuu-mt-0.5">
                     ⇆
                   </span>
                 </div>

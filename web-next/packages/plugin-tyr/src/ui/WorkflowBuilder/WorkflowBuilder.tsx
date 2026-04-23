@@ -15,7 +15,7 @@
  */
 
 import { useMemo } from 'react';
-import { cn } from '@niuulabs/ui';
+import { SegmentedFilter } from '@niuulabs/ui';
 import type { Workflow } from '../../domain/workflow';
 import { validateWorkflowFull } from '../../domain/workflowValidation';
 import { useWorkflowBuilder, type WorkflowView } from './useWorkflowBuilder';
@@ -42,6 +42,7 @@ const VIEW_LABELS: Record<WorkflowView, string> = {
   pipeline: 'Pipeline',
   yaml: 'YAML',
 };
+const VIEW_OPTIONS = VIEWS.map((value) => ({ value, label: VIEW_LABELS[value] }));
 
 const ACTION_BTN =
   'niuu-bg-transparent niuu-border niuu-border-solid niuu-border-border-subtle niuu-rounded-md niuu-text-text-secondary niuu-font-sans niuu-text-xs niuu-py-1.5 niuu-px-3 niuu-cursor-pointer niuu-whitespace-nowrap hover:niuu-border-border hover:niuu-text-text-primary niuu-transition-colors';
@@ -121,24 +122,13 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
           )}
 
           {/* View tabs */}
-          <div className="niuu-flex niuu-gap-0 niuu-self-center niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-overflow-hidden">
-            {VIEWS.map((v) => (
-              <button
-                key={v}
-                data-testid={`tab-${v}`}
-                data-active={view === v ? 'true' : undefined}
-                onClick={() => setView(v)}
-                className={cn(
-                  'niuu-px-5 niuu-py-2 niuu-text-xs niuu-cursor-pointer niuu-font-sans niuu-border-none niuu-transition-colors',
-                  view === v
-                    ? 'niuu-bg-brand niuu-text-bg-primary'
-                    : 'niuu-bg-transparent niuu-text-text-muted',
-                )}
-              >
-                {VIEW_LABELS[v]}
-              </button>
-            ))}
-          </div>
+          <SegmentedFilter
+            options={VIEW_OPTIONS}
+            value={view}
+            onChange={setView}
+            aria-label="Workflow view"
+            className="niuu-self-center niuu-rounded-xl niuu-border niuu-border-border-subtle"
+          />
 
           {/* Spacer + toolbar buttons */}
           <div className="niuu-flex niuu-items-center niuu-gap-4 niuu-ml-auto niuu-self-center">

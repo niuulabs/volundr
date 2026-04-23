@@ -57,35 +57,35 @@ describe('WorkflowBuilder', () => {
 
   it('renders all three view tabs', () => {
     render(<WorkflowBuilder initialWorkflow={makeWorkflow()} />);
-    expect(screen.getByTestId('tab-graph')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-pipeline')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-yaml')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Graph' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pipeline' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'YAML' })).toBeInTheDocument();
   });
 
   it('defaults to graph view', () => {
     render(<WorkflowBuilder initialWorkflow={makeWorkflow()} />);
-    expect(screen.getByTestId('tab-graph')).toHaveAttribute('data-active', 'true');
+    expect(screen.getByRole('button', { name: 'Graph' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('graph-view')).toBeInTheDocument();
   });
 
   it('switches to pipeline view when tab clicked', () => {
     render(<WorkflowBuilder initialWorkflow={makeWorkflow()} />);
-    fireEvent.click(screen.getByTestId('tab-pipeline'));
+    fireEvent.click(screen.getByRole('button', { name: 'Pipeline' }));
     expect(screen.getByTestId('pipeline-view')).toBeInTheDocument();
     expect(screen.queryByTestId('graph-view')).toBeNull();
   });
 
   it('switches to yaml view when tab clicked', () => {
     render(<WorkflowBuilder initialWorkflow={makeWorkflow()} />);
-    fireEvent.click(screen.getByTestId('tab-yaml'));
+    fireEvent.click(screen.getByRole('button', { name: 'YAML' }));
     expect(screen.getByTestId('yaml-view')).toBeInTheDocument();
     expect(screen.queryByTestId('graph-view')).toBeNull();
   });
 
   it('switches back to graph from yaml', () => {
     render(<WorkflowBuilder initialWorkflow={makeWorkflow()} />);
-    fireEvent.click(screen.getByTestId('tab-yaml'));
-    fireEvent.click(screen.getByTestId('tab-graph'));
+    fireEvent.click(screen.getByRole('button', { name: 'YAML' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Graph' }));
     expect(screen.getByTestId('graph-view')).toBeInTheDocument();
   });
 
@@ -120,7 +120,7 @@ describe('WorkflowBuilder', () => {
 
   it('hides library panel in pipeline view', () => {
     render(<WorkflowBuilder initialWorkflow={makeWorkflow()} />);
-    fireEvent.click(screen.getByTestId('tab-pipeline'));
+    fireEvent.click(screen.getByRole('button', { name: 'Pipeline' }));
     expect(screen.queryByTestId('library-panel')).toBeNull();
   });
 
@@ -133,8 +133,8 @@ describe('WorkflowBuilder', () => {
 
   it('tab-pipeline is active after switching to pipeline', () => {
     render(<WorkflowBuilder initialWorkflow={makeWorkflow()} />);
-    fireEvent.click(screen.getByTestId('tab-pipeline'));
-    expect(screen.getByTestId('tab-pipeline')).toHaveAttribute('data-active', 'true');
-    expect(screen.getByTestId('tab-graph')).not.toHaveAttribute('data-active');
+    fireEvent.click(screen.getByRole('button', { name: 'Pipeline' }));
+    expect(screen.getByRole('button', { name: 'Pipeline' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Graph' })).toHaveAttribute('aria-pressed', 'false');
   });
 });

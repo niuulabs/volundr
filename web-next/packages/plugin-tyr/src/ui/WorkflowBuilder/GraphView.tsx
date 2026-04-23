@@ -120,44 +120,8 @@ function useDragNode({
 }
 
 // ---------------------------------------------------------------------------
-// ConnectButton / DeleteButton — shared SVG button primitives
+// DeleteButton — shared SVG button primitive
 // ---------------------------------------------------------------------------
-
-function ConnectButton({
-  nodeId,
-  cx,
-  cy,
-  onClick,
-}: {
-  nodeId: string;
-  cx: number;
-  cy: number;
-  onClick: () => void;
-}) {
-  return (
-    <g
-      data-testid={`connect-btn-${nodeId}`}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      className="niuu-cursor-pointer"
-    >
-      <circle cx={cx} cy={cy} r={8} fill="var(--color-brand)" />
-      <text
-        x={cx}
-        y={cy}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fill="var(--color-bg-primary)"
-        fontSize={12}
-        className="niuu-pointer-events-none"
-      >
-        →
-      </text>
-    </g>
-  );
-}
 
 function DeleteButton({
   nodeId,
@@ -241,7 +205,7 @@ function StageNode({
     y,
     isConnectingMode,
     onSelect,
-    onCompleteConnect: knownInputs.length > 0 ? () => {} : onCompleteConnect,
+    onCompleteConnect: () => {},
     onDragEnd,
   });
   const fill = selected
@@ -462,15 +426,7 @@ function StageNode({
         </text>
       )}
       {selected && !isConnectingMode && (
-        <>
-          <ConnectButton
-            nodeId={node.id}
-            cx={x + STAGE_WIDTH + 10}
-            cy={y + stageHeight / 2}
-            onClick={onStartConnect}
-          />
-          <DeleteButton nodeId={node.id} cx={x + STAGE_WIDTH / 2} cy={y - 10} onClick={onDelete} />
-        </>
+        <DeleteButton nodeId={node.id} cx={x + STAGE_WIDTH / 2} cy={y - 10} onClick={onDelete} />
       )}
     </g>
   );
@@ -482,7 +438,7 @@ function GateNode({
   issueLevel,
   onSelect,
   onInspect,
-  onStartConnect,
+  onStartConnect: _onStartConnect,
   onCompleteConnect,
   onDelete,
   onDragEnd,
@@ -543,15 +499,7 @@ function GateNode({
         {node.label.length > 8 ? node.label.slice(0, 7) + '…' : node.label}
       </text>
       {selected && !isConnectingMode && (
-        <>
-          <ConnectButton
-            nodeId={node.id}
-            cx={x + GATE_SIZE + 10}
-            cy={cy}
-            onClick={onStartConnect}
-          />
-          <DeleteButton nodeId={node.id} cx={cx} cy={y - 10} onClick={onDelete} />
-        </>
+        <DeleteButton nodeId={node.id} cx={cx} cy={y - 10} onClick={onDelete} />
       )}
     </g>
   );
@@ -563,7 +511,7 @@ function CondNode({
   issueLevel,
   onSelect,
   onInspect,
-  onStartConnect,
+  onStartConnect: _onStartConnect,
   onCompleteConnect,
   onDelete,
   onDragEnd,
@@ -618,15 +566,7 @@ function CondNode({
         {node.label.length > 6 ? node.label.slice(0, 5) + '…' : node.label}
       </text>
       {selected && !isConnectingMode && (
-        <>
-          <ConnectButton
-            nodeId={node.id}
-            cx={cx + COND_RADIUS + 10}
-            cy={cy}
-            onClick={onStartConnect}
-          />
-          <DeleteButton nodeId={node.id} cx={cx} cy={cy - COND_RADIUS - 10} onClick={onDelete} />
-        </>
+        <DeleteButton nodeId={node.id} cx={cx} cy={cy - COND_RADIUS - 10} onClick={onDelete} />
       )}
     </g>
   );
@@ -638,7 +578,7 @@ function TriggerNode({
   issueLevel,
   onSelect,
   onInspect,
-  onStartConnect,
+  onStartConnect: _onStartConnect,
   onCompleteConnect,
   onDelete,
   onDragEnd,
@@ -691,10 +631,7 @@ function TriggerNode({
         {node.source ?? 'manual dispatch'}
       </text>
       {selected && !isConnectingMode && (
-        <>
-          <ConnectButton nodeId={node.id} cx={x + TRIGGER_WIDTH + 10} cy={y + TRIGGER_HEIGHT / 2} onClick={onStartConnect} />
-          <DeleteButton nodeId={node.id} cx={x + TRIGGER_WIDTH / 2} cy={y - 10} onClick={onDelete} />
-        </>
+        <DeleteButton nodeId={node.id} cx={x + TRIGGER_WIDTH / 2} cy={y - 10} onClick={onDelete} />
       )}
     </g>
   );
@@ -1155,7 +1092,7 @@ export function GraphView({
         )}
         {isConnectingMode && (
           <span className="niuu-text-text-secondary niuu-text-xs niuu-self-center">
-            Click target node…
+            Click target input…
           </span>
         )}
       </div>

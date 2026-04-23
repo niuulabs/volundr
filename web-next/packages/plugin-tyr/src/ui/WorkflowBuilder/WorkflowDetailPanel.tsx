@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { cn } from '@niuulabs/ui';
+import { cn, SegmentedFilter } from '@niuulabs/ui';
 import type { Workflow, WorkflowNode, WorkflowStageNode } from '../../domain/workflow';
 import type { WorkflowIssue } from '../../domain/workflowValidation';
 import type { WorkflowBuilderActions } from './useWorkflowBuilder';
@@ -24,23 +24,17 @@ export interface WorkflowDetailPanelProps {
 }
 
 const SECTION_LABEL =
-  'niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-[0.24em] niuu-text-text-faint niuu-font-mono';
+  'niuu-text-[9px] niuu-font-semibold niuu-uppercase niuu-tracking-[0.22em] niuu-text-text-faint niuu-font-mono';
 const INPUT =
-  'niuu-w-full niuu-py-3 niuu-px-5 niuu-bg-bg-tertiary niuu-border niuu-border-border-subtle niuu-rounded-[14px] niuu-text-text-primary niuu-font-sans niuu-text-sm';
+  'niuu-w-full niuu-py-2.5 niuu-px-3.5 niuu-bg-bg-tertiary niuu-border niuu-border-border-subtle niuu-rounded-lg niuu-text-text-primary niuu-font-sans niuu-text-[12px]';
 const CHIP_BTN =
-  'niuu-rounded-md niuu-border niuu-px-2.5 niuu-py-1.5 niuu-text-xs niuu-font-mono niuu-transition-colors';
+  'niuu-rounded-md niuu-border niuu-px-2 niuu-py-1 niuu-text-[11px] niuu-font-mono niuu-transition-colors';
 const TAG =
-  'niuu-inline-flex niuu-items-center niuu-rounded-md niuu-border niuu-px-2.5 niuu-py-1 niuu-text-[11px] niuu-font-mono';
+  'niuu-inline-flex niuu-items-center niuu-rounded-md niuu-border niuu-px-2 niuu-py-0.5 niuu-text-[10px] niuu-font-mono';
 const TAB_BTN =
-  'niuu-px-0 niuu-py-2.5 niuu-bg-transparent niuu-border-none niuu-border-b-2 niuu-text-xs niuu-font-mono niuu-uppercase niuu-tracking-[0.18em]';
+  'niuu-px-0 niuu-py-2 niuu-bg-transparent niuu-border-none niuu-border-b-2 niuu-text-[11px] niuu-font-mono niuu-uppercase niuu-tracking-[0.18em]';
 const DELETE_BTN =
-  'niuu-inline-flex niuu-items-center niuu-rounded-xl niuu-border niuu-border-critical/60 niuu-bg-critical-bg/25 niuu-px-3 niuu-py-2 niuu-text-sm niuu-font-semibold niuu-text-[#ffb0b0]';
-
-function modeButton(active: boolean) {
-  return active
-    ? `${CHIP_BTN} niuu-bg-brand/15 niuu-border-brand/50 niuu-text-brand`
-    : `${CHIP_BTN} niuu-bg-bg-elevated niuu-border-border niuu-text-text-secondary`;
-}
+  'niuu-inline-flex niuu-items-center niuu-rounded-lg niuu-border niuu-border-critical/60 niuu-bg-critical-bg/25 niuu-px-2.5 niuu-py-1.5 niuu-text-[12px] niuu-font-semibold niuu-text-[#ffb0b0]';
 
 function issueTone(severity: WorkflowIssue['severity']) {
   return severity === 'error'
@@ -175,20 +169,24 @@ function StageInspector({
   const outbound = workflow.edges.filter((edge) => edge.source === node.id);
   const nodeIssues = issues.filter((issue) => issue.nodeId === node.id);
   const stageMembers = normalizedStageMembers(node);
+  const executionOptions = [
+    { value: 'parallel' as const, label: 'parallel' },
+    { value: 'sequential' as const, label: 'sequential' },
+  ];
   const availablePersonas = personas.filter(
     (persona) => !stageMembers.some((member) => member.personaId === persona.id),
   );
 
   return (
     <div className="niuu-px-4 niuu-py-0 niuu-flex niuu-flex-col niuu-gap-4">
-      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-py-5 niuu-border-b niuu-border-border niuu-mx-[-16px] niuu-px-4">
-        <div className="niuu-flex niuu-items-center niuu-gap-3">
-          <span className="niuu-text-xl niuu-text-text-primary">◆</span>
-          <span className="niuu-text-[20px] niuu-font-semibold niuu-text-text-primary">{node.kind === 'stage' ? 'Stage' : node.label}</span>
+      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-py-4 niuu-border-b niuu-border-border niuu-mx-[-16px] niuu-px-4">
+        <div className="niuu-flex niuu-items-center niuu-gap-2.5">
+          <span className="niuu-text-[18px] niuu-text-text-primary">◆</span>
+          <span className="niuu-text-[16px] niuu-font-semibold niuu-text-text-primary">{node.kind === 'stage' ? 'Stage' : node.label}</span>
         </div>
-        <span className="niuu-text-sm niuu-font-mono niuu-text-text-faint">{node.id}</span>
+        <span className="niuu-text-[11px] niuu-font-mono niuu-text-text-faint">{node.id}</span>
       </div>
-      <div className="niuu-flex niuu-gap-6 niuu-pb-1 niuu-mb-2 niuu-border-b niuu-border-border niuu-mx-[-16px] niuu-px-4">
+      <div className="niuu-flex niuu-gap-5 niuu-pb-1 niuu-mb-1 niuu-border-b niuu-border-border niuu-mx-[-16px] niuu-px-4">
         {(['config', 'flock', 'validate'] as const).map((name) => (
           <button
             key={name}
@@ -219,18 +217,13 @@ function StageInspector({
 
           <div>
             <label className={SECTION_LABEL}>Execution</label>
-            <div className="niuu-flex niuu-gap-2 niuu-mt-1">
-              {(['parallel', 'sequential'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  className={modeButton((node.executionMode ?? 'parallel') === mode)}
-                  onClick={() => onUpdateNode(node.id, { executionMode: mode })}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
+            <SegmentedFilter
+              options={executionOptions}
+              value={node.executionMode ?? 'parallel'}
+              onChange={(mode) => onUpdateNode(node.id, { executionMode: mode })}
+              aria-label="Execution mode"
+              className="niuu-mt-1 niuu-rounded-xl niuu-border niuu-border-border-subtle"
+            />
           </div>
 
           <div className="niuu-grid niuu-grid-cols-2 niuu-gap-2">
@@ -255,18 +248,17 @@ function StageInspector({
               <div className="niuu-text-xs niuu-text-text-secondary">
                 {inbound.length} incoming · {outbound.length} outgoing
               </div>
-              <div className="niuu-flex niuu-gap-2 niuu-flex-wrap">
-                {(['all', 'any', 'merge'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    className={modeButton((node.joinMode ?? 'all') === mode)}
-                    onClick={() => onUpdateNode(node.id, { joinMode: mode })}
-                  >
-                    {mode}
-                  </button>
-                ))}
-              </div>
+              <SegmentedFilter
+                options={[
+                  { value: 'all' as const, label: 'all' },
+                  { value: 'any' as const, label: 'any' },
+                  { value: 'merge' as const, label: 'merge' },
+                ]}
+                value={node.joinMode ?? 'all'}
+                onChange={(mode) => onUpdateNode(node.id, { joinMode: mode })}
+                aria-label="Fan in mode"
+                className="niuu-rounded-xl niuu-border niuu-border-border-subtle"
+              />
             </div>
           )}
 
@@ -281,7 +273,7 @@ function StageInspector({
       {tab === 'flock' && (
         <>
           <div className={SECTION_LABEL}>Personas in this stage</div>
-          <div className="niuu-flex niuu-flex-col niuu-gap-2">
+        <div className="niuu-flex niuu-flex-col niuu-gap-1.5">
             {stageMembers.length === 0 && (
               <div className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-elevated niuu-p-3 niuu-text-xs niuu-text-text-muted">
                 No ravns assigned yet.
@@ -293,34 +285,34 @@ function StageInspector({
               return (
                 <div
                   key={member.personaId}
-                  className="niuu-rounded-[18px] niuu-border niuu-border-border-subtle niuu-bg-bg-elevated niuu-p-5 niuu-flex niuu-flex-col niuu-gap-4"
+                  className="niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-elevated niuu-p-3.5 niuu-flex niuu-flex-col niuu-gap-2.5"
                 >
                   <div className="niuu-flex niuu-items-start niuu-gap-2">
-                    <div className="niuu-flex niuu-h-10 niuu-w-10 niuu-items-center niuu-justify-center niuu-rounded-full niuu-border-2 niuu-border-[#aeddff] niuu-text-[#d6efff] niuu-font-mono niuu-text-xl">
+                    <div className="niuu-flex niuu-h-8 niuu-w-8 niuu-items-center niuu-justify-center niuu-rounded-full niuu-border niuu-border-[#aeddff] niuu-text-[#d6efff] niuu-font-mono niuu-text-[18px]">
                       {personaGlyph(persona?.role)}
                     </div>
                     <div className="niuu-flex-1 niuu-min-w-0">
-                      <div className="niuu-text-[17px] niuu-font-semibold niuu-text-text-primary">
+                      <div className="niuu-text-[13px] niuu-font-semibold niuu-text-text-primary">
                         {persona?.label ?? member.personaId}
                       </div>
-                      <div className="niuu-text-[11px] niuu-font-mono niuu-text-text-faint">
+                      <div className="niuu-text-[9px] niuu-font-mono niuu-text-text-faint">
                         {persona?.role ?? 'unknown'}
                       </div>
                     </div>
                     <button
                       type="button"
-                      className="niuu-bg-transparent niuu-border-none niuu-text-text-faint niuu-text-2xl niuu-leading-none"
+                      className="niuu-bg-transparent niuu-border-none niuu-text-text-faint niuu-text-xl niuu-leading-none"
                       onClick={() => onRemovePersona(node.id, member.personaId)}
                     >
                       ×
                     </button>
                   </div>
 
-                  <div className="niuu-flex niuu-items-center niuu-gap-3">
-                    <span className="niuu-text-[13px] niuu-text-text-muted">budget</span>
+                  <div className="niuu-flex niuu-items-center niuu-gap-2.5">
+                    <span className="niuu-text-[10px] niuu-text-text-muted">budget</span>
                     <input
                       type="number"
-                      className="niuu-w-20 niuu-bg-transparent niuu-border-none niuu-p-0 niuu-text-[18px] niuu-font-semibold niuu-text-text-primary"
+                      className="niuu-w-14 niuu-bg-transparent niuu-border-none niuu-p-0 niuu-text-[14px] niuu-font-semibold niuu-text-text-primary"
                       value={member.budget}
                       min={0}
                       onChange={(e) =>
@@ -333,10 +325,10 @@ function StageInspector({
                     />
                   </div>
 
-                  <div className="niuu-grid niuu-grid-cols-1 niuu-gap-3">
+                  <div className="niuu-grid niuu-grid-cols-1 niuu-gap-2">
                     <div>
                       <div className={SECTION_LABEL}>Consumes</div>
-                      <div className="niuu-flex niuu-flex-wrap niuu-gap-1 niuu-mt-1">
+                      <div className="niuu-flex niuu-flex-wrap niuu-gap-1 niuu-mt-0.5">
                         {(persona?.consumes ?? []).map((event) => (
                           <span
                             key={event}
@@ -352,7 +344,7 @@ function StageInspector({
                     </div>
                     <div>
                       <div className={SECTION_LABEL}>Produces</div>
-                      <div className="niuu-flex niuu-flex-wrap niuu-gap-1 niuu-mt-1">
+                      <div className="niuu-flex niuu-flex-wrap niuu-gap-1 niuu-mt-0.5">
                         {(persona?.produces ?? []).map((event) => (
                           <span
                             key={event}
@@ -371,8 +363,8 @@ function StageInspector({
                   </div>
 
                   {memberIssues.length > 0 && (
-                    <div className="niuu-rounded-xl niuu-border niuu-border-[#b75159] niuu-bg-[#4b3136] niuu-p-4 niuu-text-[#ffb0b0]">
-                      <div className="niuu-text-[15px] niuu-font-semibold niuu-leading-snug">
+                    <div className="niuu-rounded-lg niuu-border niuu-border-[#b75159] niuu-bg-[#4b3136] niuu-p-3 niuu-text-[#ffb0b0]">
+                      <div className="niuu-text-[12px] niuu-font-semibold niuu-leading-snug">
                         {memberIssues[0]?.message}
                       </div>
                     </div>
@@ -381,7 +373,7 @@ function StageInspector({
                   <div>
                     <div className={SECTION_LABEL}>Ravn</div>
                     <select
-                      className={cn(INPUT, 'niuu-mt-1')}
+                      className={cn(INPUT, 'niuu-mt-0.5')}
                       value={member.personaId}
                       onChange={(e) => onReplacePersona(node.id, member.personaId, e.target.value)}
                     >
@@ -400,7 +392,7 @@ function StageInspector({
           <div className="niuu-border-t niuu-border-border niuu-pt-6">
             <label className={SECTION_LABEL}>Add persona</label>
             <select
-              className={cn(INPUT, 'niuu-mt-1')}
+              className={cn(INPUT, 'niuu-mt-0.5')}
               defaultValue=""
               onChange={(e) => {
                 if (!e.target.value) return;
@@ -475,14 +467,14 @@ export function WorkflowDetailPanel({
   return (
     <div
       data-testid="workflow-detail-panel"
-      className="niuu-w-[340px] niuu-shrink-0 niuu-border-l niuu-border-border niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-y-auto"
+      className="niuu-w-[300px] niuu-shrink-0 niuu-border-l niuu-border-border niuu-bg-bg-secondary niuu-flex niuu-flex-col niuu-overflow-y-auto"
     >
       <div className="niuu-px-4 niuu-pt-3 niuu-pb-2 niuu-border-b niuu-border-border">
         <div className="niuu-flex niuu-flex-col niuu-gap-0.5">
-          <span className="niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-font-sans">
+          <span className="niuu-text-[13px] niuu-font-semibold niuu-text-text-primary niuu-font-sans">
             {title}
           </span>
-          <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-faint">{subtitle}</span>
+          <span className="niuu-text-[9px] niuu-font-mono niuu-text-text-faint">{subtitle}</span>
         </div>
       </div>
 

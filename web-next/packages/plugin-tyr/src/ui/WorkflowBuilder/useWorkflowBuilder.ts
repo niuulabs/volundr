@@ -193,10 +193,11 @@ export function useWorkflowBuilder(
   }, []);
 
   const startConnect = useCallback((sourceId: string, label?: string) => {
+    if (!label) return;
     connectingFromRef.current = sourceId;
-    connectingLabelRef.current = label ?? null;
+    connectingLabelRef.current = label;
     setConnectingFromId(sourceId);
-    setConnectingFromLabel(label ?? null);
+    setConnectingFromLabel(label);
     setSelectedNodeId(sourceId);
   }, []);
 
@@ -214,12 +215,9 @@ export function useWorkflowBuilder(
     connectingLabelRef.current = null;
     setConnectingFromId(null);
     setConnectingFromLabel(null);
-    if (!fromId || fromId === targetId) return;
+    if (!fromId || !fromLabel || !inputLabel || fromId === targetId) return;
     setWorkflowState((prev) => {
-      const edgeLabel =
-        fromLabel && inputLabel
-          ? `${fromLabel} -> ${inputLabel}`
-          : fromLabel ?? inputLabel ?? undefined;
+      const edgeLabel = `${fromLabel} -> ${inputLabel}`;
       const alreadyExists = prev.edges.some(
         (e) => e.source === fromId && e.target === targetId && (e.label ?? '') === (edgeLabel ?? ''),
       );

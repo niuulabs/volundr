@@ -212,13 +212,13 @@ describe('useWorkflowBuilder — moveNode', () => {
 describe('useWorkflowBuilder — startConnect / cancelConnect / completeConnect', () => {
   it('sets connectingFromId', () => {
     const { result } = renderHook(() => useWorkflowBuilder(makeWorkflow()));
-    act(() => result.current.startConnect('stage-1'));
+    act(() => result.current.startConnect('stage-1', 'qa.report'));
     expect(result.current.connectingFromId).toBe('stage-1');
   });
 
   it('cancelConnect clears connectingFromId', () => {
     const { result } = renderHook(() => useWorkflowBuilder(makeWorkflow()));
-    act(() => result.current.startConnect('stage-1'));
+    act(() => result.current.startConnect('stage-1', 'qa.report'));
     act(() => result.current.cancelConnect());
     expect(result.current.connectingFromId).toBeNull();
   });
@@ -228,31 +228,36 @@ describe('useWorkflowBuilder — startConnect / cancelConnect / completeConnect'
     // add a third node so we can connect to it
     act(() => result.current.addNode('stage', { x: 500, y: 100 }));
     const newNodeId = result.current.workflow.nodes[2]!.id;
-    act(() => result.current.startConnect('stage-1'));
-    act(() => result.current.completeConnect(newNodeId));
+    act(() => result.current.startConnect('stage-1', 'qa.report'));
+    act(() => result.current.completeConnect(newNodeId, 'review.verdict'));
     const newEdge = result.current.workflow.edges.find(
       (e) => e.source === 'stage-1' && e.target === newNodeId,
     );
     expect(newEdge).toBeDefined();
+    expect(newEdge?.label).toBe('qa.report -> review.verdict');
     expect(result.current.connectingFromId).toBeNull();
   });
 
   it('completeConnect does not create duplicate edges', () => {
     const { result } = renderHook(() => useWorkflowBuilder(makeWorkflow()));
-    act(() => result.current.startConnect('stage-1'));
-    act(() => result.current.completeConnect('gate-1'));
-    // already exists
+    act(() => result.current.startConnect('stage-1', 'qa.report'));
+    act(() => result.current.completeConnect('gate-1', 'review.verdict'));
+    act(() => result.current.startConnect('stage-1', 'qa.report'));
+    act(() => result.current.completeConnect('gate-1', 'review.verdict'));
     const edges = result.current.workflow.edges.filter(
       (e) => e.source === 'stage-1' && e.target === 'gate-1',
     );
-    expect(edges).toHaveLength(1);
+    expect(edges).toHaveLength(2);
+    expect(
+      edges.filter((e) => e.label === 'qa.report -> review.verdict'),
+    ).toHaveLength(1);
   });
 
   it('completeConnect to self does nothing', () => {
     const { result } = renderHook(() => useWorkflowBuilder(makeWorkflow()));
     const edgesBefore = result.current.workflow.edges.length;
-    act(() => result.current.startConnect('stage-1'));
-    act(() => result.current.completeConnect('stage-1'));
+    act(() => result.current.startConnect('stage-1', 'qa.report'));
+    act(() => result.current.completeConnect('stage-1', 'review.verdict'));
     expect(result.current.workflow.edges).toHaveLength(edgesBefore);
   });
 });

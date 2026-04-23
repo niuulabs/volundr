@@ -157,36 +157,28 @@ describe('GraphView', () => {
     expect(props.onDeleteNode).toHaveBeenCalledWith('stage-1');
   });
 
-  it('shows connect and delete buttons on selected node', () => {
+  it('shows delete button on selected node', () => {
     const props = { ...defaultProps(), selectedNodeId: 'stage-1' };
     render(<GraphView {...props} />);
-    expect(screen.getByTestId('connect-btn-stage-1')).toBeInTheDocument();
     expect(screen.getByTestId('delete-btn-stage-1')).toBeInTheDocument();
   });
 
-  it('does not show connect/delete buttons on unselected nodes', () => {
+  it('does not show delete buttons on unselected nodes', () => {
     const props = { ...defaultProps(), selectedNodeId: 'stage-1' };
     render(<GraphView {...props} />);
-    expect(screen.queryByTestId('connect-btn-gate-1')).toBeNull();
+    expect(screen.queryByTestId('delete-btn-gate-1')).toBeNull();
   });
 
-  it('shows "Click target node…" hint when in connecting mode', () => {
+  it('shows "Click target input…" hint when in connecting mode', () => {
     const props = { ...defaultProps(), connectingFromId: 'stage-1', selectedNodeId: 'stage-1' };
     render(<GraphView {...props} />);
-    expect(screen.getByText(/click target node/i)).toBeInTheDocument();
+    expect(screen.getByText(/click target input/i)).toBeInTheDocument();
   });
 
   it('renders with no nodes', () => {
     const props = { ...defaultProps(), nodes: [], edges: [] };
     render(<GraphView {...props} />);
     expect(screen.getByTestId('graph-canvas')).toBeInTheDocument();
-  });
-
-  it('calls onStartConnect when connect button clicked', () => {
-    const props = { ...defaultProps(), selectedNodeId: 'stage-1' };
-    render(<GraphView {...props} />);
-    fireEvent.click(screen.getByTestId('connect-btn-stage-1'));
-    expect(props.onStartConnect).toHaveBeenCalledWith('stage-1');
   });
 
   it('calls onDeleteNode via delete button on node', () => {
