@@ -10,16 +10,21 @@
   {
     "name": "audit-api",
     "prefixes": [
-      "/api/v1/tyr/audit",
       "/api/v1/audit",
       "/audit"
     ],
     "source": "plugin",
-    "plugin": "tyr,volundr"
+    "plugin": "volundr"
   },
   {
     "name": "catalog-api",
     "prefixes": [
+      "/api/v1/forge/templates",
+      "/api/v1/forge/presets",
+      "/api/v1/forge/profiles",
+      "/api/v1/forge/resources",
+      "/api/v1/forge/prompts",
+      "/api/v1/forge/mcp-servers",
       "/api/v1/volundr/templates",
       "/api/v1/volundr/presets",
       "/api/v1/volundr/profiles",
@@ -69,13 +74,32 @@
   {
     "name": "forge-api",
     "prefixes": [
+      "/api/v1/forge/sessions",
+      "/api/v1/forge/chronicles",
+      "/api/v1/forge/events",
+      "/api/v1/forge/templates",
+      "/api/v1/forge/presets",
+      "/api/v1/forge/profiles",
+      "/api/v1/forge/repos",
+      "/api/v1/forge/workspaces",
+      "/api/v1/forge/resources",
+      "/api/v1/forge/models",
+      "/api/v1/forge/stats",
+      "/api/v1/forge/prompts",
+      "/api/v1/forge/cluster",
+      "/api/v1/forge/mcp-servers",
+      "/api/v1/forge/git",
       "/api/v1/volundr/sessions",
+      "/api/v1/volundr/chronicles",
+      "/api/v1/volundr/events",
       "/api/v1/volundr/templates",
       "/api/v1/volundr/presets",
       "/api/v1/volundr/profiles",
       "/api/v1/volundr/repos",
       "/api/v1/volundr/workspaces",
       "/api/v1/volundr/resources",
+      "/api/v1/volundr/models",
+      "/api/v1/volundr/stats",
       "/api/v1/volundr/prompts",
       "/api/v1/volundr/cluster",
       "/api/v1/volundr/mcp-servers",
@@ -87,6 +111,8 @@
   {
     "name": "git-api",
     "prefixes": [
+      "/api/v1/forge/repos",
+      "/api/v1/forge/git",
       "/api/v1/volundr/repos",
       "/api/v1/volundr/git"
     ],
@@ -150,7 +176,12 @@
   {
     "name": "session-api",
     "prefixes": [
-      "/api/v1/volundr/sessions"
+      "/api/v1/forge/sessions",
+      "/api/v1/forge/chronicles",
+      "/api/v1/forge/events",
+      "/api/v1/volundr/sessions",
+      "/api/v1/volundr/chronicles",
+      "/api/v1/volundr/events"
     ],
     "source": "plugin",
     "plugin": "volundr"
@@ -244,6 +275,7 @@
   {
     "name": "workspace-api",
     "prefixes": [
+      "/api/v1/forge/workspaces",
       "/api/v1/volundr/workspaces"
     ],
     "source": "plugin",

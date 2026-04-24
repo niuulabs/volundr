@@ -726,6 +726,14 @@ class TestRootServerBuildApp:
         async def session_ping():
             return {"pong": "session"}
 
+        @volundr_app.get("/api/v1/volundr/chronicles/ping")
+        async def chronicle_ping():
+            return {"pong": "chronicle"}
+
+        @volundr_app.get("/api/v1/volundr/events/ping")
+        async def events_ping():
+            return {"pong": "events"}
+
         @volundr_app.get("/api/v1/volundr/workspaces/ping")
         async def workspace_ping():
             return {"pong": "workspace"}
@@ -738,7 +746,14 @@ class TestRootServerBuildApp:
                 return (
                     APIRouteDomain(
                         name="session-api",
-                        prefixes=("/api/v1/forge/sessions", "/api/v1/volundr/sessions"),
+                        prefixes=(
+                            "/api/v1/forge/sessions",
+                            "/api/v1/forge/chronicles",
+                            "/api/v1/forge/events",
+                            "/api/v1/volundr/sessions",
+                            "/api/v1/volundr/chronicles",
+                            "/api/v1/volundr/events",
+                        ),
                     ),
                     APIRouteDomain(
                         name="workspace-api",
@@ -759,6 +774,10 @@ class TestRootServerBuildApp:
         client = TestClient(app)
         assert client.get("/api/v1/volundr/sessions/ping").status_code == 200
         assert client.get("/api/v1/forge/sessions/ping").status_code == 200
+        assert client.get("/api/v1/volundr/chronicles/ping").status_code == 200
+        assert client.get("/api/v1/forge/chronicles/ping").status_code == 200
+        assert client.get("/api/v1/volundr/events/ping").status_code == 200
+        assert client.get("/api/v1/forge/events/ping").status_code == 200
         assert client.get("/api/v1/volundr/workspaces/ping").status_code == 404
         assert client.get("/api/v1/forge/workspaces/ping").status_code == 404
 

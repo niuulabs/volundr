@@ -107,12 +107,16 @@ class TestVolundrPlugin:
         )
         assert route_domains[4].prefixes[:3] == (
             "/api/v1/forge/sessions",
-            "/api/v1/forge/templates",
-            "/api/v1/forge/presets",
+            "/api/v1/forge/chronicles",
+            "/api/v1/forge/events",
         )
         assert route_domains[5].prefixes == (
             "/api/v1/forge/sessions",
+            "/api/v1/forge/chronicles",
+            "/api/v1/forge/events",
             "/api/v1/volundr/sessions",
+            "/api/v1/volundr/chronicles",
+            "/api/v1/volundr/events",
         )
         assert route_domains[6].prefixes == (
             "/api/v1/forge/workspaces",

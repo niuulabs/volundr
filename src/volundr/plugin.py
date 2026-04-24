@@ -98,6 +98,8 @@ class VolundrPlugin(ServicePlugin):
                 name="forge-api",
                 prefixes=(
                     "/api/v1/forge/sessions",
+                    "/api/v1/forge/chronicles",
+                    "/api/v1/forge/events",
                     "/api/v1/forge/templates",
                     "/api/v1/forge/presets",
                     "/api/v1/forge/profiles",
@@ -111,6 +113,8 @@ class VolundrPlugin(ServicePlugin):
                     "/api/v1/forge/mcp-servers",
                     "/api/v1/forge/git",
                     "/api/v1/volundr/sessions",
+                    "/api/v1/volundr/chronicles",
+                    "/api/v1/volundr/events",
                     "/api/v1/volundr/templates",
                     "/api/v1/volundr/presets",
                     "/api/v1/volundr/profiles",
@@ -128,7 +132,14 @@ class VolundrPlugin(ServicePlugin):
             ),
             APIRouteDomain(
                 name="session-api",
-                prefixes=("/api/v1/forge/sessions", "/api/v1/volundr/sessions"),
+                prefixes=(
+                    "/api/v1/forge/sessions",
+                    "/api/v1/forge/chronicles",
+                    "/api/v1/forge/events",
+                    "/api/v1/volundr/sessions",
+                    "/api/v1/volundr/chronicles",
+                    "/api/v1/volundr/events",
+                ),
                 description=(
                     "Session lifecycle, messaging, logs, chronicle, "
                     "and session-bound workflow routes."

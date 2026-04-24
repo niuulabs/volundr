@@ -1252,7 +1252,7 @@ class TestReportChronicle:
 
         pipeline_call = mock_client.post.call_args_list[1]
         p_args, p_kwargs = pipeline_call
-        assert p_args[0] == "/api/v1/volundr/events"
+        assert p_args[0] == "/api/v1/forge/events"
         assert p_kwargs["json"]["event_type"] == "session_stop"
 
     @pytest.mark.asyncio
@@ -2242,7 +2242,7 @@ class TestPipelineEventEmission:
 
         mock_client.post.assert_called_once()
         args, kwargs = mock_client.post.call_args
-        assert args[0] == "/api/v1/volundr/events"
+        assert args[0] == "/api/v1/forge/events"
         payload = kwargs["json"]
         assert payload["event_type"] == "file_modified"
         assert payload["session_id"] == "sess-pipeline"
@@ -2291,7 +2291,7 @@ class TestPipelineEventEmission:
 
         # Should have called timeline + pipeline events
         calls = mock_client.post.call_args_list
-        pipeline_calls = [c for c in calls if c[0][0] == "/api/v1/volundr/events"]
+        pipeline_calls = [c for c in calls if c[0][0] == "/api/v1/forge/events"]
         assert len(pipeline_calls) == 1
         payload = pipeline_calls[0][1]["json"]
         assert payload["event_type"] == "session_start"

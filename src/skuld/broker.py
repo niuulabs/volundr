@@ -102,6 +102,8 @@ def _configure_logging() -> None:
 _configure_logging()
 logger = logging.getLogger("skuld.broker")
 FORGE_SESSIONS_PATH = "/api/v1/forge/sessions"
+FORGE_CHRONICLES_PATH = "/api/v1/forge/chronicles"
+FORGE_EVENTS_PATH = "/api/v1/forge/events"
 
 
 def _sanitize_log(value: object) -> str:
@@ -1282,7 +1284,7 @@ class Broker:
             payload["model"] = model
 
         try:
-            response = await client.post("/api/v1/volundr/events", json=payload)
+            response = await client.post(FORGE_EVENTS_PATH, json=payload)
             if response.status_code < 300:
                 logger.debug("Pipeline event emitted: %s", event_type)
             else:
@@ -1358,7 +1360,7 @@ class Broker:
             return
 
         client = await self._get_http_client()
-        url = f"/api/v1/volundr/chronicles/{self.session_id}/timeline"
+        url = f"{FORGE_CHRONICLES_PATH}/{self.session_id}/timeline"
 
         try:
             response = await client.post(url, json=event)
