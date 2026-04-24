@@ -42,6 +42,7 @@ export function renderWithVolundr(
           'volundr.clusters': clusterAdapter,
           'volundr.templates': templateStore,
           'volundr.sessions': sessionStore,
+          sessionStore,
         }}
       >
         {ui}
