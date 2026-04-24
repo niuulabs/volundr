@@ -520,7 +520,7 @@ class TestIntegrationsAndRepos:
     async def test_list_integration_ids_filters_disabled_connections(
         self, adapter: VolundrHTTPAdapter
     ):
-        respx.get(f"{BASE_URL}/api/v1/volundr/integrations").mock(
+        route = respx.get(f"{BASE_URL}/api/v1/integrations").mock(
             return_value=httpx.Response(
                 200,
                 json=[
@@ -534,6 +534,8 @@ class TestIntegrationsAndRepos:
         ids = await adapter.list_integration_ids(auth_token="pat-1")
 
         assert ids == ["git", "jira"]
+        sent = route.calls[0].request
+        assert sent.headers["Authorization"] == "Bearer pat-1"
 
     @pytest.mark.asyncio
     @respx.mock

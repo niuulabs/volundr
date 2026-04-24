@@ -15,6 +15,7 @@ from tyr.ports.volundr import ActivityEvent, SpawnRequest, VolundrPort, VolundrS
 logger = logging.getLogger(__name__)
 
 FORGE_SESSIONS_PATH = "/api/v1/forge/sessions"
+INTEGRATIONS_PATH = "/api/v1/integrations"
 
 
 class VolundrHTTPAdapter(VolundrPort):
@@ -206,7 +207,7 @@ class VolundrHTTPAdapter(VolundrPort):
         """Fetch the user's enabled integration IDs from this Volundr instance."""
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
-                f"{self._base_url}/api/v1/volundr/integrations",
+                f"{self._base_url}{INTEGRATIONS_PATH}",
                 headers=self._headers(auth_token),
             )
             resp.raise_for_status()
