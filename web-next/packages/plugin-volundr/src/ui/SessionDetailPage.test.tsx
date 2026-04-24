@@ -403,7 +403,11 @@ describe('SessionDetailPage', () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
       fireEvent.click(screen.getByTestId('tab-files'));
       expect(screen.getByTestId('tab-files')).toHaveAttribute('aria-selected', 'true');
-      await waitFor(() => expect(screen.getByTestId('filetree-root')).toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.getByTestId('session-files-workspace')).toBeInTheDocument(),
+      );
+      expect(screen.getByRole('button', { name: 'upload' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'download' })).toBeInTheDocument();
     });
   });
 

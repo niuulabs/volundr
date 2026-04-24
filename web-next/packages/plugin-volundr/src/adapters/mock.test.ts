@@ -509,6 +509,21 @@ describe('createMockFileSystemPort', () => {
     const fs = createMockFileSystemPort();
     await expect(fs.readFile('sess-1', '/not/a/real/file')).rejects.toThrow('File not found');
   });
+
+  it('writeFile adds a new file to the tree', async () => {
+    const fs = createMockFileSystemPort();
+    await fs.writeFile('sess-1', '/workspace/new.txt', 'hello');
+    const tree = await fs.listTree('sess-1');
+    expect(tree.some((node) => node.path === '/workspace/new.txt')).toBe(true);
+    await expect(fs.readFile('sess-1', '/workspace/new.txt')).resolves.toBe('hello');
+  });
+
+  it('deletePaths removes files from the tree', async () => {
+    const fs = createMockFileSystemPort();
+    await fs.writeFile('sess-1', '/workspace/temp.txt', 'bye');
+    await fs.deletePaths('sess-1', ['/workspace/temp.txt']);
+    await expect(fs.readFile('sess-1', '/workspace/temp.txt')).rejects.toThrow('File not found');
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -1324,27 +1324,82 @@ const SEED_FILE_CONTENTS: Record<string, string> = {
 };
 
 export function createMockFileSystemPort(): IFileSystemPort {
+  let tree = structuredClone(SEED_FILE_TREE);
+  const contents = { ...SEED_FILE_CONTENTS };
+
+  function findNode(nodes: FileTreeNode[], target: string): FileTreeNode | null {
+    for (const node of nodes) {
+      if (node.path === target) return node;
+      if (node.children) {
+        const found = findNode(node.children, target);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function findParent(nodes: FileTreeNode[], target: string): FileTreeNode | null {
+    for (const node of nodes) {
+      if (node.children?.some((child) => child.path === target)) return node;
+      if (node.children) {
+        const found = findParent(node.children, target);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function removePath(target: string) {
+    const parent = findParent(tree, target);
+    if (parent?.children) {
+      parent.children = parent.children.filter((child) => child.path !== target);
+      return;
+    }
+    tree = tree.filter((node) => node.path !== target);
+  }
+
   return {
-    listTree: async (_sessionId) => SEED_FILE_TREE,
+    listTree: async (_sessionId) => tree,
 
     expandDirectory: async (_sessionId, path) => {
-      function findNode(nodes: FileTreeNode[], target: string): FileTreeNode | null {
-        for (const node of nodes) {
-          if (node.path === target) return node;
-          if (node.children) {
-            const found = findNode(node.children, target);
-            if (found) return found;
-          }
-        }
-        return null;
-      }
-      return findNode(SEED_FILE_TREE, path)?.children ?? [];
+      return findNode(tree, path)?.children ?? [];
     },
 
     readFile: async (_sessionId, path) => {
-      const content = SEED_FILE_CONTENTS[path];
+      const content = contents[path];
       if (!content) throw new Error(`File not found: ${path}`);
       return content;
+    },
+
+    writeFile: async (_sessionId, path, content) => {
+      contents[path] = content;
+      const existing = findNode(tree, path);
+      if (existing) {
+        existing.size = content.length;
+        return;
+      }
+      const parentPath = path.slice(0, path.lastIndexOf('/'));
+      const parent = findNode(tree, parentPath);
+      const newNode: FileTreeNode = {
+        name: path.split('/').at(-1) ?? path,
+        path,
+        kind: 'file',
+        size: content.length,
+      };
+      if (parent?.children) {
+        parent.children = [...parent.children, newNode].sort((a, b) =>
+          a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'directory' ? -1 : 1,
+        );
+      } else {
+        tree = [...tree, newNode];
+      }
+    },
+
+    deletePaths: async (_sessionId, paths) => {
+      for (const path of paths) {
+        delete contents[path];
+        removePath(path);
+      }
     },
   };
 }

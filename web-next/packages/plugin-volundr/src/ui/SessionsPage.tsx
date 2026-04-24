@@ -217,7 +217,7 @@ export function SessionsPage() {
           <div className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-hidden">
             <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-border-subtle niuu-px-4 niuu-py-3">
               <div className="niuu-flex niuu-items-baseline niuu-gap-2">
-                <h2 className="niuu-text-sm niuu-font-semibold niuu-text-text-primary">Pods</h2>
+                <h2 className="niuu-text-sm niuu-font-semibold niuu-text-text-primary">Sessions</h2>
                 <span
                   className="niuu-rounded-full niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted"
                   data-testid="pod-count"

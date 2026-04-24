@@ -1,6 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useService } from '@niuulabs/plugin-sdk';
-import { useQuery } from '@tanstack/react-query';
 import {
   LifecycleBadge,
   LoadingState,
@@ -14,14 +13,13 @@ import type { MeshEvent, MeshEventType, RoomParticipant } from '@niuulabs/ui';
 import { SourceLabel } from './atoms/SourceLabel';
 import { ClusterChip } from './atoms/ClusterChip';
 import { Terminal } from './Terminal/Terminal';
-import { FileTree } from './FileTree/FileTree';
-import { FileViewer } from './FileTree/FileViewer';
+import { SessionFilesWorkspace } from './SessionFilesWorkspace';
 import { useSessionDetail } from './hooks/useSessionStore';
 import { toLifecycleState } from './utils/toLifecycleState';
 import { buildMockRoom, buildMockTurns, groupTurns } from '../testing/mockChatData';
 import type { ChatTurn, PeerMeta, MockRoom, TurnGroup } from '../testing/mockChatData';
 import type { IPtyStream } from '../ports/IPtyStream';
-import type { IFileSystemPort, FileTreeNode } from '../ports/IFileSystemPort';
+import type { IFileSystemPort } from '../ports/IFileSystemPort';
 import type { Session, SessionFileStats } from '../domain/session';
 import type { SessionSource } from './atoms/SourceLabel';
 import type { ClusterData } from './atoms/ClusterChip';
@@ -1483,36 +1481,11 @@ export function SessionDetailPage({
 }: SessionDetailPageProps) {
   const [activeTab, setActiveTab] = useState<SessionTab>(initialTab);
   const [showRes, setShowRes] = useState(false);
-  const [activePath, setActivePath] = useState<string | undefined>(undefined);
-  const [fileContent, setFileContent] = useState('');
-  const [fileLoading, setFileLoading] = useState(false);
-  const [fileError, setFileError] = useState<string | undefined>(undefined);
 
   const ptyStream = useService<IPtyStream>('ptyStream');
   const filesystem = useService<IFileSystemPort>('filesystem');
 
   const sessionQuery = useSessionDetail(sessionId);
-
-  const treeQuery = useQuery<FileTreeNode[]>({
-    queryKey: ['volundr', 'filetree', sessionId],
-    queryFn: () => filesystem.listTree(sessionId),
-    enabled: activeTab === 'files',
-  });
-
-  async function handleOpenFile(path: string) {
-    setActivePath(path);
-    setFileLoading(true);
-    setFileError(undefined);
-    setFileContent('');
-    try {
-      const content = await filesystem.readFile(sessionId, path);
-      setFileContent(content);
-    } catch (err) {
-      setFileError(err instanceof Error ? err.message : 'Failed to load file');
-    } finally {
-      setFileLoading(false);
-    }
-  }
 
   const session = sessionQuery.data;
 
@@ -1641,75 +1614,8 @@ export function SessionDetailPage({
         )}
 
         {activeTab === 'files' && (
-          <div
-            role="tabpanel"
-            aria-labelledby="tab-files"
-            className="niuu-grid niuu-h-full niuu-min-h-0 niuu-grid-cols-[260px_1fr] niuu-overflow-hidden niuu-bg-bg-primary"
-          >
-            <div className="niuu-flex niuu-min-h-0 niuu-flex-col niuu-overflow-hidden niuu-border-r niuu-border-border-subtle niuu-bg-bg-secondary">
-              <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-border-subtle niuu-bg-bg-primary niuu-px-4 niuu-py-3">
-                <div className="niuu-flex niuu-flex-col">
-                  <span className="niuu-font-mono niuu-text-[11px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-muted">
-                    workspace files
-                  </span>
-                  <span className="niuu-font-mono niuu-text-[12px] niuu-text-text-faint">
-                    upload and download supported
-                  </span>
-                </div>
-                {treeQuery.data && (
-                  <span className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-elevated niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
-                    {treeQuery.data.length} roots
-                  </span>
-                )}
-              </div>
-              <div className="niuu-min-h-0 niuu-flex-1 niuu-overflow-auto">
-                {treeQuery.isLoading && (
-                  <p
-                    className="niuu-p-3 niuu-text-xs niuu-text-text-muted"
-                    data-testid="filetree-loading"
-                  >
-                    loading files{'\u2026'}
-                  </p>
-                )}
-                {treeQuery.isError && (
-                  <p
-                    className="niuu-p-3 niuu-text-xs niuu-text-critical"
-                    data-testid="filetree-error"
-                  >
-                    failed to load files
-                  </p>
-                )}
-                {treeQuery.data && (
-                  <FileTree
-                    nodes={treeQuery.data}
-                    onOpenFile={handleOpenFile}
-                    activePath={activePath}
-                  />
-                )}
-              </div>
-            </div>
-
-            <div className="niuu-min-h-0 niuu-overflow-hidden">
-              {activePath ? (
-                <FileViewer
-                  path={activePath}
-                  content={fileContent}
-                  isLoading={fileLoading}
-                  error={fileError}
-                  onClose={() => setActivePath(undefined)}
-                />
-              ) : (
-                <div
-                  className="niuu-flex niuu-h-full niuu-flex-col niuu-items-center niuu-justify-center niuu-gap-3 niuu-text-sm niuu-text-text-muted"
-                  data-testid="file-viewer-placeholder"
-                >
-                  <span className="niuu-font-mono niuu-text-[11px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-faint">
-                    no file selected
-                  </span>
-                  <span>Select a file to view its contents</span>
-                </div>
-              )}
-            </div>
+          <div role="tabpanel" aria-labelledby="tab-files" className="niuu-h-full niuu-min-h-0">
+            <SessionFilesWorkspace sessionId={sessionId} filesystem={filesystem} />
           </div>
         )}
 
