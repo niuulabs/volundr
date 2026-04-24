@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { BudgetBar, StateDot, PersonaAvatar, MountChip, LiveBadge, relTime } from '@niuulabs/ui';
-import type { Ravn } from '../domain/ravn';
-import type { MessageKind } from '../domain/message';
+import { useMemo, useState, type ReactNode } from 'react';
+import { LiveBadge, MountChip, PersonaAvatar, StateDot, relTime } from '@niuulabs/ui';
 import type { BudgetState } from '@niuulabs/domain';
+import type { Ravn } from '../domain/ravn';
+import type { Message, MessageKind } from '../domain/message';
+import type { Session } from '../domain/session';
+import type { Trigger } from '../domain/trigger';
 import { useTriggers } from './hooks/useTriggers';
-import { useSessions } from './hooks/useSessions';
-import { useRavnActivity } from './hooks/useSessions';
+import { useSessions, useRavnActivity } from './hooks/useSessions';
 import { useRavnBudget } from './hooks/useBudget';
 import { ravnStatusToDotState } from './grouping';
 import { loadStorage, saveStorage } from './storage';
@@ -14,8 +15,6 @@ import './RavnDetail.css';
 const TAB_STORAGE_KEY = 'ravn.detail.tab';
 
 type TabId = 'overview' | 'triggers' | 'activity' | 'sessions' | 'connectivity';
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 const KIND_FILTER_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'all', label: 'all' },
@@ -36,235 +35,263 @@ function formatTs(isoTs: string): string {
   });
 }
 
+function normalizeLabel(value: string): string {
+  return value.replace(/_/g, ' ').replace(/-/g, ' ');
+}
+
 function kindMatchesFilter(kind: MessageKind, filter: string): boolean {
   if (filter === 'all') return true;
   if (filter === 'tool') return kind === 'tool_call' || kind === 'tool_result';
   return kind === filter;
 }
 
-// ── Section components ──────────────────────────────────────────────────────
+function pillStateLabel(status: Ravn['status']): string {
+  return normalizeLabel(status);
+}
+
+function detailSubtitle(ravn: Ravn): string {
+  return [
+    ravn.role ? normalizeLabel(ravn.role) : null,
+    ravn.location ? normalizeLabel(ravn.location) : null,
+    ravn.deployment ? normalizeLabel(ravn.deployment) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function buildSpecialisations(ravn: Ravn): string {
+  const values = [
+    ravn.role ? normalizeLabel(ravn.role) : null,
+    ravn.writeRouting ? `${normalizeLabel(ravn.writeRouting)} routing` : null,
+    ...(ravn.mounts ?? []).slice(0, 2).map((mount) => normalizeLabel(mount.name)),
+  ].filter(Boolean);
+
+  return values.length > 0 ? values.join(', ') : '—';
+}
+
+function spendPercent(budget?: BudgetState): number {
+  if (!budget || budget.capUsd <= 0) return 0;
+  return Math.round((budget.spentUsd / budget.capUsd) * 100);
+}
+
+function dispatchSessionSelection(sessionId: string) {
+  window.dispatchEvent(new CustomEvent('ravn:session-selected', { detail: { sessionId } }));
+}
+
+interface KeyValueRowProps {
+  label: string;
+  value: ReactNode;
+}
+
+function KeyValueRow({ label, value }: KeyValueRowProps) {
+  return (
+    <div className="rv-kv-row">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
 
 interface OverviewSectionProps {
   ravn: Ravn;
-  budget: BudgetState | undefined;
+  budget?: BudgetState;
+  sessions: Session[];
 }
 
-function OverviewSection({ ravn, budget }: OverviewSectionProps) {
-  const uptimeSince = formatTs(ravn.createdAt);
+function OverviewSection({ ravn, budget, sessions }: OverviewSectionProps) {
+  const openSessions = sessions.filter((session) => session.status === 'running').length;
+  const totalSessions = sessions.length;
+  const percentage = spendPercent(budget);
 
   return (
-    <div className="rv-detail-overview">
-      {/* Identity panel */}
-      <div className="rv-overview-panel" data-testid="identity-panel">
-        <div className="rv-overview-panel__head">
-          <h5 className="rv-overview-panel__title">Identity</h5>
-        </div>
-        <div className="rv-overview-panel__body">
-          {ravn.role && ravn.letter && (
-            <div className="rv-identity-avatar-row">
-              <PersonaAvatar role={ravn.role} letter={ravn.letter} size={36} />
-              <div className="rv-identity-avatar-info">
-                <span className="rv-identity-name">{ravn.personaName}</span>
-                <span className={`rv-role-badge rv-role-badge--${ravn.role}`}>{ravn.role}</span>
-              </div>
-            </div>
-          )}
-          {!ravn.role && (
-            <div className="rv-identity-name rv-identity-name--plain">{ravn.personaName}</div>
-          )}
-          {ravn.summary && <p className="rv-identity-summary">{ravn.summary}</p>}
-          <dl className="rv-overview-dl rv-overview-dl--identity">
-            <dt>ID</dt>
-            <dd className="rv-overview-dd--model">{ravn.id.slice(0, 8)}</dd>
-          </dl>
-        </div>
-      </div>
-
-      {/* Runtime panel */}
-      <div className="rv-overview-panel" data-testid="runtime-panel">
-        <div className="rv-overview-panel__head">
-          <h5 className="rv-overview-panel__title">Runtime</h5>
-        </div>
-        <div className="rv-overview-panel__body">
-          <dl className="rv-overview-dl">
-            <dt>State</dt>
-            <dd className="rv-overview-dd--state">
-              <StateDot
-                state={ravnStatusToDotState(ravn.status)}
-                pulse={ravn.status === 'active'}
-                size={8}
+    <div className="rv-detail-overview" data-testid="section-body-overview">
+      <section className="rv-panel" data-testid="identity-panel">
+        <header className="rv-panel__head">
+          <h3>Identity</h3>
+        </header>
+        <div className="rv-panel__body">
+          <dl className="rv-kv-list">
+            <KeyValueRow label="id" value={<span className="rv-value-mono">{ravn.id}</span>} />
+            <KeyValueRow
+              label="persona"
+              value={<span className="rv-value-strong">{ravn.personaName}</span>}
+            />
+            <KeyValueRow label="role" value={<span className="rv-value-mono">{ravn.role ?? '—'}</span>} />
+            <KeyValueRow
+              label="specialisations"
+              value={<span className="rv-value-mono">{buildSpecialisations(ravn)}</span>}
+            />
+            {ravn.summary && (
+              <KeyValueRow
+                label="summary"
+                value={<span className="rv-value-copy">{ravn.summary}</span>}
               />
-              <span>{ravn.status}</span>
-            </dd>
-
-            <dt>Model</dt>
-            <dd className="rv-overview-dd--model">{ravn.model}</dd>
-
-            <dt>Since</dt>
-            <dd className="rv-overview-dd--since">{uptimeSince}</dd>
-
-            {ravn.location && (
-              <>
-                <dt>Location</dt>
-                <dd className="rv-overview-dd--model">{ravn.location}</dd>
-              </>
-            )}
-
-            {ravn.deployment && (
-              <>
-                <dt>Deployment</dt>
-                <dd className="rv-overview-dd--since">{ravn.deployment}</dd>
-              </>
-            )}
-
-            {ravn.cascade && (
-              <>
-                <dt>Cascade</dt>
-                <dd className="rv-overview-dd--since">{ravn.cascade}</dd>
-              </>
-            )}
-
-            {ravn.iterationBudget != null && (
-              <>
-                <dt>Iter budget</dt>
-                <dd className="rv-overview-dd--model">{ravn.iterationBudget} iters</dd>
-              </>
-            )}
-
-            {ravn.writeRouting && (
-              <>
-                <dt>Write routing</dt>
-                <dd className="rv-overview-dd--since">{ravn.writeRouting}</dd>
-              </>
             )}
           </dl>
+        </div>
+      </section>
 
-          {budget && (
-            <div className="rv-overview-budget">
-              <div className="rv-overview-budget__header">
-                <span>Budget</span>
-                <span className="rv-overview-budget__value">
-                  ${budget.spentUsd.toFixed(2)} / ${budget.capUsd.toFixed(2)}
+      <section className="rv-panel" data-testid="runtime-panel">
+        <header className="rv-panel__head">
+          <h3>Runtime</h3>
+        </header>
+        <div className="rv-panel__body">
+          <dl className="rv-kv-list">
+            <KeyValueRow
+              label="state"
+              value={
+                <span className="rv-state-pill">
+                  <StateDot
+                    state={ravnStatusToDotState(ravn.status)}
+                    pulse={ravn.status === 'active'}
+                    size={8}
+                  />
+                  {pillStateLabel(ravn.status)}
                 </span>
-              </div>
-              <BudgetBar
-                spent={budget.spentUsd}
-                cap={budget.capUsd}
-                warnAt={Math.round(budget.warnAt * 100)}
-                size="sm"
-              />
-            </div>
-          )}
+              }
+            />
+            <KeyValueRow
+              label="cascade"
+              value={<span className="rv-value-mono">{ravn.cascade ?? '—'}</span>}
+            />
+            <KeyValueRow
+              label="routing"
+              value={<span className="rv-value-mono">{ravn.writeRouting ?? '—'}</span>}
+            />
+            <KeyValueRow
+              label="model"
+              value={<span className="rv-value-mono">{ravn.model}</span>}
+            />
+            <KeyValueRow
+              label="last activity"
+              value={<span className="rv-value-strong">{relTime(ravn.updatedAt ?? ravn.createdAt)}</span>}
+            />
+            <KeyValueRow
+              label="sessions"
+              value={
+                <span className="rv-value-strong">
+                  {openSessions} open / {totalSessions} total
+                </span>
+              }
+            />
+            <KeyValueRow
+              label="today's spend"
+              value={
+                budget ? (
+                  <span className="rv-spend-row">
+                    <span className="rv-value-strong">${budget.spentUsd.toFixed(2)}</span>
+                    <span className="rv-value-mono">of ${budget.capUsd.toFixed(2)}</span>
+                    <span className="rv-percent-pill">{percentage}%</span>
+                  </span>
+                ) : (
+                  <span className="rv-value-mono">—</span>
+                )
+              }
+            />
+          </dl>
         </div>
-      </div>
+      </section>
 
-      {/* Mounts panel */}
       {ravn.mounts && ravn.mounts.length > 0 && (
-        <div className="rv-overview-panel" data-testid="mounts-panel">
-          <div className="rv-overview-panel__head">
-            <h5 className="rv-overview-panel__title">Mímir mounts</h5>
-            <span className="rv-overview-panel__count">{ravn.mounts.length}</span>
-          </div>
-          <div className="rv-overview-panel__body">
+        <section className="rv-panel rv-panel--wide" data-testid="mounts-panel">
+          <header className="rv-panel__head">
+            <h3>Mimir mounts</h3>
+            <span className="rv-panel__count">{ravn.mounts.length} mounts</span>
+          </header>
+          <div className="rv-panel__body rv-panel__body--wide">
             <div className="rv-mounts-row">
-              {ravn.mounts.map((m) => (
-                <MountChip key={m.name} name={m.name} role={m.role} />
+              {ravn.mounts.map((mount) => (
+                <MountChip key={mount.name} name={mount.name} role={mount.role} />
               ))}
             </div>
+
+            <div className="rv-routing-block">
+              <div className="rv-routing-title">write routing</div>
+              <dl className="rv-routing-list">
+                <KeyValueRow
+                  label="mode"
+                  value={<span className="rv-value-mono">{ravn.writeRouting ?? '—'}</span>}
+                />
+                <KeyValueRow
+                  label="gateway"
+                  value={
+                    <span className="rv-value-mono">
+                      {ravn.gatewayChannels?.join(', ') || 'none'}
+                    </span>
+                  }
+                />
+                <KeyValueRow
+                  label="events"
+                  value={
+                    <span className="rv-value-mono">
+                      {ravn.eventSubscriptions?.join(', ') || 'none'}
+                    </span>
+                  }
+                />
+              </dl>
+            </div>
           </div>
-        </div>
+        </section>
       )}
-
-      {/* Danger zone */}
-      <div className="rv-delete-actions" data-testid="danger-zone">
-        <button
-          type="button"
-          className="rv-suspend-btn"
-          data-testid="suspend-btn"
-          disabled={ravn.status === 'suspended'}
-        >
-          {ravn.status === 'suspended' ? 'Already suspended' : 'Suspend ravn'}
-        </button>
-
-        <button type="button" className="rv-delete-btn" data-testid="delete-btn">
-          Delete ravn
-        </button>
-      </div>
     </div>
   );
 }
 
 interface TriggersSectionProps {
-  ravnPersonaName: string;
+  triggers: Trigger[];
 }
 
 const TRIGGER_KIND_LABELS: Record<string, string> = {
   cron: '⏱',
   event: '⚡',
-  webhook: '🔗',
+  webhook: '⇄',
   manual: '▶',
 };
 
-function TriggersSection({ ravnPersonaName }: TriggersSectionProps) {
-  const { data: triggers } = useTriggers();
-  const ravnTriggers = triggers?.filter((t) => t.personaName === ravnPersonaName) ?? [];
-
+function TriggersSection({ triggers }: TriggersSectionProps) {
   return (
-    <div data-testid="triggers-section-body">
-      {ravnTriggers.length === 0 ? (
+    <div className="rv-section-body" data-testid="triggers-section-body">
+      {triggers.length === 0 ? (
         <p className="rv-empty-text">No triggers configured</p>
       ) : (
-        <div className="rv-trigger-cards">
-          {ravnTriggers.map((t) => (
-            <div
-              key={t.id}
-              className="rv-trigger-card"
-              data-enabled={t.enabled}
-              data-testid="trigger-card"
-            >
-              <div className="rv-trigger-card__header">
+        <div className="rv-stack-list">
+          {triggers.map((trigger) => (
+            <div key={trigger.id} className="rv-stack-card" data-testid="trigger-card">
+              <div className="rv-stack-card__main">
                 <span
-                  className={`rv-trigger-kind rv-trigger-kind--${t.kind}`}
+                  className={`rv-stack-kind rv-stack-kind--${trigger.kind}`}
                   data-testid="trigger-kind"
                 >
-                  <span className="rv-trigger-kind__icon" aria-hidden>
-                    {TRIGGER_KIND_LABELS[t.kind] ?? t.kind}
-                  </span>
-                  {t.kind}
+                  <span aria-hidden="true">{TRIGGER_KIND_LABELS[trigger.kind] ?? trigger.kind}</span>
+                  {trigger.kind}
                 </span>
-                <span className="rv-trigger-spec" data-testid="trigger-spec">
-                  {t.spec}
-                </span>
-                <button
-                  type="button"
-                  className={`rv-toggle${t.enabled ? ' rv-toggle--on' : ''}`}
-                  aria-label={t.enabled ? 'Disable trigger' : 'Enable trigger'}
-                  aria-checked={t.enabled}
-                  data-testid="trigger-toggle"
-                >
-                  <span className="rv-toggle__thumb" />
-                </button>
+                <div className="rv-stack-card__copy">
+                  <div className="rv-stack-card__title" data-testid="trigger-spec">
+                    {trigger.spec}
+                  </div>
+                  <div className="rv-stack-card__meta">
+                    {trigger.lastFiredAt && (
+                      <span data-testid="trigger-last-fired">
+                        last fired {relTime(trigger.lastFiredAt)}
+                      </span>
+                    )}
+                    {trigger.fireCount != null && (
+                      <span data-testid="trigger-fire-count">{trigger.fireCount} fires</span>
+                    )}
+                    {!trigger.enabled && <span>disabled</span>}
+                  </div>
+                </div>
               </div>
-              <div className="rv-trigger-card__meta">
-                {t.lastFiredAt && (
-                  <span className="rv-trigger-meta-item" data-testid="trigger-last-fired">
-                    Last fired {relTime(t.lastFiredAt)}
-                  </span>
-                )}
-                {t.fireCount != null && (
-                  <span
-                    className="rv-trigger-meta-item rv-trigger-meta-item--count"
-                    data-testid="trigger-fire-count"
-                  >
-                    {t.fireCount} fires
-                  </span>
-                )}
-                {!t.enabled && (
-                  <span className="rv-trigger-meta-item rv-trigger-meta-item--disabled">
-                    disabled
-                  </span>
-                )}
-              </div>
+
+              <button
+                type="button"
+                className={`rv-toggle${trigger.enabled ? ' rv-toggle--on' : ''}`}
+                aria-label={trigger.enabled ? 'Disable trigger' : 'Enable trigger'}
+                aria-checked={trigger.enabled}
+                data-testid="trigger-toggle"
+              >
+                <span className="rv-toggle__thumb" />
+              </button>
             </div>
           ))}
         </div>
@@ -274,39 +301,39 @@ function TriggersSection({ ravnPersonaName }: TriggersSectionProps) {
 }
 
 interface ActivitySectionProps {
-  ravnId: string;
+  messages: Message[];
   isActive: boolean;
+  isLoading: boolean;
 }
 
-function ActivitySection({ ravnId, isActive }: ActivitySectionProps) {
+function ActivitySection({ messages, isActive, isLoading }: ActivitySectionProps) {
   const [kindFilter, setKindFilter] = useState<string>('all');
-  const { data: messages, isLoading } = useRavnActivity(ravnId);
-
-  const filtered = (messages ?? []).filter((m) => kindMatchesFilter(m.kind, kindFilter));
-  const displayMessages = filtered.slice(-100);
+  const filtered = messages.filter((message) => kindMatchesFilter(message.kind, kindFilter));
+  const displayMessages = filtered.slice(-120);
 
   if (isLoading) {
     return <p className="rv-empty-text">Loading activity…</p>;
   }
 
   return (
-    <div data-testid="activity-section-body">
-      <div className="rv-activity-header">
+    <div className="rv-section-body" data-testid="activity-section-body">
+      <div className="rv-section-toolbar">
         {isActive && (
           <span data-testid="activity-live">
             <LiveBadge label="live" />
           </span>
         )}
+
         <div className="rv-activity-filter" data-testid="activity-filter">
-          {KIND_FILTER_OPTIONS.map((opt) => (
+          {KIND_FILTER_OPTIONS.map((option) => (
             <button
-              key={opt.value}
+              key={option.value}
               type="button"
-              className={`rv-activity-filter-btn${kindFilter === opt.value ? ' rv-activity-filter-btn--active' : ''}`}
-              onClick={() => setKindFilter(opt.value)}
-              data-testid={`activity-filter-${opt.value}`}
+              onClick={() => setKindFilter(option.value)}
+              className={`rv-activity-filter-btn${kindFilter === option.value ? ' rv-activity-filter-btn--active' : ''}`}
+              data-testid={`activity-filter-${option.value}`}
             >
-              {opt.label}
+              {option.label}
             </button>
           ))}
         </div>
@@ -314,30 +341,22 @@ function ActivitySection({ ravnId, isActive }: ActivitySectionProps) {
 
       {displayMessages.length === 0 ? (
         <p className="rv-empty-text">
-          {messages?.length === 0 ? 'No activity for this ravn' : 'No messages match this filter'}
+          {messages.length === 0 ? 'No activity for this ravn' : 'No messages match this filter'}
         </p>
       ) : (
-        <div className="rv-activity-messages" data-testid="activity-messages">
-          {filtered.length > 100 && (
-            <p className="rv-activity-overflow">Showing last 100 of {filtered.length} messages</p>
-          )}
-          {displayMessages.map((msg) => (
-            <div
-              key={msg.id}
-              className="rv-activity-message"
-              data-kind={msg.kind}
-              data-testid="activity-message"
-            >
-              <span className="rv-activity-message__ts">{formatTs(msg.ts)}</span>
+        <div className="rv-log-list" data-testid="activity-messages">
+          {displayMessages.map((message) => (
+            <div key={message.id} className="rv-log-row" data-testid="activity-message">
+              <span className="rv-log-row__ts">{formatTs(message.ts)}</span>
               <span
-                className={`rv-activity-kind-badge rv-activity-kind-badge--${msg.kind}`}
+                className={`rv-log-kind rv-log-kind--${message.kind}`}
                 data-testid="activity-kind-badge"
               >
-                {msg.kind}
+                {message.kind}
               </span>
-              <span className="rv-activity-message__content">
-                {msg.content.slice(0, 120)}
-                {msg.content.length > 120 ? '…' : ''}
+              <span className="rv-log-row__body">
+                {message.content.slice(0, 160)}
+                {message.content.length > 160 ? '…' : ''}
               </span>
             </div>
           ))}
@@ -348,65 +367,54 @@ function ActivitySection({ ravnId, isActive }: ActivitySectionProps) {
 }
 
 interface SessionsSectionProps {
-  ravnId: string;
+  sessions: Session[];
 }
 
-function SessionsSection({ ravnId }: SessionsSectionProps) {
-  const { data: sessions } = useSessions();
-  const ravnSessions = sessions?.filter((s) => s.ravnId === ravnId) ?? [];
-
-  function handleSessionClick(sessionId: string) {
-    window.dispatchEvent(new CustomEvent('ravn:session-selected', { detail: { sessionId } }));
-  }
-
+function SessionsSection({ sessions }: SessionsSectionProps) {
   return (
-    <div data-testid="sessions-section-body">
-      {ravnSessions.length === 0 ? (
+    <div className="rv-section-body" data-testid="sessions-section-body">
+      {sessions.length === 0 ? (
         <p className="rv-empty-text">No sessions</p>
       ) : (
-        <div className="rv-session-cards">
-          {ravnSessions.map((s) => (
+        <div className="rv-stack-list">
+          {sessions.map((session) => (
             <button
-              key={s.id}
+              key={session.id}
               type="button"
-              className="rv-session-card"
+              onClick={() => dispatchSessionSelection(session.id)}
+              className="rv-stack-card rv-stack-card--button"
               data-testid="session-card"
-              onClick={() => handleSessionClick(s.id)}
             >
-              <div className="rv-session-card__header">
-                <StateDot
-                  state={
-                    s.status === 'running'
-                      ? 'running'
-                      : s.status === 'failed'
-                        ? 'failed'
-                        : 'unknown'
-                  }
-                  pulse={s.status === 'running'}
-                  size={8}
-                />
-                <span className="rv-session-card__title" data-testid="session-title">
-                  {s.title ?? s.id.slice(0, 8)}
+              <div className="rv-stack-card__main">
+                <span className="rv-stack-session-dot">
+                  <StateDot
+                    state={
+                      session.status === 'running'
+                        ? 'running'
+                        : session.status === 'failed'
+                          ? 'failed'
+                          : 'unknown'
+                    }
+                    pulse={session.status === 'running'}
+                    size={8}
+                  />
                 </span>
-                <span className="rv-session-card__status">{s.status}</span>
+                <div className="rv-stack-card__copy">
+                  <div className="rv-stack-card__title">{session.title ?? session.id.slice(0, 8)}</div>
+                  <div className="rv-stack-card__meta">
+                    <span className="rv-value-mono">{session.status}</span>
+                    <span className="rv-value-mono">{relTime(session.createdAt)}</span>
+                    <span className="rv-value-mono">{session.model}</span>
+                  </div>
+                </div>
               </div>
-              <div className="rv-session-card__sub">
-                <span className="rv-session-card__model">{s.model}</span>
-                <span className="rv-session-card__since">{relTime(s.createdAt)}</span>
-              </div>
-              <div className="rv-session-card__metrics" data-testid="session-metrics">
-                {s.messageCount != null && (
-                  <span className="rv-session-metric" data-testid="session-message-count">
-                    {s.messageCount} msgs
-                  </span>
+
+              <div className="rv-stack-card__metrics">
+                {session.messageCount != null && (
+                  <span data-testid="session-message-count">{session.messageCount} msgs</span>
                 )}
-                {s.costUsd != null && (
-                  <span
-                    className="rv-session-metric rv-session-metric--cost"
-                    data-testid="session-cost"
-                  >
-                    ${s.costUsd.toFixed(2)}
-                  </span>
+                {session.costUsd != null && (
+                  <span data-testid="session-cost">${session.costUsd.toFixed(2)}</span>
                 )}
               </div>
             </button>
@@ -427,86 +435,81 @@ function ConnectivitySection({ ravn }: ConnectivitySectionProps) {
   const eventSubscriptions = ravn.eventSubscriptions ?? [];
 
   return (
-    <div data-testid="connectivity-section-body">
-      {/* MCP Servers */}
-      <div className="rv-conn-panel" data-testid="conn-mcp-panel">
-        <div className="rv-conn-panel__head">
-          <h5 className="rv-conn-panel__title">MCP servers</h5>
-          <span className="rv-conn-panel__count">{mcpServers.length}</span>
-        </div>
-        <div className="rv-conn-panel__body">
+    <div className="rv-detail-connectivity" data-testid="connectivity-section-body">
+      <section className="rv-panel" data-testid="conn-mcp-panel">
+        <header className="rv-panel__head">
+          <h3>MCP servers</h3>
+          <span className="rv-panel__count">{mcpServers.length}</span>
+        </header>
+        <div className="rv-panel__body">
           {mcpServers.length === 0 ? (
             <span className="rv-empty-text">None configured</span>
           ) : (
-            <div className="rv-conn-chips">
-              {mcpServers.map((s) => (
+            <div className="rv-chip-row">
+              {mcpServers.map((server) => (
                 <span
-                  key={s}
+                  key={server}
                   className="rv-conn-chip rv-conn-chip--mcp"
                   data-testid="mcp-server-chip"
                 >
-                  {s}
+                  {server}
                 </span>
               ))}
             </div>
           )}
         </div>
-      </div>
+      </section>
 
-      {/* Gateway Channels */}
-      <div className="rv-conn-panel" data-testid="conn-gateway-panel">
-        <div className="rv-conn-panel__head">
-          <h5 className="rv-conn-panel__title">Gateway channels</h5>
-          <span className="rv-conn-panel__count">{gatewayChannels.length}</span>
-        </div>
-        <div className="rv-conn-panel__body">
+      <section className="rv-panel" data-testid="conn-gateway-panel">
+        <header className="rv-panel__head">
+          <h3>Gateway channels</h3>
+          <span className="rv-panel__count">{gatewayChannels.length}</span>
+        </header>
+        <div className="rv-panel__body">
           {gatewayChannels.length === 0 ? (
             <span className="rv-empty-text">None configured</span>
           ) : (
-            <div className="rv-conn-chips">
-              {gatewayChannels.map((c) => (
+            <div className="rv-chip-row">
+              {gatewayChannels.map((channel) => (
                 <span
-                  key={c}
-                  className="rv-conn-chip rv-conn-chip--gw"
+                  key={channel}
+                  className="rv-conn-chip rv-conn-chip--gateway"
                   data-testid="gateway-channel-chip"
                 >
-                  {c}
+                  {channel}
                 </span>
               ))}
             </div>
           )}
         </div>
-      </div>
+      </section>
 
-      {/* Event Subscriptions */}
-      <div className="rv-conn-panel" data-testid="conn-events-panel">
-        <div className="rv-conn-panel__head">
-          <h5 className="rv-conn-panel__title">Event subscriptions</h5>
-          <span className="rv-conn-panel__count">{eventSubscriptions.length}</span>
-        </div>
-        <div className="rv-conn-panel__body">
+      <section className="rv-panel rv-panel--wide" data-testid="conn-events-panel">
+        <header className="rv-panel__head">
+          <h3>Event subscriptions</h3>
+          <span className="rv-panel__count">{eventSubscriptions.length}</span>
+        </header>
+        <div className="rv-panel__body">
           {eventSubscriptions.length === 0 ? (
             <span className="rv-empty-text">None configured</span>
           ) : (
-            <div className="rv-conn-chips">
-              {eventSubscriptions.map((e) => (
+            <div className="rv-chip-row">
+              {eventSubscriptions.map((event) => (
                 <span
-                  key={e}
+                  key={event}
                   className="rv-conn-chip rv-conn-chip--event"
                   data-testid="event-subscription-chip"
                 >
-                  {e}
+                  {event}
                 </span>
               ))}
             </div>
           )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }
-
-// ── Main component ──────────────────────────────────────────────────────────
 
 export interface RavnDetailProps {
   ravn: Ravn;
@@ -521,50 +524,84 @@ export function RavnDetail({ ravn, onClose }: RavnDetailProps) {
   const { data: budget } = useRavnBudget(ravn.id);
   const { data: triggers } = useTriggers();
   const { data: sessions } = useSessions();
+  const { data: activityMessages, isLoading: activityLoading } = useRavnActivity(ravn.id);
 
-  const triggerCount = triggers?.filter((t) => t.personaName === ravn.personaName).length ?? 0;
-  const sessionCount = sessions?.filter((s) => s.ravnId === ravn.id).length ?? 0;
+  const ravnTriggers = useMemo(
+    () => (triggers ?? []).filter((trigger) => trigger.personaName === ravn.personaName),
+    [triggers, ravn.personaName],
+  );
+  const ravnSessions = useMemo(
+    () => (sessions ?? []).filter((session) => session.ravnId === ravn.id),
+    [sessions, ravn.id],
+  );
 
-  const handleTabChange = (id: TabId) => {
-    saveStorage(TAB_STORAGE_KEY, id);
-    setActiveTab(id);
-  };
+  const openSessionId = ravnSessions.find((session) => session.status === 'running')?.id;
 
   const tabs: Array<{ id: TabId; label: string; count?: number }> = [
     { id: 'overview', label: 'Overview' },
-    { id: 'triggers', label: 'Triggers', count: triggerCount },
-    { id: 'activity', label: 'Activity' },
-    { id: 'sessions', label: 'Sessions', count: sessionCount },
+    { id: 'triggers', label: 'Triggers', count: ravnTriggers.length },
+    { id: 'activity', label: 'Activity', count: activityMessages.length },
+    { id: 'sessions', label: 'Sessions', count: ravnSessions.length },
     { id: 'connectivity', label: 'Connectivity' },
   ];
 
+  const subtitle = detailSubtitle(ravn);
+
   return (
-    <div data-testid="ravn-detail" className="rv-detail">
-      {/* Header */}
-      <div className="rv-detail__header">
-        {ravn.role && ravn.letter ? (
-          <PersonaAvatar role={ravn.role} letter={ravn.letter} size={22} />
-        ) : null}
-        <span className="rv-detail__title">{ravn.personaName}</span>
-        <StateDot
-          state={ravnStatusToDotState(ravn.status)}
-          pulse={ravn.status === 'active'}
-          size={8}
-        />
-        {onClose && (
+    <div className="rv-detail" data-testid="ravn-detail">
+      <header className="rv-detail__hero">
+        <div className="rv-detail__hero-left">
+          <PersonaAvatar
+            role={ravn.role ?? 'build'}
+            letter={ravn.letter ?? ravn.personaName.charAt(0).toUpperCase()}
+            size={46}
+          />
+          <div>
+            <div className="rv-detail__title-wrap">
+              <h1 className="rv-detail__title">{ravn.personaName}</h1>
+            </div>
+            {subtitle && <p className="rv-detail__subtitle">{subtitle}</p>}
+          </div>
+        </div>
+
+        <div className="rv-detail__hero-actions">
+          <span className="rv-state-pill">
+            <StateDot
+              state={ravnStatusToDotState(ravn.status)}
+              pulse={ravn.status === 'active'}
+              size={8}
+            />
+            {pillStateLabel(ravn.status)}
+          </span>
+
+          <button type="button" className="rv-action-btn">
+            pause
+          </button>
+
           <button
             type="button"
-            onClick={onClose}
-            aria-label="Close detail pane"
-            className="rv-detail__close"
-            data-testid="detail-close-btn"
+            className="rv-action-btn rv-action-btn--primary"
+            onClick={() => {
+              if (openSessionId) dispatchSessionSelection(openSessionId);
+            }}
           >
-            ✕
+            open session
           </button>
-        )}
-      </div>
 
-      {/* Tab nav */}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rv-detail__close"
+              data-testid="detail-close-btn"
+              aria-label="Close detail pane"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </header>
+
       <nav className="rv-sectabs" aria-label="Ravn detail sections" data-testid="ravn-sectabs">
         {tabs.map((tab) => (
           <button
@@ -572,26 +609,32 @@ export function RavnDetail({ ravn, onClose }: RavnDetailProps) {
             type="button"
             role="tab"
             aria-selected={activeTab === tab.id}
-            onClick={() => handleTabChange(tab.id)}
+            onClick={() => {
+              saveStorage(TAB_STORAGE_KEY, tab.id);
+              setActiveTab(tab.id);
+            }}
             className={`rv-sectab${activeTab === tab.id ? ' rv-sectab--active' : ''}`}
             data-testid={`sectab-${tab.id}`}
           >
             {tab.label}
-            {tab.count != null && tab.count > 0 && (
-              <span className="rv-sectabs-n">{tab.count}</span>
-            )}
+            {tab.count != null && tab.count > 0 && <span className="rv-sectabs-n">{tab.count}</span>}
           </button>
         ))}
       </nav>
 
-      {/* Tab content */}
-      <div className="rv-section__body" data-testid={`section-body-${activeTab}`}>
-        {activeTab === 'overview' && <OverviewSection ravn={ravn} budget={budget} />}
-        {activeTab === 'triggers' && <TriggersSection ravnPersonaName={ravn.personaName} />}
-        {activeTab === 'activity' && (
-          <ActivitySection ravnId={ravn.id} isActive={ravn.status === 'active'} />
+      <div className="rv-detail__content">
+        {activeTab === 'overview' && (
+          <OverviewSection ravn={ravn} budget={budget} sessions={ravnSessions} />
         )}
-        {activeTab === 'sessions' && <SessionsSection ravnId={ravn.id} />}
+        {activeTab === 'triggers' && <TriggersSection triggers={ravnTriggers} />}
+        {activeTab === 'activity' && (
+          <ActivitySection
+            messages={activityMessages}
+            isActive={ravn.status === 'active'}
+            isLoading={activityLoading}
+          />
+        )}
+        {activeTab === 'sessions' && <SessionsSection sessions={ravnSessions} />}
         {activeTab === 'connectivity' && <ConnectivitySection ravn={ravn} />}
       </div>
     </div>

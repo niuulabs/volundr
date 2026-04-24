@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { RavensPage } from './RavensPage';
@@ -42,11 +42,6 @@ describe('RavensPage', () => {
     expect(screen.getByTestId('ravens-loading')).toBeInTheDocument();
   });
 
-  it('renders ravens page after loading', async () => {
-    render(<RavensPage />, { wrapper: wrap() });
-    await waitFor(() => expect(screen.getByTestId('ravens-page')).toBeInTheDocument());
-  });
-
   it('shows error state when ravens service fails', async () => {
     const failing = { listRavens: () => Promise.reject(new Error('load failed')) };
     render(<RavensPage />, { wrapper: wrap(makeServices({ 'ravn.ravens': failing })) });
@@ -54,136 +49,70 @@ describe('RavensPage', () => {
     expect(screen.getByText(/load failed/i)).toBeInTheDocument();
   });
 
-  it('renders the layout selector', async () => {
+  it('renders the split fleet layout controls', async () => {
     render(<RavensPage />, { wrapper: wrap() });
-    await waitFor(() => expect(screen.getByTestId('layout-selector')).toBeInTheDocument());
+
+    await waitFor(() => expect(screen.getByTestId('ravens-page')).toBeInTheDocument());
+    expect(screen.getByTestId('ravens-sidebar')).toBeInTheDocument();
+    expect(screen.getByTestId('ravens-search')).toBeInTheDocument();
+    expect(screen.getByTestId('grouping-selector')).toBeInTheDocument();
+    expect(screen.getByTestId('layout-split')).toBeInTheDocument();
   });
 
-  it('renders the grouping selector', async () => {
+  it('selects a ravn by default and shows its detail pane', async () => {
     render(<RavensPage />, { wrapper: wrap() });
-    await waitFor(() => expect(screen.getByTestId('grouping-selector')).toBeInTheDocument());
+
+    await waitFor(() => expect(screen.getByTestId('ravn-detail')).toBeInTheDocument());
+    expect(screen.getAllByText(/sindri/i).length).toBeGreaterThan(0);
   });
 
-  describe('layout switching', () => {
-    it('defaults to split layout', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => expect(screen.getByTestId('layout-split')).toBeInTheDocument());
-    });
+  it('filters the fleet list from the left rail search', async () => {
+    render(<RavensPage />, { wrapper: wrap() });
 
-    it('switches to table layout', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => screen.getByTestId('layout-btn-table'));
-      fireEvent.click(screen.getByTestId('layout-btn-table'));
-      expect(screen.getByTestId('layout-table')).toBeInTheDocument();
-      expect(screen.queryByTestId('layout-split')).not.toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getAllByTestId('ravn-list-row').length).toBeGreaterThan(1));
+    fireEvent.change(screen.getByTestId('ravens-search'), { target: { value: 'muninn' } });
 
-    it('switches to cards layout', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => screen.getByTestId('layout-btn-cards'));
-      fireEvent.click(screen.getByTestId('layout-btn-cards'));
-      expect(screen.getByTestId('layout-cards')).toBeInTheDocument();
-    });
-
-    it('switches back to split layout from cards', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => screen.getByTestId('layout-btn-cards'));
-      fireEvent.click(screen.getByTestId('layout-btn-cards'));
-      fireEvent.click(screen.getByTestId('layout-btn-split'));
-      expect(screen.getByTestId('layout-split')).toBeInTheDocument();
-    });
-
-    it('persists layout selection to localStorage', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => screen.getByTestId('layout-btn-table'));
-      fireEvent.click(screen.getByTestId('layout-btn-table'));
-      expect(localStorage.getItem('ravn.ravens.layout')).toBe('"table"');
-    });
+    await waitFor(() => expect(screen.getAllByTestId('ravn-list-row')).toHaveLength(1));
+    expect(screen.getByText('muninn')).toBeInTheDocument();
   });
 
-  describe('grouping', () => {
-    it('groups by state when selected', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => screen.getByTestId('grouping-selector'));
-      const selector = screen.getByTestId('grouping-selector');
-      fireEvent.change(selector, { target: { value: 'state' } });
+  it('switches grouping from the segmented control and persists it', async () => {
+    render(<RavensPage />, { wrapper: wrap() });
 
-      // Should show group headers for each state
-      await waitFor(() => {
-        const headers = screen.queryAllByText(/^active$/i);
-        return headers.length > 0;
-      });
-      expect(localStorage.getItem('ravn.ravens.group')).toBe('"state"');
-    });
+    await waitFor(() => expect(screen.getByTestId('group-btn-state')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('group-btn-state'));
 
-    it('groups by persona when selected', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => screen.getByTestId('grouping-selector'));
-      const selector = screen.getByTestId('grouping-selector');
-      fireEvent.change(selector, { target: { value: 'persona' } });
-      expect(localStorage.getItem('ravn.ravens.group')).toBe('"persona"');
-    });
-
-    it('groups by location when selected', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => screen.getByTestId('grouping-selector'));
-      const selector = screen.getByTestId('grouping-selector');
-      fireEvent.change(selector, { target: { value: 'location' } });
-      expect(localStorage.getItem('ravn.ravens.group')).toBe('"location"');
-    });
+    await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
+    expect(localStorage.getItem('ravn.ravens.group')).toBe('"state"');
   });
 
-  describe('ravn selection in split view', () => {
-    it('shows empty state when no ravn is selected', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => expect(screen.getByTestId('detail-empty')).toBeInTheDocument());
-    });
+  it('switches the selected ravn when a different list row is clicked', async () => {
+    render(<RavensPage />, { wrapper: wrap() });
 
-    it('shows ravn detail when a ravn is selected', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => screen.getAllByTestId('ravn-list-row'));
-      const rows = screen.getAllByTestId('ravn-list-row');
-      fireEvent.click(rows[0]!);
-      await waitFor(() => expect(screen.getByTestId('ravn-detail')).toBeInTheDocument());
-    });
+    await waitFor(() => expect(screen.getAllByTestId('ravn-list-row').length).toBeGreaterThan(1));
+    const muninnRow = screen
+      .getAllByTestId('ravn-list-row')
+      .find((row) => within(row).queryByText('muninn'));
 
-    it('deselects ravn when same row is clicked again', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => screen.getAllByTestId('ravn-list-row'));
-      const rows = screen.getAllByTestId('ravn-list-row');
-      fireEvent.click(rows[0]!);
-      await waitFor(() => expect(screen.getByTestId('ravn-detail')).toBeInTheDocument());
-      fireEvent.click(rows[0]!);
-      await waitFor(() => expect(screen.queryByTestId('ravn-detail')).not.toBeInTheDocument());
-    });
+    expect(muninnRow).toBeTruthy();
+    if (muninnRow) fireEvent.click(muninnRow);
 
-    it('closes detail pane when close button is clicked', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => screen.getAllByTestId('ravn-list-row'));
-      fireEvent.click(screen.getAllByTestId('ravn-list-row')[0]!);
-      await waitFor(() => expect(screen.getByTestId('detail-close-btn')).toBeInTheDocument());
-      fireEvent.click(screen.getByTestId('detail-close-btn'));
-      await waitFor(() => expect(screen.queryByTestId('ravn-detail')).not.toBeInTheDocument());
-    });
+    await waitFor(() => expect(screen.getAllByText('muninn').length).toBeGreaterThan(0));
   });
 
-  describe('table layout', () => {
-    it('renders table rows', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => screen.getByTestId('layout-btn-table'));
-      fireEvent.click(screen.getByTestId('layout-btn-table'));
-      await waitFor(() => screen.getAllByTestId('ravn-table-row'));
-      expect(screen.getAllByTestId('ravn-table-row').length).toBeGreaterThan(0);
-    });
-  });
+  it('collapses and expands the fleet sidebar', async () => {
+    render(<RavensPage />, { wrapper: wrap() });
 
-  describe('cards layout', () => {
-    it('renders ravn cards', async () => {
-      render(<RavensPage />, { wrapper: wrap() });
-      await waitFor(() => screen.getByTestId('layout-btn-cards'));
-      fireEvent.click(screen.getByTestId('layout-btn-cards'));
-      await waitFor(() => screen.getAllByTestId('ravn-card'));
-      expect(screen.getAllByTestId('ravn-card').length).toBeGreaterThan(0);
-    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /collapse ravens sidebar/i }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /collapse ravens sidebar/i }));
+    expect(screen.getByRole('button', { name: /expand ravens sidebar/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /expand ravens sidebar/i }));
+    expect(screen.getByRole('button', { name: /collapse ravens sidebar/i })).toBeInTheDocument();
   });
 });
