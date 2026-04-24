@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { TemplatesPage } from './TemplatesPage';
 import { renderWithVolundr } from '../testing/renderWithVolundr';
 import { createMockTemplateStore } from '../adapters/mock';
@@ -62,12 +62,16 @@ describe('TemplatesPage', () => {
 
   it('renders the heading', () => {
     renderWithVolundr(<TemplatesPage />);
-    expect(screen.getByRole('heading', { name: /templates/i })).toBeInTheDocument();
+    return waitFor(() =>
+      expect(screen.getByRole('heading', { name: /templates/i })).toBeInTheDocument(),
+    );
   });
 
   it('renders the subtitle', () => {
     renderWithVolundr(<TemplatesPage />);
-    expect(screen.getByText(/reusable pod templates/i)).toBeInTheDocument();
+    return waitFor(() =>
+      expect(screen.getByText(/workspace \+ runtime bundles/i)).toBeInTheDocument(),
+    );
   });
 
   // -----------------------------------------------------------------------
@@ -133,8 +137,8 @@ describe('TemplatesPage', () => {
 
   it('renders both seed templates', async () => {
     renderWithVolundr(<TemplatesPage />);
-    await waitFor(() => expect(screen.getAllByText('default').length).toBeGreaterThan(0));
-    expect(screen.getAllByText('gpu-workload').length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getByText('niuu-platform')).toBeInTheDocument());
+    expect(screen.getAllByText('bifrost-gateway').length).toBeGreaterThan(0);
   });
 
   it('shows the template list as a list role', async () => {
@@ -148,12 +152,14 @@ describe('TemplatesPage', () => {
   // Template selection
   // -----------------------------------------------------------------------
 
-  it('auto-selects the first template', async () => {
+  it('auto-selects the showcase template', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    // First card should be selected (aria-pressed=true)
-    const cards = screen.getAllByTestId('template-card');
-    expect(cards[0]).toHaveAttribute('aria-pressed', 'true');
+    const selected = screen
+      .getAllByTestId('template-card')
+      .find((card) => card.getAttribute('aria-pressed') === 'true');
+    expect(selected).toBeTruthy();
+    expect(within(selected!).getByText('bifrost-gateway')).toBeInTheDocument();
   });
 
   it('selects a template when clicked', async () => {
@@ -244,11 +250,11 @@ describe('TemplatesPage', () => {
     expect(cards.length).toBeGreaterThanOrEqual(4);
   });
 
-  it('overview tab shows image info in detail cards', async () => {
+  it('overview tab shows cli/model info in detail cards', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getByTestId('tab-overview')).toBeInTheDocument());
-    // Image appears in list card + detail; just check at least one is present
-    expect(screen.getAllByText(/ghcr\.io\/niuulabs\/skuld/).length).toBeGreaterThan(0);
+    expect(screen.getByText('codex')).toBeInTheDocument();
+    expect(screen.getByText('codex-primary')).toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -258,20 +264,21 @@ describe('TemplatesPage', () => {
   it('workspace tab shows empty state for templates with no mounts', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: /niuu-platform/i }));
     fireEvent.click(screen.getByRole('tab', { name: /workspace/i }));
-    expect(screen.getByText(/no workspace sources/i)).toBeInTheDocument();
+    expect(screen.getByText(/blank · no sources/i)).toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
   // Tab content: Runtime
   // -----------------------------------------------------------------------
 
-  it('runtime tab shows resource meters', async () => {
+  it('runtime tab shows image and shell details', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /runtime/i }));
-    const meters = screen.getAllByTestId('meter');
-    expect(meters.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('base')).toBeInTheDocument();
+    expect(screen.getByText('shell')).toBeInTheDocument();
   });
 
   it('runtime tab shows TTL and idle timeout', async () => {
@@ -286,23 +293,23 @@ describe('TemplatesPage', () => {
   // Template list card: description + usage count
   // -----------------------------------------------------------------------
 
-  it('renders description on template list card', async () => {
+  it('renders description in the detail header', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    expect(screen.getByText(/minimal forge template/i)).toBeInTheDocument();
+    expect(screen.getByText(/provider adapters/i)).toBeInTheDocument();
   });
 
   it('renders usage count pill on template list card', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    expect(screen.getByText('42 uses')).toBeInTheDocument();
+    expect(screen.getByText(/23 sessions launched/i)).toBeInTheDocument();
   });
 
   it('does not render usage count when usageCount is absent', async () => {
     const noUsageStore = storeWith([{ ...RICH_TEMPLATE, usageCount: undefined }]);
     renderWithVolundr(<TemplatesPage />, { templateStore: noUsageStore });
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    expect(screen.queryByText(/uses$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sessions launched/i)).not.toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -319,13 +326,17 @@ describe('TemplatesPage', () => {
   it('clone button label includes selected template name', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    expect(screen.getByRole('button', { name: /clone template niuu-platform/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /clone template bifrost-gateway/i }),
+    ).toBeInTheDocument();
   });
 
   it('edit button label includes selected template name', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    expect(screen.getByRole('button', { name: /edit template niuu-platform/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /edit template bifrost-gateway/i }),
+    ).toBeInTheDocument();
   });
 
   it('clone button label updates when template is switched', async () => {
@@ -335,7 +346,7 @@ describe('TemplatesPage', () => {
     fireEvent.click(cards[3]!);
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: /clone template gpu-workload/i }),
+        screen.getByRole('button', { name: /clone template mimir-embeddings/i }),
       ).toBeInTheDocument(),
     );
   });
@@ -347,35 +358,29 @@ describe('TemplatesPage', () => {
   it('mcp tab shows empty state for template with no mcp servers', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    // default template has no MCP servers
+    fireEvent.click(screen.getByRole('button', { name: /niuu-platform/i }));
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     expect(screen.getByText(/no mcp servers enabled/i)).toBeInTheDocument();
   });
 
-  it('mcp tab shows server cards for gpu-workload template', async () => {
+  it('mcp tab shows server rows for bifrost-gateway', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
-    expect(screen.getByText('python')).toBeInTheDocument();
-    expect(screen.getByText('jupyter')).toBeInTheDocument();
+    expect(screen.getByText('filesystem')).toBeInTheDocument();
+    expect(screen.getByText('git')).toBeInTheDocument();
   });
 
   it('mcp server card shows connection string', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
-    expect(screen.getByText('uvx mcp-python')).toBeInTheDocument();
+    expect(screen.getByText('uvx mcp-filesystem')).toBeInTheDocument();
   });
 
   it('mcp server card shows transport protocol', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     expect(screen.getAllByText('stdio').length).toBeGreaterThanOrEqual(1);
   });
@@ -383,44 +388,16 @@ describe('TemplatesPage', () => {
   it('mcp server card tool list is collapsed by default', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
-    expect(screen.queryByTestId('mcp-tool-chip')).not.toBeInTheDocument();
-  });
-
-  it('mcp server card expands to show tools on click', async () => {
-    renderWithVolundr(<TemplatesPage />);
-    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[3]!);
-    fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
-    // Expand the python server card
-    fireEvent.click(screen.getByRole('button', { name: /^python$/i }));
-    expect(screen.getByText('run_script')).toBeInTheDocument();
-    expect(screen.getByText('install_package')).toBeInTheDocument();
-  });
-
-  it('mcp server card collapses tools on second click', async () => {
-    renderWithVolundr(<TemplatesPage />);
-    await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[3]!);
-    fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
-    const pythonBtn = screen.getByRole('button', { name: /^python$/i });
-    fireEvent.click(pythonBtn); // expand
-    expect(screen.getByText('run_script')).toBeInTheDocument();
-    fireEvent.click(pythonBtn); // collapse
     expect(screen.queryByText('run_script')).not.toBeInTheDocument();
   });
 
-  it('renders mcp-server-card elements for each server', async () => {
+  it('mcp server rows render as flat rows', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /^mcp$/i }));
     expect(screen.getAllByTestId('mcp-server-card').length).toBe(2);
+    expect(screen.queryByRole('button', { name: /^filesystem$/i })).not.toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -430,17 +407,16 @@ describe('TemplatesPage', () => {
   it('skills tab shows empty state for default template', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: /niuu-platform/i }));
     fireEvent.click(screen.getByRole('tab', { name: /skills/i }));
     expect(screen.getByText(/no skills defined/i)).toBeInTheDocument();
   });
 
-  it('skills tab shows tool chips for gpu-workload', async () => {
-    renderWithVolundr(<TemplatesPage />);
+  it('skills tab shows flattened tool list for rich templates', async () => {
+    renderWithVolundr(<TemplatesPage />, { templateStore: storeWith([RICH_TEMPLATE]) });
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /skills/i }));
-    expect(screen.getByText('python')).toBeInTheDocument();
+    expect(screen.getByText(/python/)).toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -450,15 +426,14 @@ describe('TemplatesPage', () => {
   it('rules tab shows empty state for default template', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: /niuu-platform/i }));
     fireEvent.click(screen.getByRole('tab', { name: /rules/i }));
     expect(screen.getByText(/no rules or constraints defined/i)).toBeInTheDocument();
   });
 
-  it('rules tab shows cluster affinity for gpu-workload', async () => {
-    renderWithVolundr(<TemplatesPage />);
+  it('rules tab shows cluster affinity for rich templates', async () => {
+    renderWithVolundr(<TemplatesPage />, { templateStore: storeWith([RICH_TEMPLATE]) });
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    const cards = screen.getAllByTestId('template-card');
-    fireEvent.click(cards[3]!);
     fireEvent.click(screen.getByRole('tab', { name: /rules/i }));
     expect(screen.getByText('cl-eitri')).toBeInTheDocument();
   });
@@ -487,19 +462,18 @@ describe('TemplatesPage', () => {
   it('shows CLI badge in detail header', async () => {
     renderWithVolundr(<TemplatesPage />);
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    expect(screen.getByTestId('cli-badge')).toBeInTheDocument();
+    expect(screen.getAllByTestId('cli-badge').length).toBeGreaterThan(0);
   });
 
   // -----------------------------------------------------------------------
   // GPU chip visibility
   // -----------------------------------------------------------------------
 
-  it('shows GPU chip on gpu-workload card', async () => {
-    renderWithVolundr(<TemplatesPage />);
+  it('shows GPU chip when a listed template has GPU resources', async () => {
+    renderWithVolundr(<TemplatesPage />, { templateStore: storeWith([RICH_TEMPLATE]) });
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
-    // The gpu-workload card should have a "GPU" chip
     const cards = screen.getAllByTestId('template-card');
-    const gpuCard = cards[3]!;
+    const gpuCard = cards[0]!;
     expect(gpuCard.textContent).toContain('GPU');
   });
 
@@ -535,22 +509,20 @@ describe('TemplatesPage', () => {
   // Rich template: runtime tab with GPU + env vars
   // -----------------------------------------------------------------------
 
-  it('runtime tab shows GPU info for template with gpuCount > 0', async () => {
+  it('runtime tab keeps image and lifecycle focus for gpu templates', async () => {
     renderWithVolundr(<TemplatesPage />, { templateStore: storeWith([RICH_TEMPLATE]) });
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /runtime/i }));
-    // gpuCount = 2 should appear
-    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('Image')).toBeInTheDocument();
+    expect(screen.getByText('Lifecycle')).toBeInTheDocument();
   });
 
-  it('runtime tab shows env vars and secret refs', async () => {
+  it('runtime tab no longer shows env vars inline', async () => {
     renderWithVolundr(<TemplatesPage />, { templateStore: storeWith([RICH_TEMPLATE]) });
     await waitFor(() => expect(screen.getAllByTestId('template-card').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('tab', { name: /runtime/i }));
-    expect(screen.getByText('API_URL')).toBeInTheDocument();
-    expect(screen.getByText('https://api.niuu.world')).toBeInTheDocument();
-    expect(screen.getByText('DB_PASSWORD')).toBeInTheDocument();
-    expect(screen.getByText('***')).toBeInTheDocument();
+    expect(screen.queryByText('API_URL')).not.toBeInTheDocument();
+    expect(screen.queryByText('DB_PASSWORD')).not.toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
