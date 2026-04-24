@@ -1,12 +1,20 @@
-"""Compatibility settings endpoints for Tyr's web-next HTTP adapter."""
+"""Compatibility settings endpoints for Tyr's web-next HTTP adapter.
+
+These routes own operator-facing settings under ``/api/v1/tyr/settings/*``.
+They intentionally remain separate from runtime flock execution config served by
+``/api/v1/tyr/flock/config`` so the host can mount settings independently from
+workflow execution concerns.
+"""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from typing import Any
+from datetime import datetime
+from typing import Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
+
+from tyr.api.settings_store import get_tyr_settings_store, now_utc
 
 
 class RetryPolicyResponse(BaseModel):
@@ -37,7 +45,7 @@ class DispatchDefaultsResponse(BaseModel):
 
 
 class NotificationSettingsResponse(BaseModel):
-    channel: str
+    channel: Literal["telegram", "email", "webhook", "none"]
     on_raid_pending_approval: bool
     on_raid_merged: bool
     on_raid_failed: bool
@@ -73,7 +81,7 @@ class DispatchDefaultsPatch(BaseModel):
 
 
 class NotificationSettingsPatch(BaseModel):
-    channel: str | None = None
+    channel: Literal["telegram", "email", "webhook", "none"] | None = None
     on_raid_pending_approval: bool | None = None
     on_raid_merged: bool | None = None
     on_raid_failed: bool | None = None
@@ -82,93 +90,48 @@ class NotificationSettingsPatch(BaseModel):
     webhook_url: str | None = None
 
 
-def _now() -> datetime:
-    return datetime.now(UTC)
-
-
-def _settings_store(request: Request) -> dict[str, dict[str, Any]]:
-    existing = getattr(request.app.state, "tyr_http_settings", None)
-    if existing is not None:
-        return existing
-
-    settings = request.app.state.settings
-    store = {
-        "flock": {
-            "flock_name": "default",
-            "default_base_branch": "main",
-            "default_tracker_type": "linear",
-            "default_repos": [],
-            "max_active_sagas": 10,
-            "auto_create_milestones": True,
-            "updated_at": _now(),
-        },
-        "dispatch": {
-            "confidence_threshold": float(settings.notification.confidence_threshold),
-            "max_concurrent_raids": 3,
-            "auto_continue": False,
-            "batch_size": int(settings.watcher.batch_size),
-            "retry_policy": {
-                "max_retries": 3,
-                "retry_delay_seconds": 30,
-                "escalate_on_exhaustion": True,
-            },
-            "quiet_hours": "22:00-07:00 UTC",
-            "escalate_after": "30m",
-            "updated_at": _now(),
-        },
-        "notifications": {
-            "channel": "activity_log",
-            "on_raid_pending_approval": bool(settings.notification.enabled),
-            "on_raid_merged": bool(settings.notification.enabled),
-            "on_raid_failed": bool(settings.notification.enabled),
-            "on_saga_complete": bool(settings.notification.enabled),
-            "on_dispatcher_error": bool(settings.notification.enabled),
-            "webhook_url": None,
-            "updated_at": _now(),
-        },
-    }
-    request.app.state.tyr_http_settings = store
-    return store
-
-
 def create_settings_router() -> APIRouter:
     router = APIRouter(prefix="/api/v1/tyr/settings", tags=["Tyr Settings"])
 
     @router.get("/flock", response_model=FlockSettingsResponse)
     async def get_flock_settings(request: Request) -> FlockSettingsResponse:
-        return FlockSettingsResponse.model_validate(_settings_store(request)["flock"])
+        return FlockSettingsResponse.model_validate(get_tyr_settings_store(request)["flock"])
 
     @router.patch("/flock", response_model=FlockSettingsResponse)
     async def patch_flock_settings(
         request: Request,
         body: FlockSettingsPatch,
     ) -> FlockSettingsResponse:
-        flock = _settings_store(request)["flock"]
+        flock = get_tyr_settings_store(request)["flock"]
         flock.update(body.model_dump(exclude_none=True))
-        flock["updated_at"] = _now()
+        flock["updated_at"] = now_utc()
         return FlockSettingsResponse.model_validate(flock)
 
     @router.get("/dispatch", response_model=DispatchDefaultsResponse)
     async def get_dispatch_defaults(request: Request) -> DispatchDefaultsResponse:
-        return DispatchDefaultsResponse.model_validate(_settings_store(request)["dispatch"])
+        return DispatchDefaultsResponse.model_validate(get_tyr_settings_store(request)["dispatch"])
 
     @router.patch("/dispatch", response_model=DispatchDefaultsResponse)
     async def patch_dispatch_defaults(
         request: Request,
         body: DispatchDefaultsPatch,
     ) -> DispatchDefaultsResponse:
-        dispatch = _settings_store(request)["dispatch"]
+        dispatch = get_tyr_settings_store(request)["dispatch"]
         patch = body.model_dump(exclude_none=True)
         retry_policy = patch.pop("retry_policy", None)
         dispatch.update(patch)
         if retry_policy:
             dispatch["retry_policy"].update(retry_policy)
-        dispatch["updated_at"] = _now()
+        dispatch["updated_at"] = now_utc()
+        request.app.state.settings.notification.confidence_threshold = (
+            dispatch["confidence_threshold"]
+        )
+        request.app.state.settings.watcher.batch_size = dispatch["batch_size"]
         return DispatchDefaultsResponse.model_validate(dispatch)
 
     @router.get("/notifications", response_model=NotificationSettingsResponse)
     async def get_notification_settings(request: Request) -> NotificationSettingsResponse:
-        notifications = _settings_store(request)["notifications"]
+        notifications = get_tyr_settings_store(request)["notifications"]
         return NotificationSettingsResponse.model_validate(notifications)
 
     @router.patch("/notifications", response_model=NotificationSettingsResponse)
@@ -176,9 +139,30 @@ def create_settings_router() -> APIRouter:
         request: Request,
         body: NotificationSettingsPatch,
     ) -> NotificationSettingsResponse:
-        notifications = _settings_store(request)["notifications"]
-        notifications.update(body.model_dump(exclude_none=True))
-        notifications["updated_at"] = _now()
+        notifications = get_tyr_settings_store(request)["notifications"]
+        patch = body.model_dump(exclude_none=True)
+        notifications.update(patch)
+        if notifications["channel"] != "webhook":
+            notifications["webhook_url"] = None
+        if notifications["channel"] == "webhook" and not notifications["webhook_url"]:
+            raise HTTPException(
+                status_code=422,
+                detail="webhook_url is required when channel is webhook",
+            )
+        notifications["updated_at"] = now_utc()
+        request.app.state.settings.notification.enabled = (
+            notifications["channel"] != "none"
+            and any(
+                notifications[key]
+                for key in (
+                    "on_raid_pending_approval",
+                    "on_raid_merged",
+                    "on_raid_failed",
+                    "on_saga_complete",
+                    "on_dispatcher_error",
+                )
+            )
+        )
         return NotificationSettingsResponse.model_validate(notifications)
 
     return router

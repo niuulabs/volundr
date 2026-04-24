@@ -80,6 +80,7 @@ async def test_get_events_returns_events(repo, client):
     assert len(data) == 1
     assert data[0]["event_id"] == evt.event_id
     assert data[0]["event_type"] == evt.event_type
+    assert data[0]["service"] == "ravn"
 
 
 async def test_canonical_audit_route_matches_legacy(repo, client):
@@ -115,6 +116,7 @@ async def test_get_events_response_schema(repo, client):
     assert data["event_id"] == "test-id"
     assert data["event_type"] == "ravn.tool.complete"
     assert data["source"] == "ravn:agent"
+    assert data["service"] == "ravn"
     assert data["summary"] == "Test event"
     assert data["urgency"] == 0.5
     assert data["domain"] == "code"
@@ -195,6 +197,17 @@ async def test_get_events_filter_source(repo, client):
     data = response.json()
     assert len(data) == 1
     assert data[0]["event_id"] == "a"
+
+
+async def test_get_events_filter_service(repo, client):
+    await repo.append(make_event(event_id="a", source="ravn:agent-1"))
+    await repo.append(make_event(event_id="b", source="tyr:dispatcher"))
+    await repo.append(make_event(event_id="c", source="ravn:agent-2"))
+
+    response = client.get("/api/v1/audit/events", params={"service": "ravn", "limit": 10})
+    assert response.status_code == 200
+    data = response.json()
+    assert [item["event_id"] for item in data] == ["a", "c"]
 
 
 # ---------------------------------------------------------------------------

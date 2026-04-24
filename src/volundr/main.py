@@ -784,7 +784,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.local_git_service = local_git_service
 
             # Tenant and identity management
-            identity_router = create_identity_router()
+            identity_router = create_identity_router(tenant_service)
             app.include_router(identity_router)
             tenants_router = create_tenants_router(tenant_service)
             app.include_router(tenants_router)

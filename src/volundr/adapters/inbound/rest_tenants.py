@@ -242,6 +242,50 @@ def _build_me_response(principal: Principal) -> MeResponse:
     )
 
 
+def _user_to_response(user) -> UserResponse:
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        status=user.status.value,
+        home_pvc=user.home_pvc,
+        created_at=user.created_at.isoformat() if user.created_at else None,
+    )
+
+
+def _tenant_to_response(tenant) -> TenantResponse:
+    return TenantResponse(
+        id=tenant.id,
+        path=tenant.path,
+        name=tenant.name,
+        parent_id=tenant.parent_id,
+        tier=tenant.tier.value,
+        max_sessions=tenant.max_sessions,
+        max_storage_gb=tenant.max_storage_gb,
+        created_at=tenant.created_at.isoformat() if tenant.created_at else None,
+    )
+
+
+def _membership_to_response(membership) -> MemberResponse:
+    return MemberResponse(
+        user_id=membership.user_id,
+        tenant_id=membership.tenant_id,
+        role=membership.role.value,
+        granted_at=membership.granted_at.isoformat() if membership.granted_at else None,
+    )
+
+
+def _provisioning_result_to_payload(result) -> dict[str, object]:
+    return {
+        "success": result.success,
+        "user_id": result.user_id,
+        "home_pvc": result.home_pvc,
+        "userId": result.user_id,
+        "homePvc": result.home_pvc,
+        "errors": result.errors,
+    }
+
+
 def create_tenants_router(tenant_service: TenantService) -> APIRouter:
     """Create the tenants router."""
     router = APIRouter(prefix="/api/v1/volundr", tags=["Tenants"])
@@ -282,17 +326,7 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
                     canonical_path="/api/v1/volundr/admin/users",
                 ),
             )
-        return [
-            UserResponse(
-                id=u.id,
-                email=u.email,
-                display_name=u.display_name,
-                status=u.status.value,
-                home_pvc=u.home_pvc,
-                created_at=u.created_at.isoformat() if u.created_at else None,
-            )
-            for u in users
-        ]
+        return [_user_to_response(u) for u in users]
 
     @router.get("/tenants", response_model=list[TenantResponse])
     async def list_tenants(
@@ -304,19 +338,7 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
     ):
         """List tenants."""
         tenants = await tenant_service.list_tenants(parent_id)
-        return [
-            TenantResponse(
-                id=t.id,
-                path=t.path,
-                name=t.name,
-                parent_id=t.parent_id,
-                tier=t.tier.value,
-                max_sessions=t.max_sessions,
-                max_storage_gb=t.max_storage_gb,
-                created_at=t.created_at.isoformat() if t.created_at else None,
-            )
-            for t in tenants
-        ]
+        return [_tenant_to_response(t) for t in tenants]
 
     @router.post(
         "/tenants",
@@ -342,16 +364,7 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
         except TenantNotFoundError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
-        return TenantResponse(
-            id=tenant.id,
-            path=tenant.path,
-            name=tenant.name,
-            parent_id=tenant.parent_id,
-            tier=tenant.tier.value,
-            max_sessions=tenant.max_sessions,
-            max_storage_gb=tenant.max_storage_gb,
-            created_at=tenant.created_at.isoformat() if tenant.created_at else None,
-        )
+        return _tenant_to_response(tenant)
 
     @router.get("/tenants/{tenant_id}", response_model=TenantResponse)
     async def get_tenant(
@@ -364,16 +377,7 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
         except TenantNotFoundError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
-        return TenantResponse(
-            id=tenant.id,
-            path=tenant.path,
-            name=tenant.name,
-            parent_id=tenant.parent_id,
-            tier=tenant.tier.value,
-            max_sessions=tenant.max_sessions,
-            max_storage_gb=tenant.max_storage_gb,
-            created_at=tenant.created_at.isoformat() if tenant.created_at else None,
-        )
+        return _tenant_to_response(tenant)
 
     @router.delete("/tenants/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
     async def delete_tenant(
@@ -392,15 +396,7 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
     ):
         """List members of a tenant."""
         members = await tenant_service.get_members(tenant_id)
-        return [
-            MemberResponse(
-                user_id=m.user_id,
-                tenant_id=m.tenant_id,
-                role=m.role.value,
-                granted_at=m.granted_at.isoformat() if m.granted_at else None,
-            )
-            for m in members
-        ]
+        return [_membership_to_response(m) for m in members]
 
     @router.post(
         "/tenants/{tenant_id}/members",
@@ -424,12 +420,7 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
-        return MemberResponse(
-            user_id=membership.user_id,
-            tenant_id=membership.tenant_id,
-            role=membership.role.value,
-            granted_at=membership.granted_at.isoformat() if membership.granted_at else None,
-        )
+        return _membership_to_response(membership)
 
     @router.delete(
         "/tenants/{tenant_id}/members/{user_id}",
@@ -499,14 +490,7 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
                     canonical_path=f"/api/v1/volundr/admin/users/{user_id}/reprovision",
                 ),
             )
-        return {
-            "success": result.success,
-            "user_id": result.user_id,
-            "home_pvc": result.home_pvc,
-            "userId": result.user_id,
-            "homePvc": result.home_pvc,
-            "errors": result.errors,
-        }
+        return _provisioning_result_to_payload(result)
 
     @router.post(
         "/tenants/{tenant_id}/reprovision",
@@ -520,22 +504,12 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
         """Re-provision storage for all users in a tenant (admin only)."""
         storage = getattr(request.app.state, "storage", None)
         results = await tenant_service.reprovision_tenant(tenant_id, storage=storage)
-        return [
-            {
-                "success": r.success,
-                "user_id": r.user_id,
-                "home_pvc": r.home_pvc,
-                "userId": r.user_id,
-                "homePvc": r.home_pvc,
-                "errors": r.errors,
-            }
-            for r in results
-        ]
+        return [_provisioning_result_to_payload(r) for r in results]
 
     return router
 
 
-def create_identity_router() -> APIRouter:
+def create_identity_router(tenant_service: TenantService) -> APIRouter:
     """Create the canonical identity router."""
     router = APIRouter(prefix="/api/v1/identity", tags=["Identity"])
 
@@ -543,5 +517,151 @@ def create_identity_router() -> APIRouter:
     async def get_me(principal: Principal = Depends(extract_principal)):
         """Get the current authenticated user's identity."""
         return _build_me_response(principal)
+
+    @router.get("/users", response_model=list[UserResponse], tags=["Users"])
+    async def list_users(
+        _: Principal = Depends(require_role("volundr:admin")),
+    ):
+        """List all users (admin only)."""
+        users = await tenant_service.list_users()
+        return [_user_to_response(u) for u in users]
+
+    @router.post("/users/{user_id}/reprovision", status_code=status.HTTP_202_ACCEPTED)
+    async def reprovision_user(
+        user_id: str,
+        request: Request,
+        _: Principal = Depends(require_role("volundr:admin")),
+    ):
+        """Re-provision storage for a user (admin only)."""
+        storage = getattr(request.app.state, "storage", None)
+        result = await tenant_service.reprovision_user(user_id, storage=storage)
+        return _provisioning_result_to_payload(result)
+
+    @router.get("/tenants", response_model=list[TenantResponse])
+    async def list_tenants(
+        parent_id: str | None = Query(default=None, description="Filter by parent tenant ID"),
+        _: Principal = Depends(extract_principal),
+    ):
+        """List tenants."""
+        tenants = await tenant_service.list_tenants(parent_id)
+        return [_tenant_to_response(t) for t in tenants]
+
+    @router.post("/tenants", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
+    async def create_tenant(
+        body: TenantCreate,
+        _: Principal = Depends(require_role("volundr:admin")),
+    ):
+        """Create a new tenant (admin only)."""
+        try:
+            tenant = await tenant_service.create_tenant(
+                name=body.name,
+                parent_id=body.parent_id,
+                tenant_id=body.tenant_id,
+                tier=TenantTier(body.tier),
+                max_sessions=body.max_sessions,
+                max_storage_gb=body.max_storage_gb,
+            )
+        except TenantAlreadyExistsError as e:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        except TenantNotFoundError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        return _tenant_to_response(tenant)
+
+    @router.get("/tenants/{tenant_id}", response_model=TenantResponse)
+    async def get_tenant(
+        tenant_id: str,
+        _: Principal = Depends(extract_principal),
+    ):
+        """Get a tenant by ID."""
+        try:
+            tenant = await tenant_service.get_tenant(tenant_id)
+        except TenantNotFoundError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        return _tenant_to_response(tenant)
+
+    @router.patch("/tenants/{tenant_id}", response_model=TenantResponse)
+    async def update_tenant(
+        tenant_id: str,
+        body: TenantUpdate,
+        _: Principal = Depends(require_role("volundr:admin")),
+    ):
+        """Update tenant settings (admin only)."""
+        try:
+            tenant = await tenant_service.update_tenant_settings(
+                tenant_id,
+                max_sessions=body.max_sessions,
+                max_storage_gb=body.max_storage_gb,
+                tier=body.tier,
+            )
+        except TenantNotFoundError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        return TenantResponse.from_tenant(tenant)
+
+    @router.delete("/tenants/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete_tenant(
+        tenant_id: str,
+        _: Principal = Depends(require_role("volundr:admin")),
+    ):
+        """Delete a tenant (admin only)."""
+        deleted = await tenant_service.delete_tenant(tenant_id)
+        if not deleted:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+    @router.get("/tenants/{tenant_id}/members", response_model=list[MemberResponse])
+    async def list_members(
+        tenant_id: str,
+        _: Principal = Depends(extract_principal),
+    ):
+        """List members of a tenant."""
+        members = await tenant_service.get_members(tenant_id)
+        return [_membership_to_response(m) for m in members]
+
+    @router.post(
+        "/tenants/{tenant_id}/members",
+        response_model=MemberResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def add_member(
+        tenant_id: str,
+        body: MemberCreate,
+        _: Principal = Depends(require_role("volundr:admin")),
+    ):
+        """Add a member to a tenant (admin only)."""
+        try:
+            membership = await tenant_service.add_member(
+                tenant_id=tenant_id,
+                user_id=body.user_id,
+                role=TenantRole(body.role),
+            )
+        except TenantNotFoundError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        return _membership_to_response(membership)
+
+    @router.delete("/tenants/{tenant_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def remove_member(
+        tenant_id: str,
+        user_id: str,
+        _: Principal = Depends(require_role("volundr:admin")),
+    ):
+        """Remove a member from a tenant (admin only)."""
+        removed = await tenant_service.remove_member(tenant_id, user_id)
+        if not removed:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Membership not found",
+            )
+
+    @router.post("/tenants/{tenant_id}/reprovision", status_code=status.HTTP_202_ACCEPTED)
+    async def reprovision_tenant(
+        tenant_id: str,
+        request: Request,
+        _: Principal = Depends(require_role("volundr:admin")),
+    ):
+        """Re-provision storage for all users in a tenant (admin only)."""
+        storage = getattr(request.app.state, "storage", None)
+        results = await tenant_service.reprovision_tenant(tenant_id, storage=storage)
+        return [_provisioning_result_to_payload(r) for r in results]
 
     return router

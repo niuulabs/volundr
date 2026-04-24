@@ -1,4 +1,13 @@
-"""Compatibility session endpoints for Tyr's web-next HTTP adapter."""
+"""Compatibility session endpoints for Tyr's web-next HTTP adapter.
+
+Ownership decision:
+- Tyr owns review and approval semantics for raid-linked sessions.
+- Forge/Volundr remains the provider of session runtime primitives such as
+  session lookup, chronicle summaries, and PR status.
+
+These endpoints intentionally compose those concerns instead of moving
+approval flows back under Forge.
+"""
 
 from __future__ import annotations
 

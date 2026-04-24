@@ -253,7 +253,6 @@ class TestTyrPlugin:
             "workflow-api",
             "settings-api",
             "integrations-api",
-            "audit-api",
             "event-api",
             "tyr-api",
         ]

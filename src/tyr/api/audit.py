@@ -5,10 +5,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
 from niuu.domain.models import Principal
+from niuu.http_compat import LegacyRouteNotice, warn_on_legacy_route
 from tyr.adapters.inbound.auth import extract_principal
 from tyr.api.dispatcher import resolve_event_bus
 from tyr.ports.event_bus import EventBusPort, TyrEvent
@@ -56,6 +57,8 @@ def create_audit_router() -> APIRouter:
 
     @router.get("/audit", response_model=list[AuditEntryResponse])
     async def list_audit_entries(
+        request: Request,
+        response: Response,
         kinds: str | None = Query(default=None, description="Comma-separated audit event kinds."),
         actor: str | None = Query(default=None),
         since: str | None = Query(default=None),
@@ -74,6 +77,14 @@ def create_audit_router() -> APIRouter:
             {part.strip() for part in kinds.split(",") if part.strip()}
             if kinds
             else None
+        )
+        warn_on_legacy_route(
+            request=request,
+            response=response,
+            notice=LegacyRouteNotice(
+                legacy_path="/api/v1/tyr/audit",
+                canonical_path="/api/v1/audit",
+            ),
         )
         events = event_bus.get_log(limit)
         filtered = [

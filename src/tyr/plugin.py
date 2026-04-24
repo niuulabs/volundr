@@ -117,11 +117,6 @@ class TyrPlugin(ServicePlugin):
                 description="Tyr integration management and Telegram setup routes.",
             ),
             APIRouteDomain(
-                name="audit-api",
-                prefixes=("/api/v1/tyr/audit",),
-                description="Tyr audit and event-log browsing routes.",
-            ),
-            APIRouteDomain(
                 name="event-api",
                 prefixes=("/api/v1/tyr/events",),
                 description="Tyr SSE event stream routes.",

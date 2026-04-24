@@ -42,6 +42,7 @@ class AuditEventResponse(BaseModel):
     event_id: str = Field(description="Unique event identifier")
     event_type: str = Field(description="Hierarchical dot-separated event type")
     source: str = Field(description="Publisher identity")
+    service: str = Field(description="Service prefix derived from the source identifier")
     summary: str = Field(description="Human-readable one-liner")
     urgency: float = Field(description="Priority hint 0.0–1.0")
     domain: str = Field(description="High-level domain tag")
@@ -58,6 +59,7 @@ class AuditEventResponse(BaseModel):
             event_id=event.event_id,
             event_type=event.event_type,
             source=event.source,
+            service=event.source.split(":", 1)[0],
             summary=event.summary,
             urgency=event.urgency,
             domain=event.domain,
@@ -116,6 +118,10 @@ def _build_audit_router(
             default=None,
             description="Filter to events from this exact source (e.g. ``ravn:agent``).",
         ),
+        service: str | None = Query(
+            default=None,
+            description="Filter to events from a service prefix (e.g. ``ravn``, ``tyr``).",
+        ),
         limit: int = Query(
             default=_DEFAULT_LIMIT,
             ge=1,
@@ -144,9 +150,12 @@ def _build_audit_router(
             to_ts=to,
             correlation_id=correlation_id,
             source=source,
-            limit=limit,
+            limit=_MAX_LIMIT if service else limit,
         )
         events = await repository.query(q)
+        if service:
+            events = [event for event in events if event.source.split(":", 1)[0] == service]
+        events = events[:limit]
         return [AuditEventResponse.from_event(e) for e in events]
 
     return router

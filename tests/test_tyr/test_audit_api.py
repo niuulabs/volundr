@@ -43,6 +43,8 @@ class TestAuditAPI:
         response = client.get("/api/v1/tyr/audit", headers=_auth_headers())
 
         assert response.status_code == 200
+        assert response.headers["Deprecation"] == "true"
+        assert response.headers["X-Niuu-Canonical-Route"] == "/api/v1/audit"
         assert response.json() == [
             {
                 "id": "evt-1",
@@ -70,6 +72,7 @@ class TestAuditAPI:
         )
 
         assert response.status_code == 200
+        assert response.headers["X-Niuu-Canonical-Route"] == "/api/v1/audit"
         assert [entry["id"] for entry in response.json()] == ["evt-1"]
 
     def test_rejects_invalid_timestamp_filter(self) -> None:

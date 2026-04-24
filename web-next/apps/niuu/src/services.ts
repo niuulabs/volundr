@@ -66,6 +66,10 @@ function hasWsBackend(svc: ServiceConfig | undefined): svc is ServiceConfig & { 
   return svc?.mode === 'ws' && typeof svc.wsUrl === 'string';
 }
 
+export function toSharedApiBase(baseUrl: string): string {
+  return baseUrl.replace(/\/(?:tyr|volundr)\/?$/, '');
+}
+
 export function buildServices(config: NiuuConfig): ServicesMap {
   const ravnSvc = config.services['ravn'];
   const tyrSvc = config.services['tyr'];
@@ -117,6 +121,12 @@ export function buildServices(config: NiuuConfig): ServicesMap {
 
   // ── Tyr ──
   const tyrClient = hasHttpBackend(tyrSvc) ? createApiClient(tyrSvc.baseUrl) : null;
+  const sharedTyrDomainBase = hasHttpBackend(tyrSvc)
+    ? toSharedApiBase(tyrSvc.baseUrl)
+    : hasHttpBackend(volundrSvc)
+      ? toSharedApiBase(volundrSvc.baseUrl)
+      : null;
+  const sharedTyrDomainClient = sharedTyrDomainBase ? createApiClient(sharedTyrDomainBase) : null;
   const tyrService = tyrClient ? buildTyrHttpAdapter(tyrClient) : createMockTyrService();
   const dispatcherService = tyrClient
     ? buildDispatcherHttpAdapter(tyrClient)
@@ -124,16 +134,16 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const tyrSessionService = tyrClient
     ? buildTyrSessionHttpAdapter(tyrClient)
     : createMockTyrSessionService();
-  const trackerService = tyrClient
-    ? buildTrackerHttpAdapter(tyrClient)
+  const trackerService = sharedTyrDomainClient
+    ? buildTrackerHttpAdapter(sharedTyrDomainClient)
     : createMockTrackerService();
   const workflowService = createMockWorkflowService();
   const dispatchBus = tyrClient ? buildDispatchBusHttpAdapter(tyrClient) : createMockDispatchBus();
   const tyrSettingsService = tyrClient
     ? buildTyrSettingsHttpAdapter(tyrClient)
     : createMockTyrSettingsService();
-  const tyrAuditLogService = tyrClient
-    ? buildTyrAuditLogHttpAdapter(tyrClient)
+  const tyrAuditLogService = sharedTyrDomainClient
+    ? buildTyrAuditLogHttpAdapter(sharedTyrDomainClient)
     : createMockAuditLogService();
 
   return {

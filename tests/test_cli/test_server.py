@@ -656,10 +656,6 @@ class TestRootServerBuildApp:
             def api_route_domains(self):
                 return (
                     APIRouteDomain(
-                        name="audit-api",
-                        prefixes=("/api/v1/tyr/audit",),
-                    ),
-                    APIRouteDomain(
                         name="saga-api",
                         prefixes=("/api/v1/tyr/sagas",),
                     ),
@@ -679,7 +675,7 @@ class TestRootServerBuildApp:
         client = TestClient(app)
         assert client.get("/api/v1/audit").status_code == 200
         assert client.get("/audit").status_code == 200
-        assert client.get("/api/v1/tyr/audit").status_code == 200
+        assert client.get("/api/v1/tyr/audit").status_code == 404
         assert client.get("/api/v1/tyr/sagas").status_code == 404
 
     def test_build_root_app_can_mount_admin_slice_without_tenancy(self) -> None:
