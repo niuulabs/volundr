@@ -39,6 +39,18 @@ class TestAdminSettings:
         assert response.status_code == 200
         data = response.json()
         assert data["storage"]["home_enabled"] is True
+        assert data["storage"]["homeEnabled"] is True
+
+    def test_patch_update_settings_disable_home(self, client: TestClient) -> None:
+        response = client.patch(
+            "/api/v1/volundr/admin/settings",
+            json={"storage": {"homeEnabled": False}},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["storage"]["home_enabled"] is False
+        assert data["storage"]["homeEnabled"] is False
+        assert "Deprecation" not in response.headers
 
     def test_update_settings_disable_home(self, client: TestClient) -> None:
         response = client.put(
@@ -48,6 +60,7 @@ class TestAdminSettings:
         assert response.status_code == 200
         data = response.json()
         assert data["storage"]["home_enabled"] is False
+        assert response.headers["Deprecation"] == "true"
 
         # Verify it persists in subsequent GET
         response = client.get("/api/v1/volundr/admin/settings")
@@ -58,10 +71,23 @@ class TestAdminSettings:
         client = TestClient(app)
         response = client.put(
             "/api/v1/volundr/admin/settings",
-            json={"storage": {"home_enabled": True}},
+            json={"storage": {"homeEnabled": True}},
         )
         assert response.status_code == 200
         assert response.json()["storage"]["home_enabled"] is True
+
+    def test_patch_update_settings_accepts_file_manager_camel_case(
+        self,
+        client: TestClient,
+    ) -> None:
+        response = client.patch(
+            "/api/v1/volundr/admin/settings",
+            json={"storage": {"homeEnabled": True, "fileManagerEnabled": False}},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["storage"]["file_manager_enabled"] is False
+        assert data["storage"]["fileManagerEnabled"] is False
 
     def test_update_without_storage_is_noop(self, client: TestClient) -> None:
         response = client.put(

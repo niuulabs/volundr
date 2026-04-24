@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 import respx
 import typer
@@ -58,6 +60,66 @@ class TestVolundrPlugin:
         svc = plugin.create_service()
         assert svc is not None
 
+    def test_create_service_stub_health_check(self) -> None:
+        plugin = VolundrPlugin()
+        svc = plugin.create_service()
+        asyncio.run(svc.start())
+        assert asyncio.run(svc.health_check()) is True
+        asyncio.run(svc.stop())
+
+    def test_create_api_app_uses_volundr_main_factory(self, monkeypatch) -> None:
+        plugin = VolundrPlugin()
+        sentinel = object()
+
+        def fake_create_app():
+            return sentinel
+
+        monkeypatch.setattr("volundr.main.create_app", fake_create_app)
+        assert plugin.create_api_app() is sentinel
+
+    def test_api_route_domains_declared(self) -> None:
+        plugin = VolundrPlugin()
+        route_domains = plugin.api_route_domains()
+        assert route_domains
+        assert [route_domain.name for route_domain in route_domains] == [
+            "audit-api",
+            "admin-api",
+            "features-api",
+            "credentials-api",
+            "forge-api",
+            "session-api",
+            "workspace-api",
+            "catalog-api",
+            "git-api",
+            "volundr-api",
+            "identity-api",
+            "integrations-api",
+            "tenancy-api",
+            "tracker-api",
+            "tokens-api",
+        ]
+        assert route_domains[0].prefixes == ("/api/v1/audit", "/audit")
+        assert route_domains[2].prefixes == ("/api/v1/features", "/api/v1/volundr/features")
+        assert route_domains[3].prefixes == (
+            "/api/v1/credentials",
+            "/api/v1/volundr/credentials",
+            "/api/v1/volundr/secrets",
+        )
+        assert route_domains[10].prefixes == (
+            "/api/v1/identity",
+            "/api/v1/volundr/me",
+            "/api/v1/volundr/identity",
+        )
+        assert route_domains[11].prefixes == (
+            "/api/v1/integrations",
+            "/api/v1/volundr/integrations",
+        )
+        assert route_domains[14].prefixes == (
+            "/api/v1/tokens",
+            "/api/v1/users/tokens",
+            "/api/v1/volundr/tokens",
+        )
+
     def test_registers_sessions_group(self) -> None:
         plugin = VolundrPlugin()
         app = typer.Typer()
@@ -76,6 +138,18 @@ class TestVolundrPlugin:
         assert result.exit_code == 0
 
     @respx.mock
+    def test_sessions_list_command_json_output(self) -> None:
+        respx.get(f"{BASE}/api/v1/volundr/sessions").mock(
+            return_value=httpx.Response(200, json=[{"id": "s1", "name": "demo"}])
+        )
+        plugin = VolundrPlugin()
+        app = typer.Typer(no_args_is_help=False)
+        plugin.register_commands(app)
+        result = runner.invoke(app, ["sessions", "list", "--json"])
+        assert result.exit_code == 0
+        assert '"id": "s1"' in result.stdout
+
+    @respx.mock
     def test_sessions_create_command(self) -> None:
         respx.post(f"{BASE}/api/v1/volundr/sessions").mock(
             return_value=httpx.Response(201, json={"id": "s1", "name": "my-session"})
@@ -85,6 +159,41 @@ class TestVolundrPlugin:
         plugin.register_commands(app)
         result = runner.invoke(app, ["sessions", "create", "my-session"])
         assert result.exit_code == 0
+
+    @respx.mock
+    def test_sessions_create_command_json_output(self) -> None:
+        respx.post(f"{BASE}/api/v1/volundr/sessions").mock(
+            return_value=httpx.Response(201, json={"id": "s1", "name": "my-session"})
+        )
+        plugin = VolundrPlugin()
+        app = typer.Typer(no_args_is_help=False)
+        plugin.register_commands(app)
+        result = runner.invoke(app, ["sessions", "create", "my-session", "--json"])
+        assert result.exit_code == 0
+        assert '"id": "s1"' in result.stdout
+
+    @respx.mock
+    def test_sessions_stop_command(self) -> None:
+        respx.post(f"{BASE}/api/v1/volundr/sessions/s1/stop").mock(
+            return_value=httpx.Response(200, json={"status": "stopped"})
+        )
+        plugin = VolundrPlugin()
+        app = typer.Typer(no_args_is_help=False)
+        plugin.register_commands(app)
+        result = runner.invoke(app, ["sessions", "stop", "s1"])
+        assert result.exit_code == 0
+
+    @respx.mock
+    def test_sessions_delete_command_json_output(self) -> None:
+        respx.delete(f"{BASE}/api/v1/volundr/sessions/s1").mock(
+            return_value=httpx.Response(200, json={"status": "deleted"})
+        )
+        plugin = VolundrPlugin()
+        app = typer.Typer(no_args_is_help=False)
+        plugin.register_commands(app)
+        result = runner.invoke(app, ["sessions", "delete", "s1", "--json"])
+        assert result.exit_code == 0
+        assert '"status": "deleted"' in result.stdout
 
     def test_api_client_returns_instance(self) -> None:
         plugin = VolundrPlugin()
@@ -131,6 +240,30 @@ class TestTyrPlugin:
         plugin = TyrPlugin()
         svc = plugin.create_service()
         assert svc is not None
+
+    def test_api_route_domains_declared(self) -> None:
+        plugin = TyrPlugin()
+        route_domains = plugin.api_route_domains()
+        assert route_domains
+        assert [route_domain.name for route_domain in route_domains] == [
+            "tracker-api",
+            "saga-api",
+            "review-api",
+            "dispatch-api",
+            "workflow-api",
+            "settings-api",
+            "integrations-api",
+            "audit-api",
+            "event-api",
+            "tyr-api",
+        ]
+        assert route_domains[0].prefixes == ("/api/v1/tracker/projects", "/api/v1/tracker/import")
+        assert route_domains[4].prefixes == (
+            "/api/v1/tyr/flock",
+            "/api/v1/tyr/flock_flows",
+            "/api/v1/tyr/pipelines",
+        )
+        assert route_domains[5].prefixes == ("/api/v1/tyr/settings",)
 
     def test_registers_sagas_group(self) -> None:
         plugin = TyrPlugin()

@@ -10,8 +10,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from sleipnir.ports.audit import AuditQuery, AuditRepository
+from tests.helpers.http_contracts import RouteCallSpec, assert_route_equivalence
 from tests.test_sleipnir.conftest import DEFAULT_TIMESTAMP, make_event
-from volundr.adapters.inbound.rest_audit import AuditEventResponse, create_audit_router
+from volundr.adapters.inbound.rest_audit import (
+    AuditEventResponse,
+    create_audit_router,
+    create_canonical_audit_router,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -47,6 +52,7 @@ def repo() -> _InMemoryAuditRepository:
 @pytest.fixture
 def client(repo) -> TestClient:
     app = FastAPI()
+    app.include_router(create_canonical_audit_router(repo))
     app.include_router(create_audit_router(repo))
     return TestClient(app)
 
@@ -60,6 +66,8 @@ def test_get_events_empty(client):
     response = client.get("/audit/events")
     assert response.status_code == 200
     assert response.json() == []
+    assert response.headers["Deprecation"] == "true"
+    assert response.headers["X-Niuu-Canonical-Route"] == "/api/v1/audit/events"
 
 
 async def test_get_events_returns_events(repo, client):
@@ -72,6 +80,17 @@ async def test_get_events_returns_events(repo, client):
     assert len(data) == 1
     assert data[0]["event_id"] == evt.event_id
     assert data[0]["event_type"] == evt.event_type
+
+
+async def test_canonical_audit_route_matches_legacy(repo, client):
+    evt = make_event()
+    await repo.append(evt)
+
+    assert_route_equivalence(
+        client,
+        legacy=RouteCallSpec(path="/audit/events"),
+        canonical=RouteCallSpec(path="/api/v1/audit/events"),
+    )
 
 
 async def test_get_events_response_schema(repo, client):

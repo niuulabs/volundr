@@ -13,7 +13,7 @@ import typer
 
 from niuu.cli_api_client import CLIAPIClient
 from niuu.cli_output import print_json, print_success, print_table
-from niuu.ports.plugin import Service, ServiceDefinition, ServicePlugin, TUIPageSpec
+from niuu.ports.plugin import APIRouteDomain, Service, ServiceDefinition, ServicePlugin, TUIPageSpec
 from volundr.tui.admin import AdminPage
 from volundr.tui.chat import ChatPage
 from volundr.tui.chronicles import ChroniclesPage
@@ -64,6 +64,124 @@ class VolundrPlugin(ServicePlugin):
         from volundr.main import create_app
 
         return create_app()
+
+    def api_route_domains(self) -> tuple[APIRouteDomain, ...]:
+        return (
+            APIRouteDomain(
+                name="audit-api",
+                prefixes=("/api/v1/audit", "/audit"),
+                description="Canonical audit log query routes.",
+            ),
+            APIRouteDomain(
+                name="admin-api",
+                prefixes=("/api/v1/volundr/admin",),
+                description=(
+                    "Administrative routes for users, settings, "
+                    "and global workspace management."
+                ),
+            ),
+            APIRouteDomain(
+                name="features-api",
+                prefixes=("/api/v1/features", "/api/v1/volundr/features"),
+                description="Canonical feature catalog and preferences routes.",
+            ),
+            APIRouteDomain(
+                name="credentials-api",
+                prefixes=(
+                    "/api/v1/credentials",
+                    "/api/v1/volundr/credentials",
+                    "/api/v1/volundr/secrets",
+                ),
+                description="Canonical credential, secret-store, and MCP metadata routes.",
+            ),
+            APIRouteDomain(
+                name="forge-api",
+                prefixes=(
+                    "/api/v1/volundr/sessions",
+                    "/api/v1/volundr/templates",
+                    "/api/v1/volundr/presets",
+                    "/api/v1/volundr/profiles",
+                    "/api/v1/volundr/repos",
+                    "/api/v1/volundr/workspaces",
+                    "/api/v1/volundr/resources",
+                    "/api/v1/volundr/prompts",
+                    "/api/v1/volundr/cluster",
+                    "/api/v1/volundr/mcp-servers",
+                    "/api/v1/volundr/git",
+                ),
+                description="Forge session, workspace, template, repo, and execution routes.",
+            ),
+            APIRouteDomain(
+                name="session-api",
+                prefixes=("/api/v1/volundr/sessions",),
+                description=(
+                    "Session lifecycle, messaging, logs, chronicle, "
+                    "and session-bound workflow routes."
+                ),
+            ),
+            APIRouteDomain(
+                name="workspace-api",
+                prefixes=("/api/v1/volundr/workspaces",),
+                description="User workspace inventory and workspace deletion routes.",
+            ),
+            APIRouteDomain(
+                name="catalog-api",
+                prefixes=(
+                    "/api/v1/volundr/templates",
+                    "/api/v1/volundr/presets",
+                    "/api/v1/volundr/profiles",
+                    "/api/v1/volundr/resources",
+                    "/api/v1/volundr/prompts",
+                    "/api/v1/volundr/mcp-servers",
+                ),
+                description=(
+                    "Templates, presets, profiles, prompts, "
+                    "resource catalog, and MCP metadata routes."
+                ),
+            ),
+            APIRouteDomain(
+                name="git-api",
+                prefixes=(
+                    "/api/v1/volundr/repos",
+                    "/api/v1/volundr/git",
+                ),
+                description="Repository discovery and git workflow routes.",
+            ),
+            APIRouteDomain(
+                name="volundr-api",
+                prefixes=("/api/v1/volundr",),
+                description="Volundr workflow and session routes.",
+            ),
+            APIRouteDomain(
+                name="identity-api",
+                prefixes=("/api/v1/identity", "/api/v1/volundr/me", "/api/v1/volundr/identity"),
+                description="Canonical identity routes currently served by Volundr.",
+            ),
+            APIRouteDomain(
+                name="integrations-api",
+                prefixes=("/api/v1/integrations", "/api/v1/volundr/integrations"),
+                description="Canonical integrations and OAuth routes currently served by Volundr.",
+            ),
+            APIRouteDomain(
+                name="tenancy-api",
+                prefixes=("/api/v1/volundr/tenants",),
+                description="Tenant hierarchy, membership, and tenant reprovisioning routes.",
+            ),
+            APIRouteDomain(
+                name="tracker-api",
+                prefixes=(
+                    "/api/v1/tracker/status",
+                    "/api/v1/tracker/issues",
+                    "/api/v1/tracker/repo-mappings",
+                ),
+                description="Canonical tracker issue, status, and repo mapping routes.",
+            ),
+            APIRouteDomain(
+                name="tokens-api",
+                prefixes=("/api/v1/tokens", "/api/v1/users/tokens", "/api/v1/volundr/tokens"),
+                description="Canonical personal access token routes currently served by Volundr.",
+            ),
+        )
 
     def create_api_client(self) -> Any:
         return CLIAPIClient(base_url="http://localhost:8080", service_name="Volundr")

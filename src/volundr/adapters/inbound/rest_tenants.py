@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_serializer
 
+from niuu.http_compat import LegacyRouteNotice, warn_on_legacy_route
 from volundr.adapters.inbound.auth import extract_principal, require_role
 from volundr.domain.models import Principal, TenantRole, TenantTier
 from volundr.domain.services.tenant import (
@@ -18,8 +19,18 @@ from volundr.domain.services.tenant import (
 logger = logging.getLogger(__name__)
 
 
+def _inject_aliases(payload: dict, aliases: dict[str, str]) -> dict:
+    """Add camelCase compatibility keys while preserving the existing payload."""
+    data = dict(payload)
+    for source, alias in aliases.items():
+        data[alias] = payload.get(source)
+    return data
+
+
 class TenantCreate(BaseModel):
     """Request model for creating a tenant."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     name: str = Field(
         ...,
@@ -31,11 +42,13 @@ class TenantCreate(BaseModel):
         default=None,
         max_length=100,
         description="Custom tenant ID (auto-generated if omitted)",
+        validation_alias=AliasChoices("tenant_id", "tenantId"),
     )
     parent_id: str | None = Field(
         default=None,
         max_length=100,
         description="Parent tenant ID for hierarchy",
+        validation_alias=AliasChoices("parent_id", "parentId"),
     )
     tier: str = Field(
         default="developer",
@@ -45,16 +58,20 @@ class TenantCreate(BaseModel):
         default=5,
         ge=1,
         description="Maximum concurrent sessions allowed",
+        validation_alias=AliasChoices("max_sessions", "maxSessions"),
     )
     max_storage_gb: int = Field(
         default=50,
         ge=1,
         description="Maximum storage quota in GB",
+        validation_alias=AliasChoices("max_storage_gb", "maxStorageGb"),
     )
 
 
 class TenantResponse(BaseModel):
     """Response model for a tenant."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(description="Unique tenant identifier")
     path: str = Field(description="Materialized tenant hierarchy path")
@@ -64,6 +81,18 @@ class TenantResponse(BaseModel):
     max_sessions: int = Field(description="Maximum concurrent sessions")
     max_storage_gb: int = Field(description="Maximum storage quota in GB")
     created_at: str | None = Field(description="ISO 8601 creation timestamp")
+
+    @model_serializer(mode="wrap")
+    def serialize_with_aliases(self, handler):
+        return _inject_aliases(
+            handler(self),
+            {
+                "parent_id": "parentId",
+                "max_sessions": "maxSessions",
+                "max_storage_gb": "maxStorageGb",
+                "created_at": "createdAt",
+            },
+        )
 
     @classmethod
     def from_tenant(cls, t) -> TenantResponse:
@@ -83,13 +112,17 @@ class TenantResponse(BaseModel):
 class TenantUpdate(BaseModel):
     """Request model for updating tenant settings."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     max_sessions: int | None = Field(
         default=None,
         description="New maximum concurrent sessions",
+        validation_alias=AliasChoices("max_sessions", "maxSessions"),
     )
     max_storage_gb: int | None = Field(
         default=None,
         description="New maximum storage quota in GB",
+        validation_alias=AliasChoices("max_storage_gb", "maxStorageGb"),
     )
     tier: str | None = Field(
         default=None,
@@ -100,9 +133,12 @@ class TenantUpdate(BaseModel):
 class MemberCreate(BaseModel):
     """Request model for adding a tenant member."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     user_id: str = Field(
         ...,
         description="ID of the user to add",
+        validation_alias=AliasChoices("user_id", "userId"),
     )
     role: str = Field(
         default="volundr:developer",
@@ -113,6 +149,8 @@ class MemberCreate(BaseModel):
 class MemberResponse(BaseModel):
     """Response model for a tenant member."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     user_id: str = Field(description="User identifier")
     tenant_id: str = Field(description="Tenant identifier")
     role: str = Field(description="Assigned role")
@@ -120,9 +158,22 @@ class MemberResponse(BaseModel):
         description="ISO 8601 timestamp of role grant",
     )
 
+    @model_serializer(mode="wrap")
+    def serialize_with_aliases(self, handler):
+        return _inject_aliases(
+            handler(self),
+            {
+                "user_id": "userId",
+                "tenant_id": "tenantId",
+                "granted_at": "grantedAt",
+            },
+        )
+
 
 class UserResponse(BaseModel):
     """Response model for a user."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(description="Unique user identifier")
     email: str = Field(description="User email address")
@@ -138,9 +189,22 @@ class UserResponse(BaseModel):
         description="ISO 8601 creation timestamp",
     )
 
+    @model_serializer(mode="wrap")
+    def serialize_with_aliases(self, handler):
+        return _inject_aliases(
+            handler(self),
+            {
+                "display_name": "displayName",
+                "home_pvc": "homePvc",
+                "created_at": "createdAt",
+            },
+        )
+
 
 class MeResponse(BaseModel):
     """Response model for the current user."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     user_id: str = Field(description="Current user identifier")
     email: str = Field(description="Current user email")
@@ -155,29 +219,69 @@ class MeResponse(BaseModel):
     )
     status: str = Field(description="Account status")
 
+    @model_serializer(mode="wrap")
+    def serialize_with_aliases(self, handler):
+        return _inject_aliases(
+            handler(self),
+            {
+                "user_id": "userId",
+                "tenant_id": "tenantId",
+                "display_name": "displayName",
+            },
+        )
+
+
+def _build_me_response(principal: Principal) -> MeResponse:
+    return MeResponse(
+        user_id=principal.user_id,
+        email=principal.email,
+        tenant_id=principal.tenant_id,
+        roles=principal.roles,
+        display_name=principal.email.split("@")[0],
+        status="active",
+    )
+
 
 def create_tenants_router(tenant_service: TenantService) -> APIRouter:
     """Create the tenants router."""
     router = APIRouter(prefix="/api/v1/volundr", tags=["Tenants"])
 
     @router.get("/me", response_model=MeResponse, tags=["Identity"])
-    async def get_me(principal: Principal = Depends(extract_principal)):
+    @router.get("/identity", response_model=MeResponse, tags=["Identity"])
+    async def get_me(
+        request: Request,
+        response: Response,
+        principal: Principal = Depends(extract_principal),
+    ):
         """Get the current authenticated user's identity."""
-        return MeResponse(
-            user_id=principal.user_id,
-            email=principal.email,
-            tenant_id=principal.tenant_id,
-            roles=principal.roles,
-            display_name=principal.email.split("@")[0],
-            status="active",
+        warn_on_legacy_route(
+            request,
+            response,
+            LegacyRouteNotice(
+                legacy_path=request.url.path,
+                canonical_path="/api/v1/identity/me",
+            ),
         )
+        return _build_me_response(principal)
 
+    @router.get("/admin/users", response_model=list[UserResponse], tags=["Users"])
     @router.get("/users", response_model=list[UserResponse], tags=["Users"])
     async def list_users(
+        request: Request,
+        response: Response,
         _: Principal = Depends(require_role("volundr:admin")),
     ):
         """List all users (admin only)."""
         users = await tenant_service.list_users()
+        if request.url.path.endswith("/users") and "/admin/" not in request.url.path:
+            warn_on_legacy_route(
+                request,
+                response,
+                LegacyRouteNotice(
+                    legacy_path="/api/v1/volundr/users",
+                    canonical_path="/api/v1/volundr/admin/users",
+                ),
+            )
         return [
             UserResponse(
                 id=u.id,
@@ -344,13 +448,13 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
                 detail="Membership not found",
             )
 
-    @router.put(
-        "/tenants/{tenant_id}",
-        response_model=TenantResponse,
-    )
+    @router.patch("/tenants/{tenant_id}", response_model=TenantResponse)
+    @router.put("/tenants/{tenant_id}", response_model=TenantResponse)
     async def update_tenant(
         tenant_id: str,
         body: TenantUpdate,
+        request: Request,
+        response: Response,
         _: Principal = Depends(require_role("volundr:admin")),
     ):
         """Update tenant settings (admin only)."""
@@ -363,24 +467,44 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
             )
         except TenantNotFoundError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        if request.method.upper() == "PUT":
+            warn_on_legacy_route(
+                request,
+                response,
+                LegacyRouteNotice(
+                    legacy_path=f"/api/v1/volundr/tenants/{tenant_id}",
+                    canonical_path=f"/api/v1/volundr/tenants/{tenant_id}",
+                ),
+            )
         return TenantResponse.from_tenant(tenant)
 
-    @router.post(
-        "/users/{user_id}/reprovision",
-        status_code=status.HTTP_202_ACCEPTED,
-    )
+    @router.post("/admin/users/{user_id}/reprovision", status_code=status.HTTP_202_ACCEPTED)
+    @router.post("/users/{user_id}/reprovision", status_code=status.HTTP_202_ACCEPTED)
     async def reprovision_user(
         user_id: str,
         request: Request,
+        response: Response,
         _: Principal = Depends(require_role("volundr:admin")),
     ):
         """Re-provision storage for a user (admin only)."""
         storage = getattr(request.app.state, "storage", None)
         result = await tenant_service.reprovision_user(user_id, storage=storage)
+        is_legacy_path = request.url.path.endswith(f"/users/{user_id}/reprovision")
+        if is_legacy_path and "/admin/" not in request.url.path:
+            warn_on_legacy_route(
+                request,
+                response,
+                LegacyRouteNotice(
+                    legacy_path=f"/api/v1/volundr/users/{user_id}/reprovision",
+                    canonical_path=f"/api/v1/volundr/admin/users/{user_id}/reprovision",
+                ),
+            )
         return {
             "success": result.success,
             "user_id": result.user_id,
             "home_pvc": result.home_pvc,
+            "userId": result.user_id,
+            "homePvc": result.home_pvc,
             "errors": result.errors,
         }
 
@@ -401,9 +525,23 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
                 "success": r.success,
                 "user_id": r.user_id,
                 "home_pvc": r.home_pvc,
+                "userId": r.user_id,
+                "homePvc": r.home_pvc,
                 "errors": r.errors,
             }
             for r in results
         ]
+
+    return router
+
+
+def create_identity_router() -> APIRouter:
+    """Create the canonical identity router."""
+    router = APIRouter(prefix="/api/v1/identity", tags=["Identity"])
+
+    @router.get("/me", response_model=MeResponse)
+    async def get_me(principal: Principal = Depends(extract_principal)):
+        """Get the current authenticated user's identity."""
+        return _build_me_response(principal)
 
     return router

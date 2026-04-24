@@ -54,6 +54,14 @@ def _sanitize_log(value: object) -> str:
     return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
 
+def _workspace_bulk_delete_session_ids(body: dict) -> list[str]:
+    """Accept both snake_case and camelCase workspace bulk-delete payloads."""
+    session_ids = body.get("session_ids")
+    if session_ids is None:
+        session_ids = body.get("sessionIds", [])
+    return session_ids
+
+
 _RFC1123_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 
@@ -2347,7 +2355,7 @@ def create_router(
     ):
         """Delete multiple workspaces by session IDs."""
         principal = await _optional_principal(request)
-        session_ids = body.get("session_ids", [])
+        session_ids = _workspace_bulk_delete_session_ids(body)
         if not session_ids:
             return {"deleted": 0, "failed": []}
 
@@ -2385,7 +2393,7 @@ def create_router(
         _: Principal = Depends(require_role("volundr:admin")),
     ):
         """Delete multiple workspaces by session IDs (admin)."""
-        session_ids = body.get("session_ids", [])
+        session_ids = _workspace_bulk_delete_session_ids(body)
         if not session_ids:
             return {"deleted": 0, "failed": []}
 

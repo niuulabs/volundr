@@ -11,9 +11,10 @@ import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
+from niuu.http_compat import LegacyRouteNotice, warn_on_legacy_route
 from niuu.domain.models import Principal
 from tyr.adapters.inbound.auth import extract_principal
 from tyr.domain.models import Saga, SagaStatus, TrackerIssue, TrackerMilestone, TrackerProject
@@ -73,13 +74,38 @@ async def resolve_trackers() -> list[TrackerPort]:
 
 def create_tracker_router() -> APIRouter:
     """Create FastAPI router for tracker browsing endpoints."""
-    router = APIRouter(
+    return _build_tracker_router(
         prefix="/api/v1/tyr/tracker",
+        deprecated=True,
+        canonical_prefix="/api/v1/tracker",
+    )
+
+
+def create_canonical_tracker_router() -> APIRouter:
+    """Create canonical tracker project browsing and import endpoints."""
+    return _build_tracker_router(
+        prefix="/api/v1/tracker",
+        deprecated=False,
+        canonical_prefix="/api/v1/tracker",
+    )
+
+
+def _build_tracker_router(
+    *,
+    prefix: str,
+    deprecated: bool,
+    canonical_prefix: str,
+) -> APIRouter:
+    """Build either legacy or canonical tracker project routes."""
+    router = APIRouter(
+        prefix=prefix,
         tags=["Tracker Browser"],
     )
 
     @router.get("/projects", response_model=list[TrackerProject])
     async def list_projects(
+        request: Request,
+        response: Response,
         principal: Principal = Depends(extract_principal),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
     ) -> list[TrackerProject]:
@@ -91,10 +117,22 @@ def create_tracker_router() -> APIRouter:
                 results.extend(projects)
             except Exception:
                 logger.warning("list_projects failed for adapter", exc_info=True)
+        if deprecated:
+            warn_on_legacy_route(
+                request,
+                response,
+                LegacyRouteNotice(
+                    legacy_path=f"{prefix}/projects",
+                    canonical_path=f"{canonical_prefix}/projects",
+                ),
+                route_logger=logger,
+            )
         return results
 
     @router.get("/projects/{project_id}", response_model=TrackerProject)
     async def get_project(
+        request: Request,
+        response: Response,
         project_id: str,
         principal: Principal = Depends(extract_principal),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
@@ -102,7 +140,18 @@ def create_tracker_router() -> APIRouter:
         """Get a single project by ID, searching across connected trackers."""
         for adapter in adapters:
             try:
-                return await adapter.get_project(project_id)
+                project = await adapter.get_project(project_id)
+                if deprecated:
+                    warn_on_legacy_route(
+                        request,
+                        response,
+                        LegacyRouteNotice(
+                            legacy_path=f"{prefix}/projects/{project_id}",
+                            canonical_path=f"{canonical_prefix}/projects/{project_id}",
+                        ),
+                        route_logger=logger,
+                    )
+                return project
             except Exception:
                 continue
         raise HTTPException(
@@ -115,6 +164,8 @@ def create_tracker_router() -> APIRouter:
         response_model=list[TrackerMilestone],
     )
     async def list_milestones(
+        request: Request,
+        response: Response,
         project_id: str,
         principal: Principal = Depends(extract_principal),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
@@ -122,7 +173,18 @@ def create_tracker_router() -> APIRouter:
         """List milestones for a project."""
         for adapter in adapters:
             try:
-                return await adapter.list_milestones(project_id)
+                milestones = await adapter.list_milestones(project_id)
+                if deprecated:
+                    warn_on_legacy_route(
+                        request,
+                        response,
+                        LegacyRouteNotice(
+                            legacy_path=f"{prefix}/projects/{project_id}/milestones",
+                            canonical_path=f"{canonical_prefix}/projects/{project_id}/milestones",
+                        ),
+                        route_logger=logger,
+                    )
+                return milestones
             except Exception:
                 continue
         return []
@@ -132,6 +194,8 @@ def create_tracker_router() -> APIRouter:
         response_model=list[TrackerIssue],
     )
     async def list_issues(
+        request: Request,
+        response: Response,
         project_id: str,
         milestone_id: str | None = Query(default=None),
         principal: Principal = Depends(extract_principal),
@@ -140,7 +204,18 @@ def create_tracker_router() -> APIRouter:
         """List issues for a project, optionally filtered by milestone."""
         for adapter in adapters:
             try:
-                return await adapter.list_issues(project_id, milestone_id)
+                issues = await adapter.list_issues(project_id, milestone_id)
+                if deprecated:
+                    warn_on_legacy_route(
+                        request,
+                        response,
+                        LegacyRouteNotice(
+                            legacy_path=f"{prefix}/projects/{project_id}/issues",
+                            canonical_path=f"{canonical_prefix}/projects/{project_id}/issues",
+                        ),
+                        route_logger=logger,
+                    )
+                return issues
             except Exception:
                 continue
         return []
@@ -148,6 +223,7 @@ def create_tracker_router() -> APIRouter:
     @router.post("/import", response_model=SagaResponse)
     async def import_project(
         request: Request,
+        response: Response,
         body: ImportRequest,
         principal: Principal = Depends(extract_principal),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
@@ -197,6 +273,16 @@ def create_tracker_router() -> APIRouter:
             saga.name,
             project.id,
         )
+        if deprecated:
+            warn_on_legacy_route(
+                request,
+                response,
+                LegacyRouteNotice(
+                    legacy_path=f"{prefix}/import",
+                    canonical_path=f"{canonical_prefix}/import",
+                ),
+                route_logger=logger,
+            )
 
         return SagaResponse(
             id=str(saga.id),

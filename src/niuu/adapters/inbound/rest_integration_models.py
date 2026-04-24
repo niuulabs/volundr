@@ -5,7 +5,7 @@ Used by both Tyr and Volundr integration routers.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 
 from niuu.domain.models import IntegrationConnection
 
@@ -22,6 +22,16 @@ class IntegrationResponse(BaseModel):
     created_at: str = Field(description="ISO 8601 creation timestamp")
     updated_at: str = Field(description="ISO 8601 last update timestamp")
     slug: str = Field(default="", description="Catalog entry slug")
+
+    @model_serializer(mode="wrap")
+    def _serialize_with_camel_case_aliases(self, handler):
+        """Expose camelCase compatibility keys alongside canonical snake_case ones."""
+        data = handler(self)
+        data["integrationType"] = data["integration_type"]
+        data["credentialName"] = data["credential_name"]
+        data["createdAt"] = data["created_at"]
+        data["updatedAt"] = data["updated_at"]
+        return data
 
     @classmethod
     def from_connection(cls, conn: IntegrationConnection) -> IntegrationResponse:

@@ -30,6 +30,7 @@ from tyr.adapters.postgres_notification_subscriptions import (
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.tracker_factory import TrackerAdapterFactory
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
+from tyr.api.audit import create_audit_router
 from tyr.api.dispatch import (
     create_dispatch_router,
     resolve_dispatch_service,
@@ -47,14 +48,18 @@ from tyr.api.flock_flows import (
     resolve_flow_provider,
 )
 from tyr.api.health import create_health_router
+from tyr.api.phases import create_saga_phases_router
 from tyr.api.pipelines import create_pipelines_router, resolve_pipeline_executor
 from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
 from tyr.api.raids import resolve_tracker as resolve_raids_tracker
 from tyr.api.raids import resolve_volundr as resolve_raids_volundr
+from tyr.api.saga_previews import create_saga_previews_router
 from tyr.api.sagas import create_sagas_router, resolve_llm, resolve_saga_repo
 from tyr.api.sagas import resolve_git as sagas_resolve_git
 from tyr.api.sagas import resolve_volundr as sagas_resolve_volundr
-from tyr.api.tracker import create_tracker_router, resolve_trackers
+from tyr.api.sessions import create_sessions_router
+from tyr.api.settings import create_settings_router
+from tyr.api.tracker import create_canonical_tracker_router, create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.domain.services.activity_subscriber import SessionActivitySubscriber
 from tyr.domain.services.dispatch_service import (
@@ -174,12 +179,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # -- Routers --
     app.include_router(create_health_router())
+    app.include_router(create_canonical_tracker_router())
     app.include_router(create_tracker_router())
+    app.include_router(create_saga_previews_router())
     app.include_router(create_sagas_router())
+    app.include_router(create_saga_phases_router())
     app.include_router(create_raids_router())
     app.include_router(create_dispatch_router())
     app.include_router(create_dispatcher_router())
     app.include_router(create_events_router(settings.events.keepalive_interval))
+    app.include_router(create_audit_router())
+    app.include_router(create_sessions_router())
+    app.include_router(create_settings_router())
     app.include_router(create_pipelines_router())
     app.include_router(create_flock_flows_router())
     app.include_router(create_flock_config_router())

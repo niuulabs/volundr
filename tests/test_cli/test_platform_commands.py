@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+import asyncio
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from typer.testing import CliRunner
 
 from cli.commands.platform import (
@@ -13,10 +16,12 @@ from cli.commands.platform import (
     _collect_service_definitions,
     _prompt_mode_selection,
     _resolve_enabled_services,
+    _route_inventory_payload,
     create_platform_commands,
 )
 from cli.config import CLISettings, PerServiceConfig, PodManagerConfig
 from cli.registry import PluginRegistry
+from cli.server import MountedRouteDomain
 from cli.services.manager import ServiceManager
 from niuu.ports.plugin import ServiceDefinition
 from tests.test_cli.conftest import FakePlugin, StubService
@@ -163,6 +168,8 @@ class TestDynamicUpCallback:
         assert "tyr" in sig.parameters
         assert "skip_preflight" in sig.parameters
         assert "all" in sig.parameters
+        assert "host_profile" in sig.parameters
+        assert "mounts" in sig.parameters
 
     def test_up_flag_defaults_are_none_for_services(self) -> None:
         service_defs = {"skuld": _make_svc_def("skuld", default_enabled=False)}
@@ -188,6 +195,59 @@ class TestDynamicUpCallback:
 
         sig = inspect.signature(up_fn)
         assert "odin" in sig.parameters
+
+    def test_up_callback_forwards_host_profile_and_mounts(self) -> None:
+        service_defs = {"volundr": _make_svc_def("volundr")}
+        manager = MagicMock()
+        settings = CLISettings()
+        up_fn = _build_up_callback(service_defs, manager, settings)
+
+        fake_event = MagicMock()
+        fake_event.wait = AsyncMock(side_effect=asyncio.CancelledError())
+        startup = AsyncMock()
+        shutdown = AsyncMock()
+
+        with (
+            patch("cli.commands.platform._startup", startup),
+            patch("cli.commands.platform._shutdown", shutdown),
+            patch("cli.commands.platform.asyncio.Event", return_value=fake_event),
+            patch("cli.commands.platform.asyncio.run", side_effect=asyncio.run),
+            patch.dict("os.environ", {}, clear=True),
+        ):
+            up_fn(
+                skip_preflight=True,
+                all=False,
+                no_web=True,
+                host_profile="api",
+                mounts="niuu-api,runtime-config",
+                volundr=True,
+            )
+
+        startup.assert_awaited_once_with(
+            manager,
+            settings,
+            {"volundr"},
+            True,
+            "api",
+            {"niuu-api", "runtime-config"},
+        )
+        shutdown.assert_awaited_once_with(manager)
+
+    def test_up_callback_rejects_unknown_mounts(self) -> None:
+        service_defs = {"volundr": _make_svc_def("volundr")}
+        manager = MagicMock()
+        settings = CLISettings()
+        up_fn = _build_up_callback(service_defs, manager, settings)
+
+        with pytest.raises(Exception, match="Unknown route domains"):
+            up_fn(
+                skip_preflight=True,
+                all=False,
+                no_web=False,
+                host_profile="full",
+                mounts="unknown-domain",
+                volundr=True,
+            )
 
 
 class TestCreatePlatformCommands:
@@ -264,6 +324,8 @@ class TestCreatePlatformCommands:
         # Must be --all, not --start-all
         assert "--all" in plain
         assert "--start-all" not in plain
+        assert "--host-profile" in plain
+        assert "--mounts" in plain
 
 
 class TestDependencyResolutionViaEnabledServices:
@@ -338,6 +400,28 @@ class TestBuildInitConfig:
         skuld_image = config["pod_manager"]["skuld_image"]
         assert ":latest" not in skuld_image
         assert ":" in skuld_image  # has a version tag
+
+
+class TestRouteInventoryPayload:
+    def test_serializes_inventory_records(self) -> None:
+        payload = _route_inventory_payload(
+            (
+                MountedRouteDomain(
+                    name="niuu-api",
+                    prefixes=("/api/v1/niuu",),
+                    source="plugin",
+                    plugin_name="niuu",
+                ),
+            )
+        )
+        assert payload == [
+            {
+                "name": "niuu-api",
+                "prefixes": ["/api/v1/niuu"],
+                "source": "plugin",
+                "plugin": "niuu",
+            }
+        ]
 
 
 class TestInitOverwriteProtection:
@@ -533,3 +617,57 @@ class TestPlatformStatusClusterInfo:
         result = runner.invoke(platform, ["status"])
         assert "Namespace:" not in result.output
         assert "Kubeconfig:" not in result.output
+
+
+class TestPlatformInventoryCommand:
+    def _make_platform(self, plugins: list | None = None) -> tuple:
+        registry = PluginRegistry()
+        for p in plugins or []:
+            registry.register(p)
+        settings = CLISettings()
+        manager = ServiceManager(
+            registry=registry,
+            health_check_interval=0.01,
+            health_check_timeout=0.5,
+            health_check_max_retries=1,
+        )
+        platform = create_platform_commands(registry, settings, manager)
+        return platform, registry, settings, manager
+
+    def test_inventory_command_present(self) -> None:
+        platform, *_ = self._make_platform()
+        names = [c.name or c.callback.__name__ for c in platform.registered_commands]
+        assert "inventory" in names
+
+    def test_inventory_json_output(self) -> None:
+        plugin = _ServicePlugin(_make_svc_def("niuu"))
+        platform, registry, *_ = self._make_platform(plugins=[plugin])
+
+        class _InventoryPlugin(_ServicePlugin):
+            def api_route_domains(self):
+                from niuu.ports.plugin import APIRouteDomain
+
+                return (APIRouteDomain(name="niuu-api", prefixes=("/api/v1/niuu",)),)
+
+        registry.register(_InventoryPlugin(_make_svc_def("niuu")))
+        result = runner.invoke(
+            platform,
+            ["inventory", "--json", "--mounts", "niuu-api,runtime-config"],
+        )
+        assert result.exit_code == 0
+        assert '"name": "niuu-api"' in result.output
+        assert '"name": "runtime-config"' in result.output
+
+    def test_inventory_writes_file(self, tmp_path: Path) -> None:
+        class _InventoryPlugin(_ServicePlugin):
+            def api_route_domains(self):
+                from niuu.ports.plugin import APIRouteDomain
+
+                return (APIRouteDomain(name="niuu-api", prefixes=("/api/v1/niuu",)),)
+
+        platform, *_ = self._make_platform(plugins=[_InventoryPlugin(_make_svc_def("niuu"))])
+        out_path = tmp_path / "route-inventory.json"
+        result = runner.invoke(platform, ["inventory", "--out", str(out_path)])
+        assert result.exit_code == 0
+        assert out_path.exists()
+        assert '"name": "niuu-api"' in out_path.read_text()

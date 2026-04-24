@@ -1,0 +1,252 @@
+[
+  {
+    "name": "admin-api",
+    "prefixes": [
+      "/api/v1/volundr/admin"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "audit-api",
+    "prefixes": [
+      "/api/v1/tyr/audit",
+      "/api/v1/audit",
+      "/audit"
+    ],
+    "source": "plugin",
+    "plugin": "tyr,volundr"
+  },
+  {
+    "name": "catalog-api",
+    "prefixes": [
+      "/api/v1/volundr/templates",
+      "/api/v1/volundr/presets",
+      "/api/v1/volundr/profiles",
+      "/api/v1/volundr/resources",
+      "/api/v1/volundr/prompts",
+      "/api/v1/volundr/mcp-servers"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "credentials-api",
+    "prefixes": [
+      "/api/v1/credentials",
+      "/api/v1/volundr/credentials",
+      "/api/v1/volundr/secrets"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "dispatch-api",
+    "prefixes": [
+      "/api/v1/tyr/dispatch",
+      "/api/v1/tyr/dispatcher"
+    ],
+    "source": "plugin",
+    "plugin": "tyr"
+  },
+  {
+    "name": "event-api",
+    "prefixes": [
+      "/api/v1/tyr/events"
+    ],
+    "source": "plugin",
+    "plugin": "tyr"
+  },
+  {
+    "name": "features-api",
+    "prefixes": [
+      "/api/v1/features",
+      "/api/v1/volundr/features"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "forge-api",
+    "prefixes": [
+      "/api/v1/volundr/sessions",
+      "/api/v1/volundr/templates",
+      "/api/v1/volundr/presets",
+      "/api/v1/volundr/profiles",
+      "/api/v1/volundr/repos",
+      "/api/v1/volundr/workspaces",
+      "/api/v1/volundr/resources",
+      "/api/v1/volundr/prompts",
+      "/api/v1/volundr/cluster",
+      "/api/v1/volundr/mcp-servers",
+      "/api/v1/volundr/git"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "git-api",
+    "prefixes": [
+      "/api/v1/volundr/repos",
+      "/api/v1/volundr/git"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "identity-api",
+    "prefixes": [
+      "/api/v1/identity",
+      "/api/v1/volundr/me",
+      "/api/v1/volundr/identity"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "integrations-api",
+    "prefixes": [
+      "/api/v1/tyr/integrations",
+      "/api/v1/tyr/telegram",
+      "/api/v1/integrations",
+      "/api/v1/volundr/integrations"
+    ],
+    "source": "plugin",
+    "plugin": "tyr,volundr"
+  },
+  {
+    "name": "niuu-api",
+    "prefixes": [
+      "/api/v1/niuu"
+    ],
+    "source": "plugin",
+    "plugin": "niuu"
+  },
+  {
+    "name": "review-api",
+    "prefixes": [
+      "/api/v1/tyr/raids",
+      "/api/v1/tyr/sessions"
+    ],
+    "source": "plugin",
+    "plugin": "tyr"
+  },
+  {
+    "name": "runtime-config",
+    "prefixes": [
+      "/config.json"
+    ],
+    "source": "internal",
+    "plugin": null
+  },
+  {
+    "name": "saga-api",
+    "prefixes": [
+      "/api/v1/tyr/sagas"
+    ],
+    "source": "plugin",
+    "plugin": "tyr"
+  },
+  {
+    "name": "session-api",
+    "prefixes": [
+      "/api/v1/volundr/sessions"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "settings-api",
+    "prefixes": [
+      "/api/v1/tyr/settings"
+    ],
+    "source": "plugin",
+    "plugin": "tyr"
+  },
+  {
+    "name": "skuld-proxy",
+    "prefixes": [
+      "/s/{session_id}/session",
+      "/s/{session_id}/api/{path:path}",
+      "/s/{session_id}/health"
+    ],
+    "source": "internal",
+    "plugin": null
+  },
+  {
+    "name": "tenancy-api",
+    "prefixes": [
+      "/api/v1/volundr/tenants"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "tokens-api",
+    "prefixes": [
+      "/api/v1/tokens",
+      "/api/v1/users/tokens",
+      "/api/v1/volundr/tokens"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "tracker-api",
+    "prefixes": [
+      "/api/v1/tracker/projects",
+      "/api/v1/tracker/import",
+      "/api/v1/tracker/status",
+      "/api/v1/tracker/issues",
+      "/api/v1/tracker/repo-mappings"
+    ],
+    "source": "plugin",
+    "plugin": "tyr,volundr"
+  },
+  {
+    "name": "tyr-api",
+    "prefixes": [
+      "/api/v1/tyr"
+    ],
+    "source": "plugin",
+    "plugin": "tyr"
+  },
+  {
+    "name": "volundr-api",
+    "prefixes": [
+      "/api/v1/volundr"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "web-ui",
+    "prefixes": [
+      "/assets",
+      "/fonts",
+      "/favicon.svg",
+      "/favicon.ico",
+      "/{path:path}"
+    ],
+    "source": "internal",
+    "plugin": null
+  },
+  {
+    "name": "workflow-api",
+    "prefixes": [
+      "/api/v1/tyr/flock",
+      "/api/v1/tyr/flock_flows",
+      "/api/v1/tyr/pipelines"
+    ],
+    "source": "plugin",
+    "plugin": "tyr"
+  },
+  {
+    "name": "workspace-api",
+    "prefixes": [
+      "/api/v1/volundr/workspaces"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  }
+]

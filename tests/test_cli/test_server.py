@@ -14,12 +14,20 @@ from starlette.testclient import TestClient
 from cli.registry import PluginRegistry
 from cli.server import (
     _PLUGIN_API_PREFIXES,
+    HOST_PROFILES,
+    MountedRouteDomain,
     RootServer,
     SkuldPortRegistry,
     _PrefixRestoreApp,
+    available_route_domains,
+    build_root_app,
+    collect_route_inventory,
     get_skuld_registry,
+    parse_enabled_mounts,
+    resolve_enabled_mounts,
 )
 from niuu.ports.embedded_database import ConnectionInfo
+from niuu.ports.plugin import APIRouteDomain
 from tests.test_cli.conftest import FakePlugin
 
 
@@ -145,6 +153,140 @@ class TestRootServerInit:
         registry = PluginRegistry()
         server = RootServer(registry=registry)
         assert isinstance(server.skuld_registry, SkuldPortRegistry)
+
+    def test_accepts_host_profile_and_mounts(self) -> None:
+        registry = PluginRegistry()
+        server = RootServer(
+            registry=registry,
+            host_profile="api",
+            enabled_mounts={"niuu-api", "runtime-config"},
+        )
+        assert server._host_profile == "api"
+        assert server._enabled_mounts == {"niuu-api", "runtime-config"}
+
+
+class TestRouteDomainSelection:
+    def test_available_route_domains_lists_known_domains(self) -> None:
+        assert available_route_domains() == {
+            "admin-api",
+            "audit-api",
+            "credentials-api",
+            "features-api",
+            "forge-api",
+            "git-api",
+            "identity-api",
+            "integrations-api",
+            "niuu-api",
+            "catalog-api",
+            "dispatch-api",
+            "event-api",
+            "review-api",
+            "session-api",
+            "saga-api",
+            "settings-api",
+            "tenancy-api",
+            "tracker-api",
+            "tokens-api",
+            "volundr-api",
+            "workflow-api",
+            "workspace-api",
+            "tyr-api",
+            "skuld-proxy",
+            "runtime-config",
+            "web-ui",
+        }
+
+    def test_host_profiles_cover_full_and_api(self) -> None:
+        assert "full" in HOST_PROFILES
+        assert "api" in HOST_PROFILES
+        assert "web-ui" in HOST_PROFILES["full"]
+        assert "web-ui" not in HOST_PROFILES["api"]
+
+    def test_parse_enabled_mounts_empty_returns_none(self) -> None:
+        assert parse_enabled_mounts("") is None
+
+    def test_parse_enabled_mounts_parses_csv(self) -> None:
+        mounts = parse_enabled_mounts("niuu-api, runtime-config")
+        assert mounts == {"niuu-api", "runtime-config"}
+
+    def test_parse_enabled_mounts_rejects_unknown_domains(self) -> None:
+        with pytest.raises(ValueError, match="Unknown route domains"):
+            parse_enabled_mounts("unknown-domain")
+
+    def test_resolve_enabled_mounts_uses_profile_defaults(self) -> None:
+        mounts = resolve_enabled_mounts("api")
+        assert mounts == HOST_PROFILES["api"]
+
+    def test_resolve_enabled_mounts_no_web_overrides_profile(self) -> None:
+        mounts = resolve_enabled_mounts("full", no_web=True)
+        assert "web-ui" not in mounts
+
+    def test_resolve_enabled_mounts_rejects_unknown_profile(self) -> None:
+        with pytest.raises(ValueError, match="Unknown host profile"):
+            resolve_enabled_mounts("unknown")
+
+    def test_collect_route_inventory_includes_internal_and_plugin_domains(self) -> None:
+        class NiuuPlugin(FakePlugin):
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="niuu-api",
+                        prefixes=("/api/v1/niuu",),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(NiuuPlugin(name="niuu"))
+        inventory = collect_route_inventory(
+            registry=registry,
+            enabled_mounts={"niuu-api", "runtime-config"},
+        )
+        assert inventory == (
+            MountedRouteDomain(
+                name="niuu-api",
+                prefixes=("/api/v1/niuu",),
+                source="plugin",
+                plugin_name="niuu",
+            ),
+            MountedRouteDomain(
+                name="runtime-config",
+                prefixes=("/config.json",),
+                source="internal",
+                plugin_name=None,
+            ),
+        )
+
+    def test_collect_route_inventory_merges_shared_domain_prefixes(self) -> None:
+        class VolundrPlugin(FakePlugin):
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="tracker-api",
+                        prefixes=("/api/v1/tracker/issues",),
+                    ),
+                )
+
+        class TyrPlugin(FakePlugin):
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="tracker-api",
+                        prefixes=("/api/v1/tracker/projects",),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(VolundrPlugin(name="volundr"))
+        registry.register(TyrPlugin(name="tyr"))
+        inventory = collect_route_inventory(registry=registry, enabled_mounts={"tracker-api"})
+        assert inventory == (
+            MountedRouteDomain(
+                name="tracker-api",
+                prefixes=("/api/v1/tracker/projects", "/api/v1/tracker/issues"),
+                source="plugin",
+                plugin_name="tyr,volundr",
+            ),
+        )
 
 
 class TestRootServerBuildApp:
@@ -359,6 +501,514 @@ class TestRootServerBuildApp:
         resp = client.get("/api/v1/volundr/ping")
         assert resp.status_code == 200
         assert resp.json() == {"pong": True}
+
+    def test_build_root_app_with_explicit_mounts_only_exposes_selected_routes(self) -> None:
+        niuu_app = FastAPI()
+
+        @niuu_app.get("/api/v1/niuu/ping")
+        async def ping():
+            return {"pong": "niuu"}
+
+        volundr_app = FastAPI()
+
+        @volundr_app.get("/api/v1/volundr/ping")
+        async def volundr_ping():
+            return {"pong": "volundr"}
+
+        class NiuuPlugin(FakePlugin):
+            def create_api_app(self):
+                return niuu_app
+
+        class VolundrPlugin(FakePlugin):
+            def create_api_app(self):
+                return volundr_app
+
+        registry = PluginRegistry()
+        registry.register(NiuuPlugin(name="niuu"))
+        registry.register(VolundrPlugin(name="volundr"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"niuu-api", "runtime-config"},
+        )
+
+        client = TestClient(app)
+        assert app.state.route_inventory == (
+            MountedRouteDomain(
+                name="niuu-api",
+                prefixes=("/api/v1/niuu",),
+                source="plugin",
+                plugin_name="niuu",
+            ),
+            MountedRouteDomain(
+                name="runtime-config",
+                prefixes=("/config.json",),
+                source="internal",
+                plugin_name=None,
+            ),
+        )
+        assert client.get("/api/v1/niuu/ping").status_code == 200
+        assert client.get("/api/v1/volundr/ping").status_code == 404
+
+    def test_build_root_app_mounts_shared_tracker_domain_across_plugins(self) -> None:
+        volundr_app = FastAPI()
+
+        @volundr_app.get("/api/v1/tracker/issues")
+        async def tracker_issues():
+            return [{"id": "issue-1"}]
+
+        @volundr_app.get("/api/v1/volundr/ping")
+        async def volundr_ping():
+            return {"pong": "volundr"}
+
+        tyr_app = FastAPI()
+
+        @tyr_app.get("/api/v1/tracker/projects")
+        async def tracker_projects():
+            return [{"id": "proj-1"}]
+
+        @tyr_app.get("/api/v1/tyr/ping")
+        async def tyr_ping():
+            return {"pong": "tyr"}
+
+        class VolundrPlugin(FakePlugin):
+            def create_api_app(self):
+                return volundr_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="tracker-api",
+                        prefixes=("/api/v1/tracker/issues",),
+                    ),
+                )
+
+        class TyrPlugin(FakePlugin):
+            def create_api_app(self):
+                return tyr_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="tracker-api",
+                        prefixes=("/api/v1/tracker/projects",),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(VolundrPlugin(name="volundr"))
+        registry.register(TyrPlugin(name="tyr"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"tracker-api"},
+        )
+
+        client = TestClient(app)
+        assert client.get("/api/v1/tracker/issues").status_code == 200
+        assert client.get("/api/v1/tracker/projects").status_code == 200
+        assert client.get("/api/v1/volundr/ping").status_code == 404
+        assert client.get("/api/v1/tyr/ping").status_code == 404
+        assert client.get("/config.json").status_code == 404
+        assert client.get("/s/example/health").status_code == 404
+
+    def test_build_root_app_mounts_shared_audit_domain_across_plugins(self) -> None:
+        volundr_app = FastAPI()
+
+        @volundr_app.get("/api/v1/audit")
+        async def canonical_audit():
+            return [{"id": "volundr-canonical"}]
+
+        @volundr_app.get("/audit")
+        async def legacy_audit():
+            return [{"id": "volundr-legacy"}]
+
+        tyr_app = FastAPI()
+
+        @tyr_app.get("/api/v1/tyr/audit")
+        async def tyr_audit():
+            return [{"id": "tyr-audit"}]
+
+        @tyr_app.get("/api/v1/tyr/sagas")
+        async def tyr_sagas():
+            return [{"id": "saga-1"}]
+
+        class VolundrPlugin(FakePlugin):
+            def create_api_app(self):
+                return volundr_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="audit-api",
+                        prefixes=("/api/v1/audit", "/audit"),
+                    ),
+                )
+
+        class TyrPlugin(FakePlugin):
+            def create_api_app(self):
+                return tyr_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="audit-api",
+                        prefixes=("/api/v1/tyr/audit",),
+                    ),
+                    APIRouteDomain(
+                        name="saga-api",
+                        prefixes=("/api/v1/tyr/sagas",),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(VolundrPlugin(name="volundr"))
+        registry.register(TyrPlugin(name="tyr"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"audit-api"},
+        )
+
+        client = TestClient(app)
+        assert client.get("/api/v1/audit").status_code == 200
+        assert client.get("/audit").status_code == 200
+        assert client.get("/api/v1/tyr/audit").status_code == 200
+        assert client.get("/api/v1/tyr/sagas").status_code == 404
+
+    def test_build_root_app_can_mount_admin_slice_without_tenancy(self) -> None:
+        volundr_app = FastAPI()
+
+        @volundr_app.get("/api/v1/volundr/admin/ping")
+        async def admin_ping():
+            return {"pong": "admin"}
+
+        @volundr_app.get("/api/v1/volundr/tenants/ping")
+        async def tenant_ping():
+            return {"pong": "tenant"}
+
+        class VolundrPlugin(FakePlugin):
+            def create_api_app(self):
+                return volundr_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="admin-api",
+                        prefixes=("/api/v1/volundr/admin",),
+                    ),
+                    APIRouteDomain(
+                        name="tenancy-api",
+                        prefixes=("/api/v1/volundr/tenants",),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(VolundrPlugin(name="volundr"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"admin-api"},
+        )
+
+        client = TestClient(app)
+        assert client.get("/api/v1/volundr/admin/ping").status_code == 200
+        assert client.get("/api/v1/volundr/tenants/ping").status_code == 404
+
+    def test_build_root_app_can_mount_session_slice_without_workspace_slice(self) -> None:
+        volundr_app = FastAPI()
+
+        @volundr_app.get("/api/v1/volundr/sessions/ping")
+        async def session_ping():
+            return {"pong": "session"}
+
+        @volundr_app.get("/api/v1/volundr/workspaces/ping")
+        async def workspace_ping():
+            return {"pong": "workspace"}
+
+        class VolundrPlugin(FakePlugin):
+            def create_api_app(self):
+                return volundr_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="session-api",
+                        prefixes=("/api/v1/volundr/sessions",),
+                    ),
+                    APIRouteDomain(
+                        name="workspace-api",
+                        prefixes=("/api/v1/volundr/workspaces",),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(VolundrPlugin(name="volundr"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"session-api"},
+        )
+
+        client = TestClient(app)
+        assert client.get("/api/v1/volundr/sessions/ping").status_code == 200
+        assert client.get("/api/v1/volundr/workspaces/ping").status_code == 404
+
+    def test_build_root_app_can_mount_saga_slice_without_dispatch_slice(self) -> None:
+        tyr_app = FastAPI()
+
+        @tyr_app.get("/api/v1/tyr/sagas/ping")
+        async def saga_ping():
+            return {"pong": "saga"}
+
+        @tyr_app.get("/api/v1/tyr/dispatch/ping")
+        async def dispatch_ping():
+            return {"pong": "dispatch"}
+
+        class TyrPlugin(FakePlugin):
+            def create_api_app(self):
+                return tyr_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="saga-api",
+                        prefixes=("/api/v1/tyr/sagas",),
+                    ),
+                    APIRouteDomain(
+                        name="dispatch-api",
+                        prefixes=("/api/v1/tyr/dispatch",),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(TyrPlugin(name="tyr"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"saga-api"},
+        )
+
+        client = TestClient(app)
+        assert client.get("/api/v1/tyr/sagas/ping").status_code == 200
+        assert client.get("/api/v1/tyr/dispatch/ping").status_code == 404
+
+    def test_build_root_app_can_mount_review_slice_without_saga_slice(self) -> None:
+        tyr_app = FastAPI()
+
+        @tyr_app.get("/api/v1/tyr/raids/ping")
+        async def raid_ping():
+            return {"pong": "review"}
+
+        @tyr_app.get("/api/v1/tyr/sagas/ping")
+        async def saga_ping():
+            return {"pong": "saga"}
+
+        class TyrPlugin(FakePlugin):
+            def create_api_app(self):
+                return tyr_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="review-api",
+                        prefixes=("/api/v1/tyr/raids",),
+                    ),
+                    APIRouteDomain(
+                        name="saga-api",
+                        prefixes=("/api/v1/tyr/sagas",),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(TyrPlugin(name="tyr"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"review-api"},
+        )
+
+        client = TestClient(app)
+        assert client.get("/api/v1/tyr/raids/ping").status_code == 200
+        assert client.get("/api/v1/tyr/sagas/ping").status_code == 404
+
+    def test_build_root_app_can_mount_credentials_slice_with_legacy_shims(self) -> None:
+        volundr_app = FastAPI()
+
+        @volundr_app.get("/api/v1/credentials/user")
+        async def canonical_credentials():
+            return {"route": "canonical-credentials"}
+
+        @volundr_app.get("/api/v1/volundr/credentials")
+        async def legacy_credentials():
+            return {"route": "legacy-credentials"}
+
+        @volundr_app.get("/api/v1/volundr/secrets")
+        async def legacy_secrets():
+            return {"route": "legacy-secrets"}
+
+        @volundr_app.get("/api/v1/volundr/secrets/store")
+        async def legacy_secret_store():
+            return {"route": "legacy-secret-store"}
+
+        @volundr_app.get("/api/v1/volundr/secrets/types")
+        async def legacy_secret_types():
+            return {"route": "legacy-secret-types"}
+
+        @volundr_app.get("/api/v1/volundr/sessions")
+        async def unrelated_sessions():
+            return {"route": "sessions"}
+
+        class VolundrPlugin(FakePlugin):
+            def create_api_app(self):
+                return volundr_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="credentials-api",
+                        prefixes=(
+                            "/api/v1/credentials",
+                            "/api/v1/volundr/credentials",
+                            "/api/v1/volundr/secrets",
+                        ),
+                    ),
+                    APIRouteDomain(
+                        name="session-api",
+                        prefixes=("/api/v1/volundr/sessions",),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(VolundrPlugin(name="volundr"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"credentials-api"},
+        )
+
+        client = TestClient(app)
+        assert client.get("/api/v1/credentials/user").status_code == 200
+        assert client.get("/api/v1/volundr/credentials").status_code == 200
+        assert client.get("/api/v1/volundr/secrets").status_code == 200
+        assert client.get("/api/v1/volundr/secrets/store").status_code == 200
+        assert client.get("/api/v1/volundr/secrets/types").status_code == 200
+        assert client.get("/api/v1/volundr/sessions").status_code == 404
+
+    def test_build_root_app_can_mount_integrations_slice_with_legacy_shims(self) -> None:
+        volundr_app = FastAPI()
+
+        @volundr_app.get("/api/v1/integrations")
+        async def canonical_integrations():
+            return {"route": "canonical-integrations"}
+
+        @volundr_app.get("/api/v1/volundr/integrations")
+        async def legacy_integrations():
+            return {"route": "legacy-integrations"}
+
+        @volundr_app.get("/api/v1/volundr/integrations/oauth/linear/start")
+        async def legacy_oauth_start():
+            return {"route": "legacy-oauth-start"}
+
+        @volundr_app.get("/api/v1/volundr/repos")
+        async def unrelated_repos():
+            return {"route": "repos"}
+
+        class VolundrPlugin(FakePlugin):
+            def create_api_app(self):
+                return volundr_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="integrations-api",
+                        prefixes=(
+                            "/api/v1/integrations",
+                            "/api/v1/volundr/integrations",
+                        ),
+                    ),
+                    APIRouteDomain(
+                        name="git-api",
+                        prefixes=("/api/v1/volundr/repos",),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(VolundrPlugin(name="volundr"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"integrations-api"},
+        )
+
+        client = TestClient(app)
+        assert client.get("/api/v1/integrations").status_code == 200
+        assert client.get("/api/v1/volundr/integrations").status_code == 200
+        assert client.get("/api/v1/volundr/integrations/oauth/linear/start").status_code == 200
+        assert client.get("/api/v1/volundr/repos").status_code == 404
+
+    def test_build_root_app_can_mount_tyr_settings_without_workflow_routes(self) -> None:
+        tyr_app = FastAPI()
+
+        @tyr_app.get("/api/v1/tyr/settings/flock")
+        async def flock_settings():
+            return {"route": "settings"}
+
+        @tyr_app.get("/api/v1/tyr/flock")
+        async def flock_workflow():
+            return {"route": "workflow"}
+
+        class TyrPlugin(FakePlugin):
+            def create_api_app(self):
+                return tyr_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="settings-api",
+                        prefixes=("/api/v1/tyr/settings",),
+                    ),
+                    APIRouteDomain(
+                        name="workflow-api",
+                        prefixes=(
+                            "/api/v1/tyr/flock",
+                            "/api/v1/tyr/flock_flows",
+                            "/api/v1/tyr/pipelines",
+                        ),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(TyrPlugin(name="tyr"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"settings-api"},
+        )
+
+        client = TestClient(app)
+        assert client.get("/api/v1/tyr/settings/flock").status_code == 200
+        assert client.get("/api/v1/tyr/flock").status_code == 404
 
     def test_plugin_create_api_app_returns_none(self) -> None:
         """Plugin that returns None from create_api_app is skipped."""

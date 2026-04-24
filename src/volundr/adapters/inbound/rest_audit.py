@@ -18,9 +18,10 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel, Field
 
+from niuu.http_compat import LegacyRouteNotice, warn_on_legacy_route
 from sleipnir.domain.events import SleipnirEvent
 from sleipnir.ports.audit import AuditQuery, AuditRepository
 
@@ -74,16 +75,20 @@ class AuditEventResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def create_audit_router(repository: AuditRepository) -> APIRouter:
-    """Create the FastAPI router for audit log queries.
-
-    :param repository: The :class:`~sleipnir.ports.audit.AuditRepository`
-        implementation to query.
-    """
-    router = APIRouter(prefix="/audit", tags=["Audit"])
+def _build_audit_router(
+    repository: AuditRepository,
+    *,
+    prefix: str,
+    deprecated: bool = False,
+    canonical_prefix: str | None = None,
+) -> APIRouter:
+    """Create the FastAPI router for audit log queries."""
+    router = APIRouter(prefix=prefix, tags=["Audit"])
 
     @router.get("/events", response_model=list[AuditEventResponse])
     async def query_audit_events(
+        request: Request,
+        response: Response,
         event_type: str | None = Query(
             default=None,
             description=(
@@ -124,6 +129,15 @@ def create_audit_router(repository: AuditRepository) -> APIRouter:
         Supports glob-style ``event_type`` patterns such as ``ravn.*`` or
         ``tyr.task.*``.
         """
+        if deprecated and canonical_prefix is not None:
+            warn_on_legacy_route(
+                request=request,
+                response=response,
+                notice=LegacyRouteNotice(
+                    legacy_path=f"{prefix}/events",
+                    canonical_path=f"{canonical_prefix}/events",
+                ),
+            )
         q = AuditQuery(
             event_type_pattern=event_type,
             from_ts=from_,
@@ -136,3 +150,18 @@ def create_audit_router(repository: AuditRepository) -> APIRouter:
         return [AuditEventResponse.from_event(e) for e in events]
 
     return router
+
+
+def create_audit_router(repository: AuditRepository) -> APIRouter:
+    """Create the legacy audit router."""
+    return _build_audit_router(
+        repository,
+        prefix="/audit",
+        deprecated=True,
+        canonical_prefix="/api/v1/audit",
+    )
+
+
+def create_canonical_audit_router(repository: AuditRepository) -> APIRouter:
+    """Create the canonical audit router."""
+    return _build_audit_router(repository, prefix="/api/v1/audit")

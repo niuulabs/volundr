@@ -115,7 +115,7 @@ class TestGetDispatcherState:
         assert resp.status_code == 200
         data = resp.json()
         assert data["running"] is True
-        assert data["threshold"] == 0.75
+        assert data["threshold"] == 75.0
         assert data["max_concurrent_raids"] == 3
         assert data["auto_continue"] is False
         assert "id" in data
@@ -138,7 +138,7 @@ class TestGetDispatcherState:
         assert resp.status_code == 200
         data = resp.json()
         assert data["running"] is False
-        assert data["threshold"] == 0.5
+        assert data["threshold"] == 50.0
         assert data["max_concurrent_raids"] == 5
         assert data["id"] == str(existing.id)
 
@@ -174,9 +174,22 @@ class TestPatchDispatcherState:
         assert resp.status_code == 200
         data = resp.json()
         assert data["running"] is False
-        assert data["threshold"] == 0.75  # unchanged
+        assert data["threshold"] == 75.0  # unchanged
 
     def test_updates_threshold(self, client: TestClient):
+        client.get("/api/v1/tyr/dispatcher", headers=_auth_headers())
+
+        resp = client.patch(
+            "/api/v1/tyr/dispatcher",
+            json={"threshold": 90},
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["threshold"] == 90.0
+        assert data["running"] is True  # unchanged
+
+    def test_updates_threshold_with_legacy_fraction_payload(self, client: TestClient):
         client.get("/api/v1/tyr/dispatcher", headers=_auth_headers())
 
         resp = client.patch(
@@ -185,9 +198,7 @@ class TestPatchDispatcherState:
             headers=_auth_headers(),
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["threshold"] == 0.9
-        assert data["running"] is True  # unchanged
+        assert resp.json()["threshold"] == 90.0
 
     def test_updates_max_concurrent_raids(self, client: TestClient):
         client.get("/api/v1/tyr/dispatcher", headers=_auth_headers())
@@ -216,7 +227,7 @@ class TestPatchDispatcherState:
     def test_validates_threshold_range_too_high(self, client: TestClient):
         resp = client.patch(
             "/api/v1/tyr/dispatcher",
-            json={"threshold": 1.5},
+            json={"threshold": 150},
             headers=_auth_headers(),
         )
         assert resp.status_code == 422
@@ -256,7 +267,7 @@ class TestPatchDispatcherState:
         assert resp.status_code == 200
         data = resp.json()
         assert data["running"] is True
-        assert data["threshold"] == 0.75
+        assert data["threshold"] == 75.0
         assert data["max_concurrent_raids"] == 3
         assert data["auto_continue"] is False
 
@@ -265,7 +276,7 @@ class TestPatchDispatcherState:
             "/api/v1/tyr/dispatcher",
             json={
                 "running": False,
-                "threshold": 0.6,
+                "threshold": 60,
                 "max_concurrent_raids": 7,
                 "auto_continue": True,
             },
@@ -274,7 +285,7 @@ class TestPatchDispatcherState:
         assert resp.status_code == 200
         data = resp.json()
         assert data["running"] is False
-        assert data["threshold"] == 0.6
+        assert data["threshold"] == 60.0
         assert data["max_concurrent_raids"] == 7
         assert data["auto_continue"] is True
 
@@ -432,9 +443,7 @@ class TestGetActivityLog:
     def test_returns_empty_log_when_no_events(self, client: TestClient):
         resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["events"] == []
-        assert data["total"] == 0
+        assert resp.json() == []
 
     def test_returns_all_emitted_events(self, client: TestClient, event_bus: InMemoryEventBus):
         import asyncio
@@ -450,11 +459,10 @@ class TestGetActivityLog:
         resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
         assert resp.status_code == 200
         data = resp.json()
-        assert data["total"] == 3
-        assert len(data["events"]) == 3
-        assert data["events"][0]["event"] == "session.spawned"
-        assert data["events"][1]["event"] == "raid.state_changed"
-        assert data["events"][2]["event"] == "session.stopped"
+        assert len(data) == 3
+        assert "session.spawned" in data[0]
+        assert "raid.state_changed" in data[1]
+        assert "session.stopped" in data[2]
 
     def test_n_param_limits_results(self, client: TestClient, event_bus: InMemoryEventBus):
         import asyncio
@@ -465,8 +473,23 @@ class TestGetActivityLog:
         resp = client.get("/api/v1/tyr/dispatcher/log?n=3", headers=_auth_headers())
         assert resp.status_code == 200
         data = resp.json()
-        assert data["total"] == 3
-        assert data["events"][-1]["data"]["i"] == 9  # newest last
+        assert len(data) == 3
+        assert '"i": 9' in data[-1]  # newest last
+
+    def test_limit_param_preserves_legacy_event_shape(
+        self, client: TestClient, event_bus: InMemoryEventBus
+    ):
+        import asyncio
+
+        for i in range(3):
+            asyncio.run(event_bus.emit(TyrEvent(event="session.spawned", data={"i": i})))
+
+        resp = client.get("/api/v1/tyr/dispatcher/log?limit=2", headers=_auth_headers())
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 2
+        assert len(data["events"]) == 2
+        assert data["events"][-1]["data"]["i"] == 2
 
     def test_event_fields_present_in_response(
         self, client: TestClient, event_bus: InMemoryEventBus
@@ -482,6 +505,25 @@ class TestGetActivityLog:
         asyncio.run(event_bus.emit(e))
 
         resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
+        assert resp.status_code == 200
+        entry = resp.json()[0]
+        assert "dispatcher.log" in entry
+        assert '"msg": "dispatched"' in entry
+
+    def test_limit_param_returns_legacy_event_fields(
+        self, client: TestClient, event_bus: InMemoryEventBus
+    ):
+        import asyncio
+
+        e = TyrEvent(
+            id="fixed-id",
+            event="dispatcher.log",
+            data={"msg": "dispatched"},
+            owner_id="user-1",
+        )
+        asyncio.run(event_bus.emit(e))
+
+        resp = client.get("/api/v1/tyr/dispatcher/log?limit=1", headers=_auth_headers())
         assert resp.status_code == 200
         entry = resp.json()["events"][0]
         assert entry["id"] == "fixed-id"
@@ -511,4 +553,4 @@ class TestGetActivityLog:
 
         resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
         assert resp.status_code == 200
-        assert resp.json()["total"] == 50
+        assert len(resp.json()) == 50

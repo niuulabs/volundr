@@ -82,7 +82,7 @@ dev = [
 ]
 
 [project.scripts]
-niuu = "cli.main:main"
+niuu = "niuu.__main__:main"
 volundr = "volundr.main:main"
 skuld = "skuld.broker:main"
 bifrost = "bifrost.__main__:main"

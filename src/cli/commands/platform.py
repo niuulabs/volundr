@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -125,6 +126,8 @@ async def _startup(
     settings: CLISettings,
     enabled_services: set[str] | None,
     skip_preflight: bool,
+    host_profile: str,
+    enabled_mounts: set[str] | None,
 ) -> None:
     """Run preflight checks, start infrastructure, then the root server."""
     if not skip_preflight:
@@ -146,7 +149,7 @@ async def _startup(
         raise typer.Exit(1) from None
 
     # Start the unified root server (all plugin APIs + web UI on one port)
-    from cli.server import RootServer
+    from niuu.app import RootServer
 
     host = settings.server.host
     port = settings.server.port
@@ -159,6 +162,8 @@ async def _startup(
         registry=manager._registry,
         host=host,
         port=port,
+        host_profile=host_profile,
+        enabled_mounts=enabled_mounts,
     )
     manager._root_server = root_server  # type: ignore[attr-defined]
 
@@ -209,6 +214,8 @@ def _build_up_callback(
         """Start platform services."""
         import os
 
+        from niuu.app import DEFAULT_HOST_PROFILE, parse_enabled_mounts
+
         # Set Anthropic API key from config if not already in env
         if settings.anthropic.api_key:
             os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic.api_key)
@@ -221,15 +228,29 @@ def _build_up_callback(
         skip_preflight: bool = bool(kwargs.pop("skip_preflight", False))
         start_all: bool = bool(kwargs.pop("all", False))
         no_web: bool = bool(kwargs.pop("no_web", False))
+        host_profile = str(kwargs.pop("host_profile", DEFAULT_HOST_PROFILE))
+        mounts = str(kwargs.pop("mounts", ""))
         svc_flags: dict[str, bool | None] = dict(kwargs)
 
         if no_web:
             os.environ["NIUU_NO_WEB"] = "true"
 
+        try:
+            enabled_mounts = parse_enabled_mounts(mounts)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc), param_hint="mounts") from exc
+
         enabled = _resolve_enabled_services(service_defs, settings, start_all, svc_flags)
 
         async def _run() -> None:
-            await _startup(manager, settings, enabled, skip_preflight)
+            await _startup(
+                manager,
+                settings,
+                enabled,
+                skip_preflight,
+                host_profile,
+                enabled_mounts,
+            )
 
             # Wait forever until cancelled by KeyboardInterrupt
             try:
@@ -267,6 +288,18 @@ def _build_up_callback(
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
             default=False,
             annotation=bool,
+        ),
+        inspect.Parameter(
+            "host_profile",
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            default="full",
+            annotation=str,
+        ),
+        inspect.Parameter(
+            "mounts",
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            default="",
+            annotation=str,
         ),
     ]
     for svc_name in sorted(service_defs.keys()):
@@ -329,6 +362,19 @@ def _build_init_config(mode: str) -> dict[str, Any]:
     }
 
 
+def _route_inventory_payload(inventory: list[Any] | tuple[Any, ...]) -> list[dict[str, Any]]:
+    """Convert route inventory records into JSON-friendly dicts."""
+    return [
+        {
+            "name": item.name,
+            "prefixes": list(item.prefixes),
+            "source": item.source,
+            "plugin": item.plugin_name,
+        }
+        for item in inventory
+    ]
+
+
 def create_platform_commands(
     registry: PluginRegistry,
     settings: CLISettings,
@@ -379,6 +425,60 @@ def create_platform_commands(
             state = svc_status.state.value if svc_status else "not started"
             svc_def = service_defs[svc_name]
             typer.echo(f"  {svc_name}: {state} — {svc_def.description}")
+
+    @platform_app.command()
+    def inventory(
+        host_profile: str = typer.Option(
+            "full",
+            "--host-profile",
+            help="Host profile used to resolve mounted route domains.",
+        ),
+        mounts: str = typer.Option(
+            "",
+            "--mounts",
+            help="Comma-separated route domains to inventory instead of the profile default.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print route inventory as JSON.",
+        ),
+        out: str = typer.Option(
+            "",
+            "--out",
+            help="Optional file path to write the JSON route inventory report.",
+        ),
+    ) -> None:
+        """Show or export the route domains mounted by the niuu host."""
+        from niuu.app import collect_route_inventory, parse_enabled_mounts
+
+        try:
+            enabled_mounts = parse_enabled_mounts(mounts)
+            inventory = collect_route_inventory(
+                registry=registry,
+                host_profile=host_profile,
+                enabled_mounts=enabled_mounts,
+            )
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
+
+        payload = _route_inventory_payload(inventory)
+
+        if out:
+            output_path = Path(out)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(f"{json.dumps(payload, indent=2)}\n")
+            typer.echo(f"Wrote route inventory to {output_path}")
+
+        if json_output:
+            typer.echo(json.dumps(payload, indent=2))
+            return
+
+        typer.echo(f"Host profile: {host_profile}")
+        for item in payload:
+            prefixes = ", ".join(item["prefixes"]) or "(none)"
+            plugin = item["plugin"] or "internal"
+            typer.echo(f"  {item['name']}: {prefixes} [{item['source']}/{plugin}]")
 
     @platform_app.command()
     def init() -> None:
