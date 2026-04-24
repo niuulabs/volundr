@@ -61,7 +61,7 @@ function makeClient() {
     }),
     put: vi.fn().mockImplementation((_path: string, body: unknown) => Promise.resolve(body)),
     patch: vi.fn().mockImplementation((path: string, body: { enabled: boolean }) => {
-      const keyMatch = path.match(/features\/(\w+)/);
+      const keyMatch = path.match(/features\/modules\/([^/]+)/);
       const key = keyMatch?.[1] ?? 'unknown';
       const base = mockApiModules.find((f) => f.key === key) ?? mockApiModules[0]!;
       return Promise.resolve({ ...base, key, enabled: body.enabled });
@@ -105,13 +105,13 @@ describe('buildFeatureCatalogAdapter', () => {
     it('appends ?scope= param when scope is provided', async () => {
       const client = makeClient();
       await buildFeatureCatalogAdapter(client).getFeatureModules('admin');
-      expect(client.get).toHaveBeenCalledWith('/features?scope=admin');
+      expect(client.get).toHaveBeenCalledWith('/features/modules?scope=admin');
     });
 
     it('omits query param when no scope', async () => {
       const client = makeClient();
       await buildFeatureCatalogAdapter(client).getFeatureModules();
-      expect(client.get).toHaveBeenCalledWith('/features');
+      expect(client.get).toHaveBeenCalledWith('/features/modules');
     });
   });
 
@@ -152,6 +152,14 @@ describe('buildFeatureCatalogAdapter', () => {
       const result = await service.toggleFeature('tokens', true);
       expect(result.key).toBe('tokens');
       expect(result.enabled).toBe(true);
+    });
+
+    it('uses the canonical feature toggle route', async () => {
+      const client = makeClient();
+      await buildFeatureCatalogAdapter(client).toggleFeature('users', false);
+      expect(client.patch).toHaveBeenCalledWith('/features/modules/users/toggle', {
+        enabled: false,
+      });
     });
   });
 

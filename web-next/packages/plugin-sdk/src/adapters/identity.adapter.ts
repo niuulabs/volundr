@@ -1,9 +1,7 @@
 /**
  * Identity adapter — fetches the current user's identity from the API.
  *
- * Reuses the existing /api/v1/volundr/me endpoint. When a shared
- * /api/v1/identity/me is available, update the base path in the factory
- * call site — no other code changes needed.
+ * Targets the canonical shared identity surface.
  */
 
 import type { AppIdentity, IIdentityService } from '../ports/identity.port';
@@ -35,12 +33,12 @@ function rowToIdentity(r: ApiIdentityResponse): AppIdentity {
 
 /**
  * Build an identity service backed by a live HTTP client.
- * Pass `createApiClient('/api/v1/volundr')` from @niuulabs/query.
+ * Pass `createApiClient('/api/v1')` from @niuulabs/query.
  */
 export function buildIdentityAdapter(client: HttpClient): IIdentityService {
   return {
     async getIdentity(): Promise<AppIdentity> {
-      const r = await client.get<ApiIdentityResponse>('/me');
+      const r = await client.get<ApiIdentityResponse>('/identity/me');
       return rowToIdentity(r);
     },
   };

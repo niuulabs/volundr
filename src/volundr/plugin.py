@@ -236,7 +236,7 @@ class VolundrPlugin(ServicePlugin):
         ) -> None:
             """List active sessions."""
             client = plugin.create_api_client()
-            resp = client.request_or_exit("GET", "/api/v1/volundr/sessions")
+            resp = client.request_or_exit("GET", "/api/v1/forge/sessions")
             data = resp.json()
 
             if json_output:
@@ -268,7 +268,7 @@ class VolundrPlugin(ServicePlugin):
             client = plugin.create_api_client()
             resp = client.request_or_exit(
                 "POST",
-                "/api/v1/volundr/sessions",
+                "/api/v1/forge/sessions",
                 json_body={"name": name},
             )
             data = resp.json()
@@ -286,7 +286,7 @@ class VolundrPlugin(ServicePlugin):
         ) -> None:
             """Stop a running session."""
             client = plugin.create_api_client()
-            resp = client.request_or_exit("POST", f"/api/v1/volundr/sessions/{session_id}/stop")
+            resp = client.request_or_exit("POST", f"/api/v1/forge/sessions/{session_id}/stop")
 
             if json_output:
                 print_json(resp.json() if resp.text else {"status": "stopped"})
@@ -301,7 +301,7 @@ class VolundrPlugin(ServicePlugin):
         ) -> None:
             """Delete a session."""
             client = plugin.create_api_client()
-            resp = client.request_or_exit("DELETE", f"/api/v1/volundr/sessions/{session_id}")
+            resp = client.request_or_exit("DELETE", f"/api/v1/forge/sessions/{session_id}")
 
             if json_output:
                 print_json(resp.json() if resp.text else {"status": "deleted"})

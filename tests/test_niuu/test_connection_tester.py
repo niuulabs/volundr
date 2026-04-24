@@ -16,7 +16,7 @@ import niuu.domain.services.connection_tester as _ct
 @pytest.mark.asyncio
 @respx.mock
 async def test_code_forge_success():
-    respx.get("http://my-server/api/v1/volundr/me").mock(
+    respx.get("http://my-server/api/v1/identity/me").mock(
         return_value=httpx.Response(200, json={"email": "dev@example.com"})
     )
     result = await _ct.test_code_forge(url="http://my-server", token="tok")
@@ -29,7 +29,7 @@ async def test_code_forge_success():
 @pytest.mark.asyncio
 @respx.mock
 async def test_code_forge_uses_user_id_fallback():
-    respx.get("http://my-server/api/v1/volundr/me").mock(
+    respx.get("http://my-server/api/v1/identity/me").mock(
         return_value=httpx.Response(200, json={"user_id": "uid-123"})
     )
     result = await _ct.test_code_forge(url="http://my-server", token="tok")
@@ -40,7 +40,7 @@ async def test_code_forge_uses_user_id_fallback():
 @pytest.mark.asyncio
 @respx.mock
 async def test_code_forge_uses_authenticated_fallback():
-    respx.get("http://my-server/api/v1/volundr/me").mock(return_value=httpx.Response(200, json={}))
+    respx.get("http://my-server/api/v1/identity/me").mock(return_value=httpx.Response(200, json={}))
     result = await _ct.test_code_forge(url="http://my-server", token="tok")
     assert result.success is True
     assert result.user == "authenticated"
@@ -49,7 +49,7 @@ async def test_code_forge_uses_authenticated_fallback():
 @pytest.mark.asyncio
 @respx.mock
 async def test_code_forge_auth_failure():
-    respx.get("http://my-server/api/v1/volundr/me").mock(
+    respx.get("http://my-server/api/v1/identity/me").mock(
         return_value=httpx.Response(401, text="unauthorized")
     )
     result = await _ct.test_code_forge(url="http://my-server", token="bad")
@@ -67,7 +67,7 @@ async def test_code_forge_empty_url():
 @pytest.mark.asyncio
 @respx.mock
 async def test_code_forge_connection_error():
-    respx.get("http://unreachable/api/v1/volundr/me").mock(
+    respx.get("http://unreachable/api/v1/identity/me").mock(
         side_effect=httpx.ConnectError("refused")
     )
     result = await _ct.test_code_forge(url="http://unreachable", token="tok")
@@ -125,7 +125,7 @@ async def test_telegram_bot_network_error():
 @pytest.mark.asyncio
 @respx.mock
 async def test_connection_code_forge():
-    respx.get("http://forge/api/v1/volundr/me").mock(
+    respx.get("http://forge/api/v1/identity/me").mock(
         return_value=httpx.Response(200, json={"email": "x@y.com"})
     )
     result = await _ct.test_connection("code_forge", {"url": "http://forge"}, {"token": "tok"})

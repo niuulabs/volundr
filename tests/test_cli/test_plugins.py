@@ -143,7 +143,7 @@ class TestVolundrPlugin:
 
     @respx.mock
     def test_sessions_list_command(self) -> None:
-        respx.get(f"{BASE}/api/v1/volundr/sessions").mock(return_value=httpx.Response(200, json=[]))
+        respx.get(f"{BASE}/api/v1/forge/sessions").mock(return_value=httpx.Response(200, json=[]))
         plugin = VolundrPlugin()
         app = typer.Typer(no_args_is_help=False)
         plugin.register_commands(app)
@@ -152,7 +152,7 @@ class TestVolundrPlugin:
 
     @respx.mock
     def test_sessions_list_command_json_output(self) -> None:
-        respx.get(f"{BASE}/api/v1/volundr/sessions").mock(
+        respx.get(f"{BASE}/api/v1/forge/sessions").mock(
             return_value=httpx.Response(200, json=[{"id": "s1", "name": "demo"}])
         )
         plugin = VolundrPlugin()
@@ -164,7 +164,7 @@ class TestVolundrPlugin:
 
     @respx.mock
     def test_sessions_create_command(self) -> None:
-        respx.post(f"{BASE}/api/v1/volundr/sessions").mock(
+        respx.post(f"{BASE}/api/v1/forge/sessions").mock(
             return_value=httpx.Response(201, json={"id": "s1", "name": "my-session"})
         )
         plugin = VolundrPlugin()
@@ -175,7 +175,7 @@ class TestVolundrPlugin:
 
     @respx.mock
     def test_sessions_create_command_json_output(self) -> None:
-        respx.post(f"{BASE}/api/v1/volundr/sessions").mock(
+        respx.post(f"{BASE}/api/v1/forge/sessions").mock(
             return_value=httpx.Response(201, json={"id": "s1", "name": "my-session"})
         )
         plugin = VolundrPlugin()
@@ -187,7 +187,7 @@ class TestVolundrPlugin:
 
     @respx.mock
     def test_sessions_stop_command(self) -> None:
-        respx.post(f"{BASE}/api/v1/volundr/sessions/s1/stop").mock(
+        respx.post(f"{BASE}/api/v1/forge/sessions/s1/stop").mock(
             return_value=httpx.Response(200, json={"status": "stopped"})
         )
         plugin = VolundrPlugin()
@@ -198,7 +198,7 @@ class TestVolundrPlugin:
 
     @respx.mock
     def test_sessions_delete_command_json_output(self) -> None:
-        respx.delete(f"{BASE}/api/v1/volundr/sessions/s1").mock(
+        respx.delete(f"{BASE}/api/v1/forge/sessions/s1").mock(
             return_value=httpx.Response(200, json={"status": "deleted"})
         )
         plugin = VolundrPlugin()

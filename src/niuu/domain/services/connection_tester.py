@@ -35,7 +35,7 @@ class ConnectionTestResult:
 
 
 async def test_code_forge(url: str, token: str) -> ConnectionTestResult:
-    """Test a Volundr/code forge connection via /me endpoint."""
+    """Test a Volundr/code forge connection via the canonical identity endpoint."""
     test_url = url.rstrip("/")
     if not test_url:
         return ConnectionTestResult(success=False, message="No URL configured")
@@ -55,7 +55,7 @@ async def test_code_forge(url: str, token: str) -> ConnectionTestResult:
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
-                f"{safe_url}/api/v1/volundr/me",
+                f"{safe_url}/api/v1/identity/me",
                 headers={"Authorization": f"Bearer {token}"},
             )
             if resp.status_code == 200:
