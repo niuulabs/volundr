@@ -24,6 +24,8 @@ _PERMISSION_PLATFORM = "platform:api"
 _DEFAULT_BASE_URL = "http://localhost:8080"
 _DEFAULT_TIMEOUT = 30.0
 _FORGE_SESSIONS_PATH = "/api/v1/forge/sessions"
+_FORGE_REPOS_PATH = "/api/v1/forge/repos"
+_TRACKER_ISSUES_PATH = "/api/v1/tracker/issues"
 
 
 def _client(base_url: str, timeout: float, pat_token: str = "") -> httpx.AsyncClient:
@@ -341,7 +343,7 @@ class VolundrGitTool(ToolPort):
         if not repo_url:
             return _err("repo_url is required for list_branches")
         try:
-            resp = await client.get("/api/v1/volundr/repos/branches", params={"repo_url": repo_url})
+            resp = await client.get(f"{_FORGE_REPOS_PATH}/branches", params={"repo_url": repo_url})
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
@@ -357,7 +359,7 @@ class VolundrGitTool(ToolPort):
         if target := input.get("target_branch"):
             body["target_branch"] = target
         try:
-            resp = await client.post("/api/v1/volundr/repos/prs", json=body)
+            resp = await client.post(f"{_FORGE_REPOS_PATH}/prs", json=body)
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
@@ -371,7 +373,7 @@ class VolundrGitTool(ToolPort):
         if status := input.get("status"):
             params["status"] = status
         try:
-            resp = await client.get("/api/v1/volundr/repos/prs", params=params)
+            resp = await client.get(f"{_FORGE_REPOS_PATH}/prs", params=params)
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
@@ -384,7 +386,7 @@ class VolundrGitTool(ToolPort):
             return _err("pr_number and repo_url are required for get_pr")
         try:
             resp = await client.get(
-                f"/api/v1/volundr/repos/prs/{pr_number}",
+                f"{_FORGE_REPOS_PATH}/prs/{pr_number}",
                 params={"repo_url": repo_url},
             )
             resp.raise_for_status()
@@ -402,7 +404,7 @@ class VolundrGitTool(ToolPort):
             body["merge_method"] = method
         try:
             resp = await client.post(
-                f"/api/v1/volundr/repos/prs/{pr_number}/merge",
+                f"{_FORGE_REPOS_PATH}/prs/{pr_number}/merge",
                 params={"repo_url": repo_url},
                 json=body,
             )
@@ -419,7 +421,7 @@ class VolundrGitTool(ToolPort):
             return _err("pr_number, repo_url, and branch are required for ci_status")
         try:
             resp = await client.get(
-                f"/api/v1/volundr/repos/prs/{pr_number}/ci",
+                f"{_FORGE_REPOS_PATH}/prs/{pr_number}/ci",
                 params={"repo_url": repo_url, "branch": branch},
             )
             resp.raise_for_status()
@@ -738,7 +740,7 @@ class TrackerIssueTool(ToolPort):
         if not query:
             return _err("query is required for search action")
         try:
-            resp = await client.get("/api/v1/volundr/issues/search", params={"q": query})
+            resp = await client.get(_TRACKER_ISSUES_PATH, params={"q": query})
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
@@ -748,7 +750,7 @@ class TrackerIssueTool(ToolPort):
         if not issue_id:
             return _err("issue_id is required for get action")
         try:
-            resp = await client.get(f"/api/v1/volundr/issues/{issue_id}")
+            resp = await client.get(f"{_TRACKER_ISSUES_PATH}/{issue_id}")
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
@@ -761,7 +763,7 @@ class TrackerIssueTool(ToolPort):
             return _err("issue_id and status are required for update_status")
         try:
             resp = await client.post(
-                f"/api/v1/volundr/issues/{issue_id}/status",
+                f"{_TRACKER_ISSUES_PATH}/{issue_id}",
                 json={"status": status},
             )
             resp.raise_for_status()
