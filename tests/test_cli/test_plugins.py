@@ -105,6 +105,19 @@ class TestVolundrPlugin:
             "/api/v1/volundr/credentials",
             "/api/v1/volundr/secrets",
         )
+        assert route_domains[4].prefixes[:3] == (
+            "/api/v1/forge/sessions",
+            "/api/v1/forge/templates",
+            "/api/v1/forge/presets",
+        )
+        assert route_domains[5].prefixes == (
+            "/api/v1/forge/sessions",
+            "/api/v1/volundr/sessions",
+        )
+        assert route_domains[6].prefixes == (
+            "/api/v1/forge/workspaces",
+            "/api/v1/volundr/workspaces",
+        )
         assert route_domains[10].prefixes == (
             "/api/v1/identity",
             "/api/v1/volundr/me",

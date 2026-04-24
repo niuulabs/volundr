@@ -46,6 +46,7 @@ describe('createApiClient', () => {
 
   it('GET prepends basePath and sends GET method', async () => {
     const client = createApiClient(BASE);
+    expect((client as { basePath?: string }).basePath).toBe(BASE);
     await client.get('/items');
     expect(fetchMock).toHaveBeenCalledWith(
       `${BASE}/items`,

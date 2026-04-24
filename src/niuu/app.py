@@ -221,6 +221,13 @@ def _declared_plugin_route_domains(
     return declared
 
 
+def _backend_prefix_for_mount(plugin_name: str, public_prefix: str) -> str:
+    """Map public mount prefixes to the backend route prefix a plugin actually serves."""
+    if plugin_name == "volundr" and public_prefix.startswith("/api/v1/forge"):
+        return public_prefix.replace("/api/v1/forge", "/api/v1/volundr", 1)
+    return public_prefix
+
+
 def collect_route_inventory(
     *,
     registry: PluginRegistry,
@@ -360,7 +367,8 @@ def build_root_app(
             logger.debug("No API prefix configured for plugin: %s", name)
             continue
         for prefix in prefixes:
-            wrapped = _PrefixRestoreApp(sub_app, prefix)
+            backend_prefix = _backend_prefix_for_mount(name, prefix)
+            wrapped = _PrefixRestoreApp(sub_app, backend_prefix)
             prefix_apps.append((prefix, wrapped))
         logger.info("Mounted %s API at %s", name, ", ".join(prefixes))
 

@@ -15,6 +15,8 @@ import { getAccessToken } from './http-client';
 export interface EventStreamOptions {
   /** Called for every SSE data frame. `raw` is the concatenated `data:` content. */
   onMessage: (raw: string) => void;
+  /** Called with parsed event metadata when the server emits an `event:` name. */
+  onEvent?: (frame: { event?: string; data: string }) => void;
   /** Called when a connection attempt fails. The stream will auto-retry. */
   onError?: (err: unknown) => void;
   /** Max retry delay (ms) for exponential backoff. Defaults to 30_000. */
@@ -26,7 +28,7 @@ export interface EventStreamHandle {
 }
 
 export function openEventStream(url: string, options: EventStreamOptions): EventStreamHandle {
-  const { onMessage, onError, maxRetryMs = 30_000 } = options;
+  const { onMessage, onEvent, onError, maxRetryMs = 30_000 } = options;
   let closed = false;
   let controller: AbortController | null = null;
   let retryMs = 1_000;
@@ -35,7 +37,7 @@ export function openEventStream(url: string, options: EventStreamOptions): Event
     while (!closed) {
       controller = new AbortController();
       try {
-        await pump(url, onMessage, controller.signal);
+        await pump(url, onMessage, onEvent, controller.signal);
         // Clean end: server closed the stream. Retry from the base backoff.
         retryMs = 1_000;
       } catch (err) {
@@ -61,6 +63,7 @@ export function openEventStream(url: string, options: EventStreamOptions): Event
 async function pump(
   url: string,
   onMessage: (raw: string) => void,
+  onEvent: ((frame: { event?: string; data: string }) => void) | undefined,
   signal: AbortSignal,
 ): Promise<void> {
   const headers: Record<string, string> = { Accept: 'text/event-stream' };
@@ -86,21 +89,30 @@ async function pump(
     while ((idx = buf.indexOf('\n\n')) !== -1) {
       const frame = buf.slice(0, idx);
       buf = buf.slice(idx + 2);
-      const data = parseFrame(frame);
-      if (data !== null) onMessage(data);
+      const parsed = parseFrame(frame);
+      if (parsed === null) continue;
+      onMessage(parsed.data);
+      onEvent?.(parsed);
     }
   }
 }
 
-function parseFrame(frame: string): string | null {
+function parseFrame(frame: string): { event?: string; data: string } | null {
   const dataLines: string[] = [];
+  let event: string | undefined;
   for (const line of frame.split('\n')) {
-    if (!line.startsWith('data:')) continue;
-    // Spec: one optional space after the colon is stripped.
-    const rest = line.slice(5);
-    dataLines.push(rest.startsWith(' ') ? rest.slice(1) : rest);
+    if (line.startsWith('event:')) {
+      const rest = line.slice(6);
+      event = rest.startsWith(' ') ? rest.slice(1) : rest;
+      continue;
+    }
+    if (line.startsWith('data:')) {
+      // Spec: one optional space after the colon is stripped.
+      const rest = line.slice(5);
+      dataLines.push(rest.startsWith(' ') ? rest.slice(1) : rest);
+    }
   }
-  return dataLines.length === 0 ? null : dataLines.join('\n');
+  return dataLines.length === 0 ? null : { event, data: dataLines.join('\n') };
 }
 
 function sleep(ms: number): Promise<void> {

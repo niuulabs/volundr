@@ -90,6 +90,7 @@ export function createApiClient(basePath: string): ApiClient {
   }
 
   return {
+    basePath,
     get<T>(endpoint: string): Promise<T> {
       return request<T>(endpoint, { method: 'GET' });
     },

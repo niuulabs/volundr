@@ -97,6 +97,19 @@ class VolundrPlugin(ServicePlugin):
             APIRouteDomain(
                 name="forge-api",
                 prefixes=(
+                    "/api/v1/forge/sessions",
+                    "/api/v1/forge/templates",
+                    "/api/v1/forge/presets",
+                    "/api/v1/forge/profiles",
+                    "/api/v1/forge/repos",
+                    "/api/v1/forge/workspaces",
+                    "/api/v1/forge/resources",
+                    "/api/v1/forge/models",
+                    "/api/v1/forge/stats",
+                    "/api/v1/forge/prompts",
+                    "/api/v1/forge/cluster",
+                    "/api/v1/forge/mcp-servers",
+                    "/api/v1/forge/git",
                     "/api/v1/volundr/sessions",
                     "/api/v1/volundr/templates",
                     "/api/v1/volundr/presets",
@@ -104,6 +117,8 @@ class VolundrPlugin(ServicePlugin):
                     "/api/v1/volundr/repos",
                     "/api/v1/volundr/workspaces",
                     "/api/v1/volundr/resources",
+                    "/api/v1/volundr/models",
+                    "/api/v1/volundr/stats",
                     "/api/v1/volundr/prompts",
                     "/api/v1/volundr/cluster",
                     "/api/v1/volundr/mcp-servers",
@@ -113,7 +128,7 @@ class VolundrPlugin(ServicePlugin):
             ),
             APIRouteDomain(
                 name="session-api",
-                prefixes=("/api/v1/volundr/sessions",),
+                prefixes=("/api/v1/forge/sessions", "/api/v1/volundr/sessions"),
                 description=(
                     "Session lifecycle, messaging, logs, chronicle, "
                     "and session-bound workflow routes."
@@ -121,12 +136,18 @@ class VolundrPlugin(ServicePlugin):
             ),
             APIRouteDomain(
                 name="workspace-api",
-                prefixes=("/api/v1/volundr/workspaces",),
+                prefixes=("/api/v1/forge/workspaces", "/api/v1/volundr/workspaces"),
                 description="User workspace inventory and workspace deletion routes.",
             ),
             APIRouteDomain(
                 name="catalog-api",
                 prefixes=(
+                    "/api/v1/forge/templates",
+                    "/api/v1/forge/presets",
+                    "/api/v1/forge/profiles",
+                    "/api/v1/forge/resources",
+                    "/api/v1/forge/prompts",
+                    "/api/v1/forge/mcp-servers",
                     "/api/v1/volundr/templates",
                     "/api/v1/volundr/presets",
                     "/api/v1/volundr/profiles",
@@ -142,6 +163,8 @@ class VolundrPlugin(ServicePlugin):
             APIRouteDomain(
                 name="git-api",
                 prefixes=(
+                    "/api/v1/forge/repos",
+                    "/api/v1/forge/git",
                     "/api/v1/volundr/repos",
                     "/api/v1/volundr/git",
                 ),

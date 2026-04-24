@@ -4,6 +4,7 @@ import type { IVolundrService } from '../ports/IVolundrService';
 
 function makeClient() {
   return {
+    basePath: 'http://localhost:8080/api/v1/forge',
     get: vi.fn().mockResolvedValue([]),
     post: vi.fn().mockResolvedValue({}),
     delete: vi.fn().mockResolvedValue(undefined),
@@ -84,6 +85,93 @@ describe('buildVolundrHttpAdapter', () => {
     const client = makeClient();
     await buildVolundrHttpAdapter(client).sendMessage('s1', 'hello');
     expect(client.post).toHaveBeenCalledWith('/sessions/s1/messages', { content: 'hello' });
+  });
+
+  it('getMessages uses conversation history and normalizes turns', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue({
+      turns: [
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'hello',
+          created_at: '2026-04-24T10:00:00Z',
+          metadata: { tokens_in: 4, tokens_out: 0 },
+        },
+        {
+          id: 'msg-2',
+          role: 'system',
+          content: 'reply',
+          created_at: '2026-04-24T10:01:00Z',
+          metadata: { tokens_in: 0, tokens_out: 12, latency: 250 },
+        },
+      ],
+    });
+
+    const messages = await buildVolundrHttpAdapter(client).getMessages('s1');
+
+    expect(client.get).toHaveBeenCalledWith('/sessions/s1/conversation');
+    expect(messages).toEqual([
+      expect.objectContaining({
+        id: 'msg-1',
+        sessionId: 's1',
+        role: 'user',
+        tokensIn: 4,
+      }),
+      expect.objectContaining({
+        id: 'msg-2',
+        sessionId: 's1',
+        role: 'assistant',
+        tokensOut: 12,
+        latency: 250,
+      }),
+    ]);
+  });
+
+  it('getLogs uses broker line filtering semantics and normalizes the response', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue({
+      lines: [
+        {
+          timestamp: 1000,
+          level: 'WARNING',
+          logger: 'skuld.broker',
+          message: 'heads up',
+        },
+      ],
+    });
+
+    const logs = await buildVolundrHttpAdapter(client).getLogs('s1', 50);
+
+    expect(client.get).toHaveBeenCalledWith('/sessions/s1/logs?lines=50');
+    expect(logs).toEqual([
+      expect.objectContaining({
+        sessionId: 's1',
+        level: 'warn',
+        source: 'skuld.broker',
+        message: 'heads up',
+      }),
+    ]);
+  });
+
+  it('getChronicle uses the timeline endpoint and normalizes token burn', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue({
+      events: [{ t: 0, type: 'session', label: 'started' }],
+      files: [{ path: 'src/app.ts', status: 'mod', ins: 3, del: 1 }],
+      commits: [{ hash: 'abc123', msg: 'test', time: '10:00' }],
+      token_burn: [1, 2, 3],
+    });
+
+    const chronicle = await buildVolundrHttpAdapter(client).getChronicle('s1');
+
+    expect(client.get).toHaveBeenCalledWith('/chronicles/s1/timeline');
+    expect(chronicle).toEqual({
+      events: [{ t: 0, type: 'session', label: 'started' }],
+      files: [{ path: 'src/app.ts', status: 'mod', ins: 3, del: 1 }],
+      commits: [{ hash: 'abc123', msg: 'test', time: '10:00' }],
+      tokenBurn: [1, 2, 3],
+    });
   });
 
   it('savePreset calls POST /presets when no id', async () => {
@@ -174,11 +262,190 @@ describe('buildVolundrHttpAdapter', () => {
     });
   });
 
-  it('subscribe returns a no-op unsubscribe', () => {
+  it('subscribe returns an unsubscribe function', () => {
     const client = makeClient();
     const unsub = buildVolundrHttpAdapter(client).subscribe(vi.fn());
     expect(typeof unsub).toBe('function');
     unsub(); // should not throw
+  });
+
+  it('normalizes session and stats payloads from snake_case responses', async () => {
+    const client = makeClient();
+    client.get.mockImplementation(async (endpoint: string) => {
+      if (endpoint === '/sessions') {
+        return [
+          {
+            id: 'sess-1',
+            name: 'alpha',
+            source: { type: 'git', repo: 'github.com/acme/repo', branch: 'main' },
+            status: 'running',
+            model: 'claude-sonnet',
+            last_active: '2026-04-24T10:00:00Z',
+            message_count: 7,
+            tokens_used: 123,
+            chat_endpoint: 'https://chat.example.com',
+            code_endpoint: 'https://code.example.com',
+            owner_id: 'user-1',
+            tenant_id: 'tenant-1',
+          },
+        ];
+      }
+      if (endpoint === '/stats') {
+        return {
+          active_sessions: 1,
+          total_sessions: 3,
+          tokens_today: 400,
+          local_tokens: 150,
+          cloud_tokens: 250,
+          cost_today: 2.5,
+        };
+      }
+      return [];
+    });
+
+    const svc = buildVolundrHttpAdapter(client);
+    const [session] = await svc.getSessions();
+    const stats = await svc.getStats();
+
+    expect(session.messageCount).toBe(7);
+    expect(session.tokensUsed).toBe(123);
+    expect(session.chatEndpoint).toBe('https://chat.example.com');
+    expect(session.ownerId).toBe('user-1');
+    expect(stats.activeSessions).toBe(1);
+    expect(stats.tokensToday).toBe(400);
+    expect(stats.costToday).toBe(2.5);
+  });
+
+  it('shares one live stream across session and stats subscribers', async () => {
+    const client = makeClient();
+    client.get.mockImplementation(async (endpoint: string) => {
+      if (endpoint === '/sessions') return [];
+      if (endpoint === '/stats') {
+        return {
+          active_sessions: 0,
+          total_sessions: 0,
+          tokens_today: 0,
+          local_tokens: 0,
+          cloud_tokens: 0,
+          cost_today: 0,
+        };
+      }
+      return [];
+    });
+
+    let onEvent:
+      | ((frame: { event?: string; data: string }) => void)
+      | undefined;
+    const close = vi.fn();
+    const openStream = vi.fn((_url: string, options: { onEvent?: typeof onEvent }) => {
+      onEvent = options.onEvent;
+      return { close };
+    });
+
+    const svc = buildVolundrHttpAdapter(client, openStream as never);
+    const sessionSeen: Array<Array<{ id: string }>> = [];
+    const statsSeen: Array<{ activeSessions: number }> = [];
+
+    const unsubSessions = svc.subscribe((sessions) => sessionSeen.push(sessions as Array<{ id: string }>));
+    const unsubStats = svc.subscribeStats((stats) =>
+      statsSeen.push(stats as { activeSessions: number }),
+    );
+    await Promise.resolve();
+
+    expect(openStream).toHaveBeenCalledTimes(1);
+    expect(openStream).toHaveBeenCalledWith(
+      'http://localhost:8080/api/v1/forge/sessions/stream',
+      expect.objectContaining({ onEvent: expect.any(Function) }),
+    );
+
+    onEvent?.({
+      event: 'session_updated',
+      data: JSON.stringify({
+        id: 'sess-1',
+        name: 'alpha',
+        source: { type: 'git', repo: 'github.com/acme/repo', branch: 'main' },
+        status: 'running',
+        model: 'claude-sonnet',
+        last_active: '2026-04-24T10:00:00Z',
+        message_count: 5,
+        tokens_used: 11,
+      }),
+    });
+    onEvent?.({
+      event: 'stats_updated',
+      data: JSON.stringify({
+        active_sessions: 1,
+        total_sessions: 2,
+        tokens_today: 80,
+        local_tokens: 20,
+        cloud_tokens: 60,
+        cost_today: 1.25,
+      }),
+    });
+    onEvent?.({ event: 'session_deleted', data: JSON.stringify({ id: 'sess-1' }) });
+
+    expect(sessionSeen.at(-2)?.[0]).toMatchObject({
+      id: 'sess-1',
+      messageCount: 5,
+      tokensUsed: 11,
+    });
+    expect(sessionSeen.at(-1)).toEqual([]);
+    expect(statsSeen.at(-1)).toMatchObject({ activeSessions: 1, costToday: 1.25 });
+
+    unsubSessions();
+    expect(close).not.toHaveBeenCalled();
+    unsubStats();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('streams chronicle updates for a specific session from the shared SSE feed', async () => {
+    const client = makeClient();
+    client.get.mockImplementation(async (endpoint: string) => {
+      if (endpoint === '/chronicles/sess-1/timeline') {
+        return {
+          events: [],
+          files: [],
+          commits: [],
+          token_burn: [],
+        };
+      }
+      return [];
+    });
+
+    let onEvent:
+      | ((frame: { event?: string; data: string }) => void)
+      | undefined;
+    const openStream = vi.fn((_url: string, options: { onEvent?: typeof onEvent }) => {
+      onEvent = options.onEvent;
+      return { close: vi.fn() };
+    });
+
+    const seen: Array<{ tokenBurn: number[]; events: Array<{ label: string }> }> = [];
+    const unsub = buildVolundrHttpAdapter(client, openStream as never).subscribeChronicle(
+      'sess-1',
+      (chronicle) => seen.push(chronicle as { tokenBurn: number[]; events: Array<{ label: string }> }),
+    );
+    await Promise.resolve();
+
+    onEvent?.({
+      event: 'chronicle_event',
+      data: JSON.stringify({
+        session_id: 'sess-1',
+        event: { t: 1, type: 'message', label: 'assistant replied' },
+        files: [{ path: 'src/app.ts', status: 'mod', ins: 3, del: 1 }],
+        commits: [{ hash: 'abc123', msg: 'test', time: '10:00' }],
+        token_burn: [2, 4],
+      }),
+    });
+
+    expect(seen.at(-1)).toEqual({
+      events: [{ t: 1, type: 'message', label: 'assistant replied' }],
+      files: [{ path: 'src/app.ts', status: 'mod', ins: 3, del: 1 }],
+      commits: [{ hash: 'abc123', msg: 'test', time: '10:00' }],
+      tokenBurn: [2, 4],
+    });
+
+    unsub();
   });
 
   it('propagates errors from the HTTP client', async () => {
@@ -221,7 +488,14 @@ describe('buildVolundrHttpAdapter', () => {
 describe('buildVolundrHttpAdapter — full method sweep', () => {
   it('covers every remaining IVolundrService method', async () => {
     const client = makeClient();
-    client.get.mockResolvedValue([]);
+    client.get.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('/conversation')) return { turns: [] };
+      if (endpoint.includes('/logs')) return { lines: [] };
+      if (endpoint.includes('/chronicles/')) {
+        return { events: [], files: [], commits: [], token_burn: [] };
+      }
+      return [];
+    });
     client.post.mockResolvedValue({});
     client.delete.mockResolvedValue(undefined);
     client.patch.mockResolvedValue({});

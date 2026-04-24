@@ -738,11 +738,11 @@ class TestRootServerBuildApp:
                 return (
                     APIRouteDomain(
                         name="session-api",
-                        prefixes=("/api/v1/volundr/sessions",),
+                        prefixes=("/api/v1/forge/sessions", "/api/v1/volundr/sessions"),
                     ),
                     APIRouteDomain(
                         name="workspace-api",
-                        prefixes=("/api/v1/volundr/workspaces",),
+                        prefixes=("/api/v1/forge/workspaces", "/api/v1/volundr/workspaces"),
                     ),
                 )
 
@@ -758,7 +758,59 @@ class TestRootServerBuildApp:
 
         client = TestClient(app)
         assert client.get("/api/v1/volundr/sessions/ping").status_code == 200
+        assert client.get("/api/v1/forge/sessions/ping").status_code == 200
         assert client.get("/api/v1/volundr/workspaces/ping").status_code == 404
+        assert client.get("/api/v1/forge/workspaces/ping").status_code == 404
+
+    def test_build_root_app_can_mount_forge_slice_with_canonical_aliases(self) -> None:
+        volundr_app = FastAPI()
+
+        @volundr_app.get("/api/v1/volundr/templates/ping")
+        async def template_ping():
+            return {"pong": "template"}
+
+        @volundr_app.get("/api/v1/volundr/stats")
+        async def stats():
+            return {"sessions": 3}
+
+        @volundr_app.get("/api/v1/volundr/models")
+        async def models():
+            return {"claude-sonnet-4-6": {"name": "Claude Sonnet 4.6"}}
+
+        class VolundrPlugin(FakePlugin):
+            def create_api_app(self):
+                return volundr_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="forge-api",
+                        prefixes=(
+                            "/api/v1/forge/templates",
+                            "/api/v1/forge/stats",
+                            "/api/v1/forge/models",
+                            "/api/v1/volundr/templates",
+                            "/api/v1/volundr/stats",
+                            "/api/v1/volundr/models",
+                        ),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(VolundrPlugin(name="volundr"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"forge-api"},
+        )
+
+        client = TestClient(app)
+        assert client.get("/api/v1/forge/templates/ping").status_code == 200
+        assert client.get("/api/v1/forge/stats").json() == {"sessions": 3}
+        assert client.get("/api/v1/forge/models").status_code == 200
+        assert client.get("/api/v1/volundr/templates/ping").status_code == 200
 
     def test_build_root_app_can_mount_saga_slice_without_dispatch_slice(self) -> None:
         tyr_app = FastAPI()

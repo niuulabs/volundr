@@ -59,6 +59,20 @@ describe('openEventStream', () => {
     expect(messages).toEqual(['a\nb', 'c', 'd']);
   });
 
+  it('passes through SSE event names when provided', async () => {
+    global.fetch = vi.fn(async () => mockSseResponse(['event: stats_updated\ndata: {"count":1}\n\n']));
+    const seen: Array<{ event?: string; data: string }> = [];
+
+    const handle = openEventStream('/stream', {
+      onMessage: () => {},
+      onEvent: (frame) => seen.push(frame),
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    handle.close();
+
+    expect(seen).toEqual([{ event: 'stats_updated', data: '{"count":1}' }]);
+  });
+
   it('attaches a Bearer header when a token provider is registered', async () => {
     setTokenProvider(() => 'test-token');
     const fetchSpy = vi.fn(async () => mockSseResponse([]));

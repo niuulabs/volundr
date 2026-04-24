@@ -4,6 +4,7 @@
  * Accepts any HTTP client with `get` and `post` / `delete` methods —
  * structurally compatible with `createApiClient(baseUrl)` from @niuulabs/query.
  */
+import { openEventStream, type EventStreamHandle, type EventStreamOptions } from '@niuulabs/query';
 import type { IVolundrService } from '../ports/IVolundrService';
 import type {
   VolundrSession,
@@ -50,6 +51,7 @@ import type {
 
 /** Minimal HTTP client — structurally compatible with ApiClient from @niuulabs/query. */
 export interface HttpClient {
+  basePath?: string;
   get<T>(endpoint: string): Promise<T>;
   post<T>(endpoint: string, body?: unknown): Promise<T>;
   delete<T>(endpoint: string): Promise<T>;
@@ -57,18 +59,421 @@ export interface HttpClient {
   put<T>(endpoint: string, body?: unknown): Promise<T>;
 }
 
-export function buildVolundrHttpAdapter(client: HttpClient): IVolundrService {
+type EventStreamOpener = (url: string, options: EventStreamOptions) => EventStreamHandle;
+
+type SessionPayload = {
+  id: string;
+  name: string;
+  source: VolundrSession['source'];
+  status: VolundrSession['status'];
+  model: string;
+  lastActive?: number;
+  last_active?: string;
+  messageCount?: number;
+  message_count?: number;
+  tokensUsed?: number;
+  tokens_used?: number;
+  podName?: string;
+  pod_name?: string | null;
+  error?: string | null;
+  origin?: VolundrSession['origin'];
+  hostname?: string;
+  chatEndpoint?: string | null;
+  chat_endpoint?: string | null;
+  codeEndpoint?: string | null;
+  code_endpoint?: string | null;
+  taskType?: string | null;
+  task_type?: string | null;
+  archivedAt?: Date | string | null;
+  archived_at?: string | null;
+  trackerIssue?: TrackerIssue;
+  activityState?: VolundrSession['activityState'];
+  activity_state?: VolundrSession['activityState'];
+  ownerId?: string | null;
+  owner_id?: string | null;
+  tenantId?: string | null;
+  tenant_id?: string | null;
+};
+
+type StatsPayload = {
+  activeSessions?: number;
+  active_sessions?: number;
+  totalSessions?: number;
+  total_sessions?: number;
+  tokensToday?: number;
+  tokens_today?: number;
+  localTokens?: number;
+  local_tokens?: number;
+  cloudTokens?: number;
+  cloud_tokens?: number;
+  costToday?: number;
+  cost_today?: number;
+  sparklines?: VolundrStats['sparklines'];
+};
+
+type ConversationPayload = {
+  turns: Array<{
+    id: string;
+    role: string;
+    content: string;
+    created_at?: string;
+    metadata?: {
+      tokens_in?: number;
+      tokens_out?: number;
+      latency?: number;
+    };
+  }>;
+};
+
+type LogPayload = {
+  lines: Array<{
+    timestamp?: number | string;
+    time?: string;
+    level?: string;
+    logger?: string;
+    message: string;
+  }>;
+};
+
+type ChroniclePayload = {
+  events: SessionChronicle['events'];
+  files: SessionChronicle['files'];
+  commits: SessionChronicle['commits'];
+  token_burn?: number[];
+  tokenBurn?: number[];
+};
+
+type ChronicleEventPayload = {
+  session_id: string;
+  event: SessionChronicle['events'][number];
+  files: SessionChronicle['files'];
+  commits: SessionChronicle['commits'];
+  token_burn?: number[];
+};
+
+function toEpochMs(value?: number | string | null): number {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return 0;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function toDate(value?: Date | string | null): Date | undefined {
+  if (!value) return undefined;
+  if (value instanceof Date) return value;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? undefined : new Date(parsed);
+}
+
+function normalizeSession(session: SessionPayload): VolundrSession {
+  return {
+    id: session.id,
+    name: session.name,
+    source: session.source,
+    status: session.status,
+    model: session.model,
+    lastActive: toEpochMs(session.lastActive ?? session.last_active),
+    messageCount: session.messageCount ?? session.message_count ?? 0,
+    tokensUsed: session.tokensUsed ?? session.tokens_used ?? 0,
+    podName: session.podName ?? session.pod_name ?? undefined,
+    error: session.error ?? undefined,
+    origin: session.origin,
+    hostname: session.hostname,
+    chatEndpoint: session.chatEndpoint ?? session.chat_endpoint ?? undefined,
+    codeEndpoint: session.codeEndpoint ?? session.code_endpoint ?? undefined,
+    taskType: session.taskType ?? session.task_type ?? undefined,
+    archivedAt: toDate(session.archivedAt ?? session.archived_at),
+    trackerIssue: session.trackerIssue,
+    activityState: session.activityState ?? session.activity_state ?? undefined,
+    ownerId: session.ownerId ?? session.owner_id ?? undefined,
+    tenantId: session.tenantId ?? session.tenant_id ?? undefined,
+  };
+}
+
+function normalizeStats(stats: StatsPayload): VolundrStats {
+  return {
+    activeSessions: stats.activeSessions ?? stats.active_sessions ?? 0,
+    totalSessions: stats.totalSessions ?? stats.total_sessions ?? 0,
+    tokensToday: stats.tokensToday ?? stats.tokens_today ?? 0,
+    localTokens: stats.localTokens ?? stats.local_tokens ?? 0,
+    cloudTokens: stats.cloudTokens ?? stats.cloud_tokens ?? 0,
+    costToday: stats.costToday ?? stats.cost_today ?? 0,
+    sparklines: stats.sparklines,
+  };
+}
+
+function normalizeMessageRole(role: string): VolundrMessage['role'] {
+  return role === 'user' ? 'user' : 'assistant';
+}
+
+function normalizeMessages(
+  sessionId: string,
+  payload: ConversationPayload,
+): VolundrMessage[] {
+  return payload.turns.map((turn) => ({
+    id: turn.id,
+    sessionId,
+    role: normalizeMessageRole(turn.role),
+    content: turn.content,
+    timestamp: toEpochMs(turn.created_at),
+    tokensIn: turn.metadata?.tokens_in,
+    tokensOut: turn.metadata?.tokens_out,
+    latency: turn.metadata?.latency,
+  }));
+}
+
+function normalizeLogLevel(level?: string): VolundrLog['level'] {
+  const normalized = (level ?? 'INFO').toLowerCase();
+  if (normalized === 'warning') return 'warn';
+  if (normalized === 'debug' || normalized === 'info' || normalized === 'warn') return normalized;
+  return 'error';
+}
+
+function normalizeLogs(sessionId: string, payload: LogPayload): VolundrLog[] {
+  return payload.lines.map((line, index) => ({
+    id: `${sessionId}-log-${index}`,
+    sessionId,
+    timestamp: toEpochMs(line.timestamp ?? line.time),
+    level: normalizeLogLevel(line.level),
+    source: line.logger ?? 'broker',
+    message: line.message,
+  }));
+}
+
+function normalizeChronicle(payload: ChroniclePayload): SessionChronicle {
+  return {
+    events: payload.events,
+    files: payload.files,
+    commits: payload.commits,
+    tokenBurn: payload.tokenBurn ?? payload.token_burn ?? [],
+  };
+}
+
+function applyChronicleEvent(
+  existing: SessionChronicle | undefined,
+  payload: ChronicleEventPayload,
+): SessionChronicle {
+  const nextEvent = payload.event;
+  const existingEvents = existing?.events ?? [];
+  const hasEvent = existingEvents.some(
+    (event) =>
+      event.t === nextEvent.t &&
+      event.type === nextEvent.type &&
+      event.label === nextEvent.label,
+  );
+
+  return {
+    events: hasEvent ? existingEvents : [...existingEvents, nextEvent],
+    files: payload.files,
+    commits: payload.commits,
+    tokenBurn: payload.token_burn ?? [],
+  };
+}
+
+function inferEventType(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+  if ('active_sessions' in payload || 'activeSessions' in payload) return 'stats_updated';
+  if ('id' in payload && ('status' in payload || 'name' in payload)) return 'session_updated';
+  if ('id' in payload) return 'session_deleted';
+  return null;
+}
+
+export function buildVolundrHttpAdapter(
+  client: HttpClient,
+  openStream: EventStreamOpener = openEventStream,
+): IVolundrService {
+  const sessionSubscribers = new Set<(sessions: VolundrSession[]) => void>();
+  const statsSubscribers = new Set<(stats: VolundrStats) => void>();
+  const chronicleSubscribers = new Map<string, Set<(chronicle: SessionChronicle) => void>>();
+  const sessionCache = new Map<string, VolundrSession>();
+  const chronicleCache = new Map<string, SessionChronicle>();
+  let statsCache: VolundrStats | null = null;
+  let streamHandle: EventStreamHandle | null = null;
+  let sessionsHydration: Promise<void> | null = null;
+  let statsHydration: Promise<void> | null = null;
+  const chronicleHydration = new Map<string, Promise<void>>();
+
+  function publishSessions(): void {
+    const snapshot = Array.from(sessionCache.values());
+    for (const subscriber of sessionSubscribers) subscriber(snapshot);
+  }
+
+  function publishStats(): void {
+    if (!statsCache) return;
+    for (const subscriber of statsSubscribers) subscriber(statsCache);
+  }
+
+  function publishChronicle(sessionId: string): void {
+    const chronicle = chronicleCache.get(sessionId);
+    if (!chronicle) return;
+    for (const subscriber of chronicleSubscribers.get(sessionId) ?? []) subscriber(chronicle);
+  }
+
+  function updateSessionCache(sessions: VolundrSession[]): void {
+    sessionCache.clear();
+    for (const session of sessions) sessionCache.set(session.id, session);
+  }
+
+  async function loadSessions(endpoint: string): Promise<VolundrSession[]> {
+    const sessions = (await client.get<SessionPayload[]>(endpoint)).map(normalizeSession);
+    updateSessionCache(sessions);
+    publishSessions();
+    return sessions;
+  }
+
+  async function loadSession(id: string): Promise<VolundrSession | null> {
+    const session = await client.get<SessionPayload | null>(`/sessions/${id}`);
+    if (!session) {
+      sessionCache.delete(id);
+      publishSessions();
+      return null;
+    }
+    const normalized = normalizeSession(session);
+    sessionCache.set(normalized.id, normalized);
+    publishSessions();
+    return normalized;
+  }
+
+  async function loadStats(): Promise<VolundrStats> {
+    statsCache = normalizeStats(await client.get<StatsPayload>('/stats'));
+    publishStats();
+    return statsCache;
+  }
+
+  async function loadChronicle(sessionId: string): Promise<SessionChronicle | null> {
+    const payload = await client.get<ChroniclePayload | null>(`/chronicles/${sessionId}/timeline`);
+    if (!payload) {
+      chronicleCache.delete(sessionId);
+      return null;
+    }
+    const chronicle = normalizeChronicle(payload);
+    chronicleCache.set(sessionId, chronicle);
+    publishChronicle(sessionId);
+    return chronicle;
+  }
+
+  function ensureStream(): void {
+    if (streamHandle || !client.basePath) return;
+    streamHandle = openStream(`${client.basePath}/sessions/stream`, {
+      onMessage: () => {},
+      onEvent: ({ event, data }) => {
+        try {
+          const payload = JSON.parse(data) as SessionPayload | StatsPayload | { id?: string };
+          const eventType = event ?? inferEventType(payload);
+          if (eventType === 'session_created' || eventType === 'session_updated') {
+            const session = normalizeSession(payload as SessionPayload);
+            sessionCache.set(session.id, session);
+            publishSessions();
+            return;
+          }
+          if (eventType === 'session_deleted') {
+            const sessionId =
+              typeof payload === 'object' && payload && 'id' in payload ? payload.id : null;
+            if (typeof sessionId === 'string') {
+              sessionCache.delete(sessionId);
+              publishSessions();
+            }
+            return;
+          }
+          if (eventType === 'stats_updated') {
+            statsCache = normalizeStats(payload as StatsPayload);
+            publishStats();
+            return;
+          }
+          if (eventType === 'chronicle_event') {
+            const chronicleEvent = payload as ChronicleEventPayload;
+            const sessionId = chronicleEvent.session_id;
+            if (typeof sessionId !== 'string') return;
+            chronicleCache.set(
+              sessionId,
+              applyChronicleEvent(chronicleCache.get(sessionId), chronicleEvent),
+            );
+            publishChronicle(sessionId);
+          }
+        } catch {
+          // Drop malformed frames.
+        }
+      },
+    });
+  }
+
+  function maybeCloseStream(): void {
+    const hasChronicleSubscribers = Array.from(chronicleSubscribers.values()).some(
+      (subscribers) => subscribers.size > 0,
+    );
+    if (sessionSubscribers.size > 0 || statsSubscribers.size > 0 || hasChronicleSubscribers) return;
+    streamHandle?.close();
+    streamHandle = null;
+  }
+
+  function hydrateSessions(): void {
+    if (sessionCache.size > 0 || sessionsHydration) return;
+    sessionsHydration = loadSessions('/sessions')
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => {
+        sessionsHydration = null;
+      });
+  }
+
+  function hydrateStats(): void {
+    if (statsCache || statsHydration) return;
+    statsHydration = loadStats()
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => {
+        statsHydration = null;
+      });
+  }
+
+  function hydrateChronicle(sessionId: string): void {
+    if (chronicleCache.has(sessionId) || chronicleHydration.has(sessionId)) return;
+    chronicleHydration.set(
+      sessionId,
+      loadChronicle(sessionId)
+        .then(() => undefined)
+        .catch(() => undefined)
+        .finally(() => {
+          chronicleHydration.delete(sessionId);
+        }),
+    );
+  }
+
   return {
     getFeatures: () => client.get<VolundrFeatures>('/features'),
-    getSessions: () => client.get<VolundrSession[]>('/sessions'),
-    getSession: (id) => client.get<VolundrSession | null>(`/sessions/${id}`),
-    getActiveSessions: () => client.get<VolundrSession[]>('/sessions?active=true'),
-    getStats: () => client.get<VolundrStats>('/stats'),
+    getSessions: () => loadSessions('/sessions'),
+    getSession: (id) => loadSession(id),
+    getActiveSessions: () => loadSessions('/sessions?active=true'),
+    getStats: () => loadStats(),
     getModels: () => client.get<Record<string, VolundrModel>>('/models'),
     getRepos: () => client.get<VolundrRepo[]>('/repos'),
 
-    subscribe: (_callback) => () => {},
-    subscribeStats: (_callback) => () => {},
+    subscribe: (callback) => {
+      sessionSubscribers.add(callback);
+      ensureStream();
+      if (sessionCache.size > 0) {
+        callback(Array.from(sessionCache.values()));
+      } else {
+        hydrateSessions();
+      }
+      return () => {
+        sessionSubscribers.delete(callback);
+        maybeCloseStream();
+      };
+    },
+    subscribeStats: (callback) => {
+      statsSubscribers.add(callback);
+      ensureStream();
+      if (statsCache) {
+        callback(statsCache);
+      } else {
+        hydrateStats();
+      }
+      return () => {
+        statsSubscribers.delete(callback);
+        maybeCloseStream();
+      };
+    },
 
     getTemplates: () => client.get<VolundrTemplate[]>('/templates'),
     getTemplate: (name) => client.get<VolundrTemplate | null>(`/templates/${name}`),
@@ -88,10 +493,11 @@ export function buildVolundrHttpAdapter(client: HttpClient): IVolundrService {
       client.post<{ name: string; keys: string[] }>('/secrets', { name, data }),
     getClusterResources: () => client.get<ClusterResourceInfo>('/cluster/resources'),
 
-    startSession: (config) => client.post<VolundrSession>('/sessions', config),
-    connectSession: (config) => client.post<VolundrSession>('/sessions/connect', config),
+    startSession: async (config) => normalizeSession(await client.post<SessionPayload>('/sessions', config)),
+    connectSession: async (config) =>
+      normalizeSession(await client.post<SessionPayload>('/sessions/connect', config)),
     updateSession: (sessionId, updates) =>
-      client.patch<VolundrSession>(`/sessions/${sessionId}`, updates),
+      client.patch<SessionPayload>(`/sessions/${sessionId}`, updates).then(normalizeSession),
     stopSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/stop`),
     resumeSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/resume`),
     deleteSession: (sessionId, cleanup) =>
@@ -100,23 +506,46 @@ export function buildVolundrHttpAdapter(client: HttpClient): IVolundrService {
       ),
     archiveSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/archive`),
     restoreSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/restore`),
-    listArchivedSessions: () => client.get<VolundrSession[]>('/sessions/archived'),
+    listArchivedSessions: () =>
+      client.get<SessionPayload[]>('/sessions/archived').then((sessions) => sessions.map(normalizeSession)),
 
-    getMessages: (sessionId) => client.get<VolundrMessage[]>(`/sessions/${sessionId}/messages`),
+    getMessages: (sessionId) =>
+      client
+        .get<ConversationPayload>(`/sessions/${sessionId}/conversation`)
+        .then((payload) => normalizeMessages(sessionId, payload)),
     sendMessage: (sessionId, content) =>
       client.post<VolundrMessage>(`/sessions/${sessionId}/messages`, { content }),
     subscribeMessages: (_sessionId, _callback) => () => {},
 
     getLogs: (sessionId, limit) =>
-      client.get<VolundrLog[]>(`/sessions/${sessionId}/logs${limit ? `?limit=${limit}` : ''}`),
+      client
+        .get<LogPayload>(`/sessions/${sessionId}/logs${limit ? `?lines=${limit}` : ''}`)
+        .then((payload) => normalizeLogs(sessionId, payload)),
     subscribeLogs: (_sessionId, _callback) => () => {},
 
     getCodeServerUrl: (sessionId) =>
       client.get<string | null>(`/sessions/${sessionId}/code-server-url`),
 
-    getChronicle: (sessionId) =>
-      client.get<SessionChronicle | null>(`/sessions/${sessionId}/chronicle`),
-    subscribeChronicle: (_sessionId, _callback) => () => {},
+    getChronicle: (sessionId) => loadChronicle(sessionId),
+    subscribeChronicle: (sessionId, callback) => {
+      const subscribers = chronicleSubscribers.get(sessionId) ?? new Set();
+      subscribers.add(callback);
+      chronicleSubscribers.set(sessionId, subscribers);
+      ensureStream();
+      const chronicle = chronicleCache.get(sessionId);
+      if (chronicle) {
+        callback(chronicle);
+      } else {
+        hydrateChronicle(sessionId);
+      }
+      return () => {
+        const active = chronicleSubscribers.get(sessionId);
+        if (!active) return;
+        active.delete(callback);
+        if (active.size === 0) chronicleSubscribers.delete(sessionId);
+        maybeCloseStream();
+      };
+    },
 
     getPullRequests: (repoUrl, status) =>
       client.get<PullRequest[]>(
