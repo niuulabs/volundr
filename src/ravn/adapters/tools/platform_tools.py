@@ -23,6 +23,7 @@ _PERMISSION_PLATFORM = "platform:api"
 
 _DEFAULT_BASE_URL = "http://localhost:8080"
 _DEFAULT_TIMEOUT = 30.0
+_FORGE_SESSIONS_PATH = "/api/v1/forge/sessions"
 
 
 def _client(base_url: str, timeout: float, pat_token: str = "") -> httpx.AsyncClient:
@@ -153,7 +154,7 @@ class VolundrSessionTool(ToolPort):
             params: dict[str, str] = {}
             if status := input.get("status"):
                 params["status"] = status
-            resp = await client.get("/api/v1/volundr/sessions", params=params or None)
+            resp = await client.get(_FORGE_SESSIONS_PATH, params=params or None)
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
@@ -168,7 +169,7 @@ class VolundrSessionTool(ToolPort):
             if value := input.get(key):
                 body[key] = value
         try:
-            resp = await client.post("/api/v1/volundr/sessions", json=body)
+            resp = await client.post(_FORGE_SESSIONS_PATH, json=body)
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
@@ -178,7 +179,7 @@ class VolundrSessionTool(ToolPort):
         if not session_id:
             return _err("session_id is required for get action")
         try:
-            resp = await client.get(f"/api/v1/volundr/sessions/{session_id}")
+            resp = await client.get(f"{_FORGE_SESSIONS_PATH}/{session_id}")
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
@@ -188,7 +189,7 @@ class VolundrSessionTool(ToolPort):
         if not session_id:
             return _err("session_id is required for start action")
         try:
-            resp = await client.post(f"/api/v1/volundr/sessions/{session_id}/start")
+            resp = await client.post(f"{_FORGE_SESSIONS_PATH}/{session_id}/start")
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
@@ -198,7 +199,7 @@ class VolundrSessionTool(ToolPort):
         if not session_id:
             return _err("session_id is required for stop action")
         try:
-            resp = await client.post(f"/api/v1/volundr/sessions/{session_id}/stop")
+            resp = await client.post(f"{_FORGE_SESSIONS_PATH}/{session_id}/stop")
             resp.raise_for_status()
             return _ok(resp.json())
         except Exception as exc:
@@ -208,7 +209,7 @@ class VolundrSessionTool(ToolPort):
         if not session_id:
             return _err("session_id is required for delete action")
         try:
-            resp = await client.delete(f"/api/v1/volundr/sessions/{session_id}")
+            resp = await client.delete(f"{_FORGE_SESSIONS_PATH}/{session_id}")
             resp.raise_for_status()
             return _ok({"session_id": session_id, "status": "deleted"})
         except Exception as exc:

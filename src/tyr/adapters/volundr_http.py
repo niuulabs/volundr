@@ -14,6 +14,8 @@ from tyr.ports.volundr import ActivityEvent, SpawnRequest, VolundrPort, VolundrS
 
 logger = logging.getLogger(__name__)
 
+FORGE_SESSIONS_PATH = "/api/v1/forge/sessions"
+
 
 class VolundrHTTPAdapter(VolundrPort):
     """Calls Volundr's REST API to manage sessions."""
@@ -57,7 +59,7 @@ class VolundrHTTPAdapter(VolundrPort):
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.post(
-                f"{self._base_url}/api/v1/volundr/sessions",
+                f"{self._base_url}{FORGE_SESSIONS_PATH}",
                 headers=self._headers(auth_token),
                 json={
                     "name": request.name,
@@ -103,7 +105,7 @@ class VolundrHTTPAdapter(VolundrPort):
     ) -> VolundrSession | None:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.get(
-                f"{self._base_url}/api/v1/volundr/sessions/{session_id}",
+                f"{self._base_url}{FORGE_SESSIONS_PATH}/{session_id}",
                 headers=self._headers(auth_token),
             )
             if resp.status_code == 404:
@@ -130,7 +132,7 @@ class VolundrHTTPAdapter(VolundrPort):
     ) -> list[VolundrSession]:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.get(
-                f"{self._base_url}/api/v1/volundr/sessions",
+                f"{self._base_url}{FORGE_SESSIONS_PATH}",
                 headers=self._headers(auth_token),
             )
             resp.raise_for_status()
@@ -148,7 +150,7 @@ class VolundrHTTPAdapter(VolundrPort):
     async def get_pr_status(self, session_id: str) -> PRStatus:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.get(
-                f"{self._base_url}/api/v1/volundr/sessions/{session_id}/pr",
+                f"{self._base_url}{FORGE_SESSIONS_PATH}/{session_id}/pr",
                 headers=self._headers(),
             )
             resp.raise_for_status()
@@ -164,7 +166,7 @@ class VolundrHTTPAdapter(VolundrPort):
     async def get_chronicle_summary(self, session_id: str) -> str:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.get(
-                f"{self._base_url}/api/v1/volundr/sessions/{session_id}/chronicle",
+                f"{self._base_url}{FORGE_SESSIONS_PATH}/{session_id}/chronicle",
                 headers=self._headers(),
             )
             resp.raise_for_status()
@@ -179,7 +181,7 @@ class VolundrHTTPAdapter(VolundrPort):
     ) -> None:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.post(
-                f"{self._base_url}/api/v1/volundr/sessions/{session_id}/messages",
+                f"{self._base_url}{FORGE_SESSIONS_PATH}/{session_id}/messages",
                 headers=self._headers(auth_token),
                 json={"content": message},
             )
@@ -193,7 +195,7 @@ class VolundrHTTPAdapter(VolundrPort):
     ) -> None:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.delete(
-                f"{self._base_url}/api/v1/volundr/sessions/{session_id}",
+                f"{self._base_url}{FORGE_SESSIONS_PATH}/{session_id}",
                 headers=self._headers(auth_token),
             )
             if resp.status_code == 404:
@@ -244,7 +246,7 @@ class VolundrHTTPAdapter(VolundrPort):
         """Fetch the full conversation history for a session."""
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
-                f"{self._base_url}/api/v1/volundr/sessions/{session_id}/conversation",
+                f"{self._base_url}{FORGE_SESSIONS_PATH}/{session_id}/conversation",
                 headers=self._headers(),
             )
             resp.raise_for_status()
@@ -278,7 +280,7 @@ class VolundrHTTPAdapter(VolundrPort):
 
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         """Subscribe to the Volundr SSE stream and yield activity + session lifecycle events."""
-        url = f"{self._base_url}/api/v1/volundr/sessions/stream"
+        url = f"{self._base_url}{FORGE_SESSIONS_PATH}/stream"
         async with httpx.AsyncClient(timeout=None) as client:
             async with client.stream("GET", url, headers=self._headers()) as resp:
                 resp.raise_for_status()

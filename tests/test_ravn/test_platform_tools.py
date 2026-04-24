@@ -16,6 +16,7 @@ from ravn.adapters.tools.platform_tools import (
 )
 
 BASE_URL = "http://localhost:8080"
+FORGE_SESSIONS_URL = f"{BASE_URL}/api/v1/forge/sessions"
 
 
 # ===========================================================================
@@ -42,7 +43,7 @@ class TestVolundrSessionTool:
     @pytest.mark.asyncio
     @respx.mock
     async def test_list_sessions(self):
-        respx.get(f"{BASE_URL}/api/v1/volundr/sessions").mock(
+        respx.get(FORGE_SESSIONS_URL).mock(
             return_value=httpx.Response(200, json=[{"id": "abc"}])
         )
         result = await self.tool.execute({"action": "list"})
@@ -53,13 +54,27 @@ class TestVolundrSessionTool:
     @pytest.mark.asyncio
     @respx.mock
     async def test_create_session(self):
-        respx.post(f"{BASE_URL}/api/v1/volundr/sessions").mock(
+        respx.post(FORGE_SESSIONS_URL).mock(
             return_value=httpx.Response(200, json={"id": "new-session"})
         )
         result = await self.tool.execute({"action": "create", "name": "my-session"})
         assert not result.is_error
         data = json.loads(result.content)
         assert data["id"] == "new-session"
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_get_session(self):
+        session_id = "sess-get"
+        respx.get(f"{FORGE_SESSIONS_URL}/{session_id}").mock(
+            return_value=httpx.Response(200, json={"id": session_id, "status": "running"})
+        )
+
+        result = await self.tool.execute({"action": "get", "session_id": session_id})
+
+        assert not result.is_error
+        data = json.loads(result.content)
+        assert data["id"] == session_id
 
     @pytest.mark.asyncio
     async def test_create_session_missing_name(self):
@@ -71,13 +86,27 @@ class TestVolundrSessionTool:
     @respx.mock
     async def test_stop_session(self):
         session_id = "sess-123"
-        respx.post(f"{BASE_URL}/api/v1/volundr/sessions/{session_id}/stop").mock(
+        respx.post(f"{FORGE_SESSIONS_URL}/{session_id}/stop").mock(
             return_value=httpx.Response(200, json={"status": "stopped"})
         )
         result = await self.tool.execute({"action": "stop", "session_id": session_id})
         assert not result.is_error
         data = json.loads(result.content)
         assert data["status"] == "stopped"
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_start_session(self):
+        session_id = "sess-start"
+        respx.post(f"{FORGE_SESSIONS_URL}/{session_id}/start").mock(
+            return_value=httpx.Response(200, json={"status": "running"})
+        )
+
+        result = await self.tool.execute({"action": "start", "session_id": session_id})
+
+        assert not result.is_error
+        data = json.loads(result.content)
+        assert data["status"] == "running"
 
     @pytest.mark.asyncio
     async def test_stop_session_missing_id(self):
@@ -89,7 +118,7 @@ class TestVolundrSessionTool:
     @respx.mock
     async def test_delete_session(self):
         session_id = "sess-456"
-        respx.delete(f"{BASE_URL}/api/v1/volundr/sessions/{session_id}").mock(
+        respx.delete(f"{FORGE_SESSIONS_URL}/{session_id}").mock(
             return_value=httpx.Response(200, json={})
         )
         result = await self.tool.execute({"action": "delete", "session_id": session_id})
@@ -104,7 +133,7 @@ class TestVolundrSessionTool:
     @pytest.mark.asyncio
     @respx.mock
     async def test_api_error_returns_error_result(self):
-        respx.get(f"{BASE_URL}/api/v1/volundr/sessions").mock(
+        respx.get(FORGE_SESSIONS_URL).mock(
             return_value=httpx.Response(500, text="internal error")
         )
         result = await self.tool.execute({"action": "list"})
