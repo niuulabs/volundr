@@ -101,6 +101,7 @@ def _configure_logging() -> None:
 
 _configure_logging()
 logger = logging.getLogger("skuld.broker")
+FORGE_SESSIONS_PATH = "/api/v1/forge/sessions"
 
 
 def _sanitize_log(value: object) -> str:
@@ -1307,7 +1308,7 @@ class Broker:
             return
 
         client = await self._get_http_client()
-        url = f"/api/v1/volundr/sessions/{self.session_id}/usage"
+        url = f"{FORGE_SESSIONS_PATH}/{self.session_id}/usage"
 
         for model_id, usage in model_usage.items():
             tokens = (
@@ -1443,7 +1444,7 @@ class Broker:
         try:
             client = await self._get_http_client()
             resp = await client.post(
-                f"/api/v1/volundr/sessions/{self.session_id}/activity",
+                f"{FORGE_SESSIONS_PATH}/{self.session_id}/activity",
                 json={"state": state, "metadata": metadata},
             )
             logger.info(
@@ -1725,7 +1726,7 @@ class Broker:
             summary_data = await self._generate_summary()
 
             client = await self._get_http_client()
-            url = f"/api/v1/volundr/sessions/{self.session_id}/chronicle"
+            url = f"{FORGE_SESSIONS_PATH}/{self.session_id}/chronicle"
 
             payload: dict = {
                 "duration_seconds": self._artifacts.duration_seconds,
@@ -2625,7 +2626,7 @@ async def send_message_to_session(body: _SendMessageRequest) -> dict:
         raise HTTPException(503, "Volundr API URL not configured")
 
     client = await broker._get_http_client()
-    url = f"/api/v1/volundr/sessions/{body.session_id}/messages"
+    url = f"{FORGE_SESSIONS_PATH}/{body.session_id}/messages"
     try:
         resp = await client.post(url, json={"content": body.content})
         resp.raise_for_status()

@@ -11,10 +11,12 @@ from fastapi.testclient import TestClient
 
 from skuld.broker import (
     Broker,
+    _SendMessageRequest,
     _log_buffer,
     _TokenRedactFilter,
     app,
     broker,
+    send_message_to_session,
 )
 from skuld.config import SkuldSettings
 from skuld.transports import (
@@ -757,12 +759,29 @@ class TestReportUsage:
 
         mock_client.post.assert_called_once()
         args, kwargs = mock_client.post.call_args
-        assert args[0] == "/api/v1/volundr/sessions/sess-abc/usage"
+        assert args[0] == "/api/v1/forge/sessions/sess-abc/usage"
         payload = kwargs["json"]
         assert payload["tokens"] == 3 + 12 + 100 + 50
         assert payload["provider"] == "cloud"
         assert payload["model"] == "claude-opus-4-5-20251101"
         assert payload["cost"] == 0.05
+
+    @pytest.mark.asyncio
+    async def test_report_activity_state_posts_to_forge_route(self, test_broker):
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.url = "http://volundr.test/api/v1/forge/sessions/sess-abc/activity"
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        test_broker._http_client = mock_client
+        test_broker.volundr_api_url = "http://volundr.test:80"
+
+        await test_broker._report_activity_state("active")
+
+        mock_client.post.assert_called_once()
+        args, kwargs = mock_client.post.call_args
+        assert args[0] == "/api/v1/forge/sessions/sess-abc/activity"
+        assert kwargs["json"]["state"] == "active"
 
     @pytest.mark.asyncio
     async def test_report_usage_skips_when_no_url(self, tmp_path):
@@ -1226,7 +1245,7 @@ class TestReportChronicle:
         assert mock_client.post.call_count == 2
         chronicle_call = mock_client.post.call_args_list[0]
         args, kwargs = chronicle_call
-        assert args[0] == "/api/v1/volundr/sessions/sess-chronicle/chronicle"
+        assert args[0] == "/api/v1/forge/sessions/sess-chronicle/chronicle"
         payload = kwargs["json"]
         assert "duration_seconds" in payload
         assert payload["key_changes"] == ["/src/main.py"]
@@ -1250,6 +1269,26 @@ class TestReportChronicle:
 
         await b._report_chronicle()
         mock_client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_send_message_to_session_uses_forge_route(self, monkeypatch):
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        monkeypatch.setattr(broker, "volundr_api_url", "http://volundr.test:80")
+        monkeypatch.setattr(broker, "_get_http_client", AsyncMock(return_value=mock_client))
+
+        response = await send_message_to_session(
+            _SendMessageRequest(session_id="sess-target", content="hello from broker")
+        )
+
+        assert response == {"status": "sent", "target_session_id": "sess-target"}
+        mock_client.post.assert_awaited_once_with(
+            "/api/v1/forge/sessions/sess-target/messages",
+            json={"content": "hello from broker"},
+        )
 
     @pytest.mark.asyncio
     async def test_report_chronicle_skips_when_no_turns(self, test_broker):
