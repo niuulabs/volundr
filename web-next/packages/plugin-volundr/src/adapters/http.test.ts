@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { buildVolundrHttpAdapter } from './http';
 import type { IVolundrService } from '../ports/IVolundrService';
 
@@ -12,6 +12,10 @@ function makeClient() {
     put: vi.fn().mockResolvedValue({}),
   };
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('buildVolundrHttpAdapter', () => {
   it('returns an IVolundrService implementation', () => {
@@ -444,6 +448,76 @@ describe('buildVolundrHttpAdapter', () => {
       commits: [{ hash: 'abc123', msg: 'test', time: '10:00' }],
       tokenBurn: [2, 4],
     });
+
+    unsub();
+  });
+
+  it('polls conversation history and emits only new messages', async () => {
+    vi.useFakeTimers();
+    const client = makeClient();
+    client.get.mockImplementation(async (endpoint: string) => {
+      if (endpoint !== '/sessions/sess-1/conversation') return [];
+      if (client.get.mock.calls.length <= 1) {
+        return {
+          turns: [{ id: 'msg-1', role: 'user', content: 'hello', created_at: '2026-04-24T10:00:00Z' }],
+        };
+      }
+      return {
+        turns: [
+          { id: 'msg-1', role: 'user', content: 'hello', created_at: '2026-04-24T10:00:00Z' },
+          { id: 'msg-2', role: 'assistant', content: 'hi', created_at: '2026-04-24T10:01:00Z' },
+        ],
+      };
+    });
+
+    const seen: VolundrMessage[] = [];
+    const unsub = buildVolundrHttpAdapter(client).subscribeMessages('sess-1', (message) =>
+      seen.push(message),
+    );
+
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(seen).toEqual([
+      expect.objectContaining({
+        id: 'msg-2',
+        sessionId: 'sess-1',
+        role: 'assistant',
+      }),
+    ]);
+
+    unsub();
+  });
+
+  it('polls session logs and emits only new lines', async () => {
+    vi.useFakeTimers();
+    const client = makeClient();
+    client.get.mockImplementation(async (endpoint: string) => {
+      if (endpoint !== '/sessions/sess-1/logs') return [];
+      if (client.get.mock.calls.length <= 1) {
+        return {
+          lines: [{ timestamp: 1000, level: 'INFO', logger: 'skuld', message: 'booting' }],
+        };
+      }
+      return {
+        lines: [
+          { timestamp: 1000, level: 'INFO', logger: 'skuld', message: 'booting' },
+          { timestamp: 2000, level: 'ERROR', logger: 'skuld', message: 'failed once' },
+        ],
+      };
+    });
+
+    const seen: VolundrLog[] = [];
+    const unsub = buildVolundrHttpAdapter(client).subscribeLogs('sess-1', (log) => seen.push(log));
+
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(seen).toEqual([
+      expect.objectContaining({
+        sessionId: 'sess-1',
+        level: 'error',
+        message: 'failed once',
+      }),
+    ]);
 
     unsub();
   });

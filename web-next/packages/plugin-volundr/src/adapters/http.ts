@@ -60,6 +60,7 @@ export interface HttpClient {
 }
 
 type EventStreamOpener = (url: string, options: EventStreamOptions) => EventStreamHandle;
+const LIVE_POLL_MS = 2_000;
 
 type SessionPayload = {
   id: string;
@@ -249,6 +250,34 @@ function normalizeChronicle(payload: ChroniclePayload): SessionChronicle {
   };
 }
 
+type SubscriberSet<T> = Set<(item: T) => void>;
+
+interface PollingConnection<T> {
+  subscribers: SubscriberSet<T>;
+  knownKeys: string[];
+  knownKeySet: Set<string>;
+  timer: ReturnType<typeof setInterval> | null;
+  loading: boolean;
+  hydrated: boolean;
+}
+
+function rememberKnownKey<T>(
+  connection: PollingConnection<T>,
+  key: string,
+  maxEntries = 500,
+): void {
+  if (connection.knownKeySet.has(key)) return;
+  connection.knownKeySet.add(key);
+  connection.knownKeys.push(key);
+  if (connection.knownKeys.length <= maxEntries) return;
+  const oldest = connection.knownKeys.shift();
+  if (oldest) connection.knownKeySet.delete(oldest);
+}
+
+function makeLogKey(log: VolundrLog): string {
+  return `${log.timestamp}:${log.level}:${log.source}:${log.message}`;
+}
+
 function applyChronicleEvent(
   existing: SessionChronicle | undefined,
   payload: ChronicleEventPayload,
@@ -285,6 +314,8 @@ export function buildVolundrHttpAdapter(
   const sessionSubscribers = new Set<(sessions: VolundrSession[]) => void>();
   const statsSubscribers = new Set<(stats: VolundrStats) => void>();
   const chronicleSubscribers = new Map<string, Set<(chronicle: SessionChronicle) => void>>();
+  const messageSubscribers = new Map<string, PollingConnection<VolundrMessage>>();
+  const logSubscribers = new Map<string, PollingConnection<VolundrLog>>();
   const sessionCache = new Map<string, VolundrSession>();
   const chronicleCache = new Map<string, SessionChronicle>();
   let statsCache: VolundrStats | null = null;
@@ -350,6 +381,77 @@ export function buildVolundrHttpAdapter(
     chronicleCache.set(sessionId, chronicle);
     publishChronicle(sessionId);
     return chronicle;
+  }
+
+  async function loadMessages(sessionId: string): Promise<VolundrMessage[]> {
+    return client
+      .get<ConversationPayload>(`/sessions/${sessionId}/conversation`)
+      .then((payload) => normalizeMessages(sessionId, payload));
+  }
+
+  async function loadLogs(sessionId: string, limit?: number): Promise<VolundrLog[]> {
+    return client
+      .get<LogPayload>(`/sessions/${sessionId}/logs${limit ? `?lines=${limit}` : ''}`)
+      .then((payload) => normalizeLogs(sessionId, payload));
+  }
+
+  function ensurePollingConnection<T>(
+    registry: Map<string, PollingConnection<T>>,
+    sessionId: string,
+    fetchItems: () => Promise<T[]>,
+    keyOf: (item: T) => string,
+  ): PollingConnection<T> {
+    const existing = registry.get(sessionId);
+    if (existing) return existing;
+
+    const connection: PollingConnection<T> = {
+      subscribers: new Set(),
+      knownKeys: [],
+      knownKeySet: new Set(),
+      timer: null,
+      loading: false,
+      hydrated: false,
+    };
+
+    const poll = async (): Promise<void> => {
+      if (connection.loading) return;
+      connection.loading = true;
+      try {
+        const items = await fetchItems();
+        if (!connection.hydrated) {
+          for (const item of items) rememberKnownKey(connection, keyOf(item));
+          connection.hydrated = true;
+          return;
+        }
+        for (const item of items) {
+          const key = keyOf(item);
+          if (connection.knownKeySet.has(key)) continue;
+          rememberKnownKey(connection, key);
+          for (const subscriber of connection.subscribers) subscriber(item);
+        }
+      } catch {
+        // Best-effort live polling on top of stable snapshot endpoints.
+      } finally {
+        connection.loading = false;
+      }
+    };
+
+    void poll();
+    connection.timer = setInterval(() => {
+      void poll();
+    }, LIVE_POLL_MS);
+    registry.set(sessionId, connection);
+    return connection;
+  }
+
+  function maybeClosePollingConnection<T>(
+    registry: Map<string, PollingConnection<T>>,
+    sessionId: string,
+  ): void {
+    const connection = registry.get(sessionId);
+    if (!connection || connection.subscribers.size > 0) return;
+    if (connection.timer) clearInterval(connection.timer);
+    registry.delete(sessionId);
   }
 
   function ensureStream(): void {
@@ -510,18 +612,38 @@ export function buildVolundrHttpAdapter(
       client.get<SessionPayload[]>('/sessions/archived').then((sessions) => sessions.map(normalizeSession)),
 
     getMessages: (sessionId) =>
-      client
-        .get<ConversationPayload>(`/sessions/${sessionId}/conversation`)
-        .then((payload) => normalizeMessages(sessionId, payload)),
+      loadMessages(sessionId),
     sendMessage: (sessionId, content) =>
       client.post<VolundrMessage>(`/sessions/${sessionId}/messages`, { content }),
-    subscribeMessages: (_sessionId, _callback) => () => {},
+    subscribeMessages: (sessionId, callback) => {
+      const connection = ensurePollingConnection(
+        messageSubscribers,
+        sessionId,
+        () => loadMessages(sessionId),
+        (message) => message.id,
+      );
+      connection.subscribers.add(callback);
+      return () => {
+        connection.subscribers.delete(callback);
+        maybeClosePollingConnection(messageSubscribers, sessionId);
+      };
+    },
 
     getLogs: (sessionId, limit) =>
-      client
-        .get<LogPayload>(`/sessions/${sessionId}/logs${limit ? `?lines=${limit}` : ''}`)
-        .then((payload) => normalizeLogs(sessionId, payload)),
-    subscribeLogs: (_sessionId, _callback) => () => {},
+      loadLogs(sessionId, limit),
+    subscribeLogs: (sessionId, callback) => {
+      const connection = ensurePollingConnection(
+        logSubscribers,
+        sessionId,
+        () => loadLogs(sessionId),
+        makeLogKey,
+      );
+      connection.subscribers.add(callback);
+      return () => {
+        connection.subscribers.delete(callback);
+        maybeClosePollingConnection(logSubscribers, sessionId);
+      };
+    },
 
     getCodeServerUrl: (sessionId) =>
       client.get<string | null>(`/sessions/${sessionId}/code-server-url`),
