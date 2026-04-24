@@ -15,21 +15,13 @@ import { createApiClient, createQueryClient } from '@niuulabs/query';
 import { AuthProvider } from '@niuulabs/auth';
 import { Shell } from '@niuulabs/shell';
 import { plugins } from './plugins';
-import { buildServices, toSharedApiBase } from './services';
+import { buildServices, resolveSharedApiBase } from './services';
 
 function AppInner() {
   const config = useConfig();
   const services = useMemo(() => buildServices(config), [config]);
   const featureCatalogService = useMemo<IFeatureCatalogService | undefined>(() => {
-    const tyrSvc = config.services['tyr'];
-    const volundrSvc = config.services['volundr'];
-    const sharedBase =
-      tyrSvc?.mode === 'http' && typeof tyrSvc.baseUrl === 'string'
-        ? toSharedApiBase(tyrSvc.baseUrl)
-        : volundrSvc?.mode === 'http' && typeof volundrSvc.baseUrl === 'string'
-          ? toSharedApiBase(volundrSvc.baseUrl)
-          : null;
-
+    const sharedBase = resolveSharedApiBase(config);
     if (!sharedBase) return createMockFeatureCatalogService();
     return buildFeatureCatalogAdapter(createApiClient(sharedBase));
   }, [config]);
