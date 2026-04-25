@@ -873,6 +873,7 @@ def create_router(
         stats_service=stats_service,
         token_service=token_service,
         pricing_provider=pricing_provider,
+        repo_service=repo_service,
     )
 
     async def _optional_principal(request: Request) -> Principal | None:
@@ -1693,12 +1694,13 @@ def create_router(
     )
     async def list_providers() -> list[ProviderResponse]:
         """List all configured git providers."""
-        if repo_service is None:
+        try:
+            providers = forge.list_providers()
+        except RuntimeError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Repo service not available",
+                detail=str(exc),
             )
-        providers = repo_service.list_providers()
         return [ProviderResponse.from_provider_info(p) for p in providers]
 
     @router.get(
@@ -1727,7 +1729,7 @@ def create_router(
 
         user_id = await _optional_user_id(request)
         try:
-            return await repo_service.list_branches(repo_url, user_id=user_id)
+            return await forge.list_branches(repo_url, user_id=user_id)
         except GitAuthError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

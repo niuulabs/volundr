@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from volundr.adapters.inbound.rest import SessionCreate
     from volundr.domain.models import ModelProvider, Principal, Session, SessionActivityState
     from volundr.domain.ports import PricingProvider
+    from volundr.domain.services.repo import ProviderInfo, RepoService
     from volundr.domain.services.stats import StatsService
     from volundr.domain.services.token import TokenService
 
@@ -26,11 +27,13 @@ class ForgeService:
         stats_service: StatsService | None = None,
         token_service: TokenService | None = None,
         pricing_provider: PricingProvider | None = None,
+        repo_service: RepoService | None = None,
     ) -> None:
         self._session_service = session_service
         self._stats_service = stats_service
         self._token_service = token_service
         self._pricing_provider = pricing_provider
+        self._repo_service = repo_service
 
     @property
     def has_broadcaster(self) -> bool:
@@ -176,6 +179,16 @@ class ForgeService:
         if self._pricing_provider is None:
             raise RuntimeError("Pricing provider not available")
         return self._pricing_provider.list_models()
+
+    def list_providers(self) -> list[ProviderInfo]:
+        if self._repo_service is None:
+            raise RuntimeError("Repo service not available")
+        return self._repo_service.list_providers()
+
+    async def list_branches(self, repo_url: str, *, user_id: str | None = None) -> list[str]:
+        if self._repo_service is None:
+            raise RuntimeError("Repo service not available")
+        return await self._repo_service.list_branches(repo_url, user_id=user_id)
 
     async def get_stats(self):
         if self._stats_service is None:

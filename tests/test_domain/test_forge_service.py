@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 
 from volundr.domain.models import ModelProvider, SessionActivityState
-from volundr.domain.services import SessionService, StatsService, TokenService
+from volundr.domain.services import RepoService, SessionService, StatsService, TokenService
 from volundr.domain.services.forge import ForgeService
 
 
@@ -105,3 +105,15 @@ async def test_update_activity_delegates_to_session_service() -> None:
         SessionActivityState.ACTIVE,
         {"source": "test"},
     )
+
+
+def test_list_providers_uses_repo_service() -> None:
+    session_service = AsyncMock(spec=SessionService)
+    repo_service = AsyncMock(spec=RepoService)
+    repo_service.list_providers.return_value = [SimpleNamespace(name="github")]
+    forge = ForgeService(session_service, repo_service=repo_service)
+
+    providers = forge.list_providers()
+
+    assert providers[0].name == "github"
+    repo_service.list_providers.assert_called_once_with()
