@@ -874,6 +874,7 @@ def create_router(
         token_service=token_service,
         pricing_provider=pricing_provider,
         repo_service=repo_service,
+        chronicle_service=chronicle_service,
     )
 
     async def _optional_principal(request: Request) -> Principal | None:
@@ -1510,25 +1511,18 @@ def create_router(
         Fetches logs from the Skuld broker's in-memory log buffer via its
         ``GET /api/logs`` endpoint.
         """
-        session = await forge.get_session(session_id)
-        if session is None:
+        try:
+            _, base_url = await forge.get_session_proxy_target(session_id)
+        except LookupError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session not found: {session_id}",
             )
-
-        if not session.chat_endpoint:
+        except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session {session_id} has no active endpoint",
             )
-
-        # Derive HTTP base URL from the chat endpoint
-        # chat_endpoint is like wss://session-name.domain/session
-        base_url = session.chat_endpoint.replace("wss://", "https://").replace("ws://", "http://")
-        # Strip the /session path to get the base
-        if base_url.endswith("/session"):
-            base_url = base_url[: -len("/session")]
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -1582,23 +1576,22 @@ def create_router(
 
         # Verify the caller owns this session
         principal = await extract_principal(request)
-        session = await forge.get_session(session_id)
-        if session is None:
+        try:
+            session, _ = await forge.get_session_proxy_target(session_id)
+        except LookupError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session not found: {session_id}",
             )
-
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session {session_id} has no active endpoint",
+            )
         if session.owner_id and session.owner_id != principal.user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to message this session",
-            )
-
-        if not session.chat_endpoint:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} has no active endpoint",
             )
 
         # Build WS URL with access token
@@ -1644,22 +1637,18 @@ def create_router(
         session_id: UUID = Path(description="Unique session identifier"),
     ) -> dict:
         """Proxy conversation history retrieval from a running session pod."""
-        session = await forge.get_session(session_id)
-        if session is None:
+        try:
+            _, base_url = await forge.get_session_proxy_target(session_id)
+        except LookupError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session not found: {session_id}",
             )
-
-        if not session.chat_endpoint:
+        except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session {session_id} has no active endpoint",
             )
-
-        base_url = session.chat_endpoint.replace("wss://", "https://").replace("ws://", "http://")
-        if base_url.endswith("/session"):
-            base_url = base_url[: -len("/session")]
 
         # Forward the caller's auth to the session pod
         headers = {}
@@ -1768,12 +1757,6 @@ def create_router(
         Creates a new DRAFT chronicle or enriches an existing one.
         Mirrors the ``/sessions/{id}/usage`` pattern for token reporting.
         """
-        if chronicle_service is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Chronicle service not available",
-            )
-
         # Authorization: caller must own the session
         principal = await _optional_principal(request)
         session = await forge.get_session(session_id)
@@ -1787,7 +1770,7 @@ def create_router(
                 )
 
         try:
-            chronicle = await chronicle_service.create_or_update_from_broker(
+            chronicle = await forge.create_or_update_chronicle_from_broker(
                 session_id=session_id,
                 summary=data.summary,
                 key_changes=data.key_changes,
@@ -1795,6 +1778,11 @@ def create_router(
                 duration_seconds=data.duration_seconds,
             )
             return ChronicleResponse.from_chronicle(chronicle)
+        except RuntimeError as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e),
+            )
         except SessionNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1834,20 +1822,21 @@ def create_router(
         ),
     ) -> list[ChronicleResponse]:
         """List chronicles with optional filters."""
-        if chronicle_service is None:
+        tag_list = [t.strip() for t in tags.split(",")] if tags else None
+        try:
+            chronicles = await forge.list_chronicles(
+                project=project,
+                repo=repo,
+                model=model_name,
+                tags=tag_list,
+                limit=limit,
+                offset=offset,
+            )
+        except RuntimeError as e:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Chronicle service not available",
+                detail=str(e),
             )
-        tag_list = [t.strip() for t in tags.split(",")] if tags else None
-        chronicles = await chronicle_service.list_chronicles(
-            project=project,
-            repo=repo,
-            model=model_name,
-            tags=tag_list,
-            limit=limit,
-            offset=offset,
-        )
         return [ChronicleResponse.from_chronicle(c) for c in chronicles]
 
     @router.post(
@@ -1859,14 +1848,14 @@ def create_router(
     )
     async def create_chronicle(data: ChronicleCreate) -> ChronicleResponse:
         """Create a chronicle from a session's current state."""
-        if chronicle_service is None:
+        try:
+            chronicle = await forge.create_chronicle(data.session_id)
+            return ChronicleResponse.from_chronicle(chronicle)
+        except RuntimeError as e:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Chronicle service not available",
+                detail=str(e),
             )
-        try:
-            chronicle = await chronicle_service.create_chronicle(data.session_id)
-            return ChronicleResponse.from_chronicle(chronicle)
         except SessionNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1883,12 +1872,13 @@ def create_router(
         chronicle_id: UUID = Path(description="Unique chronicle identifier"),
     ) -> ChronicleResponse:
         """Get a chronicle by ID."""
-        if chronicle_service is None:
+        try:
+            chronicle = await forge.get_chronicle(chronicle_id)
+        except RuntimeError as e:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Chronicle service not available",
+                detail=str(e),
             )
-        chronicle = await chronicle_service.get_chronicle(chronicle_id)
         if chronicle is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1907,13 +1897,8 @@ def create_router(
         data: ChronicleUpdate = ...,
     ) -> ChronicleResponse:
         """Update a chronicle's mutable fields."""
-        if chronicle_service is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Chronicle service not available",
-            )
         try:
-            chronicle = await chronicle_service.update_chronicle(
+            chronicle = await forge.update_chronicle(
                 chronicle_id,
                 summary=data.summary,
                 key_changes=data.key_changes,
@@ -1922,6 +1907,11 @@ def create_router(
                 status=data.status,
             )
             return ChronicleResponse.from_chronicle(chronicle)
+        except RuntimeError as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e),
+            )
         except ChronicleNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1938,12 +1928,13 @@ def create_router(
         chronicle_id: UUID = Path(description="Unique chronicle identifier"),
     ) -> None:
         """Delete a chronicle."""
-        if chronicle_service is None:
+        try:
+            deleted = await forge.delete_chronicle(chronicle_id)
+        except RuntimeError as e:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Chronicle service not available",
+                detail=str(e),
             )
-        deleted = await chronicle_service.delete_chronicle(chronicle_id)
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1960,14 +1951,14 @@ def create_router(
         chronicle_id: UUID = Path(description="Unique chronicle identifier"),
     ) -> SessionResponse:
         """Relaunch a session from a chronicle entry."""
-        if chronicle_service is None:
+        try:
+            session = await forge.reforge_chronicle(chronicle_id)
+            return SessionResponse.from_session(session)
+        except RuntimeError as e:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Chronicle service not available",
+                detail=str(e),
             )
-        try:
-            session = await chronicle_service.reforge(chronicle_id)
-            return SessionResponse.from_session(session)
         except ChronicleNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1984,12 +1975,13 @@ def create_router(
         chronicle_id: UUID = Path(description="Unique chronicle identifier"),
     ) -> list[ChronicleResponse]:
         """Get the full reforge chain for a chronicle."""
-        if chronicle_service is None:
+        try:
+            chain = await forge.get_chronicle_chain(chronicle_id)
+        except RuntimeError as e:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Chronicle service not available",
+                detail=str(e),
             )
-        chain = await chronicle_service.get_chain(chronicle_id)
         return [ChronicleResponse.from_chronicle(c) for c in chain]
 
     @router.get(
@@ -2005,12 +1997,13 @@ def create_router(
         session_id: UUID = Path(description="Unique session identifier"),
     ) -> ChronicleResponse:
         """Get the most recent chronicle for a session."""
-        if chronicle_service is None:
+        try:
+            chronicle = await forge.get_session_chronicle(session_id)
+        except RuntimeError as e:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Chronicle service not available",
+                detail=str(e),
             )
-        chronicle = await chronicle_service.get_chronicle_by_session(session_id)
         if chronicle is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -2033,12 +2026,13 @@ def create_router(
         session_id: UUID = Path(description="Session identifier for timeline lookup"),
     ) -> TimelineResponseModel:
         """Get the event timeline for a session's chronicle."""
-        if chronicle_service is None:
+        try:
+            timeline = await forge.get_timeline(session_id)
+        except RuntimeError as e:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Chronicle service not available",
+                detail=str(e),
             )
-        timeline = await chronicle_service.get_timeline(session_id)
         if timeline is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -2091,12 +2085,6 @@ def create_router(
         data: TimelineEventCreate = ...,
     ) -> TimelineEventResponse:
         """Add a timeline event for a session's chronicle."""
-        if chronicle_service is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Chronicle service not available",
-            )
-
         # Authorization: caller must own the session
         principal = await extract_principal(request)
         session = await forge.get_session(session_id)
@@ -2109,16 +2097,18 @@ def create_router(
                     detail=f"Not authorized to report timeline for session {session_id}",
                 )
 
-        chronicle = await chronicle_service.get_chronicle_by_session(session_id)
-        if chronicle is None:
-            # Auto-create a draft chronicle on first timeline event
-            try:
-                chronicle = await chronicle_service.create_chronicle(session_id)
-            except SessionNotFoundError:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Session not found: {session_id}",
-                )
+        try:
+            chronicle = await forge.ensure_session_chronicle(session_id)
+        except RuntimeError as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e),
+            )
+        except SessionNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session not found: {session_id}",
+            )
 
         from datetime import datetime
 
@@ -2139,7 +2129,7 @@ def create_router(
         )
 
         try:
-            stored = await chronicle_service.add_timeline_event(session_id, event)
+            stored = await forge.add_timeline_event(session_id, event)
         except RuntimeError:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -2190,22 +2180,18 @@ def create_router(
                 ),
             )
 
-        session = await forge.get_session(session_id)
-        if session is None:
+        try:
+            _, base_url = await forge.get_session_proxy_target(session_id)
+        except LookupError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session not found: {session_id}",
             )
-
-        if not session.chat_endpoint:
+        except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session {session_id} has no active endpoint",
             )
-
-        base_url = session.chat_endpoint.replace("wss://", "https://").replace("ws://", "http://")
-        if base_url.endswith("/session"):
-            base_url = base_url[: -len("/session")]
 
         # Forward auth header so the proxy can reach Skuld through envoy
         proxy_headers: dict[str, str] = {}
@@ -2263,10 +2249,13 @@ def create_router(
         if principal is None:
             return []
         workspace_service = request.app.state.workspace_service
+        workspace_forge = forge.with_workspace_service(workspace_service)
         ws_status = WorkspaceStatus(status_filter) if status_filter else None
-        workspaces = await workspace_service.list_workspaces(principal.user_id, ws_status)
-        session_ids = [ws.session_id for ws in workspaces]
-        sessions_map = await session_service._repository.get_many(session_ids)
+        workspaces = await workspace_forge.list_workspaces(
+            user_id=principal.user_id,
+            status=ws_status,
+        )
+        sessions_map = await workspace_forge.get_sessions_for_workspaces(workspaces)
         return [
             WorkspaceResponse.from_workspace(ws, sessions_map.get(ws.session_id))
             for ws in workspaces
@@ -2284,13 +2273,14 @@ def create_router(
         """Delete a workspace PVC by session ID."""
         principal = await _optional_principal(request)
         workspace_service = request.app.state.workspace_service
+        workspace_forge = forge.with_workspace_service(workspace_service)
         # Verify ownership before deleting
-        workspaces = await workspace_service.list_workspaces(
-            principal.user_id if principal else "",
+        workspaces = await workspace_forge.list_workspaces(
+            user_id=principal.user_id if principal else "",
         )
         if not any(str(ws.session_id) == str(session_id) for ws in workspaces):
             raise HTTPException(status_code=404, detail="Workspace not found")
-        deleted = await workspace_service.delete_workspace_by_session(str(session_id))
+        deleted = await workspace_forge.delete_workspace_by_session(str(session_id))
         if not deleted:
             raise HTTPException(status_code=404, detail="Workspace not found")
 
@@ -2314,13 +2304,13 @@ def create_router(
     ):
         """List all workspaces (admin only)."""
         workspace_service = request.app.state.workspace_service
+        workspace_forge = forge.with_workspace_service(workspace_service)
         ws_status = WorkspaceStatus(status_filter) if status_filter else None
         if user_id:
-            workspaces = await workspace_service.list_workspaces(user_id, ws_status)
+            workspaces = await workspace_forge.list_workspaces(user_id=user_id, status=ws_status)
         else:
-            workspaces = await workspace_service.list_all_workspaces(ws_status)
-        session_ids = [ws.session_id for ws in workspaces]
-        sessions_map = await session_service._repository.get_many(session_ids)
+            workspaces = await workspace_forge.list_all_workspaces(ws_status)
+        sessions_map = await workspace_forge.get_sessions_for_workspaces(workspaces)
         return [
             WorkspaceResponse.from_workspace(ws, sessions_map.get(ws.session_id))
             for ws in workspaces
@@ -2342,8 +2332,9 @@ def create_router(
             return {"deleted": 0, "failed": []}
 
         workspace_service = request.app.state.workspace_service
-        user_workspaces = await workspace_service.list_workspaces(
-            principal.user_id if principal else "",
+        workspace_forge = forge.with_workspace_service(workspace_service)
+        user_workspaces = await workspace_forge.list_workspaces(
+            user_id=principal.user_id if principal else "",
         )
         owned_session_ids = {str(ws.session_id) for ws in user_workspaces}
 
@@ -2354,7 +2345,7 @@ def create_router(
                 failed.append({"session_id": sid, "error": "Not found or not owned"})
                 continue
             try:
-                ok = await workspace_service.delete_workspace_by_session(str(sid))
+                ok = await workspace_forge.delete_workspace_by_session(str(sid))
                 if ok:
                     deleted += 1
                 else:
@@ -2380,11 +2371,12 @@ def create_router(
             return {"deleted": 0, "failed": []}
 
         workspace_service = request.app.state.workspace_service
+        workspace_forge = forge.with_workspace_service(workspace_service)
         deleted = 0
         failed = []
         for sid in session_ids:
             try:
-                ok = await workspace_service.delete_workspace_by_session(str(sid))
+                ok = await workspace_forge.delete_workspace_by_session(str(sid))
                 if ok:
                     deleted += 1
                 else:

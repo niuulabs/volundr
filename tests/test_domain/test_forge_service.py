@@ -117,3 +117,44 @@ def test_list_providers_uses_repo_service() -> None:
 
     assert providers[0].name == "github"
     repo_service.list_providers.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_with_workspace_service_enables_workspace_calls() -> None:
+    session_service = AsyncMock(spec=SessionService)
+    workspace_service = AsyncMock()
+    workspace_service.list_workspaces.return_value = [SimpleNamespace(session_id="sess-1")]
+    session_service._repository = AsyncMock()
+    session_service._repository.get_many.return_value = {"sess-1": SimpleNamespace(id="sess-1")}
+    forge = ForgeService(session_service).with_workspace_service(workspace_service)
+
+    workspaces = await forge.list_workspaces(user_id="user-1")
+    sessions = await forge.get_sessions_for_workspaces(workspaces)
+
+    assert len(workspaces) == 1
+    assert "sess-1" in sessions
+    workspace_service.list_workspaces.assert_awaited_once_with("user-1", None)
+
+
+@pytest.mark.asyncio
+async def test_get_session_proxy_target_normalizes_chat_endpoint() -> None:
+    session_service = AsyncMock(spec=SessionService)
+    session_service.get_session.return_value = SimpleNamespace(
+        chat_endpoint="wss://example.test/session",
+    )
+    forge = ForgeService(session_service)
+
+    session, base_url = await forge.get_session_proxy_target(uuid4())
+
+    assert session.chat_endpoint == "wss://example.test/session"
+    assert base_url == "https://example.test"
+
+
+@pytest.mark.asyncio
+async def test_get_session_proxy_target_requires_active_endpoint() -> None:
+    session_service = AsyncMock(spec=SessionService)
+    session_service.get_session.return_value = SimpleNamespace(chat_endpoint=None)
+    forge = ForgeService(session_service)
+
+    with pytest.raises(ValueError, match="has no active endpoint"):
+        await forge.get_session_proxy_target(uuid4())
