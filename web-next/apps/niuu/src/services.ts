@@ -54,6 +54,14 @@ import {
   type VolundrSession,
 } from '@niuulabs/plugin-volundr';
 import { createApiClient } from '@niuulabs/query';
+import {
+  buildFeatureCatalogAdapter,
+  buildIdentityAdapter,
+  createMockFeatureCatalogService,
+  createMockIdentityService,
+  type IFeatureCatalogService,
+  type IIdentityService,
+} from '@niuulabs/plugin-sdk';
 import type { NiuuConfig, ServiceConfig, ServicesMap } from '@niuulabs/plugin-sdk';
 
 /**
@@ -83,6 +91,20 @@ export function resolveSharedApiBase(config: Pick<NiuuConfig, 'services'>): stri
   if (hasHttpBackend(volundrSvc)) return toSharedApiBase(volundrSvc.baseUrl);
 
   return null;
+}
+
+export function buildSharedFeatureCatalogService(
+  config: Pick<NiuuConfig, 'services'>,
+): IFeatureCatalogService {
+  const sharedBase = resolveSharedApiBase(config);
+  if (!sharedBase) return createMockFeatureCatalogService();
+  return buildFeatureCatalogAdapter(createApiClient(sharedBase));
+}
+
+export function buildSharedIdentityService(config: Pick<NiuuConfig, 'services'>): IIdentityService {
+  const sharedBase = resolveSharedApiBase(config);
+  if (!sharedBase) return createMockIdentityService();
+  return buildIdentityAdapter(createApiClient(sharedBase));
 }
 
 const EMPTY_SESSION_RESOURCES: Session['resources'] = {
@@ -294,6 +316,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const observatoryEvents = hasHttpBackend(obsEventsSvc)
     ? buildObservatoryEventsSseStream(obsEventsSvc.baseUrl)
     : createMockEventStream();
+  const identityService = buildSharedIdentityService(config);
 
   // ── Tyr ──
   const tyrClient = hasHttpBackend(tyrSvc) ? createApiClient(tyrSvc.baseUrl) : null;
@@ -336,6 +359,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     volundr,
     ptyStream,
     metricsStream,
+    identity: identityService,
     filesystem: createMockFileSystemPort(),
     // NIU-678 pages (ClustersPage, TemplatesPage, HistoryPage)
     'volundr.clusters': createMockClusterAdapter(),

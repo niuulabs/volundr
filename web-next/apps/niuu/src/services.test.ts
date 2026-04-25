@@ -4,6 +4,13 @@ const queryMocks = vi.hoisted(() => ({
   createApiClient: vi.fn((basePath: string) => ({ basePath })),
 }));
 
+const pluginSdkMocks = vi.hoisted(() => ({
+  buildFeatureCatalogAdapter: vi.fn((client) => ({ kind: 'feature-catalog', client })),
+  createMockFeatureCatalogService: vi.fn(() => ({ kind: 'mock-feature-catalog' })),
+  buildIdentityAdapter: vi.fn((client) => ({ kind: 'identity', client })),
+  createMockIdentityService: vi.fn(() => ({ kind: 'mock-identity' })),
+}));
+
 const tyrMocks = vi.hoisted(() => ({
   createMockTyrService: vi.fn(() => ({ kind: 'mock-tyr' })),
   createMockDispatcherService: vi.fn(() => ({ kind: 'mock-dispatcher' })),
@@ -46,6 +53,7 @@ const volundrMocks = vi.hoisted(() => ({
 vi.mock('@niuulabs/query', () => ({
   createApiClient: queryMocks.createApiClient,
 }));
+vi.mock('@niuulabs/plugin-sdk', () => pluginSdkMocks);
 
 vi.mock('@niuulabs/plugin-tyr', () => tyrMocks);
 vi.mock('@niuulabs/plugin-ravn', () => ({
@@ -74,7 +82,13 @@ vi.mock('@niuulabs/plugin-observatory', () => ({
 }));
 vi.mock('@niuulabs/plugin-volundr', () => volundrMocks);
 
-import { buildServices, resolveSharedApiBase, toSharedApiBase } from './services';
+import {
+  buildServices,
+  buildSharedFeatureCatalogService,
+  buildSharedIdentityService,
+  resolveSharedApiBase,
+  toSharedApiBase,
+} from './services';
 
 describe('toSharedApiBase', () => {
   it('strips a trailing Tyr service suffix', () => {
@@ -124,6 +138,43 @@ describe('resolveSharedApiBase', () => {
   });
 });
 
+describe('shared domain helpers', () => {
+  it('builds shared feature catalog and identity services from the canonical shared base', () => {
+    const config = {
+      services: {
+        tyr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/tyr' },
+      },
+    } as any;
+
+    expect(buildSharedFeatureCatalogService(config)).toEqual({
+      kind: 'feature-catalog',
+      client: { basePath: 'http://localhost:8080/api/v1' },
+    });
+    expect(buildSharedIdentityService(config)).toEqual({
+      kind: 'identity',
+      client: { basePath: 'http://localhost:8080/api/v1' },
+    });
+    expect(pluginSdkMocks.buildFeatureCatalogAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1',
+    });
+    expect(pluginSdkMocks.buildIdentityAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1',
+    });
+  });
+
+  it('falls back to mock shared services when no shared api base exists', () => {
+    const config = {
+      services: {
+        tyr: { mode: 'mock' },
+        volundr: { mode: 'mock' },
+      },
+    } as any;
+
+    expect(buildSharedFeatureCatalogService(config)).toEqual({ kind: 'mock-feature-catalog' });
+    expect(buildSharedIdentityService(config)).toEqual({ kind: 'mock-identity' });
+  });
+});
+
 describe('buildServices', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -146,6 +197,10 @@ describe('buildServices', () => {
     });
     expect(tyrMocks.buildTyrAuditLogHttpAdapter).toHaveBeenCalledWith({
       basePath: 'http://localhost:8080/api/v1',
+    });
+    expect(services.identity).toEqual({
+      kind: 'identity',
+      client: { basePath: 'http://localhost:8080/api/v1' },
     });
     expect((services['tyr.tracker'] as any).kind).toBe('tracker');
     expect((services['tyr.audit'] as any).kind).toBe('audit');
@@ -260,6 +315,7 @@ describe('buildServices', () => {
     } as any);
 
     expect(volundrMocks.createMockSessionStore).toHaveBeenCalledTimes(1);
+    expect((services.identity as any).kind).toBe('mock-identity');
     expect((services['volundr.sessions'] as any).kind).toBe('mock-session-store');
     expect((services.sessionStore as any).kind).toBe('mock-session-store');
   });
