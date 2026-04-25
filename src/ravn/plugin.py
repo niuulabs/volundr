@@ -12,7 +12,7 @@ import typer
 
 from niuu.cli_api_client import CLIAPIClient
 from niuu.cli_output import print_json, print_success, print_table
-from niuu.ports.plugin import Service, ServiceDefinition, ServicePlugin, TUIPageSpec
+from niuu.ports.plugin import APIRouteDomain, Service, ServiceDefinition, ServicePlugin, TUIPageSpec
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -67,6 +67,28 @@ class RavnPlugin(ServicePlugin):
 
     def create_api_client(self) -> Any:
         return CLIAPIClient(base_url="http://localhost:8080", service_name="Ravn")
+
+    def api_route_domains(self) -> tuple[APIRouteDomain, ...]:
+        return (
+            APIRouteDomain(
+                name="ravn-session-api",
+                prefixes=(
+                    "/api/v1/ravn/status",
+                    "/api/v1/ravn/sessions",
+                ),
+                description="Ravn session inventory and platform status routes.",
+            ),
+            APIRouteDomain(
+                name="persona-api",
+                prefixes=("/api/v1/ravn/personas",),
+                description="Ravn persona registry CRUD and validation routes.",
+            ),
+            APIRouteDomain(
+                name="ravn-api",
+                prefixes=("/api/v1/ravn",),
+                description="All currently mounted Ravn API routes.",
+            ),
+        )
 
     def depends_on(self) -> Sequence[str]:
         return []
