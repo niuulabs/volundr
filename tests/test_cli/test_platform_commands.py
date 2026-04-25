@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from typer.testing import CliRunner
 
@@ -14,6 +16,7 @@ from cli.commands.platform import (
     _build_preflight_config,
     _build_up_callback,
     _collect_service_definitions,
+    _legacy_route_hits_url,
     _prompt_mode_selection,
     _resolve_enabled_services,
     _route_inventory_payload,
@@ -424,6 +427,14 @@ class TestRouteInventoryPayload:
         ]
 
 
+class TestLegacyRouteHitsUrl:
+    def test_normalizes_server_base(self) -> None:
+        assert (
+            _legacy_route_hits_url("http://127.0.0.1:8080/")
+            == "http://127.0.0.1:8080/api/v1/niuu/compat/legacy-routes"
+        )
+
+
 class TestInitOverwriteProtection:
     def test_aborts_when_config_exists_and_user_declines(self) -> None:
         import tempfile
@@ -671,3 +682,54 @@ class TestPlatformInventoryCommand:
         assert result.exit_code == 0
         assert out_path.exists()
         assert '"name": "niuu-api"' in out_path.read_text()
+
+
+class TestPlatformLegacyRoutesCommand:
+    def _make_platform(self) -> tuple:
+        registry = PluginRegistry()
+        settings = CLISettings()
+        manager = ServiceManager(
+            registry=registry,
+            health_check_interval=0.01,
+            health_check_timeout=0.5,
+            health_check_max_retries=1,
+        )
+        platform = create_platform_commands(registry, settings, manager)
+        return platform, registry, settings, manager
+
+    def test_legacy_routes_json_output(self) -> None:
+        platform, *_ = self._make_platform()
+        payload = {
+            "items": [
+                {
+                    "legacyPath": "/api/v1/volundr/me",
+                    "canonicalPath": "/api/v1/identity/me",
+                    "method": "GET",
+                    "hits": 2,
+                }
+            ],
+            "totalHits": 2,
+        }
+        request = httpx.Request("GET", "http://127.0.0.1:8080/api/v1/niuu/compat/legacy-routes")
+        response = httpx.Response(200, json=payload, request=request)
+
+        with patch("cli.commands.platform.httpx.get", return_value=response) as get:
+            result = runner.invoke(platform, ["legacy-routes", "--json"])
+
+        assert result.exit_code == 0
+        assert json.dumps(payload, indent=2) in result.output
+        get.assert_called_once_with(
+            "http://127.0.0.1:8080/api/v1/niuu/compat/legacy-routes",
+            timeout=5.0,
+        )
+
+    def test_legacy_routes_handles_http_errors(self) -> None:
+        platform, *_ = self._make_platform()
+        request = httpx.Request("GET", "http://127.0.0.1:8080/api/v1/niuu/compat/legacy-routes")
+        response = httpx.Response(404, request=request)
+
+        with patch("cli.commands.platform.httpx.get", return_value=response):
+            result = runner.invoke(platform, ["legacy-routes"])
+
+        assert result.exit_code == 1
+        assert "Failed to fetch legacy-route usage" in result.output

@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request, Response
 from niuu.http_compat import (
     LegacyRouteNotice,
     apply_deprecation_headers,
+    collect_legacy_route_hits,
     record_legacy_route_use,
     warn_on_legacy_route,
 )
@@ -76,3 +77,24 @@ class TestWarnOnLegacyRoute:
         assert count == 1
         assert response.headers["Deprecation"] == "true"
         assert "Legacy route hit" in caplog.text
+
+
+class TestCollectLegacyRouteHits:
+    def test_returns_sorted_snapshot(self) -> None:
+        app = FastAPI()
+        app.state.legacy_route_hits = {
+            ("/api/v1/volundr/me", "/api/v1/identity/me", "GET"): 2,
+            ("/api/v1/volundr/users", "/api/v1/volundr/admin/users", "GET"): 1,
+        }
+
+        snapshot = collect_legacy_route_hits(app)
+
+        assert snapshot[0].legacy_path == "/api/v1/volundr/me"
+        assert snapshot[0].hits == 2
+        assert snapshot[1].legacy_path == "/api/v1/volundr/users"
+
+    def test_handles_empty_state(self) -> None:
+        app = FastAPI()
+        app.state.legacy_route_hits = {}
+
+        assert collect_legacy_route_hits(app) == ()

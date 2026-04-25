@@ -10,6 +10,11 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_serialize
 from niuu.http_compat import LegacyRouteNotice, warn_on_legacy_route
 from volundr.adapters.inbound.auth import extract_principal, require_role
 from volundr.domain.models import Principal, TenantRole, TenantTier
+from volundr.domain.services.identity import (
+    IdentityService,
+    TenantCreateCommand,
+    TenantUpdateCommand,
+)
 from volundr.domain.services.tenant import (
     TenantAlreadyExistsError,
     TenantNotFoundError,
@@ -286,38 +291,57 @@ def _provisioning_result_to_payload(result) -> dict[str, object]:
     }
 
 
-def create_tenants_router(tenant_service: TenantService) -> APIRouter:
-    """Create the tenants router."""
-    router = APIRouter(prefix="/api/v1/volundr", tags=["Tenants"])
+def _storage_from_request(request: Request):
+    return getattr(request.app.state, "storage", None)
 
-    @router.get("/me", response_model=MeResponse, tags=["Identity"])
-    @router.get("/identity", response_model=MeResponse, tags=["Identity"])
+
+def _register_identity_routes(
+    router: APIRouter,
+    service: IdentityService,
+    *,
+    legacy: bool,
+) -> APIRouter:
     async def get_me(
         request: Request,
         response: Response,
         principal: Principal = Depends(extract_principal),
     ):
         """Get the current authenticated user's identity."""
-        warn_on_legacy_route(
-            request,
-            response,
-            LegacyRouteNotice(
-                legacy_path=request.url.path,
-                canonical_path="/api/v1/identity/me",
-            ),
-        )
-        return _build_me_response(principal)
+        if legacy:
+            warn_on_legacy_route(
+                request,
+                response,
+                LegacyRouteNotice(
+                    legacy_path=request.url.path,
+                    canonical_path="/api/v1/identity/me",
+                ),
+            )
+        return _build_me_response(await service.current_principal(principal))
 
-    @router.get("/admin/users", response_model=list[UserResponse], tags=["Users"])
-    @router.get("/users", response_model=list[UserResponse], tags=["Users"])
+    router.add_api_route(
+        "/me",
+        get_me,
+        methods=["GET"],
+        response_model=MeResponse,
+        tags=["Identity"],
+    )
+    if legacy:
+        router.add_api_route(
+            "/identity",
+            get_me,
+            methods=["GET"],
+            response_model=MeResponse,
+            tags=["Identity"],
+        )
+
     async def list_users(
         request: Request,
         response: Response,
         _: Principal = Depends(require_role("volundr:admin")),
     ):
         """List all users (admin only)."""
-        users = await tenant_service.list_users()
-        if request.url.path.endswith("/users") and "/admin/" not in request.url.path:
+        users = await service.list_users()
+        if legacy and request.url.path.endswith("/users") and "/admin/" not in request.url.path:
             warn_on_legacy_route(
                 request,
                 response,
@@ -328,119 +352,120 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
             )
         return [_user_to_response(u) for u in users]
 
-    @router.get("/tenants", response_model=list[TenantResponse])
+    router.add_api_route(
+        "/users" if not legacy else "/admin/users",
+        list_users,
+        methods=["GET"],
+        response_model=list[UserResponse],
+        tags=["Users"],
+    )
+    if legacy:
+        router.add_api_route(
+            "/users",
+            list_users,
+            methods=["GET"],
+            response_model=list[UserResponse],
+            tags=["Users"],
+        )
+
+    async def reprovision_user(
+        user_id: str,
+        request: Request,
+        response: Response,
+        _: Principal = Depends(require_role("volundr:admin")),
+    ):
+        """Re-provision storage for a user (admin only)."""
+        result = await service.reprovision_user(user_id, storage=_storage_from_request(request))
+        if legacy:
+            is_legacy_path = request.url.path.endswith(f"/users/{user_id}/reprovision")
+            if is_legacy_path and "/admin/" not in request.url.path:
+                warn_on_legacy_route(
+                    request,
+                    response,
+                    LegacyRouteNotice(
+                        legacy_path=f"/api/v1/volundr/users/{user_id}/reprovision",
+                        canonical_path=f"/api/v1/volundr/admin/users/{user_id}/reprovision",
+                    ),
+                )
+        return _provisioning_result_to_payload(result)
+
+    router.add_api_route(
+        "/users/{user_id}/reprovision" if not legacy else "/admin/users/{user_id}/reprovision",
+        reprovision_user,
+        methods=["POST"],
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    if legacy:
+        router.add_api_route(
+            "/users/{user_id}/reprovision",
+            reprovision_user,
+            methods=["POST"],
+            status_code=status.HTTP_202_ACCEPTED,
+        )
+
     async def list_tenants(
-        parent_id: str | None = Query(
-            default=None,
-            description="Filter by parent tenant ID",
-        ),
+        parent_id: str | None = Query(default=None, description="Filter by parent tenant ID"),
         _: Principal = Depends(extract_principal),
     ):
         """List tenants."""
-        tenants = await tenant_service.list_tenants(parent_id)
+        tenants = await service.list_tenants(parent_id)
         return [_tenant_to_response(t) for t in tenants]
 
-    @router.post(
+    router.add_api_route(
         "/tenants",
-        response_model=TenantResponse,
-        status_code=status.HTTP_201_CREATED,
+        list_tenants,
+        methods=["GET"],
+        response_model=list[TenantResponse],
     )
+
     async def create_tenant(
         body: TenantCreate,
         _: Principal = Depends(require_role("volundr:admin")),
     ):
         """Create a new tenant (admin only)."""
         try:
-            tenant = await tenant_service.create_tenant(
-                name=body.name,
-                parent_id=body.parent_id,
-                tenant_id=body.tenant_id,
-                tier=TenantTier(body.tier),
-                max_sessions=body.max_sessions,
-                max_storage_gb=body.max_storage_gb,
+            tenant = await service.create_tenant(
+                TenantCreateCommand(
+                    name=body.name,
+                    parent_id=body.parent_id,
+                    tenant_id=body.tenant_id,
+                    tier=TenantTier(body.tier),
+                    max_sessions=body.max_sessions,
+                    max_storage_gb=body.max_storage_gb,
+                )
             )
         except TenantAlreadyExistsError as e:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
         except TenantNotFoundError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
         return _tenant_to_response(tenant)
 
-    @router.get("/tenants/{tenant_id}", response_model=TenantResponse)
+    router.add_api_route(
+        "/tenants",
+        create_tenant,
+        methods=["POST"],
+        response_model=TenantResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+
     async def get_tenant(
         tenant_id: str,
         _: Principal = Depends(extract_principal),
     ):
         """Get a tenant by ID."""
         try:
-            tenant = await tenant_service.get_tenant(tenant_id)
+            tenant = await service.get_tenant(tenant_id)
         except TenantNotFoundError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
         return _tenant_to_response(tenant)
 
-    @router.delete("/tenants/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
-    async def delete_tenant(
-        tenant_id: str,
-        _: Principal = Depends(require_role("volundr:admin")),
-    ):
-        """Delete a tenant (admin only)."""
-        deleted = await tenant_service.delete_tenant(tenant_id)
-        if not deleted:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-
-    @router.get("/tenants/{tenant_id}/members", response_model=list[MemberResponse])
-    async def list_members(
-        tenant_id: str,
-        _: Principal = Depends(extract_principal),
-    ):
-        """List members of a tenant."""
-        members = await tenant_service.get_members(tenant_id)
-        return [_membership_to_response(m) for m in members]
-
-    @router.post(
-        "/tenants/{tenant_id}/members",
-        response_model=MemberResponse,
-        status_code=status.HTTP_201_CREATED,
+    router.add_api_route(
+        "/tenants/{tenant_id}",
+        get_tenant,
+        methods=["GET"],
+        response_model=TenantResponse,
     )
-    async def add_member(
-        tenant_id: str,
-        body: MemberCreate,
-        _: Principal = Depends(require_role("volundr:admin")),
-    ):
-        """Add a member to a tenant (admin only)."""
-        try:
-            membership = await tenant_service.add_member(
-                tenant_id=tenant_id,
-                user_id=body.user_id,
-                role=TenantRole(body.role),
-            )
-        except TenantNotFoundError as e:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-        except ValueError as e:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
-        return _membership_to_response(membership)
-
-    @router.delete(
-        "/tenants/{tenant_id}/members/{user_id}",
-        status_code=status.HTTP_204_NO_CONTENT,
-    )
-    async def remove_member(
-        tenant_id: str,
-        user_id: str,
-        _: Principal = Depends(require_role("volundr:admin")),
-    ):
-        """Remove a member from a tenant (admin only)."""
-        removed = await tenant_service.remove_member(tenant_id, user_id)
-        if not removed:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Membership not found",
-            )
-
-    @router.patch("/tenants/{tenant_id}", response_model=TenantResponse)
-    @router.put("/tenants/{tenant_id}", response_model=TenantResponse)
     async def update_tenant(
         tenant_id: str,
         body: TenantUpdate,
@@ -450,15 +475,17 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
     ):
         """Update tenant settings (admin only)."""
         try:
-            tenant = await tenant_service.update_tenant_settings(
+            tenant = await service.update_tenant(
                 tenant_id,
-                max_sessions=body.max_sessions,
-                max_storage_gb=body.max_storage_gb,
-                tier=body.tier,
+                TenantUpdateCommand(
+                    max_sessions=body.max_sessions,
+                    max_storage_gb=body.max_storage_gb,
+                    tier=body.tier,
+                ),
             )
         except TenantNotFoundError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-        if request.method.upper() == "PUT":
+        if legacy and request.method.upper() == "PUT":
             warn_on_legacy_route(
                 request,
                 response,
@@ -469,158 +496,51 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
             )
         return TenantResponse.from_tenant(tenant)
 
-    @router.post("/admin/users/{user_id}/reprovision", status_code=status.HTTP_202_ACCEPTED)
-    @router.post("/users/{user_id}/reprovision", status_code=status.HTTP_202_ACCEPTED)
-    async def reprovision_user(
-        user_id: str,
-        request: Request,
-        response: Response,
-        _: Principal = Depends(require_role("volundr:admin")),
-    ):
-        """Re-provision storage for a user (admin only)."""
-        storage = getattr(request.app.state, "storage", None)
-        result = await tenant_service.reprovision_user(user_id, storage=storage)
-        is_legacy_path = request.url.path.endswith(f"/users/{user_id}/reprovision")
-        if is_legacy_path and "/admin/" not in request.url.path:
-            warn_on_legacy_route(
-                request,
-                response,
-                LegacyRouteNotice(
-                    legacy_path=f"/api/v1/volundr/users/{user_id}/reprovision",
-                    canonical_path=f"/api/v1/volundr/admin/users/{user_id}/reprovision",
-                ),
-            )
-        return _provisioning_result_to_payload(result)
-
-    @router.post(
-        "/tenants/{tenant_id}/reprovision",
-        status_code=status.HTTP_202_ACCEPTED,
+    router.add_api_route(
+        "/tenants/{tenant_id}",
+        update_tenant,
+        methods=["PATCH"],
+        response_model=TenantResponse,
     )
-    async def reprovision_tenant(
-        tenant_id: str,
-        request: Request,
-        _: Principal = Depends(require_role("volundr:admin")),
-    ):
-        """Re-provision storage for all users in a tenant (admin only)."""
-        storage = getattr(request.app.state, "storage", None)
-        results = await tenant_service.reprovision_tenant(tenant_id, storage=storage)
-        return [_provisioning_result_to_payload(r) for r in results]
+    if legacy:
+        router.add_api_route(
+            "/tenants/{tenant_id}",
+            update_tenant,
+            methods=["PUT"],
+            response_model=TenantResponse,
+        )
 
-    return router
-
-
-def create_identity_router(tenant_service: TenantService) -> APIRouter:
-    """Create the canonical identity router."""
-    router = APIRouter(prefix="/api/v1/identity", tags=["Identity"])
-
-    @router.get("/me", response_model=MeResponse)
-    async def get_me(principal: Principal = Depends(extract_principal)):
-        """Get the current authenticated user's identity."""
-        return _build_me_response(principal)
-
-    @router.get("/users", response_model=list[UserResponse], tags=["Users"])
-    async def list_users(
-        _: Principal = Depends(require_role("volundr:admin")),
-    ):
-        """List all users (admin only)."""
-        users = await tenant_service.list_users()
-        return [_user_to_response(u) for u in users]
-
-    @router.post("/users/{user_id}/reprovision", status_code=status.HTTP_202_ACCEPTED)
-    async def reprovision_user(
-        user_id: str,
-        request: Request,
-        _: Principal = Depends(require_role("volundr:admin")),
-    ):
-        """Re-provision storage for a user (admin only)."""
-        storage = getattr(request.app.state, "storage", None)
-        result = await tenant_service.reprovision_user(user_id, storage=storage)
-        return _provisioning_result_to_payload(result)
-
-    @router.get("/tenants", response_model=list[TenantResponse])
-    async def list_tenants(
-        parent_id: str | None = Query(default=None, description="Filter by parent tenant ID"),
-        _: Principal = Depends(extract_principal),
-    ):
-        """List tenants."""
-        tenants = await tenant_service.list_tenants(parent_id)
-        return [_tenant_to_response(t) for t in tenants]
-
-    @router.post("/tenants", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
-    async def create_tenant(
-        body: TenantCreate,
-        _: Principal = Depends(require_role("volundr:admin")),
-    ):
-        """Create a new tenant (admin only)."""
-        try:
-            tenant = await tenant_service.create_tenant(
-                name=body.name,
-                parent_id=body.parent_id,
-                tenant_id=body.tenant_id,
-                tier=TenantTier(body.tier),
-                max_sessions=body.max_sessions,
-                max_storage_gb=body.max_storage_gb,
-            )
-        except TenantAlreadyExistsError as e:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-        except TenantNotFoundError as e:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-        return _tenant_to_response(tenant)
-
-    @router.get("/tenants/{tenant_id}", response_model=TenantResponse)
-    async def get_tenant(
-        tenant_id: str,
-        _: Principal = Depends(extract_principal),
-    ):
-        """Get a tenant by ID."""
-        try:
-            tenant = await tenant_service.get_tenant(tenant_id)
-        except TenantNotFoundError as e:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-        return _tenant_to_response(tenant)
-
-    @router.patch("/tenants/{tenant_id}", response_model=TenantResponse)
-    async def update_tenant(
-        tenant_id: str,
-        body: TenantUpdate,
-        _: Principal = Depends(require_role("volundr:admin")),
-    ):
-        """Update tenant settings (admin only)."""
-        try:
-            tenant = await tenant_service.update_tenant_settings(
-                tenant_id,
-                max_sessions=body.max_sessions,
-                max_storage_gb=body.max_storage_gb,
-                tier=body.tier,
-            )
-        except TenantNotFoundError as e:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-        return TenantResponse.from_tenant(tenant)
-
-    @router.delete("/tenants/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
     async def delete_tenant(
         tenant_id: str,
         _: Principal = Depends(require_role("volundr:admin")),
     ):
         """Delete a tenant (admin only)."""
-        deleted = await tenant_service.delete_tenant(tenant_id)
+        deleted = await service.delete_tenant(tenant_id)
         if not deleted:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
-    @router.get("/tenants/{tenant_id}/members", response_model=list[MemberResponse])
+    router.add_api_route(
+        "/tenants/{tenant_id}",
+        delete_tenant,
+        methods=["DELETE"],
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+
     async def list_members(
         tenant_id: str,
         _: Principal = Depends(extract_principal),
     ):
         """List members of a tenant."""
-        members = await tenant_service.get_members(tenant_id)
+        members = await service.list_members(tenant_id)
         return [_membership_to_response(m) for m in members]
 
-    @router.post(
+    router.add_api_route(
         "/tenants/{tenant_id}/members",
-        response_model=MemberResponse,
-        status_code=status.HTTP_201_CREATED,
+        list_members,
+        methods=["GET"],
+        response_model=list[MemberResponse],
     )
+
     async def add_member(
         tenant_id: str,
         body: MemberCreate,
@@ -628,8 +548,8 @@ def create_identity_router(tenant_service: TenantService) -> APIRouter:
     ):
         """Add a member to a tenant (admin only)."""
         try:
-            membership = await tenant_service.add_member(
-                tenant_id=tenant_id,
+            membership = await service.add_member(
+                tenant_id,
                 user_id=body.user_id,
                 role=TenantRole(body.role),
             )
@@ -639,29 +559,63 @@ def create_identity_router(tenant_service: TenantService) -> APIRouter:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         return _membership_to_response(membership)
 
-    @router.delete("/tenants/{tenant_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+    router.add_api_route(
+        "/tenants/{tenant_id}/members",
+        add_member,
+        methods=["POST"],
+        response_model=MemberResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+
     async def remove_member(
         tenant_id: str,
         user_id: str,
         _: Principal = Depends(require_role("volundr:admin")),
     ):
         """Remove a member from a tenant (admin only)."""
-        removed = await tenant_service.remove_member(tenant_id, user_id)
+        removed = await service.remove_member(tenant_id, user_id)
         if not removed:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Membership not found",
             )
 
-    @router.post("/tenants/{tenant_id}/reprovision", status_code=status.HTTP_202_ACCEPTED)
+    router.add_api_route(
+        "/tenants/{tenant_id}/members/{user_id}",
+        remove_member,
+        methods=["DELETE"],
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+
     async def reprovision_tenant(
         tenant_id: str,
         request: Request,
         _: Principal = Depends(require_role("volundr:admin")),
     ):
         """Re-provision storage for all users in a tenant (admin only)."""
-        storage = getattr(request.app.state, "storage", None)
-        results = await tenant_service.reprovision_tenant(tenant_id, storage=storage)
+        results = await service.reprovision_tenant(
+            tenant_id,
+            storage=_storage_from_request(request),
+        )
         return [_provisioning_result_to_payload(r) for r in results]
 
+    router.add_api_route(
+        "/tenants/{tenant_id}/reprovision",
+        reprovision_tenant,
+        methods=["POST"],
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+
     return router
+
+
+def create_tenants_router(tenant_service: TenantService) -> APIRouter:
+    """Create the tenants router."""
+    router = APIRouter(prefix="/api/v1/volundr", tags=["Tenants"])
+    return _register_identity_routes(router, IdentityService(tenant_service), legacy=True)
+
+
+def create_identity_router(tenant_service: TenantService) -> APIRouter:
+    """Create the canonical identity router."""
+    router = APIRouter(prefix="/api/v1/identity", tags=["Identity"])
+    return _register_identity_routes(router, IdentityService(tenant_service), legacy=False)

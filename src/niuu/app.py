@@ -16,6 +16,7 @@ from fastapi import FastAPI, Request, WebSocket
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from niuu.http_compat import collect_legacy_route_hits
 from niuu.ports.plugin import APIRouteDomain, Service
 
 if TYPE_CHECKING:
@@ -379,6 +380,24 @@ def build_root_app(
     @root.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    if "niuu-api" in active_mounts:
+
+        @root.get("/api/v1/niuu/compat/legacy-routes")
+        async def legacy_route_hits() -> dict[str, object]:
+            hits = collect_legacy_route_hits(root)
+            return {
+                "items": [
+                    {
+                        "legacyPath": item.legacy_path,
+                        "canonicalPath": item.canonical_path,
+                        "method": item.method,
+                        "hits": item.hits,
+                    }
+                    for item in hits
+                ],
+                "totalHits": sum(item.hits for item in hits),
+            }
 
     prefix_apps: list[tuple[str, ASGIApp]] = []
     for name, sub_app in sub_apps:

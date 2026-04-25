@@ -566,6 +566,53 @@ class TestRootServerBuildApp:
         assert client.get("/api/v1/niuu/ping").status_code == 200
         assert client.get("/api/v1/volundr/ping").status_code == 404
 
+    def test_build_root_app_exposes_legacy_route_usage_when_niuu_api_is_mounted(self) -> None:
+        registry = PluginRegistry()
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"niuu-api"},
+        )
+        app.state.legacy_route_hits = {
+            ("/api/v1/volundr/me", "/api/v1/identity/me", "GET"): 3,
+            ("/api/v1/volundr/users", "/api/v1/volundr/admin/users", "GET"): 1,
+        }
+
+        client = TestClient(app)
+        response = client.get("/api/v1/niuu/compat/legacy-routes")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "items": [
+                {
+                    "legacyPath": "/api/v1/volundr/me",
+                    "canonicalPath": "/api/v1/identity/me",
+                    "method": "GET",
+                    "hits": 3,
+                },
+                {
+                    "legacyPath": "/api/v1/volundr/users",
+                    "canonicalPath": "/api/v1/volundr/admin/users",
+                    "method": "GET",
+                    "hits": 1,
+                },
+            ],
+            "totalHits": 4,
+        }
+
+    def test_build_root_app_hides_legacy_route_usage_when_niuu_api_not_mounted(self) -> None:
+        registry = PluginRegistry()
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"runtime-config"},
+        )
+
+        client = TestClient(app)
+        assert client.get("/api/v1/niuu/compat/legacy-routes").status_code == 404
+
     def test_build_root_app_mounts_shared_tracker_domain_across_plugins(self) -> None:
         volundr_app = FastAPI()
 

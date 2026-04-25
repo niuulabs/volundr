@@ -22,6 +22,16 @@ class LegacyRouteNotice:
     sunset: str | None = None
 
 
+@dataclass(frozen=True)
+class LegacyRouteHit:
+    """Aggregated usage count for a legacy compatibility route."""
+
+    legacy_path: str
+    canonical_path: str
+    method: str
+    hits: int
+
+
 def apply_deprecation_headers(response: Response, notice: LegacyRouteNotice) -> None:
     """Attach standardized deprecation headers to a legacy route response."""
     response.headers["Deprecation"] = "true"
@@ -45,6 +55,26 @@ def record_legacy_route_use(
     hits[key] = current
     app.state.legacy_route_hits = hits
     return current
+
+
+def collect_legacy_route_hits(app: FastAPI) -> tuple[LegacyRouteHit, ...]:
+    """Return the current legacy-route hit counts as sorted records."""
+    hits = getattr(app.state, "legacy_route_hits", {})
+    records = [
+        LegacyRouteHit(
+            legacy_path=legacy_path,
+            canonical_path=canonical_path,
+            method=method,
+            hits=int(count),
+        )
+        for (legacy_path, canonical_path, method), count in hits.items()
+    ]
+    return tuple(
+        sorted(
+            records,
+            key=lambda item: (-item.hits, item.method, item.legacy_path, item.canonical_path),
+        )
+    )
 
 
 def warn_on_legacy_route(
