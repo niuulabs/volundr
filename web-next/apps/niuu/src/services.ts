@@ -107,12 +107,15 @@ function resolveDirectServiceBase(
 }
 
 export function toSharedApiBase(baseUrl: string): string {
-  return baseUrl.replace(/\/(?:tyr|volundr)\/?$/, '');
+  return baseUrl.replace(/\/(?:tyr|forge|volundr)\/?$/, '');
 }
 
 export function resolveSharedApiBase(config: Pick<NiuuConfig, 'services'>): string | null {
   const tyrSvc = config.services['tyr'];
   if (hasHttpBackend(tyrSvc)) return toSharedApiBase(tyrSvc.baseUrl);
+
+  const forgeSvc = config.services['forge'];
+  if (hasHttpBackend(forgeSvc)) return toSharedApiBase(forgeSvc.baseUrl);
 
   const volundrSvc = config.services['volundr'];
   if (hasHttpBackend(volundrSvc)) return toSharedApiBase(volundrSvc.baseUrl);

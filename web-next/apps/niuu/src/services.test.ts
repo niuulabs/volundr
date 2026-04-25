@@ -111,6 +111,12 @@ describe('toSharedApiBase', () => {
       'http://localhost:8080/api/v1',
     );
   });
+
+  it('strips a trailing Forge service suffix', () => {
+    expect(toSharedApiBase('http://localhost:8080/api/v1/forge')).toBe(
+      'http://localhost:8080/api/v1',
+    );
+  });
 });
 
 describe('resolveSharedApiBase', () => {
@@ -120,6 +126,16 @@ describe('resolveSharedApiBase', () => {
         services: {
           tyr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/tyr' },
           volundr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/volundr' },
+        },
+      } as any),
+    ).toBe('http://localhost:8080/api/v1');
+  });
+
+  it('falls back to the canonical Forge shared base when Tyr is not live', () => {
+    expect(
+      resolveSharedApiBase({
+        services: {
+          forge: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/forge' },
         },
       } as any),
     ).toBe('http://localhost:8080/api/v1');
@@ -386,6 +402,29 @@ describe('buildServices', () => {
       basePath: 'http://localhost:8080/api/v1',
     });
     expect(tyrMocks.buildTyrAuditLogHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1',
+    });
+  });
+
+  it('falls back to the Forge host when only the canonical Forge base is live', () => {
+    buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        forge: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/forge' },
+      },
+    } as any);
+
+    expect(tyrMocks.buildTrackerHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1',
+    });
+    expect(tyrMocks.buildTyrAuditLogHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1',
+    });
+    expect(pluginSdkMocks.buildFeatureCatalogAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1',
+    });
+    expect(pluginSdkMocks.buildIdentityAdapter).toHaveBeenCalledWith({
       basePath: 'http://localhost:8080/api/v1',
     });
   });
