@@ -14,6 +14,7 @@ import type {
   VolundrMessage,
   StoredCredential,
   FeatureModule,
+  SecretType,
 } from '../models/volundr.model';
 import type { Cluster } from '../domain/cluster';
 import type { Session } from '../domain/session';
@@ -69,6 +70,108 @@ const SEED_STATS: VolundrStats = {
   },
 };
 
+const SEED_CREDENTIALS: StoredCredential[] = [
+  {
+    id: 'cred-1',
+    name: 'anthropic-key',
+    secretType: 'api_key',
+    keys: ['ANTHROPIC_API_KEY'],
+    scope: 'global',
+    used: 42,
+    metadata: {},
+    createdAt: '2026-01-03T12:00:00Z',
+    updatedAt: '2d ago',
+  },
+  {
+    id: 'cred-2',
+    name: 'openai-key',
+    secretType: 'api_key',
+    keys: ['OPENAI_API_KEY'],
+    scope: 'global',
+    used: 17,
+    metadata: {},
+    createdAt: '2026-01-03T12:00:00Z',
+    updatedAt: '2d ago',
+  },
+  {
+    id: 'cred-3',
+    name: 'google-key',
+    secretType: 'api_key',
+    keys: ['GOOGLE_API_KEY'],
+    scope: 'global',
+    used: 3,
+    metadata: {},
+    createdAt: '2026-01-03T12:00:00Z',
+    updatedAt: '2d ago',
+  },
+  {
+    id: 'cred-4',
+    name: 'aws-mimir',
+    secretType: 'api_key',
+    keys: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'],
+    scope: 'template:mimir-embeddings',
+    used: 6,
+    metadata: {},
+    createdAt: '2026-01-02T12:00:00Z',
+    updatedAt: '3d ago',
+  },
+  {
+    id: 'cred-5',
+    name: 'hf-hub',
+    secretType: 'api_key',
+    keys: ['HF_TOKEN'],
+    scope: 'global',
+    used: 4,
+    metadata: {},
+    createdAt: '2026-01-01T12:00:00Z',
+    updatedAt: '2w ago',
+  },
+  {
+    id: 'cred-6',
+    name: 'github-niuu',
+    secretType: 'git_credential',
+    keys: ['GIT_USERNAME', 'GIT_PASSWORD'],
+    scope: 'global',
+    used: 128,
+    metadata: {},
+    createdAt: '2025-12-18T12:00:00Z',
+    updatedAt: '1w ago',
+  },
+  {
+    id: 'cred-7',
+    name: 'linear-oauth',
+    secretType: 'oauth_token',
+    keys: ['LINEAR_TOKEN', 'LINEAR_REFRESH'],
+    scope: 'global',
+    used: 14,
+    metadata: {},
+    createdAt: '2025-12-27T12:00:00Z',
+    updatedAt: '6h ago',
+  },
+  {
+    id: 'cred-8',
+    name: 'ssh-deploy',
+    secretType: 'ssh_key',
+    keys: ['id_ed25519', 'id_ed25519.pub'],
+    scope: 'template:niuu-platform',
+    used: 2,
+    metadata: {},
+    createdAt: '2025-11-15T12:00:00Z',
+    updatedAt: '1mo ago',
+  },
+  {
+    id: 'cred-9',
+    name: 'tls-niuu-internal',
+    secretType: 'tls_cert',
+    keys: ['tls.crt', 'tls.key', 'ca.crt'],
+    scope: 'cluster:valaskjalf',
+    used: 0,
+    metadata: {},
+    createdAt: '2025-10-18T12:00:00Z',
+    updatedAt: '3mo ago',
+  },
+];
+
 const SEED_CLUSTERS: Cluster[] = [
   // ── Original clusters (other tests depend on exact shape) ─────────────
   {
@@ -79,7 +182,7 @@ const SEED_CLUSTERS: Cluster[] = [
     status: 'healthy',
     region: 'ca-hamilton-1',
     capacity: { cpu: 64, memMi: 131_072, gpu: 4 },
-    used: { cpu: 12, memMi: 24_576, gpu: 1 },
+    used: { cpu: 12, memMi: 24_576, gpu: 2 },
     disk: { usedGi: 820, totalGi: 2048, systemGi: 120, podsGi: 580, logsGi: 120 },
     nodes: [
       { id: 'n-1', status: 'ready', role: 'worker' },
@@ -193,8 +296,8 @@ const SEED_CLUSTERS: Cluster[] = [
     kind: 'media',
     status: 'healthy',
     region: 'ap-tokyo',
-    capacity: { cpu: 16, memMi: 32_768, gpu: 2 },
-    used: { cpu: 1, memMi: 4_096, gpu: 0 },
+    capacity: { cpu: 16, memMi: 32_768, gpu: 3 },
+    used: { cpu: 1, memMi: 4_096, gpu: 1 },
     disk: { usedGi: 90, totalGi: 512, systemGi: 30, podsGi: 40, logsGi: 20 },
     nodes: [{ id: 'n-9', status: 'ready', role: 'worker' }],
     pods: [],
@@ -546,7 +649,7 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
   {
     id: 'ds-4',
     ravnId: 'r4',
-    personaName: 'sage',
+    personaName: 's-4855',
     templateId: 'tpl-default',
     clusterId: 'cl-eitri',
     state: 'failed',
@@ -564,7 +667,11 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
     env: {},
     events: [
       { ts: new Date(Date.now() - 86_400_000).toISOString(), kind: 'requested', body: 'session requested' },
-      { ts: new Date(Date.now() - 86_000_000).toISOString(), kind: 'failed', body: 'pod failed to start: OOMKilled' },
+      {
+        ts: new Date(Date.now() - 86_000_000).toISOString(),
+        kind: 'failed',
+        body: 'CredentialNotFound: google-key scope=global — key rotation in progress',
+      },
     ],
   },
   {
@@ -774,9 +881,9 @@ const SEED_TEMPLATES: Template[] = [
   {
     id: 'tpl-mimir',
     name: 'mimir-embeddings',
-    description: 'Embedding indexer · batch workers',
+    description: 'Indexer · needs GPU for local embeds',
     version: 1,
-    usageCount: 19,
+    usageCount: 14,
     spec: {
       image: 'ghcr.io/niuulabs/skuld',
       tag: 'latest',
@@ -786,11 +893,11 @@ const SEED_TEMPLATES: Template[] = [
       tools: [],
       mcpServers: [],
       resources: {
-        cpuRequest: '2',
+        cpuRequest: '4',
         cpuLimit: '4',
-        memRequestMi: 4096,
-        memLimitMi: 8192,
-        gpuCount: 0,
+        memRequestMi: 32_768,
+        memLimitMi: 32_768,
+        gpuCount: 1,
       },
       ttlSec: 5400,
       idleTimeoutSec: 900,
@@ -929,6 +1036,7 @@ const SEED_TEMPLATES: Template[] = [
 
 export function createMockVolundrService(): IVolundrService {
   const sessions = [...SEED_SESSIONS];
+  const credentials = new Map(SEED_CREDENTIALS.map((credential) => [credential.name, credential]));
 
   return {
     getFeatures: async () => ({
@@ -1151,18 +1259,29 @@ export function createMockVolundrService(): IVolundrService {
     deleteIntegration: async () => {},
     testIntegration: async () => ({ success: true }),
 
-    getCredentials: async (): Promise<StoredCredential[]> => [],
-    getCredential: async () => null,
-    createCredential: async (req) => ({
-      id: `cred-${Date.now()}`,
-      name: req.name,
-      secretType: req.secretType,
-      keys: Object.keys(req.data),
-      metadata: req.metadata ?? {},
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }),
-    deleteCredential: async () => {},
+    getCredentials: async (type?: SecretType): Promise<StoredCredential[]> => {
+      const rows = Array.from(credentials.values());
+      return type ? rows.filter((credential) => credential.secretType === type) : rows;
+    },
+    getCredential: async (name) => credentials.get(name) ?? null,
+    createCredential: async (req) => {
+      const created = {
+        id: `cred-${Date.now()}`,
+        name: req.name,
+        secretType: req.secretType,
+        keys: Object.keys(req.data),
+        scope: 'global',
+        used: 0,
+        metadata: req.metadata ?? {},
+        createdAt: new Date().toISOString(),
+        updatedAt: 'just now',
+      };
+      credentials.set(created.name, created);
+      return created;
+    },
+    deleteCredential: async (name) => {
+      credentials.delete(name);
+    },
     getCredentialTypes: async () => [],
 
     listWorkspaces: async () => [],
