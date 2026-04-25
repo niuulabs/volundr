@@ -176,6 +176,7 @@ class TestRouteDomainSelection:
             "git-api",
             "identity-api",
             "integrations-api",
+            "mimir-api",
             "niuu-api",
             "catalog-api",
             "dispatch-api",

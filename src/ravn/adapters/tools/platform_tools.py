@@ -1,11 +1,11 @@
 """Platform tools — Ravn tools for interacting with the Niuu platform.
 
-These tools let the Ravn agent create/manage Volundr sessions, perform git
-operations, decompose work into Tyr sagas, and track issues via Tyr's
-tracker adapters.
+These tools let the Ravn agent create/manage Forge sessions, perform git
+operations, decompose work into Tyr sagas, and track issues via the shared
+tracker routes.
 
-All tools use the platform APIs (Volundr at /api/v1/volundr/, Tyr at
-/api/v1/tyr/) rather than direct imports, preserving module boundaries.
+All tools use the mounted platform APIs rather than direct imports,
+preserving module boundaries while allowing route ownership to evolve.
 """
 
 from __future__ import annotations

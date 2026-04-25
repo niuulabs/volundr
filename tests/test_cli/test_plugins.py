@@ -10,6 +10,7 @@ import typer
 from typer.testing import CliRunner
 
 from cli.registry import PluginRegistry
+from mimir.plugin import MimirPlugin
 from niuu.ports.plugin import ServiceDefinition
 from tyr.plugin import TyrPlugin
 from volundr.plugin import VolundrPlugin
@@ -315,6 +316,58 @@ class TestTyrPlugin:
 
     def test_api_client_returns_instance(self) -> None:
         plugin = TyrPlugin()
+        client = plugin.create_api_client()
+        assert client is not None
+
+
+class TestMimirPlugin:
+    def test_name(self) -> None:
+        plugin = MimirPlugin()
+        assert plugin.name == "mimir"
+
+    def test_description(self) -> None:
+        plugin = MimirPlugin()
+        desc = plugin.description.lower()
+        assert "knowledge" in desc or "search" in desc
+
+    def test_register_service_returns_definition(self) -> None:
+        plugin = MimirPlugin()
+        svc_def = plugin.register_service()
+        assert isinstance(svc_def, ServiceDefinition)
+        assert svc_def.name == "mimir"
+        assert svc_def.default_enabled is True
+
+    def test_create_service_stub_health_check(self) -> None:
+        plugin = MimirPlugin()
+        svc = plugin.create_service()
+        asyncio.run(svc.start())
+        assert asyncio.run(svc.health_check()) is True
+        asyncio.run(svc.stop())
+
+    def test_create_api_app_uses_mimir_app_factory(self, monkeypatch) -> None:
+        plugin = MimirPlugin()
+        sentinel = object()
+
+        def fake_create_app(_config):
+            return sentinel
+
+        monkeypatch.setattr("mimir.app.create_app", fake_create_app)
+        assert plugin.create_api_app() is sentinel
+
+    def test_api_route_domains_declared(self) -> None:
+        plugin = MimirPlugin()
+        route_domains = plugin.api_route_domains()
+        assert route_domains
+        assert [route_domain.name for route_domain in route_domains] == ["mimir-api"]
+        assert route_domains[0].prefixes == (
+            "/api/v1/mimir/mcp",
+            "/api/v1/mimir",
+            "/mcp",
+            "/mimir",
+        )
+
+    def test_api_client_returns_instance(self) -> None:
+        plugin = MimirPlugin()
         client = plugin.create_api_client()
         assert client is not None
 

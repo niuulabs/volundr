@@ -97,6 +97,7 @@ ravn-mimir = "ravn.cli.commands:mimir_main"
 niuu = "niuu.plugin:NiuuPlugin"
 volundr = "volundr.plugin:VolundrPlugin"
 tyr = "tyr.plugin:TyrPlugin"
+mimir = "mimir.plugin:MimirPlugin"
 ravn = "ravn.plugin:RavnPlugin"
 bifrost = "bifrost.plugin:BifrostPlugin"
 

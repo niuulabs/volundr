@@ -69,6 +69,7 @@ _PLUGIN_ROUTE_DOMAINS: dict[str, str] = {
     "git-api": "volundr",
     "identity-api": "volundr",
     "integrations-api": "volundr",
+    "mimir-api": "mimir",
     "niuu-api": "niuu",
     "catalog-api": "volundr",
     "dispatch-api": "tyr",
@@ -225,6 +226,10 @@ def _backend_prefix_for_mount(plugin_name: str, public_prefix: str) -> str:
     """Map public mount prefixes to the backend route prefix a plugin actually serves."""
     if plugin_name == "volundr" and public_prefix.startswith("/api/v1/forge"):
         return public_prefix.replace("/api/v1/forge", "/api/v1/volundr", 1)
+    if plugin_name == "mimir" and public_prefix.startswith("/api/v1/mimir/mcp"):
+        return public_prefix.replace("/api/v1/mimir/mcp", "/mcp", 1)
+    if plugin_name == "mimir" and public_prefix.startswith("/api/v1/mimir"):
+        return public_prefix.replace("/api/v1/mimir", "/mimir", 1)
     return public_prefix
 
 
