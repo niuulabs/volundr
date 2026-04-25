@@ -1139,6 +1139,32 @@ describe('buildServices', () => {
     });
   });
 
+  it('prefers canonical Forge stream configs over the legacy Volundr stream keys', () => {
+    buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        'forge.pty': { mode: 'ws', wsUrl: 'ws://localhost:8080/api/v1/forge/pty/{sessionId}' },
+        'forge.metrics': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/forge/metrics',
+        },
+        'volundr.pty': { mode: 'ws', wsUrl: 'ws://localhost:8080/api/v1/volundr/pty/{sessionId}' },
+        'volundr.metrics': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/volundr/metrics',
+        },
+      },
+    } as any);
+
+    expect(volundrMocks.buildVolundrPtyWsAdapter).toHaveBeenCalledWith({
+      urlTemplate: 'ws://localhost:8080/api/v1/forge/pty/{sessionId}',
+    });
+    expect(volundrMocks.buildVolundrMetricsSseAdapter).toHaveBeenCalledWith({
+      urlTemplate: 'http://localhost:8080/api/v1/forge/metrics',
+    });
+  });
+
   it('lets a grouped observatory base drive all observatory adapters by default', () => {
     buildServices({
       theme: 'ice',

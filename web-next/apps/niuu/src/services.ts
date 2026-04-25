@@ -84,6 +84,17 @@ function hasWsBackend(svc: ServiceConfig | undefined): svc is ServiceConfig & { 
   return svc?.mode === 'ws' && typeof svc.wsUrl === 'string';
 }
 
+function resolveDirectServiceWsUrl(
+  config: Pick<NiuuConfig, 'services'>,
+  ...serviceKeys: string[]
+): string | null {
+  for (const serviceKey of serviceKeys) {
+    const svc = config.services[serviceKey];
+    if (hasWsBackend(svc)) return svc.wsUrl;
+  }
+  return null;
+}
+
 function resolveDirectServiceBase(
   config: Pick<NiuuConfig, 'services'>,
   ...serviceKeys: string[]
@@ -120,6 +131,14 @@ export function resolveCanonicalServiceBase(
 
 export function resolveForgeServiceBase(config: Pick<NiuuConfig, 'services'>): string | null {
   return resolveDirectServiceBase(config, 'forge', 'volundr');
+}
+
+function resolveForgeStreamWsUrl(config: Pick<NiuuConfig, 'services'>): string | null {
+  return resolveDirectServiceWsUrl(config, 'forge.pty', 'volundr.pty');
+}
+
+function resolveForgeMetricsBase(config: Pick<NiuuConfig, 'services'>): string | null {
+  return resolveDirectServiceBase(config, 'forge.metrics', 'volundr.metrics');
 }
 
 function resolveTyrServiceBase(
@@ -619,8 +638,6 @@ function buildVolundrClusterAdapter(volundr: IVolundrService): IClusterAdapter {
 
 export function buildServices(config: NiuuConfig): ServicesMap {
   const mimirSvc = config.services['mimir'];
-  const volundrPtySvc = config.services['volundr.pty'];
-  const volundrMetricsSvc = config.services['volundr.metrics'];
 
   // ── Ravn: all five sub-services share one HTTP base URL when configured ──
   const ravnPersonaBase = resolveDirectServiceBase(config, 'ravn.personas', 'ravn');
@@ -666,11 +683,13 @@ export function buildServices(config: NiuuConfig): ServicesMap {
 
   // ── Völundr streams: keyed as separate services so they can be flipped
   //    independently (e.g. mock PTY with live metrics during bring-up). ──
-  const ptyStream = hasWsBackend(volundrPtySvc)
-    ? buildVolundrPtyWsAdapter({ urlTemplate: volundrPtySvc.wsUrl })
+  const forgePtyWsUrl = resolveForgeStreamWsUrl(config);
+  const forgeMetricsBase = resolveForgeMetricsBase(config);
+  const ptyStream = forgePtyWsUrl
+    ? buildVolundrPtyWsAdapter({ urlTemplate: forgePtyWsUrl })
     : createMockPtyStream();
-  const metricsStream = hasHttpBackend(volundrMetricsSvc)
-    ? buildVolundrMetricsSseAdapter({ urlTemplate: volundrMetricsSvc.baseUrl })
+  const metricsStream = forgeMetricsBase
+    ? buildVolundrMetricsSseAdapter({ urlTemplate: forgeMetricsBase })
     : createMockMetricsStream();
 
   // ── Observatory ──

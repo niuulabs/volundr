@@ -26,6 +26,8 @@
     "ravn.triggers": { "mode": "mock" },
     "ravn.budget": { "mode": "mock" },
     "forge": { "mode": "mock" },
+    "forge.pty": { "mode": "mock" },
+    "forge.metrics": { "mode": "mock" },
     "volundr": { "mode": "mock" },
     "tyr.dispatcher": { "mode": "mock" },
     "tyr.sessions": { "mode": "mock" },
