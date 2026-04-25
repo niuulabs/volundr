@@ -24,6 +24,7 @@
     "ravn.sessions": { "mode": "mock" },
     "ravn.triggers": { "mode": "mock" },
     "ravn.budget": { "mode": "mock" },
+    "forge": { "mode": "mock" },
     "volundr": { "mode": "mock" },
     "tyr": { "mode": "mock" }
   }

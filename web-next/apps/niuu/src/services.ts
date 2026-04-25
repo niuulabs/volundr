@@ -118,6 +118,10 @@ export function resolveCanonicalServiceBase(
   return resolveSharedApiBase(config);
 }
 
+export function resolveForgeServiceBase(config: Pick<NiuuConfig, 'services'>): string | null {
+  return resolveDirectServiceBase(config, 'forge', 'volundr');
+}
+
 export function buildSharedFeatureCatalogService(
   config: Pick<NiuuConfig, 'services'>,
 ): IFeatureCatalogService {
@@ -637,16 +641,17 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     : createMimirMockAdapter();
 
   // ── Völundr request/response ──
-  const volundr = hasHttpBackend(volundrSvc)
-    ? buildVolundrHttpAdapter(createApiClient(volundrSvc.baseUrl))
+  const forgeBase = resolveForgeServiceBase(config);
+  const volundr = forgeBase
+    ? buildVolundrHttpAdapter(createApiClient(forgeBase))
     : createMockVolundrService();
-  const sessionStore = hasHttpBackend(volundrSvc)
+  const sessionStore = forgeBase
     ? buildVolundrSessionStore(volundr)
     : createMockSessionStore();
-  const clusterAdapter = hasHttpBackend(volundrSvc)
+  const clusterAdapter = forgeBase
     ? buildVolundrClusterAdapter(volundr)
     : createMockClusterAdapter();
-  const templateStore = hasHttpBackend(volundrSvc)
+  const templateStore = forgeBase
     ? buildVolundrTemplateStore(volundr)
     : createMockTemplateStore();
 

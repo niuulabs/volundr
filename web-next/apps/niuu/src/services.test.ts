@@ -90,6 +90,7 @@ vi.mock('@niuulabs/plugin-volundr', () => volundrMocks);
 import {
   buildServices,
   resolveCanonicalServiceBase,
+  resolveForgeServiceBase,
   buildSharedFeatureCatalogService,
   buildSharedIdentityService,
   resolveSharedApiBase,
@@ -183,6 +184,40 @@ describe('resolveCanonicalServiceBase', () => {
         } as any,
         'identity',
       ),
+    ).toBeNull();
+  });
+});
+
+describe('resolveForgeServiceBase', () => {
+  it('prefers an explicit forge domain base over the legacy volundr key', () => {
+    expect(
+      resolveForgeServiceBase({
+        services: {
+          forge: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/forge' },
+          volundr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/volundr' },
+        },
+      } as any),
+    ).toBe('http://localhost:8080/api/v1/forge');
+  });
+
+  it('falls back to the legacy volundr base when no explicit forge base exists', () => {
+    expect(
+      resolveForgeServiceBase({
+        services: {
+          volundr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/volundr' },
+        },
+      } as any),
+    ).toBe('http://localhost:8080/api/v1/volundr');
+  });
+
+  it('returns null when neither forge nor volundr is live', () => {
+    expect(
+      resolveForgeServiceBase({
+        services: {
+          forge: { mode: 'mock' },
+          volundr: { mode: 'mock' },
+        },
+      } as any),
     ).toBeNull();
   });
 });
@@ -424,6 +459,21 @@ describe('buildServices', () => {
     );
     await sessionStore.deleteSession('sess-live');
     expect(liveVolundr.deleteSession).toHaveBeenCalledWith('sess-live');
+  });
+
+  it('prefers an explicit forge service base for the main Volundr http adapter', () => {
+    buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        forge: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/forge' },
+        volundr: { mode: 'mock' },
+      },
+    } as any);
+
+    expect(volundrMocks.buildVolundrHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/forge',
+    });
   });
 
   it('builds a live template store from the live Volundr service', async () => {
