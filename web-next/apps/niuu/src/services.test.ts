@@ -1176,6 +1176,18 @@ describe('buildServices', () => {
     expect(volundrMocks.buildVolundrMetricsSseAdapter).toHaveBeenCalledWith({
       urlTemplate: 'http://localhost:8080/api/v1/volundr/metrics',
     });
+    expect(queryMocks.createApiClient).toHaveBeenCalledWith(
+      'http://localhost:8080/api/v1/observatory',
+    );
+    expect(observatoryMocks.buildObservatoryRegistryHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/observatory',
+    });
+    expect(observatoryMocks.buildObservatoryTopologySseStream).toHaveBeenCalledWith(
+      'http://localhost:8080/api/v1/observatory/topology',
+    );
+    expect(observatoryMocks.buildObservatoryEventsSseStream).toHaveBeenCalledWith(
+      'http://localhost:8080/api/v1/observatory/events',
+    );
   });
 
   it('prefers canonical Forge stream configs over the legacy Volundr stream keys', () => {
@@ -1220,10 +1232,10 @@ describe('buildServices', () => {
       basePath: 'http://localhost:8080/api/v1/observatory',
     });
     expect(observatoryMocks.buildObservatoryTopologySseStream).toHaveBeenCalledWith(
-      'http://localhost:8080/api/v1/observatory',
+      'http://localhost:8080/api/v1/observatory/topology',
     );
     expect(observatoryMocks.buildObservatoryEventsSseStream).toHaveBeenCalledWith(
-      'http://localhost:8080/api/v1/observatory',
+      'http://localhost:8080/api/v1/observatory/events',
     );
   });
 
@@ -1245,6 +1257,23 @@ describe('buildServices', () => {
     );
     expect(observatoryMocks.buildObservatoryEventsSseStream).toHaveBeenCalledWith(
       'http://localhost:8080/api/v1/observatory/events-stream',
+    );
+  });
+
+  it('normalizes an explicit observatory registry override back to the service root', () => {
+    buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        'observatory.registry': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/observatory/registry',
+        },
+      },
+    } as any);
+
+    expect(queryMocks.createApiClient).toHaveBeenCalledWith(
+      'http://localhost:8080/api/v1/observatory',
     );
   });
 });

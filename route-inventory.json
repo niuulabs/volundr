@@ -189,6 +189,40 @@
     "plugin": "niuu"
   },
   {
+    "name": "observatory-api",
+    "prefixes": [
+      "/api/v1/observatory"
+    ],
+    "source": "plugin",
+    "plugin": "observatory"
+  },
+  {
+    "name": "observatory-events-api",
+    "prefixes": [
+      "/api/v1/observatory/events/stream",
+      "/api/v1/observatory/events"
+    ],
+    "source": "plugin",
+    "plugin": "observatory"
+  },
+  {
+    "name": "observatory-registry-api",
+    "prefixes": [
+      "/api/v1/observatory/registry"
+    ],
+    "source": "plugin",
+    "plugin": "observatory"
+  },
+  {
+    "name": "observatory-topology-api",
+    "prefixes": [
+      "/api/v1/observatory/topology/stream",
+      "/api/v1/observatory/topology"
+    ],
+    "source": "plugin",
+    "plugin": "observatory"
+  },
+  {
     "name": "persona-api",
     "prefixes": [
       "/api/v1/ravn/personas"

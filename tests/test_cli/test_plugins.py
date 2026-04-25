@@ -9,10 +9,11 @@ import respx
 import typer
 from typer.testing import CliRunner
 
-from cli.registry import PluginRegistry
 from bifrost.plugin import BifrostPlugin
+from cli.registry import PluginRegistry
 from mimir.plugin import MimirPlugin
 from niuu.ports.plugin import ServiceDefinition
+from observatory.plugin import ObservatoryPlugin
 from ravn.plugin import RavnPlugin
 from tyr.plugin import TyrPlugin
 from volundr.plugin import VolundrPlugin
@@ -498,7 +499,10 @@ class TestRavnPlugin:
     @respx.mock
     def test_ravn_status_command(self) -> None:
         respx.get(f"{BASE}/api/v1/ravn/status").mock(
-            return_value=httpx.Response(200, json={"service": "ravn", "session_count": 2, "healthy": True})
+            return_value=httpx.Response(
+                200,
+                json={"service": "ravn", "session_count": 2, "healthy": True},
+            )
         )
         plugin = RavnPlugin()
         app = typer.Typer(no_args_is_help=False)
@@ -569,6 +573,66 @@ class TestBifrostPlugin:
             "/api/v1/bifrost/readyz",
         )
         assert route_domains[2].prefixes == ("/api/v1/bifrost",)
+
+
+class TestObservatoryPlugin:
+    def test_name(self) -> None:
+        plugin = ObservatoryPlugin()
+        assert plugin.name == "observatory"
+
+    def test_description(self) -> None:
+        plugin = ObservatoryPlugin()
+        assert "registry" in plugin.description.lower()
+
+    def test_register_service_returns_definition(self) -> None:
+        plugin = ObservatoryPlugin()
+        svc_def = plugin.register_service()
+        assert isinstance(svc_def, ServiceDefinition)
+        assert svc_def.name == "observatory"
+        assert svc_def.default_enabled is True
+
+    def test_create_service_stub_health_check(self) -> None:
+        plugin = ObservatoryPlugin()
+        svc = plugin.create_service()
+        asyncio.run(svc.start())
+        assert asyncio.run(svc.health_check()) is True
+        asyncio.run(svc.stop())
+
+    def test_create_api_app_uses_observatory_app_factory(self, monkeypatch) -> None:
+        plugin = ObservatoryPlugin()
+        sentinel = object()
+
+        def fake_create_app():
+            return sentinel
+
+        monkeypatch.setattr("observatory.app.create_app", fake_create_app)
+        assert plugin.create_api_app() is sentinel
+
+    def test_api_route_domains_declared(self) -> None:
+        plugin = ObservatoryPlugin()
+        route_domains = plugin.api_route_domains()
+        assert route_domains
+        assert [route_domain.name for route_domain in route_domains] == [
+            "observatory-registry-api",
+            "observatory-topology-api",
+            "observatory-events-api",
+            "observatory-api",
+        ]
+        assert route_domains[0].prefixes == ("/api/v1/observatory/registry",)
+        assert route_domains[1].prefixes == (
+            "/api/v1/observatory/topology/stream",
+            "/api/v1/observatory/topology",
+        )
+        assert route_domains[2].prefixes == (
+            "/api/v1/observatory/events/stream",
+            "/api/v1/observatory/events",
+        )
+        assert route_domains[3].prefixes == ("/api/v1/observatory",)
+
+    def test_api_client_returns_instance(self) -> None:
+        plugin = ObservatoryPlugin()
+        client = plugin.create_api_client()
+        assert client is not None
 
 
 class TestPluginDiscovery:

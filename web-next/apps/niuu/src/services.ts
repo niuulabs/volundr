@@ -155,7 +155,20 @@ function resolveObservatoryServiceBase(
   config: Pick<NiuuConfig, 'services'>,
   serviceKey: 'observatory.registry' | 'observatory.topology' | 'observatory.events',
 ): string | null {
-  return resolveDirectServiceBase(config, serviceKey, 'observatory');
+  const explicitBase = resolveDirectServiceBase(config, serviceKey);
+  if (explicitBase) {
+    if (serviceKey === 'observatory.registry') {
+      return explicitBase.replace(/\/registry\/?$/, '');
+    }
+    return explicitBase;
+  }
+
+  const groupedBase = resolveDirectServiceBase(config, 'observatory');
+  if (!groupedBase) return null;
+
+  if (serviceKey === 'observatory.registry') return groupedBase;
+  if (serviceKey === 'observatory.topology') return `${groupedBase}/topology`;
+  return `${groupedBase}/events`;
 }
 
 export function buildSharedFeatureCatalogService(
