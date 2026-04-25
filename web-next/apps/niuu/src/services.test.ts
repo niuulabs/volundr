@@ -52,6 +52,7 @@ const volundrMocks = vi.hoisted(() => ({
     client,
     getSessions: vi.fn().mockResolvedValue([]),
     getSession: vi.fn().mockResolvedValue(null),
+    getClusterResources: vi.fn().mockResolvedValue({ resourceTypes: [], nodes: [] }),
     getTemplates: vi.fn().mockResolvedValue([]),
     getTemplate: vi.fn().mockResolvedValue(null),
     listArchivedSessions: vi.fn().mockResolvedValue([]),
@@ -511,6 +512,150 @@ describe('buildServices', () => {
     );
   });
 
+  it('builds a live cluster adapter from Volundr resources and sessions', async () => {
+    const liveVolundr = {
+      kind: 'volundr',
+      getSessions: vi.fn().mockResolvedValue([
+        {
+          id: 'sess-running',
+          name: 'agent-runtime',
+          podName: 'forge-pod-1',
+          status: 'running',
+          lastActive: Date.parse('2026-04-24T12:30:00Z'),
+          source: { type: 'git', repo: 'github.com/niuulabs/volundr', branch: 'main' },
+          model: 'claude-sonnet',
+          messageCount: 0,
+          tokensUsed: 0,
+          activityState: 'active',
+        },
+        {
+          id: 'sess-queued',
+          name: 'queued-runtime',
+          status: 'provisioning',
+          lastActive: 0,
+          source: { type: 'git', repo: 'github.com/niuulabs/volundr', branch: 'main' },
+          model: 'claude-sonnet',
+          messageCount: 0,
+          tokensUsed: 0,
+          activityState: null,
+        },
+      ]),
+      getSession: vi.fn().mockResolvedValue(null),
+      getClusterResources: vi.fn().mockResolvedValue({
+        resourceTypes: [],
+        nodes: [
+          {
+            name: 'node-a',
+            labels: {
+              'topology.kubernetes.io/region': 'ca-hamilton-1',
+            },
+            allocatable: {
+              cpu: '8',
+              memory: '16Gi',
+              'nvidia.com/gpu': '1',
+            },
+            allocated: {
+              cpu: '1500m',
+              memory: '8Gi',
+              'nvidia.com/gpu': '1',
+            },
+            available: {},
+          },
+          {
+            name: 'node-b',
+            labels: {
+              'node-role.kubernetes.io/control-plane': 'true',
+            },
+            allocatable: {
+              cpu: '4',
+              memory: '8Gi',
+            },
+            allocated: {
+              cpu: '500m',
+              memory: '1Gi',
+            },
+            available: {},
+          },
+        ],
+      }),
+      getTemplates: vi.fn().mockResolvedValue([]),
+      getTemplate: vi.fn().mockResolvedValue(null),
+      listArchivedSessions: vi.fn().mockResolvedValue([]),
+      deleteSession: vi.fn().mockResolvedValue(undefined),
+      subscribe: vi.fn(() => () => {}),
+    };
+    volundrMocks.buildVolundrHttpAdapter.mockReturnValue(liveVolundr as any);
+
+    const services = buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        volundr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/volundr' },
+      },
+    } as any);
+
+    const clusterAdapter = services['volundr.clusters'] as any;
+    await expect(clusterAdapter.getClusters()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'shared',
+        name: 'Shared GPU Forge',
+        kind: 'gpu',
+        region: 'ca-hamilton-1',
+        capacity: { cpu: 12, memMi: 24576, gpu: 1 },
+        used: { cpu: 2, memMi: 9216, gpu: 1 },
+        runningSessions: 1,
+        queuedProvisions: 1,
+        pods: [
+          expect.objectContaining({
+            name: 'forge-pod-1',
+            status: 'running',
+            startedAt: '2026-04-24T12:30:00.000Z',
+          }),
+          expect.objectContaining({
+            name: 'queued-runtime',
+            status: 'pending',
+            startedAt: '1970-01-01T00:00:00.000Z',
+          }),
+        ],
+        nodes: [
+          { id: 'node-a', status: 'ready', role: 'worker' },
+          { id: 'node-b', status: 'ready', role: 'control-plane' },
+        ],
+      }),
+    ]);
+    expect(services.clusterAdapter).toBe(services['volundr.clusters']);
+    await expect(clusterAdapter.getCluster('shared')).resolves.toEqual(
+      expect.objectContaining({ id: 'shared' }),
+    );
+  });
+
+  it('returns no live clusters when Volundr exposes neither nodes nor sessions', async () => {
+    const liveVolundr = {
+      kind: 'volundr',
+      getSessions: vi.fn().mockResolvedValue([]),
+      getSession: vi.fn().mockResolvedValue(null),
+      getClusterResources: vi.fn().mockResolvedValue({ resourceTypes: [], nodes: [] }),
+      getTemplates: vi.fn().mockResolvedValue([]),
+      getTemplate: vi.fn().mockResolvedValue(null),
+      listArchivedSessions: vi.fn().mockResolvedValue([]),
+      deleteSession: vi.fn().mockResolvedValue(undefined),
+      subscribe: vi.fn(() => () => {}),
+    };
+    volundrMocks.buildVolundrHttpAdapter.mockReturnValue(liveVolundr as any);
+
+    const services = buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        volundr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/volundr' },
+      },
+    } as any);
+
+    const clusterAdapter = services['volundr.clusters'] as any;
+    await expect(clusterAdapter.getClusters()).resolves.toEqual([]);
+    await expect(clusterAdapter.getCluster('shared')).resolves.toBeNull();
+  });
+
   it('normalizes sparse live templates and rejects unsupported live template mutations', async () => {
     const sparseTemplate = {
       name: 'edge-template',
@@ -526,10 +671,6 @@ describe('buildServices', () => {
         memory_request: '512Ki',
         memory_limit: '1Ti',
       },
-      mcpServers: [
-        { name: 'remote', transport: 'sse', url: 'https://example.com/sse', tools: ['sync', 1] },
-        { command: 'uvx mcp-shell' },
-      ],
       workloadConfig: {
         image: 'ghcr.io/niuulabs/skuld',
         cluster_affinity: ['edge'],
@@ -537,11 +678,20 @@ describe('buildServices', () => {
         idleTimeoutSec: Number.NaN,
       },
     };
+    const remoteTemplate = {
+      name: 'remote-template',
+      description: 'remote',
+      repos: [],
+      mcpServers: [
+        { name: 'remote', transport: 'sse', url: 'https://example.com/sse', tools: ['sync', 1] },
+        { command: 'uvx mcp-shell' },
+      ],
+    };
     const liveVolundr = {
       kind: 'volundr',
       getSessions: vi.fn().mockResolvedValue([]),
       getSession: vi.fn().mockResolvedValue(null),
-      getTemplates: vi.fn().mockResolvedValue([sparseTemplate]),
+      getTemplates: vi.fn().mockResolvedValue([sparseTemplate, remoteTemplate]),
       getTemplate: vi.fn().mockResolvedValue(null),
       listArchivedSessions: vi.fn().mockResolvedValue([]),
       deleteSession: vi.fn().mockResolvedValue(undefined),
@@ -570,6 +720,7 @@ describe('buildServices', () => {
           tag: 'latest',
           env: { FEATURE_FLAG: 'on' },
           envSecretRefs: [],
+          mcpServers: [],
           clusterAffinity: ['edge'],
           ttlSec: 3600,
           idleTimeoutSec: 600,
@@ -592,6 +743,11 @@ describe('buildServices', () => {
               readOnly: false,
             },
           ],
+        }),
+      }),
+      expect.objectContaining({
+        id: 'remote-template',
+        spec: expect.objectContaining({
           mcpServers: [
             {
               name: 'remote',
@@ -619,6 +775,86 @@ describe('buildServices', () => {
     expect(services.mimir).toEqual({});
   });
 
+  it('falls back to beta/shared cluster regions and maps failed or finished sessions', async () => {
+    const liveVolundr = {
+      kind: 'volundr',
+      getSessions: vi.fn().mockResolvedValue([
+        {
+          id: 'sess-error',
+          name: 'broken-session',
+          status: 'error',
+          lastActive: Date.parse('2026-04-24T12:45:00Z'),
+          source: { type: 'git', repo: 'github.com/niuulabs/volundr', branch: 'main' },
+          model: 'claude-sonnet',
+          messageCount: 0,
+          tokensUsed: 0,
+          activityState: null,
+        },
+        {
+          id: 'sess-stopped',
+          name: 'done-session',
+          status: 'stopped',
+          lastActive: Date.parse('2026-04-24T12:50:00Z'),
+          source: { type: 'git', repo: 'github.com/niuulabs/volundr', branch: 'main' },
+          model: 'claude-sonnet',
+          messageCount: 0,
+          tokensUsed: 0,
+          activityState: null,
+        },
+      ]),
+      getSession: vi.fn().mockResolvedValue(null),
+      getClusterResources: vi
+        .fn()
+        .mockResolvedValueOnce({
+          resourceTypes: [],
+          nodes: [
+            {
+              name: 'node-c',
+              labels: {
+                'failure-domain.beta.kubernetes.io/region': 'ca-toronto',
+              },
+              allocatable: {},
+              allocated: {},
+              available: {},
+            },
+          ],
+        })
+        .mockRejectedValueOnce(new Error('cluster resources unavailable')),
+      getTemplates: vi.fn().mockResolvedValue([]),
+      getTemplate: vi.fn().mockResolvedValue(null),
+      listArchivedSessions: vi.fn().mockResolvedValue([]),
+      deleteSession: vi.fn().mockResolvedValue(undefined),
+      subscribe: vi.fn(() => () => {}),
+    };
+    volundrMocks.buildVolundrHttpAdapter.mockReturnValue(liveVolundr as any);
+
+    const services = buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        volundr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/volundr' },
+      },
+    } as any);
+
+    const clusterAdapter = services['volundr.clusters'] as any;
+    await expect(clusterAdapter.getClusters()).resolves.toEqual([
+      expect.objectContaining({
+        region: 'ca-toronto',
+        status: 'healthy',
+        pods: [
+          expect.objectContaining({ name: 'broken-session', status: 'failed' }),
+          expect.objectContaining({ name: 'done-session', status: 'succeeded' }),
+        ],
+      }),
+    ]);
+    await expect(clusterAdapter.getClusters()).resolves.toEqual([
+      expect.objectContaining({
+        region: 'shared',
+        status: 'warning',
+      }),
+    ]);
+  });
+
   it('keeps mock session stores when Volundr is not live', () => {
     const services = buildServices({
       theme: 'ice',
@@ -627,11 +863,14 @@ describe('buildServices', () => {
     } as any);
 
     expect(volundrMocks.createMockSessionStore).toHaveBeenCalledTimes(1);
+    expect(volundrMocks.createMockClusterAdapter).toHaveBeenCalledTimes(1);
     expect((services['volundr.templates'] as any).kind).toBe('mock-templates');
     expect((services.features as any).kind).toBe('mock-feature-catalog');
     expect((services.identity as any).kind).toBe('mock-identity');
     expect((services['volundr.sessions'] as any).kind).toBe('mock-session-store');
     expect((services.sessionStore as any).kind).toBe('mock-session-store');
+    expect((services['volundr.clusters'] as any).kind).toBe('mock-clusters');
+    expect((services.clusterAdapter as any).kind).toBe('mock-clusters');
   });
 
   it('maps lifecycle variants and subscription updates through the live session store', async () => {

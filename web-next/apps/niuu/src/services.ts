@@ -47,6 +47,8 @@ import {
   createMockFileSystemPort,
   buildVolundrPtyWsAdapter,
   buildVolundrMetricsSseAdapter,
+  type IClusterAdapter,
+  type Cluster,
   type IVolundrService,
   type ISessionStore,
   type ITemplateStore,
@@ -320,6 +322,25 @@ function parseMemoryToMi(value: unknown, fallback: number): number {
   }
 }
 
+function parseCpuCores(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  if (trimmed.endsWith('m')) {
+    const milli = Number(trimmed.slice(0, -1));
+    return Number.isFinite(milli) ? milli / 1000 : fallback;
+  }
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseIntegerResource(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return fallback;
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function toStringRecord(value: unknown): Record<string, string> {
   if (!value || typeof value !== 'object') return {};
   return Object.fromEntries(
@@ -330,6 +351,17 @@ function toStringRecord(value: unknown): Record<string, string> {
 function toStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
+
+type ClusterResourceRecord = {
+  resourceTypes?: Array<{ name?: string; resourceKey?: string }>;
+  nodes?: Array<{
+    name: string;
+    labels?: Record<string, string>;
+    allocatable?: Record<string, string>;
+    allocated?: Record<string, string>;
+    available?: Record<string, string>;
+  }>;
+};
 
 function toTemplateSpec(raw: ForgeTemplateRecord): Template['spec'] {
   const workloadConfig =
@@ -460,6 +492,113 @@ function buildVolundrTemplateStore(volundr: IVolundrService): ITemplateStore {
   };
 }
 
+function toPodStatus(session: VolundrSession): Cluster['pods'][number]['status'] {
+  switch (session.status) {
+    case 'created':
+    case 'starting':
+    case 'provisioning':
+      return 'pending';
+    case 'running':
+      return session.activityState === 'idle' ? 'idle' : 'running';
+    case 'error':
+      return 'failed';
+    default:
+      return 'succeeded';
+  }
+}
+
+function buildVolundrClusterAdapter(volundr: IVolundrService): IClusterAdapter {
+  return {
+    async getClusters() {
+      const [resources, sessions] = await Promise.all([
+        volundr.getClusterResources().catch(() => ({ resourceTypes: [], nodes: [] } as ClusterResourceRecord)),
+        volundr.getSessions().catch(() => [] as VolundrSession[]),
+      ]);
+
+      const nodes = (resources.nodes ?? []).map((node, index) => ({
+        id: node.name || `node-${index + 1}`,
+        status: 'ready' as const,
+        role:
+          node.labels?.['node-role.kubernetes.io/control-plane'] != null ||
+          node.labels?.['node-role.kubernetes.io/master'] != null
+            ? 'control-plane'
+            : 'worker',
+        allocatable: node.allocatable ?? {},
+        allocated: node.allocated ?? {},
+        available: node.available ?? {},
+        labels: node.labels ?? {},
+      }));
+
+      if (nodes.length === 0 && sessions.length === 0) return [];
+
+      const capacity = nodes.reduce(
+        (acc, node) => ({
+          cpu: acc.cpu + parseCpuCores(node.allocatable.cpu, 0),
+          memMi: acc.memMi + parseMemoryToMi(node.allocatable.memory, 0),
+          gpu: acc.gpu + parseIntegerResource(node.allocatable['nvidia.com/gpu'], 0),
+        }),
+        { cpu: 0, memMi: 0, gpu: 0 },
+      );
+      const used = nodes.reduce(
+        (acc, node) => ({
+          cpu: acc.cpu + parseCpuCores(node.allocated.cpu, 0),
+          memMi: acc.memMi + parseMemoryToMi(node.allocated.memory, 0),
+          gpu: acc.gpu + parseIntegerResource(node.allocated['nvidia.com/gpu'], 0),
+        }),
+        { cpu: 0, memMi: 0, gpu: 0 },
+      );
+
+      const sampleLabels = nodes[0]?.labels ?? {};
+      const region =
+        sampleLabels['topology.kubernetes.io/region'] ??
+        sampleLabels['failure-domain.beta.kubernetes.io/region'] ??
+        'shared';
+      const cluster: Cluster = {
+        id: 'shared',
+        realm: 'shared',
+        name: capacity.gpu > 0 ? 'Shared GPU Forge' : 'Shared Forge',
+        kind: capacity.gpu > 0 ? 'gpu' : 'primary',
+        status: nodes.length > 0 ? 'healthy' : 'warning',
+        region,
+        capacity,
+        used,
+        disk: {
+          usedGi: 0,
+          totalGi: 0,
+          systemGi: 0,
+          podsGi: 0,
+          logsGi: 0,
+        },
+        nodes: nodes.map((node) => ({
+          id: node.id,
+          status: node.status,
+          role: node.role,
+        })),
+        pods: sessions.map((session) => ({
+          name: session.podName ?? session.name,
+          status: toPodStatus(session),
+          startedAt: toIsoFromEpochMs(session.lastActive) ?? new Date(0).toISOString(),
+          cpuUsed: 0,
+          cpuLimit: 0,
+          memUsedMi: 0,
+          memLimitMi: 0,
+          restarts: 0,
+        })),
+        runningSessions: sessions.filter((session) => session.status === 'running').length,
+        queuedProvisions: sessions.filter(
+          (session) => session.status === 'created' || session.status === 'starting' || session.status === 'provisioning',
+        ).length,
+      };
+
+      return [cluster];
+    },
+    async getCluster(id: string) {
+      const clusters = await this.getClusters();
+      return clusters.find((cluster) => cluster.id === id) ?? null;
+    },
+  };
+}
+
 export function buildServices(config: NiuuConfig): ServicesMap {
   const tyrSvc = config.services['tyr'];
   const mimirSvc = config.services['mimir'];
@@ -504,6 +643,9 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const sessionStore = hasHttpBackend(volundrSvc)
     ? buildVolundrSessionStore(volundr)
     : createMockSessionStore();
+  const clusterAdapter = hasHttpBackend(volundrSvc)
+    ? buildVolundrClusterAdapter(volundr)
+    : createMockClusterAdapter();
   const templateStore = hasHttpBackend(volundrSvc)
     ? buildVolundrTemplateStore(volundr)
     : createMockTemplateStore();
@@ -577,11 +719,11 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     identity: identityService,
     filesystem: createMockFileSystemPort(),
     // NIU-678 pages (ClustersPage, TemplatesPage, HistoryPage)
-    'volundr.clusters': createMockClusterAdapter(),
+    'volundr.clusters': clusterAdapter,
     'volundr.templates': templateStore,
     'volundr.sessions': sessionStore,
     // VolundrPage overview hooks (useVolundrClusters, useSessionStore)
-    clusterAdapter: createMockClusterAdapter(),
+    clusterAdapter,
     sessionStore,
     'observatory.registry': observatoryRegistry,
     'observatory.topology': observatoryTopology,
