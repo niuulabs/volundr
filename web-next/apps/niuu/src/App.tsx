@@ -6,18 +6,19 @@ import {
   ConfigProvider,
   FeatureCatalogProvider,
   ServicesProvider,
+  type IFeatureCatalogService,
   useConfig,
 } from '@niuulabs/plugin-sdk';
 import { createQueryClient } from '@niuulabs/query';
 import { AuthProvider } from '@niuulabs/auth';
 import { Shell } from '@niuulabs/shell';
 import { plugins } from './plugins';
-import { buildServices, buildSharedFeatureCatalogService } from './services';
+import { buildServices } from './services';
 
 function AppInner() {
   const config = useConfig();
   const services = useMemo(() => buildServices(config), [config]);
-  const featureCatalogService = useMemo(() => buildSharedFeatureCatalogService(config), [config]);
+  const featureCatalogService = services.features as IFeatureCatalogService | undefined;
 
   return (
     <AuthProvider>

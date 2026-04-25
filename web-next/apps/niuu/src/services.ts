@@ -49,9 +49,12 @@ import {
   buildVolundrMetricsSseAdapter,
   type IVolundrService,
   type ISessionStore,
+  type ITemplateStore,
   type Session,
   type SessionFilters,
+  type Template,
   type VolundrSession,
+  type VolundrTemplate,
 } from '@niuulabs/plugin-volundr';
 import { createApiClient } from '@niuulabs/query';
 import {
@@ -79,6 +82,17 @@ function hasWsBackend(svc: ServiceConfig | undefined): svc is ServiceConfig & { 
   return svc?.mode === 'ws' && typeof svc.wsUrl === 'string';
 }
 
+function resolveDirectServiceBase(
+  config: Pick<NiuuConfig, 'services'>,
+  ...serviceKeys: string[]
+): string | null {
+  for (const serviceKey of serviceKeys) {
+    const svc = config.services[serviceKey];
+    if (hasHttpBackend(svc)) return svc.baseUrl;
+  }
+  return null;
+}
+
 export function toSharedApiBase(baseUrl: string): string {
   return baseUrl.replace(/\/(?:tyr|volundr)\/?$/, '');
 }
@@ -97,8 +111,8 @@ export function resolveCanonicalServiceBase(
   config: Pick<NiuuConfig, 'services'>,
   serviceKey: string,
 ): string | null {
-  const explicitService = config.services[serviceKey];
-  if (hasHttpBackend(explicitService)) return explicitService.baseUrl;
+  const explicitBase = resolveDirectServiceBase(config, serviceKey);
+  if (explicitBase) return explicitBase;
   return resolveSharedApiBase(config);
 }
 
@@ -274,8 +288,179 @@ function buildVolundrSessionStore(volundr: IVolundrService): ISessionStore {
   };
 }
 
+type ForgeTemplateRecord = VolundrTemplate & {
+  createdAt?: string;
+  updatedAt?: string;
+  env_vars?: Record<string, string>;
+  env_secret_refs?: string[];
+  resource_config?: Record<string, unknown>;
+  mcp_servers?: Array<Record<string, unknown>>;
+  workload_config?: Record<string, unknown>;
+};
+
+function parseMemoryToMi(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d+(?:\.\d+)?)([KMGTP]i?)?$/i);
+  if (!match) return fallback;
+  const amount = Number(match[1]);
+  const unit = (match[2] ?? 'Mi').toLowerCase();
+  switch (unit) {
+    case 'ki':
+      return Math.round(amount / 1024);
+    case 'mi':
+      return Math.round(amount);
+    case 'gi':
+      return Math.round(amount * 1024);
+    case 'ti':
+      return Math.round(amount * 1024 * 1024);
+    default:
+      return fallback;
+  }
+}
+
+function toStringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  );
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function toTemplateSpec(raw: ForgeTemplateRecord): Template['spec'] {
+  const workloadConfig =
+    raw.workloadConfig && typeof raw.workloadConfig === 'object' ? raw.workloadConfig : raw.workload_config;
+  const resourceConfig =
+    raw.resourceConfig && typeof raw.resourceConfig === 'object' ? raw.resourceConfig : raw.resource_config;
+  const env = toStringRecord(raw.envVars ?? raw.env_vars);
+  const envSecretRefs = toStringArray(raw.envSecretRefs ?? raw.env_secret_refs);
+  const tools = toStringArray((workloadConfig as Record<string, unknown> | undefined)?.tools);
+  const ttlSec = Number((workloadConfig as Record<string, unknown> | undefined)?.ttlSec ?? 3600);
+  const idleTimeoutSec = Number(
+    (workloadConfig as Record<string, unknown> | undefined)?.idleTimeoutSec ?? 600,
+  );
+  const imageValue = (workloadConfig as Record<string, unknown> | undefined)?.image;
+  const imageRef = typeof imageValue === 'string' && imageValue.length > 0 ? imageValue : 'ghcr.io/niuulabs/skuld:latest';
+  const imageTagIndex = imageRef.lastIndexOf(':');
+  const image = imageTagIndex > imageRef.lastIndexOf('/') ? imageRef.slice(0, imageTagIndex) : imageRef;
+  const tag = imageTagIndex > imageRef.lastIndexOf('/') ? imageRef.slice(imageTagIndex + 1) : 'latest';
+
+  const mounts = Array.isArray(raw.repos)
+    ? raw.repos
+        .map((repo, index) => {
+          if (!repo || typeof repo !== 'object') return null;
+          const url = typeof repo.url === 'string' ? repo.url : null;
+          if (!url) return null;
+          const branch = typeof repo.branch === 'string' ? repo.branch : 'main';
+          const name =
+            typeof repo.name === 'string'
+              ? repo.name
+              : typeof repo.repo === 'string'
+                ? repo.repo
+                : `repo-${index + 1}`;
+          const mountPath =
+            typeof repo.path === 'string' ? repo.path : `/workspace/${name.replace(/[^a-zA-Z0-9._-]+/g, '-')}`;
+          return {
+            name,
+            mountPath,
+            source: { kind: 'git' as const, repo: url, branch },
+            readOnly: false,
+          };
+        })
+        .filter((mount): mount is Template['spec']['mounts'][number] => mount !== null)
+    : [];
+
+  const resourceMap = (resourceConfig as Record<string, unknown> | undefined) ?? {};
+  const mcpServers = Array.isArray(raw.mcpServers ?? raw.mcp_servers)
+    ? (raw.mcpServers ?? raw.mcp_servers)!.map((server, index) => {
+        const record = server && typeof server === 'object' ? (server as Record<string, unknown>) : {};
+        const transport = typeof record.transport === 'string' ? record.transport : 'stdio';
+        const connectionString =
+          typeof record.connectionString === 'string'
+            ? record.connectionString
+            : typeof record.command === 'string'
+              ? record.command
+              : typeof record.url === 'string'
+                ? record.url
+                : '';
+        return {
+          name: typeof record.name === 'string' ? record.name : `server-${index + 1}`,
+          transport,
+          connectionString,
+          tools: toStringArray(record.tools),
+        };
+      })
+    : [];
+
+  return {
+    image,
+    tag,
+    mounts,
+    env,
+    envSecretRefs,
+    tools,
+    mcpServers,
+    resources: {
+      cpuRequest: String(resourceMap.cpuRequest ?? resourceMap.cpu_request ?? resourceMap.cpu ?? '1'),
+      cpuLimit: String(resourceMap.cpuLimit ?? resourceMap.cpu_limit ?? resourceMap.cpu ?? '2'),
+      memRequestMi: parseMemoryToMi(
+        resourceMap.memRequestMi ?? resourceMap.memoryRequestMi ?? resourceMap.memory_request ?? resourceMap.memory,
+        1024,
+      ),
+      memLimitMi: parseMemoryToMi(
+        resourceMap.memLimitMi ?? resourceMap.memoryLimitMi ?? resourceMap.memory_limit ?? resourceMap.memory,
+        2048,
+      ),
+      gpuCount: Number(resourceMap.gpuCount ?? resourceMap.gpu ?? 0),
+    },
+    ttlSec: Number.isFinite(ttlSec) ? ttlSec : 3600,
+    idleTimeoutSec: Number.isFinite(idleTimeoutSec) ? idleTimeoutSec : 600,
+    clusterAffinity: toStringArray(
+      (workloadConfig as Record<string, unknown> | undefined)?.clusterAffinity ??
+        (workloadConfig as Record<string, unknown> | undefined)?.cluster_affinity,
+    ),
+    tolerations: toStringArray((workloadConfig as Record<string, unknown> | undefined)?.tolerations),
+  };
+}
+
+function toDomainTemplate(raw: ForgeTemplateRecord): Template {
+  return {
+    id: raw.name,
+    name: raw.name,
+    description: raw.description || undefined,
+    version: 1,
+    spec: toTemplateSpec(raw),
+    createdAt: raw.createdAt ?? new Date(0).toISOString(),
+    updatedAt: raw.updatedAt ?? new Date(0).toISOString(),
+  };
+}
+
+function buildVolundrTemplateStore(volundr: IVolundrService): ITemplateStore {
+  return {
+    async getTemplate(id: string) {
+      const template = (await volundr.getTemplate(id)) as ForgeTemplateRecord | null;
+      return template ? toDomainTemplate(template) : null;
+    },
+    async listTemplates() {
+      return ((await volundr.getTemplates()) as ForgeTemplateRecord[]).map(toDomainTemplate);
+    },
+    async createTemplate() {
+      throw new Error('Template creation is not yet supported through the live forge template adapter.');
+    },
+    async updateTemplate() {
+      throw new Error('Template updates are not yet supported through the live forge template adapter.');
+    },
+    async deleteTemplate() {
+      throw new Error('Template deletion is not yet supported through the live forge template adapter.');
+    },
+  };
+}
+
 export function buildServices(config: NiuuConfig): ServicesMap {
-  const ravnSvc = config.services['ravn'];
   const tyrSvc = config.services['tyr'];
   const mimirSvc = config.services['mimir'];
   const volundrSvc = config.services['volundr'];
@@ -286,12 +471,26 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const obsEventsSvc = config.services['observatory.events'];
 
   // ── Ravn: all five sub-services share one HTTP base URL when configured ──
-  const ravnClient = hasHttpBackend(ravnSvc) ? createApiClient(ravnSvc.baseUrl) : null;
-  const ravnPersonas = ravnClient ? buildRavnPersonaAdapter(ravnClient) : createMockPersonaStore();
-  const ravnRavens = ravnClient ? buildRavnRavenAdapter(ravnClient) : createMockRavenStream();
-  const ravnSessions = ravnClient ? buildRavnSessionAdapter(ravnClient) : createMockSessionStream();
-  const ravnTriggers = ravnClient ? buildRavnTriggerAdapter(ravnClient) : createMockTriggerStore();
-  const ravnBudget = ravnClient ? buildRavnBudgetAdapter(ravnClient) : createMockBudgetStream();
+  const ravnPersonaBase = resolveDirectServiceBase(config, 'ravn.personas', 'ravn');
+  const ravnRavenBase = resolveDirectServiceBase(config, 'ravn.ravens', 'ravn');
+  const ravnSessionBase = resolveDirectServiceBase(config, 'ravn.sessions', 'ravn');
+  const ravnTriggerBase = resolveDirectServiceBase(config, 'ravn.triggers', 'ravn');
+  const ravnBudgetBase = resolveDirectServiceBase(config, 'ravn.budget', 'ravn');
+  const ravnPersonas = ravnPersonaBase
+    ? buildRavnPersonaAdapter(createApiClient(ravnPersonaBase))
+    : createMockPersonaStore();
+  const ravnRavens = ravnRavenBase
+    ? buildRavnRavenAdapter(createApiClient(ravnRavenBase))
+    : createMockRavenStream();
+  const ravnSessions = ravnSessionBase
+    ? buildRavnSessionAdapter(createApiClient(ravnSessionBase))
+    : createMockSessionStream();
+  const ravnTriggers = ravnTriggerBase
+    ? buildRavnTriggerAdapter(createApiClient(ravnTriggerBase))
+    : createMockTriggerStore();
+  const ravnBudget = ravnBudgetBase
+    ? buildRavnBudgetAdapter(createApiClient(ravnBudgetBase))
+    : createMockBudgetStream();
 
   // ── Mímir ──
   const mimir = hasHttpBackend(mimirSvc)
@@ -305,6 +504,9 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const sessionStore = hasHttpBackend(volundrSvc)
     ? buildVolundrSessionStore(volundr)
     : createMockSessionStore();
+  const templateStore = hasHttpBackend(volundrSvc)
+    ? buildVolundrTemplateStore(volundr)
+    : createMockTemplateStore();
 
   // ── Völundr streams: keyed as separate services so they can be flipped
   //    independently (e.g. mock PTY with live metrics during bring-up). ──
@@ -325,6 +527,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const observatoryEvents = hasHttpBackend(obsEventsSvc)
     ? buildObservatoryEventsSseStream(obsEventsSvc.baseUrl)
     : createMockEventStream();
+  const featureCatalogService = buildSharedFeatureCatalogService(config);
   const identityService = buildSharedIdentityService(config);
 
   // ── Tyr ──
@@ -370,11 +573,12 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     volundr,
     ptyStream,
     metricsStream,
+    features: featureCatalogService,
     identity: identityService,
     filesystem: createMockFileSystemPort(),
     // NIU-678 pages (ClustersPage, TemplatesPage, HistoryPage)
     'volundr.clusters': createMockClusterAdapter(),
-    'volundr.templates': createMockTemplateStore(),
+    'volundr.templates': templateStore,
     'volundr.sessions': sessionStore,
     // VolundrPage overview hooks (useVolundrClusters, useSessionStore)
     clusterAdapter: createMockClusterAdapter(),
