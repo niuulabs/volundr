@@ -15,6 +15,10 @@ import { Shell } from '@niuulabs/shell';
 import { plugins } from './plugins';
 import { buildServices } from './services';
 
+const DEFAULT_CONFIG_ENDPOINT = '/config.json';
+const CONFIG_ENDPOINT_QUERY_KEY = 'config';
+const CONFIG_ENDPOINT_STORAGE_KEY = 'niuu.config.endpoint';
+
 function AppInner() {
   const config = useConfig();
   const services = useMemo(() => buildServices(config), [config]);
@@ -33,10 +37,34 @@ function AppInner() {
 
 const queryClient = createQueryClient();
 
+export function resolveConfigEndpoint(
+  location: Pick<Location, 'search'> = window.location,
+  storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> = window.localStorage,
+): string {
+  const params = new URLSearchParams(location.search);
+  const requested = params.get(CONFIG_ENDPOINT_QUERY_KEY);
+
+  if (requested === 'default') {
+    storage.removeItem(CONFIG_ENDPOINT_STORAGE_KEY);
+    return DEFAULT_CONFIG_ENDPOINT;
+  }
+
+  if (requested && requested.startsWith('/')) {
+    storage.setItem(CONFIG_ENDPOINT_STORAGE_KEY, requested);
+    return requested;
+  }
+
+  const stored = storage.getItem(CONFIG_ENDPOINT_STORAGE_KEY);
+  if (stored && stored.startsWith('/')) return stored;
+  return DEFAULT_CONFIG_ENDPOINT;
+}
+
 export function App() {
+  const configEndpoint = resolveConfigEndpoint();
+
   return (
     <ConfigProvider
-      endpoint="/config.json"
+      endpoint={configEndpoint}
       fallback={<BootScreen label="loading config…" />}
       errorFallback={(err) => <BootScreen label={`config error: ${err.message}`} />}
     >
