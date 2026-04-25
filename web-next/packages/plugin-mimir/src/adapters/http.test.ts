@@ -12,6 +12,10 @@ function makeClient(overrides: Record<string, ReturnType<typeof vi.fn>> = {}) {
   };
 }
 
+function missingRoute(status = 404) {
+  return Object.assign(new Error(`missing route ${status}`), { status });
+}
+
 describe('buildMimirHttpAdapter', () => {
   describe('mounts.listMounts', () => {
     it('calls GET /mounts', async () => {
@@ -47,6 +51,27 @@ describe('buildMimirHttpAdapter', () => {
         lastWrite: '2026-04-18T14:22:00Z',
         sizeKb: 512,
       });
+    });
+
+    it('falls back to a synthetic local mount when /mounts is unavailable', async () => {
+      const client = makeClient({
+        get: vi
+          .fn()
+          .mockRejectedValueOnce(missingRoute())
+          .mockResolvedValueOnce({ page_count: 12, categories: ['arch'], healthy: true }),
+      });
+
+      const mounts = await buildMimirHttpAdapter(client).mounts.listMounts();
+
+      expect(mounts).toEqual([
+        expect.objectContaining({
+          name: 'local',
+          role: 'local',
+          pages: 12,
+          categories: ['arch'],
+          status: 'healthy',
+        }),
+      ]);
     });
   });
 
@@ -104,6 +129,12 @@ describe('buildMimirHttpAdapter', () => {
       const result = await buildMimirHttpAdapter(client).pages.getPage('/missing');
       expect(result).toBeNull();
     });
+
+    it('returns null when the existing backend responds with 404', async () => {
+      const client = makeClient({ get: vi.fn().mockRejectedValue(missingRoute()) });
+      const result = await buildMimirHttpAdapter(client).pages.getPage('/missing');
+      expect(result).toBeNull();
+    });
   });
 
   describe('pages.upsertPage', () => {
@@ -129,6 +160,39 @@ describe('buildMimirHttpAdapter', () => {
       const call = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
       expect(call).toContain('mode=fts');
     });
+
+    it('infers page type and confidence when the backend returns the lean shape', async () => {
+      const client = makeClient({
+        get: vi.fn().mockResolvedValue([
+          {
+            path: '/decisions/adr-001',
+            title: 'ADR-001',
+            summary: 'Decision',
+            category: 'arch',
+          },
+          {
+            path: '/preferences/editor',
+            title: 'Editor Preference',
+            summary: 'Preference',
+            category: 'prefs',
+          },
+          {
+            path: '/directives/writing',
+            title: 'Writing Directive',
+            summary: 'Directive',
+            category: 'guide',
+          },
+        ]),
+      });
+
+      const results = await buildMimirHttpAdapter(client).pages.search('adr');
+
+      expect(results).toEqual([
+        expect.objectContaining({ type: 'decision', confidence: 'medium' }),
+        expect.objectContaining({ type: 'preference', confidence: 'medium' }),
+        expect.objectContaining({ type: 'directive', confidence: 'medium' }),
+      ]);
+    });
   });
 
   describe('embeddings.semanticSearch', () => {
@@ -146,6 +210,31 @@ describe('buildMimirHttpAdapter', () => {
       const client = makeClient({ get: vi.fn().mockResolvedValue(raw) });
       const results = await buildMimirHttpAdapter(client).embeddings.semanticSearch('q');
       expect(results[0]).toMatchObject({ path: '/a', score: 0.9, mountName: 'local' });
+    });
+
+    it('falls back to FTS search when embedding search is unavailable', async () => {
+      const client = makeClient({
+        get: vi
+          .fn()
+          .mockRejectedValueOnce(missingRoute())
+          .mockResolvedValueOnce([
+            {
+              path: '/arch/overview',
+              title: 'Architecture Overview',
+              summary: 'Summary',
+              category: 'arch',
+            },
+          ]),
+      });
+
+      const results = await buildMimirHttpAdapter(client).embeddings.semanticSearch('arch', 5);
+
+      expect(client.get).toHaveBeenNthCalledWith(1, '/embeddings/search?q=arch&top_k=5');
+      expect(client.get).toHaveBeenNthCalledWith(2, '/search?q=arch&mode=fts');
+      expect(results[0]).toMatchObject({
+        path: '/arch/overview',
+        mountName: 'local',
+      });
     });
   });
 
@@ -175,6 +264,37 @@ describe('buildMimirHttpAdapter', () => {
       expect(report.issues[0]).toMatchObject({
         id: 'lint-1',
         rule: 'L05',
+        autoFix: true,
+      });
+    });
+
+    it('maps the current backend lint issue shape', async () => {
+      const client = makeClient({
+        get: vi.fn().mockResolvedValue({
+          issues: [
+            {
+              id: 'L12',
+              severity: 'warning',
+              message: 'Invalid frontmatter',
+              page_path: '/arch/overview',
+              auto_fixable: true,
+            },
+          ],
+          pages_checked: 3,
+        }),
+      });
+
+      const report = await buildMimirHttpAdapter(client).lint.getLintReport();
+
+      expect(report).toMatchObject({
+        pagesChecked: 3,
+        summary: { error: 0, warn: 1, info: 0 },
+      });
+      expect(report.issues[0]).toMatchObject({
+        rule: 'L12',
+        severity: 'warn',
+        page: '/arch/overview',
+        mount: 'local',
         autoFix: true,
       });
     });
@@ -226,6 +346,11 @@ describe('buildMimirHttpAdapter', () => {
         durationMs: 42000,
       });
     });
+
+    it('returns an empty list when dreams are not implemented yet', async () => {
+      const client = makeClient({ get: vi.fn().mockRejectedValue(missingRoute()) });
+      await expect(buildMimirHttpAdapter(client).lint.getDreamCycles()).resolves.toEqual([]);
+    });
   });
 
   describe('lint.getActivityLog', () => {
@@ -257,6 +382,11 @@ describe('buildMimirHttpAdapter', () => {
         message: 'wrote some page',
         page: 'some/page.md',
       });
+    });
+
+    it('returns an empty list when activity is not implemented yet', async () => {
+      const client = makeClient({ get: vi.fn().mockRejectedValue(missingRoute()) });
+      await expect(buildMimirHttpAdapter(client).lint.getActivityLog()).resolves.toEqual([]);
     });
   });
 
@@ -339,6 +469,32 @@ describe('buildMimirHttpAdapter', () => {
         kind: 'write',
       });
     });
+
+    it('derives recent writes from sources when the dedicated endpoint is unavailable', async () => {
+      const client = makeClient({
+        get: vi
+          .fn()
+          .mockRejectedValueOnce(missingRoute())
+          .mockResolvedValueOnce([
+            {
+              source_id: 'src-001',
+              title: 'ADR-001',
+              source_type: 'document',
+              ingested_at: '2026-04-11T10:30:00Z',
+            },
+          ]),
+      });
+
+      const writes = await buildMimirHttpAdapter(client).mounts.getRecentWrites();
+
+      expect(writes[0]).toMatchObject({
+        id: 'src-001',
+        mount: 'local',
+        ravn: 'mimir',
+        kind: 'compile',
+        message: 'ADR-001',
+      });
+    });
   });
 
   describe('pages.listSources', () => {
@@ -405,6 +561,87 @@ describe('buildMimirHttpAdapter', () => {
         relationshipCount: 3,
       });
     });
+
+    it('derives entity cards from pages when /entities is unavailable', async () => {
+      const client = makeClient({
+        get: vi
+          .fn()
+          .mockRejectedValueOnce(missingRoute())
+          .mockResolvedValueOnce([
+            {
+              path: '/entities/niuulabs',
+              title: 'Niuu Labs',
+              summary: 'The organisation behind Niuu.',
+              category: 'entity',
+              updated_at: '2026-04-10T08:00:00Z',
+              source_ids: [],
+            },
+          ]),
+      });
+
+      const entities = await buildMimirHttpAdapter(client).pages.listEntities();
+
+      expect(entities).toEqual([
+        expect.objectContaining({
+          path: '/entities/niuulabs',
+          title: 'Niuu Labs',
+          entityKind: 'org',
+        }),
+      ]);
+    });
+
+    it('supports kind filtering against derived entity cards', async () => {
+      const client = makeClient({
+        get: vi
+          .fn()
+          .mockRejectedValueOnce(missingRoute())
+          .mockResolvedValueOnce([
+            {
+              path: '/entities/people/jane-doe',
+              title: 'Jane Doe',
+              summary: 'Person record',
+              category: 'entity',
+              updated_at: '2026-04-10T08:00:00Z',
+              source_ids: [],
+            },
+            {
+              path: '/entities/project/atlas',
+              title: 'Atlas',
+              summary: 'Project record',
+              category: 'entity',
+              updated_at: '2026-04-10T08:00:00Z',
+              source_ids: [],
+            },
+            {
+              path: '/entities/component/api-gateway',
+              title: 'API Gateway',
+              summary: 'Component record',
+              category: 'entity',
+              updated_at: '2026-04-10T08:00:00Z',
+              source_ids: [],
+            },
+            {
+              path: '/entities/technology/postgres',
+              title: 'Postgres',
+              summary: 'Technology record',
+              category: 'entity',
+              updated_at: '2026-04-10T08:00:00Z',
+              source_ids: [],
+            },
+            {
+              path: '/entities/idea/federation',
+              title: 'Federation',
+              summary: 'Concept record',
+              category: 'entity',
+              updated_at: '2026-04-10T08:00:00Z',
+              source_ids: [],
+            },
+          ]),
+      });
+
+      await expect(buildMimirHttpAdapter(client).pages.listEntities({ kind: 'person' })).resolves
+        .toEqual([expect.objectContaining({ entityKind: 'person' })]);
+    });
   });
 
   describe('pages.listSources', () => {
@@ -450,6 +687,66 @@ describe('buildMimirHttpAdapter', () => {
         compiledInto: ['/arch/overview'],
       });
     });
+
+    it('maps the current backend source metadata shape', async () => {
+      const raw = [
+        {
+          source_id: 'src-001',
+          title: 'Arch wiki',
+          source_type: 'document',
+          ingested_at: '2026-04-10T08:00:00Z',
+        },
+      ];
+      const client = makeClient({ get: vi.fn().mockResolvedValue(raw) });
+      const sources = await buildMimirHttpAdapter(client).pages.listSources();
+      expect(sources[0]).toMatchObject({
+        id: 'src-001',
+        originType: 'file',
+        ingestAgent: 'mimir',
+        compiledInto: [],
+      });
+    });
+
+    it('normalizes conversation metadata to chat origins', async () => {
+      const client = makeClient({
+        get: vi.fn().mockResolvedValue([
+          {
+            source_id: 'src-chat',
+            title: 'Conversation',
+            source_type: 'conversation',
+            ingested_at: '2026-04-10T08:00:00Z',
+          },
+        ]),
+      });
+
+      const sources = await buildMimirHttpAdapter(client).pages.listSources();
+      expect(sources[0]).toMatchObject({ originType: 'chat' });
+    });
+
+    it('defaults unknown legacy source types to file during fallback filtering', async () => {
+      const client = makeClient({
+        get: vi
+          .fn()
+          .mockRejectedValueOnce(missingRoute())
+          .mockResolvedValueOnce([
+            {
+              source_id: 'src-custom',
+              title: 'Custom Source',
+              source_type: 'custom',
+              ingested_at: '2026-04-10T08:00:00Z',
+            },
+            {
+              source_id: 'src-web',
+              title: 'Web Source',
+              source_type: 'web',
+              ingested_at: '2026-04-10T08:00:00Z',
+            },
+          ]),
+      });
+
+      const sources = await buildMimirHttpAdapter(client).pages.listSources({ originType: 'web' });
+      expect(sources).toEqual([expect.objectContaining({ id: 'src-web', originType: 'web' })]);
+    });
   });
 
   describe('pages.getPageSources', () => {
@@ -481,6 +778,224 @@ describe('buildMimirHttpAdapter', () => {
         originType: 'file',
         originPath: '/docs/adr/001.md',
         ingestAgent: 'ravn-fjolnir',
+      });
+    });
+
+    it('falls back through page.sourceIds when /page/sources is unavailable', async () => {
+      const client = makeClient({
+        get: vi
+          .fn()
+          .mockRejectedValueOnce(missingRoute())
+          .mockResolvedValueOnce({
+            path: '/arch/overview',
+            title: 'Architecture Overview',
+            summary: 'Summary',
+            category: 'arch',
+            updated_at: '2026-04-10T08:00:00Z',
+            source_ids: ['src-001'],
+            content: '# Overview',
+            related: [],
+          })
+          .mockResolvedValueOnce({
+            source_id: 'src-001',
+            title: 'ADR-001',
+            source_type: 'document',
+            ingested_at: '2026-04-11T10:30:00Z',
+            content: 'hello',
+          }),
+      });
+
+      const sources = await buildMimirHttpAdapter(client).pages.getPageSources('/arch/overview');
+
+      expect(sources).toEqual([
+        expect.objectContaining({
+          id: 'src-001',
+          title: 'ADR-001',
+          content: 'hello',
+        }),
+      ]);
+    });
+
+    it('returns an empty list when fallback page lookup has no source ids', async () => {
+      const client = makeClient({
+        get: vi
+          .fn()
+          .mockRejectedValueOnce(missingRoute())
+          .mockResolvedValueOnce({
+            path: '/arch/overview',
+            title: 'Architecture Overview',
+            summary: 'Summary',
+            category: 'arch',
+            updated_at: '2026-04-10T08:00:00Z',
+            source_ids: [],
+            content: '# Overview',
+            related: [],
+          }),
+      });
+
+      await expect(
+        buildMimirHttpAdapter(client).pages.getPageSources('/arch/overview'),
+      ).resolves.toEqual([]);
+    });
+  });
+
+  describe('pages.ingestUrl', () => {
+    it('calls the dedicated URL ingest route when available', async () => {
+      const client = makeClient({
+        post: vi.fn().mockResolvedValue({
+          id: 'src-url',
+          title: 'Example',
+          origin_type: 'web',
+          origin_url: 'https://example.com',
+          ingested_at: '2026-04-10T08:00:00Z',
+          ingest_agent: 'ravn-fjolnir',
+          compiled_into: [],
+          content: '',
+        }),
+      });
+
+      const source = await buildMimirHttpAdapter(client).pages.ingestUrl('https://example.com');
+      expect(client.post).toHaveBeenCalledWith('/sources/ingest/url', { url: 'https://example.com' });
+      expect(source).toMatchObject({ id: 'src-url', originType: 'web' });
+    });
+
+    it('fails clearly when only the legacy backend is available', async () => {
+      const client = makeClient({ post: vi.fn().mockRejectedValue(missingRoute()) });
+      await expect(
+        buildMimirHttpAdapter(client).pages.ingestUrl('https://example.com'),
+      ).rejects.toThrow('URL ingest is not supported by the current Mimir backend');
+    });
+  });
+
+  describe('pages.ingestFile', () => {
+    it('uses the dedicated upload route when available', async () => {
+      const client = makeClient({
+        post: vi.fn().mockResolvedValue({
+          id: 'src-file',
+          title: 'test.md',
+          origin_type: 'file',
+          origin_path: 'test.md',
+          ingested_at: '2026-04-10T08:00:00Z',
+          ingest_agent: 'ravn-fjolnir',
+          compiled_into: [],
+          content: '',
+        }),
+      });
+
+      const file = new File(['# hello'], 'test.md', { type: 'text/markdown' });
+      const source = await buildMimirHttpAdapter(client).pages.ingestFile(file);
+      expect(source).toMatchObject({ id: 'src-file', originType: 'file' });
+    });
+
+    it('falls back to the legacy /ingest endpoint when file upload is unavailable', async () => {
+      const client = makeClient({
+        post: vi
+          .fn()
+          .mockRejectedValueOnce(missingRoute())
+          .mockResolvedValueOnce({
+            source_id: 'src-ingest',
+            pages_updated: ['/arch/overview'],
+          }),
+      });
+
+      const file = new File(['# hello'], 'test.md', { type: 'text/markdown' });
+      Object.defineProperty(file, 'text', { value: vi.fn().mockResolvedValue('# hello') });
+      const source = await buildMimirHttpAdapter(client).pages.ingestFile(file);
+
+      expect(client.post).toHaveBeenNthCalledWith(2, '/ingest', {
+        title: 'test.md',
+        content: '# hello',
+        source_type: 'document',
+      });
+      expect(source).toMatchObject({
+        id: 'src-ingest',
+        originType: 'file',
+        compiledInto: ['/arch/overview'],
+      });
+    });
+
+    it('uses arrayBuffer fallback when File.text is unavailable', async () => {
+      const client = makeClient({
+        post: vi
+          .fn()
+          .mockRejectedValueOnce(missingRoute())
+          .mockResolvedValueOnce({
+            source_id: 'src-buffer',
+            pages_updated: [],
+          }),
+      });
+
+      const file = new File(['# hello'], 'buffer.md', { type: 'text/markdown' });
+      Object.defineProperty(file, 'text', { value: undefined });
+      Object.defineProperty(file, 'arrayBuffer', {
+        value: vi.fn().mockResolvedValue(new TextEncoder().encode('# hello').buffer),
+      });
+
+      await buildMimirHttpAdapter(client).pages.ingestFile(file);
+
+      expect(client.post).toHaveBeenNthCalledWith(2, '/ingest', {
+        title: 'buffer.md',
+        content: '# hello',
+        source_type: 'document',
+      });
+    });
+  });
+
+  describe('mounts.listRoutingRules', () => {
+    it('returns an empty list when routing rules are unavailable', async () => {
+      const client = makeClient({ get: vi.fn().mockRejectedValue(missingRoute()) });
+      await expect(buildMimirHttpAdapter(client).mounts.listRoutingRules()).resolves.toEqual([]);
+    });
+
+    it('treats 501 as a missing-route compatibility case too', async () => {
+      const client = makeClient({ get: vi.fn().mockRejectedValue(missingRoute(501)) });
+      await expect(buildMimirHttpAdapter(client).mounts.listRoutingRules()).resolves.toEqual([]);
+    });
+  });
+
+  describe('mounts.upsertRoutingRule', () => {
+    it('calls PUT /routing/rules/{id} with the rule body', async () => {
+      const client = makeClient();
+      const rule = {
+        id: 'rule-1',
+        prefix: '/arch',
+        mountName: 'local',
+        priority: 1,
+        active: true,
+      };
+
+      await buildMimirHttpAdapter(client).mounts.upsertRoutingRule(rule);
+
+      expect(client.put).toHaveBeenCalledWith('/routing/rules/rule-1', rule);
+    });
+  });
+
+  describe('mounts.deleteRoutingRule', () => {
+    it('calls DELETE /routing/rules/{id}', async () => {
+      const client = makeClient();
+      await buildMimirHttpAdapter(client).mounts.deleteRoutingRule('rule-1');
+      expect(client.delete).toHaveBeenCalledWith('/routing/rules/rule-1');
+    });
+  });
+
+  describe('mounts.listRavnBindings', () => {
+    it('returns an empty list when ravn bindings are unavailable', async () => {
+      const client = makeClient({ get: vi.fn().mockRejectedValue(missingRoute()) });
+      await expect(buildMimirHttpAdapter(client).mounts.listRavnBindings()).resolves.toEqual([]);
+    });
+  });
+
+  describe('lint.reassignIssues', () => {
+    it('calls POST /lint/reassign with issue ids and assignee', async () => {
+      const client = makeClient({
+        post: vi.fn().mockResolvedValue({ issues: [], pages_checked: 0 }),
+      });
+
+      await buildMimirHttpAdapter(client).lint.reassignIssues(['lint-1'], 'ravn-fjolnir');
+
+      expect(client.post).toHaveBeenCalledWith('/lint/reassign', {
+        issue_ids: ['lint-1'],
+        assignee: 'ravn-fjolnir',
       });
     });
   });

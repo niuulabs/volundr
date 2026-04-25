@@ -17,6 +17,24 @@
     "plugin": "volundr"
   },
   {
+    "name": "bifrost-api",
+    "prefixes": [
+      "/api/v1/bifrost"
+    ],
+    "source": "plugin",
+    "plugin": "bifrost"
+  },
+  {
+    "name": "bifrost-observability-api",
+    "prefixes": [
+      "/api/v1/bifrost/metrics",
+      "/api/v1/bifrost/healthz",
+      "/api/v1/bifrost/readyz"
+    ],
+    "source": "plugin",
+    "plugin": "bifrost"
+  },
+  {
     "name": "catalog-api",
     "prefixes": [
       "/api/v1/forge/templates",
@@ -141,12 +159,59 @@
     "plugin": "tyr,volundr"
   },
   {
+    "name": "llm-api",
+    "prefixes": [
+      "/api/v1/bifrost/health",
+      "/api/v1/bifrost/admin",
+      "/api/v1/bifrost/v1",
+      "/api/v1/bifrost/api"
+    ],
+    "source": "plugin",
+    "plugin": "bifrost"
+  },
+  {
+    "name": "mimir-api",
+    "prefixes": [
+      "/api/v1/mimir/mcp",
+      "/api/v1/mimir",
+      "/mcp",
+      "/mimir"
+    ],
+    "source": "plugin",
+    "plugin": "mimir"
+  },
+  {
     "name": "niuu-api",
     "prefixes": [
       "/api/v1/niuu"
     ],
     "source": "plugin",
     "plugin": "niuu"
+  },
+  {
+    "name": "persona-api",
+    "prefixes": [
+      "/api/v1/ravn/personas"
+    ],
+    "source": "plugin",
+    "plugin": "ravn"
+  },
+  {
+    "name": "ravn-api",
+    "prefixes": [
+      "/api/v1/ravn"
+    ],
+    "source": "plugin",
+    "plugin": "ravn"
+  },
+  {
+    "name": "ravn-session-api",
+    "prefixes": [
+      "/api/v1/ravn/status",
+      "/api/v1/ravn/sessions"
+    ],
+    "source": "plugin",
+    "plugin": "ravn"
   },
   {
     "name": "review-api",

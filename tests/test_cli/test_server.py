@@ -1084,6 +1084,107 @@ class TestRootServerBuildApp:
         assert client.get("/api/v1/tyr/settings/flock").status_code == 200
         assert client.get("/api/v1/tyr/flock").status_code == 404
 
+    def test_build_root_app_mounts_canonical_mimir_prefixes_via_backend_translation(self) -> None:
+        mimir_app = FastAPI()
+
+        @mimir_app.get("/mimir/stats")
+        async def mimir_stats():
+            return {"pages": 12}
+
+        @mimir_app.get("/mcp/health")
+        async def mimir_mcp_health():
+            return {"status": "ok"}
+
+        class MimirPlugin(FakePlugin):
+            def create_api_app(self):
+                return mimir_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="mimir-api",
+                        prefixes=(
+                            "/api/v1/mimir/mcp",
+                            "/api/v1/mimir",
+                            "/mcp",
+                            "/mimir",
+                        ),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(MimirPlugin(name="mimir"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"mimir-api"},
+        )
+
+        client = TestClient(app)
+        assert client.get("/api/v1/mimir/stats").json() == {"pages": 12}
+        assert client.get("/api/v1/mimir/mcp/health").json() == {"status": "ok"}
+        assert client.get("/mimir/stats").json() == {"pages": 12}
+        assert client.get("/mcp/health").json() == {"status": "ok"}
+
+    def test_build_root_app_mounts_canonical_bifrost_prefixes_via_backend_translation(self) -> None:
+        bifrost_app = FastAPI()
+
+        @bifrost_app.get("/v1/models")
+        async def list_models():
+            return {"data": []}
+
+        @bifrost_app.get("/metrics")
+        async def metrics():
+            return {"metrics": "ok"}
+
+        @bifrost_app.get("/healthz")
+        async def healthz():
+            return {"status": "ok"}
+
+        class BifrostPlugin(FakePlugin):
+            def create_api_app(self):
+                return bifrost_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="llm-api",
+                        prefixes=(
+                            "/api/v1/bifrost/health",
+                            "/api/v1/bifrost/admin",
+                            "/api/v1/bifrost/v1",
+                            "/api/v1/bifrost/api",
+                        ),
+                    ),
+                    APIRouteDomain(
+                        name="bifrost-observability-api",
+                        prefixes=(
+                            "/api/v1/bifrost/metrics",
+                            "/api/v1/bifrost/healthz",
+                            "/api/v1/bifrost/readyz",
+                        ),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(BifrostPlugin(name="bifrost"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"llm-api", "bifrost-observability-api"},
+        )
+
+        client = TestClient(app)
+        assert client.get("/api/v1/bifrost/v1/models").json() == {"data": []}
+        assert client.get("/api/v1/bifrost/metrics").json() == {"metrics": "ok"}
+        assert client.get("/api/v1/bifrost/healthz").json() == {"status": "ok"}
+        assert client.get("/v1/models").status_code == 404
+        assert client.get("/metrics").status_code == 404
+
     def test_plugin_create_api_app_returns_none(self) -> None:
         """Plugin that returns None from create_api_app is skipped."""
         registry = PluginRegistry()
