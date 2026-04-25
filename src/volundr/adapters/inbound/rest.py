@@ -34,6 +34,7 @@ from volundr.domain.ports import EventBroadcaster, PricingProvider
 from volundr.domain.services import (
     ChronicleNotFoundError,
     ChronicleService,
+    ForgeService,
     ProviderInfo,
     RepoService,
     RepoValidationError,
@@ -867,9 +868,12 @@ def create_router(
 ) -> APIRouter:
     """Create FastAPI router with session, stats, token, repo, and SSE endpoints."""
     router = APIRouter(prefix="/api/v1/volundr")
-
-    # Alias for backward compatibility within this function
-    service = session_service
+    forge = ForgeService(
+        session_service,
+        stats_service=stats_service,
+        token_service=token_service,
+        pricing_provider=pricing_provider,
+    )
 
     async def _optional_principal(request: Request) -> Principal | None:
         """Extract principal if identity is configured, else return None.
@@ -959,7 +963,7 @@ def create_router(
     ) -> list[SessionResponse]:
         """List all sessions. Archived sessions are excluded by default."""
         principal = await _optional_principal(request)
-        sessions = await service.list_sessions(
+        sessions = await forge.list_sessions(
             status=status_filter,
             include_archived=include_archived,
             principal=principal,
@@ -1045,7 +1049,7 @@ def create_router(
     )
     async def archive_stopped_sessions() -> list[str]:
         """Bulk archive all stopped sessions."""
-        archived_ids = await service.archive_stopped_sessions()
+        archived_ids = await forge.archive_stopped_sessions()
         return [str(uid) for uid in archived_ids]
 
     @router.post(
@@ -1068,44 +1072,18 @@ def create_router(
         """
         principal = await _optional_principal(request)
         try:
-            session = await service.create_session(
-                name=data.name,
-                model=data.model,
-                source=data.source,
-                template_name=data.template_name,
-                preset_id=data.preset_id,
-                principal=principal,
-                workspace_id=data.workspace_id,
-                tracker_issue_id=data.issue_id,
-                issue_tracker_url=data.issue_url,
-            )
+            started = await forge.create_and_start_session(data, principal=principal)
         except RepoValidationError as e:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=str(e),
             )
-
-        try:
-            started = await service.start_session(
-                session.id,
-                profile_name=data.profile_name,
-                template_name=data.template_name,
-                principal=principal,
-                terminal_restricted=data.terminal_restricted,
-                credential_names=data.credential_names,
-                integration_ids=data.integration_ids,
-                resource_config=data.resource_config or None,
-                system_prompt=data.system_prompt,
-                initial_prompt=data.initial_prompt,
-                workload_type=data.workload_type,
-                workload_config=data.workload_config or None,
-            )
-            return SessionResponse.from_session(started)
         except SessionStateError as e:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=str(e),
             )
+        return SessionResponse.from_session(started)
 
     @router.get(
         "/sessions/{session_id}",
@@ -1117,7 +1095,7 @@ def create_router(
         request: Request, session_id: UUID = Path(description="Unique session identifier")
     ) -> SessionResponse:
         """Get a session by ID."""
-        session = await service.get_session(session_id)
+        session = await forge.get_session(session_id)
         if session is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1126,7 +1104,7 @@ def create_router(
 
         principal = await _optional_principal(request)
         try:
-            await service._check_access(session, principal)
+            await forge.ensure_access(session, principal)
         except SessionAccessDeniedError:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -1149,7 +1127,7 @@ def create_router(
         """Update a session."""
         principal = await _optional_principal(request)
         try:
-            session = await service.update_session(
+            session = await forge.update_session(
                 session_id=session_id,
                 name=data.name,
                 model=data.model,
@@ -1184,7 +1162,7 @@ def create_router(
         principal = await _optional_principal(request)
         cleanup_targets = body.cleanup if body else []
         try:
-            deleted = await service.delete_session(
+            deleted = await forge.delete_session(
                 session_id,
                 principal=principal,
                 cleanup_targets=cleanup_targets,
@@ -1222,7 +1200,7 @@ def create_router(
         profile_name = data.profile_name if data else None
         principal = await _optional_principal(request)
         try:
-            session = await service.start_session(
+            session = await forge.start_session(
                 session_id,
                 profile_name=profile_name,
                 principal=principal,
@@ -1259,7 +1237,7 @@ def create_router(
         """Stop a session's pods."""
         principal = await _optional_principal(request)
         try:
-            session = await service.stop_session(session_id, principal=principal)
+            session = await forge.stop_session(session_id, principal=principal)
             return SessionResponse.from_session(session)
         except SessionAccessDeniedError:
             raise HTTPException(
@@ -1295,10 +1273,10 @@ def create_router(
         """
         # Authorization: caller must own the session
         principal = await _optional_principal(request)
-        session = await service.get_session(session_id)
+        session = await forge.get_session(session_id)
         if session is not None and principal is not None:
             try:
-                await service._check_access(session, principal, "report_activity")
+                await forge.ensure_access(session, principal, "report_activity")
             except SessionAccessDeniedError:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -1320,12 +1298,12 @@ def create_router(
             _sanitize_log(data.metadata),
         )
         try:
-            updated = await service.update_activity(session_id, activity_state, data.metadata)
+            updated = await forge.update_activity(session_id, activity_state, data.metadata)
             logger.info(
                 "Activity updated: session=%s state=%s broadcaster=%s",
                 _sanitize_log(session_id),
                 updated.activity_state,
-                service._broadcaster is not None,
+                forge.has_broadcaster,
             )
         except SessionNotFoundError:
             logger.warning("Activity report for unknown session: %s", _sanitize_log(session_id))
@@ -1351,7 +1329,7 @@ def create_router(
         """Archive a session. Stops pod if running."""
         principal = await _optional_principal(request)
         try:
-            session = await service.archive_session(
+            session = await forge.archive_session(
                 session_id,
                 principal=principal,
             )
@@ -1387,7 +1365,7 @@ def create_router(
         """Restore an archived session to stopped state."""
         principal = await _optional_principal(request)
         try:
-            session = await service.restore_session(
+            session = await forge.restore_session(
                 session_id,
                 principal=principal,
             )
@@ -1411,23 +1389,25 @@ def create_router(
     @router.get("/models", response_model=list[ModelInfo], tags=["Models & Stats"])
     async def list_models() -> list[ModelInfo]:
         """List available models."""
-        if pricing_provider is None:
+        try:
+            models = forge.list_models()
+        except RuntimeError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Pricing provider not available",
+                detail=str(exc),
             )
-        models = pricing_provider.list_models()
         return [ModelInfo.from_model(m) for m in models]
 
     @router.get("/stats", response_model=StatsResponse, tags=["Models & Stats"])
     async def get_stats() -> StatsResponse:
         """Get aggregate statistics for the dashboard."""
-        if stats_service is None:
+        try:
+            stats = await forge.get_stats()
+        except RuntimeError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Stats service not available",
+                detail=str(exc),
             )
-        stats = await stats_service.get_stats()
         return StatsResponse(
             active_sessions=stats.active_sessions,
             total_sessions=stats.total_sessions,
@@ -1462,10 +1442,10 @@ def create_router(
 
         # Authorization: caller must own the session
         principal = await _optional_principal(request)
-        session = await service.get_session(session_id)
+        session = await forge.get_session(session_id)
         if session is not None and principal is not None:
             try:
-                await service._check_access(session, principal, "report_usage")
+                await forge.ensure_access(session, principal, "report_usage")
             except SessionAccessDeniedError:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -1475,7 +1455,7 @@ def create_router(
         provider = ModelProvider(data.provider)
 
         try:
-            record = await token_service.record_usage(
+            record = await forge.record_usage(
                 session_id=session_id,
                 tokens=data.tokens,
                 provider=provider,
@@ -1529,7 +1509,7 @@ def create_router(
         Fetches logs from the Skuld broker's in-memory log buffer via its
         ``GET /api/logs`` endpoint.
         """
-        session = await service.get_session(session_id)
+        session = await forge.get_session(session_id)
         if session is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1601,7 +1581,7 @@ def create_router(
 
         # Verify the caller owns this session
         principal = await extract_principal(request)
-        session = await service.get_session(session_id)
+        session = await forge.get_session(session_id)
         if session is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1663,7 +1643,7 @@ def create_router(
         session_id: UUID = Path(description="Unique session identifier"),
     ) -> dict:
         """Proxy conversation history retrieval from a running session pod."""
-        session = await service.get_session(session_id)
+        session = await forge.get_session(session_id)
         if session is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1794,10 +1774,10 @@ def create_router(
 
         # Authorization: caller must own the session
         principal = await _optional_principal(request)
-        session = await service.get_session(session_id)
+        session = await forge.get_session(session_id)
         if session is not None and principal is not None:
             try:
-                await service._check_access(session, principal, "report_chronicle")
+                await forge.ensure_access(session, principal, "report_chronicle")
             except SessionAccessDeniedError:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -2117,10 +2097,10 @@ def create_router(
 
         # Authorization: caller must own the session
         principal = await extract_principal(request)
-        session = await service.get_session(session_id)
+        session = await forge.get_session(session_id)
         if session is not None:
             try:
-                await service._check_access(session, principal, "report_timeline")
+                await forge.ensure_access(session, principal, "report_timeline")
             except SessionAccessDeniedError:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -2208,7 +2188,7 @@ def create_router(
                 ),
             )
 
-        session = await service.get_session(session_id)
+        session = await forge.get_session(session_id)
         if session is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
