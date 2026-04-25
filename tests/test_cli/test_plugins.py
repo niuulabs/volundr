@@ -425,16 +425,25 @@ class TestRavnPlugin:
         route_domains = plugin.api_route_domains()
         assert route_domains
         assert [route_domain.name for route_domain in route_domains] == [
+            "ravn-runtime-api",
+            "ravn-trigger-api",
+            "ravn-budget-api",
             "ravn-session-api",
             "persona-api",
             "ravn-api",
         ]
         assert route_domains[0].prefixes == (
+            "/api/v1/ravn/ravens",
+            "/api/v1/ravn/sessions",
+        )
+        assert route_domains[1].prefixes == ("/api/v1/ravn/triggers",)
+        assert route_domains[2].prefixes == ("/api/v1/ravn/budget",)
+        assert route_domains[3].prefixes == (
             "/api/v1/ravn/status",
             "/api/v1/ravn/sessions",
         )
-        assert route_domains[1].prefixes == ("/api/v1/ravn/personas",)
-        assert route_domains[2].prefixes == ("/api/v1/ravn",)
+        assert route_domains[4].prefixes == ("/api/v1/ravn/personas",)
+        assert route_domains[5].prefixes == ("/api/v1/ravn",)
 
     def test_api_client_returns_instance(self) -> None:
         plugin = RavnPlugin()

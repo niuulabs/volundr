@@ -239,10 +239,35 @@
     "plugin": "ravn"
   },
   {
+    "name": "ravn-budget-api",
+    "prefixes": [
+      "/api/v1/ravn/budget"
+    ],
+    "source": "plugin",
+    "plugin": "ravn"
+  },
+  {
+    "name": "ravn-runtime-api",
+    "prefixes": [
+      "/api/v1/ravn/ravens",
+      "/api/v1/ravn/sessions"
+    ],
+    "source": "plugin",
+    "plugin": "ravn"
+  },
+  {
     "name": "ravn-session-api",
     "prefixes": [
       "/api/v1/ravn/status",
       "/api/v1/ravn/sessions"
+    ],
+    "source": "plugin",
+    "plugin": "ravn"
+  },
+  {
+    "name": "ravn-trigger-api",
+    "prefixes": [
+      "/api/v1/ravn/triggers"
     ],
     "source": "plugin",
     "plugin": "ravn"

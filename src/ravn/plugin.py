@@ -71,6 +71,24 @@ class RavnPlugin(ServicePlugin):
     def api_route_domains(self) -> tuple[APIRouteDomain, ...]:
         return (
             APIRouteDomain(
+                name="ravn-runtime-api",
+                prefixes=(
+                    "/api/v1/ravn/ravens",
+                    "/api/v1/ravn/sessions",
+                ),
+                description="Ravn runtime fleet and session routes.",
+            ),
+            APIRouteDomain(
+                name="ravn-trigger-api",
+                prefixes=("/api/v1/ravn/triggers",),
+                description="Ravn trigger definition routes.",
+            ),
+            APIRouteDomain(
+                name="ravn-budget-api",
+                prefixes=("/api/v1/ravn/budget",),
+                description="Ravn per-agent and fleet budget routes.",
+            ),
+            APIRouteDomain(
                 name="ravn-session-api",
                 prefixes=(
                     "/api/v1/ravn/status",
