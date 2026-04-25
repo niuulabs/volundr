@@ -953,6 +953,10 @@ def create_router(
             return None
         return principal.user_id
 
+    def _workspace_forge(request: Request) -> ForgeService:
+        """Bind the shared Forge facade to the request-scoped workspace service."""
+        return forge.with_workspace_service(request.app.state.workspace_service)
+
     @router.get("/sessions", response_model=list[SessionResponse], tags=["Sessions"])
     async def list_sessions(
         request: Request,
@@ -1708,17 +1712,16 @@ def create_router(
         repo_url: str = Query(..., description="Repository URL"),
     ) -> list[str]:
         """List branches for a repository using the user's credentials."""
-        if repo_service is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Repo service not available",
-            )
-
         from volundr.domain.ports import GitAuthError, GitRepoNotFoundError
 
         user_id = await _optional_user_id(request)
         try:
             return await forge.list_branches(repo_url, user_id=user_id)
+        except RuntimeError as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e),
+            )
         except GitAuthError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -2248,8 +2251,7 @@ def create_router(
         principal = await _optional_principal(request)
         if principal is None:
             return []
-        workspace_service = request.app.state.workspace_service
-        workspace_forge = forge.with_workspace_service(workspace_service)
+        workspace_forge = _workspace_forge(request)
         ws_status = WorkspaceStatus(status_filter) if status_filter else None
         workspaces = await workspace_forge.list_workspaces(
             user_id=principal.user_id,
@@ -2272,8 +2274,7 @@ def create_router(
     ):
         """Delete a workspace PVC by session ID."""
         principal = await _optional_principal(request)
-        workspace_service = request.app.state.workspace_service
-        workspace_forge = forge.with_workspace_service(workspace_service)
+        workspace_forge = _workspace_forge(request)
         # Verify ownership before deleting
         workspaces = await workspace_forge.list_workspaces(
             user_id=principal.user_id if principal else "",
@@ -2303,8 +2304,7 @@ def create_router(
         _: Principal = Depends(require_role("volundr:admin")),
     ):
         """List all workspaces (admin only)."""
-        workspace_service = request.app.state.workspace_service
-        workspace_forge = forge.with_workspace_service(workspace_service)
+        workspace_forge = _workspace_forge(request)
         ws_status = WorkspaceStatus(status_filter) if status_filter else None
         if user_id:
             workspaces = await workspace_forge.list_workspaces(user_id=user_id, status=ws_status)
@@ -2331,8 +2331,7 @@ def create_router(
         if not session_ids:
             return {"deleted": 0, "failed": []}
 
-        workspace_service = request.app.state.workspace_service
-        workspace_forge = forge.with_workspace_service(workspace_service)
+        workspace_forge = _workspace_forge(request)
         user_workspaces = await workspace_forge.list_workspaces(
             user_id=principal.user_id if principal else "",
         )
@@ -2370,8 +2369,7 @@ def create_router(
         if not session_ids:
             return {"deleted": 0, "failed": []}
 
-        workspace_service = request.app.state.workspace_service
-        workspace_forge = forge.with_workspace_service(workspace_service)
+        workspace_forge = _workspace_forge(request)
         deleted = 0
         failed = []
         for sid in session_ids:
