@@ -65,7 +65,7 @@ describe('OverviewPage', () => {
     render(<OverviewPage />, { wrapper: wrap() });
     await waitFor(() => expect(screen.getByTestId('active-ravens-list')).toBeInTheDocument());
     const rows = screen.getAllByTestId('active-ravn-row');
-    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBe(7);
   });
 
   it('renders persona avatars in active ravens rows', async () => {
@@ -98,7 +98,7 @@ describe('OverviewPage', () => {
     render(<OverviewPage />, { wrapper: wrap() });
     await waitFor(() => expect(screen.getByTestId('location-bars')).toBeInTheDocument());
     const rows = screen.getAllByTestId('location-row');
-    // Mock has 3 locations: eu-west-1, us-east-1, ap-southeast-1
+    // Active ravens currently span three locations.
     expect(rows.length).toBe(3);
   });
 
@@ -154,5 +154,11 @@ describe('OverviewPage', () => {
     render(<OverviewPage />, { wrapper: wrap() });
     await waitFor(() => expect(screen.getByTestId('kpi-spend')).toBeInTheDocument());
     expect(screen.getByTestId('kpi-spend').textContent).toContain('$');
+  });
+
+  it('shows the expanded active trigger count', async () => {
+    render(<OverviewPage />, { wrapper: wrap() });
+    await waitFor(() => expect(screen.getByTestId('kpi-triggers')).toBeInTheDocument());
+    expect(screen.getByTestId('kpi-triggers').textContent).toContain('9');
   });
 });

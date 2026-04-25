@@ -1,13 +1,8 @@
-import {
-  KpiStrip,
-  KpiCard,
-  BudgetBar,
-  Sparkline,
-  StateDot,
-  PersonaAvatar,
-  LoadingState,
-  ErrorState,
-} from '@niuulabs/ui';
+import { useMemo, type ReactNode } from 'react';
+import { BudgetBar, Sparkline, StateDot, PersonaAvatar, LoadingState, ErrorState } from '@niuulabs/ui';
+import type { ActivityLogEntry } from '../domain/activityLog';
+import type { Ravn } from '../domain/ravn';
+import type { Session } from '../domain/session';
 import { useRavens } from './hooks/useRavens';
 import { useTriggers } from './hooks/useTriggers';
 import { useSessions } from './hooks/useSessions';
@@ -15,69 +10,119 @@ import { useFleetBudget, useRavnBudgets } from './hooks/useBudget';
 import { useActivityLog } from './hooks/useActivityLog';
 import { topBudgetSpenders } from './grouping';
 import { formatTime } from './formatTime';
-import type { ActivityLogEntry } from '../domain/activityLog';
 import './OverviewPage.css';
 
 const TOP_SPENDERS_COUNT = 5;
-const FLEET_SPARKLINE_SAMPLES = 24;
-const FLEET_SPARKLINE_WIDTH = 520;
-const FLEET_SPARKLINE_HEIGHT = 100;
+const ACTIVE_RAVEN_LIMIT = 7;
+const FLEET_SPARKLINE_WIDTH = 640;
+const FLEET_SPARKLINE_HEIGHT = 132;
+const FLEET_SPEND_SERIES = [
+  0.56, 0.56, 0.58, 0.62, 0.67, 0.72, 0.72, 0.68, 0.64, 0.6, 0.6, 0.64,
+  0.69, 0.72, 0.73, 0.71, 0.67, 0.63, 0.6, 0.62, 0.66, 0.71, 0.75, 0.76,
+];
 
-function generateHourlySpend(seed: number): number[] {
-  const values: number[] = [];
-  let v = 0.2 + (seed % 100) / 500;
-  for (let i = 0; i < FLEET_SPARKLINE_SAMPLES; i++) {
-    v = Math.max(0, Math.min(1, v + (((seed * (i + 1)) % 37) / 37 - 0.42) * 0.18));
-    values.push(v);
-  }
-  return values;
+const ACTIVITY_KIND_LABEL: Record<ActivityLogEntry['kind'], string> = {
+  session: 'ITER',
+  trigger: 'TOOL',
+  emit: 'EMIT',
+};
+
+function titleCase(value: string | undefined): string {
+  if (!value) return 'unknown';
+  return value.replace(/_/g, ' ').replace(/-/g, ' ');
 }
 
-// Group ravens by location and compute counts
-function byLocation(ravens: { location?: string }[]): Array<{ name: string; count: number }> {
+function formatCurrency(value: number | undefined): string {
+  if (value == null) return '—';
+  return `$${value.toFixed(2)}`;
+}
+
+function formatTokenCount(value: number): string {
+  return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value);
+}
+
+function percentOfCap(spent: number, cap: number): number {
+  if (cap <= 0) return 0;
+  return Math.round((spent / cap) * 100);
+}
+
+function sortByLocationCount(ravens: Ravn[]): Array<{ name: string; count: number }> {
   const counts = new Map<string, number>();
-  for (const r of ravens) {
-    const loc = r.location ?? 'unknown';
-    counts.set(loc, (counts.get(loc) ?? 0) + 1);
+
+  for (const ravn of ravens) {
+    const location = ravn.location ?? 'unknown';
+    counts.set(location, (counts.get(location) ?? 0) + 1);
   }
+
   return Array.from(counts.entries())
     .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count);
+    .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
 }
 
-function ActivityLogSection({ entries }: { entries: ActivityLogEntry[] }) {
+function deriveAnchorTime(sessions: Session[]): string {
+  if (sessions.length === 0) return new Date().toISOString();
+  const newest = [...sessions].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]!;
+  return new Date(new Date(newest.createdAt).getTime() + 2 * 60 * 1000).toISOString();
+}
+
+function relativeAge(iso: string | undefined, anchorIso: string): string {
+  if (!iso) return '—';
+  const deltaMs = new Date(anchorIso).getTime() - new Date(iso).getTime();
+  const deltaMinutes = Math.max(0, Math.round(deltaMs / 60000));
+  if (deltaMinutes <= 1) return 'just now';
+  if (deltaMinutes < 60) return `${deltaMinutes}m ago`;
+  return `${Math.round(deltaMinutes / 60)}h ago`;
+}
+
+function roleLabel(role: string | undefined): string {
+  return titleCase(role ?? 'raven');
+}
+
+function OverviewMetricCard({
+  label,
+  value,
+  subline,
+  accent = false,
+  testId,
+}: {
+  label: string;
+  value: string | number;
+  subline: ReactNode;
+  accent?: boolean;
+  testId: string;
+}) {
+  return (
+    <section className="rv-ov__metric" data-testid={testId}>
+      <div className="rv-ov__metric-label">{label}</div>
+      <div className={`rv-ov__metric-value${accent ? ' rv-ov__metric-value--accent' : ''}`}>
+        {value}
+      </div>
+      <div className="rv-ov__metric-sub">{subline}</div>
+    </section>
+  );
+}
+
+function ActivityTail({ entries }: { entries: ActivityLogEntry[] }) {
   if (entries.length === 0) {
     return (
-      <div className="rv-log-panel" data-testid="activity-log">
-        <p className="rv-log-empty">No recent activity</p>
+      <div className="rv-ov__log" data-testid="activity-log">
+        <div className="rv-ov__log-empty">No recent activity</div>
       </div>
     );
   }
 
   return (
-    <div className="rv-log-panel" data-testid="activity-log">
-      <table className="rv-log-table" aria-label="Recent activity">
-        <thead>
-          <tr className="rv-log-thead-row">
-            <th className="rv-log-th">Time</th>
-            <th className="rv-log-th">Kind</th>
-            <th className="rv-log-th">Ravn</th>
-            <th className="rv-log-th">Event</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((e) => (
-            <tr key={e.id} className="rv-log-row" data-testid="activity-log-row">
-              <td className="rv-log-td--time">{formatTime(e.ts)}</td>
-              <td className="rv-log-td--kind">
-                <span className={`rv-log-kind rv-log-kind--${e.kind}`}>{e.kind}</span>
-              </td>
-              <td className="rv-log-td--persona">{e.ravnId}</td>
-              <td className="rv-log-td--event">{e.message}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="rv-ov__log" data-testid="activity-log">
+      {entries.map((entry) => (
+        <div key={entry.id} className="rv-ov__log-row" data-testid="activity-log-row">
+          <span className="rv-ov__log-time">{formatTime(entry.ts)}</span>
+          <span className={`rv-ov__log-kind rv-ov__log-kind--${entry.kind}`}>
+            {ACTIVITY_KIND_LABEL[entry.kind]}
+          </span>
+          <span className="rv-ov__log-raven">{entry.ravnId}</span>
+          <span className="rv-ov__log-message">{entry.message}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -90,26 +135,60 @@ export function OverviewPage() {
   const activityLog = useActivityLog();
 
   const ravnList = ravens.data ?? [];
-  const ravnIds = ravnList.map((r) => r.id);
+  const sessionList = sessions.data ?? [];
+  const triggerList = triggers.data ?? [];
+  const ravnIds = ravnList.map((ravn) => ravn.id);
   const budgets = useRavnBudgets(ravnIds);
 
-  const activeRavens = ravnList.filter((r) => r.status === 'active');
-  const activeCount = activeRavens.length;
-  const idleCount = ravnList.filter((r) => r.status === 'idle').length;
-  const suspendedCount = ravnList.filter((r) => r.status === 'suspended').length;
+  const activeRavens = useMemo(
+    () => ravnList.filter((ravn) => ravn.status === 'active'),
+    [ravnList],
+  );
+  const idleCount = ravnList.filter((ravn) => ravn.status === 'idle').length;
+  const failedCount = ravnList.filter((ravn) => ravn.status === 'failed').length;
+  const suspendedCount = ravnList.filter((ravn) => ravn.status === 'suspended').length;
 
-  const activeTriggerCount = triggers.data?.filter((t) => t.enabled).length ?? 0;
-  const pausedTriggerCount = triggers.data?.filter((t) => !t.enabled).length ?? 0;
+  const activeTriggers = triggerList.filter((trigger) => trigger.enabled).length;
+  const pausedTriggers = triggerList.filter((trigger) => !trigger.enabled).length;
+  const openSessions = sessionList.filter((session) => session.status === 'running');
 
-  const openSessionCount = sessions.data?.filter((s) => s.status === 'running').length ?? 0;
-  const totalMsgs = sessions.data?.reduce((sum, s) => sum + (s.messageCount ?? 0), 0) ?? 0;
+  const totalMsgs = sessionList.reduce((sum, session) => sum + (session.messageCount ?? 0), 0);
+  const totalTokens = sessionList.reduce((sum, session) => sum + (session.tokenCount ?? 0), 0);
   const fleetBudgetData = fleetBudget.data;
-  const sparklineSeed = Math.round((fleetBudgetData?.spentUsd ?? 0) * 100);
-  const hourlyValues = generateHourlySpend(sparklineSeed);
 
-  const spenders = topBudgetSpenders(ravnList, budgets, TOP_SPENDERS_COUNT);
-  const locationGroups = byLocation(ravnList);
-  const maxLocCount = locationGroups[0]?.count ?? 1;
+  const sessionsByRavn = useMemo(() => {
+    const openCounts = new Map<string, number>();
+    const latestSession = new Map<string, string>();
+
+    for (const session of sessionList) {
+      if (session.status === 'running') {
+        openCounts.set(session.ravnId, (openCounts.get(session.ravnId) ?? 0) + 1);
+      }
+
+      const currentLatest = latestSession.get(session.ravnId);
+      if (!currentLatest || session.createdAt > currentLatest) {
+        latestSession.set(session.ravnId, session.createdAt);
+      }
+    }
+
+    return { openCounts, latestSession };
+  }, [sessionList]);
+
+  const anchorTime = deriveAnchorTime(sessionList);
+
+  const activeRows = useMemo(() => {
+    return [...activeRavens]
+      .sort((left, right) => {
+        const leftLatest = sessionsByRavn.latestSession.get(left.id) ?? left.createdAt;
+        const rightLatest = sessionsByRavn.latestSession.get(right.id) ?? right.createdAt;
+        return rightLatest.localeCompare(leftLatest);
+      })
+      .slice(0, ACTIVE_RAVEN_LIMIT);
+  }, [activeRavens, sessionsByRavn.latestSession]);
+
+  const locationGroups = useMemo(() => sortByLocationCount(activeRavens), [activeRavens]);
+  const maxLocationCount = locationGroups[0]?.count ?? 1;
+  const topBurners = topBudgetSpenders(ravnList, budgets, TOP_SPENDERS_COUNT);
 
   if (ravens.isLoading || sessions.isLoading || triggers.isLoading) {
     return (
@@ -129,203 +208,219 @@ export function OverviewPage() {
     );
   }
 
-  // Compute per-ravn open session counts
-  const sessionsByRavn = new Map<string, number>();
-  for (const s of sessions.data ?? []) {
-    if (s.status === 'running') {
-      const prev = sessionsByRavn.get(s.ravnId) ?? 0;
-      sessionsByRavn.set(s.ravnId, prev + 1);
-    }
-  }
-  const totalTokens = sessions.data?.reduce((sum, s) => sum + (s.tokenCount ?? 0), 0) ?? 0;
-  const tokLabel =
-    totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}k tok` : `${totalTokens} tok`;
-
   return (
-    <div data-testid="overview-page" className="rv-overview">
-      {/* 4-card KPI strip */}
-      <KpiStrip>
-        <div data-testid="kpi-ravens" className="rv-kpi-item">
-          <KpiCard label="Ravens" value={ravnList.length} />
-          <p className="rv-kpi-sub">
-            {activeCount} active · {idleCount} idle
-            {suspendedCount > 0 && (
-              <>
-                {' '}
-                · <span className="rv-kpi-sub--warn">{suspendedCount} suspended</span>
-              </>
-            )}
-          </p>
-        </div>
-        <div data-testid="kpi-sessions" className="rv-kpi-item">
-          <KpiCard label="Open sessions" value={openSessionCount} />
-          <p className="rv-kpi-sub">
-            {totalMsgs} msgs · {tokLabel}
-          </p>
-        </div>
-        <div data-testid="kpi-spend" className="rv-kpi-item">
-          <KpiCard
-            label="Spend today"
-            value={fleetBudgetData ? `$${fleetBudgetData.spentUsd.toFixed(2)}` : '—'}
-          />
-          {fleetBudgetData && (
-            <p className="rv-kpi-sub">
-              of ${fleetBudgetData.capUsd.toFixed(2)} ·{' '}
-              {fleetBudgetData.capUsd > 0
-                ? Math.round((fleetBudgetData.spentUsd / fleetBudgetData.capUsd) * 100)
-                : 0}
-              %
-            </p>
-          )}
-        </div>
-        <div data-testid="kpi-triggers" className="rv-kpi-item">
-          <KpiCard label="Active triggers" value={activeTriggerCount} />
-          {pausedTriggerCount > 0 && <p className="rv-kpi-sub">{pausedTriggerCount} paused</p>}
-        </div>
-      </KpiStrip>
+    <div data-testid="overview-page" className="rv-ov">
+      <div className="rv-ov__kpis">
+        <OverviewMetricCard
+          testId="kpi-ravens"
+          label="Ravens"
+          value={ravnList.length}
+          subline={
+            <>
+              <span className="rv-ov__sub-ok">{activeRavens.length} active</span>
+              <span className="rv-ov__sub-sep">·</span>
+              <span>{idleCount} idle</span>
+              {failedCount > 0 && (
+                <>
+                  <span className="rv-ov__sub-sep">·</span>
+                  <span className="rv-ov__sub-bad">{failedCount} failed</span>
+                </>
+              )}
+              {suspendedCount > 0 && (
+                <>
+                  <span className="rv-ov__sub-sep">·</span>
+                  <span className="rv-ov__sub-warn">{suspendedCount} suspended</span>
+                </>
+              )}
+            </>
+          }
+        />
 
-      {/* 2-column body */}
-      <div className="rv-overview__grid">
-        {/* Left: Active ravens list + By location */}
-        <div>
-          <section aria-labelledby="active-ravens-heading">
-            <div className="rv-section-heading-row">
-              <h3 id="active-ravens-heading" className="rv-section-heading">
-                Active ravens
-              </h3>
-              <span className="rv-section-link">open directory →</span>
-            </div>
-            {activeRavens.length === 0 ? (
-              <p className="rv-empty-text">No active ravens</p>
+        <OverviewMetricCard
+          testId="kpi-sessions"
+          label="Open sessions"
+          value={openSessions.length}
+          subline={
+            <>
+              <span>{totalMsgs} msgs</span>
+              <span className="rv-ov__sub-sep">·</span>
+              <span>{formatTokenCount(totalTokens)} tok</span>
+            </>
+          }
+        />
+
+        <OverviewMetricCard
+          testId="kpi-spend"
+          label="Spend today"
+          value={fleetBudgetData ? formatCurrency(fleetBudgetData.spentUsd) : '—'}
+          accent
+          subline={
+            fleetBudgetData ? (
+              <>
+                <span>of {formatCurrency(fleetBudgetData.capUsd)} cap</span>
+                <span className="rv-ov__sub-sep">·</span>
+                <span>{percentOfCap(fleetBudgetData.spentUsd, fleetBudgetData.capUsd)}%</span>
+              </>
             ) : (
-              <ul className="rv-active-list" data-testid="active-ravens-list">
-                {activeRavens.map((r) => {
-                  const ravnSessions = sessionsByRavn.get(r.id) ?? 0;
-                  const b = budgets[r.id];
+              '—'
+            )
+          }
+        />
+
+        <OverviewMetricCard
+          testId="kpi-triggers"
+          label="Active triggers"
+          value={activeTriggers}
+          subline={<span>{pausedTriggers} paused</span>}
+        />
+      </div>
+
+      <div className="rv-ov__body">
+        <div className="rv-ov__col">
+          <section>
+            <div className="rv-ov__section-head">
+              <h3 className="rv-ov__section-title">Active ravens</h3>
+              <a className="rv-ov__section-link" href="/ravn/ravens">
+                open directory →
+              </a>
+            </div>
+
+            {activeRows.length === 0 ? (
+              <p className="rv-ov__empty-text">No active ravens</p>
+            ) : (
+              <div className="rv-ov__active" data-testid="active-ravens-list">
+                {activeRows.map((ravn) => {
+                  const budgetState = budgets[ravn.id];
+                  const openCount = sessionsByRavn.openCounts.get(ravn.id) ?? 0;
+                  const latestAt = sessionsByRavn.latestSession.get(ravn.id) ?? ravn.createdAt;
+
                   return (
-                    <li key={r.id} className="rv-active-row" data-testid="active-ravn-row">
-                      <StateDot state="running" pulse size={8} />
-                      {r.role && r.letter && (
-                        <PersonaAvatar role={r.role} letter={r.letter} size={16} />
-                      )}
-                      <div className="rv-active-row__identity">
-                        <span className="rv-active-row__name">{r.personaName}</span>
-                        <span className="rv-active-row__model">{r.model}</span>
-                      </div>
-                      <span className="rv-active-row__role">{r.role ?? ''}</span>
-                      <span className="rv-active-row__loc">@ {r.location ?? '—'}</span>
-                      <span className="rv-active-row__sessions">{ravnSessions} open</span>
-                      {b && (
-                        <div className="rv-active-row__bar">
+                    <div key={ravn.id} className="rv-ov__active-row" data-testid="active-ravn-row">
+                      <span className="rv-ov__active-state">
+                        <StateDot state="running" pulse size={8} />
+                      </span>
+                      <span className="rv-ov__active-avatar">
+                        <PersonaAvatar role={ravn.role ?? 'build'} letter={ravn.letter ?? '?'} size={20} />
+                      </span>
+                      <span className="rv-ov__active-name">{ravn.personaName}</span>
+                      <span className="rv-ov__active-role">{roleLabel(ravn.role)}</span>
+                      <span className="rv-ov__active-loc">@ {titleCase(ravn.location)}</span>
+                      <span className="rv-ov__active-sessions">{openCount} open</span>
+                      <span className="rv-ov__active-budget">
+                        {budgetState ? (
                           <BudgetBar
-                            spent={b.spentUsd}
-                            cap={b.capUsd}
-                            warnAt={Math.round(b.warnAt * 100)}
+                            spent={budgetState.spentUsd}
+                            cap={budgetState.capUsd}
+                            warnAt={Math.round(budgetState.warnAt * 100)}
                             size="sm"
                           />
-                        </div>
-                      )}
-                      <span className="rv-active-row__time">just now</span>
-                    </li>
+                        ) : null}
+                      </span>
+                      <span className="rv-ov__active-time">{relativeAge(latestAt, anchorTime)}</span>
+                    </div>
                   );
                 })}
-              </ul>
+              </div>
             )}
           </section>
 
-          {/* By location section */}
-          {locationGroups.length > 0 && (
-            <section aria-labelledby="location-heading" className="rv-overview__by-location">
-              <h3 id="location-heading" className="rv-section-heading">
-                By location
-              </h3>
-              <div className="rv-loc-bars" data-testid="location-bars">
-                {locationGroups.map(({ name, count }) => (
-                  <div key={name} className="rv-loc-row" data-testid="location-row">
-                    <span className="rv-loc-name">{name}</span>
-                    <div className="rv-loc-bar-track">
-                      <div
-                        className="rv-loc-bar-fill"
-                        style={{ width: `${(count / maxLocCount) * 100}%` }}
-                      />
-                    </div>
-                    <span className="rv-loc-count">{count}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+          <section className="rv-ov__section rv-ov__section--location">
+            <div className="rv-ov__section-head">
+              <h3 className="rv-ov__section-title">By location</h3>
+              <span className="rv-ov__section-meta">active ravens</span>
+            </div>
+
+            <div className="rv-ov__location-panel" data-testid="location-bars">
+              {locationGroups.map(({ name, count }) => (
+                <div key={name} className="rv-ov__location-row" data-testid="location-row">
+                  <span className="rv-ov__location-name">{name}</span>
+                  <span className="rv-ov__location-track">
+                    <span
+                      className="rv-ov__location-fill"
+                      style={{ width: `${(count / maxLocationCount) * 100}%` }}
+                    />
+                  </span>
+                  <span className="rv-ov__location-count">{count}</span>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
 
-        {/* Right: Fleet sparkline + top burners + activity log */}
-        <section aria-labelledby="fleet-spend-heading">
-          {/* Fleet sparkline */}
-          <div className="rv-fleet-sparkline" data-testid="fleet-sparkline">
-            <div className="rv-fleet-sparkline__header">
-              <span className="rv-fleet-sparkline__label">Fleet spend · 24h</span>
-              {fleetBudgetData && (
-                <span className="rv-fleet-sparkline__value">
-                  ${fleetBudgetData.spentUsd.toFixed(2)} total
-                </span>
-              )}
+        <div className="rv-ov__col">
+          <section>
+            <div className="rv-ov__section-head">
+              <h3 className="rv-ov__section-title">Fleet spend · 24h</h3>
+              <span className="rv-ov__section-meta">
+                {fleetBudgetData ? `${formatCurrency(fleetBudgetData.spentUsd)} total` : '—'}
+              </span>
             </div>
-            <Sparkline
-              values={hourlyValues}
-              width={FLEET_SPARKLINE_WIDTH}
-              height={FLEET_SPARKLINE_HEIGHT}
-              fill
-            />
-            <div className="rv-fleet-sparkline__axis">
-              <span>-24h</span>
-              <span>-12h</span>
-              <span>now</span>
+
+            <div className="rv-ov__chart" data-testid="fleet-sparkline">
+              <Sparkline
+                values={FLEET_SPEND_SERIES}
+                width={FLEET_SPARKLINE_WIDTH}
+                height={FLEET_SPARKLINE_HEIGHT}
+                fill
+              />
+              <div className="rv-ov__chart-axis">
+                <span>-24h</span>
+                <span>-12h</span>
+                <span>now</span>
+              </div>
             </div>
-          </div>
-
-          {/* Top burners */}
-          <div className="rv-section-heading-row">
-            <h3 id="fleet-spend-heading" className="rv-section-heading">
-              Top burners
-            </h3>
-            <span className="rv-section-link">budget page →</span>
-          </div>
-          <ul className="rv-spenders-list" data-testid="top-spenders-list">
-            {spenders.map((r) => {
-              const b = budgets[r.id];
-              const pct = b && b.capUsd > 0 ? Math.round((b.spentUsd / b.capUsd) * 100) : 0;
-              return (
-                <li key={r.id} className="rv-spender-row" data-testid="spender-row">
-                  {r.role && r.letter && (
-                    <PersonaAvatar role={r.role} letter={r.letter} size={16} />
-                  )}
-                  <span className="rv-spender-row__name">{r.personaName}</span>
-                  {b && (
-                    <div className="rv-spender-row__bar">
-                      <BudgetBar
-                        spent={b.spentUsd}
-                        cap={b.capUsd}
-                        warnAt={Math.round(b.warnAt * 100)}
-                        size="sm"
-                      />
-                    </div>
-                  )}
-                  <span className="rv-spender-row__pct">{pct}%</span>
-                  <span className="rv-spender-row__amount">
-                    {b ? `$${b.spentUsd.toFixed(2)}` : '—'}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-
-          {/* Recent activity log tail */}
-          <section aria-labelledby="activity-log-heading" className="rv-overview__activity">
-            <h3 id="activity-log-heading" className="rv-section-heading">
-              Recent activity
-            </h3>
-            <ActivityLogSection entries={activityLog.data ?? []} />
           </section>
-        </section>
+
+          <section className="rv-ov__section">
+            <div className="rv-ov__section-head">
+              <h3 className="rv-ov__section-title">Top burners</h3>
+              <a className="rv-ov__section-link" href="/ravn/budget">
+                budget page →
+              </a>
+            </div>
+
+            <div className="rv-ov__burners" data-testid="top-spenders-list">
+              {topBurners.map((ravn) => {
+                const budgetState = budgets[ravn.id];
+                const usage = budgetState
+                  ? percentOfCap(budgetState.spentUsd, budgetState.capUsd)
+                  : 0;
+
+                return (
+                  <div key={ravn.id} className="rv-ov__burner-row" data-testid="spender-row">
+                    <span className="rv-ov__burner-avatar">
+                      <PersonaAvatar role={ravn.role ?? 'build'} letter={ravn.letter ?? '?'} size={18} />
+                    </span>
+                    <span className="rv-ov__burner-name">{ravn.personaName}</span>
+                    <span className="rv-ov__burner-bar">
+                      {budgetState ? (
+                        <BudgetBar
+                          spent={budgetState.spentUsd}
+                          cap={budgetState.capUsd}
+                          warnAt={Math.round(budgetState.warnAt * 100)}
+                          size="sm"
+                        />
+                      ) : null}
+                    </span>
+                    <span className="rv-ov__burner-pct">{usage}%</span>
+                    <span className="rv-ov__burner-amount">
+                      {budgetState ? formatCurrency(budgetState.spentUsd) : '—'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="rv-ov__section">
+            <div className="rv-ov__section-head">
+              <h3 className="rv-ov__section-title">Recent activity</h3>
+              <span className="rv-ov__section-meta">fleet tail · last 9</span>
+            </div>
+
+            <ActivityTail entries={activityLog.data ?? []} />
+          </section>
+        </div>
       </div>
     </div>
   );

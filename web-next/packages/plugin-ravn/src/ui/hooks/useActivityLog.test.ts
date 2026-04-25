@@ -82,10 +82,36 @@ describe('useActivityLog', () => {
       wrapper: makeWrapper(),
     });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    // With 12 sessions (all Jan 15) and 6 triggers (Jan 1-12), the top 9 by
-    // timestamp are all sessions. Triggers only appear when recent enough.
     const kinds = result.current.data!.map((e) => e.kind);
-    expect(kinds).toContain('session');
+    expect(kinds).toContain('trigger');
+  });
+
+  it('includes emit entries for completed or stopped sessions', async () => {
+    const stoppedSession: Session = {
+      id: 'feed0001-0000-4000-8000-000000000001',
+      ravnId: 'feed0001-0000-4000-8000-000000000002',
+      personaName: 'reviewer',
+      personaRole: 'review',
+      personaLetter: 'R',
+      status: 'stopped',
+      model: 'claude-4-sonnet',
+      createdAt: '2026-01-15T08:55:00Z',
+      title: 'Finalize security verdict',
+      messageCount: 4,
+      tokenCount: 1200,
+      costUsd: 0.03,
+    };
+    const customSessions = {
+      listSessions: () => Promise.resolve([stoppedSession]),
+      getSession: (_id: string) => Promise.resolve(stoppedSession),
+      getMessages: () => Promise.resolve([]),
+    };
+    const { result } = renderHook(() => useActivityLog(), {
+      wrapper: makeWrapper(customSessions),
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    const kinds = result.current.data!.map((e) => e.kind);
+    expect(kinds).toContain('emit');
   });
 
   it('returns isError true when sessions fail', async () => {

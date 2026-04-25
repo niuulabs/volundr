@@ -7,23 +7,73 @@ import type { Trigger } from '../../domain/trigger';
 
 const ACTIVITY_LOG_ROWS = 9;
 
+function outputEventFor(session: Session): string {
+  switch (session.personaRole) {
+    case 'review':
+      return 'review.verdict';
+    case 'observe':
+      return 'incident.report';
+    case 'knowledge':
+      return 'mimir.write';
+    case 'qa':
+      return 'qa.completed';
+    case 'build':
+      return 'code.changed';
+    case 'report':
+      return 'report.ready';
+    case 'coord':
+      return 'workflow.progress';
+    case 'investigate':
+      return 'investigation.report';
+    default:
+      return 'session.output';
+  }
+}
+
+function sessionMessage(s: Session): string {
+  const title = s.title ?? `working session ${s.id.slice(0, 6)}`;
+  const iterations = s.messageCount ?? 0;
+  return `iter ${iterations} — ${title.toLowerCase()}`;
+}
+
+function emitMessage(s: Session): string {
+  const title = s.title ?? 'completed';
+  return `${outputEventFor(s)} · ${title.toLowerCase()}`;
+}
+
 function sessionToEntry(s: Session): ActivityLogEntry {
+  const kind = s.status === 'running' ? 'session' : 'emit';
   return {
     id: `session-${s.id}`,
     ts: s.createdAt,
-    kind: 'session',
-    ravnId: s.ravnId.slice(0, 8),
-    message: s.title ?? `session ${s.id.slice(0, 8)}`,
+    kind,
+    ravnId: s.personaName,
+    message: kind === 'session' ? sessionMessage(s) : emitMessage(s),
   };
+}
+
+function triggerMessage(t: Trigger): string {
+  switch (t.kind) {
+    case 'cron':
+      return `cron.tick · ${t.spec}`;
+    case 'event':
+      return `${t.spec} · dispatch ${t.personaName}`;
+    case 'manual':
+      return `manual.run · ${t.spec}`;
+    case 'webhook':
+      return `webhook.hit · ${t.spec}`;
+    default:
+      return `${t.kind} · ${t.spec}`;
+  }
 }
 
 function triggerToEntry(t: Trigger): ActivityLogEntry {
   return {
     id: `trigger-${t.id}`,
-    ts: t.createdAt,
+    ts: t.lastFiredAt ?? t.createdAt,
     kind: 'trigger',
-    ravnId: t.personaName.slice(0, 8),
-    message: `${t.kind}: ${t.spec}`,
+    ravnId: t.personaName,
+    message: triggerMessage(t),
   };
 }
 
@@ -53,5 +103,9 @@ export function useActivityLog(): {
     return entries.sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, ACTIVITY_LOG_ROWS);
   }, [sessions.data, triggers.data]);
 
-  return { data, isLoading: sessions.isLoading, isError: sessions.isError };
+  return {
+    data,
+    isLoading: sessions.isLoading || triggers.isLoading,
+    isError: sessions.isError || triggers.isError,
+  };
 }
