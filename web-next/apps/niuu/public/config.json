@@ -27,6 +27,10 @@
     "ravn.budget": { "mode": "mock" },
     "forge": { "mode": "mock" },
     "volundr": { "mode": "mock" },
+    "tyr.dispatcher": { "mode": "mock" },
+    "tyr.sessions": { "mode": "mock" },
+    "tyr.dispatch": { "mode": "mock" },
+    "tyr.settings": { "mode": "mock" },
     "tyr": { "mode": "mock" }
   }
 }

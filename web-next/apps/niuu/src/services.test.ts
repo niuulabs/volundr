@@ -334,6 +334,45 @@ describe('buildServices', () => {
     });
   });
 
+  it('prefers explicit Tyr subdomain configs over the shared Tyr base', () => {
+    buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        tyr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/tyr' },
+        'tyr.dispatcher': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/tyr/dispatcher',
+        },
+        'tyr.sessions': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/tyr/sessions',
+        },
+        'tyr.dispatch': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/tyr/dispatch',
+        },
+        'tyr.settings': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/tyr/settings',
+        },
+      },
+    } as any);
+
+    expect(tyrMocks.buildDispatcherHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/tyr/dispatcher',
+    });
+    expect(tyrMocks.buildTyrSessionHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/tyr/sessions',
+    });
+    expect(tyrMocks.buildDispatchBusHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/tyr/dispatch',
+    });
+    expect(tyrMocks.buildTyrSettingsHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/tyr/settings',
+    });
+  });
+
   it('falls back to the Volundr host when Tyr is not live', () => {
     buildServices({
       theme: 'ice',

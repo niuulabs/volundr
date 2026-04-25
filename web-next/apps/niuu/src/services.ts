@@ -122,6 +122,13 @@ export function resolveForgeServiceBase(config: Pick<NiuuConfig, 'services'>): s
   return resolveDirectServiceBase(config, 'forge', 'volundr');
 }
 
+function resolveTyrServiceBase(
+  config: Pick<NiuuConfig, 'services'>,
+  serviceKey: 'tyr' | 'tyr.dispatcher' | 'tyr.sessions' | 'tyr.dispatch' | 'tyr.settings',
+): string | null {
+  return resolveDirectServiceBase(config, serviceKey, 'tyr');
+}
+
 function resolveObservatoryServiceBase(
   config: Pick<NiuuConfig, 'services'>,
   serviceKey: 'observatory.registry' | 'observatory.topology' | 'observatory.events',
@@ -611,7 +618,6 @@ function buildVolundrClusterAdapter(volundr: IVolundrService): IClusterAdapter {
 }
 
 export function buildServices(config: NiuuConfig): ServicesMap {
-  const tyrSvc = config.services['tyr'];
   const mimirSvc = config.services['mimir'];
   const volundrPtySvc = config.services['volundr.pty'];
   const volundrMetricsSvc = config.services['volundr.metrics'];
@@ -684,25 +690,34 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const identityService = buildSharedIdentityService(config);
 
   // ── Tyr ──
-  const tyrClient = hasHttpBackend(tyrSvc) ? createApiClient(tyrSvc.baseUrl) : null;
+  const tyrBase = resolveTyrServiceBase(config, 'tyr');
+  const tyrClient = tyrBase ? createApiClient(tyrBase) : null;
+  const dispatcherBase = resolveTyrServiceBase(config, 'tyr.dispatcher');
+  const dispatcherClient = dispatcherBase ? createApiClient(dispatcherBase) : null;
+  const tyrSessionsBase = resolveTyrServiceBase(config, 'tyr.sessions');
+  const tyrSessionsClient = tyrSessionsBase ? createApiClient(tyrSessionsBase) : null;
+  const dispatchBase = resolveTyrServiceBase(config, 'tyr.dispatch');
+  const dispatchClient = dispatchBase ? createApiClient(dispatchBase) : null;
+  const tyrSettingsBase = resolveTyrServiceBase(config, 'tyr.settings');
+  const tyrSettingsClient = tyrSettingsBase ? createApiClient(tyrSettingsBase) : null;
   const trackerBase = resolveCanonicalServiceBase(config, 'tracker');
   const trackerClient = trackerBase ? createApiClient(trackerBase) : null;
   const auditBase = resolveCanonicalServiceBase(config, 'audit');
   const auditClient = auditBase ? createApiClient(auditBase) : null;
   const tyrService = tyrClient ? buildTyrHttpAdapter(tyrClient) : createMockTyrService();
-  const dispatcherService = tyrClient
-    ? buildDispatcherHttpAdapter(tyrClient)
+  const dispatcherService = dispatcherClient
+    ? buildDispatcherHttpAdapter(dispatcherClient)
     : createMockDispatcherService();
-  const tyrSessionService = tyrClient
-    ? buildTyrSessionHttpAdapter(tyrClient)
+  const tyrSessionService = tyrSessionsClient
+    ? buildTyrSessionHttpAdapter(tyrSessionsClient)
     : createMockTyrSessionService();
   const trackerService = trackerClient
     ? buildTrackerHttpAdapter(trackerClient)
     : createMockTrackerService();
   const workflowService = createMockWorkflowService();
-  const dispatchBus = tyrClient ? buildDispatchBusHttpAdapter(tyrClient) : createMockDispatchBus();
-  const tyrSettingsService = tyrClient
-    ? buildTyrSettingsHttpAdapter(tyrClient)
+  const dispatchBus = dispatchClient ? buildDispatchBusHttpAdapter(dispatchClient) : createMockDispatchBus();
+  const tyrSettingsService = tyrSettingsClient
+    ? buildTyrSettingsHttpAdapter(tyrSettingsClient)
     : createMockTyrSettingsService();
   const tyrAuditLogService = auditClient
     ? buildTyrAuditLogHttpAdapter(auditClient)
