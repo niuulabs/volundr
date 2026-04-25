@@ -15,6 +15,7 @@
     "tracker": { "mode": "mock" },
     "audit": { "mode": "mock" },
     "mimir": { "mode": "mock" },
+    "observatory": { "mode": "mock" },
     "observatory.registry": { "mode": "mock" },
     "observatory.topology": { "mode": "mock" },
     "observatory.events": { "mode": "mock" },

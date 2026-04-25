@@ -150,6 +150,7 @@ describe('buildVolundrHttpAdapter', () => {
     expect(client.get).toHaveBeenCalledWith('/sessions/s1/logs?lines=50');
     expect(logs).toEqual([
       expect.objectContaining({
+        id: 's1-log-1000:warn:skuld.broker:heads up:1',
         sessionId: 's1',
         level: 'warn',
         source: 'skuld.broker',
@@ -516,6 +517,41 @@ describe('buildVolundrHttpAdapter', () => {
         sessionId: 'sess-1',
         level: 'error',
         message: 'failed once',
+      }),
+    ]);
+
+    unsub();
+  });
+
+  it('preserves repeated identical log lines as distinct live events', async () => {
+    vi.useFakeTimers();
+    const client = makeClient();
+    client.get.mockImplementation(async (endpoint: string) => {
+      if (endpoint !== '/sessions/sess-1/logs') return [];
+      if (client.get.mock.calls.length <= 1) {
+        return {
+          lines: [{ timestamp: 1000, level: 'INFO', logger: 'skuld', message: 'retrying' }],
+        };
+      }
+      return {
+        lines: [
+          { timestamp: 1000, level: 'INFO', logger: 'skuld', message: 'retrying' },
+          { timestamp: 1000, level: 'INFO', logger: 'skuld', message: 'retrying' },
+        ],
+      };
+    });
+
+    const seen: VolundrLog[] = [];
+    const unsub = buildVolundrHttpAdapter(client).subscribeLogs('sess-1', (log) => seen.push(log));
+
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(seen).toEqual([
+      expect.objectContaining({
+        id: 'sess-1-log-1000:info:skuld:retrying:2',
+        sessionId: 'sess-1',
+        level: 'info',
+        message: 'retrying',
       }),
     ]);
 

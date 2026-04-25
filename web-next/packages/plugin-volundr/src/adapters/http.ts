@@ -230,15 +230,28 @@ function normalizeLogLevel(level?: string): VolundrLog['level'] {
   return 'error';
 }
 
+function makeLogFingerprint(log: Pick<VolundrLog, 'timestamp' | 'level' | 'source' | 'message'>): string {
+  return `${log.timestamp}:${log.level}:${log.source}:${log.message}`;
+}
+
 function normalizeLogs(sessionId: string, payload: LogPayload): VolundrLog[] {
-  return payload.lines.map((line, index) => ({
-    id: `${sessionId}-log-${index}`,
-    sessionId,
-    timestamp: toEpochMs(line.timestamp ?? line.time),
-    level: normalizeLogLevel(line.level),
-    source: line.logger ?? 'broker',
-    message: line.message,
-  }));
+  const seenCounts = new Map<string, number>();
+  return payload.lines.map((line) => {
+    const normalized: Omit<VolundrLog, 'id'> = {
+      sessionId,
+      timestamp: toEpochMs(line.timestamp ?? line.time),
+      level: normalizeLogLevel(line.level),
+      source: line.logger ?? 'broker',
+      message: line.message,
+    };
+    const fingerprint = makeLogFingerprint(normalized);
+    const occurrence = (seenCounts.get(fingerprint) ?? 0) + 1;
+    seenCounts.set(fingerprint, occurrence);
+    return {
+      id: `${sessionId}-log-${fingerprint}:${occurrence}`,
+      ...normalized,
+    };
+  });
 }
 
 function normalizeChronicle(payload: ChroniclePayload): SessionChronicle {
@@ -275,7 +288,7 @@ function rememberKnownKey<T>(
 }
 
 function makeLogKey(log: VolundrLog): string {
-  return `${log.timestamp}:${log.level}:${log.source}:${log.message}`;
+  return log.id;
 }
 
 function applyChronicleEvent(

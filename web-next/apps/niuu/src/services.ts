@@ -122,6 +122,13 @@ export function resolveForgeServiceBase(config: Pick<NiuuConfig, 'services'>): s
   return resolveDirectServiceBase(config, 'forge', 'volundr');
 }
 
+function resolveObservatoryServiceBase(
+  config: Pick<NiuuConfig, 'services'>,
+  serviceKey: 'observatory.registry' | 'observatory.topology' | 'observatory.events',
+): string | null {
+  return resolveDirectServiceBase(config, serviceKey, 'observatory');
+}
+
 export function buildSharedFeatureCatalogService(
   config: Pick<NiuuConfig, 'services'>,
 ): IFeatureCatalogService {
@@ -606,12 +613,8 @@ function buildVolundrClusterAdapter(volundr: IVolundrService): IClusterAdapter {
 export function buildServices(config: NiuuConfig): ServicesMap {
   const tyrSvc = config.services['tyr'];
   const mimirSvc = config.services['mimir'];
-  const volundrSvc = config.services['volundr'];
   const volundrPtySvc = config.services['volundr.pty'];
   const volundrMetricsSvc = config.services['volundr.metrics'];
-  const obsRegistrySvc = config.services['observatory.registry'];
-  const obsTopologySvc = config.services['observatory.topology'];
-  const obsEventsSvc = config.services['observatory.events'];
 
   // ── Ravn: all five sub-services share one HTTP base URL when configured ──
   const ravnPersonaBase = resolveDirectServiceBase(config, 'ravn.personas', 'ravn');
@@ -665,14 +668,17 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     : createMockMetricsStream();
 
   // ── Observatory ──
-  const observatoryRegistry = hasHttpBackend(obsRegistrySvc)
-    ? buildObservatoryRegistryHttpAdapter(createApiClient(obsRegistrySvc.baseUrl))
+  const observatoryRegistryBase = resolveObservatoryServiceBase(config, 'observatory.registry');
+  const observatoryTopologyBase = resolveObservatoryServiceBase(config, 'observatory.topology');
+  const observatoryEventsBase = resolveObservatoryServiceBase(config, 'observatory.events');
+  const observatoryRegistry = observatoryRegistryBase
+    ? buildObservatoryRegistryHttpAdapter(createApiClient(observatoryRegistryBase))
     : createMockRegistryRepository();
-  const observatoryTopology = hasHttpBackend(obsTopologySvc)
-    ? buildObservatoryTopologySseStream(obsTopologySvc.baseUrl)
+  const observatoryTopology = observatoryTopologyBase
+    ? buildObservatoryTopologySseStream(observatoryTopologyBase)
     : createMockTopologyStream();
-  const observatoryEvents = hasHttpBackend(obsEventsSvc)
-    ? buildObservatoryEventsSseStream(obsEventsSvc.baseUrl)
+  const observatoryEvents = observatoryEventsBase
+    ? buildObservatoryEventsSseStream(observatoryEventsBase)
     : createMockEventStream();
   const featureCatalogService = buildSharedFeatureCatalogService(config);
   const identityService = buildSharedIdentityService(config);

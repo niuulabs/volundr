@@ -42,6 +42,15 @@ const ravnMocks = vi.hoisted(() => ({
   buildRavnBudgetAdapter: vi.fn(() => ({})),
 }));
 
+const observatoryMocks = vi.hoisted(() => ({
+  createMockRegistryRepository: vi.fn(() => ({})),
+  createMockTopologyStream: vi.fn(() => ({})),
+  createMockEventStream: vi.fn(() => ({})),
+  buildObservatoryRegistryHttpAdapter: vi.fn(() => ({})),
+  buildObservatoryTopologySseStream: vi.fn(() => ({})),
+  buildObservatoryEventsSseStream: vi.fn(() => ({})),
+}));
+
 const volundrMocks = vi.hoisted(() => ({
   createMockVolundrService: vi.fn(() => ({ kind: 'mock-volundr' })),
   createMockClusterAdapter: vi.fn(() => ({ kind: 'mock-clusters' })),
@@ -77,14 +86,7 @@ vi.mock('@niuulabs/plugin-mimir', () => ({
   createMimirMockAdapter: vi.fn(() => ({})),
   buildMimirHttpAdapter: vi.fn(() => ({})),
 }));
-vi.mock('@niuulabs/plugin-observatory', () => ({
-  createMockRegistryRepository: vi.fn(() => ({})),
-  createMockTopologyStream: vi.fn(() => ({})),
-  createMockEventStream: vi.fn(() => ({})),
-  buildObservatoryRegistryHttpAdapter: vi.fn(() => ({})),
-  buildObservatoryTopologySseStream: vi.fn(() => ({})),
-  buildObservatoryEventsSseStream: vi.fn(() => ({})),
-}));
+vi.mock('@niuulabs/plugin-observatory', () => observatoryMocks);
 vi.mock('@niuulabs/plugin-volundr', () => volundrMocks);
 
 import {
@@ -1096,5 +1098,49 @@ describe('buildServices', () => {
     expect(volundrMocks.buildVolundrMetricsSseAdapter).toHaveBeenCalledWith({
       urlTemplate: 'http://localhost:8080/api/v1/volundr/metrics',
     });
+  });
+
+  it('lets a grouped observatory base drive all observatory adapters by default', () => {
+    buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        observatory: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/observatory' },
+      },
+    } as any);
+
+    expect(queryMocks.createApiClient).toHaveBeenCalledWith(
+      'http://localhost:8080/api/v1/observatory',
+    );
+    expect(observatoryMocks.buildObservatoryRegistryHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/observatory',
+    });
+    expect(observatoryMocks.buildObservatoryTopologySseStream).toHaveBeenCalledWith(
+      'http://localhost:8080/api/v1/observatory',
+    );
+    expect(observatoryMocks.buildObservatoryEventsSseStream).toHaveBeenCalledWith(
+      'http://localhost:8080/api/v1/observatory',
+    );
+  });
+
+  it('prefers explicit observatory surface overrides over the grouped observatory base', () => {
+    buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        observatory: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/observatory' },
+        'observatory.events': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/observatory/events-stream',
+        },
+      },
+    } as any);
+
+    expect(queryMocks.createApiClient).toHaveBeenCalledWith(
+      'http://localhost:8080/api/v1/observatory',
+    );
+    expect(observatoryMocks.buildObservatoryEventsSseStream).toHaveBeenCalledWith(
+      'http://localhost:8080/api/v1/observatory/events-stream',
+    );
   });
 });
