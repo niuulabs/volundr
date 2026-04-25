@@ -84,6 +84,7 @@ vi.mock('@niuulabs/plugin-volundr', () => volundrMocks);
 
 import {
   buildServices,
+  resolveCanonicalServiceBase,
   buildSharedFeatureCatalogService,
   buildSharedIdentityService,
   resolveSharedApiBase,
@@ -138,6 +139,49 @@ describe('resolveSharedApiBase', () => {
   });
 });
 
+describe('resolveCanonicalServiceBase', () => {
+  it('prefers an explicit canonical domain base when configured', () => {
+    expect(
+      resolveCanonicalServiceBase(
+        {
+          services: {
+            features: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/features' },
+            tyr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/tyr' },
+          },
+        } as any,
+        'features',
+      ),
+    ).toBe('http://localhost:8080/api/v1/features');
+  });
+
+  it('falls back to the shared base when the canonical domain is not explicitly configured', () => {
+    expect(
+      resolveCanonicalServiceBase(
+        {
+          services: {
+            volundr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/volundr' },
+          },
+        } as any,
+        'identity',
+      ),
+    ).toBe('http://localhost:8080/api/v1');
+  });
+
+  it('returns null when neither an explicit nor shared live base exists', () => {
+    expect(
+      resolveCanonicalServiceBase(
+        {
+          services: {
+            identity: { mode: 'mock' },
+            volundr: { mode: 'mock' },
+          },
+        } as any,
+        'identity',
+      ),
+    ).toBeNull();
+  });
+});
+
 describe('shared domain helpers', () => {
   it('builds shared feature catalog and identity services from the canonical shared base', () => {
     const config = {
@@ -159,6 +203,25 @@ describe('shared domain helpers', () => {
     });
     expect(pluginSdkMocks.buildIdentityAdapter).toHaveBeenCalledWith({
       basePath: 'http://localhost:8080/api/v1',
+    });
+  });
+
+  it('prefers explicit identity and feature domain configs over the derived shared base', () => {
+    const config = {
+      services: {
+        features: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/features' },
+        identity: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/identity' },
+        tyr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/tyr' },
+      },
+    } as any;
+
+    expect(buildSharedFeatureCatalogService(config)).toEqual({
+      kind: 'feature-catalog',
+      client: { basePath: 'http://localhost:8080/api/v1/features' },
+    });
+    expect(buildSharedIdentityService(config)).toEqual({
+      kind: 'identity',
+      client: { basePath: 'http://localhost:8080/api/v1/identity' },
     });
   });
 
@@ -204,6 +267,25 @@ describe('buildServices', () => {
     });
     expect((services['tyr.tracker'] as any).kind).toBe('tracker');
     expect((services['tyr.audit'] as any).kind).toBe('audit');
+  });
+
+  it('prefers explicit tracker and audit domain configs over the derived shared base', () => {
+    buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        tracker: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/tracker' },
+        audit: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/audit' },
+        tyr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/tyr' },
+      },
+    } as any);
+
+    expect(tyrMocks.buildTrackerHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/tracker',
+    });
+    expect(tyrMocks.buildTyrAuditLogHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/audit',
+    });
   });
 
   it('falls back to the Volundr host when Tyr is not live', () => {

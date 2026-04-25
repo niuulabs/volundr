@@ -93,18 +93,27 @@ export function resolveSharedApiBase(config: Pick<NiuuConfig, 'services'>): stri
   return null;
 }
 
+export function resolveCanonicalServiceBase(
+  config: Pick<NiuuConfig, 'services'>,
+  serviceKey: string,
+): string | null {
+  const explicitService = config.services[serviceKey];
+  if (hasHttpBackend(explicitService)) return explicitService.baseUrl;
+  return resolveSharedApiBase(config);
+}
+
 export function buildSharedFeatureCatalogService(
   config: Pick<NiuuConfig, 'services'>,
 ): IFeatureCatalogService {
-  const sharedBase = resolveSharedApiBase(config);
-  if (!sharedBase) return createMockFeatureCatalogService();
-  return buildFeatureCatalogAdapter(createApiClient(sharedBase));
+  const featuresBase = resolveCanonicalServiceBase(config, 'features');
+  if (!featuresBase) return createMockFeatureCatalogService();
+  return buildFeatureCatalogAdapter(createApiClient(featuresBase));
 }
 
 export function buildSharedIdentityService(config: Pick<NiuuConfig, 'services'>): IIdentityService {
-  const sharedBase = resolveSharedApiBase(config);
-  if (!sharedBase) return createMockIdentityService();
-  return buildIdentityAdapter(createApiClient(sharedBase));
+  const identityBase = resolveCanonicalServiceBase(config, 'identity');
+  if (!identityBase) return createMockIdentityService();
+  return buildIdentityAdapter(createApiClient(identityBase));
 }
 
 const EMPTY_SESSION_RESOURCES: Session['resources'] = {
@@ -320,8 +329,10 @@ export function buildServices(config: NiuuConfig): ServicesMap {
 
   // ── Tyr ──
   const tyrClient = hasHttpBackend(tyrSvc) ? createApiClient(tyrSvc.baseUrl) : null;
-  const sharedTyrDomainBase = resolveSharedApiBase(config);
-  const sharedTyrDomainClient = sharedTyrDomainBase ? createApiClient(sharedTyrDomainBase) : null;
+  const trackerBase = resolveCanonicalServiceBase(config, 'tracker');
+  const trackerClient = trackerBase ? createApiClient(trackerBase) : null;
+  const auditBase = resolveCanonicalServiceBase(config, 'audit');
+  const auditClient = auditBase ? createApiClient(auditBase) : null;
   const tyrService = tyrClient ? buildTyrHttpAdapter(tyrClient) : createMockTyrService();
   const dispatcherService = tyrClient
     ? buildDispatcherHttpAdapter(tyrClient)
@@ -329,16 +340,16 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const tyrSessionService = tyrClient
     ? buildTyrSessionHttpAdapter(tyrClient)
     : createMockTyrSessionService();
-  const trackerService = sharedTyrDomainClient
-    ? buildTrackerHttpAdapter(sharedTyrDomainClient)
+  const trackerService = trackerClient
+    ? buildTrackerHttpAdapter(trackerClient)
     : createMockTrackerService();
   const workflowService = createMockWorkflowService();
   const dispatchBus = tyrClient ? buildDispatchBusHttpAdapter(tyrClient) : createMockDispatchBus();
   const tyrSettingsService = tyrClient
     ? buildTyrSettingsHttpAdapter(tyrClient)
     : createMockTyrSettingsService();
-  const tyrAuditLogService = sharedTyrDomainClient
-    ? buildTyrAuditLogHttpAdapter(sharedTyrDomainClient)
+  const tyrAuditLogService = auditClient
+    ? buildTyrAuditLogHttpAdapter(auditClient)
     : createMockAuditLogService();
 
   return {
