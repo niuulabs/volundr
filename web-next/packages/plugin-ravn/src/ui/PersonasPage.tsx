@@ -1,18 +1,42 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Rune, PersonaAvatar } from '@niuulabs/ui';
-import type { PersonaCreateRequest } from '../ports';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PersonaAvatar, ErrorState, LoadingState, cn } from '@niuulabs/ui';
+import type { PersonaRole } from '@niuulabs/domain';
+import type { PersonaCreateRequest, PersonaSummary } from '../ports';
+import { PERSONA_ROLE_ORDER } from '../catalog';
+import { PersonaList } from './PersonaList';
 import { PersonaForm } from './PersonaForm';
 import { PersonaYaml } from './PersonaYaml';
 import { PersonaSubs } from './PersonaSubs';
 import { usePersona, useUpdatePersona } from './usePersona';
+import { usePersonas } from './usePersonas';
 import { loadStorage, saveStorage } from './storage';
 import './ravn-views.css';
+import './PersonasPage.css';
 
 const PERSONA_STORAGE_KEY = 'ravn.persona';
 
 type TabId = 'form' | 'yaml' | 'subs';
 
-// ── Persona detail pane ────────────────────────────────────────────────────
+function pickDefaultPersona(personas: PersonaSummary[], preferredName: string | null): string | null {
+  if (personas.length === 0) return null;
+  if (preferredName && personas.some((persona) => persona.name === preferredName)) return preferredName;
+  return personas.find((persona) => persona.name === 'reviewer')?.name ?? personas[0]!.name;
+}
+
+function groupPersonas(personas: PersonaSummary[]) {
+  const grouped = new Map<PersonaRole, PersonaSummary[]>();
+  for (const role of PERSONA_ROLE_ORDER) grouped.set(role, []);
+
+  for (const persona of personas) {
+    const bucket = grouped.get(persona.role);
+    if (bucket) bucket.push(persona);
+    else grouped.get('plan')!.push(persona);
+  }
+
+  return PERSONA_ROLE_ORDER.map((role) => [role, grouped.get(role) ?? []] as const).filter(
+    ([, items]) => items.length > 0,
+  );
+}
 
 interface PersonaDetailPaneProps {
   name: string;
@@ -38,13 +62,12 @@ function PersonaDetailPane({ name, activeTab, onTabChange }: PersonaDetailPanePr
   ];
 
   return (
-    <div className="niuu-flex niuu-flex-col niuu-h-full" data-testid="persona-detail">
-      {/* Persona header — matches web2 pr-head */}
+    <div className="rv-personas__detail-pane" data-testid="persona-detail">
       {persona && (
-        <div className="rv-pr-head">
+        <div className="rv-pr-head rv-personas__head">
           <div className="rv-pr-head__left">
             {persona.role && persona.letter && (
-              <PersonaAvatar role={persona.role} letter={persona.letter} size={40} />
+              <PersonaAvatar role={persona.role} letter={persona.letter} size={54} />
             )}
             <div className="rv-pr-head__info">
               <div className="rv-pr-head__name">{persona.name}</div>
@@ -77,8 +100,7 @@ function PersonaDetailPane({ name, activeTab, onTabChange }: PersonaDetailPanePr
               </div>
             </div>
           </div>
-          <div className="rv-pr-head__right">
-            {/* Tab segment control */}
+          <div className="rv-pr-head__right rv-personas__head-actions">
             <div className="rv-pr-seg">
               {tabs.map((tab) => (
                 <button
@@ -93,15 +115,20 @@ function PersonaDetailPane({ name, activeTab, onTabChange }: PersonaDetailPanePr
                 </button>
               ))}
             </div>
-            <button type="button" className="rv-pr-action-btn">+ new persona</button>
-            <button type="button" className="rv-pr-action-btn">clone as…</button>
-            <button type="button" className="rv-pr-action-btn rv-pr-action-btn--primary">save</button>
+            <button type="button" className="rv-pr-action-btn">
+              + new persona
+            </button>
+            <button type="button" className="rv-pr-action-btn">
+              clone as…
+            </button>
+            <button type="button" className="rv-pr-action-btn">
+              save
+            </button>
           </div>
         </div>
       )}
 
-      {/* Tab content */}
-      <div className="niuu-flex-1 niuu-overflow-hidden">
+      <div className="rv-personas__detail-body">
         {activeTab === 'form' && persona && (
           <PersonaForm persona={persona} onSave={handleSave} isSaving={isSaving} />
         )}
@@ -112,47 +139,166 @@ function PersonaDetailPane({ name, activeTab, onTabChange }: PersonaDetailPanePr
   );
 }
 
-// ── Main page ──────────────────────────────────────────────────────────────
-
 export function PersonasPage() {
   const [selectedName, setSelectedName] = useState<string | null>(() =>
     loadStorage<string | null>(PERSONA_STORAGE_KEY, null),
   );
   const [activeTab, setActiveTab] = useState<TabId>('form');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { data: personas, isLoading, isError, error } = usePersonas();
+
+  const personaList = personas ?? [];
 
   useEffect(() => {
-    const handleSelect = (e: Event) => {
-      const name = (e as CustomEvent<string>).detail;
+    const handleSelect = (event: Event) => {
+      const name = (event as CustomEvent<string>).detail;
       saveStorage(PERSONA_STORAGE_KEY, name);
       setSelectedName(name);
       setActiveTab('form');
     };
+
     window.addEventListener('ravn:persona-selected', handleSelect);
     return () => window.removeEventListener('ravn:persona-selected', handleSelect);
   }, []);
 
-  return (
-    <div
-      className="niuu-flex niuu-flex-col niuu-h-full niuu-overflow-hidden niuu-bg-bg-primary"
-      data-testid="personas-page"
-    >
-      {selectedName ? (
-        <PersonaDetailPane name={selectedName} activeTab={activeTab} onTabChange={setActiveTab} />
-      ) : (
-        <EmptyState />
-      )}
-    </div>
-  );
-}
+  useEffect(() => {
+    if (personaList.length === 0) {
+      setSelectedName(null);
+      return;
+    }
 
-function EmptyState() {
+    const preferredName = selectedName ?? loadStorage<string | null>(PERSONA_STORAGE_KEY, null);
+    const nextName = pickDefaultPersona(personaList, preferredName);
+    if (nextName && nextName !== selectedName) {
+      saveStorage(PERSONA_STORAGE_KEY, nextName);
+      setSelectedName(nextName);
+    }
+  }, [personaList, selectedName]);
+
+  const groupedPersonas = useMemo(() => groupPersonas(personaList), [personaList]);
+
+  const handleSelectPersona = useCallback((name: string) => {
+    saveStorage(PERSONA_STORAGE_KEY, name);
+    setSelectedName(name);
+    setActiveTab('form');
+  }, []);
+
+  const selectedPersona = personaList.find((persona) => persona.name === selectedName) ?? null;
+
+  if (isLoading) {
+    return (
+      <div className="rv-personas" data-testid="personas-page">
+        <div className="rv-personas__state" data-testid="personas-loading">
+          <LoadingState label="Loading personas…" />
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="rv-personas" data-testid="personas-page">
+        <div className="rv-personas__state" data-testid="personas-error">
+          <ErrorState message={error instanceof Error ? error.message : 'Failed to load personas'} />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div
-      className="niuu-flex niuu-flex-col niuu-items-center niuu-justify-center niuu-h-full niuu-gap-4 niuu-text-text-muted"
-      data-testid="personas-empty-state"
-    >
-      <Rune glyph="ᚱ" size={48} muted />
-      <p className="niuu-m-0 niuu-text-sm">Select a persona from the list to edit it.</p>
+    <div className="rv-personas" data-testid="personas-page">
+      <div className="rv-personas__content">
+        <aside
+          className={cn('rv-personas__sidebar', sidebarCollapsed && 'rv-personas__sidebar--collapsed')}
+          aria-label="Personas directory"
+          data-testid="personas-sidebar"
+        >
+          {sidebarCollapsed ? (
+            <div className="rv-personas__collapsed">
+              <div className="rv-personas__collapsed-head">
+                <button
+                  type="button"
+                  onClick={() => setSidebarCollapsed(false)}
+                  className="rv-personas__toggle"
+                  data-testid="personas-sidebar-toggle"
+                  aria-label="Expand personas sidebar"
+                >
+                  ›
+                </button>
+              </div>
+              <div className="rv-personas__collapsed-body">
+                {groupedPersonas.map(([role, rolePersonas]) => (
+                  <div key={role} className="rv-personas__collapsed-group">
+                    {rolePersonas.map((persona) => (
+                      <button
+                        key={persona.name}
+                        type="button"
+                        onClick={() => handleSelectPersona(persona.name)}
+                        className={cn(
+                          'rv-personas__collapsed-item',
+                          selectedPersona?.name === persona.name &&
+                            'rv-personas__collapsed-item--selected',
+                        )}
+                        aria-label={persona.name}
+                      >
+                        <PersonaAvatar role={persona.role} letter={persona.letter} size={24} />
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="rv-personas__expanded">
+              <div className="rv-personas__headbar">
+                <div className="rv-personas__title-block">
+                  <div>
+                    <h2 className="rv-personas__title">Personas</h2>
+                    <div className="rv-personas__subtitle">cognitive templates</div>
+                  </div>
+                </div>
+                <div className="rv-personas__title-row">
+                  <div className="rv-personas__count">{personaList.length}</div>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarCollapsed(true)}
+                    className="rv-personas__toggle"
+                    data-testid="personas-sidebar-toggle"
+                    aria-label="Collapse personas sidebar"
+                  >
+                    ‹
+                  </button>
+                </div>
+              </div>
+              <div className="rv-personas__body">
+                <PersonaList
+                  selectedName={selectedName}
+                  onSelect={handleSelectPersona}
+                  personas={personaList}
+                  isLoadingOverride={false}
+                  showFooterAction={false}
+                  showRoleHint={false}
+                  showMeta={false}
+                  className="rv-personas__list"
+                  dataTestId="personas-directory"
+                />
+              </div>
+            </div>
+          )}
+        </aside>
+
+        <main className="rv-personas__detail" data-testid="personas-detail-pane">
+          {selectedName ? (
+            <PersonaDetailPane
+              name={selectedName}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+            />
+          ) : (
+            <div className="rv-personas__empty">No personas available.</div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

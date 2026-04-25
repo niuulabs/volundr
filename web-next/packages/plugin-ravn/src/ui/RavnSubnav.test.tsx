@@ -59,59 +59,9 @@ describe('RavnSubnav — personas route', () => {
     mockPathname.mockReturnValue('/ravn/personas');
   });
 
-  it('renders personas subnav on /ravn/personas', async () => {
-    render(<RavnSubnav />, { wrapper: wrapWithServices(services()) });
-    await waitFor(() => expect(screen.getByTestId('personas-subnav')).toBeInTheDocument());
-  });
-
-  it('shows the Personas section header', async () => {
-    render(<RavnSubnav />, { wrapper: wrapWithServices(services()) });
-    await waitFor(() => expect(screen.getByText('Personas')).toBeInTheDocument());
-  });
-
-  it('shows "cognitive templates" subtitle', async () => {
-    render(<RavnSubnav />, { wrapper: wrapWithServices(services()) });
-    await waitFor(() => expect(screen.getByText('cognitive templates')).toBeInTheDocument());
-  });
-
-  it('shows persona count', async () => {
-    render(<RavnSubnav />, { wrapper: wrapWithServices(services()) });
-    // Mock has 16 personas
-    await waitFor(() => expect(screen.getByText('16')).toBeInTheDocument());
-  });
-
-  it('shows persona items grouped by role', async () => {
-    render(<RavnSubnav />, { wrapper: wrapWithServices(services()) });
-    await waitFor(() =>
-      expect(screen.getByTestId('persona-subnav-item-architect')).toBeInTheDocument(),
-    );
-    expect(screen.getByTestId('persona-subnav-item-reviewer')).toBeInTheDocument();
-  });
-
-  it('dispatches ravn:persona-selected event on click', async () => {
-    const handler = vi.fn();
-    window.addEventListener('ravn:persona-selected', handler);
-
-    render(<RavnSubnav />, { wrapper: wrapWithServices(services()) });
-    await waitFor(() =>
-      expect(screen.getByTestId('persona-subnav-item-architect')).toBeInTheDocument(),
-    );
-
-    fireEvent.click(screen.getByTestId('persona-subnav-item-architect'));
-    expect(handler).toHaveBeenCalledOnce();
-    expect((handler.mock.calls[0][0] as CustomEvent).detail).toBe('architect');
-
-    window.removeEventListener('ravn:persona-selected', handler);
-  });
-
-  it('saves selected persona to localStorage', async () => {
-    render(<RavnSubnav />, { wrapper: wrapWithServices(services()) });
-    await waitFor(() =>
-      expect(screen.getByTestId('persona-subnav-item-architect')).toBeInTheDocument(),
-    );
-
-    fireEvent.click(screen.getByTestId('persona-subnav-item-architect'));
-    expect(localStorage.getItem('ravn.persona')).toBe('"architect"');
+  it('renders null for /ravn/personas because the page owns its split sidebar', () => {
+    const { container } = render(<RavnSubnav />, { wrapper: wrapWithServices(services()) });
+    expect(container.firstChild).toBeNull();
   });
 });
 

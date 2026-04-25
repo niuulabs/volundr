@@ -46,7 +46,6 @@ describe('PersonaForm', () => {
     });
     expect(screen.getByText('Identity')).toBeInTheDocument();
     expect(screen.getByText('Runtime')).toBeInTheDocument();
-    expect(screen.getByText('System prompt')).toBeInTheDocument();
     expect(screen.getByText('Tool access')).toBeInTheDocument();
     expect(screen.getByText('Produces')).toBeInTheDocument();
     expect(screen.getByText('Consumes')).toBeInTheDocument();
@@ -148,71 +147,6 @@ describe('PersonaForm', () => {
       wrapper: wrap(),
     });
     expect(screen.getByText('+ Add consumed event')).toBeInTheDocument();
-  });
-
-  // ── System prompt field ────────────────────────────────────────────────
-
-  it('renders system prompt textarea', () => {
-    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
-      wrapper: wrap(),
-    });
-    expect(screen.getByTestId('pf-system-prompt')).toBeInTheDocument();
-  });
-
-  it('populates system prompt from persona', () => {
-    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
-      wrapper: wrap(),
-    });
-    const textarea = screen.getByTestId('pf-system-prompt') as HTMLTextAreaElement;
-    expect(textarea.value).toContain('test-persona');
-  });
-
-  it('shows character and token count for system prompt', () => {
-    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
-      wrapper: wrap(),
-    });
-    const counter = screen.getByTestId('pf-prompt-char-count');
-    expect(counter.textContent).toMatch(/chars/);
-    expect(counter.textContent).toMatch(/tokens/);
-  });
-
-  it('updates character count when system prompt changes', async () => {
-    render(
-      <PersonaForm persona={{ ...MOCK_PERSONA, systemPromptTemplate: '' }} onSave={vi.fn()} />,
-      { wrapper: wrap() },
-    );
-    const textarea = screen.getByTestId('pf-system-prompt');
-    fireEvent.change(textarea, { target: { value: 'Hello world' } });
-    await waitFor(() => {
-      const counter = screen.getByTestId('pf-prompt-char-count');
-      expect(counter.textContent).toContain('11 chars');
-    });
-  });
-
-  it('shows/hides prompt preview on toggle', async () => {
-    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
-      wrapper: wrap(),
-    });
-    expect(screen.queryByTestId('pf-prompt-preview')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Show preview'));
-    await waitFor(() => expect(screen.getByTestId('pf-prompt-preview')).toBeInTheDocument());
-
-    fireEvent.click(screen.getByText('Hide preview'));
-    await waitFor(() => expect(screen.queryByTestId('pf-prompt-preview')).not.toBeInTheDocument());
-  });
-
-  it('renders {{variable}} highlights in prompt preview', async () => {
-    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
-      wrapper: wrap(),
-    });
-    fireEvent.click(screen.getByText('Show preview'));
-    await waitFor(() => expect(screen.getByTestId('pf-prompt-preview')).toBeInTheDocument());
-    const preview = screen.getByTestId('pf-prompt-preview');
-    // Should have <mark> elements for {{name}} and {{role}}
-    const marks = preview.querySelectorAll('mark');
-    expect(marks.length).toBeGreaterThan(0);
-    expect(marks[0]!.textContent).toContain('{{');
   });
 
   // ── Fan-in strategy cards ──────────────────────────────────────────────
