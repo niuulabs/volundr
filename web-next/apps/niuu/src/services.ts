@@ -69,6 +69,14 @@ import {
 } from '@niuulabs/plugin-sdk';
 import type { NiuuConfig, ServiceConfig, ServicesMap } from '@niuulabs/plugin-sdk';
 
+export interface ServiceBackendStatus {
+  mode: 'live' | 'mock';
+  transport: 'http' | 'ws' | 'mock';
+  target: string | null;
+  source: string;
+  note?: string;
+}
+
 /**
  * A service config is "live" (i.e. should use a real transport) when its mode
  * is `http` or `ws` and a URL is present. Any other combination — missing
@@ -104,6 +112,38 @@ function resolveDirectServiceBase(
     if (hasHttpBackend(svc)) return svc.baseUrl;
   }
   return null;
+}
+
+function resolveDirectServiceStatus(
+  config: Pick<NiuuConfig, 'services'>,
+  transport: 'http' | 'ws',
+  ...serviceKeys: string[]
+): ServiceBackendStatus {
+  for (const serviceKey of serviceKeys) {
+    const svc = config.services[serviceKey];
+    if (transport === 'http' && hasHttpBackend(svc)) {
+      return {
+        mode: 'live',
+        transport,
+        target: svc.baseUrl,
+        source: serviceKey,
+      };
+    }
+    if (transport === 'ws' && hasWsBackend(svc)) {
+      return {
+        mode: 'live',
+        transport,
+        target: svc.wsUrl,
+        source: serviceKey,
+      };
+    }
+  }
+  return {
+    mode: 'mock',
+    transport: 'mock',
+    target: null,
+    source: 'mock',
+  };
 }
 
 export function toSharedApiBase(baseUrl: string): string {
@@ -183,6 +223,94 @@ export function buildSharedIdentityService(config: Pick<NiuuConfig, 'services'>)
   const identityBase = resolveCanonicalServiceBase(config, 'identity');
   if (!identityBase) return createMockIdentityService();
   return buildIdentityAdapter(createApiClient(identityBase));
+}
+
+function resolveCanonicalServiceStatus(
+  config: Pick<NiuuConfig, 'services'>,
+  serviceKey: string,
+): ServiceBackendStatus {
+  const explicit = resolveDirectServiceStatus(config, 'http', serviceKey);
+  if (explicit.mode === 'live') return explicit;
+
+  const sharedBase = resolveSharedApiBase(config);
+  if (sharedBase) {
+    return {
+      mode: 'live',
+      transport: 'http',
+      target: sharedBase,
+      source: 'shared-api',
+    };
+  }
+
+  return explicit;
+}
+
+function resolveObservatoryServiceStatus(
+  config: Pick<NiuuConfig, 'services'>,
+  serviceKey: 'observatory.registry' | 'observatory.topology' | 'observatory.events',
+): ServiceBackendStatus {
+  const explicit = resolveDirectServiceStatus(config, 'http', serviceKey);
+  if (explicit.mode === 'live') {
+    if (serviceKey === 'observatory.registry' && explicit.target) {
+      return { ...explicit, target: explicit.target.replace(/\/registry\/?$/, '') };
+    }
+    return explicit;
+  }
+
+  const grouped = resolveDirectServiceStatus(config, 'http', 'observatory');
+  if (grouped.mode !== 'live' || !grouped.target) return grouped;
+
+  if (serviceKey === 'observatory.registry') {
+    return { ...grouped, source: 'observatory' };
+  }
+  if (serviceKey === 'observatory.topology') {
+    return { ...grouped, target: `${grouped.target}/topology`, source: 'observatory' };
+  }
+  return { ...grouped, target: `${grouped.target}/events`, source: 'observatory' };
+}
+
+export function buildServiceBackendStatus(
+  config: Pick<NiuuConfig, 'services'>,
+): Record<string, ServiceBackendStatus> {
+  return {
+    identity: resolveCanonicalServiceStatus(config, 'identity'),
+    features: resolveCanonicalServiceStatus(config, 'features'),
+    tracker: resolveCanonicalServiceStatus(config, 'tracker'),
+    audit: resolveCanonicalServiceStatus(config, 'audit'),
+    mimir: resolveDirectServiceStatus(config, 'http', 'mimir'),
+    'observatory.registry': resolveObservatoryServiceStatus(config, 'observatory.registry'),
+    'observatory.topology': resolveObservatoryServiceStatus(config, 'observatory.topology'),
+    'observatory.events': resolveObservatoryServiceStatus(config, 'observatory.events'),
+    'ravn.personas': resolveDirectServiceStatus(config, 'http', 'ravn.personas', 'ravn'),
+    'ravn.ravens': resolveDirectServiceStatus(config, 'http', 'ravn.ravens', 'ravn'),
+    'ravn.sessions': resolveDirectServiceStatus(config, 'http', 'ravn.sessions', 'ravn'),
+    'ravn.triggers': resolveDirectServiceStatus(config, 'http', 'ravn.triggers', 'ravn'),
+    'ravn.budget': resolveDirectServiceStatus(config, 'http', 'ravn.budget', 'ravn'),
+    forge: resolveDirectServiceStatus(config, 'http', 'forge', 'volundr'),
+    'forge.pty': resolveDirectServiceStatus(config, 'ws', 'forge.pty', 'volundr.pty'),
+    'forge.metrics': resolveDirectServiceStatus(config, 'http', 'forge.metrics', 'volundr.metrics'),
+    tyr: resolveDirectServiceStatus(config, 'http', 'tyr'),
+    'tyr.dispatcher': resolveDirectServiceStatus(config, 'http', 'tyr.dispatcher', 'tyr'),
+    'tyr.sessions': resolveDirectServiceStatus(config, 'http', 'tyr.sessions', 'tyr'),
+    'tyr.dispatch': resolveDirectServiceStatus(config, 'http', 'tyr.dispatch', 'tyr'),
+    'tyr.settings': resolveDirectServiceStatus(config, 'http', 'tyr.settings', 'tyr'),
+    'tyr.tracker': resolveCanonicalServiceStatus(config, 'tracker'),
+    'tyr.audit': resolveCanonicalServiceStatus(config, 'audit'),
+    'tyr.workflows': {
+      mode: 'mock',
+      transport: 'mock',
+      target: null,
+      source: 'mock',
+      note: 'No live workflow API is wired yet; see NIU-756.',
+    },
+    filesystem: {
+      mode: 'mock',
+      transport: 'mock',
+      target: null,
+      source: 'mock',
+      note: 'No live filesystem API is wired yet.',
+    },
+  };
 }
 
 const EMPTY_SESSION_RESOURCES: Session['resources'] = {

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider } from '@niuulabs/design-tokens';
@@ -13,16 +13,28 @@ import { createQueryClient } from '@niuulabs/query';
 import { AuthProvider } from '@niuulabs/auth';
 import { Shell } from '@niuulabs/shell';
 import { plugins } from './plugins';
-import { buildServices } from './services';
+import { buildServiceBackendStatus, buildServices } from './services';
 
 const DEFAULT_CONFIG_ENDPOINT = '/config.json';
 const CONFIG_ENDPOINT_QUERY_KEY = 'config';
 const CONFIG_ENDPOINT_STORAGE_KEY = 'niuu.config.endpoint';
 
+export function publishServiceBackends(
+  backends: Record<string, unknown>,
+  target: Record<string, unknown> = globalThis as Record<string, unknown>,
+): void {
+  target.__NIUU_SERVICE_BACKENDS__ = backends;
+}
+
 function AppInner() {
   const config = useConfig();
   const services = useMemo(() => buildServices(config), [config]);
+  const backendStatus = useMemo(() => buildServiceBackendStatus(config), [config]);
   const featureCatalogService = services.features as IFeatureCatalogService | undefined;
+
+  useEffect(() => {
+    publishServiceBackends(backendStatus);
+  }, [backendStatus]);
 
   return (
     <AuthProvider>

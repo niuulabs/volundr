@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { resolveConfigEndpoint } from './App';
+import { publishServiceBackends, resolveConfigEndpoint } from './App';
 
 function makeStorage(initial: Record<string, string> = {}) {
   const state = new Map(Object.entries(initial));
@@ -37,5 +37,16 @@ describe('resolveConfigEndpoint', () => {
     const storage = makeStorage({ 'niuu.config.endpoint': '/config.live.json' });
     expect(resolveConfigEndpoint({ search: '?config=default' }, storage)).toBe('/config.json');
     expect(storage.removeItem).toHaveBeenCalledWith('niuu.config.endpoint');
+  });
+});
+
+describe('publishServiceBackends', () => {
+  it('stores the resolved backend map on the provided target', () => {
+    const target: Record<string, unknown> = {};
+    const backends = { forge: { mode: 'live' } };
+
+    publishServiceBackends(backends, target);
+
+    expect(target.__NIUU_SERVICE_BACKENDS__).toBe(backends);
   });
 });

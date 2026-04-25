@@ -601,6 +601,36 @@ class TestRootServerBuildApp:
             "totalHits": 4,
         }
 
+    def test_build_root_app_can_clear_legacy_route_usage_when_niuu_api_is_mounted(self) -> None:
+        registry = PluginRegistry()
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"niuu-api"},
+        )
+        app.state.legacy_route_hits = {
+            ("/api/v1/volundr/me", "/api/v1/identity/me", "GET"): 2,
+        }
+
+        client = TestClient(app)
+        response = client.delete("/api/v1/niuu/compat/legacy-routes")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "items": [
+                {
+                    "legacyPath": "/api/v1/volundr/me",
+                    "canonicalPath": "/api/v1/identity/me",
+                    "method": "GET",
+                    "hits": 2,
+                }
+            ],
+            "totalHits": 2,
+            "cleared": True,
+        }
+        assert app.state.legacy_route_hits == {}
+
     def test_build_root_app_hides_legacy_route_usage_when_niuu_api_not_mounted(self) -> None:
         registry = PluginRegistry()
         app = build_root_app(
@@ -612,6 +642,7 @@ class TestRootServerBuildApp:
 
         client = TestClient(app)
         assert client.get("/api/v1/niuu/compat/legacy-routes").status_code == 404
+        assert client.delete("/api/v1/niuu/compat/legacy-routes").status_code == 404
 
     def test_build_root_app_mounts_shared_tracker_domain_across_plugins(self) -> None:
         volundr_app = FastAPI()

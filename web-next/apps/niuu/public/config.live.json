@@ -16,11 +16,26 @@
     "audit": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1" },
     "mimir": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/mimir" },
     "observatory": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/observatory" },
+    "observatory.registry": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/observatory/registry" },
+    "observatory.topology": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/observatory/topology" },
+    "observatory.events": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/observatory/events" },
     "ravn": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/ravn" },
+    "ravn.personas": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/ravn/personas" },
+    "ravn.ravens": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/ravn/ravens" },
+    "ravn.sessions": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/ravn/sessions" },
+    "ravn.triggers": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/ravn/triggers" },
+    "ravn.budget": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/ravn/budget" },
     "forge": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/forge" },
     "forge.pty": { "mode": "ws", "wsUrl": "ws://localhost:8080/api/v1/forge/pty/{sessionId}" },
     "forge.metrics": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/forge/metrics" },
     "tyr": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/tyr" },
-    "tyr.workflows": { "mode": "mock" }
+    "tyr.dispatcher": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/tyr/dispatcher" },
+    "tyr.sessions": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/tyr/sessions" },
+    "tyr.dispatch": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/tyr/dispatch" },
+    "tyr.settings": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/tyr/settings" },
+    "tyr.tracker": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/tracker" },
+    "tyr.audit": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/audit" },
+    "tyr.workflows": { "mode": "mock" },
+    "filesystem": { "mode": "mock" }
   }
 }

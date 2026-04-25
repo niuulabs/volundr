@@ -77,6 +77,13 @@ def collect_legacy_route_hits(app: FastAPI) -> tuple[LegacyRouteHit, ...]:
     )
 
 
+def reset_legacy_route_hits(app: FastAPI) -> tuple[LegacyRouteHit, ...]:
+    """Return the current snapshot and clear the in-memory counters."""
+    snapshot = collect_legacy_route_hits(app)
+    app.state.legacy_route_hits = {}
+    return snapshot
+
+
 def warn_on_legacy_route(
     request: Request,
     response: Response,

@@ -91,6 +91,7 @@ vi.mock('@niuulabs/plugin-volundr', () => volundrMocks);
 
 import {
   buildServices,
+  buildServiceBackendStatus,
   resolveCanonicalServiceBase,
   resolveForgeServiceBase,
   buildSharedFeatureCatalogService,
@@ -293,6 +294,76 @@ describe('shared domain helpers', () => {
 
     expect(buildSharedFeatureCatalogService(config)).toEqual({ kind: 'mock-feature-catalog' });
     expect(buildSharedIdentityService(config)).toEqual({ kind: 'mock-identity' });
+  });
+});
+
+describe('buildServiceBackendStatus', () => {
+  it('reports explicit and derived live backends separately', () => {
+    const status = buildServiceBackendStatus({
+      services: {
+        forge: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/forge' },
+        'forge.metrics': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/forge/metrics' },
+        'forge.pty': { mode: 'ws', wsUrl: 'ws://localhost:8080/api/v1/forge/pty/{sessionId}' },
+        observatory: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/observatory' },
+        ravn: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn' },
+      },
+    } as any);
+
+    expect(status.forge).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1/forge',
+      source: 'forge',
+    });
+    expect(status['forge.metrics']).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1/forge/metrics',
+      source: 'forge.metrics',
+    });
+    expect(status['forge.pty']).toEqual({
+      mode: 'live',
+      transport: 'ws',
+      target: 'ws://localhost:8080/api/v1/forge/pty/{sessionId}',
+      source: 'forge.pty',
+    });
+    expect(status['observatory.registry']).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1/observatory',
+      source: 'observatory',
+    });
+    expect(status['observatory.topology']).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1/observatory/topology',
+      source: 'observatory',
+    });
+    expect(status['ravn.personas']).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1/ravn',
+      source: 'ravn',
+    });
+  });
+
+  it('reports mock-only workflow and filesystem surfaces explicitly', () => {
+    const status = buildServiceBackendStatus({ services: {} } as any);
+
+    expect(status['tyr.workflows']).toEqual({
+      mode: 'mock',
+      transport: 'mock',
+      target: null,
+      source: 'mock',
+      note: 'No live workflow API is wired yet; see NIU-756.',
+    });
+    expect(status.filesystem).toEqual({
+      mode: 'mock',
+      transport: 'mock',
+      target: null,
+      source: 'mock',
+      note: 'No live filesystem API is wired yet.',
+    });
   });
 });
 

@@ -498,6 +498,11 @@ def create_platform_commands(
             "--json",
             help="Print the legacy-route usage snapshot as JSON.",
         ),
+        clear: bool = typer.Option(
+            False,
+            "--clear",
+            help="Clear the legacy-route counters after returning the current snapshot.",
+        ),
         out: str = typer.Option(
             "",
             "--out",
@@ -509,10 +514,15 @@ def create_platform_commands(
         url = _legacy_route_hits_url(base_url)
 
         try:
-            response = httpx.get(url, timeout=5.0)
+            response = (
+                httpx.delete(url, timeout=5.0)
+                if clear
+                else httpx.get(url, timeout=5.0)
+            )
             response.raise_for_status()
         except httpx.HTTPError as exc:
-            typer.echo(f"Failed to fetch legacy-route usage from {url}: {exc}")
+            action = "clear" if clear else "fetch"
+            typer.echo(f"Failed to {action} legacy-route usage from {url}: {exc}")
             raise typer.Exit(1) from None
 
         payload = response.json()
@@ -527,7 +537,8 @@ def create_platform_commands(
             typer.echo(json.dumps(payload, indent=2))
             return
 
-        typer.echo(f"Legacy route hits: {payload.get('totalHits', 0)}")
+        summary_label = "Cleared legacy route hits" if clear else "Legacy route hits"
+        typer.echo(f"{summary_label}: {payload.get('totalHits', 0)}")
         for item in payload.get("items", []):
             typer.echo(
                 f"  {item['method']} {item['legacyPath']} -> "

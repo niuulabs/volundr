@@ -11,6 +11,7 @@ from niuu.http_compat import (
     apply_deprecation_headers,
     collect_legacy_route_hits,
     record_legacy_route_use,
+    reset_legacy_route_hits,
     warn_on_legacy_route,
 )
 
@@ -98,3 +99,16 @@ class TestCollectLegacyRouteHits:
         app.state.legacy_route_hits = {}
 
         assert collect_legacy_route_hits(app) == ()
+
+
+class TestResetLegacyRouteHits:
+    def test_returns_snapshot_and_clears_state(self) -> None:
+        app = FastAPI()
+        app.state.legacy_route_hits = {
+            ("/api/v1/volundr/me", "/api/v1/identity/me", "GET"): 2,
+        }
+
+        snapshot = reset_legacy_route_hits(app)
+
+        assert snapshot[0].legacy_path == "/api/v1/volundr/me"
+        assert app.state.legacy_route_hits == {}

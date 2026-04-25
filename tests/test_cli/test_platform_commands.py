@@ -733,3 +733,32 @@ class TestPlatformLegacyRoutesCommand:
 
         assert result.exit_code == 1
         assert "Failed to fetch legacy-route usage" in result.output
+
+    def test_legacy_routes_can_clear_snapshot(self) -> None:
+        platform, *_ = self._make_platform()
+        payload = {
+            "items": [
+                {
+                    "legacyPath": "/api/v1/volundr/me",
+                    "canonicalPath": "/api/v1/identity/me",
+                    "method": "GET",
+                    "hits": 2,
+                }
+            ],
+            "totalHits": 2,
+            "cleared": True,
+        }
+        request = httpx.Request(
+            "DELETE", "http://127.0.0.1:8080/api/v1/niuu/compat/legacy-routes"
+        )
+        response = httpx.Response(200, json=payload, request=request)
+
+        with patch("cli.commands.platform.httpx.delete", return_value=response) as delete:
+            result = runner.invoke(platform, ["legacy-routes", "--clear"])
+
+        assert result.exit_code == 0
+        assert "Cleared legacy route hits: 2" in result.output
+        delete.assert_called_once_with(
+            "http://127.0.0.1:8080/api/v1/niuu/compat/legacy-routes",
+            timeout=5.0,
+        )
