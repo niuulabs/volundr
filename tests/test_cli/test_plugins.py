@@ -10,6 +10,7 @@ import typer
 from typer.testing import CliRunner
 
 from cli.registry import PluginRegistry
+from bifrost.plugin import BifrostPlugin
 from mimir.plugin import MimirPlugin
 from niuu.ports.plugin import ServiceDefinition
 from ravn.plugin import RavnPlugin
@@ -511,6 +512,63 @@ class TestRavnPlugin:
         pages = plugin.tui_pages()
         assert len(pages) == 1
         assert pages[0].name == "Agents"
+
+
+class TestBifrostPlugin:
+    def test_name(self) -> None:
+        plugin = BifrostPlugin()
+        assert plugin.name == "bifrost"
+
+    def test_description(self) -> None:
+        plugin = BifrostPlugin()
+        desc = plugin.description.lower()
+        assert "proxy" in desc or "gateway" in desc
+
+    def test_register_service_returns_definition(self) -> None:
+        plugin = BifrostPlugin()
+        svc_def = plugin.register_service()
+        assert isinstance(svc_def, ServiceDefinition)
+        assert svc_def.name == "bifrost"
+        assert svc_def.default_enabled is True
+
+    def test_create_service_stub_health_check(self) -> None:
+        plugin = BifrostPlugin()
+        svc = plugin.create_service()
+        asyncio.run(svc.start())
+        assert asyncio.run(svc.health_check()) is True
+        asyncio.run(svc.stop())
+
+    def test_create_api_app_uses_bifrost_app_factory(self, monkeypatch) -> None:
+        plugin = BifrostPlugin()
+        sentinel = object()
+
+        def fake_create_app(_config):
+            return sentinel
+
+        monkeypatch.setattr("bifrost.app.create_app", fake_create_app)
+        assert plugin.create_api_app() is sentinel
+
+    def test_api_route_domains_declared(self) -> None:
+        plugin = BifrostPlugin()
+        route_domains = plugin.api_route_domains()
+        assert route_domains
+        assert [route_domain.name for route_domain in route_domains] == [
+            "llm-api",
+            "bifrost-observability-api",
+            "bifrost-api",
+        ]
+        assert route_domains[0].prefixes == (
+            "/api/v1/bifrost/health",
+            "/api/v1/bifrost/admin",
+            "/api/v1/bifrost/v1",
+            "/api/v1/bifrost/api",
+        )
+        assert route_domains[1].prefixes == (
+            "/api/v1/bifrost/metrics",
+            "/api/v1/bifrost/healthz",
+            "/api/v1/bifrost/readyz",
+        )
+        assert route_domains[2].prefixes == ("/api/v1/bifrost",)
 
 
 class TestPluginDiscovery:

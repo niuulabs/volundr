@@ -63,6 +63,8 @@ _PLUGIN_API_PREFIXES: dict[str, list[str]] = {
 _PLUGIN_ROUTE_DOMAINS: dict[str, str] = {
     "admin-api": "volundr",
     "audit-api": "volundr",
+    "bifrost-api": "bifrost",
+    "bifrost-observability-api": "bifrost",
     "credentials-api": "volundr",
     "features-api": "volundr",
     "forge-api": "volundr",
@@ -74,6 +76,7 @@ _PLUGIN_ROUTE_DOMAINS: dict[str, str] = {
     "persona-api": "ravn",
     "ravn-api": "ravn",
     "ravn-session-api": "ravn",
+    "llm-api": "bifrost",
     "catalog-api": "volundr",
     "dispatch-api": "tyr",
     "event-api": "tyr",
@@ -227,6 +230,8 @@ def _declared_plugin_route_domains(
 
 def _backend_prefix_for_mount(plugin_name: str, public_prefix: str) -> str:
     """Map public mount prefixes to the backend route prefix a plugin actually serves."""
+    if plugin_name == "bifrost" and public_prefix.startswith("/api/v1/bifrost"):
+        return public_prefix.replace("/api/v1/bifrost", "", 1)
     if plugin_name == "volundr" and public_prefix.startswith("/api/v1/forge"):
         return public_prefix.replace("/api/v1/forge", "/api/v1/volundr", 1)
     if plugin_name == "mimir" and public_prefix.startswith("/api/v1/mimir/mcp"):
