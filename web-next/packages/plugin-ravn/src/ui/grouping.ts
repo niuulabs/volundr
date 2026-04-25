@@ -42,7 +42,7 @@ export function groupRavens(ravens: Ravn[], by: GroupKey): Record<string, Ravn[]
 
     if (by === 'persona') key = r.personaName;
     else if (by === 'state') key = r.status;
-    else key = modelToLocation(r.model);
+    else key = r.location ?? modelToLocation(r.model);
 
     (groups[key] ??= []).push(r);
   }

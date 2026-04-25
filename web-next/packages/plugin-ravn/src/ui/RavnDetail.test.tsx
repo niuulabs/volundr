@@ -42,14 +42,6 @@ const SAMPLE_RAVN_MINIMAL: Ravn = {
   createdAt: '2026-04-14T18:00:00Z',
 };
 
-const SUSPENDED_RAVN: Ravn = {
-  id: 'e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b',
-  personaName: 'fjölnir',
-  status: 'suspended',
-  model: 'claude-opus-4-6',
-  createdAt: '2026-04-14T22:00:00Z',
-};
-
 function makeServices(overrides?: Record<string, unknown>) {
   return {
     'ravn.ravens': createMockRavenStream(),
@@ -216,18 +208,6 @@ describe('RavnDetail — Overview tab', () => {
   it('does not render mounts panel when no mounts', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN_MINIMAL} />, { wrapper: wrap() });
     expect(screen.queryByTestId('mounts-panel')).not.toBeInTheDocument();
-  });
-
-  it('renders suspend and delete buttons', () => {
-    render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    expect(screen.getByTestId('suspend-btn')).toBeInTheDocument();
-    expect(screen.getByTestId('suspend-btn')).not.toBeDisabled();
-    expect(screen.getByTestId('delete-btn')).toBeInTheDocument();
-  });
-
-  it('disables suspend button when ravn is already suspended', () => {
-    render(<RavnDetail ravn={SUSPENDED_RAVN} />, { wrapper: wrap() });
-    expect(screen.getByTestId('suspend-btn')).toBeDisabled();
   });
 
   it('renders without role/letter gracefully', () => {

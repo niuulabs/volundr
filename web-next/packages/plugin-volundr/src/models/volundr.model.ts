@@ -389,6 +389,8 @@ export interface StoredCredential {
   name: string;
   secretType: SecretType;
   keys: string[];
+  scope?: string;
+  used?: number;
   metadata: Record<string, string>;
   createdAt: string;
   updatedAt: string;

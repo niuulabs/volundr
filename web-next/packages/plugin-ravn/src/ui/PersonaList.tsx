@@ -1,5 +1,6 @@
 import { cn, PersonaAvatar } from '@niuulabs/ui';
 import type { PersonaRole } from '@niuulabs/domain';
+import type { PersonaSummary } from '../ports';
 import { usePersonas } from './usePersonas';
 import { PERSONA_ROLE_ORDER } from '../catalog';
 import './PersonaList.css';
@@ -48,10 +49,35 @@ export interface PersonaListProps {
   selectedName: string | null;
   onSelect: (name: string) => void;
   onNew?: () => void;
+  personas?: PersonaSummary[];
+  isLoadingOverride?: boolean;
+  errorOverride?: string | null;
+  showFooterAction?: boolean;
+  showRoleHint?: boolean;
+  showMeta?: boolean;
+  className?: string;
+  dataTestId?: string;
 }
 
-export function PersonaList({ selectedName, onSelect, onNew }: PersonaListProps) {
-  const { data, isLoading, isError, error } = usePersonas();
+export function PersonaList({
+  selectedName,
+  onSelect,
+  onNew,
+  personas,
+  isLoadingOverride,
+  errorOverride,
+  showFooterAction = true,
+  showRoleHint = true,
+  showMeta = true,
+  className,
+  dataTestId = 'persona-list',
+}: PersonaListProps) {
+  const query = usePersonas();
+  const data = personas ?? query.data;
+  const isLoading = isLoadingOverride ?? query.isLoading;
+  const errorMessage =
+    errorOverride ?? (query.error instanceof Error ? query.error.message : 'Failed to load personas');
+  const isError = errorOverride != null || query.isError;
 
   if (isLoading) {
     return (
@@ -67,7 +93,7 @@ export function PersonaList({ selectedName, onSelect, onNew }: PersonaListProps)
   if (isError) {
     return (
       <div data-testid="persona-list-error" className="niuu-p-3 niuu-text-sm niuu-text-critical">
-        {error instanceof Error ? error.message : 'Failed to load personas'}
+        {errorMessage}
       </div>
     );
   }
@@ -94,8 +120,8 @@ export function PersonaList({ selectedName, onSelect, onNew }: PersonaListProps)
   return (
     <nav
       aria-label="Personas"
-      className="niuu-flex niuu-flex-col niuu-overflow-y-auto niuu-h-full niuu-py-2"
-      data-testid="persona-list"
+      className={cn('niuu-flex niuu-flex-col niuu-overflow-y-auto niuu-h-full niuu-py-2', className)}
+      data-testid={dataTestId}
     >
       {PERSONA_ROLE_ORDER.map((role) => {
         const personas = byRole.get(role) ?? [];
@@ -109,8 +135,10 @@ export function PersonaList({ selectedName, onSelect, onNew }: PersonaListProps)
               data-testid={`persona-role-header-${role}`}
             >
               <div className="rv-persona-role-header__copy">
-                <span className="rv-persona-role-header__title">{ROLE_LABEL[role].toLowerCase()}</span>
-                <span className="rv-persona-role-header__hint">{ROLE_HINT[role]}</span>
+                <span className="rv-persona-role-header__title">
+                  {ROLE_LABEL[role].toLowerCase()}
+                </span>
+                {showRoleHint && <span className="rv-persona-role-header__hint">{ROLE_HINT[role]}</span>}
               </div>
               <span className="rv-persona-role-header__count">{personas.length}</span>
             </div>
@@ -127,9 +155,11 @@ export function PersonaList({ selectedName, onSelect, onNew }: PersonaListProps)
                   <PersonaAvatar role={p.role} letter={p.letter} size={24} />
                   <div className="rv-persona-row__copy">
                     <span className="rv-persona-row__name">{p.name}</span>
-                    <span className="rv-persona-row__meta">
-                      {p.isBuiltin ? 'builtin' : 'user'} · {p.iterationBudget} iter
-                    </span>
+                    {showMeta && (
+                      <span className="rv-persona-row__meta">
+                        {p.isBuiltin ? 'builtin' : 'user'} · {p.iterationBudget} iter
+                      </span>
+                    )}
                   </div>
                   <div className="rv-persona-row__badges">
                     {!p.isBuiltin && <span className="rv-persona-usr-badge">USR</span>}
@@ -142,17 +172,18 @@ export function PersonaList({ selectedName, onSelect, onNew }: PersonaListProps)
         );
       })}
 
-      {/* New persona button */}
-      <div className="niuu-px-3 niuu-mt-auto niuu-pt-3 niuu-pb-2">
-        <button
-          type="button"
-          onClick={onNew}
-          data-testid="persona-new-button"
-          className="niuu-w-full niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-muted niuu-border niuu-border-dashed niuu-border-border niuu-rounded-md niuu-bg-transparent niuu-cursor-pointer hover:niuu-border-brand hover:niuu-text-text-primary niuu-transition-colors"
-        >
-          + New persona
-        </button>
-      </div>
+      {showFooterAction && (
+        <div className="niuu-px-3 niuu-mt-auto niuu-pt-3 niuu-pb-2">
+          <button
+            type="button"
+            onClick={onNew}
+            data-testid="persona-new-button"
+            className="niuu-w-full niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-muted niuu-border niuu-border-dashed niuu-border-border niuu-rounded-md niuu-bg-transparent niuu-cursor-pointer hover:niuu-border-brand hover:niuu-text-text-primary niuu-transition-colors"
+          >
+            + New persona
+          </button>
+        </div>
+      )}
     </nav>
   );
 }

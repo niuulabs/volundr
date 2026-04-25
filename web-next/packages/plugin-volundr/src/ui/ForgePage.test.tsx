@@ -47,9 +47,9 @@ describe('ForgePage', () => {
 
   it('renders metric tiles once data loads', async () => {
     wrap();
-    await waitFor(() => expect(screen.getByText('active pods')).toBeInTheDocument());
-    expect(screen.getByText('tokens today')).toBeInTheDocument();
-    expect(screen.getByText('cost today')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/active pods/i)).toBeInTheDocument());
+    expect(screen.getByText(/tokens today/i)).toBeInTheDocument();
+    expect(screen.getByText(/cost today/i)).toBeInTheDocument();
     expect(screen.getByText('GPUs')).toBeInTheDocument();
   });
 
@@ -73,7 +73,7 @@ describe('ForgePage', () => {
 
   it('renders cluster load rows with cluster data', async () => {
     wrap();
-    await waitFor(() => expect(screen.getByText('Eitri')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('Eitri').length).toBeGreaterThan(0));
     expect(screen.getAllByTestId('cluster-load-row').length).toBeGreaterThan(0);
   });
 
@@ -223,8 +223,7 @@ describe('ForgePage', () => {
 
   it('renders sparklines in KPI tiles when stats include sparklines', async () => {
     wrap();
-    await waitFor(() => expect(screen.getByText('active pods')).toBeInTheDocument());
-    // Sparklines are SVG elements rendered inside KpiCards
+    await waitFor(() => expect(screen.getByText(/active pods/i)).toBeInTheDocument());
     const svgs = document.querySelectorAll('svg[aria-hidden="true"]');
     expect(svgs.length).toBeGreaterThan(0);
   });
@@ -285,7 +284,7 @@ describe('ForgePage', () => {
 
   it('renders cluster kind badges', async () => {
     wrap();
-    await waitFor(() => expect(screen.getByText('Eitri')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('Eitri').length).toBeGreaterThan(0));
     expect(screen.getAllByTestId('cluster-kind-badge').length).toBeGreaterThan(0);
   });
 

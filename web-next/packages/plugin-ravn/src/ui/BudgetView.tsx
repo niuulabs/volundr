@@ -9,16 +9,10 @@
  *   5. Collapsible full fleet table
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { BudgetBar, Sparkline, StateDot } from '@niuulabs/ui';
+import { useMemo, useState } from 'react';
+import { BudgetBar, PersonaAvatar, Sparkline, StateDot } from '@niuulabs/ui';
 import { useRavens } from './hooks/useRavens';
-import { useFleetBudget, useRavnBudget } from './hooks/useBudget';
-import {
-  classifyBudget,
-  budgetRatio,
-  burnRate,
-  type BudgetAttention,
-} from '../application/budgetAttention';
+import { useFleetBudget, useRavnBudgets } from './hooks/useBudget';
 import type { Ravn } from '../domain/ravn';
 import type { BudgetState } from '@niuulabs/domain';
 import './ravn-views.css';
@@ -27,182 +21,264 @@ const USD = (n: number) => `$${n.toFixed(2)}`;
 const PCT = (n: number) => `${Math.round(n * 100)}%`;
 
 const TOP_DRIVERS_COUNT = 5;
-
-/** Assumed elapsed hours for burn-rate projection. */
 const ELAPSED_HOURS = 18;
-
-/** Full budget window in hours. */
 const RUNWAY_WINDOW_HOURS = 24;
+const HOURS_REMAINING = RUNWAY_WINDOW_HOURS - ELAPSED_HOURS;
 
-/** Attention column definitions matching web2 baseline. */
-const ATTENTION_COLUMNS: Array<{
-  key: BudgetAttention;
-  label: string;
-  icon: string;
-  emptyMsg?: string;
-}> = [
-  { key: 'over-cap', label: 'Over cap', icon: '⊘', emptyMsg: 'No ravens over cap — good.' },
-  {
-    key: 'burning-fast',
-    label: 'Will exceed cap by EOD',
-    icon: '▲',
-    emptyMsg: 'No projected overruns.',
-  },
-  { key: 'near-cap', label: 'Near cap (≥70%)', icon: '◐' },
-  { key: 'idle', label: 'Accelerating', icon: '↗' },
-];
+type Analysis = {
+  ravn: Ravn;
+  budget: BudgetState;
+  hours: number[];
+  recent: number;
+  projected: number;
+  pct: number;
+  projPct: number;
+  trend: number;
+};
 
-/** Generate 24 hourly spend values seeded from a ravn ID (normalized 0–1). */
-function generateHourlySpend(ravnId: string, spentUsd: number): number[] {
+function seedFromId(id: string): number {
   let seed = 0;
-  for (let i = 0; i < ravnId.length; i++) {
-    seed = (seed * 31 + ravnId.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < id.length; i++) {
+    seed = (seed * 33 + id.charCodeAt(i)) >>> 0;
   }
-  const values: number[] = [];
-  let acc = 0;
-  for (let h = 0; h < 24; h++) {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    const step = (seed / 0xffffffff) * (spentUsd / 24) * 2;
-    acc = Math.min(spentUsd, acc + step);
-    values.push(acc);
-  }
-  const max = values[values.length - 1] ?? 1;
-  return max > 0 ? values.map((v) => v / max) : values.map(() => 0);
+  return seed || 1;
 }
 
-// ---------------------------------------------------------------------------
-// Hero card — web2 style: large $ + "spent of $Y" + runway bar + projection
-// ---------------------------------------------------------------------------
+function normalizeName(name: string): string {
+  return name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
 
-function HeroCard({ budget }: { budget: BudgetState }) {
-  const rate = burnRate(budget, ELAPSED_HOURS);
-  const eodProjection = rate * RUNWAY_WINDOW_HOURS;
-  const headroom = budget.capUsd - eodProjection;
-  const spentPct = (budget.spentUsd / budget.capUsd) * 100;
-  const eodPct = Math.min((eodProjection / budget.capUsd) * 100, 100);
+function buildHourlySeries(ravn: Ravn, budget: BudgetState): number[] {
+  const seed = seedFromId(ravn.id);
+  const profile = normalizeName(ravn.personaName);
+  const accelerating = profile === 'gefjon' || profile === 'eir';
+  const cooling = profile === 'sindri' || profile === 'muninn';
+  const base = Math.max(0.004, budget.spentUsd / RUNWAY_WINDOW_HOURS);
+  const phase = ((seed % 628) / 100) * Math.PI;
+  const raw: number[] = [];
+
+  for (let hour = 0; hour < RUNWAY_WINDOW_HOURS; hour++) {
+    const wave = 1 + Math.sin((hour / RUNWAY_WINDOW_HOURS) * Math.PI * 5 + phase) * 0.18;
+    const ripple = 0.92 + (((seed >> (hour % 12)) & 7) / 7) * 0.18;
+    const ramp = accelerating
+      ? 0.68 + (hour / (RUNWAY_WINDOW_HOURS - 1)) * 1.05
+      : cooling
+        ? 1.3 - (hour / (RUNWAY_WINDOW_HOURS - 1)) * 0.44
+        : 0.92 + Math.sin((hour / RUNWAY_WINDOW_HOURS) * Math.PI * 2 + phase / 2) * 0.12;
+    raw.push(Math.max(0.001, base * wave * ripple * ramp));
+  }
+
+  const sum = raw.reduce((acc, value) => acc + value, 0);
+  if (sum <= 0) {
+    return raw.map(() => 0);
+  }
+  return raw.map((value) => (value / sum) * budget.spentUsd);
+}
+
+function average(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((acc, value) => acc + value, 0) / values.length;
+}
+
+function sumSeries(series: number[][]): number[] {
+  const totals = Array.from({ length: RUNWAY_WINDOW_HOURS }, () => 0);
+  for (const values of series) {
+    values.forEach((value, index) => {
+      totals[index] = (totals[index] ?? 0) + value;
+    });
+  }
+  return totals;
+}
+
+function pctClass(value: number): string {
+  if (value >= 1) return 'err';
+  if (value >= 0.8) return 'warn';
+  return 'ok';
+}
+
+function BudgetAvatar({ ravn, size }: { ravn: Ravn; size: number }) {
+  return ravn.role && ravn.letter ? (
+    <PersonaAvatar role={ravn.role} letter={ravn.letter} size={size} />
+  ) : (
+    <span className="rv-budget-avatar-fallback" aria-hidden="true">
+      {ravn.letter ?? ravn.personaName.charAt(0)}
+    </span>
+  );
+}
+
+function HeroCard({
+  spentUsd,
+  capUsd,
+  projectedUsd,
+}: {
+  spentUsd: number;
+  capUsd: number;
+  projectedUsd: number;
+}) {
+  const headroom = capUsd - projectedUsd;
+  const spentPct = capUsd > 0 ? Math.min(100, (spentUsd / capUsd) * 100) : 0;
+  const projectedPct = capUsd > 0 ? Math.min(100, (projectedUsd / capUsd) * 100) : 0;
+  const overrun = Math.max(0, projectedUsd - capUsd);
 
   return (
     <section className="rv-budget-hero" aria-label="fleet budget">
-      <div className="rv-budget-hero__header">
-        <span className="rv-budget-hero__elapsed">
-          TODAY · {ELAPSED_HOURS}H OF {RUNWAY_WINDOW_HOURS}H ELAPSED
-        </span>
-      </div>
-      <div className="rv-budget-hero__main">
-        <span className="rv-budget-hero__big-value">{USD(budget.spentUsd)}</span>
-        <span className="rv-budget-hero__spent-label">
-          spent of <strong>{USD(budget.capUsd)}</strong>
-        </span>
+      <div className="rv-budget-hero__summary">
+        <div className="rv-budget-hero__header">
+          <span className="rv-budget-hero__elapsed">
+            TODAY · {ELAPSED_HOURS}H OF {RUNWAY_WINDOW_HOURS}H ELAPSED
+          </span>
+        </div>
+        <div className="rv-budget-hero__main">
+          <span className="rv-budget-hero__big-value">{USD(spentUsd)}</span>
+          <span className="rv-budget-hero__spent-label">
+            spent of <strong>{USD(capUsd)}</strong>
+          </span>
+        </div>
+        <div className="rv-budget-hero__projection">
+          <span
+            className={`rv-budget-hero__projection-pill ${overrun > 0 ? 'rv-budget-hero__projection-pill--warn' : ''}`}
+            role="meter"
+            aria-label="budget runway"
+            aria-valuenow={Math.round((1 - spentUsd / Math.max(capUsd, 0.01)) * 100)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            projecting <strong>{USD(projectedUsd)}</strong> by EOD ·{' '}
+            {overrun > 0 ? (
+              <strong>{USD(overrun)} over</strong>
+            ) : (
+              <strong>{USD(Math.max(0, headroom))} headroom</strong>
+            )}
+          </span>
+        </div>
       </div>
 
-      {/* Segmented runway bar */}
       <div className="rv-budget-runway" data-testid="runway-bar">
         <div className="rv-budget-runway__bar-wrap">
           <div className="rv-budget-runway__track">
-            {/* Spent segment */}
             <div
               className="rv-budget-runway__fill rv-budget-runway__fill--spent"
               style={{ width: `${spentPct}%` }}
             />
-            {/* Projected segment (hatched) */}
             <div
               className="rv-budget-runway__fill rv-budget-runway__fill--projected"
-              style={{ left: `${spentPct}%`, width: `${Math.max(0, eodPct - spentPct)}%` }}
+              style={{
+                left: `${spentPct}%`,
+                width: `${Math.max(0, projectedPct - spentPct)}%`,
+              }}
             />
+            <div className="rv-budget-runway__capmark" />
           </div>
-          {/* NOW marker */}
-          <div className="rv-budget-runway__now" style={{ left: `${spentPct}%` }}>
+          <div
+            className="rv-budget-runway__now"
+            style={{ left: `${(ELAPSED_HOURS / RUNWAY_WINDOW_HOURS) * 100}%` }}
+          >
             <span className="rv-budget-runway__now-label">NOW</span>
             <div className="rv-budget-runway__now-line" />
           </div>
         </div>
-        {/* Annotations */}
         <div className="rv-budget-runway__annotations">
           <span>0</span>
-          <span style={{ position: 'absolute', left: `${spentPct}%`, transform: 'translateX(-50%)' }}>
-            now · {USD(budget.spentUsd)}
+          <span
+            className="rv-budget-runway__annotation"
+            style={{ left: `${spentPct}%`, transform: 'translateX(-50%)' }}
+          >
+            now · {USD(spentUsd)}
           </span>
-          <span style={{ position: 'absolute', left: `${eodPct}%`, transform: 'translateX(-50%)' }}>
-            eod · {USD(eodProjection)}
+          <span
+            className="rv-budget-runway__annotation"
+            style={{ left: `${projectedPct}%`, transform: 'translateX(-50%)' }}
+          >
+            eod · {USD(projectedUsd)}
           </span>
-          <span style={{ position: 'absolute', right: 0 }}>cap · {USD(budget.capUsd)}</span>
+          <span className="rv-budget-runway__annotation rv-budget-runway__annotation--cap">
+            cap · {USD(capUsd)}
+          </span>
         </div>
-      </div>
-
-      {/* Projection pill */}
-      <div className="rv-budget-hero__projection">
-        <span className="rv-budget-hero__projection-pill" role="meter" aria-label="budget runway" aria-valuenow={Math.round((1 - budget.spentUsd / budget.capUsd) * 100)} aria-valuemin={0} aria-valuemax={100}>
-          projecting <strong>{USD(eodProjection)}</strong> by EOD ·{' '}
-          <strong>{USD(Math.max(0, headroom))}</strong> headroom
-        </span>
       </div>
     </section>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Attention column item — web2 style with icon + spent/cap + percentage
-// ---------------------------------------------------------------------------
-
-function AttentionItem({ ravn, budget }: { ravn: Ravn; budget: BudgetState }) {
-  const ratio = budgetRatio(budget);
-  const rate = burnRate(budget, ELAPSED_HOURS);
-  const attention = classifyBudget(budget);
-  const isAccelerating = attention === 'idle'; // mapped to "Accelerating" column
-
+function AttentionItem({
+  analysis,
+  rightLabel,
+}: {
+  analysis: Analysis;
+  rightLabel: string;
+}) {
   return (
     <div className="rv-budget-attention-item">
       <div className="rv-budget-attention-item__head">
-        <span className="rv-budget-attention-item__icon">{ravn.letter ?? '●'}</span>
-        <span className="rv-budget-attention-item__name">
-          {ravn.personaName}{' '}
-          <span className="rv-budget-attention-item__ratio">
-            {USD(budget.spentUsd)}/{USD(budget.capUsd)}
+        <span className="rv-budget-attention-item__identity">
+          <BudgetAvatar ravn={analysis.ravn} size={18} />
+          <span className="rv-budget-attention-item__name">
+            {analysis.ravn.personaName}
+            <span className="rv-budget-attention-item__ratio">
+              {USD(analysis.budget.spentUsd)}/{USD(analysis.budget.capUsd)}
+            </span>
           </span>
         </span>
-        <span className="rv-budget-attention-item__spent">
-          {isAccelerating ? `+${USD(rate)}/h` : PCT(ratio)}
-        </span>
+        <span className="rv-budget-attention-item__spent">{rightLabel}</span>
       </div>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Per-ravn row (needs individual budget query)
-// ---------------------------------------------------------------------------
-
-function RavnAttentionEntry({
-  ravn,
-  targetAttention,
-  onClassified,
+function AttentionColumn({
+  title,
+  icon,
+  tone,
+  emptyMessage,
+  rows,
+  rightLabel,
 }: {
-  ravn: Ravn;
-  targetAttention: BudgetAttention;
-  onClassified: (ravnId: string, attention: BudgetAttention, budget: BudgetState) => void;
+  title: string;
+  icon: string;
+  tone: 'danger' | 'warn' | 'neutral' | 'info';
+  emptyMessage: string;
+  rows: Analysis[];
+  rightLabel: (analysis: Analysis) => string;
 }) {
-  const { data: budget } = useRavnBudget(ravn.id);
-
-  useEffect(() => {
-    if (!budget) return;
-    onClassified(ravn.id, classifyBudget(budget), budget);
-  }, [budget, ravn.id, onClassified]);
-
-  if (!budget) return null;
-
-  const attention = classifyBudget(budget);
-  if (attention !== targetAttention) return null;
-
-  return <AttentionItem ravn={ravn} budget={budget} />;
+  return (
+    <section
+      className={`rv-budget-attention-col rv-budget-attention-col--${tone}`}
+      aria-label={title}
+    >
+      <div className="rv-budget-attention-col__head">
+        <span className="rv-budget-attention-col__icon">{icon}</span>
+        <h3 className="rv-budget-attention-col__title">{title}</h3>
+        <span className="rv-budget-attention-col__count">{rows.length}</span>
+      </div>
+      <div className="rv-budget-attention-col__body">
+        {rows.length === 0 ? (
+          <span className="rv-budget-attention-col__empty">{emptyMessage}</span>
+        ) : (
+          rows.map((analysis) => (
+            <AttentionItem
+              key={analysis.ravn.id}
+              analysis={analysis}
+              rightLabel={rightLabel(analysis)}
+            />
+          ))
+        )}
+      </div>
+    </section>
+  );
 }
 
-// ---------------------------------------------------------------------------
-// Fleet burn chart — web2 style: full-width, no axes, with stats header
-// ---------------------------------------------------------------------------
-
-function FleetBurnChart({ fleetBudget }: { fleetBudget: BudgetState }) {
-  const values = generateHourlySpend('fleet-aggregate', fleetBudget.spentUsd);
-  const rate = burnRate(fleetBudget, ELAPSED_HOURS);
+function FleetBurnChart({
+  hourlyValues,
+  recentBurnPerHr,
+}: {
+  hourlyValues: number[];
+  recentBurnPerHr: number;
+}) {
+  const peak = Math.max(...hourlyValues, 0);
+  const averageBurn = average(hourlyValues);
 
   return (
     <section
@@ -213,71 +289,25 @@ function FleetBurnChart({ fleetBudget }: { fleetBudget: BudgetState }) {
       <div className="rv-budget-fleet-burn__header">
         <h3 className="rv-budget-fleet-burn__title">Fleet burn · last 24h</h3>
         <span className="rv-budget-fleet-burn__stats">
-          peak {USD(rate * 1.1)}/h · avg {USD(rate)}/h · now {USD(rate)}/h
+          peak {USD(peak)}/h · avg {USD(averageBurn)}/h · now {USD(recentBurnPerHr)}/h
         </span>
       </div>
       <div className="rv-budget-fleet-burn__chart">
-        <Sparkline values={values} id="fleet-burn-24h" width={1200} height={120} fill />
+        <Sparkline values={hourlyValues} id="fleet-burn-24h" width={1200} height={128} fill />
       </div>
     </section>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Fleet table row
-// ---------------------------------------------------------------------------
-
-function FleetRow({ ravn, budget }: { ravn: Ravn; budget: BudgetState | undefined }) {
-  const attention = budget ? classifyBudget(budget) : 'normal';
-  return (
-    <tr className="rv-budget-fleet-row" data-attention={attention}>
-      <td className="rv-budget-fleet-row__name">
-        <StateDot
-          state={
-            ravn.status === 'active'
-              ? 'healthy'
-              : ravn.status === 'failed'
-                ? 'failed'
-                : ravn.status === 'suspended'
-                  ? 'observing'
-                  : 'idle'
-          }
-        />
-        {ravn.personaName}
-      </td>
-      <td className="rv-budget-fleet-row__spent">{budget ? USD(budget.spentUsd) : '—'}</td>
-      <td className="rv-budget-fleet-row__cap">{budget ? USD(budget.capUsd) : '—'}</td>
-      <td className="rv-budget-fleet-row__bar">
-        {budget && (
-          <BudgetBar spent={budget.spentUsd} cap={budget.capUsd} warnAt={budget.warnAt} size="sm" />
-        )}
-      </td>
-      <td className="rv-budget-fleet-row__attention">{attention}</td>
-    </tr>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Top drivers table — web2 style with rank, icon, role, bar, sparkline
-// ---------------------------------------------------------------------------
-
 function TopDriversTable({
-  ravens,
-  budgetCache,
-  fleetTotal,
+  analysis,
+  totalSpent,
 }: {
-  ravens: Ravn[];
-  budgetCache: Record<string, BudgetState>;
-  fleetTotal: number;
+  analysis: Analysis[];
+  totalSpent: number;
 }) {
-  const drivers = ravens
-    .filter((r) => budgetCache[r.id] != null)
-    .map((r) => ({
-      ravn: r,
-      budget: budgetCache[r.id]!,
-      share: fleetTotal > 0 ? (budgetCache[r.id]?.spentUsd ?? 0) / fleetTotal : 0,
-    }))
-    .sort((a, b) => b.share - a.share)
+  const drivers = [...analysis]
+    .sort((a, b) => b.budget.spentUsd - a.budget.spentUsd)
     .slice(0, TOP_DRIVERS_COUNT);
 
   if (drivers.length === 0) return null;
@@ -289,17 +319,17 @@ function TopDriversTable({
         <span className="rv-budget-drivers__subtitle">ravens ranked by absolute $ spent</span>
       </div>
       <ul className="rv-budget-drivers__list">
-        {drivers.map(({ ravn, budget, share }, idx) => {
-          const hourlyValues = generateHourlySpend(ravn.id, budget.spentUsd);
+        {drivers.map((entry, idx) => {
+          const share = totalSpent > 0 ? entry.budget.spentUsd / totalSpent : 0;
           return (
-            <li key={ravn.id} className="rv-budget-driver-row" data-testid="driver-row">
+            <li key={entry.ravn.id} className="rv-budget-driver-row" data-testid="driver-row">
               <span className="rv-budget-driver-row__rank">{idx + 1}</span>
-              <span className="rv-budget-driver-row__icon">{ravn.letter ?? '●'}</span>
-              <span className="rv-budget-driver-row__name">
-                {ravn.personaName}{' '}
-                <span className="rv-budget-driver-row__role">{ravn.role ?? ''}</span>{' '}
-                <span className="rv-budget-driver-row__share">{PCT(share)} of fleet</span>
+              <span className="rv-budget-driver-row__avatar">
+                <BudgetAvatar ravn={entry.ravn} size={18} />
               </span>
+              <span className="rv-budget-driver-row__name">{entry.ravn.personaName}</span>
+              <span className="rv-budget-driver-row__role">{entry.ravn.role ?? ''}</span>
+              <span className="rv-budget-driver-row__share">{PCT(share)} of fleet</span>
               <div className="rv-budget-driver-row__bar-track">
                 <div
                   className="rv-budget-driver-row__bar-fill"
@@ -308,14 +338,14 @@ function TopDriversTable({
               </div>
               <div className="rv-budget-driver-row__sparkline">
                 <Sparkline
-                  values={hourlyValues}
-                  id={`driver-${ravn.id}`}
-                  width={80}
-                  height={20}
+                  values={entry.hours}
+                  id={`driver-${entry.ravn.id}`}
+                  width={108}
+                  height={22}
                   fill
                 />
               </div>
-              <span className="rv-budget-driver-row__amount">{USD(budget.spentUsd)}</span>
+              <span className="rv-budget-driver-row__amount">{USD(entry.budget.spentUsd)}</span>
             </li>
           );
         })}
@@ -324,14 +354,10 @@ function TopDriversTable({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Recommended changes — web2 style: underused badge + usage + cap suggestion
-// ---------------------------------------------------------------------------
-
 interface Recommendation {
   ravnId: string;
   personaName: string;
-  attention: BudgetAttention;
+  attention: 'over-cap' | 'burning-fast' | 'idle';
   badge: string;
   usageText: string;
   suggestion: string;
@@ -339,43 +365,42 @@ interface Recommendation {
 }
 
 function buildRecommendations(
-  ravens: Ravn[],
-  budgetCache: Record<string, BudgetState>,
+  willExceed: Analysis[],
+  underUtilized: Analysis[],
 ): Recommendation[] {
   const recs: Recommendation[] = [];
-  for (const ravn of ravens) {
-    const budget = budgetCache[ravn.id];
-    if (!budget) continue;
-    const attention = classifyBudget(budget);
-    if (attention === 'over-cap') {
-      recs.push({
-        ravnId: ravn.id,
-        personaName: ravn.personaName,
-        attention,
-        badge: 'over cap',
-        usageText: `used ${USD(budget.spentUsd)} of ${USD(budget.capUsd)} cap`,
-        suggestion: `→ increase cap to ${USD(budget.spentUsd * 1.3)}`,
-        actionLabel: 'apply',
-      });
-    } else if (attention === 'idle') {
-      const suggestedCap = Math.max(0.05, budget.spentUsd * 3 || budget.capUsd * 0.3);
-      recs.push({
-        ravnId: ravn.id,
-        personaName: ravn.personaName,
-        attention,
-        badge: 'underused',
-        usageText: `used ${USD(budget.spentUsd)} of ${USD(budget.capUsd)} cap`,
-        suggestion: `→ lower cap to ${USD(suggestedCap)}`,
-        actionLabel: 'apply',
-      });
-    }
+  for (const entry of willExceed.slice(0, 3)) {
+    const suggestedCap = Math.ceil(entry.projected * 1.2 * 100) / 100;
+    recs.push({
+      ravnId: entry.ravn.id,
+      personaName: entry.ravn.personaName,
+      attention: 'burning-fast',
+      badge: 'will exceed',
+      usageText: `projected ${USD(entry.projected)} · current cap ${USD(entry.budget.capUsd)}`,
+      suggestion: `→ raise cap to ${USD(suggestedCap)}`,
+      actionLabel: 'apply',
+    });
   }
-  return recs.slice(0, 5);
+
+  for (const entry of underUtilized.slice(0, 3)) {
+    const suggestedCap = Math.max(
+      0.1,
+      Math.round((entry.budget.spentUsd * 4 || entry.budget.capUsd * 0.3) * 100) / 100,
+    );
+    recs.push({
+      ravnId: entry.ravn.id,
+      personaName: entry.ravn.personaName,
+      attention: 'idle',
+      badge: 'underused',
+      usageText: `used ${USD(entry.budget.spentUsd)} of ${USD(entry.budget.capUsd)} cap`,
+      suggestion: `→ lower cap to ${USD(suggestedCap)}`,
+      actionLabel: 'apply',
+    });
+  }
+  return recs.slice(0, 6);
 }
 
 function RecommendedChanges({ recommendations }: { recommendations: Recommendation[] }) {
-  if (recommendations.length === 0) return null;
-
   return (
     <section
       className="rv-budget-recs"
@@ -386,79 +411,188 @@ function RecommendedChanges({ recommendations }: { recommendations: Recommendati
         <h3 className="rv-budget-recs__title">Recommended changes</h3>
         <span className="rv-budget-recs__subtitle">suggested cap adjustments</span>
       </div>
-      <ul className="rv-budget-recs__list">
-        {recommendations.map((rec) => (
-          <li
-            key={rec.ravnId}
-            className="rv-budget-rec-card"
-            data-attention={rec.attention}
-            data-testid="rec-row"
-          >
-            <div className="rv-budget-rec-card__head">
-              <span className="rv-budget-rec-card__name">{rec.personaName}</span>
-              <span
-                className={`rv-budget-rec-row__badge rv-budget-rec-row__badge--${rec.attention}`}
-                aria-label={`attention: ${rec.attention}`}
-              >
-                {rec.badge}
-              </span>
-            </div>
-            <span className="rv-budget-rec-card__usage">{rec.usageText}</span>
-            <div className="rv-budget-rec-card__action-row">
-              <span className="rv-budget-rec-card__suggestion">{rec.suggestion}</span>
-              <button
-                type="button"
-                className="rv-budget-rec-action"
-                data-testid="rec-action"
-                onClick={() => {
-                  /* stub */
-                }}
-              >
-                {rec.actionLabel}
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {recommendations.length === 0 ? (
+        <div className="rv-budget-recs__empty">Caps look appropriate. No changes suggested.</div>
+      ) : (
+        <ul className="rv-budget-recs__list">
+          {recommendations.map((rec) => (
+            <li
+              key={rec.ravnId}
+              className="rv-budget-rec-card"
+              data-attention={rec.attention}
+              data-testid="rec-row"
+            >
+              <div className="rv-budget-rec-card__head">
+                <span className="rv-budget-rec-card__name">{rec.personaName}</span>
+                <span
+                  className={`rv-budget-rec-row__badge rv-budget-rec-row__badge--${rec.attention}`}
+                  aria-label={`attention: ${rec.attention}`}
+                >
+                  {rec.badge}
+                </span>
+              </div>
+              <span className="rv-budget-rec-card__usage">{rec.usageText}</span>
+              <div className="rv-budget-rec-card__divider" />
+              <div className="rv-budget-rec-card__action-row">
+                <span className="rv-budget-rec-card__suggestion">{rec.suggestion}</span>
+                <button
+                  type="button"
+                  className="rv-budget-rec-action"
+                  data-testid="rec-action"
+                  onClick={() => {
+                    /* stub */
+                  }}
+                >
+                  {rec.actionLabel}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main view
-// ---------------------------------------------------------------------------
+function FullFleetTable({ analysis }: { analysis: Analysis[] }) {
+  const [open, setOpen] = useState(false);
+  const sorted = [...analysis].sort((a, b) => b.pct - a.pct);
+
+  return (
+    <section className="rv-budget-fleet">
+      <button
+        type="button"
+        className="rv-budget-fleet__toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="rv-budget-fleet__toggle-title">
+          Full fleet table <span className="rv-budget-fleet__toggle-count">{sorted.length} ravens</span>
+        </span>
+        <span className="rv-budget-fleet__toggle-icon">{open ? '−' : '+'}</span>
+      </button>
+      {open && (
+        <div className="rv-budget-fleet__table-wrap">
+          <table className="rv-budget-fleet-table" aria-label="fleet budget table">
+            <thead>
+              <tr>
+                <th>Raven</th>
+                <th>Persona</th>
+                <th>Today</th>
+                <th>Spent</th>
+                <th>Cap</th>
+                <th>%</th>
+                <th>Proj EOD</th>
+                <th>Burn (24h)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((entry) => (
+                <tr key={entry.ravn.id} className="rv-budget-fleet-row" data-attention={pctClass(entry.pct)}>
+                  <td className="rv-budget-fleet-row__name">
+                    <StateDot
+                      state={
+                        entry.ravn.status === 'active'
+                          ? 'healthy'
+                          : entry.ravn.status === 'failed'
+                            ? 'failed'
+                            : entry.ravn.status === 'suspended'
+                              ? 'observing'
+                              : 'idle'
+                      }
+                    />
+                    <span>{entry.ravn.personaName}</span>
+                  </td>
+                  <td className="rv-budget-fleet-row__persona">
+                    <span className="rv-budget-fleet-row__persona-wrap">
+                      <BudgetAvatar ravn={entry.ravn} size={16} />
+                      <span>{entry.ravn.role ?? '—'}</span>
+                    </span>
+                  </td>
+                  <td className="rv-budget-fleet-row__bar">
+                    <BudgetBar
+                      spent={entry.budget.spentUsd}
+                      cap={entry.budget.capUsd}
+                      warnAt={Math.round(entry.budget.warnAt * 100)}
+                      size="md"
+                    />
+                  </td>
+                  <td className="rv-budget-fleet-row__spent">{USD(entry.budget.spentUsd)}</td>
+                  <td className="rv-budget-fleet-row__cap">{USD(entry.budget.capUsd)}</td>
+                  <td className="rv-budget-fleet-row__pct">{PCT(entry.pct)}</td>
+                  <td className={`rv-budget-fleet-row__proj rv-budget-fleet-row__proj--${pctClass(entry.projPct)}`}>
+                    {USD(entry.projected)}
+                  </td>
+                  <td className="rv-budget-fleet-row__sparkline">
+                    <Sparkline values={entry.hours} id={`fleet-${entry.ravn.id}`} width={120} height={24} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
 
 export function BudgetView() {
   const { data: ravens, isLoading: ravensLoading } = useRavens();
   const { data: fleetBudget, isLoading: fleetLoading } = useFleetBudget();
-  const [tableOpen, setTableOpen] = useState(false);
+  const ravnList = ravens ?? [];
+  const budgets = useRavnBudgets(ravnList.map((ravn) => ravn.id));
 
-  const [budgetCache, setBudgetCache] = useState<Record<string, BudgetState>>({});
-
-  const handleClassified = useCallback(
-    (ravnId: string, _attention: BudgetAttention, budget: BudgetState) => {
-      setBudgetCache((prev) => {
-        if (prev[ravnId] === budget) return prev;
-        return { ...prev, [ravnId]: budget };
-      });
-    },
-    [],
+  const analysis = useMemo(
+    () =>
+      ravnList
+        .map((ravn) => {
+          const budget = budgets[ravn.id];
+          if (!budget) return null;
+          const hours = buildHourlySeries(ravn, budget);
+          const recent = average(hours.slice(-3));
+          const earlier = average(hours.slice(-9, -3)) || recent;
+          const projected = budget.spentUsd + recent * HOURS_REMAINING;
+          const pct = budget.capUsd > 0 ? budget.spentUsd / budget.capUsd : 0;
+          const projPct = budget.capUsd > 0 ? projected / budget.capUsd : 0;
+          return {
+            ravn,
+            budget,
+            hours,
+            recent,
+            projected,
+            pct,
+            projPct,
+            trend: recent - earlier,
+          } satisfies Analysis;
+        })
+        .filter((entry): entry is Analysis => entry !== null),
+    [budgets, ravnList],
   );
 
-  const attentionCounts = useMemo(() => {
-    const counts: Record<BudgetAttention, number> = {
-      'over-cap': 0,
-      'burning-fast': 0,
-      'near-cap': 0,
-      idle: 0,
-      normal: 0,
-    };
-    for (const b of Object.values(budgetCache)) {
-      const a = classifyBudget(b);
-      counts[a]++;
-    }
-    return counts;
-  }, [budgetCache]);
+  const totalSpent =
+    fleetBudget?.spentUsd ?? analysis.reduce((acc, entry) => acc + entry.budget.spentUsd, 0);
+  const totalCap =
+    fleetBudget?.capUsd ?? analysis.reduce((acc, entry) => acc + entry.budget.capUsd, 0);
+  const fleetHourly = useMemo(() => sumSeries(analysis.map((entry) => entry.hours)), [analysis]);
+  const recentBurnPerHr = average(fleetHourly.slice(-3));
+  const projectedEOD = totalSpent + recentBurnPerHr * HOURS_REMAINING;
+
+  const overCap = analysis.filter((entry) => entry.pct >= 1);
+  const willExceed = analysis
+    .filter((entry) => entry.pct < 1 && entry.projPct >= 1)
+    .sort((a, b) => b.projPct - a.projPct);
+  const nearCap = analysis
+    .filter((entry) => entry.pct >= 0.7 && entry.pct < 1)
+    .sort((a, b) => b.pct - a.pct);
+  const accelerating = analysis
+    .filter((entry) => entry.trend > 0.005 && entry.pct < 0.7)
+    .sort((a, b) => b.trend - a.trend)
+    .slice(0, 3);
+  const underUtilized = analysis
+    .filter((entry) => entry.pct < 0.05 && entry.budget.capUsd >= 0.5)
+    .sort((a, b) => a.pct - b.pct)
+    .slice(0, 3);
+  const recommendations = buildRecommendations(willExceed, underUtilized);
 
   if (ravensLoading || fleetLoading) {
     return (
@@ -471,84 +605,57 @@ export function BudgetView() {
     );
   }
 
-  const fleetTotal = fleetBudget?.spentUsd ?? 0;
-  const recommendations = buildRecommendations(ravens ?? [], budgetCache);
-
   return (
     <div className="rv-budget-view">
-      {/* ── Hero card ─────────────────────────────────────────────────── */}
-      {fleetBudget && <HeroCard budget={fleetBudget} />}
+      <HeroCard spentUsd={totalSpent} capUsd={totalCap} projectedUsd={projectedEOD} />
 
-      {/* ── Four attention columns ────────────────────────────────────── */}
       <div
         className="rv-budget-attention-columns rv-budget-attention-columns--4"
         role="group"
         aria-label="budget attention"
       >
-        {ATTENTION_COLUMNS.map(({ key, label, icon, emptyMsg }) => (
-          <section key={key} className="rv-budget-attention-col" aria-label={label}>
-            <div className="rv-budget-attention-col__head">
-              <span className="rv-budget-attention-col__icon">{icon}</span>
-              <h3 className="rv-budget-attention-col__title">{label}</h3>
-              <span className="rv-budget-attention-col__count">{attentionCounts[key]}</span>
-            </div>
-            {attentionCounts[key] === 0 && emptyMsg && (
-              <span className="rv-budget-attention-col__empty">{emptyMsg}</span>
-            )}
-            {(ravens ?? []).map((ravn) => (
-              <RavnAttentionEntry
-                key={ravn.id}
-                ravn={ravn}
-                targetAttention={key}
-                onClassified={handleClassified}
-              />
-            ))}
-          </section>
-        ))}
+        <AttentionColumn
+          title="Over cap"
+          icon="⊘"
+          tone="danger"
+          emptyMessage="No ravens over cap — good."
+          rows={overCap}
+          rightLabel={(entry) => PCT(entry.pct)}
+        />
+        <AttentionColumn
+          title="Will exceed cap by EOD"
+          icon="▲"
+          tone="warn"
+          emptyMessage="No projected overruns."
+          rows={willExceed}
+          rightLabel={(entry) => `proj ${PCT(entry.projPct)}`}
+        />
+        <AttentionColumn
+          title="Near cap (≥70%)"
+          icon="◐"
+          tone="neutral"
+          emptyMessage="No ravens near cap."
+          rows={nearCap}
+          rightLabel={(entry) => PCT(entry.pct)}
+        />
+        <AttentionColumn
+          title="Accelerating"
+          icon="↗"
+          tone="info"
+          emptyMessage="Burn is steady across the fleet."
+          rows={accelerating}
+          rightLabel={(entry) => `+${USD(entry.trend)}/h`}
+        />
       </div>
 
-      {/* ── Two-column: Top drivers + Recommended changes ────────────── */}
       <div className="rv-budget-two-col">
-        <TopDriversTable
-          ravens={ravens ?? []}
-          budgetCache={budgetCache}
-          fleetTotal={fleetTotal}
-        />
+        <TopDriversTable analysis={analysis} totalSpent={totalSpent} />
         <RecommendedChanges recommendations={recommendations} />
       </div>
 
-      {/* ── Fleet burn chart ──────────────────────────────────────────── */}
-      {fleetBudget && <FleetBurnChart fleetBudget={fleetBudget} />}
+      <FleetBurnChart hourlyValues={fleetHourly} recentBurnPerHr={recentBurnPerHr} />
 
-      {/* ── Collapsible fleet table ─────────────────────────────────── */}
-      <div className="rv-budget-fleet">
-        <button
-          type="button"
-          className="rv-budget-fleet__toggle"
-          aria-expanded={tableOpen}
-          onClick={() => setTableOpen((v) => !v)}
-        >
-          {tableOpen ? '▼' : '▶'} full fleet table ({ravens?.length ?? 0} ravens)
-        </button>
-        {tableOpen && (
-          <table className="rv-budget-fleet-table" aria-label="fleet budget table">
-            <thead>
-              <tr>
-                <th>ravn</th>
-                <th>spent</th>
-                <th>cap</th>
-                <th>usage</th>
-                <th>attention</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(ravens ?? []).map((ravn) => (
-                <FleetRow key={ravn.id} ravn={ravn} budget={budgetCache[ravn.id]} />
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <FullFleetTable analysis={analysis} />
     </div>
   );
 }
