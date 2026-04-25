@@ -9,6 +9,7 @@ import { TyrTopbar } from './ui/TyrTopbar';
 import { TyrFooter } from './ui/TyrFooter';
 import { PlanWizard } from './ui/PlanWizard';
 import { TyrSubnav } from './ui/TyrSubnav';
+export { tyrMountedSettingsProvider } from './settingsMount';
 
 export const tyrPlugin = definePlugin({
   id: 'tyr',

@@ -13,6 +13,11 @@ from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 from starlette import status as http_status
 
+from niuu.settings_schema import (
+    SettingsFieldSchema,
+    SettingsProviderSchema,
+    SettingsSectionSchema,
+)
 from ravn.api.runtime_data import (
     create_trigger as create_runtime_trigger,
 )
@@ -70,6 +75,63 @@ def create_app(persona_loader: PersonaRegistryPort | None = None) -> FastAPI:
     async def status_endpoint() -> dict:
         """Return basic Ravn platform status."""
         return {"service": "ravn", "session_count": 0, "healthy": True}
+
+    @app.get("/api/v1/ravn/settings", response_model=SettingsProviderSchema)
+    async def settings_endpoint() -> SettingsProviderSchema:
+        sessions = list_runtime_sessions()
+        ravens = list_runtime_ravens()
+        triggers = list_runtime_triggers()
+        fleet_budget = get_runtime_fleet_budget()
+        return SettingsProviderSchema(
+            title="Ravn",
+            subtitle="runtime and agent settings",
+            scope="service",
+            sections=[
+                SettingsSectionSchema(
+                    id="runtime",
+                    label="Runtime",
+                    description="Mounted Ravn runtime capabilities and current fleet state.",
+                    fields=[
+                        SettingsFieldSchema(
+                            key="persona_registry_available",
+                            label="Persona Registry",
+                            type="boolean",
+                            value=persona_loader is not None,
+                            description="Whether persona-backed runtime routes are mounted in this host profile.",
+                            read_only=True,
+                        ),
+                        SettingsFieldSchema(
+                            key="active_session_count",
+                            label="Active Session Count",
+                            type="number",
+                            value=len(sessions),
+                            read_only=True,
+                        ),
+                        SettingsFieldSchema(
+                            key="fleet_member_count",
+                            label="Fleet Member Count",
+                            type="number",
+                            value=len(ravens),
+                            read_only=True,
+                        ),
+                        SettingsFieldSchema(
+                            key="trigger_count",
+                            label="Trigger Count",
+                            type="number",
+                            value=len(triggers),
+                            read_only=True,
+                        ),
+                        SettingsFieldSchema(
+                            key="fleet_budget_usd",
+                            label="Fleet Budget (USD)",
+                            type="number",
+                            value=float(fleet_budget.get("remaining_usd", 0.0)),
+                            read_only=True,
+                        ),
+                    ],
+                )
+            ],
+        )
 
     @app.get("/api/v1/ravn/sessions")
     async def list_sessions_endpoint() -> list:

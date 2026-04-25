@@ -24,6 +24,11 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from niuu.settings_schema import (
+    SettingsFieldSchema,
+    SettingsProviderSchema,
+    SettingsSectionSchema,
+)
 from mimir.adapters.markdown import MarkdownMimirAdapter
 from mimir.config import MimirServiceConfig
 from mimir.mcp import MimirMcpServer
@@ -127,5 +132,66 @@ def create_app(config: MimirServiceConfig) -> FastAPI:
 
     app.include_router(mimir_router.router, prefix="/mimir")
     app.include_router(mcp_server.router(), prefix="/mcp")
+    app.state.mimir_config = config
+
+    @app.get("/settings", response_model=SettingsProviderSchema)
+    async def settings() -> SettingsProviderSchema:
+        categories = ", ".join(config.categories or ["all"])
+        return SettingsProviderSchema(
+            title="Mimir",
+            subtitle="knowledge system settings",
+            scope="service",
+            sections=[
+                SettingsSectionSchema(
+                    id="service",
+                    label="Service",
+                    description="Mounted Mimir instance characteristics exposed by the current host profile.",
+                    fields=[
+                        SettingsFieldSchema(
+                            key="instance_name",
+                            label="Instance Name",
+                            type="text",
+                            value=config.name,
+                            read_only=True,
+                        ),
+                        SettingsFieldSchema(
+                            key="role",
+                            label="Role",
+                            type="text",
+                            value=config.role,
+                            read_only=True,
+                        ),
+                        SettingsFieldSchema(
+                            key="knowledge_path",
+                            label="Knowledge Path",
+                            type="text",
+                            value=config.path,
+                            read_only=True,
+                        ),
+                        SettingsFieldSchema(
+                            key="category_scope",
+                            label="Category Scope",
+                            type="text",
+                            value=categories,
+                            read_only=True,
+                        ),
+                        SettingsFieldSchema(
+                            key="embedding_model",
+                            label="Embedding Model",
+                            type="text",
+                            value=config.embedding_model or "fts-only",
+                            read_only=True,
+                        ),
+                        SettingsFieldSchema(
+                            key="announce_url",
+                            label="Announce URL",
+                            type="text",
+                            value=config.announce_url or "disabled",
+                            read_only=True,
+                        ),
+                    ],
+                )
+            ],
+        )
 
     return app

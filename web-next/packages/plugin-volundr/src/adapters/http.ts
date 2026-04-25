@@ -4,8 +4,14 @@
  * Accepts any HTTP client with `get` and `post` / `delete` methods —
  * structurally compatible with `createApiClient(baseUrl)` from @niuulabs/query.
  */
-import { openEventStream, type EventStreamHandle, type EventStreamOptions } from '@niuulabs/query';
+import {
+  createApiClient,
+  openEventStream,
+  type EventStreamHandle,
+  type EventStreamOptions,
+} from '@niuulabs/query';
 import type { IVolundrService } from '../ports/IVolundrService';
+import type { IFileSystemPort, FileTreeNode } from '../ports/IFileSystemPort';
 import type {
   VolundrSession,
   VolundrStats,
@@ -28,7 +34,6 @@ import type {
   VolundrIdentity,
   VolundrUser,
   VolundrTenant,
-  VolundrCredential,
   IntegrationConnection,
   IntegrationTestResult,
   CatalogEntry,
@@ -36,6 +41,7 @@ import type {
   CredentialCreateRequest,
   SecretType,
   SecretTypeInfo,
+  SecretTypeField,
   VolundrWorkspace,
   WorkspaceStatus,
   VolundrMember,
@@ -61,6 +67,17 @@ export interface HttpClient {
 
 type EventStreamOpener = (url: string, options: EventStreamOptions) => EventStreamHandle;
 const LIVE_POLL_MS = 2_000;
+
+interface FileEntryPayload {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  size?: number;
+}
+
+interface FileListPayload {
+  entries: FileEntryPayload[];
+}
 
 type SessionPayload = {
   id: string;
@@ -152,6 +169,40 @@ type ChronicleEventPayload = {
   token_burn?: number[];
 };
 
+type CanonicalCredentialPayload = {
+  id: string;
+  name: string;
+  secret_type?: SecretType;
+  secretType?: SecretType;
+  keys: string[];
+  metadata: Record<string, string>;
+  created_at?: string;
+  createdAt?: string;
+  updated_at?: string;
+  updatedAt?: string;
+};
+
+type CanonicalCredentialListPayload = {
+  credentials: CanonicalCredentialPayload[];
+};
+
+type CanonicalSecretTypeFieldPayload = {
+  key?: string;
+  name?: string;
+  label?: string;
+  type?: SecretTypeField['type'];
+  required?: boolean;
+};
+
+type CanonicalSecretTypePayload = {
+  type: SecretType;
+  label: string;
+  description: string;
+  fields: CanonicalSecretTypeFieldPayload[];
+  default_mount_type?: 'env_file' | 'file' | 'template';
+  defaultMountType?: 'env' | 'file' | 'template';
+};
+
 function toEpochMs(value?: number | string | null): number {
   if (typeof value === 'number') return value;
   if (typeof value !== 'string') return 0;
@@ -205,6 +256,51 @@ function normalizeStats(stats: StatsPayload): VolundrStats {
 
 function normalizeMessageRole(role: string): VolundrMessage['role'] {
   return role === 'user' ? 'user' : 'assistant';
+}
+
+function deriveCanonicalCredentialsBasePath(basePath?: string): string | null {
+  if (!basePath) return null;
+
+  const normalized = basePath.replace(/\/$/, '');
+  if (normalized.endsWith('/api/v1/credentials')) return normalized;
+  if (normalized.endsWith('/api/v1')) return `${normalized}/credentials`;
+
+  const derived = normalized.replace(/\/api\/v1\/(?:forge|volundr)$/, '/api/v1/credentials');
+  return derived === normalized ? null : derived;
+}
+
+function normalizeStoredCredential(
+  credential: CanonicalCredentialPayload,
+  fallbackSecretType: SecretType = 'generic',
+): StoredCredential {
+  return {
+    id: credential.id,
+    name: credential.name,
+    secretType: credential.secretType ?? credential.secret_type ?? fallbackSecretType,
+    keys: credential.keys,
+    metadata: credential.metadata ?? {},
+    createdAt: credential.createdAt ?? credential.created_at ?? '',
+    updatedAt: credential.updatedAt ?? credential.updated_at ?? '',
+  };
+}
+
+function normalizeSecretTypeInfo(secretType: CanonicalSecretTypePayload): SecretTypeInfo {
+  return {
+    type: secretType.type,
+    label: secretType.label,
+    description: secretType.description,
+    fields: (secretType.fields ?? []).map((field) => ({
+      key: field.key ?? field.name ?? '',
+      label: field.label ?? field.key ?? field.name ?? '',
+      type: field.type ?? 'text',
+      required: Boolean(field.required),
+    })),
+    defaultMountType:
+      secretType.defaultMountType ??
+      (secretType.default_mount_type === 'file' || secretType.default_mount_type === 'template'
+        ? secretType.default_mount_type
+        : 'env'),
+  };
 }
 
 function normalizeMessages(
@@ -320,10 +416,155 @@ function inferEventType(payload: unknown): string | null {
   return null;
 }
 
+function trimTrailingSlash(value: string): string {
+  return value.endsWith('/') ? value.slice(0, -1) : value;
+}
+
+function splitSessionPath(path: string): { root: 'workspace' | 'home'; relativePath: string } {
+  const normalized = path.replace(/\/+$/, '') || '/workspace';
+  if (normalized === '/workspace') return { root: 'workspace', relativePath: '' };
+  if (normalized === '/home') return { root: 'home', relativePath: '' };
+  if (normalized.startsWith('/workspace/')) {
+    return { root: 'workspace', relativePath: normalized.slice('/workspace/'.length) };
+  }
+  if (normalized.startsWith('/home/')) {
+    return { root: 'home', relativePath: normalized.slice('/home/'.length) };
+  }
+  return { root: 'workspace', relativePath: normalized.replace(/^\/+/, '') };
+}
+
+function toSessionPath(root: 'workspace' | 'home', relativePath: string): string {
+  const prefix = root === 'home' ? '/home' : '/workspace';
+  return relativePath ? `${prefix}/${relativePath}` : prefix;
+}
+
+function toTreeNode(
+  entry: FileEntryPayload,
+  root: 'workspace' | 'home',
+  children?: FileTreeNode[],
+): FileTreeNode {
+  return {
+    name: entry.name,
+    path: toSessionPath(root, entry.path),
+    kind: entry.type,
+    size: entry.type === 'file' ? entry.size : undefined,
+    children,
+  };
+}
+
+async function readJson<T>(response: Response): Promise<T> {
+  return (await response.json()) as T;
+}
+
+async function ensureOk(response: Response): Promise<Response> {
+  if (response.ok) return response;
+  const detail = await response.text();
+  throw new Error(detail || `Request failed with ${response.status}`);
+}
+
+export function buildVolundrFileSystemHttpAdapter(options: {
+  baseUrl: string;
+  fetchImpl?: typeof fetch;
+}): IFileSystemPort {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const baseUrl = trimTrailingSlash(options.baseUrl);
+
+  function sessionApi(sessionId: string): string {
+    return `${baseUrl}/s/${encodeURIComponent(sessionId)}/api`;
+  }
+
+  async function listDirectory(
+    sessionId: string,
+    root: 'workspace' | 'home',
+    relativePath = '',
+  ): Promise<FileTreeNode[]> {
+    const params = new URLSearchParams({ root });
+    if (relativePath) params.set('path', relativePath);
+    const response = await ensureOk(
+      await fetchImpl(`${sessionApi(sessionId)}/files?${params.toString()}`),
+    );
+    const payload = await readJson<FileListPayload>(response);
+    return payload.entries.map((entry) => toTreeNode(entry, root));
+  }
+
+  return {
+    async listTree(sessionId: string): Promise<FileTreeNode[]> {
+      const nodes = await listDirectory(sessionId, 'workspace');
+      const withChildren = await Promise.all(
+        nodes.map(async (node) => {
+          if (node.kind !== 'directory') return node;
+          const { root, relativePath } = splitSessionPath(node.path);
+          const children = await listDirectory(sessionId, root, relativePath);
+          return { ...node, children };
+        }),
+      );
+      return withChildren;
+    },
+
+    async expandDirectory(sessionId: string, path: string): Promise<FileTreeNode[]> {
+      const { root, relativePath } = splitSessionPath(path);
+      return listDirectory(sessionId, root, relativePath);
+    },
+
+    async readFile(sessionId: string, path: string): Promise<string> {
+      const { root, relativePath } = splitSessionPath(path);
+      const params = new URLSearchParams({ root, path: relativePath });
+      const response = await ensureOk(
+        await fetchImpl(`${sessionApi(sessionId)}/files/download?${params.toString()}`),
+      );
+      return response.text();
+    },
+
+    async writeFile(sessionId: string, path: string, content: string): Promise<void> {
+      const { root, relativePath } = splitSessionPath(path);
+      const segments = relativePath.split('/').filter(Boolean);
+      const fileName = segments.pop() ?? 'untitled';
+      const parentPath = segments.join('/');
+
+      if (parentPath) {
+        const mkdirResponse = await fetchImpl(`${sessionApi(sessionId)}/files/mkdir`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ path: parentPath, root }),
+        });
+        if (!mkdirResponse.ok && mkdirResponse.status !== 409) {
+          await ensureOk(mkdirResponse);
+        }
+      }
+
+      const form = new FormData();
+      form.append('files', new Blob([content], { type: 'text/plain' }), fileName);
+      const params = new URLSearchParams({ root });
+      if (parentPath) params.set('path', parentPath);
+      await ensureOk(
+        await fetchImpl(`${sessionApi(sessionId)}/files/upload?${params.toString()}`, {
+          method: 'POST',
+          body: form,
+        }),
+      );
+    },
+
+    async deletePaths(sessionId: string, paths: string[]): Promise<void> {
+      for (const path of paths) {
+        const { root, relativePath } = splitSessionPath(path);
+        const params = new URLSearchParams({ root, path: relativePath });
+        await ensureOk(await fetchImpl(`${sessionApi(sessionId)}/files?${params.toString()}`, {
+          method: 'DELETE',
+        }));
+      }
+    },
+  };
+}
+
 export function buildVolundrHttpAdapter(
   client: HttpClient,
   openStream: EventStreamOpener = openEventStream,
 ): IVolundrService {
+  const credentialsClient = (() => {
+    const credentialsBasePath = deriveCanonicalCredentialsBasePath(client.basePath);
+    return credentialsBasePath ? createApiClient(credentialsBasePath) : client;
+  })();
+
   const sessionSubscribers = new Set<(sessions: VolundrSession[]) => void>();
   const statsSubscribers = new Set<(stats: VolundrStats) => void>();
   const chronicleSubscribers = new Map<string, Set<(chronicle: SessionChronicle) => void>>();
@@ -622,7 +863,9 @@ export function buildVolundrHttpAdapter(
     archiveSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/archive`),
     restoreSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/restore`),
     listArchivedSessions: () =>
-      client.get<SessionPayload[]>('/sessions/archived').then((sessions) => sessions.map(normalizeSession)),
+      client
+        .get<SessionPayload[]>('/sessions?status=archived')
+        .then((sessions) => sessions.map(normalizeSession)),
 
     getMessages: (sessionId) =>
       loadMessages(sessionId),
@@ -720,12 +963,24 @@ export function buildVolundrHttpAdapter(
     reprovisionTenant: (tenantId) =>
       client.post<VolundrProvisioningResult[]>(`/tenants/${tenantId}/reprovision`),
 
-    getUserCredentials: () => client.get<VolundrCredential[]>('/credentials/user'),
-    storeUserCredential: (name, data) => client.post<void>('/credentials/user', { name, data }),
-    deleteUserCredential: (name) => client.delete<void>(`/credentials/user/${name}`),
-    getTenantCredentials: () => client.get<VolundrCredential[]>('/credentials/tenant'),
-    storeTenantCredential: (name, data) => client.post<void>('/credentials/tenant', { name, data }),
-    deleteTenantCredential: (name) => client.delete<void>(`/credentials/tenant/${name}`),
+    getUserCredentials: async () => {
+      const payload = await credentialsClient.get<CanonicalCredentialListPayload>('/user');
+      return payload.credentials.map((credential) => ({
+        name: credential.name,
+        keys: credential.keys,
+      }));
+    },
+    storeUserCredential: (name, data) => credentialsClient.post<void>('/user', { name, data }),
+    deleteUserCredential: (name) => credentialsClient.delete<void>(`/user/${name}`),
+    getTenantCredentials: async () => {
+      const payload = await credentialsClient.get<CanonicalCredentialListPayload>('/tenant');
+      return payload.credentials.map((credential) => ({
+        name: credential.name,
+        keys: credential.keys,
+      }));
+    },
+    storeTenantCredential: (name, data) => credentialsClient.post<void>('/tenant', { name, data }),
+    deleteTenantCredential: (name) => credentialsClient.delete<void>(`/tenant/${name}`),
 
     getIntegrationCatalog: () => client.get<CatalogEntry[]>('/integrations/catalog'),
     getIntegrations: () => client.get<IntegrationConnection[]>('/integrations'),
@@ -734,13 +989,32 @@ export function buildVolundrHttpAdapter(
     deleteIntegration: (id) => client.delete<void>(`/integrations/${id}`),
     testIntegration: (id) => client.post<IntegrationTestResult>(`/integrations/${id}/test`),
 
-    getCredentials: (type?: SecretType) =>
-      client.get<StoredCredential[]>(`/secrets/store${type ? `?type=${type}` : ''}`),
-    getCredential: (name) => client.get<StoredCredential | null>(`/secrets/store/${name}`),
-    createCredential: (req: CredentialCreateRequest) =>
-      client.post<StoredCredential>('/secrets/store', req),
-    deleteCredential: (name) => client.delete<void>(`/secrets/store/${name}`),
-    getCredentialTypes: () => client.get<SecretTypeInfo[]>('/secrets/types'),
+    getCredentials: async (type?: SecretType) => {
+      const payload = await credentialsClient.get<CanonicalCredentialListPayload>(
+        `/user${type ? `?secret_type=${type}` : ''}`,
+      );
+      return payload.credentials.map((credential) =>
+        normalizeStoredCredential(credential, type ?? 'generic'),
+      );
+    },
+    getCredential: async (name) => {
+      const payload = await credentialsClient.get<CanonicalCredentialPayload | null>(`/user/${name}`);
+      return payload ? normalizeStoredCredential(payload) : null;
+    },
+    createCredential: async (req: CredentialCreateRequest) => {
+      const payload = await credentialsClient.post<CanonicalCredentialPayload>('/user', {
+        name: req.name,
+        secret_type: req.secretType,
+        data: req.data,
+        metadata: req.metadata,
+      });
+      return normalizeStoredCredential(payload, req.secretType);
+    },
+    deleteCredential: (name) => credentialsClient.delete<void>(`/user/${name}`),
+    getCredentialTypes: async () => {
+      const payload = await credentialsClient.get<CanonicalSecretTypePayload[]>('/types');
+      return payload.map(normalizeSecretTypeInfo);
+    },
 
     listWorkspaces: (status?: WorkspaceStatus) =>
       client.get<VolundrWorkspace[]>(`/workspaces${status ? `?status=${status}` : ''}`),

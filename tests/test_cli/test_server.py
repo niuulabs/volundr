@@ -323,6 +323,22 @@ class TestRootServerBuildApp:
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok"}
 
+    def test_cors_headers_are_only_added_when_configured(self) -> None:
+        registry = PluginRegistry()
+        server = RootServer(registry=registry)
+        with patch.dict(
+            os.environ,
+            {
+                "NIUU_NO_WEB": "true",
+                "NIUU_CORS_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173",
+            },
+        ):
+            app = server._build_app()
+        client = TestClient(app)
+        resp = client.get("/health", headers={"Origin": "http://localhost:5173"})
+        assert resp.status_code == 200
+        assert resp.headers["access-control-allow-origin"] == "http://localhost:5173"
+
     def test_config_json_endpoint(self) -> None:
         registry = PluginRegistry()
         server = RootServer(registry=registry, host="127.0.0.1", port=8080)
@@ -458,6 +474,7 @@ class TestRootServerBuildApp:
         assets.mkdir()
         (assets / "main.js").write_text("// js")
         (dist / "index.html").write_text("<html>SPA</html>")
+        (dist / "config.live.json").write_text('{"services":{"forge":{"mode":"http"}}}')
         favicon = dist / "favicon.svg"
         favicon.write_text("<svg/>")
 
@@ -477,6 +494,11 @@ class TestRootServerBuildApp:
         resp = client.get("/dashboard")
         assert resp.status_code == 200
         assert b"SPA" in resp.content
+
+        config_resp = client.get("/config.live.json")
+        assert config_resp.status_code == 200
+        assert config_resp.headers["content-type"].startswith("application/json")
+        assert config_resp.json()["services"]["forge"]["mode"] == "http"
 
     def test_web_ui_filenotfound_gracefully_handled(self) -> None:
         """When web_dist_dir raises FileNotFoundError, app is still returned."""
@@ -1269,6 +1291,64 @@ class TestRootServerBuildApp:
         assert client.get("/api/v1/bifrost/healthz").json() == {"status": "ok"}
         assert client.get("/v1/models").status_code == 404
         assert client.get("/metrics").status_code == 404
+
+    def test_build_root_app_merges_mounted_plugin_routes_into_openapi(self) -> None:
+        volundr_app = FastAPI()
+
+        @volundr_app.get("/api/v1/volundr/sessions")
+        async def list_sessions():
+            return [{"id": "sess-1"}]
+
+        mimir_app = FastAPI()
+
+        @mimir_app.get("/mimir/stats")
+        async def mimir_stats():
+            return {"healthy": True}
+
+        class VolundrPlugin(FakePlugin):
+            def create_api_app(self):
+                return volundr_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="forge-api",
+                        prefixes=("/api/v1/forge/sessions", "/api/v1/volundr/sessions"),
+                    ),
+                )
+
+        class MimirPlugin(FakePlugin):
+            def create_api_app(self):
+                return mimir_app
+
+            def api_route_domains(self):
+                return (
+                    APIRouteDomain(
+                        name="mimir-api",
+                        prefixes=("/api/v1/mimir",),
+                    ),
+                )
+
+        registry = PluginRegistry()
+        registry.register(VolundrPlugin(name="volundr"))
+        registry.register(MimirPlugin(name="mimir"))
+
+        app = build_root_app(
+            registry=registry,
+            host="127.0.0.1",
+            port=8080,
+            enabled_mounts={"forge-api", "mimir-api"},
+        )
+
+        client = TestClient(app)
+        response = client.get("/openapi.json")
+
+        assert response.status_code == 200
+        paths = response.json()["paths"]
+        assert "/health" in paths
+        assert "/api/v1/forge/sessions" in paths
+        assert "/api/v1/volundr/sessions" in paths
+        assert "/api/v1/mimir/stats" in paths
 
     def test_plugin_create_api_app_returns_none(self) -> None:
         """Plugin that returns None from create_api_app is skipped."""

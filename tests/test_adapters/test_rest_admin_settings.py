@@ -34,6 +34,15 @@ def client(app: FastAPI) -> TestClient:
 
 
 class TestAdminSettings:
+    def test_get_mounted_settings_schema(self, client: TestClient) -> None:
+        response = client.get("/api/v1/volundr/settings")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["title"] == "Volundr"
+        assert data["scope"] == "admin"
+        assert data["sections"][0]["path"] == "/admin/settings"
+        assert data["sections"][0]["saveLabel"] == "Save storage settings"
+
     def test_get_settings(self, client: TestClient) -> None:
         response = client.get("/api/v1/volundr/admin/settings")
         assert response.status_code == 200

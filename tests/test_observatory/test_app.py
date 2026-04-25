@@ -27,6 +27,15 @@ class TestObservatoryApp:
         assert payload["version"] == 7
         assert any(item["id"] == "mimir" for item in payload["types"])
 
+    def test_settings_returns_mounted_schema(self) -> None:
+        client = TestClient(create_app())
+        response = client.get("/api/v1/observatory/settings")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["title"] == "Observatory"
+        assert payload["sections"][0]["id"] == "streams"
+        assert any(field["key"] == "keepalive_interval_seconds" for field in payload["sections"][0]["fields"])
+
     def test_topology_stream_aliases_return_sse(self) -> None:
         for path in ("/api/v1/observatory/topology", "/api/v1/observatory/topology/stream"):
             response = asyncio.run(_route_response(path))

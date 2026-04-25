@@ -1,4 +1,38 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+
+const queryMocks = vi.hoisted(() => ({
+  createApiClient: vi.fn((basePath: string) => ({
+    basePath,
+    get: vi.fn(async (endpoint: string) => {
+      if (endpoint === '/types') return [];
+      if (endpoint === '/user' || endpoint.startsWith('/user?')) return { credentials: [] };
+      if (endpoint === '/tenant' || endpoint.startsWith('/tenant?')) return { credentials: [] };
+      if (endpoint.startsWith('/user/') || endpoint.startsWith('/tenant/')) return null;
+      return [];
+    }),
+    post: vi.fn(async (_endpoint: string, body?: any) => ({
+      id: 'cred-1',
+      name: body?.name ?? 'cred-1',
+      secret_type: body?.secret_type ?? 'generic',
+      keys: Object.keys(body?.data ?? {}),
+      metadata: body?.metadata ?? {},
+      created_at: '',
+      updated_at: '',
+    })),
+    delete: vi.fn().mockResolvedValue(undefined),
+    patch: vi.fn().mockResolvedValue({}),
+    put: vi.fn().mockResolvedValue({}),
+  })),
+}));
+
+vi.mock('@niuulabs/query', async () => {
+  const actual = await vi.importActual<typeof import('@niuulabs/query')>('@niuulabs/query');
+  return {
+    ...actual,
+    createApiClient: queryMocks.createApiClient,
+  };
+});
+
 import { buildVolundrHttpAdapter } from './http';
 import type { IVolundrService } from '../ports/IVolundrService';
 
@@ -15,6 +49,7 @@ function makeClient() {
 
 afterEach(() => {
   vi.useRealTimers();
+  queryMocks.createApiClient.mockClear();
 });
 
 describe('buildVolundrHttpAdapter', () => {
@@ -238,11 +273,27 @@ describe('buildVolundrHttpAdapter', () => {
     expect(client.get).toHaveBeenCalledWith('/identity');
   });
 
-  it('createCredential calls POST /secrets/store', async () => {
+  it('listArchivedSessions uses the archived status query instead of a synthetic sub-route', async () => {
+    const client = makeClient();
+    await buildVolundrHttpAdapter(client).listArchivedSessions();
+    expect(client.get).toHaveBeenCalledWith('/sessions?status=archived');
+  });
+
+  it('createCredential targets the canonical shared credentials route', async () => {
     const client = makeClient();
     const req = { name: 'my-key', secretType: 'api_key' as const, data: { token: 'abc' } };
     await buildVolundrHttpAdapter(client).createCredential(req);
-    expect(client.post).toHaveBeenCalledWith('/secrets/store', req);
+    const derivedClient = queryMocks.createApiClient.mock.results.at(-1)?.value;
+    expect(queryMocks.createApiClient).toHaveBeenCalledWith(
+      'http://localhost:8080/api/v1/credentials',
+    );
+    expect(derivedClient.post).toHaveBeenCalledWith('/user', {
+      name: 'my-key',
+      secret_type: 'api_key',
+      data: { token: 'abc' },
+      metadata: undefined,
+    });
+    expect(client.post).not.toHaveBeenCalledWith('/secrets/store', req);
   });
 
   it('toggleFeature calls POST /features/modules/:key/toggle', async () => {
@@ -576,10 +627,11 @@ describe('buildVolundrHttpAdapter', () => {
     expect(client.get).toHaveBeenCalledWith('/features/modules?scope=admin');
   });
 
-  it('getCredentials includes type when provided', async () => {
+  it('getCredentials targets the canonical shared credentials route when filtering by type', async () => {
     const client = makeClient();
     await buildVolundrHttpAdapter(client).getCredentials('api_key');
-    expect(client.get).toHaveBeenCalledWith('/secrets/store?type=api_key');
+    const derivedClient = queryMocks.createApiClient.mock.results.at(-1)?.value;
+    expect(derivedClient.get).toHaveBeenCalledWith('/user?secret_type=api_key');
   });
 
   it('listWorkspaces includes status when provided', async () => {

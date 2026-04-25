@@ -8,6 +8,11 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_serializer
 
 from niuu.http_compat import LegacyRouteNotice, warn_on_legacy_route
+from niuu.settings_schema import (
+    SettingsFieldSchema,
+    SettingsProviderSchema,
+    SettingsSectionSchema,
+)
 from volundr.adapters.inbound.auth import require_role
 from volundr.domain.models import Principal
 
@@ -76,6 +81,44 @@ def create_admin_settings_router() -> APIRouter:
                 home_enabled=storage.get("home_enabled", True),
                 file_manager_enabled=storage.get("file_manager_enabled", True),
             ),
+        )
+
+    @router.get("/settings", response_model=SettingsProviderSchema)
+    async def get_mounted_settings_schema(
+        request: Request,
+        _: Principal = Depends(require_role("volundr:admin")),
+    ) -> SettingsProviderSchema:
+        settings = request.app.state.admin_settings
+        storage = settings.get("storage", {})
+        return SettingsProviderSchema(
+            title="Volundr",
+            subtitle="forge platform settings",
+            scope="admin",
+            sections=[
+                SettingsSectionSchema(
+                    id="storage",
+                    label="Storage",
+                    description="Administrative storage controls for the mounted Forge host.",
+                    path="/admin/settings",
+                    save_label="Save storage settings",
+                    fields=[
+                        SettingsFieldSchema(
+                            key="homeEnabled",
+                            label="Home Volumes Enabled",
+                            type="boolean",
+                            value=storage.get("home_enabled", True),
+                            description="Whether home PVC provisioning is available for users.",
+                        ),
+                        SettingsFieldSchema(
+                            key="fileManagerEnabled",
+                            label="File Manager Enabled",
+                            type="boolean",
+                            value=storage.get("file_manager_enabled", True),
+                            description="Whether the file manager tab is visible in Forge sessions.",
+                        ),
+                    ],
+                )
+            ],
         )
 
     @router.patch("/admin/settings", response_model=AdminSettingsResponse)

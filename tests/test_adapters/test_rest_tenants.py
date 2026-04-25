@@ -111,6 +111,19 @@ class TestGetMe:
         assert legacy_response.headers["X-Niuu-Canonical-Route"] == "/api/v1/identity/me"
         assert "Deprecation" not in canonical_response.headers
 
+    def test_identity_settings_returns_profile_schema(self):
+        svc = AsyncMock(spec=TenantService)
+        app = _make_app(svc)
+        client = TestClient(app)
+
+        resp = client.get("/api/v1/identity/settings", headers=AUTH)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["title"] == "You"
+        assert data["scope"] == "user"
+        assert data["sections"][0]["id"] == "profile"
+        assert any(field["key"] == "email" for field in data["sections"][0]["fields"])
+
 
 class TestListTenants:
     """Tests for GET /tenants."""

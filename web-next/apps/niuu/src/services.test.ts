@@ -71,6 +71,7 @@ const volundrMocks = vi.hoisted(() => ({
   createMockPtyStream: vi.fn(() => ({})),
   createMockMetricsStream: vi.fn(() => ({})),
   createMockFileSystemPort: vi.fn(() => ({})),
+  buildVolundrFileSystemHttpAdapter: vi.fn((options) => ({ kind: 'filesystem', options })),
   buildVolundrPtyWsAdapter: vi.fn(() => ({})),
   buildVolundrMetricsSseAdapter: vi.fn(() => ({})),
 }));
@@ -98,6 +99,9 @@ import {
   buildSharedIdentityService,
   resolveSharedApiBase,
   toSharedApiBase,
+  toHostBase,
+  toHostPtyWsUrl,
+  resolveSettingsServiceBase,
 } from './services';
 
 describe('toSharedApiBase', () => {
@@ -116,6 +120,24 @@ describe('toSharedApiBase', () => {
   it('strips a trailing Forge service suffix', () => {
     expect(toSharedApiBase('http://localhost:8080/api/v1/forge')).toBe(
       'http://localhost:8080/api/v1',
+    );
+  });
+});
+
+describe('toHostBase', () => {
+  it('strips a trailing canonical Forge service suffix', () => {
+    expect(toHostBase('http://localhost:8080/api/v1/forge')).toBe('http://localhost:8080');
+  });
+
+  it('strips a trailing legacy Volundr service suffix', () => {
+    expect(toHostBase('http://localhost:8080/api/v1/volundr')).toBe('http://localhost:8080');
+  });
+});
+
+describe('toHostPtyWsUrl', () => {
+  it('derives the bundled host websocket PTY route from Forge', () => {
+    expect(toHostPtyWsUrl('http://localhost:8080/api/v1/forge')).toBe(
+      'ws://localhost:8080/s/{sessionId}/session',
     );
   });
 });
@@ -207,6 +229,47 @@ describe('resolveCanonicalServiceBase', () => {
   });
 });
 
+describe('resolveSettingsServiceBase', () => {
+  it('resolves identity settings from the canonical identity base', () => {
+    expect(
+      resolveSettingsServiceBase(
+        {
+          services: {
+            identity: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/identity' },
+          },
+        } as any,
+        'identity',
+      ),
+    ).toBe('http://localhost:8080/api/v1/identity');
+  });
+
+  it('resolves tyr settings from the normalized tyr base', () => {
+    expect(
+      resolveSettingsServiceBase(
+        {
+          services: {
+            'tyr.settings': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/tyr/settings' },
+          },
+        } as any,
+        'tyr',
+      ),
+    ).toBe('http://localhost:8080/api/v1/tyr');
+  });
+
+  it('resolves ravn settings from the grouped ravn base', () => {
+    expect(
+      resolveSettingsServiceBase(
+        {
+          services: {
+            ravn: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn' },
+          },
+        } as any,
+        'ravn',
+      ),
+    ).toBe('http://localhost:8080/api/v1/ravn');
+  });
+});
+
 describe('resolveForgeServiceBase', () => {
   it('prefers an explicit forge domain base over the legacy volundr key', () => {
     expect(
@@ -238,6 +301,64 @@ describe('resolveForgeServiceBase', () => {
         },
       } as any),
     ).toBeNull();
+  });
+});
+
+describe('buildServices live base selection', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('prefers an explicit volundr base for the full volundr adapter', () => {
+    buildServices({
+      services: {
+        forge: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/forge' },
+        volundr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/volundr' },
+      },
+    } as any);
+
+    expect(volundrMocks.buildVolundrHttpAdapter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        basePath: 'http://localhost:8080/api/v1/volundr',
+      }),
+    );
+  });
+
+  it('normalizes explicit Tyr sub-service bases back to /api/v1/tyr', () => {
+    buildServices({
+      services: {
+        tyr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/tyr' },
+        'tyr.dispatcher': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/tyr/dispatcher',
+        },
+        'tyr.sessions': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/tyr/sessions',
+        },
+        'tyr.dispatch': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/tyr/dispatch',
+        },
+        'tyr.settings': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/tyr/settings',
+        },
+      },
+    } as any);
+
+    expect(tyrMocks.buildDispatcherHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/tyr',
+    });
+    expect(tyrMocks.buildTyrSessionHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/tyr',
+    });
+    expect(tyrMocks.buildDispatchBusHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/tyr',
+    });
+    expect(tyrMocks.buildTyrSettingsHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/tyr',
+    });
   });
 });
 
@@ -347,6 +468,21 @@ describe('buildServiceBackendStatus', () => {
     });
   });
 
+  it('derives a live forge pty websocket backend from the forge host when available', () => {
+    const status = buildServiceBackendStatus({
+      services: {
+        forge: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/forge' },
+      },
+    } as any);
+
+    expect(status['forge.pty']).toEqual({
+      mode: 'live',
+      transport: 'ws',
+      target: 'ws://localhost:8080/s/{sessionId}/session',
+      source: 'forge',
+    });
+  });
+
   it('reports mock-only workflow and filesystem surfaces explicitly', () => {
     const status = buildServiceBackendStatus({ services: {} } as any);
 
@@ -363,6 +499,64 @@ describe('buildServiceBackendStatus', () => {
       target: null,
       source: 'mock',
       note: 'No live filesystem API is wired yet.',
+    });
+  });
+
+  it('derives a live filesystem backend from the forge host when available', () => {
+    const status = buildServiceBackendStatus({
+      services: {
+        forge: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/forge' },
+      },
+    } as any);
+
+    expect(status.filesystem).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080',
+      source: 'forge-host',
+    });
+  });
+
+  it('normalizes explicit ravn sub-service bases back to /api/v1/ravn', () => {
+    const status = buildServiceBackendStatus({
+      services: {
+        'ravn.personas': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn/personas' },
+        'ravn.ravens': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn/ravens' },
+        'ravn.sessions': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn/sessions' },
+        'ravn.triggers': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn/triggers' },
+        'ravn.budget': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn/budget' },
+      },
+    } as any);
+
+    expect(status['ravn.personas']).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1/ravn',
+      source: 'ravn.personas',
+    });
+    expect(status['ravn.ravens']).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1/ravn',
+      source: 'ravn.ravens',
+    });
+    expect(status['ravn.sessions']).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1/ravn',
+      source: 'ravn.sessions',
+    });
+    expect(status['ravn.triggers']).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1/ravn',
+      source: 'ravn.triggers',
+    });
+    expect(status['ravn.budget']).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1/ravn',
+      source: 'ravn.budget',
     });
   });
 });
@@ -421,7 +615,7 @@ describe('buildServices', () => {
     });
   });
 
-  it('prefers explicit Tyr subdomain configs over the shared Tyr base', () => {
+  it('normalizes explicit Tyr subdomain configs back to the shared Tyr base', () => {
     buildServices({
       theme: 'ice',
       plugins: {},
@@ -447,16 +641,16 @@ describe('buildServices', () => {
     } as any);
 
     expect(tyrMocks.buildDispatcherHttpAdapter).toHaveBeenCalledWith({
-      basePath: 'http://localhost:8080/api/v1/tyr/dispatcher',
+      basePath: 'http://localhost:8080/api/v1/tyr',
     });
     expect(tyrMocks.buildTyrSessionHttpAdapter).toHaveBeenCalledWith({
-      basePath: 'http://localhost:8080/api/v1/tyr/sessions',
+      basePath: 'http://localhost:8080/api/v1/tyr',
     });
     expect(tyrMocks.buildDispatchBusHttpAdapter).toHaveBeenCalledWith({
-      basePath: 'http://localhost:8080/api/v1/tyr/dispatch',
+      basePath: 'http://localhost:8080/api/v1/tyr',
     });
     expect(tyrMocks.buildTyrSettingsHttpAdapter).toHaveBeenCalledWith({
-      basePath: 'http://localhost:8080/api/v1/tyr/settings',
+      basePath: 'http://localhost:8080/api/v1/tyr',
     });
   });
 
@@ -498,6 +692,25 @@ describe('buildServices', () => {
     expect(pluginSdkMocks.buildIdentityAdapter).toHaveBeenCalledWith({
       basePath: 'http://localhost:8080/api/v1',
     });
+    expect(volundrMocks.buildVolundrFileSystemHttpAdapter).toHaveBeenCalledWith({
+      baseUrl: 'http://localhost:8080',
+    });
+  });
+
+  it('prefers an explicit filesystem base over the derived forge host', () => {
+    const services = buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        forge: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/forge' },
+        filesystem: { mode: 'http', baseUrl: 'http://localhost:9999' },
+      },
+    } as any);
+
+    expect(volundrMocks.buildVolundrFileSystemHttpAdapter).toHaveBeenCalledWith({
+      baseUrl: 'http://localhost:9999',
+    });
+    expect((services.filesystem as any).kind).toBe('filesystem');
   });
 
   it('prefers explicit Ravn domain configs over the shared ravn base', () => {
@@ -506,16 +719,19 @@ describe('buildServices', () => {
       plugins: {},
       services: {
         ravn: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn' },
-        'ravn.personas': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravens/personas' },
-        'ravn.sessions': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravens/sessions' },
+        'ravn.personas': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn/personas' },
+        'ravn.sessions': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn/sessions' },
+        'ravn.ravens': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn/ravens' },
+        'ravn.triggers': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn/triggers' },
+        'ravn.budget': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn/budget' },
       },
     } as any);
 
     expect(ravnMocks.buildRavnPersonaAdapter).toHaveBeenCalledWith({
-      basePath: 'http://localhost:8080/api/v1/ravens/personas',
+      basePath: 'http://localhost:8080/api/v1/ravn',
     });
     expect(ravnMocks.buildRavnSessionAdapter).toHaveBeenCalledWith({
-      basePath: 'http://localhost:8080/api/v1/ravens/sessions',
+      basePath: 'http://localhost:8080/api/v1/ravn',
     });
     expect(ravnMocks.buildRavnRavenAdapter).toHaveBeenCalledWith({
       basePath: 'http://localhost:8080/api/v1/ravn',
@@ -622,9 +838,11 @@ describe('buildServices', () => {
       },
     } as any);
 
-    expect(volundrMocks.buildVolundrHttpAdapter).toHaveBeenCalledWith({
-      basePath: 'http://localhost:8080/api/v1/forge',
-    });
+    expect(volundrMocks.buildVolundrHttpAdapter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        basePath: 'http://localhost:8080/api/v1/forge',
+      }),
+    );
   });
 
   it('builds a live template store from the live Volundr service', async () => {
@@ -1259,6 +1477,20 @@ describe('buildServices', () => {
     expect(observatoryMocks.buildObservatoryEventsSseStream).toHaveBeenCalledWith(
       'http://localhost:8080/api/v1/observatory/events',
     );
+  });
+
+  it('derives the bundled host pty websocket path from the live forge base when no explicit pty config exists', () => {
+    buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        forge: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/forge' },
+      },
+    } as any);
+
+    expect(volundrMocks.buildVolundrPtyWsAdapter).toHaveBeenCalledWith({
+      urlTemplate: 'ws://localhost:8080/s/{sessionId}/session',
+    });
   });
 
   it('prefers canonical Forge stream configs over the legacy Volundr stream keys', () => {

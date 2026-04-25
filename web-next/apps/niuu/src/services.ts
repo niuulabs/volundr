@@ -42,6 +42,7 @@ import {
   createMockTemplateStore,
   createMockSessionStore,
   buildVolundrHttpAdapter,
+  buildVolundrFileSystemHttpAdapter,
   createMockPtyStream,
   createMockMetricsStream,
   createMockFileSystemPort,
@@ -150,6 +151,15 @@ export function toSharedApiBase(baseUrl: string): string {
   return baseUrl.replace(/\/(?:tyr|forge|volundr)\/?$/, '');
 }
 
+export function toHostBase(baseUrl: string): string {
+  return baseUrl.replace(/\/api\/v1\/(?:forge|volundr)\/?$/, '');
+}
+
+export function toHostPtyWsUrl(baseUrl: string): string {
+  const hostBase = toHostBase(baseUrl).replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+  return `${hostBase}/s/{sessionId}/session`;
+}
+
 export function resolveSharedApiBase(config: Pick<NiuuConfig, 'services'>): string | null {
   const tyrSvc = config.services['tyr'];
   if (hasHttpBackend(tyrSvc)) return toSharedApiBase(tyrSvc.baseUrl);
@@ -176,19 +186,49 @@ export function resolveForgeServiceBase(config: Pick<NiuuConfig, 'services'>): s
   return resolveDirectServiceBase(config, 'forge', 'volundr');
 }
 
+function resolveVolundrServiceBase(config: Pick<NiuuConfig, 'services'>): string | null {
+  return resolveDirectServiceBase(config, 'volundr', 'forge');
+}
+
 function resolveForgeStreamWsUrl(config: Pick<NiuuConfig, 'services'>): string | null {
-  return resolveDirectServiceWsUrl(config, 'forge.pty', 'volundr.pty');
+  const explicitWsUrl = resolveDirectServiceWsUrl(config, 'forge.pty', 'volundr.pty');
+  if (explicitWsUrl) return explicitWsUrl;
+
+  const forgeBase = resolveForgeServiceBase(config);
+  return forgeBase ? toHostPtyWsUrl(forgeBase) : null;
 }
 
 function resolveForgeMetricsBase(config: Pick<NiuuConfig, 'services'>): string | null {
   return resolveDirectServiceBase(config, 'forge.metrics', 'volundr.metrics');
 }
 
+function resolveFilesystemBase(config: Pick<NiuuConfig, 'services'>): string | null {
+  const explicitBase = resolveDirectServiceBase(config, 'filesystem');
+  if (explicitBase) return explicitBase;
+
+  const forgeBase = resolveForgeServiceBase(config);
+  return forgeBase ? toHostBase(forgeBase) : null;
+}
+
 function resolveTyrServiceBase(
   config: Pick<NiuuConfig, 'services'>,
   serviceKey: 'tyr' | 'tyr.dispatcher' | 'tyr.sessions' | 'tyr.dispatch' | 'tyr.settings',
 ): string | null {
-  return resolveDirectServiceBase(config, serviceKey, 'tyr');
+  const explicitBase = resolveDirectServiceBase(config, serviceKey);
+  if (!explicitBase) return resolveDirectServiceBase(config, 'tyr');
+
+  switch (serviceKey) {
+    case 'tyr.dispatcher':
+      return explicitBase.replace(/\/dispatcher\/?$/, '');
+    case 'tyr.sessions':
+      return explicitBase.replace(/\/sessions\/?$/, '');
+    case 'tyr.dispatch':
+      return explicitBase.replace(/\/dispatch\/?$/, '');
+    case 'tyr.settings':
+      return explicitBase.replace(/\/settings\/?$/, '');
+    default:
+      return explicitBase;
+  }
 }
 
 function resolveObservatoryServiceBase(
@@ -209,6 +249,67 @@ function resolveObservatoryServiceBase(
   if (serviceKey === 'observatory.registry') return groupedBase;
   if (serviceKey === 'observatory.topology') return `${groupedBase}/topology`;
   return `${groupedBase}/events`;
+}
+
+export function resolveSettingsServiceBase(
+  config: Pick<NiuuConfig, 'services'>,
+  providerId: 'identity' | 'tyr' | 'volundr' | 'mimir' | 'ravn' | 'observatory',
+): string | null {
+  switch (providerId) {
+    case 'identity':
+      return resolveCanonicalServiceBase(config, 'identity');
+    case 'tyr':
+      return resolveTyrServiceBase(config, 'tyr.settings');
+    case 'volundr':
+      return resolveVolundrServiceBase(config);
+    case 'mimir':
+      return resolveDirectServiceBase(config, 'mimir');
+    case 'ravn':
+      return resolveDirectServiceBase(config, 'ravn');
+    case 'observatory':
+      return resolveDirectServiceBase(config, 'observatory');
+    default:
+      return null;
+  }
+}
+
+function resolveRavnServiceBase(
+  config: Pick<NiuuConfig, 'services'>,
+  serviceKey: 'ravn.personas' | 'ravn.ravens' | 'ravn.sessions' | 'ravn.triggers' | 'ravn.budget',
+): string | null {
+  const explicitBase = resolveDirectServiceBase(config, serviceKey);
+  if (!explicitBase) return resolveDirectServiceBase(config, 'ravn');
+
+  switch (serviceKey) {
+    case 'ravn.personas':
+      return explicitBase.replace(/\/personas\/?$/, '');
+    case 'ravn.ravens':
+      return explicitBase.replace(/\/ravens\/?$/, '');
+    case 'ravn.sessions':
+      return explicitBase.replace(/\/sessions\/?$/, '');
+    case 'ravn.triggers':
+      return explicitBase.replace(/\/triggers\/?$/, '');
+    case 'ravn.budget':
+      return explicitBase.replace(/\/budget\/?$/, '');
+    default:
+      return explicitBase;
+  }
+}
+
+function resolveRavnServiceStatus(
+  config: Pick<NiuuConfig, 'services'>,
+  serviceKey: 'ravn.personas' | 'ravn.ravens' | 'ravn.sessions' | 'ravn.triggers' | 'ravn.budget',
+): ServiceBackendStatus {
+  const explicit = resolveDirectServiceStatus(config, 'http', serviceKey);
+  if (explicit.mode === 'live' && explicit.target) {
+    if (serviceKey === 'ravn.personas') return { ...explicit, target: explicit.target.replace(/\/personas\/?$/, '') };
+    if (serviceKey === 'ravn.ravens') return { ...explicit, target: explicit.target.replace(/\/ravens\/?$/, '') };
+    if (serviceKey === 'ravn.sessions') return { ...explicit, target: explicit.target.replace(/\/sessions\/?$/, '') };
+    if (serviceKey === 'ravn.triggers') return { ...explicit, target: explicit.target.replace(/\/triggers\/?$/, '') };
+    return { ...explicit, target: explicit.target.replace(/\/budget\/?$/, '') };
+  }
+
+  return resolveDirectServiceStatus(config, 'http', 'ravn');
 }
 
 export function buildSharedFeatureCatalogService(
@@ -272,6 +373,9 @@ function resolveObservatoryServiceStatus(
 export function buildServiceBackendStatus(
   config: Pick<NiuuConfig, 'services'>,
 ): Record<string, ServiceBackendStatus> {
+  const forgePtyStatus = resolveDirectServiceStatus(config, 'ws', 'forge.pty', 'volundr.pty');
+  const derivedForgeBase = resolveForgeServiceBase(config);
+
   return {
     identity: resolveCanonicalServiceStatus(config, 'identity'),
     features: resolveCanonicalServiceStatus(config, 'features'),
@@ -281,13 +385,23 @@ export function buildServiceBackendStatus(
     'observatory.registry': resolveObservatoryServiceStatus(config, 'observatory.registry'),
     'observatory.topology': resolveObservatoryServiceStatus(config, 'observatory.topology'),
     'observatory.events': resolveObservatoryServiceStatus(config, 'observatory.events'),
-    'ravn.personas': resolveDirectServiceStatus(config, 'http', 'ravn.personas', 'ravn'),
-    'ravn.ravens': resolveDirectServiceStatus(config, 'http', 'ravn.ravens', 'ravn'),
-    'ravn.sessions': resolveDirectServiceStatus(config, 'http', 'ravn.sessions', 'ravn'),
-    'ravn.triggers': resolveDirectServiceStatus(config, 'http', 'ravn.triggers', 'ravn'),
-    'ravn.budget': resolveDirectServiceStatus(config, 'http', 'ravn.budget', 'ravn'),
+    'ravn.personas': resolveRavnServiceStatus(config, 'ravn.personas'),
+    'ravn.ravens': resolveRavnServiceStatus(config, 'ravn.ravens'),
+    'ravn.sessions': resolveRavnServiceStatus(config, 'ravn.sessions'),
+    'ravn.triggers': resolveRavnServiceStatus(config, 'ravn.triggers'),
+    'ravn.budget': resolveRavnServiceStatus(config, 'ravn.budget'),
     forge: resolveDirectServiceStatus(config, 'http', 'forge', 'volundr'),
-    'forge.pty': resolveDirectServiceStatus(config, 'ws', 'forge.pty', 'volundr.pty'),
+    'forge.pty':
+      forgePtyStatus.mode === 'live'
+        ? forgePtyStatus
+        : derivedForgeBase
+          ? {
+              mode: 'live',
+              transport: 'ws',
+              target: toHostPtyWsUrl(derivedForgeBase),
+              source: 'forge',
+            }
+          : forgePtyStatus,
     'forge.metrics': resolveDirectServiceStatus(config, 'http', 'forge.metrics', 'volundr.metrics'),
     tyr: resolveDirectServiceStatus(config, 'http', 'tyr'),
     'tyr.dispatcher': resolveDirectServiceStatus(config, 'http', 'tyr.dispatcher', 'tyr'),
@@ -303,13 +417,26 @@ export function buildServiceBackendStatus(
       source: 'mock',
       note: 'No live workflow API is wired yet; see NIU-756.',
     },
-    filesystem: {
-      mode: 'mock',
-      transport: 'mock',
-      target: null,
-      source: 'mock',
-      note: 'No live filesystem API is wired yet.',
-    },
+    filesystem: (() => {
+      const explicit = resolveDirectServiceStatus(config, 'http', 'filesystem');
+      if (explicit.mode === 'live') return explicit;
+      const derivedBase = resolveFilesystemBase(config);
+      if (derivedBase) {
+        return {
+          mode: 'live',
+          transport: 'http',
+          target: derivedBase,
+          source: 'forge-host',
+        } satisfies ServiceBackendStatus;
+      }
+      return {
+        mode: 'mock',
+        transport: 'mock',
+        target: null,
+        source: 'mock',
+        note: 'No live filesystem API is wired yet.',
+      } satisfies ServiceBackendStatus;
+    })(),
   };
 }
 
@@ -562,35 +689,40 @@ function toTemplateSpec(raw: ForgeTemplateRecord): Template['spec'] {
   const image = imageTagIndex > imageRef.lastIndexOf('/') ? imageRef.slice(0, imageTagIndex) : imageRef;
   const tag = imageTagIndex > imageRef.lastIndexOf('/') ? imageRef.slice(imageTagIndex + 1) : 'latest';
 
-  const mounts = Array.isArray(raw.repos)
-    ? raw.repos
-        .map((repo, index) => {
-          if (!repo || typeof repo !== 'object') return null;
-          const url = typeof repo.url === 'string' ? repo.url : null;
-          if (!url) return null;
-          const branch = typeof repo.branch === 'string' ? repo.branch : 'main';
-          const name =
-            typeof repo.name === 'string'
-              ? repo.name
-              : typeof repo.repo === 'string'
-                ? repo.repo
-                : `repo-${index + 1}`;
-          const mountPath =
-            typeof repo.path === 'string' ? repo.path : `/workspace/${name.replace(/[^a-zA-Z0-9._-]+/g, '-')}`;
-          return {
-            name,
-            mountPath,
-            source: { kind: 'git' as const, repo: url, branch },
-            readOnly: false,
-          };
-        })
-        .filter((mount): mount is Template['spec']['mounts'][number] => mount !== null)
+  const mounts: Template['spec']['mounts'] = Array.isArray(raw.repos)
+    ? raw.repos.reduce<Template['spec']['mounts']>((acc, repo, index) => {
+        if (!repo || typeof repo !== 'object') return acc;
+        const url = typeof repo.url === 'string' ? repo.url : null;
+        if (!url) return acc;
+        const branch = typeof repo.branch === 'string' ? repo.branch : 'main';
+        const name =
+          typeof repo.name === 'string'
+            ? repo.name
+            : typeof repo.repo === 'string'
+              ? repo.repo
+              : `repo-${index + 1}`;
+        const mountPath =
+          typeof repo.path === 'string'
+            ? repo.path
+            : `/workspace/${name.replace(/[^a-zA-Z0-9._-]+/g, '-')}`;
+        acc.push({
+          name,
+          mountPath,
+          source: { kind: 'git', repo: url, branch },
+          readOnly: false,
+        });
+        return acc;
+      }, [])
     : [];
 
   const resourceMap = (resourceConfig as Record<string, unknown> | undefined) ?? {};
-  const mcpServers = Array.isArray(raw.mcpServers ?? raw.mcp_servers)
-    ? (raw.mcpServers ?? raw.mcp_servers)!.map((server, index) => {
-        const record = server && typeof server === 'object' ? (server as Record<string, unknown>) : {};
+  const mcpServers: NonNullable<Template['spec']['mcpServers']> = Array.isArray(
+    raw.mcpServers ?? raw.mcp_servers,
+  )
+    ? (raw.mcpServers ?? raw.mcp_servers)!.reduce<NonNullable<Template['spec']['mcpServers']>>(
+        (acc, server, index) => {
+          const record =
+            server && typeof server === 'object' ? (server as unknown as Record<string, unknown>) : {};
         const transport = typeof record.transport === 'string' ? record.transport : 'stdio';
         const connectionString =
           typeof record.connectionString === 'string'
@@ -600,13 +732,16 @@ function toTemplateSpec(raw: ForgeTemplateRecord): Template['spec'] {
               : typeof record.url === 'string'
                 ? record.url
                 : '';
-        return {
-          name: typeof record.name === 'string' ? record.name : `server-${index + 1}`,
-          transport,
-          connectionString,
-          tools: toStringArray(record.tools),
-        };
-      })
+          acc.push({
+            name: typeof record.name === 'string' ? record.name : `server-${index + 1}`,
+            transport,
+            connectionString,
+            tools: toStringArray(record.tools),
+          });
+          return acc;
+        },
+        [],
+      )
     : [];
 
   return {
@@ -784,11 +919,11 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const mimirSvc = config.services['mimir'];
 
   // ── Ravn: all five sub-services share one HTTP base URL when configured ──
-  const ravnPersonaBase = resolveDirectServiceBase(config, 'ravn.personas', 'ravn');
-  const ravnRavenBase = resolveDirectServiceBase(config, 'ravn.ravens', 'ravn');
-  const ravnSessionBase = resolveDirectServiceBase(config, 'ravn.sessions', 'ravn');
-  const ravnTriggerBase = resolveDirectServiceBase(config, 'ravn.triggers', 'ravn');
-  const ravnBudgetBase = resolveDirectServiceBase(config, 'ravn.budget', 'ravn');
+  const ravnPersonaBase = resolveRavnServiceBase(config, 'ravn.personas');
+  const ravnRavenBase = resolveRavnServiceBase(config, 'ravn.ravens');
+  const ravnSessionBase = resolveRavnServiceBase(config, 'ravn.sessions');
+  const ravnTriggerBase = resolveRavnServiceBase(config, 'ravn.triggers');
+  const ravnBudgetBase = resolveRavnServiceBase(config, 'ravn.budget');
   const ravnPersonas = ravnPersonaBase
     ? buildRavnPersonaAdapter(createApiClient(ravnPersonaBase))
     : createMockPersonaStore();
@@ -812,8 +947,9 @@ export function buildServices(config: NiuuConfig): ServicesMap {
 
   // ── Völundr request/response ──
   const forgeBase = resolveForgeServiceBase(config);
-  const volundr = forgeBase
-    ? buildVolundrHttpAdapter(createApiClient(forgeBase))
+  const volundrBase = resolveVolundrServiceBase(config);
+  const volundr = volundrBase
+    ? buildVolundrHttpAdapter(createApiClient(volundrBase))
     : createMockVolundrService();
   const sessionStore = forgeBase
     ? buildVolundrSessionStore(volundr)
@@ -829,12 +965,16 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   //    independently (e.g. mock PTY with live metrics during bring-up). ──
   const forgePtyWsUrl = resolveForgeStreamWsUrl(config);
   const forgeMetricsBase = resolveForgeMetricsBase(config);
+  const filesystemBase = resolveFilesystemBase(config);
   const ptyStream = forgePtyWsUrl
     ? buildVolundrPtyWsAdapter({ urlTemplate: forgePtyWsUrl })
     : createMockPtyStream();
   const metricsStream = forgeMetricsBase
     ? buildVolundrMetricsSseAdapter({ urlTemplate: forgeMetricsBase })
     : createMockMetricsStream();
+  const filesystem = filesystemBase
+    ? buildVolundrFileSystemHttpAdapter({ baseUrl: filesystemBase })
+    : createMockFileSystemPort();
 
   // ── Observatory ──
   const observatoryRegistryBase = resolveObservatoryServiceBase(config, 'observatory.registry');
@@ -906,7 +1046,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     metricsStream,
     features: featureCatalogService,
     identity: identityService,
-    filesystem: createMockFileSystemPort(),
+    filesystem,
     // NIU-678 pages (ClustersPage, TemplatesPage, HistoryPage)
     'volundr.clusters': clusterAdapter,
     'volundr.templates': templateStore,

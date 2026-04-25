@@ -15,6 +15,11 @@ export {
   type PluginConfig,
   type ServiceConfig,
 } from './config';
+export type {
+  SettingsScope,
+  MountedSettingsSectionDescriptor,
+  MountedSettingsProviderDescriptor,
+} from './mounted-settings';
 
 // Ports
 export type { AppIdentity, IIdentityService } from './ports/identity.port';

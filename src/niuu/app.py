@@ -7,12 +7,15 @@ import logging
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import uvicorn
 from fastapi import FastAPI, Request, WebSocket
+from fastapi.openapi.utils import get_openapi
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -24,6 +27,14 @@ if TYPE_CHECKING:
     from niuu.ports.embedded_database import EmbeddedDatabasePort
 
 logger = logging.getLogger(__name__)
+
+
+def _configured_cors_origins() -> list[str]:
+    """Return explicitly configured CORS origins for the unified niuu host."""
+    raw = os.environ.get("NIUU_CORS_ORIGINS", "").strip()
+    if not raw:
+        return []
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 def _sanitize_log(value: object) -> str:
@@ -294,6 +305,106 @@ def collect_route_inventory(
     return tuple(inventory)
 
 
+def _rewrite_public_openapi_path(
+    *,
+    plugin_name: str,
+    public_prefix: str,
+    backend_path: str,
+) -> str | None:
+    """Rewrite a plugin-local OpenAPI path onto the host's public prefix."""
+    backend_prefix = _backend_prefix_for_mount(plugin_name, public_prefix)
+
+    if backend_prefix:
+        if backend_path == backend_prefix:
+            return public_prefix
+        if backend_path.startswith(f"{backend_prefix}/"):
+            return f"{public_prefix}{backend_path[len(backend_prefix):]}"
+        return None
+
+    if not backend_path.startswith("/"):
+        return None
+    if backend_path == "/":
+        return public_prefix
+    return f"{public_prefix}{backend_path}"
+
+
+def _merge_openapi_components(target: dict, source: dict, *, namespace: str) -> None:
+    """Merge OpenAPI component dictionaries conservatively."""
+    for key, value in source.items():
+        if key not in target:
+            target[key] = deepcopy(value)
+            continue
+        if isinstance(target[key], dict) and isinstance(value, dict):
+            _merge_openapi_components(target[key], value, namespace=namespace)
+            continue
+        if target[key] != value:
+            logger.warning(
+                "Skipping conflicting OpenAPI component '%s' from %s",
+                _sanitize_log(key),
+                _sanitize_log(namespace),
+            )
+
+
+def _install_merged_openapi(
+    *,
+    root: FastAPI,
+    sub_apps: list[tuple[str, FastAPI]],
+    plugin_prefixes: dict[str, list[str]],
+) -> None:
+    """Install an OpenAPI generator that merges root and mounted plugin apps."""
+
+    def merged_openapi() -> dict:
+        cached = getattr(root, "openapi_schema", None)
+        if cached is not None:
+            return cached
+
+        schema = get_openapi(
+            title=root.title,
+            version=root.version,
+            description=root.description,
+            routes=root.routes,
+        )
+
+        for plugin_name, sub_app in sub_apps:
+            prefixes = tuple(dict.fromkeys(plugin_prefixes.get(plugin_name, [])))
+            if not prefixes:
+                continue
+
+            sub_schema = sub_app.openapi()
+            for backend_path, path_item in sub_schema.get("paths", {}).items():
+                for public_prefix in prefixes:
+                    public_path = _rewrite_public_openapi_path(
+                        plugin_name=plugin_name,
+                        public_prefix=public_prefix,
+                        backend_path=backend_path,
+                    )
+                    if public_path is None:
+                        continue
+                    schema.setdefault("paths", {}).setdefault(public_path, {})
+                    schema["paths"][public_path].update(deepcopy(path_item))
+
+            sub_components = sub_schema.get("components")
+            if isinstance(sub_components, dict):
+                schema.setdefault("components", {})
+                _merge_openapi_components(
+                    schema["components"],
+                    sub_components,
+                    namespace=plugin_name,
+                )
+
+            existing_tags = {tag.get("name") for tag in schema.get("tags", []) if isinstance(tag, dict)}
+            for tag in sub_schema.get("tags", []):
+                tag_name = tag.get("name") if isinstance(tag, dict) else None
+                if tag_name and tag_name not in existing_tags:
+                    schema.setdefault("tags", []).append(deepcopy(tag))
+                    existing_tags.add(tag_name)
+
+        root.openapi_schema = schema
+        return schema
+
+    root.openapi = merged_openapi
+
+
 def build_root_app(
     *,
     registry: PluginRegistry,
@@ -369,6 +480,15 @@ def build_root_app(
         version="0.1.0",
         lifespan=lifespan,
     )
+    cors_origins = _configured_cors_origins()
+    if cors_origins:
+        root.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
     root.state.legacy_route_hits = {}
     root.state.route_inventory = route_inventory
 
@@ -430,6 +550,12 @@ def build_root_app(
 
     if prefix_apps:
         root.add_middleware(_PrefixDispatchMiddleware, prefix_apps=prefix_apps)
+
+    _install_merged_openapi(
+        root=root,
+        sub_apps=sub_apps,
+        plugin_prefixes=plugin_prefixes,
+    )
 
     skuld_reg = skuld_registry or SkuldPortRegistry()
 
@@ -601,6 +727,13 @@ def build_root_app(
             @root.get("/favicon.ico", include_in_schema=False)
             async def favicon() -> FileResponse:
                 return FileResponse(str(favicon_path), media_type="image/svg+xml")
+
+        live_config_path = dist / "config.live.json"
+        if live_config_path.exists():
+
+            @root.get("/config.live.json", include_in_schema=False)
+            async def live_config() -> FileResponse:
+                return FileResponse(str(live_config_path), media_type="application/json")
 
         index_html = (dist / "index.html").read_bytes()
 

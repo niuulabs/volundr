@@ -8,6 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_serializer
 
 from niuu.http_compat import LegacyRouteNotice, warn_on_legacy_route
+from niuu.settings_schema import (
+    SettingsFieldSchema,
+    SettingsProviderSchema,
+    SettingsSectionSchema,
+)
 from volundr.adapters.inbound.auth import extract_principal, require_role
 from volundr.domain.models import Principal, TenantRole, TenantTier
 from volundr.domain.services.identity import (
@@ -333,6 +338,69 @@ def _register_identity_routes(
             response_model=MeResponse,
             tags=["Identity"],
         )
+
+    async def get_identity_settings(
+        principal: Principal = Depends(extract_principal),
+    ) -> SettingsProviderSchema:
+        current = await service.current_principal(principal)
+        me = _build_me_response(current)
+        return SettingsProviderSchema(
+            title="You",
+            subtitle="personal settings",
+            scope="user",
+            sections=[
+                SettingsSectionSchema(
+                    id="profile",
+                    label="Profile",
+                    description="Current mounted identity profile and access context.",
+                    fields=[
+                        SettingsFieldSchema(
+                            key="email",
+                            label="Email",
+                            type="text",
+                            value=me.email,
+                            read_only=True,
+                        ),
+                        SettingsFieldSchema(
+                            key="display_name",
+                            label="Display Name",
+                            type="text",
+                            value=me.display_name,
+                            read_only=True,
+                        ),
+                        SettingsFieldSchema(
+                            key="tenant_id",
+                            label="Tenant",
+                            type="text",
+                            value=me.tenant_id,
+                            read_only=True,
+                        ),
+                        SettingsFieldSchema(
+                            key="status",
+                            label="Status",
+                            type="text",
+                            value=me.status,
+                            read_only=True,
+                        ),
+                        SettingsFieldSchema(
+                            key="roles",
+                            label="Roles",
+                            type="textarea",
+                            value="\n".join(me.roles),
+                            read_only=True,
+                        ),
+                    ],
+                )
+            ],
+        )
+
+    router.add_api_route(
+        "/settings",
+        get_identity_settings,
+        methods=["GET"],
+        response_model=SettingsProviderSchema,
+        tags=["Identity"],
+    )
 
     async def list_users(
         request: Request,
