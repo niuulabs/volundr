@@ -15,6 +15,14 @@ import type {
   StoredCredential,
   FeatureModule,
   SecretType,
+  IntegrationConnection,
+  ClusterResourceInfo,
+  McpServerConfig,
+  VolundrModel,
+  VolundrPreset,
+  VolundrRepo,
+  TrackerIssue,
+  VolundrWorkspace,
 } from '../models/volundr.model';
 import type { Cluster } from '../domain/cluster';
 import type { Session } from '../domain/session';
@@ -169,6 +177,176 @@ const SEED_CREDENTIALS: StoredCredential[] = [
     metadata: {},
     createdAt: '2025-10-18T12:00:00Z',
     updatedAt: '3mo ago',
+  },
+];
+
+const SEED_MODELS: Record<string, VolundrModel> = {
+  'sonnet-primary': {
+    name: 'Claude Sonnet',
+    provider: 'cloud',
+    tier: 'balanced',
+    color: '#e7d2b4',
+    cost: '$$$',
+  },
+  'gpt-5-codex': {
+    name: 'GPT-5 Codex',
+    provider: 'cloud',
+    tier: 'execution',
+    color: '#b9d8ff',
+    cost: '$$$',
+  },
+};
+
+const SEED_REPOS: VolundrRepo[] = [
+  {
+    provider: 'github',
+    org: 'niuulabs',
+    name: 'volundr',
+    cloneUrl: 'github.com/niuulabs/volundr',
+    url: 'https://github.com/niuulabs/volundr',
+    defaultBranch: 'main',
+    branches: ['main', 'develop', 'feat/host-profiles'],
+  },
+  {
+    provider: 'github',
+    org: 'niuulabs',
+    name: 'bifrost',
+    cloneUrl: 'github.com/niuulabs/bifrost',
+    url: 'https://github.com/niuulabs/bifrost',
+    defaultBranch: 'main',
+    branches: ['main', 'feat/provider-router'],
+  },
+];
+
+const SEED_WORKSPACES: VolundrWorkspace[] = [
+  {
+    id: 'ws-1',
+    pvcName: 'pvc-volundr-main',
+    sessionId: 'sess-arch-1',
+    ownerId: 'dev-user',
+    tenantId: 't1',
+    sizeGb: 14,
+    status: 'archived',
+    createdAt: '2026-04-01T12:00:00Z',
+    archivedAt: '2026-04-20T12:00:00Z',
+    sessionName: 'main',
+    sourceUrl: 'github.com/niuulabs/volundr',
+    sourceRef: 'main',
+  },
+  {
+    id: 'ws-2',
+    pvcName: 'pvc-bifrost-provider-router',
+    sessionId: 'sess-arch-2',
+    ownerId: 'dev-user',
+    tenantId: 't1',
+    sizeGb: 8,
+    status: 'archived',
+    createdAt: '2026-04-02T12:00:00Z',
+    archivedAt: '2026-04-18T12:00:00Z',
+    sessionName: 'provider-router',
+    sourceUrl: 'github.com/niuulabs/bifrost',
+    sourceRef: 'feat/provider-router',
+  },
+];
+
+const SEED_INTEGRATIONS: IntegrationConnection[] = [
+  {
+    id: 'github-primary',
+    createdAt: '2026-04-01T12:00:00Z',
+    updatedAt: '2026-04-24T12:00:00Z',
+  },
+  {
+    id: 'linear-main',
+    createdAt: '2026-04-02T12:00:00Z',
+    updatedAt: '2026-04-23T12:00:00Z',
+  },
+];
+
+const SEED_TRACKER_ISSUES: TrackerIssue[] = [
+  {
+    id: 'issue-1',
+    identifier: 'NIU-801',
+    title: 'Polish forge launch defaults',
+    status: 'in_progress',
+    url: 'https://linear.app/niuu/issue/NIU-801',
+  },
+  {
+    id: 'issue-2',
+    identifier: 'NIU-802',
+    title: 'Hook tracker issue launch context into sessions',
+    status: 'todo',
+    url: 'https://linear.app/niuu/issue/NIU-802',
+  },
+];
+
+const SEED_CLUSTER_RESOURCES: ClusterResourceInfo = {
+  resourceTypes: [
+    { name: 'cpu', resourceKey: 'cpu', displayName: 'CPU', unit: 'cores', category: 'compute' },
+    {
+      name: 'memory',
+      resourceKey: 'memory',
+      displayName: 'Memory',
+      unit: 'bytes',
+      category: 'memory',
+    },
+    { name: 'gpu', resourceKey: 'gpu', displayName: 'GPU', unit: 'count', category: 'accelerator' },
+  ],
+  nodes: [
+    {
+      name: 'forge-a',
+      labels: {},
+      allocatable: { cpu: '16', memory: '32Gi', gpu: '1' },
+      allocated: { cpu: '4', memory: '8Gi', gpu: '0' },
+      available: { cpu: '12', memory: '24Gi', gpu: '1' },
+    },
+    {
+      name: 'forge-b',
+      labels: {},
+      allocatable: { cpu: '24', memory: '48Gi', gpu: '2' },
+      allocated: { cpu: '8', memory: '16Gi', gpu: '1' },
+      available: { cpu: '16', memory: '32Gi', gpu: '1' },
+    },
+  ],
+};
+
+const SEED_MCP_SERVERS: McpServerConfig[] = [
+  {
+    name: 'filesystem',
+    type: 'stdio',
+    command: 'uvx',
+    args: ['mcp-filesystem', '/workspace'],
+  },
+  {
+    name: 'git',
+    type: 'stdio',
+    command: 'uvx',
+    args: ['mcp-git'],
+  },
+];
+
+const SEED_PRESETS: VolundrPreset[] = [
+  {
+    id: 'preset-fast-review',
+    name: 'fast-review',
+    description: 'Quick review setup for the main repo',
+    isDefault: true,
+    createdAt: '2026-04-01T12:00:00Z',
+    updatedAt: '2026-04-20T12:00:00Z',
+    cliTool: 'claude',
+    workloadType: 'skuld-claude',
+    model: 'sonnet-primary',
+    systemPrompt: 'Review changes and summarize the main risks.',
+    resourceConfig: { cpu: '2', memory: '8Gi' },
+    mcpServers: [SEED_MCP_SERVERS[0]!],
+    terminalSidecar: { enabled: true, allowedCommands: [] },
+    skills: [],
+    rules: [],
+    envVars: { LOG_LEVEL: 'info' },
+    envSecretRefs: ['github-niuu'],
+    source: { type: 'git', repo: 'github.com/niuulabs/volundr', branch: 'main' },
+    integrationIds: ['github-primary'],
+    setupScripts: ['pnpm install'],
+    workloadConfig: {},
   },
 ];
 
@@ -1037,6 +1215,7 @@ const SEED_TEMPLATES: Template[] = [
 export function createMockVolundrService(): IVolundrService {
   const sessions = [...SEED_SESSIONS];
   const credentials = new Map(SEED_CREDENTIALS.map((credential) => [credential.name, credential]));
+  const presets = [...SEED_PRESETS];
 
   return {
     getFeatures: async () => ({
@@ -1054,9 +1233,9 @@ export function createMockVolundrService(): IVolundrService {
 
     getStats: async () => ({ ...SEED_STATS }),
 
-    getModels: async () => ({}),
+    getModels: async () => ({ ...SEED_MODELS }),
 
-    getRepos: async () => [],
+    getRepos: async () => [...SEED_REPOS],
 
     subscribe: (callback) => {
       callback(sessions);
@@ -1116,20 +1295,29 @@ export function createMockVolundrService(): IVolundrService {
     },
     saveTemplate: async (t) => t,
 
-    getPresets: async () => [],
-    getPreset: async () => null,
-    savePreset: async (p) => ({
-      ...p,
-      id: p.id ?? 'preset-new',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }),
+    getPresets: async () => [...presets],
+    getPreset: async (id) => presets.find((preset) => preset.id === id) ?? null,
+    savePreset: async (p) => {
+      const saved = {
+        ...p,
+        id: p.id ?? `preset-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const existingIndex = presets.findIndex((preset) => preset.id === saved.id);
+      if (existingIndex >= 0) {
+        presets[existingIndex] = saved;
+      } else {
+        presets.push(saved);
+      }
+      return saved;
+    },
     deletePreset: async () => {},
 
-    getAvailableMcpServers: async () => [],
+    getAvailableMcpServers: async () => [...SEED_MCP_SERVERS],
     getAvailableSecrets: async () => [],
     createSecret: async (name) => ({ name, keys: [] }),
-    getClusterResources: async () => ({ resourceTypes: [], nodes: [] }),
+    getClusterResources: async () => SEED_CLUSTER_RESOURCES,
 
     startSession: async (config) => ({
       id: 'sess-new',
@@ -1198,7 +1386,12 @@ export function createMockVolundrService(): IVolundrService {
 
     getSessionMcpServers: async () => [],
 
-    searchTrackerIssues: async () => [],
+    searchTrackerIssues: async (query) =>
+      SEED_TRACKER_ISSUES.filter(
+        (issue) =>
+          issue.identifier.toLowerCase().includes(query.toLowerCase()) ||
+          issue.title.toLowerCase().includes(query.toLowerCase()),
+      ),
     getProjectRepoMappings: async () => [],
     updateTrackerIssueStatus: async (issueId, status) => ({
       id: issueId,
@@ -1250,7 +1443,7 @@ export function createMockVolundrService(): IVolundrService {
     deleteTenantCredential: async () => {},
 
     getIntegrationCatalog: async () => [],
-    getIntegrations: async () => [],
+    getIntegrations: async () => [...SEED_INTEGRATIONS],
     createIntegration: async () => ({
       id: `int-${Date.now()}`,
       createdAt: new Date().toISOString(),
@@ -1284,7 +1477,8 @@ export function createMockVolundrService(): IVolundrService {
     },
     getCredentialTypes: async () => [],
 
-    listWorkspaces: async () => [],
+    listWorkspaces: async (status) =>
+      status ? SEED_WORKSPACES.filter((workspace) => workspace.status === status) : [...SEED_WORKSPACES],
     listAllWorkspaces: async () => [],
     restoreWorkspace: async () => {},
     deleteWorkspace: async () => {},

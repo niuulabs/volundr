@@ -47,6 +47,18 @@ function makeClient() {
   };
 }
 
+function makeClientWithBase(basePath: string) {
+  return {
+    ...makeClient(),
+    basePath,
+  };
+}
+
+function getDerivedClient(basePath: string) {
+  const index = queryMocks.createApiClient.mock.calls.findIndex(([arg]) => arg === basePath);
+  return index >= 0 ? queryMocks.createApiClient.mock.results[index]?.value : undefined;
+}
+
 afterEach(() => {
   vi.useRealTimers();
   queryMocks.createApiClient.mockClear();
@@ -88,7 +100,8 @@ describe('buildVolundrHttpAdapter', () => {
   it('getFeatures calls GET /features', async () => {
     const client = makeClient();
     await buildVolundrHttpAdapter(client).getFeatures();
-    expect(client.get).toHaveBeenCalledWith('/features');
+    const sharedClient = getDerivedClient('http://localhost:8080/api/v1');
+    expect(sharedClient.get).toHaveBeenCalledWith('/features');
   });
 
   it('startSession calls POST /sessions', async () => {
@@ -100,6 +113,31 @@ describe('buildVolundrHttpAdapter', () => {
     };
     await buildVolundrHttpAdapter(client).startSession(config);
     expect(client.post).toHaveBeenCalledWith('/sessions', config);
+  });
+
+  it('derives a canonical forge client for session launch when the main base is legacy volundr', async () => {
+    const client = makeClientWithBase('http://localhost:8080/api/v1/volundr');
+    const config = {
+      name: 'test',
+      source: { type: 'git' as const, repo: 'r', branch: 'main' },
+      model: 'claude-sonnet',
+    };
+
+    await buildVolundrHttpAdapter(client).startSession(config);
+
+    const forgeClient = getDerivedClient('http://localhost:8080/api/v1/forge');
+    expect(forgeClient.post).toHaveBeenCalledWith('/sessions', config);
+    expect(client.post).not.toHaveBeenCalledWith('/sessions', config);
+  });
+
+  it('derives a canonical forge client for session reads when the main base is legacy volundr', async () => {
+    const client = makeClientWithBase('http://localhost:8080/api/v1/volundr');
+
+    await buildVolundrHttpAdapter(client).getSessions();
+
+    const forgeClient = getDerivedClient('http://localhost:8080/api/v1/forge');
+    expect(forgeClient.get).toHaveBeenCalledWith('/sessions');
+    expect(client.get).not.toHaveBeenCalledWith('/sessions');
   });
 
   it('stopSession calls POST /sessions/:id/stop', async () => {
@@ -270,7 +308,8 @@ describe('buildVolundrHttpAdapter', () => {
   it('getIdentity calls GET /identity', async () => {
     const client = makeClient();
     await buildVolundrHttpAdapter(client).getIdentity();
-    expect(client.get).toHaveBeenCalledWith('/identity');
+    const sharedClient = getDerivedClient('http://localhost:8080/api/v1');
+    expect(sharedClient.get).toHaveBeenCalledWith('/identity');
   });
 
   it('listArchivedSessions uses the archived status query instead of a synthetic sub-route', async () => {
@@ -283,7 +322,7 @@ describe('buildVolundrHttpAdapter', () => {
     const client = makeClient();
     const req = { name: 'my-key', secretType: 'api_key' as const, data: { token: 'abc' } };
     await buildVolundrHttpAdapter(client).createCredential(req);
-    const derivedClient = queryMocks.createApiClient.mock.results.at(-1)?.value;
+    const derivedClient = getDerivedClient('http://localhost:8080/api/v1/credentials');
     expect(queryMocks.createApiClient).toHaveBeenCalledWith(
       'http://localhost:8080/api/v1/credentials',
     );
@@ -299,7 +338,8 @@ describe('buildVolundrHttpAdapter', () => {
   it('toggleFeature calls POST /features/modules/:key/toggle', async () => {
     const client = makeClient();
     await buildVolundrHttpAdapter(client).toggleFeature('some-feature', true);
-    expect(client.post).toHaveBeenCalledWith('/features/modules/some-feature/toggle', {
+    const sharedClient = getDerivedClient('http://localhost:8080/api/v1');
+    expect(sharedClient.post).toHaveBeenCalledWith('/features/modules/some-feature/toggle', {
       enabled: true,
     });
   });
@@ -307,7 +347,8 @@ describe('buildVolundrHttpAdapter', () => {
   it('revokeToken calls DELETE /tokens/:id', async () => {
     const client = makeClient();
     await buildVolundrHttpAdapter(client).revokeToken('t1');
-    expect(client.delete).toHaveBeenCalledWith('/tokens/t1');
+    const sharedClient = getDerivedClient('http://localhost:8080/api/v1');
+    expect(sharedClient.delete).toHaveBeenCalledWith('/tokens/t1');
   });
 
   it('bulkDeleteWorkspaces calls POST /workspaces/bulk-delete', async () => {
@@ -618,19 +659,21 @@ describe('buildVolundrHttpAdapter', () => {
   it('searchTrackerIssues encodes the query', async () => {
     const client = makeClient();
     await buildVolundrHttpAdapter(client).searchTrackerIssues('fix auth', 'proj-1');
-    expect(client.get).toHaveBeenCalledWith('/tracker/issues?q=fix%20auth&projectId=proj-1');
+    const sharedClient = getDerivedClient('http://localhost:8080/api/v1');
+    expect(sharedClient.get).toHaveBeenCalledWith('/tracker/issues?q=fix%20auth&projectId=proj-1');
   });
 
   it('getFeatureModules includes scope when provided', async () => {
     const client = makeClient();
     await buildVolundrHttpAdapter(client).getFeatureModules('admin');
-    expect(client.get).toHaveBeenCalledWith('/features/modules?scope=admin');
+    const sharedClient = getDerivedClient('http://localhost:8080/api/v1');
+    expect(sharedClient.get).toHaveBeenCalledWith('/features/modules?scope=admin');
   });
 
   it('getCredentials targets the canonical shared credentials route when filtering by type', async () => {
     const client = makeClient();
     await buildVolundrHttpAdapter(client).getCredentials('api_key');
-    const derivedClient = queryMocks.createApiClient.mock.results.at(-1)?.value;
+    const derivedClient = getDerivedClient('http://localhost:8080/api/v1/credentials');
     expect(derivedClient.get).toHaveBeenCalledWith('/user?secret_type=api_key');
   });
 

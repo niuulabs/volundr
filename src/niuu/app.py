@@ -77,12 +77,19 @@ _PLUGIN_ROUTE_DOMAINS: dict[str, str] = {
     "audit-api": "volundr",
     "bifrost-api": "bifrost",
     "bifrost-observability-api": "bifrost",
+    "catalog-legacy-api": "volundr",
     "credentials-api": "volundr",
+    "credentials-legacy-api": "volundr",
     "features-api": "volundr",
+    "features-legacy-api": "volundr",
     "forge-api": "volundr",
+    "forge-legacy-api": "volundr",
     "git-api": "volundr",
+    "git-legacy-api": "volundr",
     "identity-api": "volundr",
+    "identity-legacy-api": "volundr",
     "integrations-api": "volundr",
+    "integrations-legacy-api": "volundr",
     "mimir-api": "mimir",
     "niuu-api": "niuu",
     "observatory-api": "observatory",
@@ -101,27 +108,50 @@ _PLUGIN_ROUTE_DOMAINS: dict[str, str] = {
     "event-api": "tyr",
     "review-api": "tyr",
     "session-api": "volundr",
+    "session-legacy-api": "volundr",
     "saga-api": "tyr",
     "settings-api": "tyr",
     "tenancy-api": "volundr",
     "tracker-api": "volundr",
     "tokens-api": "volundr",
+    "tokens-legacy-api": "volundr",
     "volundr-api": "volundr",
     "workflow-api": "tyr",
     "workspace-api": "volundr",
+    "workspace-legacy-api": "volundr",
     "tyr-api": "tyr",
 }
 _LEGACY_PLUGIN_DOMAIN_NAMES: dict[str, str] = {
-    plugin_name: domain_name for domain_name, plugin_name in _PLUGIN_ROUTE_DOMAINS.items()
+    "volundr": "volundr-api",
+    "tyr": "tyr-api",
+    "niuu": "niuu-api",
 }
 
 _STATIC_ROUTE_DOMAINS = frozenset({"skuld-proxy", "runtime-config", "web-ui"})
 _FULL_ROUTE_DOMAINS = frozenset({*_PLUGIN_ROUTE_DOMAINS.keys(), *_STATIC_ROUTE_DOMAINS})
+_LEGACY_COMPAT_ROUTE_DOMAINS = frozenset(
+    {
+        "catalog-legacy-api",
+        "credentials-legacy-api",
+        "features-legacy-api",
+        "forge-legacy-api",
+        "git-legacy-api",
+        "identity-legacy-api",
+        "integrations-legacy-api",
+        "session-legacy-api",
+        "tokens-legacy-api",
+        "volundr-api",
+        "workspace-legacy-api",
+    }
+)
+_CANONICAL_ROUTE_DOMAINS = frozenset(_FULL_ROUTE_DOMAINS - _LEGACY_COMPAT_ROUTE_DOMAINS)
 
 DEFAULT_HOST_PROFILE = "full"
 HOST_PROFILES: dict[str, frozenset[str]] = {
-    "full": _FULL_ROUTE_DOMAINS,
-    "api": frozenset(domain for domain in _FULL_ROUTE_DOMAINS if domain != "web-ui"),
+    "full": _CANONICAL_ROUTE_DOMAINS,
+    "api": frozenset(domain for domain in _CANONICAL_ROUTE_DOMAINS if domain != "web-ui"),
+    "full-compat": _FULL_ROUTE_DOMAINS,
+    "api-compat": frozenset(domain for domain in _FULL_ROUTE_DOMAINS if domain != "web-ui"),
 }
 _STATIC_ROUTE_PREFIXES: dict[str, tuple[str, ...]] = {
     "skuld-proxy": (

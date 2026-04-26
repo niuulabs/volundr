@@ -94,6 +94,7 @@ export interface IVolundrService {
     source: SessionSource;
     model: string;
     templateName?: string;
+    presetId?: string;
     taskType?: string;
     trackerIssue?: TrackerIssue;
     terminalRestricted?: boolean;
@@ -103,6 +104,7 @@ export interface IVolundrService {
     resourceConfig?: Record<string, string | undefined>;
     systemPrompt?: string;
     initialPrompt?: string;
+    workloadConfig?: Record<string, string | number | boolean | undefined>;
   }): Promise<VolundrSession>;
   connectSession(config: { name: string; hostname: string }): Promise<VolundrSession>;
   updateSession(

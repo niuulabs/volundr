@@ -172,12 +172,19 @@ class TestRouteDomainSelection:
             "audit-api",
             "bifrost-api",
             "bifrost-observability-api",
+            "catalog-legacy-api",
             "credentials-api",
+            "credentials-legacy-api",
             "features-api",
+            "features-legacy-api",
             "forge-api",
+            "forge-legacy-api",
             "git-api",
+            "git-legacy-api",
             "identity-api",
+            "identity-legacy-api",
             "integrations-api",
+            "integrations-legacy-api",
             "llm-api",
             "mimir-api",
             "niuu-api",
@@ -196,14 +203,17 @@ class TestRouteDomainSelection:
             "event-api",
             "review-api",
             "session-api",
+            "session-legacy-api",
             "saga-api",
             "settings-api",
             "tenancy-api",
             "tracker-api",
             "tokens-api",
+            "tokens-legacy-api",
             "volundr-api",
             "workflow-api",
             "workspace-api",
+            "workspace-legacy-api",
             "tyr-api",
             "skuld-proxy",
             "runtime-config",
@@ -213,8 +223,12 @@ class TestRouteDomainSelection:
     def test_host_profiles_cover_full_and_api(self) -> None:
         assert "full" in HOST_PROFILES
         assert "api" in HOST_PROFILES
+        assert "full-compat" in HOST_PROFILES
+        assert "api-compat" in HOST_PROFILES
         assert "web-ui" in HOST_PROFILES["full"]
         assert "web-ui" not in HOST_PROFILES["api"]
+        assert "volundr-api" not in HOST_PROFILES["full"]
+        assert "volundr-api" in HOST_PROFILES["full-compat"]
 
     def test_parse_enabled_mounts_empty_returns_none(self) -> None:
         assert parse_enabled_mounts("") is None
@@ -529,7 +543,7 @@ class TestRootServerBuildApp:
         registry = PluginRegistry()
         registry.register(VolundrPlugin(name="volundr"))
 
-        server = RootServer(registry=registry)
+        server = RootServer(registry=registry, enabled_mounts={"volundr-api"})
         with patch.dict(os.environ, {"NIUU_NO_WEB": "true"}):
             app = server._build_app()
 
@@ -1313,7 +1327,11 @@ class TestRootServerBuildApp:
                 return (
                     APIRouteDomain(
                         name="forge-api",
-                        prefixes=("/api/v1/forge/sessions", "/api/v1/volundr/sessions"),
+                        prefixes=("/api/v1/forge/sessions",),
+                    ),
+                    APIRouteDomain(
+                        name="forge-legacy-api",
+                        prefixes=("/api/v1/volundr/sessions",),
                     ),
                 )
 
@@ -1347,7 +1365,7 @@ class TestRootServerBuildApp:
         paths = response.json()["paths"]
         assert "/health" in paths
         assert "/api/v1/forge/sessions" in paths
-        assert "/api/v1/volundr/sessions" in paths
+        assert "/api/v1/volundr/sessions" not in paths
         assert "/api/v1/mimir/stats" in paths
 
     def test_plugin_create_api_app_returns_none(self) -> None:
@@ -1610,7 +1628,7 @@ class TestRootServerLifespan:
         registry = PluginRegistry()
         registry.register(VolundrPlugin(name="volundr"))
 
-        server = RootServer(registry=registry)
+        server = RootServer(registry=registry, enabled_mounts={"volundr-api"})
         with patch.dict(os.environ, {"NIUU_NO_WEB": "true"}):
             app = server._build_app()
 

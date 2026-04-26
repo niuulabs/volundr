@@ -269,6 +269,27 @@ function deriveCanonicalCredentialsBasePath(basePath?: string): string | null {
   return derived === normalized ? null : derived;
 }
 
+function deriveSharedApiBasePath(basePath?: string): string | null {
+  if (!basePath) return null;
+
+  const normalized = basePath.replace(/\/$/, '');
+  if (normalized.endsWith('/api/v1')) return normalized;
+
+  const derived = normalized.replace(/\/api\/v1\/(?:forge|volundr)$/, '/api/v1');
+  return derived === normalized ? null : derived;
+}
+
+function deriveCanonicalForgeBasePath(basePath?: string): string | null {
+  if (!basePath) return null;
+
+  const normalized = basePath.replace(/\/$/, '');
+  if (normalized.endsWith('/api/v1/forge')) return normalized;
+  if (normalized.endsWith('/api/v1')) return `${normalized}/forge`;
+
+  const derived = normalized.replace(/\/api\/v1\/volundr$/, '/api/v1/forge');
+  return derived === normalized ? null : derived;
+}
+
 function normalizeStoredCredential(
   credential: CanonicalCredentialPayload,
   fallbackSecretType: SecretType = 'generic',
@@ -560,10 +581,21 @@ export function buildVolundrHttpAdapter(
   client: HttpClient,
   openStream: EventStreamOpener = openEventStream,
 ): IVolundrService {
+  const forgeClient = (() => {
+    const forgeBasePath = deriveCanonicalForgeBasePath(client.basePath);
+    return forgeBasePath && forgeBasePath !== client.basePath
+      ? createApiClient(forgeBasePath)
+      : client;
+  })();
   const credentialsClient = (() => {
     const credentialsBasePath = deriveCanonicalCredentialsBasePath(client.basePath);
     return credentialsBasePath ? createApiClient(credentialsBasePath) : client;
   })();
+  const sharedClient = (() => {
+    const sharedBasePath = deriveSharedApiBasePath(client.basePath);
+    return sharedBasePath ? createApiClient(sharedBasePath) : client;
+  })();
+  const trackerClient = sharedClient;
 
   const sessionSubscribers = new Set<(sessions: VolundrSession[]) => void>();
   const statsSubscribers = new Set<(stats: VolundrStats) => void>();
@@ -600,14 +632,14 @@ export function buildVolundrHttpAdapter(
   }
 
   async function loadSessions(endpoint: string): Promise<VolundrSession[]> {
-    const sessions = (await client.get<SessionPayload[]>(endpoint)).map(normalizeSession);
+    const sessions = (await forgeClient.get<SessionPayload[]>(endpoint)).map(normalizeSession);
     updateSessionCache(sessions);
     publishSessions();
     return sessions;
   }
 
   async function loadSession(id: string): Promise<VolundrSession | null> {
-    const session = await client.get<SessionPayload | null>(`/sessions/${id}`);
+    const session = await forgeClient.get<SessionPayload | null>(`/sessions/${id}`);
     if (!session) {
       sessionCache.delete(id);
       publishSessions();
@@ -620,13 +652,13 @@ export function buildVolundrHttpAdapter(
   }
 
   async function loadStats(): Promise<VolundrStats> {
-    statsCache = normalizeStats(await client.get<StatsPayload>('/stats'));
+    statsCache = normalizeStats(await forgeClient.get<StatsPayload>('/stats'));
     publishStats();
     return statsCache;
   }
 
   async function loadChronicle(sessionId: string): Promise<SessionChronicle | null> {
-    const payload = await client.get<ChroniclePayload | null>(`/chronicles/${sessionId}/timeline`);
+    const payload = await forgeClient.get<ChroniclePayload | null>(`/chronicles/${sessionId}/timeline`);
     if (!payload) {
       chronicleCache.delete(sessionId);
       return null;
@@ -638,13 +670,13 @@ export function buildVolundrHttpAdapter(
   }
 
   async function loadMessages(sessionId: string): Promise<VolundrMessage[]> {
-    return client
+    return forgeClient
       .get<ConversationPayload>(`/sessions/${sessionId}/conversation`)
       .then((payload) => normalizeMessages(sessionId, payload));
   }
 
   async function loadLogs(sessionId: string, limit?: number): Promise<VolundrLog[]> {
-    return client
+    return forgeClient
       .get<LogPayload>(`/sessions/${sessionId}/logs${limit ? `?lines=${limit}` : ''}`)
       .then((payload) => normalizeLogs(sessionId, payload));
   }
@@ -709,8 +741,8 @@ export function buildVolundrHttpAdapter(
   }
 
   function ensureStream(): void {
-    if (streamHandle || !client.basePath) return;
-    streamHandle = openStream(`${client.basePath}/sessions/stream`, {
+    if (streamHandle || !forgeClient.basePath) return;
+    streamHandle = openStream(`${forgeClient.basePath}/sessions/stream`, {
       onMessage: () => {},
       onEvent: ({ event, data }) => {
         try {
@@ -796,13 +828,13 @@ export function buildVolundrHttpAdapter(
   }
 
   return {
-    getFeatures: () => client.get<VolundrFeatures>('/features'),
+    getFeatures: () => sharedClient.get<VolundrFeatures>('/features'),
     getSessions: () => loadSessions('/sessions'),
     getSession: (id) => loadSession(id),
     getActiveSessions: () => loadSessions('/sessions?active=true'),
     getStats: () => loadStats(),
-    getModels: () => client.get<Record<string, VolundrModel>>('/models'),
-    getRepos: () => client.get<VolundrRepo[]>('/repos'),
+    getModels: () => forgeClient.get<Record<string, VolundrModel>>('/models'),
+    getRepos: () => forgeClient.get<VolundrRepo[]>('/repos'),
 
     subscribe: (callback) => {
       sessionSubscribers.add(callback);
@@ -831,46 +863,47 @@ export function buildVolundrHttpAdapter(
       };
     },
 
-    getTemplates: () => client.get<VolundrTemplate[]>('/templates'),
-    getTemplate: (name) => client.get<VolundrTemplate | null>(`/templates/${name}`),
-    saveTemplate: (template) => client.post<VolundrTemplate>('/templates', template),
+    getTemplates: () => forgeClient.get<VolundrTemplate[]>('/templates'),
+    getTemplate: (name) => forgeClient.get<VolundrTemplate | null>(`/templates/${name}`),
+    saveTemplate: (template) => forgeClient.post<VolundrTemplate>('/templates', template),
 
-    getPresets: () => client.get<VolundrPreset[]>('/presets'),
-    getPreset: (id) => client.get<VolundrPreset | null>(`/presets/${id}`),
+    getPresets: () => forgeClient.get<VolundrPreset[]>('/presets'),
+    getPreset: (id) => forgeClient.get<VolundrPreset | null>(`/presets/${id}`),
     savePreset: (preset) =>
       preset.id
-        ? client.put<VolundrPreset>(`/presets/${preset.id}`, preset)
-        : client.post<VolundrPreset>('/presets', preset),
-    deletePreset: (id) => client.delete<void>(`/presets/${id}`),
+        ? forgeClient.put<VolundrPreset>(`/presets/${preset.id}`, preset)
+        : forgeClient.post<VolundrPreset>('/presets', preset),
+    deletePreset: (id) => forgeClient.delete<void>(`/presets/${id}`),
 
-    getAvailableMcpServers: () => client.get<McpServerConfig[]>('/mcp-servers'),
+    getAvailableMcpServers: () => forgeClient.get<McpServerConfig[]>('/mcp-servers'),
     getAvailableSecrets: () => client.get<string[]>('/secrets'),
     createSecret: (name, data) =>
       client.post<{ name: string; keys: string[] }>('/secrets', { name, data }),
-    getClusterResources: () => client.get<ClusterResourceInfo>('/cluster/resources'),
+    getClusterResources: () => forgeClient.get<ClusterResourceInfo>('/cluster/resources'),
 
-    startSession: async (config) => normalizeSession(await client.post<SessionPayload>('/sessions', config)),
+    startSession: async (config) =>
+      normalizeSession(await forgeClient.post<SessionPayload>('/sessions', config)),
     connectSession: async (config) =>
-      normalizeSession(await client.post<SessionPayload>('/sessions/connect', config)),
+      normalizeSession(await forgeClient.post<SessionPayload>('/sessions/connect', config)),
     updateSession: (sessionId, updates) =>
-      client.patch<SessionPayload>(`/sessions/${sessionId}`, updates).then(normalizeSession),
-    stopSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/stop`),
-    resumeSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/resume`),
+      forgeClient.patch<SessionPayload>(`/sessions/${sessionId}`, updates).then(normalizeSession),
+    stopSession: (sessionId) => forgeClient.post<void>(`/sessions/${sessionId}/stop`),
+    resumeSession: (sessionId) => forgeClient.post<void>(`/sessions/${sessionId}/resume`),
     deleteSession: (sessionId, cleanup) =>
-      client.delete<void>(
+      forgeClient.delete<void>(
         `/sessions/${sessionId}${cleanup ? `?cleanup=${cleanup.join(',')}` : ''}`,
       ),
-    archiveSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/archive`),
-    restoreSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/restore`),
+    archiveSession: (sessionId) => forgeClient.post<void>(`/sessions/${sessionId}/archive`),
+    restoreSession: (sessionId) => forgeClient.post<void>(`/sessions/${sessionId}/restore`),
     listArchivedSessions: () =>
-      client
+      forgeClient
         .get<SessionPayload[]>('/sessions?status=archived')
         .then((sessions) => sessions.map(normalizeSession)),
 
     getMessages: (sessionId) =>
       loadMessages(sessionId),
     sendMessage: (sessionId, content) =>
-      client.post<VolundrMessage>(`/sessions/${sessionId}/messages`, { content }),
+      forgeClient.post<VolundrMessage>(`/sessions/${sessionId}/messages`, { content }),
     subscribeMessages: (sessionId, callback) => {
       const connection = ensurePollingConnection(
         messageSubscribers,
@@ -902,7 +935,7 @@ export function buildVolundrHttpAdapter(
     },
 
     getCodeServerUrl: (sessionId) =>
-      client.get<string | null>(`/sessions/${sessionId}/code-server-url`),
+      forgeClient.get<string | null>(`/sessions/${sessionId}/code-server-url`),
 
     getChronicle: (sessionId) => loadChronicle(sessionId),
     subscribeChronicle: (sessionId, callback) => {
@@ -926,30 +959,30 @@ export function buildVolundrHttpAdapter(
     },
 
     getPullRequests: (repoUrl, status) =>
-      client.get<PullRequest[]>(
+      forgeClient.get<PullRequest[]>(
         `/repos/prs?url=${encodeURIComponent(repoUrl)}${status ? `&status=${status}` : ''}`,
       ),
     createPullRequest: (sessionId, title, targetBranch) =>
-      client.post<PullRequest>(`/sessions/${sessionId}/pr`, { title, targetBranch }),
+      forgeClient.post<PullRequest>(`/sessions/${sessionId}/pr`, { title, targetBranch }),
     mergePullRequest: (prNumber, repoUrl, mergeMethod) =>
-      client.post<MergeResult>(`/repos/prs/${prNumber}/merge`, { repoUrl, mergeMethod }),
+      forgeClient.post<MergeResult>(`/repos/prs/${prNumber}/merge`, { repoUrl, mergeMethod }),
     getCIStatus: (prNumber, repoUrl, branch) =>
-      client.get<CIStatusValue>(
+      forgeClient.get<CIStatusValue>(
         `/repos/prs/${prNumber}/ci?url=${encodeURIComponent(repoUrl)}&branch=${encodeURIComponent(branch)}`,
       ),
 
     getSessionMcpServers: (sessionId) =>
-      client.get<McpServer[]>(`/sessions/${sessionId}/mcp-servers`),
+      forgeClient.get<McpServer[]>(`/sessions/${sessionId}/mcp-servers`),
 
     searchTrackerIssues: (query, projectId) =>
-      client.get<TrackerIssue[]>(
+      trackerClient.get<TrackerIssue[]>(
         `/tracker/issues?q=${encodeURIComponent(query)}${projectId ? `&projectId=${projectId}` : ''}`,
       ),
-    getProjectRepoMappings: () => client.get<ProjectRepoMapping[]>('/tracker/repo-mappings'),
+    getProjectRepoMappings: () => trackerClient.get<ProjectRepoMapping[]>('/tracker/repo-mappings'),
     updateTrackerIssueStatus: (issueId, status) =>
-      client.patch<TrackerIssue>(`/tracker/issues/${issueId}`, { status }),
+      trackerClient.patch<TrackerIssue>(`/tracker/issues/${issueId}`, { status }),
 
-    getIdentity: () => client.get<VolundrIdentity>('/identity'),
+    getIdentity: () => sharedClient.get<VolundrIdentity>('/identity'),
     listUsers: () => client.get<VolundrUser[]>('/admin/users'),
 
     getTenants: () => client.get<VolundrTenant[]>('/tenants'),
@@ -982,12 +1015,12 @@ export function buildVolundrHttpAdapter(
     storeTenantCredential: (name, data) => credentialsClient.post<void>('/tenant', { name, data }),
     deleteTenantCredential: (name) => credentialsClient.delete<void>(`/tenant/${name}`),
 
-    getIntegrationCatalog: () => client.get<CatalogEntry[]>('/integrations/catalog'),
-    getIntegrations: () => client.get<IntegrationConnection[]>('/integrations'),
+    getIntegrationCatalog: () => sharedClient.get<CatalogEntry[]>('/integrations/catalog'),
+    getIntegrations: () => sharedClient.get<IntegrationConnection[]>('/integrations'),
     createIntegration: (connection) =>
-      client.post<IntegrationConnection>('/integrations', connection),
-    deleteIntegration: (id) => client.delete<void>(`/integrations/${id}`),
-    testIntegration: (id) => client.post<IntegrationTestResult>(`/integrations/${id}/test`),
+      sharedClient.post<IntegrationConnection>('/integrations', connection),
+    deleteIntegration: (id) => sharedClient.delete<void>(`/integrations/${id}`),
+    testIntegration: (id) => sharedClient.post<IntegrationTestResult>(`/integrations/${id}/test`),
 
     getCredentials: async (type?: SecretType) => {
       const payload = await credentialsClient.get<CanonicalCredentialListPayload>(
@@ -1017,13 +1050,13 @@ export function buildVolundrHttpAdapter(
     },
 
     listWorkspaces: (status?: WorkspaceStatus) =>
-      client.get<VolundrWorkspace[]>(`/workspaces${status ? `?status=${status}` : ''}`),
+      forgeClient.get<VolundrWorkspace[]>(`/workspaces${status ? `?status=${status}` : ''}`),
     listAllWorkspaces: (status?: WorkspaceStatus) =>
-      client.get<VolundrWorkspace[]>(`/admin/workspaces${status ? `?status=${status}` : ''}`),
-    restoreWorkspace: (id) => client.post<void>(`/workspaces/${id}/restore`),
-    deleteWorkspace: (id) => client.delete<void>(`/workspaces/${id}`),
+      forgeClient.get<VolundrWorkspace[]>(`/admin/workspaces${status ? `?status=${status}` : ''}`),
+    restoreWorkspace: (id) => forgeClient.post<void>(`/workspaces/${id}/restore`),
+    deleteWorkspace: (id) => forgeClient.delete<void>(`/workspaces/${id}`),
     bulkDeleteWorkspaces: (sessionIds) =>
-      client.post<{ deleted: number; failed: Array<{ session_id: string; error: string }> }>(
+      forgeClient.post<{ deleted: number; failed: Array<{ session_id: string; error: string }> }>(
         '/workspaces/bulk-delete',
         { sessionIds },
       ),
@@ -1033,15 +1066,15 @@ export function buildVolundrHttpAdapter(
       client.patch<AdminSettings>('/admin/settings', data),
 
     getFeatureModules: (scope?: FeatureScope) =>
-      client.get<FeatureModule[]>(`/features/modules${scope ? `?scope=${scope}` : ''}`),
+      sharedClient.get<FeatureModule[]>(`/features/modules${scope ? `?scope=${scope}` : ''}`),
     toggleFeature: (key, enabled) =>
-      client.post<FeatureModule>(`/features/modules/${key}/toggle`, { enabled }),
-    getUserFeaturePreferences: () => client.get<UserFeaturePreference[]>('/features/preferences'),
+      sharedClient.post<FeatureModule>(`/features/modules/${key}/toggle`, { enabled }),
+    getUserFeaturePreferences: () => sharedClient.get<UserFeaturePreference[]>('/features/preferences'),
     updateUserFeaturePreferences: (preferences) =>
-      client.put<UserFeaturePreference[]>('/features/preferences', preferences),
+      sharedClient.put<UserFeaturePreference[]>('/features/preferences', preferences),
 
-    listTokens: () => client.get<PersonalAccessToken[]>('/tokens'),
-    createToken: (name) => client.post<CreatePATResult>('/tokens', { name }),
-    revokeToken: (id) => client.delete<void>(`/tokens/${id}`),
+    listTokens: () => sharedClient.get<PersonalAccessToken[]>('/tokens'),
+    createToken: (name) => sharedClient.post<CreatePATResult>('/tokens', { name }),
+    revokeToken: (id) => sharedClient.delete<void>(`/tokens/${id}`),
   };
 }

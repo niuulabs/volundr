@@ -82,17 +82,26 @@ class VolundrPlugin(ServicePlugin):
             ),
             APIRouteDomain(
                 name="features-api",
-                prefixes=("/api/v1/features", "/api/v1/volundr/features"),
+                prefixes=("/api/v1/features",),
                 description="Canonical feature catalog and preferences routes.",
             ),
             APIRouteDomain(
+                name="features-legacy-api",
+                prefixes=("/api/v1/volundr/features",),
+                description="Legacy Volundr-scoped feature routes kept for compatibility.",
+            ),
+            APIRouteDomain(
                 name="credentials-api",
+                prefixes=("/api/v1/credentials",),
+                description="Canonical credential and secret-type routes.",
+            ),
+            APIRouteDomain(
+                name="credentials-legacy-api",
                 prefixes=(
-                    "/api/v1/credentials",
                     "/api/v1/volundr/credentials",
                     "/api/v1/volundr/secrets",
                 ),
-                description="Canonical credential, secret-store, and MCP metadata routes.",
+                description="Legacy Volundr credential and secret-store compatibility routes.",
             ),
             APIRouteDomain(
                 name="forge-api",
@@ -112,6 +121,12 @@ class VolundrPlugin(ServicePlugin):
                     "/api/v1/forge/cluster",
                     "/api/v1/forge/mcp-servers",
                     "/api/v1/forge/git",
+                ),
+                description="Forge session, workspace, template, repo, and execution routes.",
+            ),
+            APIRouteDomain(
+                name="forge-legacy-api",
+                prefixes=(
                     "/api/v1/volundr/sessions",
                     "/api/v1/volundr/chronicles",
                     "/api/v1/volundr/events",
@@ -128,7 +143,7 @@ class VolundrPlugin(ServicePlugin):
                     "/api/v1/volundr/mcp-servers",
                     "/api/v1/volundr/git",
                 ),
-                description="Forge session, workspace, template, repo, and execution routes.",
+                description="Legacy Volundr-scoped Forge routes kept for compatibility.",
             ),
             APIRouteDomain(
                 name="session-api",
@@ -136,9 +151,6 @@ class VolundrPlugin(ServicePlugin):
                     "/api/v1/forge/sessions",
                     "/api/v1/forge/chronicles",
                     "/api/v1/forge/events",
-                    "/api/v1/volundr/sessions",
-                    "/api/v1/volundr/chronicles",
-                    "/api/v1/volundr/events",
                 ),
                 description=(
                     "Session lifecycle, messaging, logs, chronicle, "
@@ -146,9 +158,23 @@ class VolundrPlugin(ServicePlugin):
                 ),
             ),
             APIRouteDomain(
+                name="session-legacy-api",
+                prefixes=(
+                    "/api/v1/volundr/sessions",
+                    "/api/v1/volundr/chronicles",
+                    "/api/v1/volundr/events",
+                ),
+                description="Legacy Volundr-scoped session and chronicle routes.",
+            ),
+            APIRouteDomain(
                 name="workspace-api",
-                prefixes=("/api/v1/forge/workspaces", "/api/v1/volundr/workspaces"),
+                prefixes=("/api/v1/forge/workspaces",),
                 description="User workspace inventory and workspace deletion routes.",
+            ),
+            APIRouteDomain(
+                name="workspace-legacy-api",
+                prefixes=("/api/v1/volundr/workspaces",),
+                description="Legacy Volundr workspace routes kept for compatibility.",
             ),
             APIRouteDomain(
                 name="catalog-api",
@@ -159,12 +185,6 @@ class VolundrPlugin(ServicePlugin):
                     "/api/v1/forge/resources",
                     "/api/v1/forge/prompts",
                     "/api/v1/forge/mcp-servers",
-                    "/api/v1/volundr/templates",
-                    "/api/v1/volundr/presets",
-                    "/api/v1/volundr/profiles",
-                    "/api/v1/volundr/resources",
-                    "/api/v1/volundr/prompts",
-                    "/api/v1/volundr/mcp-servers",
                 ),
                 description=(
                     "Templates, presets, profiles, prompts, "
@@ -172,29 +192,54 @@ class VolundrPlugin(ServicePlugin):
                 ),
             ),
             APIRouteDomain(
+                name="catalog-legacy-api",
+                prefixes=(
+                    "/api/v1/volundr/templates",
+                    "/api/v1/volundr/presets",
+                    "/api/v1/volundr/profiles",
+                    "/api/v1/volundr/resources",
+                    "/api/v1/volundr/prompts",
+                    "/api/v1/volundr/mcp-servers",
+                ),
+                description="Legacy Volundr catalog routes kept for compatibility.",
+            ),
+            APIRouteDomain(
                 name="git-api",
                 prefixes=(
                     "/api/v1/forge/repos",
                     "/api/v1/forge/git",
-                    "/api/v1/volundr/repos",
-                    "/api/v1/volundr/git",
                 ),
                 description="Repository discovery and git workflow routes.",
             ),
             APIRouteDomain(
+                name="git-legacy-api",
+                prefixes=("/api/v1/volundr/repos", "/api/v1/volundr/git"),
+                description="Legacy Volundr git and repo routes kept for compatibility.",
+            ),
+            APIRouteDomain(
                 name="volundr-api",
                 prefixes=("/api/v1/volundr",),
-                description="Volundr workflow and session routes.",
+                description="Legacy catch-all Volundr API surface kept for compatibility.",
             ),
             APIRouteDomain(
                 name="identity-api",
-                prefixes=("/api/v1/identity", "/api/v1/volundr/me", "/api/v1/volundr/identity"),
+                prefixes=("/api/v1/identity",),
                 description="Canonical identity routes currently served by Volundr.",
             ),
             APIRouteDomain(
+                name="identity-legacy-api",
+                prefixes=("/api/v1/volundr/me", "/api/v1/volundr/identity"),
+                description="Legacy Volundr-scoped identity routes kept for compatibility.",
+            ),
+            APIRouteDomain(
                 name="integrations-api",
-                prefixes=("/api/v1/integrations", "/api/v1/volundr/integrations"),
+                prefixes=("/api/v1/integrations",),
                 description="Canonical integrations and OAuth routes currently served by Volundr.",
+            ),
+            APIRouteDomain(
+                name="integrations-legacy-api",
+                prefixes=("/api/v1/volundr/integrations",),
+                description="Legacy Volundr-scoped integrations routes kept for compatibility.",
             ),
             APIRouteDomain(
                 name="tenancy-api",
@@ -212,8 +257,13 @@ class VolundrPlugin(ServicePlugin):
             ),
             APIRouteDomain(
                 name="tokens-api",
-                prefixes=("/api/v1/tokens", "/api/v1/users/tokens", "/api/v1/volundr/tokens"),
+                prefixes=("/api/v1/tokens",),
                 description="Canonical personal access token routes currently served by Volundr.",
+            ),
+            APIRouteDomain(
+                name="tokens-legacy-api",
+                prefixes=("/api/v1/users/tokens", "/api/v1/volundr/tokens"),
+                description="Legacy token routes kept for compatibility during cutover.",
             ),
         )
 
