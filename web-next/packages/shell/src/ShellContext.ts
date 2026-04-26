@@ -1,9 +1,9 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import type { PluginDescriptor, PluginCtx } from '@niuulabs/plugin-sdk';
 
 export interface ShellContextValue {
   enabled: PluginDescriptor[];
-  brand: string;
+  brand: ReactNode;
   version: string;
   ctx: PluginCtx;
 }

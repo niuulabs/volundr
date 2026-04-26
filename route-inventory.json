@@ -42,7 +42,14 @@
       "/api/v1/forge/profiles",
       "/api/v1/forge/resources",
       "/api/v1/forge/prompts",
-      "/api/v1/forge/mcp-servers",
+      "/api/v1/forge/mcp-servers"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "catalog-legacy-api",
+    "prefixes": [
       "/api/v1/volundr/templates",
       "/api/v1/volundr/presets",
       "/api/v1/volundr/profiles",
@@ -56,7 +63,14 @@
   {
     "name": "credentials-api",
     "prefixes": [
-      "/api/v1/credentials",
+      "/api/v1/credentials"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "credentials-legacy-api",
+    "prefixes": [
       "/api/v1/volundr/credentials",
       "/api/v1/volundr/secrets"
     ],
@@ -83,7 +97,14 @@
   {
     "name": "features-api",
     "prefixes": [
-      "/api/v1/features",
+      "/api/v1/features"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "features-legacy-api",
+    "prefixes": [
       "/api/v1/volundr/features"
     ],
     "source": "plugin",
@@ -98,7 +119,6 @@
       "/api/v1/forge/templates",
       "/api/v1/forge/presets",
       "/api/v1/forge/profiles",
-      "/api/v1/forge/repos",
       "/api/v1/forge/workspaces",
       "/api/v1/forge/resources",
       "/api/v1/forge/models",
@@ -106,14 +126,20 @@
       "/api/v1/forge/prompts",
       "/api/v1/forge/cluster",
       "/api/v1/forge/mcp-servers",
-      "/api/v1/forge/git",
+      "/api/v1/forge/git"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "forge-legacy-api",
+    "prefixes": [
       "/api/v1/volundr/sessions",
       "/api/v1/volundr/chronicles",
       "/api/v1/volundr/events",
       "/api/v1/volundr/templates",
       "/api/v1/volundr/presets",
       "/api/v1/volundr/profiles",
-      "/api/v1/volundr/repos",
       "/api/v1/volundr/workspaces",
       "/api/v1/volundr/resources",
       "/api/v1/volundr/models",
@@ -129,9 +155,18 @@
   {
     "name": "git-api",
     "prefixes": [
-      "/api/v1/forge/repos",
-      "/api/v1/forge/git",
-      "/api/v1/volundr/repos",
+      "/api/v1/forge/repos/branches",
+      "/api/v1/forge/repos/prs",
+      "/api/v1/forge/git"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "git-legacy-api",
+    "prefixes": [
+      "/api/v1/volundr/repos/branches",
+      "/api/v1/volundr/repos/prs",
       "/api/v1/volundr/git"
     ],
     "source": "plugin",
@@ -140,7 +175,14 @@
   {
     "name": "identity-api",
     "prefixes": [
-      "/api/v1/identity",
+      "/api/v1/identity"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "identity-legacy-api",
+    "prefixes": [
       "/api/v1/volundr/me",
       "/api/v1/volundr/identity"
     ],
@@ -152,11 +194,18 @@
     "prefixes": [
       "/api/v1/tyr/integrations",
       "/api/v1/tyr/telegram",
-      "/api/v1/integrations",
-      "/api/v1/volundr/integrations"
+      "/api/v1/integrations"
     ],
     "source": "plugin",
     "plugin": "tyr,volundr"
+  },
+  {
+    "name": "integrations-legacy-api",
+    "prefixes": [
+      "/api/v1/volundr/integrations"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
   },
   {
     "name": "llm-api",
@@ -302,7 +351,14 @@
     "prefixes": [
       "/api/v1/forge/sessions",
       "/api/v1/forge/chronicles",
-      "/api/v1/forge/events",
+      "/api/v1/forge/events"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "session-legacy-api",
+    "prefixes": [
       "/api/v1/volundr/sessions",
       "/api/v1/volundr/chronicles",
       "/api/v1/volundr/events"
@@ -339,7 +395,14 @@
   {
     "name": "tokens-api",
     "prefixes": [
-      "/api/v1/tokens",
+      "/api/v1/tokens"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "tokens-legacy-api",
+    "prefixes": [
       "/api/v1/users/tokens",
       "/api/v1/volundr/tokens"
     ],
@@ -399,7 +462,14 @@
   {
     "name": "workspace-api",
     "prefixes": [
-      "/api/v1/forge/workspaces",
+      "/api/v1/forge/workspaces"
+    ],
+    "source": "plugin",
+    "plugin": "volundr"
+  },
+  {
+    "name": "workspace-legacy-api",
+    "prefixes": [
       "/api/v1/volundr/workspaces"
     ],
     "source": "plugin",

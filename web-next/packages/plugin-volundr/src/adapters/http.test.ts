@@ -104,6 +104,40 @@ describe('buildVolundrHttpAdapter', () => {
     expect(sharedClient.get).toHaveBeenCalledWith('/features');
   });
 
+  it('getRepos uses the shared niuu repo catalog and normalizes grouped provider payloads', async () => {
+    const client = makeClientWithBase('http://localhost:8080/api/v1/volundr');
+    const svc = buildVolundrHttpAdapter(client);
+    const niuuClient = getDerivedClient('http://localhost:8080/api/v1/niuu')!;
+    expect(niuuClient).toBeDefined();
+    niuuClient.get.mockResolvedValue({
+      GitHub: [
+        {
+          provider: 'github',
+          org: 'niuulabs',
+          name: 'volundr',
+          url: 'https://github.com/niuulabs/volundr',
+          clone_url: 'https://github.com/niuulabs/volundr.git',
+          default_branch: 'main',
+          branches: ['main', 'feat/wizard'],
+        },
+      ],
+    });
+
+    const repos = await svc.getRepos();
+
+    expect(niuuClient.get).toHaveBeenCalledWith('/repos');
+    expect(repos).toEqual([
+      expect.objectContaining({
+        provider: 'github',
+        org: 'niuulabs',
+        name: 'volundr',
+        cloneUrl: 'https://github.com/niuulabs/volundr.git',
+        defaultBranch: 'main',
+        branches: ['main', 'feat/wizard'],
+      }),
+    ]);
+  });
+
   it('startSession calls POST /sessions', async () => {
     const client = makeClient();
     const config = {

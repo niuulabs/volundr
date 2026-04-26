@@ -17,7 +17,7 @@ from ravn.adapters.tools.platform_tools import (
 
 BASE_URL = "http://localhost:8080"
 FORGE_SESSIONS_URL = f"{BASE_URL}/api/v1/forge/sessions"
-FORGE_REPOS_URL = f"{BASE_URL}/api/v1/forge/repos"
+FORGE_GIT_URL = f"{BASE_URL}/api/v1/forge/repos"
 TRACKER_ISSUES_URL = f"{BASE_URL}/api/v1/tracker/issues"
 
 
@@ -160,7 +160,7 @@ class TestVolundrGitTool:
     @pytest.mark.asyncio
     @respx.mock
     async def test_list_branches(self):
-        respx.get(f"{FORGE_REPOS_URL}/branches").mock(
+        respx.get(f"{FORGE_GIT_URL}/branches").mock(
             return_value=httpx.Response(200, json=[{"name": "main"}])
         )
         result = await self.tool.execute(
@@ -178,7 +178,7 @@ class TestVolundrGitTool:
     @pytest.mark.asyncio
     @respx.mock
     async def test_create_pr(self):
-        respx.post(f"{FORGE_REPOS_URL}/prs").mock(
+        respx.post(f"{FORGE_GIT_URL}/prs").mock(
             return_value=httpx.Response(200, json={"url": "https://github.com/pr/1"})
         )
         result = await self.tool.execute(
@@ -200,7 +200,7 @@ class TestVolundrGitTool:
     @pytest.mark.asyncio
     @respx.mock
     async def test_ci_status(self):
-        respx.get(f"{FORGE_REPOS_URL}/prs/42/ci").mock(
+        respx.get(f"{FORGE_GIT_URL}/prs/42/ci").mock(
             return_value=httpx.Response(200, json={"status": "passing"})
         )
         result = await self.tool.execute(

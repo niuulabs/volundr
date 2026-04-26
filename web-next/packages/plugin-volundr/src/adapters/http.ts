@@ -203,6 +203,28 @@ type CanonicalSecretTypePayload = {
   defaultMountType?: 'env' | 'file' | 'template';
 };
 
+type SharedRepoPayload = {
+  provider: string;
+  org: string;
+  name: string;
+  url: string;
+  clone_url?: string;
+  default_branch?: string;
+  branches?: string[];
+};
+
+type SharedRepoResponse = Record<string, SharedRepoPayload[]>;
+
+type ApiModelInfo = {
+  id: string;
+  name: string;
+  provider: VolundrModel['provider'];
+  tier: VolundrModel['tier'];
+  color: string;
+  cost_per_million_tokens?: number | null;
+  vram_required?: string | null;
+};
+
 function toEpochMs(value?: number | string | null): number {
   if (typeof value === 'number') return value;
   if (typeof value !== 'string') return 0;
@@ -288,6 +310,16 @@ function deriveCanonicalForgeBasePath(basePath?: string): string | null {
 
   const derived = normalized.replace(/\/api\/v1\/volundr$/, '/api/v1/forge');
   return derived === normalized ? null : derived;
+}
+
+function deriveNiuuBasePath(basePath?: string): string | null {
+  if (!basePath) return null;
+
+  const normalized = basePath.replace(/\/$/, '');
+  if (normalized.endsWith('/api/v1/niuu')) return normalized;
+
+  const sharedBasePath = deriveSharedApiBasePath(normalized);
+  return sharedBasePath ? `${sharedBasePath}/niuu` : null;
 }
 
 function normalizeStoredCredential(
@@ -378,6 +410,53 @@ function normalizeChronicle(payload: ChroniclePayload): SessionChronicle {
     commits: payload.commits,
     tokenBurn: payload.tokenBurn ?? payload.token_burn ?? [],
   };
+}
+
+function normalizeRepo(payload: SharedRepoPayload): VolundrRepo {
+  return {
+    provider: payload.provider as VolundrRepo['provider'],
+    org: payload.org,
+    name: payload.name,
+    cloneUrl: payload.clone_url ?? `${payload.url}.git`,
+    url: payload.url,
+    defaultBranch: payload.default_branch ?? 'main',
+    branches: payload.branches ?? [],
+  };
+}
+
+function normalizeRepoList(payload: SharedRepoResponse | SharedRepoPayload[] | VolundrRepo[]): VolundrRepo[] {
+  if (Array.isArray(payload)) {
+    return payload.map((repo) =>
+      'cloneUrl' in repo ? repo : normalizeRepo(repo as SharedRepoPayload),
+    );
+  }
+
+  return Object.values(payload)
+    .flat()
+    .map(normalizeRepo);
+}
+
+function normalizeModel(payload: ApiModelInfo): VolundrModel {
+  return {
+    name: payload.name,
+    provider: payload.provider,
+    tier: payload.tier,
+    color: payload.color,
+    cost:
+      payload.cost_per_million_tokens != null
+        ? `$${payload.cost_per_million_tokens}/M`
+        : undefined,
+    vram: payload.vram_required ?? undefined,
+  };
+}
+
+function normalizeModelList(
+  payload: ApiModelInfo[] | Record<string, VolundrModel>,
+): Record<string, VolundrModel> {
+  if (Array.isArray(payload)) {
+    return Object.fromEntries(payload.map((model) => [model.id, normalizeModel(model)]));
+  }
+  return payload;
 }
 
 type SubscriberSet<T> = Set<(item: T) => void>;
@@ -594,6 +673,10 @@ export function buildVolundrHttpAdapter(
   const sharedClient = (() => {
     const sharedBasePath = deriveSharedApiBasePath(client.basePath);
     return sharedBasePath ? createApiClient(sharedBasePath) : client;
+  })();
+  const niuuClient = (() => {
+    const niuuBasePath = deriveNiuuBasePath(client.basePath);
+    return niuuBasePath ? createApiClient(niuuBasePath) : null;
   })();
   const trackerClient = sharedClient;
 
@@ -833,8 +916,12 @@ export function buildVolundrHttpAdapter(
     getSession: (id) => loadSession(id),
     getActiveSessions: () => loadSessions('/sessions?active=true'),
     getStats: () => loadStats(),
-    getModels: () => forgeClient.get<Record<string, VolundrModel>>('/models'),
-    getRepos: () => forgeClient.get<VolundrRepo[]>('/repos'),
+    getModels: async () =>
+      normalizeModelList(await forgeClient.get<ApiModelInfo[] | Record<string, VolundrModel>>('/models')),
+    getRepos: async () =>
+      normalizeRepoList(
+        await (niuuClient ?? forgeClient).get<SharedRepoResponse | SharedRepoPayload[] | VolundrRepo[]>('/repos'),
+      ),
 
     subscribe: (callback) => {
       sessionSubscribers.add(callback);

@@ -25,6 +25,7 @@ _DEFAULT_BASE_URL = "http://localhost:8080"
 _DEFAULT_TIMEOUT = 30.0
 _FORGE_SESSIONS_PATH = "/api/v1/forge/sessions"
 _FORGE_REPOS_PATH = "/api/v1/forge/repos"
+_NIUU_REPOS_PATH = "/api/v1/niuu/repos"
 _TRACKER_ISSUES_PATH = "/api/v1/tracker/issues"
 
 

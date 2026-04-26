@@ -112,7 +112,6 @@ class VolundrPlugin(ServicePlugin):
                     "/api/v1/forge/templates",
                     "/api/v1/forge/presets",
                     "/api/v1/forge/profiles",
-                    "/api/v1/forge/repos",
                     "/api/v1/forge/workspaces",
                     "/api/v1/forge/resources",
                     "/api/v1/forge/models",
@@ -133,7 +132,6 @@ class VolundrPlugin(ServicePlugin):
                     "/api/v1/volundr/templates",
                     "/api/v1/volundr/presets",
                     "/api/v1/volundr/profiles",
-                    "/api/v1/volundr/repos",
                     "/api/v1/volundr/workspaces",
                     "/api/v1/volundr/resources",
                     "/api/v1/volundr/models",
@@ -206,15 +204,20 @@ class VolundrPlugin(ServicePlugin):
             APIRouteDomain(
                 name="git-api",
                 prefixes=(
-                    "/api/v1/forge/repos",
+                    "/api/v1/forge/repos/branches",
+                    "/api/v1/forge/repos/prs",
                     "/api/v1/forge/git",
                 ),
-                description="Repository discovery and git workflow routes.",
+                description="Git workflow routes without the deprecated repo-catalog surface.",
             ),
             APIRouteDomain(
                 name="git-legacy-api",
-                prefixes=("/api/v1/volundr/repos", "/api/v1/volundr/git"),
-                description="Legacy Volundr git and repo routes kept for compatibility.",
+                prefixes=(
+                    "/api/v1/volundr/repos/branches",
+                    "/api/v1/volundr/repos/prs",
+                    "/api/v1/volundr/git",
+                ),
+                description="Legacy Volundr git workflow routes kept for compatibility.",
             ),
             APIRouteDomain(
                 name="volundr-api",

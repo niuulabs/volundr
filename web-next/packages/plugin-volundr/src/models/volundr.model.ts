@@ -425,6 +425,11 @@ export interface VolundrCredential {
 
 export interface IntegrationConnection {
   id: string;
+  slug?: string;
+  integrationType?: string;
+  credentialName?: string;
+  adapter?: string;
+  enabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }

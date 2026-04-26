@@ -1138,10 +1138,6 @@ class TestRootServerBuildApp:
                             "/api/v1/volundr/integrations",
                         ),
                     ),
-                    APIRouteDomain(
-                        name="git-api",
-                        prefixes=("/api/v1/volundr/repos",),
-                    ),
                 )
 
         registry = PluginRegistry()

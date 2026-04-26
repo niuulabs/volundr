@@ -12,6 +12,7 @@ import {
 import { createQueryClient } from '@niuulabs/query';
 import { AuthProvider } from '@niuulabs/auth';
 import { Shell } from '@niuulabs/shell';
+import { LogoKnot } from '@niuulabs/plugin-login';
 import { plugins } from './plugins';
 import { buildServiceBackendStatus, buildServices } from './services';
 
@@ -40,7 +41,14 @@ function AppInner() {
     <AuthProvider>
       <ServicesProvider services={services}>
         <FeatureCatalogProvider service={featureCatalogService}>
-          <Shell plugins={plugins} />
+          <Shell
+            plugins={plugins}
+            brand={
+              <span className="niuu-inline-flex niuu-items-center niuu-justify-center niuu-text-sky-300">
+                <LogoKnot size={22} stroke={1.8} />
+              </span>
+            }
+          />
         </FeatureCatalogProvider>
       </ServicesProvider>
     </AuthProvider>

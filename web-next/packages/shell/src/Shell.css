@@ -38,6 +38,10 @@
   margin-bottom: 10px;
   text-shadow: 0 0 12px color-mix(in srgb, var(--color-brand) 55%, transparent);
 }
+.niuu-shell__rail-brand svg {
+  display: block;
+  flex-shrink: 0;
+}
 
 .niuu-shell__rail-item {
   width: 48px;
