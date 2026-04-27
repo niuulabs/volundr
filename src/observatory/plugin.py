@@ -80,4 +80,3 @@ class ObservatoryPlugin(ServicePlugin):
 
     def create_api_client(self) -> Any:
         return CLIAPIClient(base_url="http://localhost:8080", service_name="Observatory")
-

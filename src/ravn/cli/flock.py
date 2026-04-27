@@ -345,7 +345,7 @@ def _spawn_node(node: NodeDef, flock_dir: Path) -> int:
     """Start the daemon process and return its PID."""
     log_path = Path(node.log_path)
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(log_path, "a") as log_fd:  # noqa: WPS515
+    with open(log_path, "a") as log_fd:
         proc = subprocess.Popen(
             [sys.executable, "-m", "ravn", "daemon", "--persona", node.persona],
             env={**os.environ, "RAVN_CONFIG": node.config_path},
@@ -756,7 +756,7 @@ def _python_tail(paths: list[str], *, lines: int, follow: bool) -> None:
         handles = []
         for p in paths:
             try:
-                handles.append((p, stack.enter_context(open(p))))  # noqa: WPS515
+                handles.append((p, stack.enter_context(open(p))))
             except OSError:
                 pass
 

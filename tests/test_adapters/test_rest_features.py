@@ -73,10 +73,7 @@ class TestFeatureCatalogRoutes:
         legacy = client.get("/api/v1/volundr/features")
         assert legacy.status_code == 200
         assert legacy.headers["Deprecation"] == "true"
-        assert (
-            legacy.headers["Link"]
-            == '</api/v1/features/modules>; rel="successor-version"'
-        )
+        assert legacy.headers["Link"] == '</api/v1/features/modules>; rel="successor-version"'
 
         assert_route_equivalence(
             client,

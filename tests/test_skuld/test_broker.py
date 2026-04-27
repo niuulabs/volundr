@@ -5,14 +5,15 @@ import logging
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from skuld.broker import (
     Broker,
-    _SendMessageRequest,
     _log_buffer,
+    _SendMessageRequest,
     _TokenRedactFilter,
     app,
     broker,
@@ -604,9 +605,9 @@ class TestFastAPIEndpoints:
 
     @pytest.fixture
     def client(self):
-        from fastapi.testclient import TestClient
-
-        return TestClient(app)
+        client = TestClient(app)
+        yield client
+        client.close()
 
     def test_health_endpoint(self, client, monkeypatch):
         broker.session_id = "test-123"
@@ -693,7 +694,9 @@ class TestCORSMiddleware:
 
     @pytest.fixture
     def client(self):
-        return TestClient(app)
+        client = TestClient(app)
+        yield client
+        client.close()
 
     def test_cors_allows_all_origins(self, client):
         """CORS preflight should succeed for any origin."""
@@ -733,7 +736,11 @@ class TestReportUsage:
             session={"id": "sess-abc", "workspace_dir": str(tmp_path)},
             volundr_api_url="http://volundr.test:80",
         )
-        return Broker(settings=settings)
+        test_broker = Broker(settings=settings)
+        yield test_broker
+        if isinstance(test_broker._http_client, httpx.AsyncClient):
+            asyncio.run(test_broker._http_client.aclose())
+            test_broker._http_client = None
 
     @pytest.mark.asyncio
     async def test_report_usage_posts_to_api(self, test_broker):
@@ -1645,7 +1652,9 @@ class TestServiceAPIEndpoints:
 
     @pytest.fixture
     def client(self):
-        return TestClient(app)
+        client = TestClient(app)
+        yield client
+        client.close()
 
     def test_create_service_no_manager(self, client):
         broker.service_manager = None
@@ -2377,10 +2386,9 @@ class TestTokenRedactFilter:
         f.filter(record)
         assert record.msg == "first access_token=[REDACTED] second access_token=[REDACTED]"
 
-    def test_filter_attached_during_lifespan(self):
+    @pytest.mark.asyncio
+    async def test_filter_attached_during_lifespan(self):
         """Lifespan attaches redact filter to uvicorn loggers."""
-        import asyncio
-
         from skuld.broker import lifespan
 
         async def check():
@@ -2395,7 +2403,7 @@ class TestTokenRedactFilter:
                             has_redact = any(isinstance(f, _TokenRedactFilter) for f in lgr.filters)
                             assert has_redact, f"{name} missing _TokenRedactFilter"
 
-        asyncio.run(check())
+        await check()
 
 
 # ---------------------------------------------------------------------------

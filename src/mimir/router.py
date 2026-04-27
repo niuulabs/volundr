@@ -609,6 +609,7 @@ def _decorate_source(
         mount_name=mount_name,
     )
 
+
 # ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
@@ -838,9 +839,7 @@ class MimirRouter:
                 report,
                 assignments=assignments,
                 mount_lookup=lambda path: (
-                    resolved_mount
-                    if mount is not None
-                    else mount_map.get(path, [self._name])[0]
+                    resolved_mount if mount is not None else mount_map.get(path, [self._name])[0]
                 ),
             )
 
@@ -862,9 +861,7 @@ class MimirRouter:
                 report,
                 assignments=assignments,
                 mount_lookup=lambda path: (
-                    resolved_mount
-                    if mount is not None
-                    else mount_map.get(path, [self._name])[0]
+                    resolved_mount if mount is not None else mount_map.get(path, [self._name])[0]
                 ),
             )
 

@@ -24,15 +24,15 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from mimir.adapters.markdown import MarkdownMimirAdapter
+from mimir.config import MimirServiceConfig
+from mimir.mcp import MimirMcpServer
+from mimir.router import MimirRouter
 from niuu.settings_schema import (
     SettingsFieldSchema,
     SettingsProviderSchema,
     SettingsSectionSchema,
 )
-from mimir.adapters.markdown import MarkdownMimirAdapter
-from mimir.config import MimirServiceConfig
-from mimir.mcp import MimirMcpServer
-from mimir.router import MimirRouter
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +145,10 @@ def create_app(config: MimirServiceConfig) -> FastAPI:
                 SettingsSectionSchema(
                     id="service",
                     label="Service",
-                    description="Mounted Mimir instance characteristics exposed by the current host profile.",
+                    description=(
+                        "Mounted Mimir instance characteristics exposed by the "
+                        "current host profile."
+                    ),
                     fields=[
                         SettingsFieldSchema(
                             key="instance_name",

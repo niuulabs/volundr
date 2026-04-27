@@ -8,7 +8,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from volundr.adapters.inbound.rest_tracker import create_canonical_tracker_router, create_tracker_router
+from volundr.adapters.inbound.rest_tracker import (
+    create_canonical_tracker_router,
+    create_tracker_router,
+)
 from volundr.domain.models import ProjectMapping, TrackerConnectionStatus, TrackerIssue
 from volundr.domain.ports import IssueTrackerProvider, ProjectMappingRepository
 from volundr.domain.services.tracker import (

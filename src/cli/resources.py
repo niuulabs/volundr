@@ -16,20 +16,20 @@ def web_dist_dir() -> Path:
 
     Falls back to source-tree web builds when running from source.
     """
-    pkg_dir = importlib.resources.files("cli") / "web" / "dist"
-    pkg_path = _resource_path(pkg_dir)
-    if pkg_path.is_dir():
-        return pkg_path
-
     repo_root = Path(__file__).resolve().parents[2]
     repo_candidates = (
-        repo_root / "src" / "cli" / "web" / "dist",
         repo_root / "web-next" / "apps" / "niuu" / "dist",
         repo_root / "web" / "dist",
+        repo_root / "src" / "cli" / "web" / "dist",
     )
     for candidate in repo_candidates:
         if candidate.is_dir():
             return candidate
+
+    pkg_dir = importlib.resources.files("cli") / "web" / "dist"
+    pkg_path = _resource_path(pkg_dir)
+    if pkg_path.is_dir():
+        return pkg_path
 
     msg = "Web UI assets not found — run 'make build-web' first"
     raise FileNotFoundError(msg)

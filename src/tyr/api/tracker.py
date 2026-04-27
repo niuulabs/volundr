@@ -14,8 +14,8 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
-from niuu.http_compat import LegacyRouteNotice, warn_on_legacy_route
 from niuu.domain.models import Principal
+from niuu.http_compat import LegacyRouteNotice, warn_on_legacy_route
 from tyr.adapters.inbound.auth import extract_principal
 from tyr.domain.models import Saga, SagaStatus, TrackerIssue, TrackerMilestone, TrackerProject
 from tyr.domain.utils import _slugify

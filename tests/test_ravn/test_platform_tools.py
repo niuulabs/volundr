@@ -45,9 +45,7 @@ class TestVolundrSessionTool:
     @pytest.mark.asyncio
     @respx.mock
     async def test_list_sessions(self):
-        respx.get(FORGE_SESSIONS_URL).mock(
-            return_value=httpx.Response(200, json=[{"id": "abc"}])
-        )
+        respx.get(FORGE_SESSIONS_URL).mock(return_value=httpx.Response(200, json=[{"id": "abc"}]))
         result = await self.tool.execute({"action": "list"})
         assert not result.is_error
         data = json.loads(result.content)
@@ -135,9 +133,7 @@ class TestVolundrSessionTool:
     @pytest.mark.asyncio
     @respx.mock
     async def test_api_error_returns_error_result(self):
-        respx.get(FORGE_SESSIONS_URL).mock(
-            return_value=httpx.Response(500, text="internal error")
-        )
+        respx.get(FORGE_SESSIONS_URL).mock(return_value=httpx.Response(500, text="internal error"))
         result = await self.tool.execute({"action": "list"})
         assert result.is_error
 

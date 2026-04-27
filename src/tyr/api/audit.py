@@ -74,9 +74,7 @@ def create_audit_router() -> APIRouter:
             raise HTTPException(status_code=422, detail=f"Invalid timestamp filter: {exc}") from exc
 
         requested_kinds = (
-            {part.strip() for part in kinds.split(",") if part.strip()}
-            if kinds
-            else None
+            {part.strip() for part in kinds.split(",") if part.strip()} if kinds else None
         )
         warn_on_legacy_route(
             request=request,

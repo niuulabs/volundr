@@ -123,9 +123,9 @@ def create_settings_router() -> APIRouter:
         if retry_policy:
             dispatch["retry_policy"].update(retry_policy)
         dispatch["updated_at"] = now_utc()
-        request.app.state.settings.notification.confidence_threshold = (
-            dispatch["confidence_threshold"]
-        )
+        request.app.state.settings.notification.confidence_threshold = dispatch[
+            "confidence_threshold"
+        ]
         request.app.state.settings.watcher.batch_size = dispatch["batch_size"]
         return DispatchDefaultsResponse.model_validate(dispatch)
 
@@ -150,17 +150,16 @@ def create_settings_router() -> APIRouter:
                 detail="webhook_url is required when channel is webhook",
             )
         notifications["updated_at"] = now_utc()
-        request.app.state.settings.notification.enabled = (
-            notifications["channel"] != "none"
-            and any(
-                notifications[key]
-                for key in (
-                    "on_raid_pending_approval",
-                    "on_raid_merged",
-                    "on_raid_failed",
-                    "on_saga_complete",
-                    "on_dispatcher_error",
-                )
+        request.app.state.settings.notification.enabled = notifications[
+            "channel"
+        ] != "none" and any(
+            notifications[key]
+            for key in (
+                "on_raid_pending_approval",
+                "on_raid_merged",
+                "on_raid_failed",
+                "on_saga_complete",
+                "on_dispatcher_error",
             )
         )
         return NotificationSettingsResponse.model_validate(notifications)

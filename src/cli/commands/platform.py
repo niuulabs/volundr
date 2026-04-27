@@ -514,11 +514,7 @@ def create_platform_commands(
         url = _legacy_route_hits_url(base_url)
 
         try:
-            response = (
-                httpx.delete(url, timeout=5.0)
-                if clear
-                else httpx.get(url, timeout=5.0)
-            )
+            response = httpx.delete(url, timeout=5.0) if clear else httpx.get(url, timeout=5.0)
             response.raise_for_status()
         except httpx.HTTPError as exc:
             action = "clear" if clear else "fetch"

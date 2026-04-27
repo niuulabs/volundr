@@ -48,9 +48,9 @@ class TestRecordLegacyRouteUse:
 
         assert count1 == 1
         assert count2 == 2
-        assert app.state.legacy_route_hits[
-            ("/api/v1/volundr/me", "/api/v1/identity/me", "GET")
-        ] == 2
+        assert (
+            app.state.legacy_route_hits[("/api/v1/volundr/me", "/api/v1/identity/me", "GET")] == 2
+        )
 
 
 class TestWarnOnLegacyRoute:

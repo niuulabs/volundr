@@ -114,7 +114,9 @@ def create_admin_settings_router() -> APIRouter:
                             label="File Manager Enabled",
                             type="boolean",
                             value=storage.get("file_manager_enabled", True),
-                            description="Whether the file manager tab is visible in Forge sessions.",
+                            description=(
+                                "Whether the file manager tab is visible in Forge sessions."
+                            ),
                         ),
                     ],
                 )

@@ -31,7 +31,9 @@ class TestWebDistDir:
         app_dist = tmp_path / "web-next" / "apps" / "niuu" / "dist"
         app_dist.mkdir(parents=True)
 
-        with patch("cli.resources.Path.resolve", return_value=tmp_path / "src" / "cli" / "resources.py"):
+        with patch(
+            "cli.resources.Path.resolve", return_value=tmp_path / "src" / "cli" / "resources.py"
+        ):
             assert web_dist_dir() == app_dist
 
     def test_raises_when_no_dist_found(self):

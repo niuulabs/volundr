@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -917,7 +917,7 @@ class SessionService:
         ):
             raise SessionStateError(session_id, "archive", session.status)
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         archived = session.model_copy(
             update={
                 "status": SessionStatus.ARCHIVED,
@@ -954,7 +954,7 @@ class SessionService:
             update={
                 "status": SessionStatus.STOPPED,
                 "archived_at": None,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(UTC),
             }
         )
         updated = await self._repository.update(restored)

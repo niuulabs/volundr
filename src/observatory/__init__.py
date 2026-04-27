@@ -1,2 +1,1 @@
 """Observatory runtime module."""
-

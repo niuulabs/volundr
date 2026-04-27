@@ -49,9 +49,7 @@ class TestSessionsList:
     @respx.mock
     def test_list_json_output(self) -> None:
         data = [{"id": "s1", "name": "demo", "status": "running"}]
-        respx.get(f"{BASE}/api/v1/forge/sessions").mock(
-            return_value=httpx.Response(200, json=data)
-        )
+        respx.get(f"{BASE}/api/v1/forge/sessions").mock(return_value=httpx.Response(200, json=data))
         result = runner.invoke(_make_app(), ["sessions", "list", "--json"])
         assert result.exit_code == 0
         parsed = json.loads(result.output)

@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING
 
 import uvicorn
 from fastapi import FastAPI, Request, WebSocket
-from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -48,9 +48,12 @@ class SkuldPortRegistry:
 
     def __init__(self, state_file: Path | None = None) -> None:
         self._ports: dict[str, int] = {}
-        self._state_file = state_file or Path(
-            os.environ.get("NIUU_FORGE_STATE_FILE", "~/.niuu/forge-state.json")
-        ).expanduser()
+        self._state_file = (
+            state_file
+            or Path(
+                os.environ.get("NIUU_FORGE_STATE_FILE", "~/.niuu/forge-state.json")
+            ).expanduser()
+        )
 
     def register(self, session_id: str, port: int) -> None:
         self._ports[session_id] = port
@@ -337,9 +340,7 @@ def collect_route_inventory(
             entries = declared_domains[domain_name]
             prefixes = tuple(
                 dict.fromkeys(
-                    prefix
-                    for _, route_domain in entries
-                    for prefix in route_domain.prefixes
+                    prefix for _, route_domain in entries for prefix in route_domain.prefixes
                 )
             )
             plugin_name = ",".join(sorted({plugin_name for plugin_name, _ in entries}))
@@ -375,7 +376,7 @@ def _rewrite_public_openapi_path(
         if backend_path == backend_prefix:
             return public_prefix
         if backend_path.startswith(f"{backend_prefix}/"):
-            return f"{public_prefix}{backend_path[len(backend_prefix):]}"
+            return f"{public_prefix}{backend_path[len(backend_prefix) :]}"
         return None
 
     if not backend_path.startswith("/"):
@@ -449,7 +450,9 @@ def _install_merged_openapi(
                     namespace=plugin_name,
                 )
 
-            existing_tags = {tag.get("name") for tag in schema.get("tags", []) if isinstance(tag, dict)}
+            existing_tags = {
+                tag.get("name") for tag in schema.get("tags", []) if isinstance(tag, dict)
+            }
             for tag in sub_schema.get("tags", []):
                 tag_name = tag.get("name") if isinstance(tag, dict) else None
                 if tag_name and tag_name not in existing_tags:

@@ -97,7 +97,10 @@ def create_app(persona_loader: PersonaRegistryPort | None = None) -> FastAPI:
                             label="Persona Registry",
                             type="boolean",
                             value=persona_loader is not None,
-                            description="Whether persona-backed runtime routes are mounted in this host profile.",
+                            description=(
+                                "Whether persona-backed runtime routes are "
+                                "mounted in this host profile."
+                            ),
                             read_only=True,
                         ),
                         SettingsFieldSchema(

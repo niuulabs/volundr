@@ -34,7 +34,10 @@ class TestObservatoryApp:
         payload = response.json()
         assert payload["title"] == "Observatory"
         assert payload["sections"][0]["id"] == "streams"
-        assert any(field["key"] == "keepalive_interval_seconds" for field in payload["sections"][0]["fields"])
+        assert any(
+            field["key"] == "keepalive_interval_seconds"
+            for field in payload["sections"][0]["fields"]
+        )
 
     def test_topology_stream_aliases_return_sse(self) -> None:
         for path in ("/api/v1/observatory/topology", "/api/v1/observatory/topology/stream"):

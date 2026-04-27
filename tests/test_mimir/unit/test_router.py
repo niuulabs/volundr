@@ -112,11 +112,7 @@ def client_with_sourced_page(tmp_path: Path) -> TestClient:
         "/mimir/page",
         json={
             "path": "entities/org/niuu.md",
-            "content": (
-                "# Niuu\n"
-                "Platform knowledge graph.\n"
-                f"<!-- sources: {source_id} -->"
-            ),
+            "content": (f"# Niuu\nPlatform knowledge graph.\n<!-- sources: {source_id} -->"),
         },
     )
     return tc

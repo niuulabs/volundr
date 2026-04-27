@@ -76,8 +76,7 @@ class VolundrPlugin(ServicePlugin):
                 name="admin-api",
                 prefixes=("/api/v1/volundr/admin",),
                 description=(
-                    "Administrative routes for users, settings, "
-                    "and global workspace management."
+                    "Administrative routes for users, settings, and global workspace management."
                 ),
             ),
             APIRouteDomain(

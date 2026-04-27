@@ -486,9 +486,7 @@ class TestStopSession:
     @pytest.mark.asyncio
     @respx.mock
     async def test_success(self, adapter: VolundrHTTPAdapter):
-        route = respx.delete(f"{SESSIONS_URL}/ses-1").mock(
-            return_value=httpx.Response(204)
-        )
+        route = respx.delete(f"{SESSIONS_URL}/ses-1").mock(return_value=httpx.Response(204))
 
         await adapter.stop_session("ses-1")
 
@@ -504,9 +502,7 @@ class TestStopSession:
     @pytest.mark.asyncio
     @respx.mock
     async def test_sends_auth_token(self, adapter: VolundrHTTPAdapter):
-        route = respx.delete(f"{SESSIONS_URL}/ses-2").mock(
-            return_value=httpx.Response(204)
-        )
+        route = respx.delete(f"{SESSIONS_URL}/ses-2").mock(return_value=httpx.Response(204))
 
         await adapter.stop_session("ses-2", auth_token="runtime-token")
 
@@ -544,8 +540,20 @@ class TestIntegrationsAndRepos:
             return_value=httpx.Response(
                 200,
                 json={
-                    "github": [{"org": "niuulabs", "name": "volundr", "url": "https://github.com/niuulabs/volundr"}],
-                    "gitlab": [{"org": "niuulabs", "name": "niuu", "url": "https://gitlab.com/niuulabs/niuu"}],
+                    "github": [
+                        {
+                            "org": "niuulabs",
+                            "name": "volundr",
+                            "url": "https://github.com/niuulabs/volundr",
+                        }
+                    ],
+                    "gitlab": [
+                        {
+                            "org": "niuulabs",
+                            "name": "niuu",
+                            "url": "https://gitlab.com/niuulabs/niuu",
+                        }
+                    ],
                 },
             )
         )
@@ -562,7 +570,11 @@ class TestIntegrationsAndRepos:
         async def fake_list_repos(*, auth_token=None):
             assert auth_token == "runtime"
             return [
-                {"org": "niuulabs", "name": "volundr", "url": "https://github.com/niuulabs/volundr"},
+                {
+                    "org": "niuulabs",
+                    "name": "volundr",
+                    "url": "https://github.com/niuulabs/volundr",
+                },
             ]
 
         monkeypatch.setattr(adapter, "list_repos", fake_list_repos)
@@ -576,7 +588,9 @@ class TestIntegrationsAndRepos:
         self, adapter: VolundrHTTPAdapter, monkeypatch
     ):
         async def fake_list_repos(*, auth_token=None):
-            return [{"org": "niuulabs", "name": "volundr", "url": "https://github.com/niuulabs/volundr"}]
+            return [
+                {"org": "niuulabs", "name": "volundr", "url": "https://github.com/niuulabs/volundr"}
+            ]
 
         monkeypatch.setattr(adapter, "list_repos", fake_list_repos)
 
@@ -717,13 +731,24 @@ class TestSubscribeActivity:
     async def test_yields_activity_and_terminal_session_updates(
         self, adapter: VolundrHTTPAdapter, monkeypatch
     ):
+        activity_event = {
+            "session_id": "ses-1",
+            "state": "running",
+            "metadata": {"step": "plan"},
+            "owner_id": "user-1",
+        }
+        session_updated_event = {
+            "id": "ses-2",
+            "status": "stopped",
+            "owner_id": "user-2",
+        }
         response = _FakeStreamResponse(
             [
                 "event: session_activity",
-                f"data: {json.dumps({'session_id': 'ses-1', 'state': 'running', 'metadata': {'step': 'plan'}, 'owner_id': 'user-1'})}",
+                f"data: {json.dumps(activity_event)}",
                 "",
                 "event: session_updated",
-                f"data: {json.dumps({'id': 'ses-2', 'status': 'stopped', 'owner_id': 'user-2'})}",
+                f"data: {json.dumps(session_updated_event)}",
                 "",
                 "event: session_updated",
                 f"data: {json.dumps({'id': 'ses-3', 'status': 'running', 'owner_id': 'user-3'})}",

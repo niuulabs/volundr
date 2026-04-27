@@ -4,8 +4,9 @@ import asyncio
 import json
 import logging
 import os
-from urllib.parse import urlsplit, urlunsplit
 import re
+from datetime import UTC, datetime
+from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID, uuid4
 
 import httpx
@@ -1101,7 +1102,7 @@ def create_router(
             started = await forge.create_and_start_session(data, principal=principal)
         except RepoValidationError as e:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(e),
             )
         except SessionStateError as e:
@@ -1313,7 +1314,7 @@ def create_router(
             activity_state = SessionActivityState(data.state)
         except ValueError:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Invalid activity state: {data.state}",
             )
 
@@ -2108,18 +2109,6 @@ def create_router(
         data: TimelineEventCreate = ...,
     ) -> TimelineEventResponse:
         """Add a timeline event for a session's chronicle."""
-        # Authorization: caller must own the session
-        principal = await extract_principal(request)
-        session = await forge.get_session(session_id)
-        if session is not None:
-            try:
-                await forge.ensure_access(session, principal, "report_timeline")
-            except SessionAccessDeniedError:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Not authorized to report timeline for session {session_id}",
-                )
-
         try:
             chronicle = await forge.ensure_session_chronicle(session_id)
         except RuntimeError as e:
@@ -2133,7 +2122,17 @@ def create_router(
                 detail=f"Session not found: {session_id}",
             )
 
-        from datetime import datetime
+        # Authorization: caller must own the session
+        principal = await extract_principal(request)
+        session = await forge.get_session(session_id)
+        if session is not None:
+            try:
+                await forge.ensure_access(session, principal, "report_timeline")
+            except SessionAccessDeniedError:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Not authorized to report timeline for session {session_id}",
+                )
 
         event = TimelineEvent(
             id=uuid4(),
@@ -2148,7 +2147,7 @@ def create_router(
             del_=data.del_,
             hash=data.hash,
             exit_code=data.exit_code,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
 
         try:

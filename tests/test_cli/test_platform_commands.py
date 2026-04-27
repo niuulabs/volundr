@@ -748,9 +748,7 @@ class TestPlatformLegacyRoutesCommand:
             "totalHits": 2,
             "cleared": True,
         }
-        request = httpx.Request(
-            "DELETE", "http://127.0.0.1:8080/api/v1/niuu/compat/legacy-routes"
-        )
+        request = httpx.Request("DELETE", "http://127.0.0.1:8080/api/v1/niuu/compat/legacy-routes")
         response = httpx.Response(200, json=payload, request=request)
 
         with patch("cli.commands.platform.httpx.delete", return_value=response) as delete:

@@ -53,7 +53,11 @@ def create_router() -> APIRouter:
     async def registry() -> dict[str, object]:
         return get_registry()
 
-    @router.get("/settings", response_model=SettingsProviderSchema, summary="Get observatory settings schema")
+    @router.get(
+        "/settings",
+        response_model=SettingsProviderSchema,
+        summary="Get observatory settings schema",
+    )
     async def settings() -> SettingsProviderSchema:
         registry_payload = get_registry()
         topology = get_topology_snapshot()
@@ -65,7 +69,10 @@ def create_router() -> APIRouter:
                 SettingsSectionSchema(
                     id="streams",
                     label="Streams",
-                    description="Live topology and event stream characteristics for the mounted observability surface.",
+                    description=(
+                        "Live topology and event stream characteristics for the "
+                        "mounted observability surface."
+                    ),
                     fields=[
                         SettingsFieldSchema(
                             key="keepalive_interval_seconds",
@@ -80,7 +87,9 @@ def create_router() -> APIRouter:
                             label="Registered Type Count",
                             type="number",
                             value=len(registry_payload.get("types", [])),
-                            description="Number of types currently published in the observatory registry.",
+                            description=(
+                                "Number of types currently published in the observatory registry."
+                            ),
                             read_only=True,
                         ),
                         SettingsFieldSchema(
@@ -96,7 +105,10 @@ def create_router() -> APIRouter:
                             label="Seed Event Count",
                             type="number",
                             value=len(get_events()),
-                            description="Number of events replayed to a fresh observatory subscriber before keepalives.",
+                            description=(
+                                "Number of events replayed to a fresh "
+                                "observatory subscriber before keepalives."
+                            ),
                             read_only=True,
                         ),
                     ],

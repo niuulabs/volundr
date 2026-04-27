@@ -370,7 +370,13 @@ def _extract_token_from_websocket(websocket: WebSocket) -> str | None:
     2. x-auth-* headers injected by Envoy sidecar
     3. access_token query parameter — browser fallback
     """
-    headers = {k.lower(): v for k, v in websocket.headers.items()}
+    header_items = websocket.headers.items()
+    if inspect.iscoroutine(header_items):
+        header_items.close()
+        header_items = ()
+    elif inspect.isawaitable(header_items):
+        header_items = ()
+    headers = {k.lower(): v for k, v in header_items}
 
     # 1. Bearer token from Authorization header
     token = _extract_bearer_token(headers)
@@ -381,7 +387,16 @@ def _extract_token_from_websocket(websocket: WebSocket) -> str | None:
     #    but we have the validated claims — return None (caller uses headers).
 
     # 3. Query parameter fallback (browser WebSocket can't set headers)
-    return websocket.query_params.get("access_token")
+    query_get = getattr(websocket.query_params, "get", None)
+    if not callable(query_get):
+        return None
+    query_token = query_get("access_token")
+    if inspect.iscoroutine(query_token):
+        query_token.close()
+        return None
+    if inspect.isawaitable(query_token):
+        return None
+    return query_token
 
 
 CONVERSATION_HISTORY_DIR = ".skuld"

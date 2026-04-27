@@ -629,7 +629,7 @@ def create_sagas_router() -> APIRouter:
             new_status = SagaStatus(body.status.upper())
         except ValueError:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Invalid saga_id or status: {saga_id!r} / {body.status!r}",
             )
 

@@ -8,7 +8,10 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from volundr.adapters.inbound.rest_issues import create_canonical_issues_router, create_issues_router
+from volundr.adapters.inbound.rest_issues import (
+    create_canonical_issues_router,
+    create_issues_router,
+)
 from volundr.domain.models import (
     IntegrationConnection,
     IntegrationType,

@@ -116,10 +116,7 @@ class TestAuthorize:
 
         assert resp.status_code == 200
         assert resp.headers["Deprecation"] == "true"
-        assert (
-            resp.headers["X-Niuu-Canonical-Route"]
-            == f"{CANONICAL_PREFIX}/linear/authorize"
-        )
+        assert resp.headers["X-Niuu-Canonical-Route"] == f"{CANONICAL_PREFIX}/linear/authorize"
 
     def test_canonical_authorize_route_exists(self):
         defn = _make_definition(slug="linear")
