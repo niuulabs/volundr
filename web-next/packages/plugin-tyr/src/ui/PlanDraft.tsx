@@ -250,17 +250,24 @@ export function PlanDraft({
         <div className="tyr-plan-step-head">
           <div className="tyr-plan-step-index">4</div>
           <div className="niuu-flex niuu-flex-col niuu-gap-1">
-            <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">Review your plan</h2>
+            <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">
+              Review your plan
+            </h2>
             <p className="niuu-text-sm niuu-text-text-secondary">
-              Nothing is created yet. Tune the draft, remove work, or re-plan before materializing the saga.
+              Nothing is created yet. Tune the draft, remove work, or re-plan before materializing
+              the saga.
             </p>
           </div>
         </div>
 
         <div className="tyr-plan-draft-head">
           <div className="niuu-flex niuu-flex-col niuu-gap-1 niuu-min-w-0">
-            <span className="niuu-text-[10px] niuu-font-mono niuu-uppercase niuu-tracking-[0.22em] niuu-text-text-muted">Proposed title</span>
-            <span className="niuu-text-base niuu-font-semibold niuu-text-text-primary niuu-truncate">{sagaName}</span>
+            <span className="niuu-text-[10px] niuu-font-mono niuu-uppercase niuu-tracking-[0.22em] niuu-text-text-muted">
+              Proposed title
+            </span>
+            <span className="niuu-text-base niuu-font-semibold niuu-text-text-primary niuu-truncate">
+              {sagaName}
+            </span>
           </div>
           <div className="niuu-flex niuu-flex-wrap niuu-gap-2 niuu-justify-end niuu-text-[10px] niuu-font-mono niuu-text-text-muted">
             <span>{phases.length} phases</span>

@@ -80,10 +80,9 @@ export function buildFeatureCatalogAdapter(client: HttpClient): IFeatureCatalogS
     },
 
     async toggleFeature(key: string, enabled: boolean): Promise<FeatureModule> {
-      const response = await client.patch<ApiFeatureModule>(
-        `/features/modules/${key}/toggle`,
-        { enabled },
-      );
+      const response = await client.patch<ApiFeatureModule>(`/features/modules/${key}/toggle`, {
+        enabled,
+      });
       return rowToModule(response);
     },
   };

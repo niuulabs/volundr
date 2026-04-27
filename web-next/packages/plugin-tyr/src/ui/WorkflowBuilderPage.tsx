@@ -101,7 +101,9 @@ export function WorkflowBuilderPage() {
                     : 'niuu-bg-transparent niuu-border-transparent niuu-text-text-secondary hover:niuu-bg-bg-tertiary hover:niuu-border-border-subtle',
                 )}
               >
-                <span className="niuu-text-brand niuu-text-sm niuu-leading-none niuu-mt-0.5">◇</span>
+                <span className="niuu-text-brand niuu-text-sm niuu-leading-none niuu-mt-0.5">
+                  ◇
+                </span>
                 <span className="niuu-flex-1 niuu-min-w-0 niuu-flex niuu-flex-col niuu-gap-1">
                   <span className="niuu-truncate niuu-font-semibold niuu-text-text-primary">
                     {wf.name.length > 22 ? wf.name.slice(0, 20) + '…' : wf.name}

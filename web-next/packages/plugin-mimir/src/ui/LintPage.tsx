@@ -67,7 +67,8 @@ export function LintPage() {
 
   const KPI_LBL = 'niuu-text-[10px] niuu-uppercase niuu-tracking-[0.07em] niuu-text-text-muted';
   const KPI_VAL = 'niuu-text-2xl niuu-font-medium niuu-font-mono niuu-tracking-[-0.01em]';
-  const KPI_SUB = 'niuu-text-[10px] niuu-text-text-muted niuu-font-mono niuu-whitespace-nowrap niuu-overflow-hidden niuu-text-ellipsis';
+  const KPI_SUB =
+    'niuu-text-[10px] niuu-text-text-muted niuu-font-mono niuu-whitespace-nowrap niuu-overflow-hidden niuu-text-ellipsis';
 
   if (isLoading) {
     return (
@@ -98,7 +99,9 @@ export function LintPage() {
         </div>
         <div className="niuu-flex niuu-flex-col niuu-gap-[2px] niuu-py-3 niuu-px-4 niuu-bg-bg-secondary niuu-border-r niuu-border-border-subtle">
           <span className={KPI_LBL}>errors</span>
-          <span className={`${KPI_VAL} ${summary.error > 0 ? 'niuu-text-critical-fg' : 'niuu-text-text-muted'}`}>
+          <span
+            className={`${KPI_VAL} ${summary.error > 0 ? 'niuu-text-critical-fg' : 'niuu-text-text-muted'}`}
+          >
             {summary.error}
           </span>
           <span className={KPI_SUB}>{rulesByseverity('error') || '—'}</span>

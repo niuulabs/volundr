@@ -40,7 +40,12 @@ const SESSION_DOT: Record<SessionState, DotState> = {
 };
 
 function looksLikeRepoLabel(value: string): boolean {
-  return value.includes('#') || value.startsWith('~/') || value.startsWith('/') || value.startsWith('http');
+  return (
+    value.includes('#') ||
+    value.startsWith('~/') ||
+    value.startsWith('/') ||
+    value.startsWith('http')
+  );
 }
 
 function compactSourceParts(value: string): { label: string; branch?: string } {
@@ -110,7 +115,9 @@ function PodEntry({
                   <FolderGit2 className="niuu-h-3 niuu-w-3 niuu-flex-shrink-0 niuu-text-text-faint" />
                   <span className="niuu-truncate">{sourceParts.label}</span>
                   {sourceParts.branch ? (
-                    <span className="niuu-flex-shrink-0 niuu-text-brand">@{sourceParts.branch}</span>
+                    <span className="niuu-flex-shrink-0 niuu-text-brand">
+                      @{sourceParts.branch}
+                    </span>
                   ) : null}
                 </span>
               ) : null}
@@ -157,12 +164,15 @@ function PodGroup({
   return (
     <div data-testid={`pod-group-${label.toLowerCase()}`}>
       {!collapsed && (
-      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-white/6 niuu-px-5 niuu-py-2.5 niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-muted">
-        <span>{label}</span>
-        <span className="niuu-font-mono niuu-text-text-faint" data-testid={`pod-group-${label.toLowerCase()}-count`}>
-          {sessions.length}
-        </span>
-      </div>
+        <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-white/6 niuu-px-5 niuu-py-2.5 niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-muted">
+          <span>{label}</span>
+          <span
+            className="niuu-font-mono niuu-text-text-faint"
+            data-testid={`pod-group-${label.toLowerCase()}-count`}
+          >
+            {sessions.length}
+          </span>
+        </div>
       )}
       {sessions.map((s) => (
         <PodEntry
@@ -305,7 +315,10 @@ export function SessionsPage() {
 
             <div className="niuu-px-4 niuu-py-1.5">
               <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-px-3 niuu-py-2 niuu-shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] focus-within:niuu-border-brand/50 focus-within:niuu-ring-1 focus-within:niuu-ring-brand/20">
-                <Search className="niuu-h-4 niuu-w-4 niuu-flex-shrink-0 niuu-text-text-muted" aria-hidden="true" />
+                <Search
+                  className="niuu-h-4 niuu-w-4 niuu-flex-shrink-0 niuu-text-text-muted"
+                  aria-hidden="true"
+                />
                 <input
                   type="search"
                   placeholder="filter by name / branch /"
@@ -355,7 +368,10 @@ export function SessionsPage() {
           />
         )}
         {sessionsQuery.data && !selectedSessionId && (
-          <EmptyState title="No session selected" description="Select a session from the sidebar." />
+          <EmptyState
+            title="No session selected"
+            description="Select a session from the sidebar."
+          />
         )}
         {sessionsQuery.data && selectedSessionId && (
           <LiveSessionDetailPage key={selectedSessionId} sessionId={selectedSessionId} />

@@ -40,4 +40,10 @@ export default tseslint.config(
       react: { version: 'detect' },
     },
   },
+  {
+    files: ['**/*.test.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
 );

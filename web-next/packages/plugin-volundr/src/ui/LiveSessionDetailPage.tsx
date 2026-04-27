@@ -6,7 +6,6 @@ import { ErrorState, LoadingState, SessionChat, cn, type PermissionBehavior } fr
 import {
   AlertTriangle,
   Check,
-  Copy,
   ExternalLink,
   FileCode2,
   FileDiff,
@@ -19,7 +18,12 @@ import {
 } from 'lucide-react';
 import type { IVolundrService } from '../ports/IVolundrService';
 import type { IFileSystemPort } from '../ports/IFileSystemPort';
-import type { SessionChronicle, SessionFile, VolundrLog, VolundrSession } from '../models/volundr.model';
+import type {
+  SessionChronicle,
+  SessionFile,
+  VolundrLog,
+  VolundrSession,
+} from '../models/volundr.model';
 import { useSessionDetail } from './hooks/useSessionStore';
 import { SessionFilesWorkspace } from './SessionFilesWorkspace';
 import { useSkuldChat } from './hooks/useSkuldChat';
@@ -229,13 +233,7 @@ function renderSourceMeta(session: VolundrSession | null | undefined) {
   );
 }
 
-function HeaderMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function HeaderMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="niuu-flex niuu-items-baseline niuu-gap-2 niuu-font-mono">
       <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-faint">
@@ -387,7 +385,11 @@ function DeleteSessionDialog({
 
   return (
     <>
-      <div className="niuu-fixed niuu-inset-0 niuu-z-[90] niuu-bg-black/45" onClick={onClose} role="presentation" />
+      <div
+        className="niuu-fixed niuu-inset-0 niuu-z-[90] niuu-bg-black/45"
+        onClick={onClose}
+        role="presentation"
+      />
       <div className="niuu-fixed niuu-inset-0 niuu-z-[100] niuu-flex niuu-items-center niuu-justify-center niuu-p-4">
         <div className="niuu-w-[520px] niuu-max-w-[calc(100vw-32px)] niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-5 niuu-shadow-2xl">
           <div className="niuu-text-lg niuu-font-medium niuu-text-text-primary">
@@ -396,11 +398,13 @@ function DeleteSessionDialog({
           <div className="niuu-mt-2 niuu-text-sm niuu-leading-6 niuu-text-text-muted">
             {isManual ? (
               <>
-                Remove <span className="niuu-font-mono niuu-text-text-primary">{session.name}</span> from the session list?
+                Remove <span className="niuu-font-mono niuu-text-text-primary">{session.name}</span>{' '}
+                from the session list?
               </>
             ) : (
               <>
-                Delete <span className="niuu-font-mono niuu-text-text-primary">{session.name}</span>? This action cannot be undone.
+                Delete <span className="niuu-font-mono niuu-text-text-primary">{session.name}</span>
+                ? This action cannot be undone.
               </>
             )}
           </div>
@@ -428,7 +432,9 @@ function DeleteSessionDialog({
                     className="niuu-mt-0.5 niuu-h-4 niuu-w-4 niuu-flex-shrink-0"
                   />
                   <div>
-                    <div className="niuu-text-sm niuu-text-text-primary">Delete workspace storage</div>
+                    <div className="niuu-text-sm niuu-text-text-primary">
+                      Delete workspace storage
+                    </div>
                     <div className="niuu-mt-1 niuu-text-xs niuu-text-text-muted">
                       {isLocalStorage
                         ? 'Local mounted workspace — manage storage on your machine.'
@@ -581,10 +587,14 @@ function LiveLogsTab({ sessionId, volundr }: { sessionId: string; volundr: IVolu
       </div>
       <div className="niuu-flex-1 niuu-overflow-auto niuu-bg-bg-primary">
         {loading && logs.length === 0 && (
-          <div className="niuu-p-4 niuu-text-center niuu-text-sm niuu-text-text-muted">Loading logs…</div>
+          <div className="niuu-p-4 niuu-text-center niuu-text-sm niuu-text-text-muted">
+            Loading logs…
+          </div>
         )}
         {!loading && logs.length === 0 && (
-          <div className="niuu-p-4 niuu-text-center niuu-text-sm niuu-text-text-muted">No log entries yet.</div>
+          <div className="niuu-p-4 niuu-text-center niuu-text-sm niuu-text-text-muted">
+            No log entries yet.
+          </div>
         )}
         {logs.map((line) => (
           <div
@@ -674,7 +684,9 @@ function LiveChroniclesTab({
   if (!chronicle) {
     return (
       <div className="niuu-flex niuu-h-full niuu-items-center niuu-justify-center niuu-text-sm niuu-text-text-muted">
-        {sessionStatus === 'running' ? 'No chronicle data yet.' : 'Start the session to view its chronicle.'}
+        {sessionStatus === 'running'
+          ? 'No chronicle data yet.'
+          : 'Start the session to view its chronicle.'}
       </div>
     );
   }
@@ -750,7 +762,9 @@ function LiveChroniclesTab({
                         </div>
                         <div className="niuu-flex niuu-flex-wrap niuu-justify-end niuu-gap-x-2 niuu-gap-y-1 niuu-font-mono niuu-text-[10px]">
                           {typeof event.tokens === 'number' && (
-                            <span className="niuu-text-text-muted">{formatCount(event.tokens)} tok</span>
+                            <span className="niuu-text-text-muted">
+                              {formatCount(event.tokens)} tok
+                            </span>
                           )}
                           {(typeof event.ins === 'number' || typeof event.del === 'number') && (
                             <span className="niuu-text-text-muted">
@@ -760,7 +774,11 @@ function LiveChroniclesTab({
                           )}
                           {event.hash && <span className="niuu-text-text-faint">{event.hash}</span>}
                           {typeof event.exit === 'number' && (
-                            <span className={event.exit === 0 ? 'niuu-text-emerald-300' : 'niuu-text-rose-300'}>
+                            <span
+                              className={
+                                event.exit === 0 ? 'niuu-text-emerald-300' : 'niuu-text-rose-300'
+                              }
+                            >
                               exit {event.exit}
                             </span>
                           )}
@@ -800,8 +818,12 @@ function LiveChroniclesTab({
 
         <section className="niuu-mb-3 niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-3">
           <div className="niuu-mb-2.5 niuu-flex niuu-items-center niuu-justify-between">
-            <div className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Files modified</div>
-            <div className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted">{chronicle.files.length}</div>
+            <div className="niuu-text-sm niuu-font-medium niuu-text-text-primary">
+              Files modified
+            </div>
+            <div className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
+              {chronicle.files.length}
+            </div>
           </div>
           <div className="niuu-flex niuu-flex-col">
             {chronicle.files.length > 0 ? (
@@ -847,7 +869,9 @@ function LiveChroniclesTab({
         <section className="niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-3">
           <div className="niuu-mb-2.5 niuu-flex niuu-items-center niuu-justify-between">
             <div className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Commits</div>
-            <div className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted">{chronicle.commits.length}</div>
+            <div className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
+              {chronicle.commits.length}
+            </div>
           </div>
           <div className="niuu-flex niuu-flex-col">
             {chronicle.commits.length > 0 ? (
@@ -863,7 +887,9 @@ function LiveChroniclesTab({
                     <GitCommitHorizontal className="niuu-h-3 niuu-w-3 niuu-text-text-muted" />
                   </span>
                   <div className="niuu-min-w-0 niuu-flex-1">
-                    <div className="niuu-truncate niuu-text-[12px] niuu-text-text-primary">{commit.msg}</div>
+                    <div className="niuu-truncate niuu-text-[12px] niuu-text-text-primary">
+                      {commit.msg}
+                    </div>
                     <div className="niuu-mt-0.5 niuu-flex niuu-items-center niuu-gap-2 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
                       <span>{commit.hash.slice(0, 8)}</span>
                       <span className="niuu-text-text-faint">•</span>
@@ -910,7 +936,10 @@ function authHeaders(): Record<string, string> {
 }
 
 function useLiveDiffViewer(chatEndpoint: string | null) {
-  const apiBase = useMemo(() => (chatEndpoint ? wsUrlToHttpBase(chatEndpoint) : null), [chatEndpoint]);
+  const apiBase = useMemo(
+    () => (chatEndpoint ? wsUrlToHttpBase(chatEndpoint) : null),
+    [chatEndpoint],
+  );
   const [files, setFiles] = useState<SessionFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
   const [diff, setDiff] = useState<DiffData | null>(null);
@@ -1201,7 +1230,11 @@ function LiveDiffsTab({ chatEndpoint }: { chatEndpoint: string | null }) {
             Loading files...
           </div>
         ) : (
-          <DiffFileList files={files} selectedPath={selectedFile} onSelect={(path) => void selectFile(path)} />
+          <DiffFileList
+            files={files}
+            selectedPath={selectedFile}
+            onSelect={(path) => void selectFile(path)}
+          />
         )}
       </div>
       <div className="niuu-overflow-hidden">
@@ -1278,8 +1311,10 @@ export function LiveSessionDetailPage({
       const rightFeature = sessionFeatures.find((feature) => feature.key === right.id);
       const leftPref = prefMap.get(left.id);
       const rightPref = prefMap.get(right.id);
-      const leftOrder = left.id === 'diffs' ? 25 : leftPref ? leftPref.sortOrder : (leftFeature?.order ?? 0);
-      const rightOrder = right.id === 'diffs' ? 25 : rightPref ? rightPref.sortOrder : (rightFeature?.order ?? 0);
+      const leftOrder =
+        left.id === 'diffs' ? 25 : leftPref ? leftPref.sortOrder : (leftFeature?.order ?? 0);
+      const rightOrder =
+        right.id === 'diffs' ? 25 : rightPref ? rightPref.sortOrder : (rightFeature?.order ?? 0);
       return leftOrder - rightOrder;
     });
 
@@ -1315,7 +1350,9 @@ export function LiveSessionDetailPage({
                   className="niuu-flex niuu-items-center niuu-justify-between niuu-gap-3 niuu-text-xs"
                 >
                   <div>
-                    <div className="niuu-font-mono niuu-text-text-primary">{permission.toolName}</div>
+                    <div className="niuu-font-mono niuu-text-text-primary">
+                      {permission.toolName}
+                    </div>
                     <div className="niuu-text-text-muted">{permission.description}</div>
                   </div>
                   <div className="niuu-flex niuu-gap-2">
@@ -1447,7 +1484,7 @@ export function LiveSessionDetailPage({
               <>
                 <HeaderDivider />
                 <span className="niuu-rounded-full niuu-bg-bg-elevated niuu-px-3 niuu-py-1 niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
-                Archived
+                  Archived
                 </span>
               </>
             )}
@@ -1479,31 +1516,31 @@ export function LiveSessionDetailPage({
         aria-label="Session tabs"
       >
         <div className="niuu-flex niuu-items-center niuu-gap-1">
-          {tabs.map((tab) => (
+          {tabs.map((tab) =>
             (() => {
               const TabIcon = tab.icon;
               return (
-            <button
-              key={tab.id}
-              id={`tab-${tab.id}`}
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              onClick={() => {
-                setTabWasManuallySelected(true);
-                setActiveTab(tab.id);
-              }}
-              className={
-                activeTab === tab.id
-                  ? 'niuu-flex niuu-items-center niuu-gap-2 niuu-border-b-2 niuu-border-brand niuu-px-3 niuu-py-2.5 niuu-font-mono niuu-text-[13px] niuu-font-medium niuu-text-brand'
-                  : 'niuu-flex niuu-items-center niuu-gap-2 niuu-border-b-2 niuu-border-transparent niuu-px-3 niuu-py-2.5 niuu-font-mono niuu-text-[13px] niuu-text-text-muted hover:niuu-text-text-secondary'
-              }
-            >
-              <TabIcon className="niuu-h-4 niuu-w-4" />
-              {tab.label}
-            </button>
+                <button
+                  key={tab.id}
+                  id={`tab-${tab.id}`}
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  onClick={() => {
+                    setTabWasManuallySelected(true);
+                    setActiveTab(tab.id);
+                  }}
+                  className={
+                    activeTab === tab.id
+                      ? 'niuu-flex niuu-items-center niuu-gap-2 niuu-border-b-2 niuu-border-brand niuu-px-3 niuu-py-2.5 niuu-font-mono niuu-text-[13px] niuu-font-medium niuu-text-brand'
+                      : 'niuu-flex niuu-items-center niuu-gap-2 niuu-border-b-2 niuu-border-transparent niuu-px-3 niuu-py-2.5 niuu-font-mono niuu-text-[13px] niuu-text-text-muted hover:niuu-text-text-secondary'
+                  }
+                >
+                  <TabIcon className="niuu-h-4 niuu-w-4" />
+                  {tab.label}
+                </button>
               );
-            })()
-          ))}
+            })(),
+          )}
         </div>
         {!readOnly && liveSession && (
           <div className="niuu-ml-auto niuu-flex niuu-flex-shrink-0 niuu-items-center niuu-gap-2 niuu-pr-1">

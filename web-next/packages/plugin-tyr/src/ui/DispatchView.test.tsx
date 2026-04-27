@@ -541,7 +541,9 @@ describe('DispatchView', () => {
       expect(screen.queryByText('Apply workflow override')).not.toBeInTheDocument(),
     );
     await waitFor(() =>
-      expect(screen.getByText(/Applied "ship — default release cycle" to 1 raid/i)).toBeInTheDocument(),
+      expect(
+        screen.getByText(/Applied "ship — default release cycle" to 1 raid/i),
+      ).toBeInTheDocument(),
     );
   });
 

@@ -41,12 +41,18 @@ const TABS: { id: SessionTab; label: string }[] = [
 
 function tabIcon(id: SessionTab): string {
   switch (id) {
-    case 'chat': return '\u25AD';
-    case 'terminal': return '>_';
-    case 'diffs': return '\u296E';
-    case 'files': return '\u25F0';
-    case 'chronicle': return '\u2263';
-    case 'logs': return '\u2328';
+    case 'chat':
+      return '\u25AD';
+    case 'terminal':
+      return '>_';
+    case 'diffs':
+      return '\u296E';
+    case 'files':
+      return '\u25F0';
+    case 'chronicle':
+      return '\u2263';
+    case 'logs':
+      return '\u2328';
   }
 }
 
@@ -78,10 +84,16 @@ function formatTokens(n: number): string {
 
 function tabCount(tab: SessionTab, session: Session): number | undefined {
   switch (tab) {
-    case 'chat': return session.events.length;
-    case 'diffs': return (session.files?.added ?? 0) + (session.files?.modified ?? 0) + (session.files?.deleted ?? 0);
-    case 'chronicle': return session.events.length;
-    default: return undefined;
+    case 'chat':
+      return session.events.length;
+    case 'diffs':
+      return (
+        (session.files?.added ?? 0) + (session.files?.modified ?? 0) + (session.files?.deleted ?? 0)
+      );
+    case 'chronicle':
+      return session.events.length;
+    default:
+      return undefined;
   }
 }
 
@@ -228,10 +240,12 @@ function SessionHeader({
         <div className="niuu-flex niuu-items-center niuu-gap-6" data-testid="session-stats">
           <Stat label="uptime" value={duration} />
           <Stat label="msgs" value={session.events.length} />
-          <Stat label="tokens" value={formatTokens((session.tokensIn ?? 0) + (session.tokensOut ?? 0))} />
+          <Stat
+            label="tokens"
+            value={formatTokens((session.tokensIn ?? 0) + (session.tokensOut ?? 0))}
+          />
           <Stat label="cost" value={`$${((session.costCents ?? 0) / 100).toFixed(2)}`} />
         </div>
-
       </div>
 
       {/* File change summary row */}
@@ -295,7 +309,9 @@ function ThinkingBlock({ turn, peer }: { turn: ChatTurn; peer: PeerMeta | undefi
             {peer.glyph}
           </span>
         )}
-        <span className="niuu-font-mono niuu-uppercase niuu-tracking-[0.16em] niuu-text-text-muted">thinking</span>
+        <span className="niuu-font-mono niuu-uppercase niuu-tracking-[0.16em] niuu-text-text-muted">
+          thinking
+        </span>
         <span className="niuu-font-mono niuu-text-text-muted">{turn.ms}ms</span>
         {!open && <span className="niuu-text-text-muted">{truncate(firstLine, 80)}</span>}
       </button>
@@ -430,7 +446,9 @@ function ChatTurnComponent({ turn, room }: { turn: ChatTurn; room: MockRoom }) {
             </>
           )}
         </div>
-        <div className="niuu-max-w-[88%] niuu-text-sm niuu-leading-7 niuu-text-text-primary">{turn.content}</div>
+        <div className="niuu-max-w-[88%] niuu-text-sm niuu-leading-7 niuu-text-text-primary">
+          {turn.content}
+        </div>
         {turn.outcome && (
           <div
             className="niuu-mt-3 niuu-max-w-[88%] niuu-rounded-xl niuu-border niuu-border-brand/40 niuu-bg-bg-secondary niuu-p-3"
@@ -474,12 +492,17 @@ function ChatInput({ participants }: { participants: RoomParticipant[] }) {
       {/* Direct-to chips */}
       <div className="niuu-flex niuu-items-center niuu-gap-1.5 niuu-mb-2 niuu-text-[10px] niuu-text-text-muted">
         <span className="niuu-uppercase niuu-tracking-wider">direct to</span>
-        {participants.filter((p) => p.participantType === 'ravn').map((p) => (
-          <span key={p.peerId} className="niuu-flex niuu-items-center niuu-gap-1 niuu-rounded-md niuu-bg-bg-tertiary niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-text-secondary">
-            <span className="niuu-w-1.5 niuu-h-1.5 niuu-rounded-full niuu-bg-brand" />
-            {p.displayName ?? p.persona}
-          </span>
-        ))}
+        {participants
+          .filter((p) => p.participantType === 'ravn')
+          .map((p) => (
+            <span
+              key={p.peerId}
+              className="niuu-flex niuu-items-center niuu-gap-1 niuu-rounded-md niuu-bg-bg-tertiary niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-text-secondary"
+            >
+              <span className="niuu-w-1.5 niuu-h-1.5 niuu-rounded-full niuu-bg-brand" />
+              {p.displayName ?? p.persona}
+            </span>
+          ))}
         <span className="niuu-text-text-muted">(broadcast · all participants receive)</span>
       </div>
       {/* Input row */}
@@ -537,7 +560,9 @@ function ChatStream({ groups, room }: { groups: TurnGroup[]; room: MockRoom }) {
         <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
           <span>sast_findings 0</span>
           <span>deps_changed 0</span>
-          <span>scope <span className="niuu-text-text-primary">frontend-only</span></span>
+          <span>
+            scope <span className="niuu-text-text-primary">frontend-only</span>
+          </span>
         </div>
       </div>
       <div className="niuu-flex-1 niuu-overflow-y-auto niuu-px-4 niuu-py-3" ref={scrollRef}>
@@ -582,8 +607,16 @@ function PeerRail({
   const peers = room.participants.filter((p) => p.participantType === 'ravn');
   if (collapsed) {
     return (
-      <aside className="niuu-flex niuu-w-[54px] niuu-flex-col niuu-border-r niuu-border-border-subtle niuu-bg-bg-secondary" data-testid="mesh-sidebar">
-        <button className="niuu-py-3 niuu-font-mono niuu-text-sm niuu-text-text-muted" onClick={onToggleCollapsed}>›</button>
+      <aside
+        className="niuu-flex niuu-w-[54px] niuu-flex-col niuu-border-r niuu-border-border-subtle niuu-bg-bg-secondary"
+        data-testid="mesh-sidebar"
+      >
+        <button
+          className="niuu-py-3 niuu-font-mono niuu-text-sm niuu-text-text-muted"
+          onClick={onToggleCollapsed}
+        >
+          ›
+        </button>
         <div className="niuu-flex niuu-flex-col niuu-items-center niuu-gap-3 niuu-py-3">
           {peers.map((peer) => (
             <button
@@ -591,7 +624,9 @@ function PeerRail({
               onClick={() => onSelectPeer(peer.peerId)}
               className={cn(
                 'niuu-flex niuu-h-8 niuu-w-8 niuu-items-center niuu-justify-center niuu-rounded-full niuu-border niuu-font-mono niuu-text-xs',
-                selectedPeerId === peer.peerId ? 'niuu-border-brand niuu-text-brand' : 'niuu-border-border niuu-text-text-muted',
+                selectedPeerId === peer.peerId
+                  ? 'niuu-border-brand niuu-text-brand'
+                  : 'niuu-border-border niuu-text-text-muted',
               )}
               title={peer.displayName ?? peer.persona}
             >
@@ -604,12 +639,20 @@ function PeerRail({
   }
 
   return (
-    <aside className="niuu-flex niuu-w-[232px] niuu-flex-col niuu-border-r niuu-border-border-subtle niuu-bg-bg-secondary" data-testid="mesh-sidebar">
+    <aside
+      className="niuu-flex niuu-w-[232px] niuu-flex-col niuu-border-r niuu-border-border-subtle niuu-bg-bg-secondary"
+      data-testid="mesh-sidebar"
+    >
       <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-border-subtle niuu-px-4 niuu-py-3">
         <span className="niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-muted">
           participants {peers.length}
         </span>
-        <button className="niuu-font-mono niuu-text-lg niuu-text-text-muted" onClick={onToggleCollapsed}>‹</button>
+        <button
+          className="niuu-font-mono niuu-text-lg niuu-text-text-muted"
+          onClick={onToggleCollapsed}
+        >
+          ‹
+        </button>
       </div>
       <div className="niuu-flex-1 niuu-overflow-y-auto">
         {peers.map((peer) => (
@@ -624,7 +667,10 @@ function PeerRail({
           >
             <span
               className="niuu-flex niuu-h-9 niuu-w-9 niuu-items-center niuu-justify-center niuu-rounded-full niuu-border niuu-font-mono niuu-text-sm"
-              style={{ color: resolveParticipantColor(peer.peerId), borderColor: resolveParticipantColor(peer.peerId) }}
+              style={{
+                color: resolveParticipantColor(peer.peerId),
+                borderColor: resolveParticipantColor(peer.peerId),
+              }}
             >
               {peer.glyph}
             </span>
@@ -677,8 +723,16 @@ function MeshCascade({
 
   if (collapsed) {
     return (
-      <div className="niuu-flex niuu-w-[54px] niuu-flex-col niuu-border-l niuu-border-border-subtle niuu-bg-bg-secondary" data-testid="mesh-cascade">
-        <button className="niuu-py-3 niuu-font-mono niuu-text-sm niuu-text-text-muted" onClick={onToggleCollapsed}>‹</button>
+      <div
+        className="niuu-flex niuu-w-[54px] niuu-flex-col niuu-border-l niuu-border-border-subtle niuu-bg-bg-secondary"
+        data-testid="mesh-cascade"
+      >
+        <button
+          className="niuu-py-3 niuu-font-mono niuu-text-sm niuu-text-text-muted"
+          onClick={onToggleCollapsed}
+        >
+          ‹
+        </button>
       </div>
     );
   }
@@ -693,10 +747,15 @@ function MeshCascade({
           mesh cascade
         </span>
         <div className="niuu-flex niuu-items-center niuu-gap-3">
-        <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
-          {filtered.length}
-        </span>
-        <button className="niuu-font-mono niuu-text-lg niuu-text-text-muted" onClick={onToggleCollapsed}>›</button>
+          <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+            {filtered.length}
+          </span>
+          <button
+            className="niuu-font-mono niuu-text-lg niuu-text-text-muted"
+            onClick={onToggleCollapsed}
+          >
+            ›
+          </button>
         </div>
       </div>
 
@@ -1121,36 +1180,36 @@ interface ChronicleChapter {
 }
 
 const CHRONICLE_CHAPTERS: ChronicleChapter[] = [
-    {
-      id: 'ch-1',
-      label: 'CH. 01',
-      hash: 'f2b9c1a',
-      title: 'perf: quadtree cull @ 60fps',
-      age: '2h ago',
-      span: '58m',
-      count: 6,
-      events: [
-        { time: '3h', type: 'SESSION', body: 'pod scheduled on valaskjalf-03' },
-        { time: '3h', type: 'GIT', body: 'cloned niuu/volundr@main · switch obs-perf' },
-        { time: '2h', type: 'MSG', body: 'USER the drag lags on 400-entity graphs · 38t' },
-        { time: '2h', type: 'FILE', body: 'observatory.jsx added quadtree cull', delta: '+214 -12' },
-        { time: '2h', type: 'TERM', body: '$ npm test observatory.perf.test.jsx', badge: 'exit 0' },
-      ],
-    },
-    {
-      id: 'ch-2',
-      label: 'CH. 02',
-      hash: 'a019be2',
-      title: 'perf: throttle pan to rAF',
-      age: '45m ago',
-      span: '45m',
-      count: 3,
-      events: [
-        { time: '1h', type: 'MSG', body: 'ASSISTANT frame time dropped 18ms→6ms · 420t' },
-        { time: '1h', type: 'FILE', body: 'observatory.jsx throttle pan rAF', delta: '+34 -18' },
-      ],
-    },
-  ];
+  {
+    id: 'ch-1',
+    label: 'CH. 01',
+    hash: 'f2b9c1a',
+    title: 'perf: quadtree cull @ 60fps',
+    age: '2h ago',
+    span: '58m',
+    count: 6,
+    events: [
+      { time: '3h', type: 'SESSION', body: 'pod scheduled on valaskjalf-03' },
+      { time: '3h', type: 'GIT', body: 'cloned niuu/volundr@main · switch obs-perf' },
+      { time: '2h', type: 'MSG', body: 'USER the drag lags on 400-entity graphs · 38t' },
+      { time: '2h', type: 'FILE', body: 'observatory.jsx added quadtree cull', delta: '+214 -12' },
+      { time: '2h', type: 'TERM', body: '$ npm test observatory.perf.test.jsx', badge: 'exit 0' },
+    ],
+  },
+  {
+    id: 'ch-2',
+    label: 'CH. 02',
+    hash: 'a019be2',
+    title: 'perf: throttle pan to rAF',
+    age: '45m ago',
+    span: '45m',
+    count: 3,
+    events: [
+      { time: '1h', type: 'MSG', body: 'ASSISTANT frame time dropped 18ms→6ms · 420t' },
+      { time: '1h', type: 'FILE', body: 'observatory.jsx throttle pan rAF', delta: '+34 -18' },
+    ],
+  },
+];
 
 function ChronicleTab() {
   const events = buildMockChronicle();
@@ -1161,23 +1220,29 @@ function ChronicleTab() {
     events.filter((e) => e.type === 'file').map((e) => e.label.split(' · ')[0] ?? ''),
   ).size;
   return (
-    <div
-      className="niuu-min-h-full niuu-bg-bg-primary"
-      data-testid="chronicle-tab"
-    >
-      <div className="niuu-grid niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary" style={{ gridTemplateColumns: 'repeat(5,minmax(0,1fr))' }} data-testid="chronicle-summary">
-          {[
-            { label: 'commits', value: commitCount },
-            { label: 'files touched', value: fileCount },
-            { label: 'shell runs', value: termCount },
-            { label: 'messages', value: msgCount },
-            { label: 'total span', value: '2h 38m' },
-          ].map(({ label, value }) => (
-          <div key={label} className="niuu-flex niuu-flex-col niuu-gap-1 niuu-border-r niuu-border-border-subtle niuu-px-5 niuu-py-3 last:niuu-border-r-0">
+    <div className="niuu-min-h-full niuu-bg-bg-primary" data-testid="chronicle-tab">
+      <div
+        className="niuu-grid niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary"
+        style={{ gridTemplateColumns: 'repeat(5,minmax(0,1fr))' }}
+        data-testid="chronicle-summary"
+      >
+        {[
+          { label: 'commits', value: commitCount },
+          { label: 'files touched', value: fileCount },
+          { label: 'shell runs', value: termCount },
+          { label: 'messages', value: msgCount },
+          { label: 'total span', value: '2h 38m' },
+        ].map(({ label, value }) => (
+          <div
+            key={label}
+            className="niuu-flex niuu-flex-col niuu-gap-1 niuu-border-r niuu-border-border-subtle niuu-px-5 niuu-py-3 last:niuu-border-r-0"
+          >
             <span className="niuu-font-mono niuu-text-[12px] niuu-font-medium niuu-leading-none niuu-text-text-primary">
               {value}
             </span>
-            <span className="niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-faint">{label}</span>
+            <span className="niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-faint">
+              {label}
+            </span>
           </div>
         ))}
       </div>
@@ -1190,9 +1255,15 @@ function ChronicleTab() {
               <span className="niuu-absolute niuu-left-[5px] niuu-top-6 niuu-h-4 niuu-w-4 niuu-rounded-full niuu-border-2 niuu-border-brand niuu-bg-bg-primary" />
               <section className="niuu-ml-10 niuu-overflow-hidden niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-secondary">
                 <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-border-b niuu-border-border-subtle niuu-px-4 niuu-py-3">
-                  <span className="niuu-rounded-md niuu-border niuu-border-border niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">{chapter.label}</span>
-                  <span className="niuu-rounded-md niuu-bg-brand-subtle niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-font-medium niuu-text-brand">{chapter.hash}</span>
-                  <h3 className="niuu-m-0 niuu-text-sm niuu-font-semibold niuu-text-text-primary">{chapter.title}</h3>
+                  <span className="niuu-rounded-md niuu-border niuu-border-border niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+                    {chapter.label}
+                  </span>
+                  <span className="niuu-rounded-md niuu-bg-brand-subtle niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-font-medium niuu-text-brand">
+                    {chapter.hash}
+                  </span>
+                  <h3 className="niuu-m-0 niuu-text-sm niuu-font-semibold niuu-text-text-primary">
+                    {chapter.title}
+                  </h3>
                   <div className="niuu-flex-1" />
                   <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">{`${chapter.age}·${chapter.span}·${chapter.count} events`}</span>
                 </div>
@@ -1204,12 +1275,20 @@ function ChronicleTab() {
                       style={{ gridTemplateColumns: '56px 96px minmax(0,1fr) auto' }}
                       data-testid={`chronicle-event-${event.type.toLowerCase()}`}
                     >
-                      <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">{event.time}</span>
-                      <span className="niuu-font-mono niuu-text-[11px] niuu-tracking-[0.16em] niuu-text-brand">{event.type}</span>
+                      <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+                        {event.time}
+                      </span>
+                      <span className="niuu-font-mono niuu-text-[11px] niuu-tracking-[0.16em] niuu-text-brand">
+                        {event.type}
+                      </span>
                       <span className="niuu-text-xs niuu-text-text-secondary">{event.body}</span>
                       <span className="niuu-font-mono niuu-text-[11px]">
                         {event.delta && <span className="niuu-text-brand">{event.delta}</span>}
-                        {event.badge && <span className="niuu-rounded-md niuu-bg-brand-subtle niuu-px-2 niuu-py-0.5 niuu-text-brand">{event.badge}</span>}
+                        {event.badge && (
+                          <span className="niuu-rounded-md niuu-bg-brand-subtle niuu-px-2 niuu-py-0.5 niuu-text-brand">
+                            {event.badge}
+                          </span>
+                        )}
                       </span>
                     </div>
                   ))}
@@ -1221,29 +1300,56 @@ function ChronicleTab() {
             <span className="niuu-absolute niuu-left-[5px] niuu-top-6 niuu-h-4 niuu-w-4 niuu-rounded-full niuu-border-2 niuu-border-border niuu-bg-bg-primary" />
             <section className="niuu-ml-10 niuu-overflow-hidden niuu-rounded-xl niuu-border niuu-border-dashed niuu-border-border niuu-bg-bg-primary">
               <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-border-b niuu-border-border-subtle niuu-px-4 niuu-py-3">
-                <span className="niuu-rounded-md niuu-border niuu-border-border niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">TAIL</span>
-                <h3 className="niuu-m-0 niuu-text-sm niuu-font-medium niuu-italic niuu-text-text-muted">in progress — 3 events since last commit</h3>
+                <span className="niuu-rounded-md niuu-border niuu-border-border niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+                  TAIL
+                </span>
+                <h3 className="niuu-m-0 niuu-text-sm niuu-font-medium niuu-italic niuu-text-text-muted">
+                  in progress — 3 events since last commit
+                </h3>
                 <div className="niuu-flex-1" />
-                <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">22m ago·18m·3 events</span>
+                <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+                  22m ago·18m·3 events
+                </span>
               </div>
               <div className="niuu-divide-y niuu-divide-border-subtle">
-                <div className="niuu-grid niuu-items-center niuu-gap-4 niuu-px-4 niuu-py-3" style={{ gridTemplateColumns: '56px 96px minmax(0,1fr) auto' }}>
+                <div
+                  className="niuu-grid niuu-items-center niuu-gap-4 niuu-px-4 niuu-py-3"
+                  style={{ gridTemplateColumns: '56px 96px minmax(0,1fr) auto' }}
+                >
                   <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">40m</span>
-                  <span className="niuu-font-mono niuu-text-[11px] niuu-tracking-[0.16em] niuu-text-brand">TERM</span>
-                  <span className="niuu-text-xs niuu-text-text-secondary">$ git push origin obs-perf</span>
-                  <span className="niuu-rounded-md niuu-bg-brand-subtle niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-brand">exit 0</span>
+                  <span className="niuu-font-mono niuu-text-[11px] niuu-tracking-[0.16em] niuu-text-brand">
+                    TERM
+                  </span>
+                  <span className="niuu-text-xs niuu-text-text-secondary">
+                    $ git push origin obs-perf
+                  </span>
+                  <span className="niuu-rounded-md niuu-bg-brand-subtle niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-brand">
+                    exit 0
+                  </span>
                 </div>
-                <div className="niuu-grid niuu-items-center niuu-gap-4 niuu-px-4 niuu-py-3" style={{ gridTemplateColumns: '56px 96px minmax(0,1fr) auto' }}>
+                <div
+                  className="niuu-grid niuu-items-center niuu-gap-4 niuu-px-4 niuu-py-3"
+                  style={{ gridTemplateColumns: '56px 96px minmax(0,1fr) auto' }}
+                >
                   <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">38m</span>
-                  <span className="niuu-font-mono niuu-text-[11px] niuu-tracking-[0.16em] niuu-text-brand">SESSION</span>
+                  <span className="niuu-font-mono niuu-text-[11px] niuu-tracking-[0.16em] niuu-text-brand">
+                    SESSION
+                  </span>
                   <span className="niuu-text-xs niuu-text-text-secondary">opened PR #248</span>
                   <span />
                 </div>
-                <div className="niuu-grid niuu-items-center niuu-gap-4 niuu-px-4 niuu-py-3" style={{ gridTemplateColumns: '56px 96px minmax(0,1fr) auto' }}>
+                <div
+                  className="niuu-grid niuu-items-center niuu-gap-4 niuu-px-4 niuu-py-3"
+                  style={{ gridTemplateColumns: '56px 96px minmax(0,1fr) auto' }}
+                >
                   <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted">22m</span>
-                  <span className="niuu-font-mono niuu-text-[11px] niuu-tracking-[0.16em] niuu-text-brand">TERM</span>
+                  <span className="niuu-font-mono niuu-text-[11px] niuu-tracking-[0.16em] niuu-text-brand">
+                    TERM
+                  </span>
                   <span className="niuu-text-xs niuu-text-text-secondary">$ npm test · watch</span>
-                  <span className="niuu-rounded-md niuu-border niuu-border-border niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">running…</span>
+                  <span className="niuu-rounded-md niuu-border niuu-border-border niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+                    running…
+                  </span>
                 </div>
               </div>
             </section>
@@ -1540,7 +1646,9 @@ export function SessionDetailPage({
               </span>
               <span>{tab.label}</span>
               {count != null && count > 0 && (
-                <span className="niuu-rounded-full niuu-bg-bg-elevated niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-opacity-80">{count}</span>
+                <span className="niuu-rounded-full niuu-bg-bg-elevated niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-opacity-80">
+                  {count}
+                </span>
               )}
             </button>
           );

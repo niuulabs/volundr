@@ -61,10 +61,7 @@ function personaGlyph(role?: string) {
   }
 }
 
-function memberIssuesForPersona(
-  issues: WorkflowIssue[],
-  persona: PersonaEntry | undefined,
-) {
+function memberIssuesForPersona(issues: WorkflowIssue[], persona: PersonaEntry | undefined) {
   if (!persona) return [];
   const keys = [persona.label, ...(persona.produces ?? []), ...(persona.consumes ?? [])].map((v) =>
     v.toLowerCase(),
@@ -128,10 +125,24 @@ function WorkflowSummary({
       </div>
 
       <div className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-elevated niuu-p-3 niuu-flex niuu-gap-2">
-        <span className={cn(CHIP_BTN, errorCount ? 'niuu-border-critical niuu-text-critical' : 'niuu-border-border niuu-text-text-faint')}>
+        <span
+          className={cn(
+            CHIP_BTN,
+            errorCount
+              ? 'niuu-border-critical niuu-text-critical'
+              : 'niuu-border-border niuu-text-text-faint',
+          )}
+        >
           ERR {errorCount}
         </span>
-        <span className={cn(CHIP_BTN, warnCount ? 'niuu-border-status-amber niuu-text-status-amber' : 'niuu-border-border niuu-text-text-faint')}>
+        <span
+          className={cn(
+            CHIP_BTN,
+            warnCount
+              ? 'niuu-border-status-amber niuu-text-status-amber'
+              : 'niuu-border-border niuu-text-text-faint',
+          )}
+        >
           WARN {warnCount}
         </span>
       </div>
@@ -182,7 +193,9 @@ function StageInspector({
       <div className="niuu-flex niuu-items-center niuu-justify-between niuu-py-4 niuu-border-b niuu-border-border niuu-mx-[-16px] niuu-px-4">
         <div className="niuu-flex niuu-items-center niuu-gap-2.5">
           <span className="niuu-text-[18px] niuu-text-text-primary">◆</span>
-          <span className="niuu-text-[16px] niuu-font-semibold niuu-text-text-primary">{node.kind === 'stage' ? 'Stage' : node.label}</span>
+          <span className="niuu-text-[16px] niuu-font-semibold niuu-text-text-primary">
+            {node.kind === 'stage' ? 'Stage' : node.label}
+          </span>
         </div>
         <span className="niuu-text-[11px] niuu-font-mono niuu-text-text-faint">{node.id}</span>
       </div>
@@ -273,7 +286,7 @@ function StageInspector({
       {tab === 'flock' && (
         <>
           <div className={SECTION_LABEL}>Personas in this stage</div>
-        <div className="niuu-flex niuu-flex-col niuu-gap-1.5">
+          <div className="niuu-flex niuu-flex-col niuu-gap-1.5">
             {stageMembers.length === 0 && (
               <div className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-elevated niuu-p-3 niuu-text-xs niuu-text-text-muted">
                 No ravns assigned yet.
@@ -405,8 +418,8 @@ function StageInspector({
                 <option key={persona.id} value={persona.id}>
                   {persona.label} · {persona.role}
                 </option>
-                ))}
-              </select>
+              ))}
+            </select>
           </div>
 
           <div className="niuu-border-t niuu-border-border niuu-pt-4">
@@ -530,9 +543,7 @@ export function WorkflowDetailPanel({
             <input
               className={INPUT}
               value={selectedNode.autoForwardAfter ?? '30m'}
-              onChange={(e) =>
-                onUpdateNode(selectedNode.id, { autoForwardAfter: e.target.value })
-              }
+              onChange={(e) => onUpdateNode(selectedNode.id, { autoForwardAfter: e.target.value })}
             />
           </div>
         </div>
@@ -585,7 +596,8 @@ export function WorkflowDetailPanel({
             />
           </div>
           <div className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-elevated niuu-p-3 niuu-text-xs niuu-text-text-secondary">
-            Terminal node. Use this to make completion paths explicit in the graph and pipeline views.
+            Terminal node. Use this to make completion paths explicit in the graph and pipeline
+            views.
           </div>
         </div>
       ) : (

@@ -341,15 +341,12 @@ export function RavensPage() {
 
               <div className="rv-fleet__body" data-testid="layout-split">
                 {filteredRavens.length === 0 ? (
-                  <div className="rv-fleet__empty">no ravens match "{searchQuery}"</div>
+                  <div className="rv-fleet__empty">no ravens match &quot;{searchQuery}&quot;</div>
                 ) : (
                   groupedEntries.map(([groupLabel, groupRavns]) => (
                     <section key={groupLabel} className="rv-fleet__section">
                       {groupBy !== 'none' && (
-                        <FleetGroupHeader
-                          label={titleCase(groupLabel)}
-                          count={groupRavns.length}
-                        />
+                        <FleetGroupHeader label={titleCase(groupLabel)} count={groupRavns.length} />
                       )}
 
                       <div className="rv-fleet__rows">

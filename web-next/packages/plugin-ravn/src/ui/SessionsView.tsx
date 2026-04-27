@@ -380,7 +380,9 @@ function summarizeSession(
   const thought = [...entries].reverse().find((entry) => entry.kind === 'thought' && entry.text);
   if (thought?.text) return thought.text.replace(/^Persona=[^.]+\.\s*/, '');
 
-  const assistant = [...entries].reverse().find((entry) => entry.kind === 'assistant' && entry.text);
+  const assistant = [...entries]
+    .reverse()
+    .find((entry) => entry.kind === 'assistant' && entry.text);
   if (assistant?.text) return assistant.text;
 
   if (session.status === 'running') {
@@ -449,7 +451,9 @@ function deriveRelativeAge(iso: string, anchorIso: string): string {
 
 function deriveAnchorTime(sessions: Session[]): string {
   if (sessions.length === 0) return new Date().toISOString();
-  const newest = [...sessions].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]!;
+  const newest = [...sessions].sort((left, right) =>
+    right.createdAt.localeCompare(left.createdAt),
+  )[0]!;
   return new Date(new Date(newest.createdAt).getTime() + 4 * 60 * 1000).toISOString();
 }
 
@@ -480,7 +484,11 @@ function SessionRailItem({
       aria-label={`Open session ${titleForSession(session)}`}
     >
       <div className="rv-rs__session-avatar">
-        <PersonaAvatar role={session.personaRole ?? 'build'} letter={session.personaLetter ?? '?'} size={24} />
+        <PersonaAvatar
+          role={session.personaRole ?? 'build'}
+          letter={session.personaLetter ?? '?'}
+          size={24}
+        />
       </div>
       <div className="rv-rs__session-main">
         <div className="rv-rs__session-title">{titleForSession(session)}</div>
@@ -549,12 +557,21 @@ function SessionHeader({
     <header className="rv-rs__head" data-testid="sessions-header">
       <div className="rv-rs__head-left">
         <div className="rv-rs__head-avatar">
-          <PersonaAvatar role={session.personaRole ?? 'build'} letter={session.personaLetter ?? '?'} size={34} />
+          <PersonaAvatar
+            role={session.personaRole ?? 'build'}
+            letter={session.personaLetter ?? '?'}
+            size={34}
+          />
         </div>
         <div className="rv-rs__head-copy">
           <div className="rv-rs__title-row">
             <h2 className="rv-rs__title">{titleForSession(session)}</h2>
-            <span className={cn('rv-rs__status', isRunning ? 'rv-rs__status--live' : 'rv-rs__status--closed')}>
+            <span
+              className={cn(
+                'rv-rs__status',
+                isRunning ? 'rv-rs__status--live' : 'rv-rs__status--closed',
+              )}
+            >
               <span className="rv-rs__status-dot" />
               {isRunning ? 'active' : session.status}
             </span>
@@ -578,8 +595,12 @@ function SessionHeader({
       </div>
       <div className="rv-rs__head-right">
         <div className="rv-rs__metrics" data-testid="sessions-metrics">
-          <span>msgs <strong>{session.messageCount ?? 0}</strong></span>
-          <span>tokens <strong>{formatTokenCount(session.tokenCount)}</strong></span>
+          <span>
+            msgs <strong>{session.messageCount ?? 0}</strong>
+          </span>
+          <span>
+            tokens <strong>{formatTokenCount(session.tokenCount)}</strong>
+          </span>
           <span>
             cost <strong>{formatCurrency(session.costUsd)}</strong>
           </span>
@@ -752,7 +773,10 @@ function ActiveCursor({
   personaRole: PersonaRole;
 }) {
   return (
-    <div className="rv-rs__msg rv-rs__msg--assistant rv-rs__msg--cursor" data-testid="sessions-cursor">
+    <div
+      className="rv-rs__msg rv-rs__msg--assistant rv-rs__msg--cursor"
+      data-testid="sessions-cursor"
+    >
       <div className="rv-rs__msg-rail rv-rs__msg-rail--avatar">
         <PersonaAvatar role={personaRole} letter={personaLetter} size={22} />
       </div>
@@ -775,7 +799,10 @@ function Composer({ session }: { session: Session }) {
 
   if (!isRunning) {
     return (
-      <div className="rv-rs__composer rv-rs__composer--closed" data-testid="sessions-composer-closed">
+      <div
+        className="rv-rs__composer rv-rs__composer--closed"
+        data-testid="sessions-composer-closed"
+      >
         <span className="rv-rs__composer-closed-copy">
           session {session.status} · {formatTimelineStamp(session.createdAt)} · read-only
         </span>
@@ -825,9 +852,7 @@ function ContextSidebar({
   const summary = summarizeSession(session, entries, personaLabel);
   const timeline = deriveTimeline(entries, session);
   const injects = Array.from(
-    new Set(
-      (persona?.consumes.events ?? []).flatMap((item) => item.injects ?? []).filter(Boolean),
-    ),
+    new Set((persona?.consumes.events ?? []).flatMap((item) => item.injects ?? []).filter(Boolean)),
   );
   const emitted = entries.find((entry) => entry.kind === 'emit');
 
@@ -842,7 +867,10 @@ function ContextSidebar({
         <h4 className="rv-rs__card-title">Timeline</h4>
         <ol className="rv-rs__timeline">
           {timeline.map((item) => (
-            <li key={item.id} className={cn('rv-rs__timeline-item', `rv-rs__timeline-item--${item.tone}`)}>
+            <li
+              key={item.id}
+              className={cn('rv-rs__timeline-item', `rv-rs__timeline-item--${item.tone}`)}
+            >
               <span className="rv-rs__timeline-dot" />
               <span className="rv-rs__timeline-label">{item.label}</span>
             </li>
@@ -874,17 +902,27 @@ function ContextSidebar({
         </h4>
         {persona?.produces.eventType ? (
           <div className="rv-rs__emit-card">
-            <span className="rv-rs__event-chip rv-rs__event-chip--block">{persona.produces.eventType}</span>
+            <span className="rv-rs__event-chip rv-rs__event-chip--block">
+              {persona.produces.eventType}
+            </span>
             <div className="rv-rs__schema">
               {Object.entries(persona.produces.schemaDef).map(([key, value]) => (
                 <div key={key}>
-                  <span className="rv-rs__schema-key">{key}</span>: <span className="rv-rs__schema-value">{String(value)}</span>
+                  <span className="rv-rs__schema-key">{key}</span>:{' '}
+                  <span className="rv-rs__schema-value">{String(value)}</span>
                 </div>
               ))}
             </div>
             <div className="rv-rs__emit-status">
-              <span className={cn('rv-rs__emit-status-dot', emitted ? 'rv-rs__emit-status-dot--good' : 'rv-rs__emit-status-dot--warn')} />
-              {emitted ? `emitted · ${formatShortTime(emitted.ts)}` : 'pending · will emit on final answer'}
+              <span
+                className={cn(
+                  'rv-rs__emit-status-dot',
+                  emitted ? 'rv-rs__emit-status-dot--good' : 'rv-rs__emit-status-dot--warn',
+                )}
+              />
+              {emitted
+                ? `emitted · ${formatShortTime(emitted.ts)}`
+                : 'pending · will emit on final answer'}
             </div>
           </div>
         ) : (
@@ -955,10 +993,7 @@ export function SessionsView() {
     isError: messagesError,
   } = useMessages(selectedSession?.id ?? '');
 
-  const ravnById = useMemo(
-    () => new Map((ravens ?? []).map((ravn) => [ravn.id, ravn])),
-    [ravens],
-  );
+  const ravnById = useMemo(() => new Map((ravens ?? []).map((ravn) => [ravn.id, ravn])), [ravens]);
 
   const selectedRavn = selectedSession ? (ravnById.get(selectedSession.ravnId) ?? null) : null;
   const personaKey = selectedSession ? derivePersonaKey(selectedSession) : '';
@@ -1051,7 +1086,12 @@ export function SessionsView() {
         <div className="rv-rs__body">
           <section className="rv-rs__chat">
             <TranscriptToolbar filter={filter} onFilterChange={setFilter} />
-            <div className="rv-rs__scroll" ref={transcriptRef} role="log" aria-label="Session transcript">
+            <div
+              className="rv-rs__scroll"
+              ref={transcriptRef}
+              role="log"
+              aria-label="Session transcript"
+            >
               {messagesLoading ? (
                 <div className="rv-rs__empty">loading transcript…</div>
               ) : messagesError ? (

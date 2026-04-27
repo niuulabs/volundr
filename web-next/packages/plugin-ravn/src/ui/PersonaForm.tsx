@@ -303,11 +303,7 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
         <Section title="Identity" subtitle="What this persona is for.">
           <label className="rv-pf-field">
             <span className="rv-pf-field__label">name</span>
-            <input
-              className="niuu-form-control niuu-font-mono"
-              value={form.name}
-              readOnly
-            />
+            <input className="niuu-form-control niuu-font-mono" value={form.name} readOnly />
           </label>
           <label className="rv-pf-field">
             <span className="rv-pf-field__label">role</span>
@@ -349,7 +345,9 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
                 onChange={(e) => update('permissionMode', e.target.value)}
               >
                 {PERMISSION_MODES.map((m) => (
-                  <option key={m} value={m}>{m}</option>
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
                 ))}
               </select>
             </label>
@@ -375,7 +373,9 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
                 onClick={() => update('llmThinkingEnabled', !form.llmThinkingEnabled)}
               >
                 <span className="rv-pf-toggle__knob" />
-                <span className="rv-pf-toggle__label">{form.llmThinkingEnabled ? 'true' : 'false'}</span>
+                <span className="rv-pf-toggle__label">
+                  {form.llmThinkingEnabled ? 'true' : 'false'}
+                </span>
               </button>
             </label>
             <label className="rv-pf-field">
@@ -393,7 +393,10 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
         </Section>
 
         {/* Tool access */}
-        <Section title="Tool access" subtitle={`Enforced at dispatch. Destructive tools (${form.allowedTools.filter(t => SEED_TOOL_REGISTRY.find(r => r.id === t)?.destructive).length} granted) require permission_mode ≥ normal.`}>
+        <Section
+          title="Tool access"
+          subtitle={`Enforced at dispatch. Destructive tools (${form.allowedTools.filter((t) => SEED_TOOL_REGISTRY.find((r) => r.id === t)?.destructive).length} granted) require permission_mode ≥ normal.`}
+        >
           <FieldRow label={`allowed (${form.allowedTools.length})`}>
             <div className="niuu-flex niuu-flex-wrap niuu-gap-1 niuu-mb-2">
               {form.allowedTools.map((toolId) => {
@@ -472,7 +475,10 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
         </Section>
 
         {/* Produces */}
-        <Section title="Produces" subtitle="The event this persona emits on a successful iteration.">
+        <Section
+          title="Produces"
+          subtitle="The event this persona emits on a successful iteration."
+        >
           <FieldRow label="Event">
             <EventPicker
               value={form.producesEventType}
@@ -493,7 +499,10 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
         </Section>
 
         {/* Consumes */}
-        <Section title="Consumes" subtitle="Events this persona listens for, and the context it wants loaded.">
+        <Section
+          title="Consumes"
+          subtitle="Events this persona listens for, and the context it wants loaded."
+        >
           <div className="niuu-flex niuu-flex-col niuu-gap-3">
             {form.consumesEvents.map((ev, i) => (
               <div
@@ -557,7 +566,10 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
         </Section>
 
         {/* Fan-in */}
-        <Section title="Fan-in" subtitle="How Týr combines this persona's output with others emitting the same event.">
+        <Section
+          title="Fan-in"
+          subtitle="How Týr combines this persona's output with others emitting the same event."
+        >
           <div className="rv-fanin-grid" data-testid="fanin-cards">
             {FAN_IN_STRATEGIES.map((s) => {
               const isActive = form.fanInStrategy === s;

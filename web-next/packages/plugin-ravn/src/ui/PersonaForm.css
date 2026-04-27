@@ -105,7 +105,9 @@
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--color-text-muted);
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 .rv-pf-toggle--on {
   background: color-mix(in srgb, var(--color-accent-cyan) 15%, transparent);

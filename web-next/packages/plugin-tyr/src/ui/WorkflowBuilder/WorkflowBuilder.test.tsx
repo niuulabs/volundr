@@ -134,7 +134,10 @@ describe('WorkflowBuilder', () => {
   it('tab-pipeline is active after switching to pipeline', () => {
     render(<WorkflowBuilder initialWorkflow={makeWorkflow()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Pipeline' }));
-    expect(screen.getByRole('button', { name: 'Pipeline' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Pipeline' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByRole('button', { name: 'Graph' })).toHaveAttribute('aria-pressed', 'false');
   });
 });

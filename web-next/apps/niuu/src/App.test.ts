@@ -38,6 +38,15 @@ describe('resolveConfigEndpoint', () => {
     expect(resolveConfigEndpoint({ search: '?config=default' }, storage)).toBe('/config.json');
     expect(storage.removeItem).toHaveBeenCalledWith('niuu.config.endpoint');
   });
+
+  it('rejects protocol-relative overrides', () => {
+    const storage = makeStorage();
+
+    expect(resolveConfigEndpoint({ search: '?config=//evil.test/config.json' }, storage)).toBe(
+      '/config.json',
+    );
+    expect(storage.setItem).not.toHaveBeenCalled();
+  });
 });
 
 describe('publishServiceBackends', () => {

@@ -36,10 +36,7 @@ const KIND_LABEL: Record<ClusterKind, string> = {
   media: 'MEDIA',
 };
 
-const FORGE_CLUSTER_DISPLAY: Record<
-  string,
-  { name: string; realm: string; kind?: ClusterKind }
-> = {
+const FORGE_CLUSTER_DISPLAY: Record<string, { name: string; realm: string; kind?: ClusterKind }> = {
   'cl-eitri': { name: 'Valaskjálf', realm: 'asgard', kind: 'primary' },
   'cl-valhalla': { name: 'Valhalla', realm: 'asgard', kind: 'gpu' },
   'cl-noatun': { name: 'Nóatún', realm: 'midgard', kind: 'edge' },
@@ -218,7 +215,10 @@ function InflightRow({
       data-testid="inflight-row"
     >
       <div className="vol-forge__inflight-ident">
-        <StateDot state={sessionDotState(session)} pulse={!isBooting && session.state === 'running'} />
+        <StateDot
+          state={sessionDotState(session)}
+          pulse={!isBooting && session.state === 'running'}
+        />
         <div className="vol-forge__inflight-namecol">
           <div className="vol-forge__inflight-name">{session.id}</div>
           <div className="vol-forge__inflight-sub">
@@ -250,7 +250,9 @@ function InflightRow({
       </div>
 
       <div className="vol-forge__inflight-stats">
-        {!isBooting && tokenTotal > 0 ? <span data-testid="token-stat">{tokens(tokenTotal)}</span> : null}
+        {!isBooting && tokenTotal > 0 ? (
+          <span data-testid="token-stat">{tokens(tokenTotal)}</span>
+        ) : null}
         {!isBooting && tokenTotal > 0 && session.costCents !== undefined ? (
           <span className="vol-forge__sep">·</span>
         ) : null}
@@ -328,7 +330,12 @@ function QuickLaunchCard({
   onClick: () => void;
 }) {
   return (
-    <button type="button" className="vol-forge__launch-card" onClick={onClick} data-testid="quick-launch-card">
+    <button
+      type="button"
+      className="vol-forge__launch-card"
+      onClick={onClick}
+      data-testid="quick-launch-card"
+    >
       <div className="vol-forge__launch-head">
         <CliBadge cli={templateCli(template)} />
         {isDefault ? <span className="vol-forge__launch-default">DEFAULT</span> : null}
@@ -337,7 +344,9 @@ function QuickLaunchCard({
       <div className="vol-forge__launch-desc">{template.description}</div>
       <div className="vol-forge__launch-foot">
         <span>{formatTemplateSpec(template)}</span>
-        {template.usageCount !== undefined ? <span data-testid="usage-count">{template.usageCount}×</span> : null}
+        {template.usageCount !== undefined ? (
+          <span data-testid="usage-count">{template.usageCount}×</span>
+        ) : null}
       </div>
     </button>
   );
@@ -375,7 +384,9 @@ export function ForgePage() {
 
   const activeSessions = useMemo(
     () =>
-      dashboardSessions.filter((session) => session.state === 'running' || session.state === 'idle'),
+      dashboardSessions.filter(
+        (session) => session.state === 'running' || session.state === 'idle',
+      ),
     [dashboardSessions],
   );
   const bootingSessions = useMemo(
@@ -409,7 +420,10 @@ export function ForgePage() {
         displayName: display.name,
         displayRealm: display.realm,
         displayKind: display.kind ?? cluster.kind,
-        podCount: sessionsByCluster.get(normalizeKey(cluster.name)) ?? sessionsByCluster.get(normalizeKey(cluster.id)) ?? cluster.runningSessions,
+        podCount:
+          sessionsByCluster.get(normalizeKey(cluster.name)) ??
+          sessionsByCluster.get(normalizeKey(cluster.id)) ??
+          cluster.runningSessions,
         cpuPct: cluster.capacity.cpu > 0 ? cluster.used.cpu / cluster.capacity.cpu : 0,
         memPct: cluster.capacity.memMi > 0 ? cluster.used.memMi / cluster.capacity.memMi : 0,
         gpuPct: cluster.capacity.gpu > 0 ? cluster.used.gpu / cluster.capacity.gpu : 0,
@@ -506,7 +520,10 @@ export function ForgePage() {
         </section>
 
         <div className="vol-forge__grid">
-          <section className="vol-forge__panel vol-forge__panel--inflight" data-testid="inflight-panel">
+          <section
+            className="vol-forge__panel vol-forge__panel--inflight"
+            data-testid="inflight-panel"
+          >
             <header className="vol-forge__panel-head">
               <div className="vol-forge__panel-title">
                 <h2>In-flight pods</h2>
@@ -539,7 +556,10 @@ export function ForgePage() {
             </div>
           </section>
 
-          <section className="vol-forge__panel vol-forge__panel--load" data-testid="forge-load-panel">
+          <section
+            className="vol-forge__panel vol-forge__panel--load"
+            data-testid="forge-load-panel"
+          >
             <header className="vol-forge__panel-head">
               <div className="vol-forge__panel-title">
                 <h2>Forge load</h2>
@@ -562,7 +582,10 @@ export function ForgePage() {
             </div>
           </section>
 
-          <section className="vol-forge__panel vol-forge__panel--launch" data-testid="quick-launch-panel">
+          <section
+            className="vol-forge__panel vol-forge__panel--launch"
+            data-testid="quick-launch-panel"
+          >
             <header className="vol-forge__panel-head">
               <div className="vol-forge__panel-title">
                 <h2>Quick launch</h2>
@@ -603,7 +626,10 @@ export function ForgePage() {
           </section>
 
           {erroredSessions.length > 0 ? (
-            <section className="vol-forge__panel vol-forge__panel--errors" data-testid="error-strip">
+            <section
+              className="vol-forge__panel vol-forge__panel--errors"
+              data-testid="error-strip"
+            >
               <header className="vol-forge__panel-head">
                 <div className="vol-forge__panel-title vol-forge__panel-title--critical">
                   <h2>Needs attention</h2>

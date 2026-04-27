@@ -153,9 +153,7 @@ function SettingsSectionRail({
 function ProvidersOverview({ providers }: { providers: MountedSettingsProvider[] }) {
   return (
     <div className="niuu-max-w-[720px]">
-      <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary niuu-mb-2">
-        Settings
-      </h2>
+      <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary niuu-mb-2">Settings</h2>
       <p className="niuu-text-sm niuu-text-text-secondary niuu-mb-6">
         Choose a mounted settings surface to configure.
       </p>
@@ -236,8 +234,8 @@ function ProviderOverview({
       </p>
       <p className="niuu-text-sm niuu-text-text-secondary">
         This provider will mount dynamically from{' '}
-        <code>{provider.baseUrl ? `${provider.baseUrl}/settings` : '(not configured)'}</code>{' '}
-        when its settings endpoint is available.
+        <code>{provider.baseUrl ? `${provider.baseUrl}/settings` : '(not configured)'}</code> when
+        its settings endpoint is available.
       </p>
     </div>
   );
@@ -360,7 +358,9 @@ function RemoteSettingsSection({
                   readOnly={field.readOnly}
                   onChange={(event) => {
                     const nextValue =
-                      field.type === 'number' ? Number(event.target.value || 0) : event.target.value;
+                      field.type === 'number'
+                        ? Number(event.target.value || 0)
+                        : event.target.value;
                     setDraft((current) => ({ ...current, [field.key]: nextValue }));
                   }}
                   className="niuu-w-full niuu-rounded-lg niuu-border niuu-border-border niuu-bg-bg-primary niuu-px-3 niuu-py-2 niuu-text-sm"
@@ -379,7 +379,7 @@ function RemoteSettingsSection({
             {saveMutation.isPending
               ? 'Saving…'
               : isWritable
-                ? section.saveLabel ?? 'Save settings'
+                ? (section.saveLabel ?? 'Save settings')
                 : 'Read only'}
           </button>
           {saveMutation.isSuccess ? (
@@ -403,12 +403,16 @@ export function SettingsPage() {
   const selectedProvider = providers.find((provider) => provider.id === providerId) ?? null;
   const remoteSchemaQuery = useQuery({
     queryKey: ['mounted-settings', selectedProvider?.id],
-    enabled: Boolean(selectedProvider && isRemoteProvider(selectedProvider) && selectedProvider.baseUrl),
+    enabled: Boolean(
+      selectedProvider && isRemoteProvider(selectedProvider) && selectedProvider.baseUrl,
+    ),
     queryFn: async () => {
       if (!selectedProvider || !isRemoteProvider(selectedProvider) || !selectedProvider.baseUrl) {
         return null;
       }
-      return createApiClient(selectedProvider.baseUrl).get<RemoteSettingsProviderSchema>('/settings');
+      return createApiClient(selectedProvider.baseUrl).get<RemoteSettingsProviderSchema>(
+        '/settings',
+      );
     },
   });
 
@@ -451,9 +455,9 @@ export function SettingsPage() {
             {selectedProvider.source === 'local' ? (
               effectiveSectionId ? (
                 <div className="niuu-max-w-[900px]">
-                  {selectedProvider.sections.find((section) => section.id === effectiveSectionId)?.render() ?? (
-                    <ProviderOverview provider={selectedProvider} />
-                  )}
+                  {selectedProvider.sections
+                    .find((section) => section.id === effectiveSectionId)
+                    ?.render() ?? <ProviderOverview provider={selectedProvider} />}
                 </div>
               ) : (
                 <div className="niuu-max-w-[720px]">

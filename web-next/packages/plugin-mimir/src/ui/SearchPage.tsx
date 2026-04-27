@@ -119,7 +119,10 @@ export function SearchPage() {
 
       {/* Results list */}
       {results.length > 0 && (
-        <div className="niuu-flex niuu-flex-col niuu-overflow-y-auto niuu-flex-1" aria-label="Search results">
+        <div
+          className="niuu-flex niuu-flex-col niuu-overflow-y-auto niuu-flex-1"
+          aria-label="Search results"
+        >
           {results.map((result) => (
             <div
               key={result.path}
@@ -151,10 +154,14 @@ export function SearchPage() {
               {/* Chips row */}
               <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-mt-1.5">
                 <span className="mm-chip accent">
-                  <span className="mm-chip-k">type</span> {result.type?.toUpperCase() ?? result.category?.toUpperCase()}
+                  <span className="mm-chip-k">type</span>{' '}
+                  {result.type?.toUpperCase() ?? result.category?.toUpperCase()}
                 </span>
-                <span className={`mm-chip ${result.confidence === 'high' ? 'ok' : result.confidence === 'medium' ? 'warn' : 'err'}`}>
-                  <span className="mm-chip-k">conf</span> <strong>{result.confidence?.toUpperCase()}</strong>
+                <span
+                  className={`mm-chip ${result.confidence === 'high' ? 'ok' : result.confidence === 'medium' ? 'warn' : 'err'}`}
+                >
+                  <span className="mm-chip-k">conf</span>{' '}
+                  <strong>{result.confidence?.toUpperCase()}</strong>
                 </span>
                 {result.mounts?.map((mount) => (
                   <span key={mount} className="mm-chip">

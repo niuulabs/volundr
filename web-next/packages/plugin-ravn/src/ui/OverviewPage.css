@@ -177,7 +177,9 @@
 
 .rv-ov__active-row {
   display: grid;
-  grid-template-columns: 18px 28px minmax(88px, 132px) minmax(120px, 1fr) minmax(100px, 128px) 62px minmax(120px, 156px) 68px;
+  grid-template-columns:
+    18px 28px minmax(88px, 132px) minmax(120px, 1fr) minmax(100px, 128px)
+    62px minmax(120px, 156px) 68px;
   gap: 14px;
   align-items: center;
   min-height: 52px;

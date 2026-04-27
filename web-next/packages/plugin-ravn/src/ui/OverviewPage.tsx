@@ -1,5 +1,12 @@
 import { useMemo, type ReactNode } from 'react';
-import { BudgetBar, Sparkline, StateDot, PersonaAvatar, LoadingState, ErrorState } from '@niuulabs/ui';
+import {
+  BudgetBar,
+  Sparkline,
+  StateDot,
+  PersonaAvatar,
+  LoadingState,
+  ErrorState,
+} from '@niuulabs/ui';
 import type { ActivityLogEntry } from '../domain/activityLog';
 import type { Ravn } from '../domain/ravn';
 import type { Session } from '../domain/session';
@@ -17,8 +24,8 @@ const ACTIVE_RAVEN_LIMIT = 7;
 const FLEET_SPARKLINE_WIDTH = 640;
 const FLEET_SPARKLINE_HEIGHT = 132;
 const FLEET_SPEND_SERIES = [
-  0.56, 0.56, 0.58, 0.62, 0.67, 0.72, 0.72, 0.68, 0.64, 0.6, 0.6, 0.64,
-  0.69, 0.72, 0.73, 0.71, 0.67, 0.63, 0.6, 0.62, 0.66, 0.71, 0.75, 0.76,
+  0.56, 0.56, 0.58, 0.62, 0.67, 0.72, 0.72, 0.68, 0.64, 0.6, 0.6, 0.64, 0.69, 0.72, 0.73, 0.71,
+  0.67, 0.63, 0.6, 0.62, 0.66, 0.71, 0.75, 0.76,
 ];
 
 const ACTIVITY_KIND_LABEL: Record<ActivityLogEntry['kind'], string> = {
@@ -61,7 +68,9 @@ function sortByLocationCount(ravens: Ravn[]): Array<{ name: string; count: numbe
 
 function deriveAnchorTime(sessions: Session[]): string {
   if (sessions.length === 0) return new Date().toISOString();
-  const newest = [...sessions].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]!;
+  const newest = [...sessions].sort((left, right) =>
+    right.createdAt.localeCompare(left.createdAt),
+  )[0]!;
   return new Date(new Date(newest.createdAt).getTime() + 2 * 60 * 1000).toISOString();
 }
 
@@ -300,7 +309,11 @@ export function OverviewPage() {
                         <StateDot state="running" pulse size={8} />
                       </span>
                       <span className="rv-ov__active-avatar">
-                        <PersonaAvatar role={ravn.role ?? 'build'} letter={ravn.letter ?? '?'} size={20} />
+                        <PersonaAvatar
+                          role={ravn.role ?? 'build'}
+                          letter={ravn.letter ?? '?'}
+                          size={20}
+                        />
                       </span>
                       <span className="rv-ov__active-name">{ravn.personaName}</span>
                       <span className="rv-ov__active-role">{roleLabel(ravn.role)}</span>
@@ -316,7 +329,9 @@ export function OverviewPage() {
                           />
                         ) : null}
                       </span>
-                      <span className="rv-ov__active-time">{relativeAge(latestAt, anchorTime)}</span>
+                      <span className="rv-ov__active-time">
+                        {relativeAge(latestAt, anchorTime)}
+                      </span>
                     </div>
                   );
                 })}
@@ -389,7 +404,11 @@ export function OverviewPage() {
                 return (
                   <div key={ravn.id} className="rv-ov__burner-row" data-testid="spender-row">
                     <span className="rv-ov__burner-avatar">
-                      <PersonaAvatar role={ravn.role ?? 'build'} letter={ravn.letter ?? '?'} size={18} />
+                      <PersonaAvatar
+                        role={ravn.role ?? 'build'}
+                        letter={ravn.letter ?? '?'}
+                        size={18}
+                      />
                     </span>
                     <span className="rv-ov__burner-name">{ravn.personaName}</span>
                     <span className="rv-ov__burner-bar">

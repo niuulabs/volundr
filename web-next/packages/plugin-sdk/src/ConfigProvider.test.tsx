@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { ConfigProvider, useConfig } from './ConfigProvider';
+import { ConfigProvider, resolveSafeConfigEndpoint, useConfig } from './ConfigProvider';
 
 function ConfigReader() {
   const cfg = useConfig();
@@ -63,5 +63,36 @@ describe('ConfigProvider', () => {
     console.error = () => {};
     expect(() => render(<ConfigReader />)).toThrow(/ConfigProvider/);
     console.error = error;
+  });
+
+  it('renders the error fallback when the endpoint leaves the current origin', async () => {
+    render(
+      <ConfigProvider
+        endpoint="https://evil.example/config.json"
+        errorFallback={(e) => <span data-testid="err">{e.message}</span>}
+      >
+        <ConfigReader />
+      </ConfigProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('err')).toHaveTextContent('current origin'));
+  });
+});
+
+describe('resolveSafeConfigEndpoint', () => {
+  it('normalizes same-origin absolute URLs back to a path', () => {
+    expect(
+      resolveSafeConfigEndpoint('http://localhost:3000/config.live.json?ts=1', {
+        origin: 'http://localhost:3000',
+      }),
+    ).toBe('/config.live.json?ts=1');
+  });
+
+  it('rejects cross-origin URLs', () => {
+    expect(() =>
+      resolveSafeConfigEndpoint('https://evil.example/config.json', {
+        origin: 'http://localhost:3000',
+      }),
+    ).toThrow(/current origin/);
   });
 });

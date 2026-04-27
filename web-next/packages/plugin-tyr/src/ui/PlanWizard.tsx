@@ -53,7 +53,8 @@ export function PlanWizard() {
                 New saga plan
               </h1>
               <p className="tyr-plan-title__copy">
-                Turn a rough brief into a decomposed saga with workflow, acceptance criteria, and reviewable sub-tasks.
+                Turn a rough brief into a decomposed saga with workflow, acceptance criteria, and
+                reviewable sub-tasks.
               </p>
             </div>
           </div>

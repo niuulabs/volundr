@@ -30,6 +30,10 @@ from tyr.ports.volundr import VolundrPort, VolundrSession
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: object) -> str:
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 class SessionInfoResponse(BaseModel):
     session_id: str
     status: str
@@ -157,11 +161,14 @@ def create_sessions_router() -> APIRouter:
             try:
                 pr_status = await volundr.get_pr_status(raid.session_id)
                 if pr_status.ci_passed is False:
-                    logger.warning("Approving session %s with failing CI", session_id)
+                    logger.warning(
+                        "Approving session %s with failing CI",
+                        _sanitize_log(session_id),
+                    )
             except Exception:
                 logger.warning(
                     "Could not verify CI status for session %s",
-                    session_id,
+                    _sanitize_log(session_id),
                     exc_info=True,
                 )
 
@@ -178,7 +185,11 @@ def create_sessions_router() -> APIRouter:
             try:
                 await git.delete_branch(repo, raid.branch)
             except Exception:
-                logger.warning("Failed to delete branch %s", raid.branch, exc_info=True)
+                logger.warning(
+                    "Failed to delete branch %s",
+                    _sanitize_log(raid.branch),
+                    exc_info=True,
+                )
 
         try:
             result = await svc.approve(raid.id)
@@ -199,7 +210,7 @@ def create_sessions_router() -> APIRouter:
         except Exception:
             logger.warning(
                 "Failed to update tracker after approving session %s",
-                session_id,
+                _sanitize_log(session_id),
                 exc_info=True,
             )
 

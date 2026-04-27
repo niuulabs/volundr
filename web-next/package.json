@@ -9,6 +9,11 @@
     "node": ">=20.11",
     "pnpm": ">=9"
   },
+  "pnpm": {
+    "overrides": {
+      "uuid": "14.0.0"
+    }
+  },
   "scripts": {
     "dev": "pnpm --filter @niuulabs/niuu dev",
     "build": "pnpm -r --filter='./packages/*' build && pnpm --filter @niuulabs/niuu build",
@@ -43,12 +48,12 @@
   "devDependencies": {
     "@eslint/js": "^9.18.0",
     "@playwright/test": "^1.49.1",
-    "@storybook/addon-a11y": "^8.4.7",
-    "@storybook/addon-essentials": "^8.4.7",
-    "@storybook/addon-interactions": "^8.4.7",
-    "@storybook/react": "^8.4.7",
-    "@storybook/react-vite": "^8.4.7",
-    "@storybook/test": "^8.4.7",
+    "@storybook/addon-a11y": "^8.6.18",
+    "@storybook/addon-essentials": "^8.6.18",
+    "@storybook/addon-interactions": "^8.6.18",
+    "@storybook/react": "^8.6.18",
+    "@storybook/react-vite": "^8.6.18",
+    "@storybook/test": "^8.6.18",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
@@ -73,7 +78,7 @@
     "prettier": "^3.4.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "storybook": "^8.4.7",
+    "storybook": "^8.6.18",
     "tailwindcss": "^3.4",
     "tsup": "^8.3.5",
     "typescript": "^5.7.3",

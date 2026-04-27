@@ -204,9 +204,7 @@ function GraphLegend({ categories }: LegendProps) {
             data-color-idx={String(i % CATEGORY_COLORS.length)}
             aria-hidden
           />
-          <span className="niuu-text-xs niuu-text-text-secondary niuu-font-mono">
-            {cat}
-          </span>
+          <span className="niuu-text-xs niuu-text-text-secondary niuu-font-mono">{cat}</span>
         </div>
       ))}
       <span className="niuu-text-[10px] niuu-uppercase niuu-tracking-widest niuu-text-text-muted niuu-font-semibold niuu-mt-2 niuu-mb-1">

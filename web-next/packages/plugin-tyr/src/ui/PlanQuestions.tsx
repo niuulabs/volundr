@@ -54,7 +54,8 @@ export function PlanQuestions({
             Clarify your plan
           </h2>
           <p className="niuu-text-sm niuu-text-text-secondary">
-            Sharpen the planning raid&apos;s output. Skip anything optional and the draft will surface assumptions.
+            Sharpen the planning raid&apos;s output. Skip anything optional and the draft will
+            surface assumptions.
           </p>
         </div>
       </div>
@@ -140,17 +141,10 @@ export function PlanQuestions({
       </ol>
 
       <div className="niuu-flex niuu-justify-between">
-        <button
-          type="button"
-          onClick={onBack}
-          className="tyr-plan-secondary-btn"
-        >
+        <button type="button" onClick={onBack} className="tyr-plan-secondary-btn">
           ← Back
         </button>
-        <button
-          type="submit"
-          className="tyr-plan-primary-btn"
-        >
+        <button type="submit" className="tyr-plan-primary-btn">
           Decompose →
         </button>
       </div>

@@ -332,12 +332,11 @@
   padding: var(--space-3) var(--space-6) var(--space-4);
   flex-shrink: 0;
   border-top: 1px solid color-mix(in srgb, var(--color-border-subtle) 80%, transparent);
-  background:
-    linear-gradient(
-      to top,
-      color-mix(in srgb, var(--color-bg-primary) 100%, transparent) 72%,
-      color-mix(in srgb, var(--color-bg-primary) 82%, transparent) 100%
-    );
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--color-bg-primary) 100%, transparent) 72%,
+    color-mix(in srgb, var(--color-bg-primary) 82%, transparent) 100%
+  );
   backdrop-filter: blur(10px);
 }
 

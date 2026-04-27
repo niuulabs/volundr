@@ -30,13 +30,13 @@ pnpm exec playwright show-report
 
 ## Progress log
 
-| Date | Pass/Total | Key changes |
-|------|-----------|-------------|
-| Apr 20 (start) | 0/35 | App was blank (broken plugin-tyr export). Tests had wrong selectors. |
-| Apr 20 (mid) | 33/33 | Fixed app render, test selectors, but baselines were self-referential (not web2) |
-| Apr 20 (late) | 10/33 | Switched baselines to web2 screenshots. Real comparison. |
-| Apr 21 (early) | 16/33 | Tyr subnav route-awareness, Mimir /pages + /sources routes added |
-| Apr 21 (mid) | 15/33 | Fixed 27 missing CSS imports in @niuulabs/ui (KpiCard, Table, etc.). Ravn overview regressed slightly from new CSS. |
+| Date           | Pass/Total | Key changes                                                                                                         |
+| -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------- |
+| Apr 20 (start) | 0/35       | App was blank (broken plugin-tyr export). Tests had wrong selectors.                                                |
+| Apr 20 (mid)   | 33/33      | Fixed app render, test selectors, but baselines were self-referential (not web2)                                    |
+| Apr 20 (late)  | 10/33      | Switched baselines to web2 screenshots. Real comparison.                                                            |
+| Apr 21 (early) | 16/33      | Tyr subnav route-awareness, Mimir /pages + /sources routes added                                                    |
+| Apr 21 (mid)   | 15/33      | Fixed 27 missing CSS imports in @niuulabs/ui (KpiCard, Table, etc.). Ravn overview regressed slightly from new CSS. |
 
 ## Root causes found and fixed
 
@@ -55,76 +55,76 @@ pnpm exec playwright show-report
 
 ### Login (1 ticket) — NIU-698
 
-| Page | Status | Gaps remaining |
-|------|--------|----------------|
+| Page       | Status   | Gaps remaining                                          |
+| ---------- | -------- | ------------------------------------------------------- |
 | Login page | **PASS** | OAuth buttons added, footer added, build metadata added |
 
 ### Observatory (4 tickets) — NIU-699 to NIU-702
 
-| Page | Status | Gaps remaining |
-|------|--------|----------------|
-| Canvas | **PASS** | — |
-| Registry Types | **FAIL 6%** | Type display layout (rows vs cards), inspector width |
-| Registry Containment | **FAIL 6%** | Hint box styling, tree indentation |
-| Registry JSON | **PASS** | — |
+| Page                 | Status      | Gaps remaining                                       |
+| -------------------- | ----------- | ---------------------------------------------------- |
+| Canvas               | **PASS**    | —                                                    |
+| Registry Types       | **FAIL 6%** | Type display layout (rows vs cards), inspector width |
+| Registry Containment | **FAIL 6%** | Hint box styling, tree indentation                   |
+| Registry JSON        | **PASS**    | —                                                    |
 
 ### Ravn (5 tickets) — NIU-703 to NIU-707
 
-| Page | Status | Gaps remaining |
-|------|--------|----------------|
+| Page     | Status      | Gaps remaining                                   |
+| -------- | ----------- | ------------------------------------------------ |
 | Overview | **FAIL 6%** | Slight regression from CSS fix — content density |
-| Ravens | **PASS** | — |
-| Sessions | **PASS** | — |
-| Budget | **PASS** | — |
-| Personas | **PASS** | — |
+| Ravens   | **PASS**    | —                                                |
+| Sessions | **PASS**    | —                                                |
+| Budget   | **PASS**    | —                                                |
+| Personas | **PASS**    | —                                                |
 
 ### Tyr (7 tickets) — NIU-708 to NIU-714
 
-| Page | Status | Gaps remaining |
-|------|--------|----------------|
-| Dashboard | **FAIL 7%** | Content density (1 saga vs 4), event feed section |
-| Sagas list | **FAIL 6%** | Workflow card, stage rail, confidence drift chart |
-| Saga detail | **FAIL 6%** | Same as sagas list detail |
-| Dispatch | **FAIL 6%** | Content density, recent dispatches data |
-| Workflows | **PASS** | — |
-| Plan | **PASS** | — |
-| Settings | **FAIL 6%** | Content density in section cards |
+| Page        | Status      | Gaps remaining                                    |
+| ----------- | ----------- | ------------------------------------------------- |
+| Dashboard   | **FAIL 7%** | Content density (1 saga vs 4), event feed section |
+| Sagas list  | **FAIL 6%** | Workflow card, stage rail, confidence drift chart |
+| Saga detail | **FAIL 6%** | Same as sagas list detail                         |
+| Dispatch    | **FAIL 6%** | Content density, recent dispatches data           |
+| Workflows   | **PASS**    | —                                                 |
+| Plan        | **PASS**    | —                                                 |
+| Settings    | **FAIL 6%** | Content density in section cards                  |
 
 ### Mimir (11 tickets) — NIU-715 to NIU-726
 
-| Page | Status | Gaps remaining |
-|------|--------|----------------|
-| Overview | **FAIL 7%** | Content density (fewer mounts/ravns in mock data) |
-| Pages tree | **FAIL 7%** | Sidebar width (220 vs 260px), panel proportions |
-| Pages reader | **PASS** | — |
-| Sources | **PASS** | — |
-| Search | **FAIL 6%** | Empty results (no pre-populated search in mock) |
-| Graph | **PASS** | — |
-| Entities | **PASS** | — |
-| Ravns | **FAIL 6%** | Content density in warden cards |
-| Lint | **FAIL 7%** | KPI accent colors, rule description styling |
-| Routing | **FAIL 6%** | Table row density, minor spacing |
-| Dreams | **FAIL 6%** | Activity log layout vs dream cycles |
+| Page         | Status      | Gaps remaining                                    |
+| ------------ | ----------- | ------------------------------------------------- |
+| Overview     | **FAIL 7%** | Content density (fewer mounts/ravns in mock data) |
+| Pages tree   | **FAIL 7%** | Sidebar width (220 vs 260px), panel proportions   |
+| Pages reader | **PASS**    | —                                                 |
+| Sources      | **PASS**    | —                                                 |
+| Search       | **FAIL 6%** | Empty results (no pre-populated search in mock)   |
+| Graph        | **PASS**    | —                                                 |
+| Entities     | **PASS**    | —                                                 |
+| Ravns        | **FAIL 6%** | Content density in warden cards                   |
+| Lint         | **FAIL 7%** | KPI accent colors, rule description styling       |
+| Routing      | **FAIL 6%** | Table row density, minor spacing                  |
+| Dreams       | **FAIL 6%** | Activity log layout vs dream cycles               |
 
 ### Volundr (5 tickets) — NIU-725 to NIU-730
 
-| Page | Status | Gaps remaining |
-|------|--------|----------------|
+| Page           | Status       | Gaps remaining                                                       |
+| -------------- | ------------ | -------------------------------------------------------------------- |
 | Forge overview | **FAIL 10%** | KPI cards now styled (CSS fix), but fewer pods/clusters in mock data |
-| Templates | **PASS** | — |
-| Clusters | **FAIL 12%** | Fewer clusters in mock data, resource panel layout |
-| Sessions | **FAIL 6%** | Left subnav tree vs top tabs, search filter |
-| Session chat | **PASS** | — |
+| Templates      | **PASS**     | —                                                                    |
+| Clusters       | **FAIL 12%** | Fewer clusters in mock data, resource panel layout                   |
+| Sessions       | **FAIL 6%**  | Left subnav tree vs top tabs, search filter                          |
+| Session chat   | **PASS**     | —                                                                    |
 
 ---
 
 ## Completed infrastructure tickets
 
-| Ticket | Title | Status |
-|--------|-------|--------|
-| NIU-695 | Shared UI components — promote and create | **Done** |
+| Ticket  | Title                                            | Status   |
+| ------- | ------------------------------------------------ | -------- |
+| NIU-695 | Shared UI components — promote and create        | **Done** |
 | NIU-696 | Shell layout gaps — topbar, tabs, footer, subnav | **Done** |
-| NIU-697 | Design token gaps | **Done** |
+| NIU-697 | Design token gaps                                | **Done** |
 
 ---
 
@@ -133,6 +133,7 @@ pnpm exec playwright show-report
 The 18 failing pages are ALL at 6-12% diff (threshold 5%). The gaps fall into two categories:
 
 ### 1. Mock data density (affects ~12 pages)
+
 Web2 prototypes bake in rich seed data (8 pods, 6 clusters, 4 sagas, 7 search results).
 Web-next mock adapters return minimal data (2 pods, 2 clusters, 1 saga, 0 search results).
 This makes pages look emptier even though the layout and styling are correct.
@@ -140,7 +141,9 @@ This makes pages look emptier even though the layout and styling are correct.
 **Fix:** Enrich mock adapters to return web2-equivalent data density.
 
 ### 2. Layout proportions (affects ~6 pages)
+
 Minor grid/panel width differences:
+
 - Mimir pages sidebar: 220px vs 260px
 - Registry types: row list vs card grid
 - Observatory containment: hint box styling

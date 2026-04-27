@@ -38,7 +38,9 @@ export function TreeNode({ node, depth, selectedPath, onSelect, knownPaths }: Tr
           'niuu-text-[11px] niuu-font-mono niuu-text-text-secondary',
           'niuu-cursor-pointer niuu-border-none niuu-bg-transparent niuu-w-full niuu-text-left',
           'hover:niuu-bg-bg-tertiary hover:niuu-text-text-primary',
-          isActive ? 'niuu-bg-[color-mix(in_srgb,var(--brand-300)_14%,transparent)] niuu-text-text-primary' : '',
+          isActive
+            ? 'niuu-bg-[color-mix(in_srgb,var(--brand-300)_14%,transparent)] niuu-text-text-primary'
+            : '',
         ]
           .filter(Boolean)
           .join(' ')}

@@ -111,24 +111,30 @@ export function PipelineView({ nodes, edges, selectedNodeId, onSelectNode }: Pip
                     {node.label}
                   </span>
                   {node.kind === 'trigger' && (
-                    <span className="niuu-text-xs niuu-text-text-muted">{node.source ?? 'manual dispatch'}</span>
+                    <span className="niuu-text-xs niuu-text-text-muted">
+                      {node.source ?? 'manual dispatch'}
+                    </span>
                   )}
-                  {node.kind === 'stage' && (() => {
-                    const summary = stageSummary(node);
-                    return (
-                      <>
-                        <span className="niuu-text-xs niuu-text-text-muted">
-                          {summary.members.length} persona{summary.members.length !== 1 ? 's' : ''} · {summary.members.length} ravn{summary.members.length !== 1 ? 's' : ''} · {summary.mode}
-                        </span>
-                        <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-faint">
-                          join {summary.joinMode} · max {summary.maxConcurrent}
-                        </span>
-                      </>
-                    );
-                  })()}
+                  {node.kind === 'stage' &&
+                    (() => {
+                      const summary = stageSummary(node);
+                      return (
+                        <>
+                          <span className="niuu-text-xs niuu-text-text-muted">
+                            {summary.members.length} persona
+                            {summary.members.length !== 1 ? 's' : ''} · {summary.members.length}{' '}
+                            ravn{summary.members.length !== 1 ? 's' : ''} · {summary.mode}
+                          </span>
+                          <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-faint">
+                            join {summary.joinMode} · max {summary.maxConcurrent}
+                          </span>
+                        </>
+                      );
+                    })()}
                   {node.kind === 'gate' && (
                     <span className="niuu-text-xs niuu-text-text-muted">
-                      {(node.approvers ?? []).length || 1} approver{(node.approvers ?? []).length === 1 ? '' : 's'}
+                      {(node.approvers ?? []).length || 1} approver
+                      {(node.approvers ?? []).length === 1 ? '' : 's'}
                     </span>
                   )}
                   {node.kind === 'cond' && (

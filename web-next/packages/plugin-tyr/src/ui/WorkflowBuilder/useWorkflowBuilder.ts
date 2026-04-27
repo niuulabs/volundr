@@ -10,7 +10,12 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
-import type { Workflow, WorkflowNode, WorkflowNodeKind, WorkflowStageNode } from '../../domain/workflow';
+import type {
+  Workflow,
+  WorkflowNode,
+  WorkflowNodeKind,
+  WorkflowStageNode,
+} from '../../domain/workflow';
 import { makeNodeId, makeEdgeId, defaultBezierCPs } from './graphUtils';
 
 export type WorkflowView = 'graph' | 'pipeline' | 'yaml';
@@ -219,14 +224,22 @@ export function useWorkflowBuilder(
     setWorkflowState((prev) => {
       const edgeLabel = `${fromLabel} -> ${inputLabel}`;
       const alreadyExists = prev.edges.some(
-        (e) => e.source === fromId && e.target === targetId && (e.label ?? '') === (edgeLabel ?? ''),
+        (e) =>
+          e.source === fromId && e.target === targetId && (e.label ?? '') === (edgeLabel ?? ''),
       );
       if (alreadyExists) return prev;
       const srcNode = prev.nodes.find((n) => n.id === fromId);
       const tgtNode = prev.nodes.find((n) => n.id === targetId);
       if (!srcNode || !tgtNode) return prev;
       const { cp1, cp2 } = defaultBezierCPs(srcNode.position, tgtNode.position);
-      const newEdge = { id: makeEdgeId(), source: fromId, target: targetId, label: edgeLabel, cp1, cp2 };
+      const newEdge = {
+        id: makeEdgeId(),
+        source: fromId,
+        target: targetId,
+        label: edgeLabel,
+        cp1,
+        cp2,
+      };
       return { ...prev, edges: [...prev.edges, newEdge] };
     });
   }, []);
@@ -250,17 +263,17 @@ export function useWorkflowBuilder(
   const replacePersonaInStage = useCallback(
     (nodeId: string, previousPersonaId: string, personaId: string) => {
       setWorkflowState((prev) => ({
-      ...prev,
-      nodes: prev.nodes.map((n) => {
-        if (n.id !== nodeId || n.kind !== 'stage') return n;
-        const normalized = syncStagePersonaIds(n);
-        const stageMembers = normalized.stageMembers ?? [];
-        return syncStagePersonaIds({
-          ...normalized,
-          stageMembers: stageMembers.map((member) =>
-            member.personaId === previousPersonaId ? { ...member, personaId } : member,
-          ),
-        });
+        ...prev,
+        nodes: prev.nodes.map((n) => {
+          if (n.id !== nodeId || n.kind !== 'stage') return n;
+          const normalized = syncStagePersonaIds(n);
+          const stageMembers = normalized.stageMembers ?? [];
+          return syncStagePersonaIds({
+            ...normalized,
+            stageMembers: stageMembers.map((member) =>
+              member.personaId === previousPersonaId ? { ...member, personaId } : member,
+            ),
+          });
         }),
       }));
     },

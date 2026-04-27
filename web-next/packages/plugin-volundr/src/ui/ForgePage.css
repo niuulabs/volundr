@@ -35,7 +35,14 @@
 .vol-forge__panel-title span,
 .vol-forge__tail-time,
 .vol-forge__tail-sep {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
 }
 
 .vol-forge__metric-label {
@@ -47,7 +54,14 @@
 }
 
 .vol-forge__metric-value {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 43px;
   font-weight: 700;
   line-height: 1;
@@ -58,7 +72,14 @@
 .vol-forge__metric-sub {
   margin-top: 12px;
   color: #8b909c;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 14px;
   font-weight: 600;
 }
@@ -158,7 +179,14 @@
   background: transparent;
   color: #9196a1;
   cursor: pointer;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 13px;
   font-weight: 700;
 }
@@ -218,7 +246,14 @@
 .vol-forge__cluster-name,
 .vol-forge__error-title span:first-child,
 .vol-forge__tail-name {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
 }
 
 .vol-forge__inflight-name {
@@ -234,7 +269,14 @@
   gap: 8px;
   margin-top: 6px;
   color: #848997;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
@@ -272,7 +314,14 @@
 }
 
 .vol-forge__booting-copy {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
 }
 
 .vol-forge__inflight-stats {
@@ -280,7 +329,14 @@
   align-items: center;
   gap: 5px;
   color: #9197a4;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
@@ -341,7 +397,14 @@
 .vol-forge__cluster-realm,
 .vol-forge__cluster-count {
   color: #7f8591;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 13px;
   font-weight: 700;
 }
@@ -351,7 +414,14 @@
   align-items: center;
   border-radius: 6px;
   padding: 2px 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -402,7 +472,14 @@
 
 .vol-forge__meter-empty span {
   color: #777d89;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 11px;
 }
 
@@ -450,7 +527,14 @@
   padding: 3px 9px;
   background: rgba(69, 150, 221, 0.18);
   color: #bcecff;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -469,7 +553,14 @@
   gap: 12px;
   margin-top: auto;
   color: #8f95a2;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 13px;
   font-weight: 700;
 }
@@ -486,7 +577,14 @@
   background: transparent;
   color: #818692;
   cursor: pointer;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 13px;
   font-weight: 700;
   padding: 13px 16px;
@@ -558,7 +656,14 @@
 
 .vol-forge__error-title span:last-child {
   color: #787d88;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 13px;
   font-weight: 700;
 }
@@ -566,7 +671,14 @@
 .vol-forge__error-message {
   margin-top: 6px;
   color: #f09d9d;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
 }
 
 .vol-forge__retry-btn {
@@ -575,7 +687,14 @@
   background: rgba(27, 90, 129, 0.18);
   color: #d5f1ff;
   cursor: pointer;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 13px;
   font-weight: 700;
   padding: 9px 14px;

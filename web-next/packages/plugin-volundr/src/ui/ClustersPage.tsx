@@ -53,8 +53,21 @@ type DisplayCluster = Cluster & {
 };
 
 const REALM_ORDER = ['asgard', 'midgard', 'svartalfheim', 'jotunheim'];
-const CLUSTER_ORDER = ['cl-eitri', 'cl-valhalla', 'cl-noatun', 'cl-glitnir', 'cl-brokkr', 'cl-jarnvidr'];
-const ACTIVE_SESSION_STATES: SessionState[] = ['requested', 'provisioning', 'ready', 'running', 'idle'];
+const CLUSTER_ORDER = [
+  'cl-eitri',
+  'cl-valhalla',
+  'cl-noatun',
+  'cl-glitnir',
+  'cl-brokkr',
+  'cl-jarnvidr',
+];
+const ACTIVE_SESSION_STATES: SessionState[] = [
+  'requested',
+  'provisioning',
+  'ready',
+  'running',
+  'idle',
+];
 
 const SESSION_STATE_ORDER: Record<SessionState, number> = {
   running: 0,
@@ -219,9 +232,7 @@ function clusterStatusLabel(status: Cluster['status']) {
   return 'error';
 }
 
-function statusToDotState(
-  status: Cluster['status'] | ClusterNode['status'] | SessionState,
-) {
+function statusToDotState(status: Cluster['status'] | ClusterNode['status'] | SessionState) {
   switch (status) {
     case 'healthy':
     case 'ready':
@@ -273,7 +284,10 @@ function metricCardsFor(cluster: Cluster): ClusterMetricCard[] {
       used: cluster.used.gpu,
       limit: cluster.capacity.gpu,
       unitLabel: cluster.capacity.gpu > 0 ? 'GPU' : '—',
-      footer: cluster.capacity.gpu > 0 ? formatPercent(cluster.used.gpu, cluster.capacity.gpu) : 'not provisioned',
+      footer:
+        cluster.capacity.gpu > 0
+          ? formatPercent(cluster.used.gpu, cluster.capacity.gpu)
+          : 'not provisioned',
     },
     {
       label: 'DISK',
@@ -367,28 +381,28 @@ function MetricCard({ card }: { card: ClusterMetricCard }) {
         <span className="niuu-font-mono niuu-text-xs niuu-uppercase niuu-tracking-[0.22em] niuu-text-text-faint">
           {card.label}
         </span>
-        <span className="niuu-font-mono niuu-text-[11px] niuu-text-text-faint">{card.unitLabel}</span>
+        <span className="niuu-font-mono niuu-text-[11px] niuu-text-text-faint">
+          {card.unitLabel}
+        </span>
       </div>
       <div className="niuu-mt-2 niuu-font-sans niuu-text-[18px] niuu-font-semibold niuu-tracking-tight niuu-text-text-primary">
         {card.used}/{card.limit}
       </div>
       <Meter className="niuu-mt-3" used={card.used} limit={card.limit} />
-      <div className="niuu-mt-2 niuu-font-mono niuu-text-[11px] niuu-text-text-faint">{card.footer}</div>
+      <div className="niuu-mt-2 niuu-font-mono niuu-text-[11px] niuu-text-text-faint">
+        {card.footer}
+      </div>
     </section>
   );
 }
 
-function PodsPanel({
-  pods,
-  isLoading,
-}: {
-  pods: ClusterSessionView[];
-  isLoading: boolean;
-}) {
+function PodsPanel({ pods, isLoading }: { pods: ClusterSessionView[]; isLoading: boolean }) {
   return (
     <section className="niuu-rounded-xl niuu-border" style={PANEL_SURFACE_STYLE}>
       <header className="niuu-flex niuu-items-baseline niuu-gap-3 niuu-border-b niuu-border-border niuu-px-4 niuu-py-3">
-        <h3 className="niuu-text-base niuu-font-semibold niuu-text-text-primary">Pods on this forge</h3>
+        <h3 className="niuu-text-base niuu-font-semibold niuu-text-text-primary">
+          Pods on this forge
+        </h3>
         <span className="niuu-font-mono niuu-text-base niuu-text-text-faint">{pods.length}</span>
       </header>
       {isLoading ? (
@@ -407,7 +421,11 @@ function PodsPanel({
               className="niuu-grid niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-3"
               style={{ gridTemplateColumns: 'auto minmax(0, 1fr) auto auto' }}
             >
-              <StateDot state={statusToDotState(pod.status)} pulse={pod.status === 'running'} size={10} />
+              <StateDot
+                state={statusToDotState(pod.status)}
+                pulse={pod.status === 'running'}
+                size={10}
+              />
               <span className="niuu-font-mono niuu-text-[14px] niuu-font-medium niuu-text-text-primary">
                 {pod.id}
               </span>
@@ -495,7 +513,8 @@ export function ClustersPage() {
     return mappedClusters.sort((left, right) => {
       const clusterDelta = CLUSTER_ORDER.indexOf(left.id) - CLUSTER_ORDER.indexOf(right.id);
       if (clusterDelta !== 0) return clusterDelta;
-      const realmDelta = REALM_ORDER.indexOf(left.displayRealm) - REALM_ORDER.indexOf(right.displayRealm);
+      const realmDelta =
+        REALM_ORDER.indexOf(left.displayRealm) - REALM_ORDER.indexOf(right.displayRealm);
       if (realmDelta !== 0) return realmDelta;
       return left.displayName.localeCompare(right.displayName);
     });
@@ -563,7 +582,10 @@ export function ClustersPage() {
   }
 
   return (
-    <div className="niuu-flex niuu-min-h-0 niuu-flex-1 niuu-bg-bg-primary" data-testid="clusters-page">
+    <div
+      className="niuu-flex niuu-min-h-0 niuu-flex-1 niuu-bg-bg-primary"
+      data-testid="clusters-page"
+    >
       <div className="niuu-relative niuu-flex niuu-min-h-0 niuu-flex-1">
         <aside
           className={cn(
@@ -613,8 +635,12 @@ export function ClustersPage() {
               <div className="niuu-flex niuu-items-start niuu-justify-between niuu-border-b niuu-border-border-subtle niuu-px-5 niuu-py-4">
                 <div className="niuu-flex niuu-items-baseline niuu-gap-2">
                   <div>
-                    <h1 className="niuu-text-[15px] niuu-font-semibold niuu-text-text-primary">Clusters</h1>
-                    <p className="niuu-mt-1 niuu-font-sans niuu-text-[11px] niuu-text-text-secondary">by realm</p>
+                    <h1 className="niuu-text-[15px] niuu-font-semibold niuu-text-text-primary">
+                      Clusters
+                    </h1>
+                    <p className="niuu-mt-1 niuu-font-sans niuu-text-[11px] niuu-text-text-secondary">
+                      by realm
+                    </p>
                   </div>
                   <span className="niuu-font-mono niuu-text-[12px] niuu-text-text-faint">
                     {clusters.length}
@@ -698,7 +724,8 @@ export function ClustersPage() {
                 </span>
               </div>
               <div className="niuu-font-mono niuu-text-[13px] niuu-text-text-faint">
-                {selectedCluster.displayRegion} · {selectedCluster.readyNodes}/{selectedCluster.totalNodes} nodes ready
+                {selectedCluster.displayRegion} · {selectedCluster.readyNodes}/
+                {selectedCluster.totalNodes} nodes ready
               </div>
             </div>
             <div className="niuu-flex niuu-items-center niuu-gap-8 niuu-pt-1">

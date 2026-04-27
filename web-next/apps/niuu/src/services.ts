@@ -156,7 +156,9 @@ export function toHostBase(baseUrl: string): string {
 }
 
 export function toHostPtyWsUrl(baseUrl: string): string {
-  const hostBase = toHostBase(baseUrl).replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+  const hostBase = toHostBase(baseUrl)
+    .replace(/^http:/, 'ws:')
+    .replace(/^https:/, 'wss:');
   return `${hostBase}/s/{sessionId}/session`;
 }
 
@@ -302,10 +304,14 @@ function resolveRavnServiceStatus(
 ): ServiceBackendStatus {
   const explicit = resolveDirectServiceStatus(config, 'http', serviceKey);
   if (explicit.mode === 'live' && explicit.target) {
-    if (serviceKey === 'ravn.personas') return { ...explicit, target: explicit.target.replace(/\/personas\/?$/, '') };
-    if (serviceKey === 'ravn.ravens') return { ...explicit, target: explicit.target.replace(/\/ravens\/?$/, '') };
-    if (serviceKey === 'ravn.sessions') return { ...explicit, target: explicit.target.replace(/\/sessions\/?$/, '') };
-    if (serviceKey === 'ravn.triggers') return { ...explicit, target: explicit.target.replace(/\/triggers\/?$/, '') };
+    if (serviceKey === 'ravn.personas')
+      return { ...explicit, target: explicit.target.replace(/\/personas\/?$/, '') };
+    if (serviceKey === 'ravn.ravens')
+      return { ...explicit, target: explicit.target.replace(/\/ravens\/?$/, '') };
+    if (serviceKey === 'ravn.sessions')
+      return { ...explicit, target: explicit.target.replace(/\/sessions\/?$/, '') };
+    if (serviceKey === 'ravn.triggers')
+      return { ...explicit, target: explicit.target.replace(/\/triggers\/?$/, '') };
     return { ...explicit, target: explicit.target.replace(/\/budget\/?$/, '') };
   }
 
@@ -523,7 +529,8 @@ function toDomainSession(session: VolundrSession): Session {
     resources: EMPTY_SESSION_RESOURCES,
     env: {},
     events: [],
-    bootProgress: state === 'provisioning' ? (session.status === 'starting' ? 0.25 : 0.6) : undefined,
+    bootProgress:
+      state === 'provisioning' ? (session.status === 'starting' ? 0.25 : 0.6) : undefined,
     connectionType: 'cli',
     tokensIn: session.tokensUsed,
     tokensOut: 0,
@@ -566,10 +573,14 @@ function buildVolundrSessionStore(volundr: IVolundrService): ISessionStore {
       return applySessionFilters(await listAllVolundrSessions(volundr), filters);
     },
     async createSession() {
-      throw new Error('Session creation is not yet supported through the app session-store adapter.');
+      throw new Error(
+        'Session creation is not yet supported through the app session-store adapter.',
+      );
     },
     async updateSession() {
-      throw new Error('Session updates are not yet supported through the app session-store adapter.');
+      throw new Error(
+        'Session updates are not yet supported through the app session-store adapter.',
+      );
     },
     async deleteSession(id: string) {
       await volundr.deleteSession(id);
@@ -652,12 +663,16 @@ function parseIntegerResource(value: unknown, fallback: number): number {
 function toStringRecord(value: unknown): Record<string, string> {
   if (!value || typeof value !== 'object') return {};
   return Object.fromEntries(
-    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => typeof entry[1] === 'string',
+    ),
   );
 }
 
 function toStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
 }
 
 type ClusterResourceRecord = {
@@ -673,9 +688,13 @@ type ClusterResourceRecord = {
 
 function toTemplateSpec(raw: ForgeTemplateRecord): Template['spec'] {
   const workloadConfig =
-    raw.workloadConfig && typeof raw.workloadConfig === 'object' ? raw.workloadConfig : raw.workload_config;
+    raw.workloadConfig && typeof raw.workloadConfig === 'object'
+      ? raw.workloadConfig
+      : raw.workload_config;
   const resourceConfig =
-    raw.resourceConfig && typeof raw.resourceConfig === 'object' ? raw.resourceConfig : raw.resource_config;
+    raw.resourceConfig && typeof raw.resourceConfig === 'object'
+      ? raw.resourceConfig
+      : raw.resource_config;
   const env = toStringRecord(raw.envVars ?? raw.env_vars);
   const envSecretRefs = toStringArray(raw.envSecretRefs ?? raw.env_secret_refs);
   const tools = toStringArray((workloadConfig as Record<string, unknown> | undefined)?.tools);
@@ -684,10 +703,15 @@ function toTemplateSpec(raw: ForgeTemplateRecord): Template['spec'] {
     (workloadConfig as Record<string, unknown> | undefined)?.idleTimeoutSec ?? 600,
   );
   const imageValue = (workloadConfig as Record<string, unknown> | undefined)?.image;
-  const imageRef = typeof imageValue === 'string' && imageValue.length > 0 ? imageValue : 'ghcr.io/niuulabs/skuld:latest';
+  const imageRef =
+    typeof imageValue === 'string' && imageValue.length > 0
+      ? imageValue
+      : 'ghcr.io/niuulabs/skuld:latest';
   const imageTagIndex = imageRef.lastIndexOf(':');
-  const image = imageTagIndex > imageRef.lastIndexOf('/') ? imageRef.slice(0, imageTagIndex) : imageRef;
-  const tag = imageTagIndex > imageRef.lastIndexOf('/') ? imageRef.slice(imageTagIndex + 1) : 'latest';
+  const image =
+    imageTagIndex > imageRef.lastIndexOf('/') ? imageRef.slice(0, imageTagIndex) : imageRef;
+  const tag =
+    imageTagIndex > imageRef.lastIndexOf('/') ? imageRef.slice(imageTagIndex + 1) : 'latest';
 
   const mounts: Template['spec']['mounts'] = Array.isArray(raw.repos)
     ? raw.repos.reduce<Template['spec']['mounts']>((acc, repo, index) => {
@@ -722,16 +746,18 @@ function toTemplateSpec(raw: ForgeTemplateRecord): Template['spec'] {
     ? (raw.mcpServers ?? raw.mcp_servers)!.reduce<NonNullable<Template['spec']['mcpServers']>>(
         (acc, server, index) => {
           const record =
-            server && typeof server === 'object' ? (server as unknown as Record<string, unknown>) : {};
-        const transport = typeof record.transport === 'string' ? record.transport : 'stdio';
-        const connectionString =
-          typeof record.connectionString === 'string'
-            ? record.connectionString
-            : typeof record.command === 'string'
-              ? record.command
-              : typeof record.url === 'string'
-                ? record.url
-                : '';
+            server && typeof server === 'object'
+              ? (server as unknown as Record<string, unknown>)
+              : {};
+          const transport = typeof record.transport === 'string' ? record.transport : 'stdio';
+          const connectionString =
+            typeof record.connectionString === 'string'
+              ? record.connectionString
+              : typeof record.command === 'string'
+                ? record.command
+                : typeof record.url === 'string'
+                  ? record.url
+                  : '';
           acc.push({
             name: typeof record.name === 'string' ? record.name : `server-${index + 1}`,
             transport,
@@ -753,14 +779,22 @@ function toTemplateSpec(raw: ForgeTemplateRecord): Template['spec'] {
     tools,
     mcpServers,
     resources: {
-      cpuRequest: String(resourceMap.cpuRequest ?? resourceMap.cpu_request ?? resourceMap.cpu ?? '1'),
+      cpuRequest: String(
+        resourceMap.cpuRequest ?? resourceMap.cpu_request ?? resourceMap.cpu ?? '1',
+      ),
       cpuLimit: String(resourceMap.cpuLimit ?? resourceMap.cpu_limit ?? resourceMap.cpu ?? '2'),
       memRequestMi: parseMemoryToMi(
-        resourceMap.memRequestMi ?? resourceMap.memoryRequestMi ?? resourceMap.memory_request ?? resourceMap.memory,
+        resourceMap.memRequestMi ??
+          resourceMap.memoryRequestMi ??
+          resourceMap.memory_request ??
+          resourceMap.memory,
         1024,
       ),
       memLimitMi: parseMemoryToMi(
-        resourceMap.memLimitMi ?? resourceMap.memoryLimitMi ?? resourceMap.memory_limit ?? resourceMap.memory,
+        resourceMap.memLimitMi ??
+          resourceMap.memoryLimitMi ??
+          resourceMap.memory_limit ??
+          resourceMap.memory,
         2048,
       ),
       gpuCount: Number(resourceMap.gpuCount ?? resourceMap.gpu ?? 0),
@@ -771,7 +805,9 @@ function toTemplateSpec(raw: ForgeTemplateRecord): Template['spec'] {
       (workloadConfig as Record<string, unknown> | undefined)?.clusterAffinity ??
         (workloadConfig as Record<string, unknown> | undefined)?.cluster_affinity,
     ),
-    tolerations: toStringArray((workloadConfig as Record<string, unknown> | undefined)?.tolerations),
+    tolerations: toStringArray(
+      (workloadConfig as Record<string, unknown> | undefined)?.tolerations,
+    ),
   };
 }
 
@@ -797,13 +833,19 @@ function buildVolundrTemplateStore(volundr: IVolundrService): ITemplateStore {
       return ((await volundr.getTemplates()) as ForgeTemplateRecord[]).map(toDomainTemplate);
     },
     async createTemplate() {
-      throw new Error('Template creation is not yet supported through the live forge template adapter.');
+      throw new Error(
+        'Template creation is not yet supported through the live forge template adapter.',
+      );
     },
     async updateTemplate() {
-      throw new Error('Template updates are not yet supported through the live forge template adapter.');
+      throw new Error(
+        'Template updates are not yet supported through the live forge template adapter.',
+      );
     },
     async deleteTemplate() {
-      throw new Error('Template deletion is not yet supported through the live forge template adapter.');
+      throw new Error(
+        'Template deletion is not yet supported through the live forge template adapter.',
+      );
     },
   };
 }
@@ -827,7 +869,9 @@ function buildVolundrClusterAdapter(volundr: IVolundrService): IClusterAdapter {
   return {
     async getClusters() {
       const [resources, sessions] = await Promise.all([
-        volundr.getClusterResources().catch(() => ({ resourceTypes: [], nodes: [] } as ClusterResourceRecord)),
+        volundr
+          .getClusterResources()
+          .catch(() => ({ resourceTypes: [], nodes: [] }) as ClusterResourceRecord),
         volundr.getSessions().catch(() => [] as VolundrSession[]),
       ]);
 
@@ -902,7 +946,10 @@ function buildVolundrClusterAdapter(volundr: IVolundrService): IClusterAdapter {
         })),
         runningSessions: sessions.filter((session) => session.status === 'running').length,
         queuedProvisions: sessions.filter(
-          (session) => session.status === 'created' || session.status === 'starting' || session.status === 'provisioning',
+          (session) =>
+            session.status === 'created' ||
+            session.status === 'starting' ||
+            session.status === 'provisioning',
         ).length,
       };
 
@@ -951,15 +998,11 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const volundr = volundrBase
     ? buildVolundrHttpAdapter(createApiClient(volundrBase))
     : createMockVolundrService();
-  const sessionStore = forgeBase
-    ? buildVolundrSessionStore(volundr)
-    : createMockSessionStore();
+  const sessionStore = forgeBase ? buildVolundrSessionStore(volundr) : createMockSessionStore();
   const clusterAdapter = forgeBase
     ? buildVolundrClusterAdapter(volundr)
     : createMockClusterAdapter();
-  const templateStore = forgeBase
-    ? buildVolundrTemplateStore(volundr)
-    : createMockTemplateStore();
+  const templateStore = forgeBase ? buildVolundrTemplateStore(volundr) : createMockTemplateStore();
 
   // ── Völundr streams: keyed as separate services so they can be flipped
   //    independently (e.g. mock PTY with live metrics during bring-up). ──
@@ -1018,7 +1061,9 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     ? buildTrackerHttpAdapter(trackerClient)
     : createMockTrackerService();
   const workflowService = createMockWorkflowService();
-  const dispatchBus = dispatchClient ? buildDispatchBusHttpAdapter(dispatchClient) : createMockDispatchBus();
+  const dispatchBus = dispatchClient
+    ? buildDispatchBusHttpAdapter(dispatchClient)
+    : createMockDispatchBus();
   const tyrSettingsService = tyrSettingsClient
     ? buildTyrSettingsHttpAdapter(tyrSettingsClient)
     : createMockTyrSettingsService();

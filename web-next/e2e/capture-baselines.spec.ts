@@ -30,6 +30,17 @@ const __dirname = path.dirname(__filename);
 const WEB2_ROOT = path.resolve(__dirname, '../../web2/niuu_handoff');
 const OUT_ROOT = path.resolve(__dirname, '__screenshots__/web2');
 
+const BASELINE_VIEWS = {
+  observatory: ['canvas', 'registry-types', 'registry-containment', 'registry-json'],
+  ravn: ['overview', 'ravens-split', 'personas', 'sessions', 'budget'],
+  tyr: ['dashboard', 'sagas', 'workflows', 'plan', 'dispatch', 'settings'],
+  mimir: ['home', 'pages-tree', 'search', 'graph', 'ravns', 'lint', 'ingest', 'log'],
+  volundr: ['forge-overview', 'templates', 'clusters', 'sessions'],
+  login: ['login-page'],
+} as const;
+
+type BaselinePlugin = keyof typeof BASELINE_VIEWS;
+
 // Serve web2 prototypes over HTTP so CDN scripts (React, Babel) load normally.
 let server: http.Server;
 let serverPort: number;
@@ -57,7 +68,9 @@ function inlineBabelScripts(htmlPath: string): string {
   html = html.replace(
     /<script\s+type="text\/babel"\s+src="([^"]+)"\s*><\/script>/g,
     (_match, src: string) => {
-      const srcPath = path.join(dir, src);
+      const safeSrc = normalizeRelativePath(src);
+      const srcPath = safeSrc ? resolveUnderRoot(dir, safeSrc) : null;
+      if (!srcPath) return `<!-- invalid path: ${src} -->`;
       if (!fs.existsSync(srcPath)) return `<!-- missing: ${src} -->`;
       const content = fs.readFileSync(srcPath, 'utf-8');
       return `<script type="text/babel">\n${content}\n</script>`;
@@ -69,9 +82,9 @@ function inlineBabelScripts(htmlPath: string): string {
 test.beforeAll(async () => {
   server = http.createServer((req, res) => {
     // Strip query strings (e.g. styles.css?v=4) before resolving file paths.
-    const url = decodeURIComponent(req.url ?? '/').split('?')[0];
-    const filePath = path.join(WEB2_ROOT, url);
-    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    const relativePath = normalizeRequestPath(req.url ?? '/');
+    const filePath = relativePath ? resolveUnderRoot(WEB2_ROOT, relativePath) : null;
+    if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
       res.writeHead(404);
       res.end('Not found');
       return;
@@ -100,9 +113,20 @@ test.afterAll(async () => {
 });
 
 function outPath(plugin: string, view: string): string {
-  const dir = path.join(OUT_ROOT, plugin);
+  if (!isKnownBaselineView(plugin, view)) {
+    throw new Error(`Unknown baseline target: ${plugin}/${view}`);
+  }
+
+  const dir = resolveUnderRoot(OUT_ROOT, plugin);
+  if (!dir) {
+    throw new Error(`Invalid baseline plugin path: ${plugin}`);
+  }
   fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, `${view}.png`);
+  const output = resolveUnderRoot(dir, `${view}.png`);
+  if (!output) {
+    throw new Error(`Invalid baseline output path: ${plugin}/${view}`);
+  }
+  return output;
 }
 
 function web2Url(relativePath: string): string {
@@ -153,6 +177,35 @@ async function clickTab(page: Page, label: string): Promise<void> {
     await page.locator(`button:has-text("${label}")`).first().click({ force: true });
   }
   await page.waitForTimeout(400);
+}
+
+function normalizeRelativePath(value: string): string | null {
+  if (!value || path.isAbsolute(value)) return null;
+  const normalized = value.replaceAll('\\', '/');
+  if (normalized === '..' || normalized.startsWith('../') || normalized.includes('/../')) {
+    return null;
+  }
+  return normalized;
+}
+
+function normalizeRequestPath(url: string): string | null {
+  const pathname = decodeURIComponent(url).split('?')[0] ?? '/';
+  if (!pathname.startsWith('/')) return null;
+  return normalizeRelativePath(pathname.slice(1));
+}
+
+function resolveUnderRoot(root: string, relativePath: string): string | null {
+  const resolved = path.resolve(root, relativePath);
+  const relative = path.relative(root, resolved);
+  if (relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))) {
+    return resolved;
+  }
+  return null;
+}
+
+function isKnownBaselineView(plugin: string, view: string): plugin is BaselinePlugin {
+  if (!(plugin in BASELINE_VIEWS)) return false;
+  return (BASELINE_VIEWS[plugin as BaselinePlugin] as readonly string[]).includes(view);
 }
 
 // Single viewport/colorScheme applies to all describe blocks below.

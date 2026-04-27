@@ -66,4 +66,3 @@ describe('buildMountedSettingsProviders', () => {
     expect(providers).toEqual([]);
   });
 });
-

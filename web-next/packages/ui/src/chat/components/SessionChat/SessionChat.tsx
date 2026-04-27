@@ -173,7 +173,11 @@ export function SessionChat({
 
   const selectedAgentId: string | null = activeFilter !== 'all' ? activeFilter : null;
   const [detailPeerId, setDetailPeerId] = useState<string | null>(null);
-  const effectiveRightPanelMode = detailPeerId ? 'detail' : meshEvents.length > 0 ? 'cascade' : null;
+  const effectiveRightPanelMode = detailPeerId
+    ? 'detail'
+    : meshEvents.length > 0
+      ? 'cascade'
+      : null;
 
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
   const handleOutcomeClick = useCallback(
@@ -413,7 +417,8 @@ export function SessionChat({
     (message) => message.role === 'assistant' && message.status === 'running',
   );
   const isStreaming =
-    !hasRunningAssistantMessage && (!!streamingContent || (streamingParts && streamingParts.length > 0));
+    !hasRunningAssistantMessage &&
+    (!!streamingContent || (streamingParts && streamingParts.length > 0));
 
   return (
     <div

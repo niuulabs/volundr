@@ -762,10 +762,22 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
     files: { added: 3, modified: 7, deleted: 1 },
     env: {},
     events: [
-      { ts: new Date(Date.now() - 3_600_000).toISOString(), kind: 'requested', body: 'session requested' },
-      { ts: new Date(Date.now() - 3_595_000).toISOString(), kind: 'provisioning', body: 'pod scheduling' },
+      {
+        ts: new Date(Date.now() - 3_600_000).toISOString(),
+        kind: 'requested',
+        body: 'session requested',
+      },
+      {
+        ts: new Date(Date.now() - 3_595_000).toISOString(),
+        kind: 'provisioning',
+        body: 'pod scheduling',
+      },
       { ts: new Date(Date.now() - 3_590_000).toISOString(), kind: 'ready', body: 'pod ready' },
-      { ts: new Date(Date.now() - 3_580_000).toISOString(), kind: 'running', body: 'session active' },
+      {
+        ts: new Date(Date.now() - 3_580_000).toISOString(),
+        kind: 'running',
+        body: 'session active',
+      },
     ],
   },
   {
@@ -794,9 +806,17 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
     },
     env: { NODE_ENV: 'development' },
     events: [
-      { ts: new Date(Date.now() - 7_200_000).toISOString(), kind: 'requested', body: 'session requested' },
+      {
+        ts: new Date(Date.now() - 7_200_000).toISOString(),
+        kind: 'requested',
+        body: 'session requested',
+      },
       { ts: new Date(Date.now() - 7_190_000).toISOString(), kind: 'ready', body: 'pod ready' },
-      { ts: new Date(Date.now() - 1_800_000).toISOString(), kind: 'idle', body: 'no activity detected' },
+      {
+        ts: new Date(Date.now() - 1_800_000).toISOString(),
+        kind: 'idle',
+        body: 'no activity detected',
+      },
     ],
   },
   {
@@ -820,8 +840,16 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
     },
     env: {},
     events: [
-      { ts: new Date(Date.now() - 120_000).toISOString(), kind: 'requested', body: 'session requested' },
-      { ts: new Date(Date.now() - 90_000).toISOString(), kind: 'provisioning', body: 'pod scheduling' },
+      {
+        ts: new Date(Date.now() - 120_000).toISOString(),
+        kind: 'requested',
+        body: 'session requested',
+      },
+      {
+        ts: new Date(Date.now() - 90_000).toISOString(),
+        kind: 'provisioning',
+        body: 'pod scheduling',
+      },
     ],
   },
   {
@@ -844,7 +872,11 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
     },
     env: {},
     events: [
-      { ts: new Date(Date.now() - 86_400_000).toISOString(), kind: 'requested', body: 'session requested' },
+      {
+        ts: new Date(Date.now() - 86_400_000).toISOString(),
+        kind: 'requested',
+        body: 'session requested',
+      },
       {
         ts: new Date(Date.now() - 86_000_000).toISOString(),
         kind: 'failed',
@@ -873,9 +905,17 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
     },
     env: {},
     events: [
-      { ts: new Date(Date.now() - 172_800_000).toISOString(), kind: 'requested', body: 'session requested' },
+      {
+        ts: new Date(Date.now() - 172_800_000).toISOString(),
+        kind: 'requested',
+        body: 'session requested',
+      },
       { ts: new Date(Date.now() - 172_790_000).toISOString(), kind: 'ready', body: 'pod ready' },
-      { ts: new Date(Date.now() - 43_200_000).toISOString(), kind: 'terminated', body: 'TTL expired — session terminated' },
+      {
+        ts: new Date(Date.now() - 43_200_000).toISOString(),
+        kind: 'terminated',
+        body: 'TTL expired — session terminated',
+      },
     ],
   },
   {
@@ -1478,7 +1518,9 @@ export function createMockVolundrService(): IVolundrService {
     getCredentialTypes: async () => [],
 
     listWorkspaces: async (status) =>
-      status ? SEED_WORKSPACES.filter((workspace) => workspace.status === status) : [...SEED_WORKSPACES],
+      status
+        ? SEED_WORKSPACES.filter((workspace) => workspace.status === status)
+        : [...SEED_WORKSPACES],
     listAllWorkspaces: async () => [],
     restoreWorkspace: async () => {},
     deleteWorkspace: async () => {},

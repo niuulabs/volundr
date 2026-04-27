@@ -171,7 +171,9 @@ function TplOverview({ template }: { template: Template }) {
 
       <DetailCard title="Workspace">
         {template.spec.mounts.length === 0 ? (
-          <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">blank · no sources</span>
+          <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
+            blank · no sources
+          </span>
         ) : (
           template.spec.mounts.map((mount) => (
             <div key={mount.name} className="niuu-flex niuu-items-center niuu-gap-2 niuu-py-1">
@@ -197,7 +199,8 @@ function TplOverview({ template }: { template: Template }) {
         </KV>
         <KV label="rules">
           <span>
-            {(template.spec.clusterAffinity?.length ?? 0) + (template.spec.tolerations?.length ?? 0)}
+            {(template.spec.clusterAffinity?.length ?? 0) +
+              (template.spec.tolerations?.length ?? 0)}
           </span>
         </KV>
       </DetailCard>
@@ -357,7 +360,10 @@ function TplRules({ template }: { template: Template }) {
           {affinity.length > 0 && (
             <DetailCard title="Cluster affinity">
               {affinity.map((cluster) => (
-                <div key={cluster} className="niuu-py-1 niuu-font-mono niuu-text-xs niuu-text-text-secondary">
+                <div
+                  key={cluster}
+                  className="niuu-py-1 niuu-font-mono niuu-text-xs niuu-text-text-secondary"
+                >
                   {cluster}
                 </div>
               ))}
@@ -366,7 +372,10 @@ function TplRules({ template }: { template: Template }) {
           {tolerations.length > 0 && (
             <DetailCard title="Tolerations">
               {tolerations.map((rule) => (
-                <div key={rule} className="niuu-py-1 niuu-font-mono niuu-text-xs niuu-text-text-secondary">
+                <div
+                  key={rule}
+                  className="niuu-py-1 niuu-font-mono niuu-text-xs niuu-text-text-secondary"
+                >
                   {rule}
                 </div>
               ))}
@@ -396,7 +405,10 @@ export function TemplatesPage() {
   }
 
   return (
-    <div className="niuu-flex niuu-min-h-0 niuu-flex-1 niuu-flex-col niuu-p-5" data-testid="templates-page">
+    <div
+      className="niuu-flex niuu-min-h-0 niuu-flex-1 niuu-flex-col niuu-p-5"
+      data-testid="templates-page"
+    >
       {templates.isLoading && <LoadingState label="loading templates…" />}
 
       {templates.isError && (

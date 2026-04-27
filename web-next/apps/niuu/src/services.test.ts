@@ -761,7 +761,11 @@ describe('buildServices', () => {
     const archivedSession = {
       id: 'sess-archived',
       name: 'fix/legacy-shim-cleanup',
-      source: { type: 'git', repo: 'github.com/niuulabs/volundr', branch: 'fix/legacy-shim-cleanup' },
+      source: {
+        type: 'git',
+        repo: 'github.com/niuulabs/volundr',
+        branch: 'fix/legacy-shim-cleanup',
+      },
       status: 'archived',
       model: 'claude-haiku',
       lastActive: Date.parse('2026-04-23T12:30:00Z'),
@@ -781,7 +785,7 @@ describe('buildServices', () => {
       }),
       listArchivedSessions: vi.fn().mockResolvedValue([archivedSession]),
       deleteSession: vi.fn().mockResolvedValue(undefined),
-      subscribe: vi.fn((callback: (sessions: typeof activeSession[]) => void) => {
+      subscribe: vi.fn((callback: (sessions: (typeof activeSession)[]) => void) => {
         callback([activeSession]);
         return () => {};
       }),
@@ -849,11 +853,15 @@ describe('buildServices', () => {
     const liveTemplate = {
       name: 'niuu-platform',
       description: 'Full niuu monorepo',
-      repos: [{ url: 'https://github.com/niuulabs/volundr', branch: 'main', path: '/workspace/volundr' }],
+      repos: [
+        { url: 'https://github.com/niuulabs/volundr', branch: 'main', path: '/workspace/volundr' },
+      ],
       env_vars: { OPENAI_API_KEY: 'secret-ref' },
       env_secret_refs: ['OPENAI_API_KEY'],
       resource_config: { cpu: '4', memory: '8Gi', gpu: 1 },
-      mcp_servers: [{ name: 'filesystem', transport: 'stdio', command: 'uvx mcp-filesystem', tools: ['read'] }],
+      mcp_servers: [
+        { name: 'filesystem', transport: 'stdio', command: 'uvx mcp-filesystem', tools: ['read'] },
+      ],
       workload_config: {
         image: 'ghcr.io/niuulabs/skuld:cuda-12',
         tools: ['python', 'git'],
@@ -1443,7 +1451,10 @@ describe('buildServices', () => {
       plugins: {},
       services: {
         'volundr.pty': { mode: 'ws', wsUrl: 'ws://localhost:8080/api/v1/volundr/pty/{sessionId}' },
-        'volundr.metrics': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/volundr/metrics' },
+        'volundr.metrics': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/volundr/metrics',
+        },
         'observatory.registry': {
           mode: 'http',
           baseUrl: 'http://localhost:8080/api/v1/observatory/registry',

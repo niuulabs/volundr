@@ -122,10 +122,7 @@ export function CredentialsPage() {
   return (
     <div className="vol-creds" data-testid="credentials-page">
       <aside
-        className={cn(
-          'vol-creds__sidebar',
-          sidebarCollapsed && 'vol-creds__sidebar--collapsed',
-        )}
+        className={cn('vol-creds__sidebar', sidebarCollapsed && 'vol-creds__sidebar--collapsed')}
         aria-label="Credentials by type"
         data-testid="credentials-sidebar"
       >
@@ -150,7 +147,8 @@ export function CredentialsPage() {
                       type="button"
                       className={cn(
                         'vol-creds__collapsed-item',
-                        selectedCredential === credential.id && 'vol-creds__collapsed-item--selected',
+                        selectedCredential === credential.id &&
+                          'vol-creds__collapsed-item--selected',
                       )}
                       onClick={() => setSelectedCredential(credential.id)}
                       aria-label={credential.name}
@@ -198,7 +196,8 @@ export function CredentialsPage() {
                         type="button"
                         className={cn(
                           'vol-creds__sidebar-item',
-                          selectedCredential === credential.id && 'vol-creds__sidebar-item--selected',
+                          selectedCredential === credential.id &&
+                            'vol-creds__sidebar-item--selected',
                         )}
                         onClick={() => setSelectedCredential(credential.id)}
                       >
@@ -286,7 +285,9 @@ export function CredentialsPage() {
                       </div>
                     </td>
                     <td>
-                      <span className="vol-creds__type-pill">{TYPE_LABEL[credential.secretType]}</span>
+                      <span className="vol-creds__type-pill">
+                        {TYPE_LABEL[credential.secretType]}
+                      </span>
                     </td>
                     <td>
                       <div className="vol-creds__keys">

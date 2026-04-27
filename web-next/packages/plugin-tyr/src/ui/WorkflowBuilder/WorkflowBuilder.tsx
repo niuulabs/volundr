@@ -164,7 +164,12 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
           data-testid="action-bar"
         >
           {onSave && (
-            <button type="button" className={ACTION_BTN} data-testid="save-workflow" onClick={handleSave}>
+            <button
+              type="button"
+              className={ACTION_BTN}
+              data-testid="save-workflow"
+              onClick={handleSave}
+            >
               Save as…
             </button>
           )}
@@ -175,11 +180,7 @@ export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowB
           >
             Test
           </button>
-          <button
-            type="button"
-            className={ACTION_BTN}
-            data-testid="btn-dispatch"
-          >
+          <button type="button" className={ACTION_BTN} data-testid="btn-dispatch">
             Dispatch
           </button>
         </div>

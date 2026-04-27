@@ -84,9 +84,7 @@ describe('IngestPage', () => {
     fireEvent.change(screen.getByLabelText(/target page path/i), {
       target: { value: '/infra/k8s' },
     });
-    await waitFor(() =>
-      expect(screen.getByTestId('resolved-route')).toHaveTextContent(/infra/),
-    );
+    await waitFor(() => expect(screen.getByTestId('resolved-route')).toHaveTextContent(/infra/));
   });
 
   it('renders recent source rows after data loads', async () => {

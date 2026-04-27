@@ -20,6 +20,10 @@ const DEFAULT_CONFIG_ENDPOINT = '/config.json';
 const CONFIG_ENDPOINT_QUERY_KEY = 'config';
 const CONFIG_ENDPOINT_STORAGE_KEY = 'niuu.config.endpoint';
 
+function isSafeConfigOverride(value: string | null): value is string {
+  return Boolean(value && value.startsWith('/') && !value.startsWith('//'));
+}
+
 export function publishServiceBackends(
   backends: Record<string, unknown>,
   target: Record<string, unknown> = globalThis as Record<string, unknown>,
@@ -69,13 +73,13 @@ export function resolveConfigEndpoint(
     return DEFAULT_CONFIG_ENDPOINT;
   }
 
-  if (requested && requested.startsWith('/')) {
+  if (isSafeConfigOverride(requested)) {
     storage.setItem(CONFIG_ENDPOINT_STORAGE_KEY, requested);
     return requested;
   }
 
   const stored = storage.getItem(CONFIG_ENDPOINT_STORAGE_KEY);
-  if (stored && stored.startsWith('/')) return stored;
+  if (isSafeConfigOverride(stored)) return stored;
   return DEFAULT_CONFIG_ENDPOINT;
 }
 

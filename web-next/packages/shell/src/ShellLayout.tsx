@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { Outlet, useRouter, useRouterState } from '@tanstack/react-router';
-import { useConfig } from '@niuulabs/plugin-sdk';
+import { useConfig, type PluginCtx } from '@niuulabs/plugin-sdk';
 import { LiveBadge, Kbd, useCommandPalette, useCommandPaletteRegistry } from '@niuulabs/ui';
 import { useShellContext } from './ShellContext';
 import './Shell.css';
@@ -17,8 +17,8 @@ function PluginSlot({
   render,
   ctx,
 }: {
-  render?: ((ctx: unknown) => ReactNode) | null;
-  ctx: unknown;
+  render?: ((ctx: PluginCtx) => ReactNode) | null;
+  ctx: PluginCtx;
 }) {
   if (!render) return null;
   return <>{render(ctx)}</>;

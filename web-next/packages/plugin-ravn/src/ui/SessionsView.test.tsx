@@ -40,7 +40,9 @@ describe('SessionsView', () => {
   it('selects the newest running session by default and shows the header', async () => {
     render(<SessionsView />, { wrapper: wrap(services()) });
     const header = await screen.findByTestId('sessions-header');
-    expect(within(header).getByRole('heading', { name: 'Run integration tests' })).toBeInTheDocument();
+    expect(
+      within(header).getByRole('heading', { name: 'Run integration tests' }),
+    ).toBeInTheDocument();
     expect(within(header).getByText(/trigger:/i)).toBeInTheDocument();
   });
 
@@ -77,9 +79,7 @@ describe('SessionsView', () => {
       name: 'Open session Security audit — API endpoints',
     });
     fireEvent.click(target);
-    expect(localStorage.getItem('ravn.session')).toBe(
-      '"10000001-0000-4000-8000-000000000004"',
-    );
+    expect(localStorage.getItem('ravn.session')).toBe('"10000001-0000-4000-8000-000000000004"');
   });
 
   it('renders transcript toolbar filters', async () => {

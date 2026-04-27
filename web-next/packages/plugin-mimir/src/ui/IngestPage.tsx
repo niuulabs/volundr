@@ -8,14 +8,12 @@ const INPUT_CLS =
   'niuu-rounded-md niuu-text-text-primary niuu-font-sans niuu-text-sm niuu-outline-none niuu-box-border ' +
   'focus:niuu-border-brand';
 
-const TEXTAREA_CLS =
-  `${INPUT_CLS} niuu-resize-y niuu-min-h-[8rem] niuu-font-sans`;
+const TEXTAREA_CLS = `${INPUT_CLS} niuu-resize-y niuu-min-h-[8rem] niuu-font-sans`;
 
 const LABEL_CLS =
   'niuu-text-[10px] niuu-uppercase niuu-tracking-wider niuu-text-text-muted niuu-block niuu-mb-1';
 
-const SECTION_HEAD =
-  'niuu-flex niuu-items-baseline niuu-justify-between niuu-mb-3';
+const SECTION_HEAD = 'niuu-flex niuu-items-baseline niuu-justify-between niuu-mb-3';
 
 const H3_CLS = 'niuu-text-base niuu-font-semibold niuu-m-0';
 
@@ -33,9 +31,7 @@ export function IngestPage() {
 
   // Resolve which rule matches the current path
   const resolved = (() => {
-    const activeRules = rules
-      .filter((r) => r.active)
-      .sort((a, b) => a.priority - b.priority);
+    const activeRules = rules.filter((r) => r.active).sort((a, b) => a.priority - b.priority);
     for (const rule of activeRules) {
       if (path.startsWith(rule.prefix)) {
         return { matched: rule.prefix, mount: rule.mountName };
@@ -191,19 +187,16 @@ export function IngestPage() {
                 data-testid="resolved-route"
               >
                 <div className="niuu-text-text-muted niuu-uppercase niuu-tracking-wider niuu-text-[10px] niuu-mb-1">
-                  Resolved for{' '}
-                  <span className="niuu-text-brand-300">{path || '(empty)'}</span>
+                  Resolved for <span className="niuu-text-brand-300">{path || '(empty)'}</span>
                 </div>
                 {resolved.matched ? (
                   <span>
-                    matched prefix{' '}
-                    <span className="niuu-text-brand-300">{resolved.matched}</span> → writes to{' '}
+                    matched prefix <span className="niuu-text-brand-300">{resolved.matched}</span> →
+                    writes to{' '}
                     <span className="niuu-text-[var(--status-emerald)]">{resolved.mount}</span>
                   </span>
                 ) : (
-                  <span>
-                    no prefix match — falls through to default ({resolved.mount})
-                  </span>
+                  <span>no prefix match — falls through to default ({resolved.mount})</span>
                 )}
               </div>
             </>
@@ -212,9 +205,7 @@ export function IngestPage() {
           {/* Recent sources */}
           <div className={`${SECTION_HEAD} niuu-mt-6`}>
             <h3 className={H3_CLS}>Recent sources</h3>
-            <span className={META_CLS}>
-              {sources.length} · across all mounts
-            </span>
+            <span className={META_CLS}>{sources.length} · across all mounts</span>
           </div>
 
           <div className="niuu-flex niuu-flex-col niuu-gap-1">

@@ -133,7 +133,13 @@ describe('SagasPage', () => {
       getSagas: async (): Promise<Saga[]> => [
         makeSaga({ id: '1', name: 'Active', phaseSummary: { total: 2, completed: 0 } }),
         makeSaga({ id: '2', name: 'Review', phaseSummary: { total: 4, completed: 2 } }),
-        makeSaga({ id: '3', name: 'Done', status: 'complete', slug: 'done', phaseSummary: { total: 4, completed: 4 } }),
+        makeSaga({
+          id: '3',
+          name: 'Done',
+          status: 'complete',
+          slug: 'done',
+          phaseSummary: { total: 4, completed: 4 },
+        }),
         makeSaga({ id: '4', name: 'Broken', status: 'failed', slug: 'broken' }),
       ],
     };

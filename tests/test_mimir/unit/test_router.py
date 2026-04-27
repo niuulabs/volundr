@@ -478,6 +478,27 @@ def test_url_ingest_endpoint_fetches_and_ingests(client: TestClient, respx_mock)
     assert data["origin_url"] == "https://example.com/mimir"
 
 
+def test_url_ingest_rejects_private_hosts(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "mimir.router.check_ssrf",
+        lambda hostname: f"Blocked: '{hostname}' resolves to a private/reserved address",
+    )
+
+    resp = client.post("/mimir/sources/ingest/url", json={"url": "http://127.0.0.1/secret"})
+
+    assert resp.status_code == 400
+    assert "private/reserved" in resp.json()["detail"]
+
+
+def test_url_ingest_rejects_unsupported_schemes(client: TestClient) -> None:
+    resp = client.post("/mimir/sources/ingest/url", json={"url": "file:///tmp/secret.txt"})
+
+    assert resp.status_code == 400
+    assert "Unsupported URL scheme" in resp.json()["detail"]
+
+
 def test_dreams_endpoint_parses_dream_cycle_entries(tmp_path: Path) -> None:
     app = _make_app(tmp_path)
     log_path = tmp_path / "mimir" / "wiki" / "log.md"

@@ -91,7 +91,10 @@ export function stageNodeHeight(node: WorkflowStageNode): number {
 export function nodeCentre(node: WorkflowNode): { x: number; y: number } {
   switch (node.kind) {
     case 'stage':
-      return { x: node.position.x + STAGE_WIDTH / 2, y: node.position.y + stageNodeHeight(node) / 2 };
+      return {
+        x: node.position.x + STAGE_WIDTH / 2,
+        y: node.position.y + stageNodeHeight(node) / 2,
+      };
     case 'gate':
       return { x: node.position.x + GATE_SIZE / 2, y: node.position.y + GATE_SIZE / 2 };
     case 'cond':
@@ -159,9 +162,10 @@ export function workflowToYaml(workflow: {
       lines.push(`    label: ${JSON.stringify(node.label)}`);
       if (node.kind === 'stage') {
         const stageMembers = normalizedStageMembers(node);
+        const personaIds = node.personaIds ?? [];
         lines.push(`    raidId: ${node.raidId === null ? 'null' : JSON.stringify(node.raidId)}`);
         lines.push(
-          `    personaIds: ${node.personaIds.length === 0 ? '[]' : `[${node.personaIds.map((p) => JSON.stringify(p)).join(', ')}]`}`,
+          `    personaIds: ${personaIds.length === 0 ? '[]' : `[${personaIds.map((p) => JSON.stringify(p)).join(', ')}]`}`,
         );
         if (stageMembers.length > 0) {
           lines.push('    stageMembers:');

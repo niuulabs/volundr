@@ -47,7 +47,8 @@ function statusLabel(status: SagaStatus): string {
 function statusClasses(status: SagaStatus): string {
   const base =
     'niuu-inline-flex niuu-items-center niuu-gap-2 niuu-min-w-[112px] niuu-justify-center niuu-rounded-full niuu-border niuu-px-3 niuu-py-1 niuu-text-[11px] niuu-font-mono niuu-tracking-[0.1em]';
-  if (status === 'failed') return `${base} niuu-border-critical/50 niuu-text-critical-fg niuu-bg-critical-bg`;
+  if (status === 'failed')
+    return `${base} niuu-border-critical/50 niuu-text-critical-fg niuu-bg-critical-bg`;
   if (status === 'complete')
     return `${base} niuu-border-border niuu-text-text-primary niuu-bg-bg-tertiary`;
   return `${base} niuu-border-brand/45 niuu-text-brand-200 niuu-bg-brand/10`;
@@ -106,7 +107,9 @@ function SagaRailItem({
       onClick={onClick}
       className={[
         'niuu-grid niuu-w-full niuu-grid-cols-[10px_minmax(0,1fr)] niuu-items-center niuu-gap-3 niuu-rounded-md niuu-px-3 niuu-py-2 niuu-text-left niuu-transition-colors',
-        selected ? 'niuu-bg-[#202733] niuu-text-text-primary' : 'hover:niuu-bg-bg-secondary/70 niuu-text-text-secondary',
+        selected
+          ? 'niuu-bg-[#202733] niuu-text-text-primary'
+          : 'hover:niuu-bg-bg-secondary/70 niuu-text-text-secondary',
       ].join(' ')}
     >
       <span className={['niuu-w-2.5 niuu-h-2.5 niuu-rounded-full', bucketColor].join(' ')} />
@@ -185,7 +188,9 @@ function SagaRow({
           {saga.name}
         </div>
         <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-flex-wrap niuu-text-[11px] niuu-font-mono niuu-text-text-muted">
-          <span className="niuu-rounded-md niuu-bg-bg-elevated niuu-px-2 niuu-py-0.5">{saga.trackerId}</span>
+          <span className="niuu-rounded-md niuu-bg-bg-elevated niuu-px-2 niuu-py-0.5">
+            {saga.trackerId}
+          </span>
           <span>{saga.repos[0] ?? 'niuulabs/volundr'}</span>
           <span>{`branch · ${saga.featureBranch}`}</span>
           <span>{relTime(saga.createdAt)}</span>
@@ -308,7 +313,9 @@ function SagasPageContent() {
             onSelect={handleSelectSaga}
           />
           {filtered.length === 0 && (
-            <div className="niuu-px-4 niuu-text-sm niuu-text-text-muted">No sagas match "{search}".</div>
+            <div className="niuu-px-4 niuu-text-sm niuu-text-text-muted">
+              No sagas match &quot;{search}&quot;.
+            </div>
           )}
         </div>
       </aside>
@@ -319,9 +326,12 @@ function SagasPageContent() {
             <div className="niuu-flex niuu-items-start niuu-gap-3">
               <Rune glyph="ᚦ" size={26} />
               <div>
-                <h2 className="niuu-m-0 niuu-text-[22px] niuu-font-semibold niuu-text-text-primary">Sagas</h2>
+                <h2 className="niuu-m-0 niuu-text-[22px] niuu-font-semibold niuu-text-text-primary">
+                  Sagas
+                </h2>
                 <p className="niuu-m-0 niuu-mt-2 niuu-text-[14px] niuu-leading-6 niuu-text-text-secondary">
-                  Every saga is a decomposed tracker issue driven by a workflow. Select one to inspect phases, raids and confidence movement.
+                  Every saga is a decomposed tracker issue driven by a workflow. Select one to
+                  inspect phases, raids and confidence movement.
                 </p>
               </div>
             </div>
@@ -333,8 +343,8 @@ function SagasPageContent() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               aria-label="Filter sagas"
-            className="niuu-w-[310px] niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2.5 niuu-text-[14px] niuu-text-text-primary niuu-placeholder-text-muted niuu-outline-none"
-          />
+              className="niuu-w-[310px] niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2.5 niuu-text-[14px] niuu-text-text-primary niuu-placeholder-text-muted niuu-outline-none"
+            />
             <button
               type="button"
               className="niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2.5 niuu-text-[14px] niuu-font-medium niuu-text-text-primary"

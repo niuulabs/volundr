@@ -196,8 +196,12 @@ function StageNode({
   const { x, y } = node.position;
   const stageMembers = normalizedStageMembers(node);
   const personaMap = new Map(personas.map((persona) => [persona.id, persona]));
-  const knownInputs = [...new Set(stageMembers.flatMap((member) => personaMap.get(member.personaId)?.consumes ?? []))];
-  const knownOutputs = [...new Set(stageMembers.flatMap((member) => personaMap.get(member.personaId)?.produces ?? []))];
+  const knownInputs = [
+    ...new Set(stageMembers.flatMap((member) => personaMap.get(member.personaId)?.consumes ?? [])),
+  ];
+  const knownOutputs = [
+    ...new Set(stageMembers.flatMap((member) => personaMap.get(member.personaId)?.produces ?? [])),
+  ];
   const portRows = Math.max(knownInputs.length, knownOutputs.length, 0);
   const stageHeight = stageNodeHeight(node) + (portRows > 0 ? 22 + portRows * 14 : 0);
   const { handleMouseDown, handleMouseMove, handleMouseUp } = useDragNode({
@@ -324,7 +328,7 @@ function StageNode({
               {isConnectingMode && (
                 <circle
                   cx={x + 10}
-                  cy={y + stageHeight - (portRows * 14) + index * 14 - 4}
+                  cy={y + stageHeight - portRows * 14 + index * 14 - 4}
                   r={4}
                   fill="var(--color-bg-primary)"
                   stroke="var(--color-brand)"
@@ -338,7 +342,7 @@ function StageNode({
               )}
               <rect
                 x={x + 18}
-                y={y + stageHeight - (portRows * 14) + index * 14 - 9}
+                y={y + stageHeight - portRows * 14 + index * 14 - 9}
                 width={64}
                 height={10}
                 rx={3}
@@ -347,7 +351,7 @@ function StageNode({
               />
               <text
                 x={x + 23}
-                y={y + stageHeight - (portRows * 14) + index * 14 - 2}
+                y={y + stageHeight - portRows * 14 + index * 14 - 2}
                 textAnchor="start"
                 fill={C.textMuted}
                 fontSize={6.5}
@@ -377,7 +381,7 @@ function StageNode({
             <g key={`out-${output}-${index}`}>
               <rect
                 x={x + STAGE_WIDTH - 82}
-                y={y + stageHeight - (portRows * 14) + index * 14 - 9}
+                y={y + stageHeight - portRows * 14 + index * 14 - 9}
                 width={64}
                 height={10}
                 rx={3}
@@ -386,9 +390,11 @@ function StageNode({
               />
               <circle
                 cx={x + STAGE_WIDTH - 10}
-                cy={y + stageHeight - (portRows * 14) + index * 14 - 4}
+                cy={y + stageHeight - portRows * 14 + index * 14 - 4}
                 r={4}
-                fill={connectingFromLabel === output ? 'var(--color-brand)' : 'var(--color-bg-primary)'}
+                fill={
+                  connectingFromLabel === output ? 'var(--color-brand)' : 'var(--color-bg-primary)'
+                }
                 stroke="var(--color-brand)"
                 strokeWidth={1}
                 onClick={(e) => {
@@ -399,7 +405,7 @@ function StageNode({
               />
               <text
                 x={x + STAGE_WIDTH - 77}
-                y={y + stageHeight - (portRows * 14) + index * 14 - 2}
+                y={y + stageHeight - portRows * 14 + index * 14 - 2}
                 textAnchor="start"
                 fill={C.text}
                 fontSize={6.5}
@@ -454,7 +460,8 @@ function GateNode({
     onDragEnd,
   });
   const H = GATE_SIZE / 2;
-  const fill = issueLevel === 'error' ? C.errorFill : issueLevel === 'warning' ? C.warnFill : C.gate;
+  const fill =
+    issueLevel === 'error' ? C.errorFill : issueLevel === 'warning' ? C.warnFill : C.gate;
   const stroke = selected
     ? C.nodeStrokeSelected
     : issueLevel === 'error'
@@ -528,7 +535,8 @@ function CondNode({
   });
   const cx = x + COND_RADIUS;
   const cy = y + COND_RADIUS;
-  const fill = issueLevel === 'error' ? C.errorFill : issueLevel === 'warning' ? C.warnFill : C.cond;
+  const fill =
+    issueLevel === 'error' ? C.errorFill : issueLevel === 'warning' ? C.warnFill : C.cond;
   const stroke = selected
     ? C.nodeStrokeSelected
     : issueLevel === 'error'
@@ -623,8 +631,24 @@ function TriggerNode({
       }}
       style={{ cursor: isConnectingMode ? 'crosshair' : 'grab' }}
     >
-      <rect x={x} y={y} width={TRIGGER_WIDTH} height={TRIGGER_HEIGHT} rx={8} fill={fill} stroke={stroke} strokeWidth={sw} />
-      <text x={x + 14} y={y + 22} fill={C.text} fontSize={11} fontWeight="600" fontFamily="var(--font-sans)">
+      <rect
+        x={x}
+        y={y}
+        width={TRIGGER_WIDTH}
+        height={TRIGGER_HEIGHT}
+        rx={8}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={sw}
+      />
+      <text
+        x={x + 14}
+        y={y + 22}
+        fill={C.text}
+        fontSize={11}
+        fontWeight="600"
+        fontFamily="var(--font-sans)"
+      >
         {node.label.length > 20 ? node.label.slice(0, 18) + '…' : node.label}
       </text>
       <text x={x + 14} y={y + 38} fill={C.textMuted} fontSize={8.5} fontFamily="var(--font-mono)">
@@ -691,10 +715,24 @@ function EndNode({
       style={{ cursor: isConnectingMode ? 'crosshair' : 'grab' }}
     >
       <circle cx={cx} cy={cy} r={END_RADIUS} fill={fill} stroke={stroke} strokeWidth={sw} />
-      <text x={cx} y={cy - 4} textAnchor="middle" fill={C.text} fontSize={16} fontFamily="var(--font-sans)">
+      <text
+        x={cx}
+        y={cy - 4}
+        textAnchor="middle"
+        fill={C.text}
+        fontSize={16}
+        fontFamily="var(--font-sans)"
+      >
         ●
       </text>
-      <text x={cx} y={cy + 12} textAnchor="middle" fill={C.textMuted} fontSize={8} fontFamily="var(--font-mono)">
+      <text
+        x={cx}
+        y={cy + 12}
+        textAnchor="middle"
+        fill={C.textMuted}
+        fontSize={8}
+        fontFamily="var(--font-mono)"
+      >
         {node.label.length > 10 ? node.label.slice(0, 8) + '…' : node.label}
       </text>
       {selected && !isConnectingMode && (
@@ -709,10 +747,14 @@ function stagePortLists(node: WorkflowStageNode, personas: PersonaEntry[]) {
   const personaMap = new Map(personas.map((persona) => [persona.id, persona]));
   return {
     knownInputs: [
-      ...new Set(stageMembers.flatMap((member) => personaMap.get(member.personaId)?.consumes ?? [])),
+      ...new Set(
+        stageMembers.flatMap((member) => personaMap.get(member.personaId)?.consumes ?? []),
+      ),
     ],
     knownOutputs: [
-      ...new Set(stageMembers.flatMap((member) => personaMap.get(member.personaId)?.produces ?? [])),
+      ...new Set(
+        stageMembers.flatMap((member) => personaMap.get(member.personaId)?.produces ?? []),
+      ),
     ],
   };
 }
@@ -753,7 +795,7 @@ function edgeAnchor(
   const totalHeight = renderedStageHeight(node, personas);
   return {
     x: direction === 'source' ? node.position.x + STAGE_WIDTH - 10 : node.position.x + 10,
-    y: node.position.y + totalHeight - (portRows * 14) + index * 14 - 4,
+    y: node.position.y + totalHeight - portRows * 14 + index * 14 - 4,
   };
 }
 
@@ -1137,7 +1179,15 @@ export function GraphView({
               case 'trigger':
                 return <TriggerNode key={node.id} node={node} {...props} />;
               case 'stage':
-                return <StageNode key={node.id} node={node} personas={personas} connectingFromLabel={connectingFromLabel} {...props} />;
+                return (
+                  <StageNode
+                    key={node.id}
+                    node={node}
+                    personas={personas}
+                    connectingFromLabel={connectingFromLabel}
+                    {...props}
+                  />
+                );
               case 'gate':
                 return <GateNode key={node.id} node={node} {...props} />;
               case 'cond':

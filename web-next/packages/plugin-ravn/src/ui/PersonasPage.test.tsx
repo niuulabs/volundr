@@ -46,7 +46,10 @@ describe('PersonasPage', () => {
     render(<PersonasPage />, { wrapper: wrapWithServices(allServices()) });
 
     await waitFor(() => expect(screen.getByTestId('persona-detail')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /architect/i })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: /architect/i })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   });
 
   it('changes selection when a persona is clicked in the left rail', async () => {
@@ -71,7 +74,10 @@ describe('PersonasPage', () => {
 
     await waitFor(() => {
       expect(localStorage.getItem('ravn.persona')).toBe('"coder"');
-      expect(screen.getByRole('button', { name: /coder/i })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('button', { name: /coder/i })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
     });
   });
 

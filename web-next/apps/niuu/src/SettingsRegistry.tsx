@@ -106,13 +106,16 @@ function isPluginEnabled(config: NiuuConfig, pluginId: string): boolean {
 export function buildMountedSettingsProviders(config: NiuuConfig): MountedSettingsProvider[] {
   const localPluginIds = new Set(LOCAL_PROVIDERS.map((provider) => provider.pluginId));
 
-  const providers: MountedSettingsProvider[] = LOCAL_PROVIDERS
-    .filter((provider) => isPluginEnabled(config, provider.pluginId))
-    .map((provider) => ({ ...provider, source: 'local' as const }));
+  const providers: MountedSettingsProvider[] = LOCAL_PROVIDERS.filter((provider) =>
+    isPluginEnabled(config, provider.pluginId),
+  ).map((provider) => ({ ...provider, source: 'local' as const }));
 
   for (const def of REMOTE_PROVIDER_DEFS) {
     if (localPluginIds.has(def.pluginId)) continue;
-    if (!isPluginEnabled(config, def.pluginId) && !(def.id === 'identity' && def.resolver(config))) {
+    if (
+      !isPluginEnabled(config, def.pluginId) &&
+      !(def.id === 'identity' && def.resolver(config))
+    ) {
       continue;
     }
     providers.push({

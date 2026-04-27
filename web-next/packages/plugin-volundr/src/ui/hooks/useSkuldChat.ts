@@ -7,6 +7,7 @@ import type {
   ChatMessagePart,
   ContentBlock,
   MeshEvent,
+  MeshOutcomeEvent,
   PermissionBehavior,
   PermissionRequest,
   RoomParticipant,
@@ -18,11 +19,15 @@ import { wsUrlToHttpBase } from '../liveSessionTransport';
 
 type WireParticipant = {
   peer_id?: string;
+  peerId?: string;
   persona?: string;
   display_name?: string;
+  displayName?: string;
   color?: string;
   participant_type?: string;
+  participantType?: string;
   gateway_url?: string;
+  gatewayUrl?: string;
   gateway_latency_ms?: number;
   gatewayLatencyMs?: number;
   gateway_region?: string;
@@ -183,44 +188,60 @@ function makeSingleParticipant(): RoomParticipant {
   };
 }
 
-function parseParticipantMeta(raw: WireParticipant | Record<string, unknown> | undefined): RoomParticipant | undefined {
+function parseParticipantMeta(
+  raw: WireParticipant | Record<string, unknown> | undefined,
+): RoomParticipant | undefined {
   if (!raw) return undefined;
-  const peerId = String(raw.peer_id ?? raw.peerId ?? '');
+  const peerId = getString(raw, 'peer_id', 'peerId');
   if (!peerId) return undefined;
   return {
     peerId,
-    persona: String(raw.persona ?? ''),
-    displayName: String(raw.display_name ?? raw.displayName ?? ''),
-    color: String(raw.color ?? ''),
-    participantType: String(raw.participant_type ?? raw.participantType ?? 'ravn'),
-    subscribesTo: Array.isArray(raw.subscribes_to) ? (raw.subscribes_to as string[]) : undefined,
-    emits: Array.isArray(raw.emits) ? (raw.emits as string[]) : undefined,
-    tools: Array.isArray(raw.tools) ? (raw.tools as string[]) : undefined,
-    gateway:
-      typeof raw.gateway_url === 'string'
-        ? raw.gateway_url
-        : typeof raw.gatewayUrl === 'string'
-          ? raw.gatewayUrl
-          : undefined,
-    gatewayLatencyMs:
-      typeof raw.gateway_latency_ms === 'number'
-        ? raw.gateway_latency_ms
-        : typeof raw.gatewayLatencyMs === 'number'
-          ? raw.gatewayLatencyMs
-          : undefined,
-    gatewayRegion:
-      typeof raw.gateway_region === 'string'
-        ? raw.gateway_region
-        : typeof raw.gatewayRegion === 'string'
-          ? raw.gatewayRegion
-          : undefined,
-    status:
-      typeof raw.status === 'string'
-        ? raw.status
-        : typeof raw.activityType === 'string'
-          ? raw.activityType
-          : undefined,
+    persona: getString(raw, 'persona') ?? '',
+    displayName: getString(raw, 'display_name', 'displayName') ?? '',
+    color: getString(raw, 'color') ?? '',
+    participantType: getString(raw, 'participant_type', 'participantType') ?? 'ravn',
+    subscribesTo: getStringArray(raw, 'subscribes_to'),
+    emits: getStringArray(raw, 'emits'),
+    tools: getStringArray(raw, 'tools'),
+    gateway: getString(raw, 'gateway_url', 'gatewayUrl'),
+    gatewayLatencyMs: getNumber(raw, 'gateway_latency_ms', 'gatewayLatencyMs'),
+    gatewayRegion: getString(raw, 'gateway_region', 'gatewayRegion'),
+    status: getString(raw, 'status', 'activityType'),
   };
+}
+
+function getString(
+  raw: WireParticipant | Record<string, unknown>,
+  ...keys: string[]
+): string | undefined {
+  const values = raw as Record<string, unknown>;
+  for (const key of keys) {
+    const value = values[key];
+    if (typeof value === 'string') return value;
+  }
+  return undefined;
+}
+
+function getNumber(
+  raw: WireParticipant | Record<string, unknown>,
+  ...keys: string[]
+): number | undefined {
+  const values = raw as Record<string, unknown>;
+  for (const key of keys) {
+    const value = values[key];
+    if (typeof value === 'number') return value;
+  }
+  return undefined;
+}
+
+function getStringArray(
+  raw: WireParticipant | Record<string, unknown>,
+  key: string,
+): string[] | undefined {
+  const value = (raw as Record<string, unknown>)[key];
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : undefined;
 }
 
 function reviveMessages(messages: PersistedChatState['messages']): ChatMessage[] {
@@ -239,7 +260,9 @@ function reviveMeshEvents(events: PersistedChatState['meshEvents']): MeshEvent[]
   })) as MeshEvent[];
 }
 
-function reviveAgentEvents(events: PersistedChatState['agentEvents']): Map<string, AgentInternalEvent[]> {
+function reviveAgentEvents(
+  events: PersistedChatState['agentEvents'],
+): Map<string, AgentInternalEvent[]> {
   const next = new Map<string, AgentInternalEvent[]>();
   for (const [peerId, peerEvents] of Object.entries(events ?? {})) {
     next.set(
@@ -405,7 +428,8 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
   const finalizeStreaming = useCallback(
     (status: ChatMessage['status'] = 'done', overrideContent?: string) => {
       const content = overrideContent ?? streamingTextRef.current;
-      const parts = streamingPartsRef.current.length > 0 ? [...streamingPartsRef.current] : undefined;
+      const parts =
+        streamingPartsRef.current.length > 0 ? [...streamingPartsRef.current] : undefined;
       const model = streamingModelRef.current;
       const messageId = streamingMessageIdRef.current;
       if (!content && !parts?.length) {
@@ -471,7 +495,9 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
       setMeshEvents(reviveMeshEvents(cached.meshEvents));
     }
     if ((cached.participants?.length ?? 0) > 0) {
-      setParticipants(new Map(cached.participants?.map((participant) => [participant.peerId, participant])));
+      setParticipants(
+        new Map(cached.participants?.map((participant) => [participant.peerId, participant])),
+      );
     }
     if (cached.agentEvents) {
       setAgentEvents(reviveAgentEvents(cached.agentEvents));
@@ -548,7 +574,8 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
         const messageId = streamingMessageIdRef.current;
         if (!messageId) return;
         const nextContent = streamingTextRef.current;
-        const nextParts = streamingPartsRef.current.length > 0 ? [...streamingPartsRef.current] : undefined;
+        const nextParts =
+          streamingPartsRef.current.length > 0 ? [...streamingPartsRef.current] : undefined;
         const participant = getDefaultAssistantParticipant();
         const metadata = streamingModelRef.current
           ? {
@@ -575,12 +602,15 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
         );
       };
 
-      const finalizeParticipantStream = (peerId: string, status: ChatMessage['status'] = 'done') => {
+      const finalizeParticipantStream = (
+        peerId: string,
+        status: ChatMessage['status'] = 'done',
+      ) => {
         const stream = internalStreamsRef.current.get(peerId);
         if (!stream) return;
         const finalParts = [...stream.parts];
         const finalContent = finalParts
-          .filter((part): part is Extract<ChatMessagePart, { type: 'reasoning' }> => part.type === 'reasoning')
+          .filter((part) => part.type === 'reasoning')
           .map((part) => part.text ?? '')
           .join('\n');
         setMessages((prev) =>
@@ -612,7 +642,9 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
             const participant = getDefaultAssistantParticipant();
             streamingMessageIdRef.current = messageId;
             streamingTextRef.current = initialContent;
-            streamingPartsRef.current = initialContent ? [{ type: 'text', text: initialContent }] : [];
+            streamingPartsRef.current = initialContent
+              ? [{ type: 'text', text: initialContent }]
+              : [];
             streamingModelRef.current = event.message?.model ?? '';
             setStreamingContent(initialContent);
             setStreamingParts(streamingPartsRef.current);
@@ -628,7 +660,8 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
                 createdAt: new Date(),
                 status: 'running',
                 participant,
-                parts: streamingPartsRef.current.length > 0 ? [...streamingPartsRef.current] : undefined,
+                parts:
+                  streamingPartsRef.current.length > 0 ? [...streamingPartsRef.current] : undefined,
               },
             ]);
             break;
@@ -644,7 +677,10 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
                 syncStreamingMessage();
               }
             } else if (blockType === 'text') {
-              streamingPartsRef.current = [...streamingPartsRef.current, { type: 'text', text: '' }];
+              streamingPartsRef.current = [
+                ...streamingPartsRef.current,
+                { type: 'text', text: '' },
+              ];
               setStreamingParts([...streamingPartsRef.current]);
               syncStreamingMessage();
             } else if (blockType === 'tool_use') {
@@ -712,7 +748,9 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
             try {
               const input = JSON.parse(toolJsonRef.current) as Record<string, unknown>;
               streamingPartsRef.current = streamingPartsRef.current.map((part) =>
-                part.type === 'tool_use' && part.id === toolIdRef.current ? { ...part, input } : part,
+                part.type === 'tool_use' && part.id === toolIdRef.current
+                  ? { ...part, input }
+                  : part,
               );
               setStreamingParts([...streamingPartsRef.current]);
               syncStreamingMessage();
@@ -735,7 +773,7 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
             const errorMessage =
               typeof event.error === 'string'
                 ? event.error
-                : event.error?.message ?? 'Unknown error';
+                : (event.error?.message ?? 'Unknown error');
             finalizeStreaming('error', errorMessage);
             break;
           }
@@ -855,7 +893,7 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
                 participant: { color: participant?.color },
                 persona: event.persona ?? participant?.persona ?? '',
                 eventType: event.eventType ?? '',
-                verdict: event.verdict as MeshEvent['verdict'],
+                verdict: event.verdict as MeshOutcomeEvent['verdict'],
                 summary: event.summary,
               },
             ]);
@@ -1004,7 +1042,9 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
       if (!trimmed && attachments.length === 0) return;
 
       Promise.all(attachments.map(attachmentToWireContent)).then((converted) => {
-        const valid = converted.filter((value): value is NonNullable<typeof value> => value !== null);
+        const valid = converted.filter(
+          (value): value is NonNullable<typeof value> => value !== null,
+        );
         setMessages((prev) => [
           ...prev,
           {
@@ -1056,11 +1096,7 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
   const respondToPermission = useCallback(
     (requestId: string, behavior: PermissionBehavior) => {
       const normalized =
-        behavior === 'allow_always'
-          ? 'allowForever'
-          : behavior === 'allow_once'
-            ? 'allow'
-            : 'deny';
+        behavior === 'allow_always' ? 'allowForever' : behavior === 'allow_once' ? 'allow' : 'deny';
       sendJson({
         type: 'permission_response',
         request_id: requestId,
@@ -1068,7 +1104,9 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
         updated_input: {},
         updated_permissions: [],
       });
-      setPendingPermissions((prev) => prev.filter((permission) => permission.requestId !== requestId));
+      setPendingPermissions((prev) =>
+        prev.filter((permission) => permission.requestId !== requestId),
+      );
     },
     [sendJson],
   );
@@ -1082,7 +1120,10 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
     resetStreaming();
   }, [resetStreaming]);
 
-  const stableParticipants = useMemo(() => participants as ReadonlyMap<string, RoomParticipant>, [participants]);
+  const stableParticipants = useMemo(
+    () => participants as ReadonlyMap<string, RoomParticipant>,
+    [participants],
+  );
   const stableAgentEvents = useMemo(
     () => agentEvents as ReadonlyMap<string, readonly AgentInternalEvent[]>,
     [agentEvents],

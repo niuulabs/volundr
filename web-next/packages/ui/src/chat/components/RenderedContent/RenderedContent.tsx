@@ -45,23 +45,51 @@ export function RenderedContent({ content, className }: RenderedContentProps) {
     );
   }
 
-  // Split code blocks
-  const parts = content.split(/(```[\s\S]*?```)/g);
+  const parts = splitContentBlocks(content);
 
   return (
     <div className={className} data-testid="rendered-content">
       {parts.map((part, i) => {
-        const codeMatch = /^```(\w*)\n?([\s\S]*?)```$/.exec(part.trim());
-        if (codeMatch) {
-          return <InlineCode key={i}>{codeMatch[2] ?? ''}</InlineCode>;
+        if (part.type === 'code') {
+          return <InlineCode key={i}>{part.content}</InlineCode>;
         }
-        if (!part.trim()) return null;
+        if (!part.content.trim()) return null;
         return (
           <p key={i} className="niuu-chat-rc-p">
-            {part}
+            {part.content}
           </p>
         );
       })}
     </div>
   );
+}
+
+function splitContentBlocks(content: string): Array<{ type: 'text' | 'code'; content: string }> {
+  const parts: Array<{ type: 'text' | 'code'; content: string }> = [];
+  let cursor = 0;
+
+  while (cursor < content.length) {
+    const fenceStart = content.indexOf('```', cursor);
+    if (fenceStart === -1) break;
+
+    if (fenceStart > cursor) {
+      parts.push({ type: 'text', content: content.slice(cursor, fenceStart) });
+    }
+
+    const languageStart = fenceStart + 3;
+    const newlineIndex = content.indexOf('\n', languageStart);
+    if (newlineIndex === -1) break;
+
+    const fenceEnd = content.indexOf('```', newlineIndex + 1);
+    if (fenceEnd === -1) break;
+
+    parts.push({ type: 'code', content: content.slice(newlineIndex + 1, fenceEnd) });
+    cursor = fenceEnd + 3;
+  }
+
+  if (cursor < content.length) {
+    parts.push({ type: 'text', content: content.slice(cursor) });
+  }
+
+  return parts;
 }

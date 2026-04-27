@@ -116,7 +116,10 @@ function OverviewSection({ ravn, budget, sessions }: OverviewSectionProps) {
               label="persona"
               value={<span className="rv-value-strong">{ravn.personaName}</span>}
             />
-            <KeyValueRow label="role" value={<span className="rv-value-mono">{ravn.role ?? '—'}</span>} />
+            <KeyValueRow
+              label="role"
+              value={<span className="rv-value-mono">{ravn.role ?? '—'}</span>}
+            />
             <KeyValueRow
               label="specialisations"
               value={<span className="rv-value-mono">{buildSpecialisations(ravn)}</span>}
@@ -164,7 +167,9 @@ function OverviewSection({ ravn, budget, sessions }: OverviewSectionProps) {
             />
             <KeyValueRow
               label="last activity"
-              value={<span className="rv-value-strong">{relTime(ravn.updatedAt ?? ravn.createdAt)}</span>}
+              value={
+                <span className="rv-value-strong">{relTime(ravn.updatedAt ?? ravn.createdAt)}</span>
+              }
             />
             <KeyValueRow
               label="sessions"
@@ -262,7 +267,9 @@ function TriggersSection({ triggers }: TriggersSectionProps) {
                   className={`rv-stack-kind rv-stack-kind--${trigger.kind}`}
                   data-testid="trigger-kind"
                 >
-                  <span aria-hidden="true">{TRIGGER_KIND_LABELS[trigger.kind] ?? trigger.kind}</span>
+                  <span aria-hidden="true">
+                    {TRIGGER_KIND_LABELS[trigger.kind] ?? trigger.kind}
+                  </span>
                   {trigger.kind}
                 </span>
                 <div className="rv-stack-card__copy">
@@ -400,7 +407,9 @@ function SessionsSection({ sessions }: SessionsSectionProps) {
                   />
                 </span>
                 <div className="rv-stack-card__copy">
-                  <div className="rv-stack-card__title">{session.title ?? session.id.slice(0, 8)}</div>
+                  <div className="rv-stack-card__title">
+                    {session.title ?? session.id.slice(0, 8)}
+                  </div>
                   <div className="rv-stack-card__meta">
                     <span className="rv-value-mono">{session.status}</span>
                     <span className="rv-value-mono">{relTime(session.createdAt)}</span>
@@ -617,7 +626,9 @@ export function RavnDetail({ ravn, onClose }: RavnDetailProps) {
             data-testid={`sectab-${tab.id}`}
           >
             {tab.label}
-            {tab.count != null && tab.count > 0 && <span className="rv-sectabs-n">{tab.count}</span>}
+            {tab.count != null && tab.count > 0 && (
+              <span className="rv-sectabs-n">{tab.count}</span>
+            )}
           </button>
         ))}
       </nav>

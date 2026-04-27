@@ -238,8 +238,12 @@ export function LibraryPanel({ personas }: LibraryPanelProps) {
                     if (glyph.shape === 'triangle') {
                       return (
                         <div className="niuu-relative niuu-h-7 niuu-w-7">
-                          <div className="niuu-absolute niuu-inset-0 niuu-flex niuu-items-center niuu-justify-center niuu-text-[#d6efff] niuu-font-mono niuu-text-[11px]">△</div>
-                          <div className="niuu-absolute niuu-inset-0 niuu-flex niuu-items-center niuu-justify-center niuu-text-[#d6efff] niuu-font-mono niuu-text-[8px]">{glyph.text}</div>
+                          <div className="niuu-absolute niuu-inset-0 niuu-flex niuu-items-center niuu-justify-center niuu-text-[#d6efff] niuu-font-mono niuu-text-[11px]">
+                            △
+                          </div>
+                          <div className="niuu-absolute niuu-inset-0 niuu-flex niuu-items-center niuu-justify-center niuu-text-[#d6efff] niuu-font-mono niuu-text-[8px]">
+                            {glyph.text}
+                          </div>
                         </div>
                       );
                     }

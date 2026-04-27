@@ -14,10 +14,7 @@ import type { SegmentedFilterOption } from '@niuulabs/ui';
 import type { IDispatchBus, IDispatcherService } from '../ports';
 import type { RaidStatus } from '../domain/saga';
 import type { Workflow } from '../domain/workflow';
-import {
-  checkFeasibility,
-  type FeasibilityResult,
-} from '../application/dispatch-feasibility';
+import { checkFeasibility, type FeasibilityResult } from '../application/dispatch-feasibility';
 import { useDispatcherState } from './useDispatcherState';
 import { useDispatchQueue, type DispatchEntry } from './useDispatchQueue';
 import { WorkflowOverrideModal } from './WorkflowOverrideModal';
@@ -115,9 +112,7 @@ function BatchDispatchBar({
       role="status"
       aria-live="polite"
     >
-      <span className="niuu-text-sm niuu-font-medium niuu-text-text-primary">
-        {selectedCount}
-      </span>
+      <span className="niuu-text-sm niuu-font-medium niuu-text-text-primary">{selectedCount}</span>
       <span className="niuu-text-sm niuu-text-text-secondary">selected</span>
       <span className="niuu-flex-1" />
       {onApplyWorkflow && (
@@ -184,11 +179,15 @@ function SagaGroupHeader({
       </span>
       <span className="niuu-text-sm niuu-font-medium niuu-text-text-primary">{sagaName}</span>
       <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-ml-auto niuu-flex niuu-items-center niuu-gap-2">
-        <span>{raidCount} queued · {featureBranch}</span>
+        <span>
+          {raidCount} queued · {featureBranch}
+        </span>
         {workflowName && (
           <>
             <span className="niuu-w-px niuu-h-[10px] niuu-bg-border" />
-            <span>workflow <span className="niuu-text-text-secondary">{workflowName}</span></span>
+            <span>
+              workflow <span className="niuu-text-text-secondary">{workflowName}</span>
+            </span>
           </>
         )}
       </span>
@@ -243,11 +242,15 @@ function RaidRow({
         {isSelected && '✓'}
       </label>
       <div className="niuu-flex-1 niuu-min-w-0">
-        <div className="niuu-text-sm niuu-font-medium niuu-text-text-primary niuu-truncate">{entry.raid.name}</div>
+        <div className="niuu-text-sm niuu-font-medium niuu-text-text-primary niuu-truncate">
+          {entry.raid.name}
+        </div>
         <div className="niuu-text-[10px] niuu-font-mono niuu-text-text-muted niuu-mt-0.5">
           {entry.raid.trackerId}
           {entry.raid.estimateHours != null && ` · est ${entry.raid.estimateHours}h`}
-          {entry.raid.retryCount != null && entry.raid.retryCount > 0 && ` · retry ${entry.raid.retryCount}`}
+          {entry.raid.retryCount != null &&
+            entry.raid.retryCount > 0 &&
+            ` · retry ${entry.raid.retryCount}`}
         </div>
       </div>
       <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-shrink-0">
@@ -271,8 +274,12 @@ function RaidRow({
             className="niuu-inline-flex niuu-items-center niuu-rounded-sm niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-font-mono niuu-uppercase"
             style={{ border: '1px solid rgba(168,85,247,0.5)', color: 'rgb(192,132,252)' }}
           >
-            blocked{entry.feasibility.gates.filter((g) => !g.passed).length > 0 &&
-              ` · ${entry.feasibility.gates.filter((g) => !g.passed).map((g) => GATE_LABELS[g.name] ?? g.name).join(', ')}`}
+            blocked
+            {entry.feasibility.gates.filter((g) => !g.passed).length > 0 &&
+              ` · ${entry.feasibility.gates
+                .filter((g) => !g.passed)
+                .map((g) => GATE_LABELS[g.name] ?? g.name)
+                .join(', ')}`}
           </span>
         )}
         <ConfidenceBar
@@ -340,7 +347,9 @@ function DispatchRulesPanel({
           {rules.map((r) => (
             <div key={r.label} className="niuu-flex niuu-justify-between niuu-items-baseline">
               <dt className="niuu-text-text-muted">{r.label}</dt>
-              <dd className="niuu-m-0 niuu-font-mono niuu-text-text-primary niuu-font-semibold">{r.value}</dd>
+              <dd className="niuu-m-0 niuu-font-mono niuu-text-text-primary niuu-font-semibold">
+                {r.value}
+              </dd>
             </div>
           ))}
         </dl>
@@ -489,7 +498,13 @@ function DispatchViewContent() {
   const groupedBySaga = useMemo(() => {
     const map = new Map<
       string,
-      { sagaName: string; trackerId: string; featureBranch: string; workflowName: string; entries: EnrichedEntry[] }
+      {
+        sagaName: string;
+        trackerId: string;
+        featureBranch: string;
+        workflowName: string;
+        entries: EnrichedEntry[];
+      }
     >();
     for (const entry of filtered) {
       const existing = map.get(entry.saga.id);

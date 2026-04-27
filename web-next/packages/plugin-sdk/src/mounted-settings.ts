@@ -18,4 +18,3 @@ export interface MountedSettingsProviderDescriptor {
   sections: MountedSettingsSectionDescriptor[];
   defaultSectionId?: string;
 }
-

@@ -33,7 +33,12 @@ const KIND_ICON: Record<WorkflowIssue['kind'], string> = {
 const ZOOM_BTN =
   'niuu-bg-bg-elevated niuu-border niuu-border-border niuu-text-text-secondary niuu-rounded-md niuu-px-2.5 niuu-py-1 niuu-text-xs niuu-cursor-pointer niuu-font-mono hover:niuu-text-text-primary niuu-transition-colors';
 
-export function ValidationPanel({ workflow, onSelectNode, errorCount, warnCount }: ValidationPanelProps) {
+export function ValidationPanel({
+  workflow,
+  onSelectNode,
+  errorCount,
+  warnCount,
+}: ValidationPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const issues = useMemo(() => validateWorkflowFull(workflow), [workflow]);
   const reviewCount = issues.filter((i) => i.kind === 'missing_persona').length;

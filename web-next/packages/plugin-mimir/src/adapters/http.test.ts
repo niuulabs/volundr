@@ -639,8 +639,9 @@ describe('buildMimirHttpAdapter', () => {
           ]),
       });
 
-      await expect(buildMimirHttpAdapter(client).pages.listEntities({ kind: 'person' })).resolves
-        .toEqual([expect.objectContaining({ entityKind: 'person' })]);
+      await expect(
+        buildMimirHttpAdapter(client).pages.listEntities({ kind: 'person' }),
+      ).resolves.toEqual([expect.objectContaining({ entityKind: 'person' })]);
     });
   });
 
@@ -818,19 +819,16 @@ describe('buildMimirHttpAdapter', () => {
 
     it('returns an empty list when fallback page lookup has no source ids', async () => {
       const client = makeClient({
-        get: vi
-          .fn()
-          .mockRejectedValueOnce(missingRoute())
-          .mockResolvedValueOnce({
-            path: '/arch/overview',
-            title: 'Architecture Overview',
-            summary: 'Summary',
-            category: 'arch',
-            updated_at: '2026-04-10T08:00:00Z',
-            source_ids: [],
-            content: '# Overview',
-            related: [],
-          }),
+        get: vi.fn().mockRejectedValueOnce(missingRoute()).mockResolvedValueOnce({
+          path: '/arch/overview',
+          title: 'Architecture Overview',
+          summary: 'Summary',
+          category: 'arch',
+          updated_at: '2026-04-10T08:00:00Z',
+          source_ids: [],
+          content: '# Overview',
+          related: [],
+        }),
       });
 
       await expect(
@@ -855,7 +853,9 @@ describe('buildMimirHttpAdapter', () => {
       });
 
       const source = await buildMimirHttpAdapter(client).pages.ingestUrl('https://example.com');
-      expect(client.post).toHaveBeenCalledWith('/sources/ingest/url', { url: 'https://example.com' });
+      expect(client.post).toHaveBeenCalledWith('/sources/ingest/url', {
+        url: 'https://example.com',
+      });
       expect(source).toMatchObject({ id: 'src-url', originType: 'web' });
     });
 
@@ -916,13 +916,10 @@ describe('buildMimirHttpAdapter', () => {
 
     it('uses arrayBuffer fallback when File.text is unavailable', async () => {
       const client = makeClient({
-        post: vi
-          .fn()
-          .mockRejectedValueOnce(missingRoute())
-          .mockResolvedValueOnce({
-            source_id: 'src-buffer',
-            pages_updated: [],
-          }),
+        post: vi.fn().mockRejectedValueOnce(missingRoute()).mockResolvedValueOnce({
+          source_id: 'src-buffer',
+          pages_updated: [],
+        }),
       });
 
       const file = new File(['# hello'], 'buffer.md', { type: 'text/markdown' });

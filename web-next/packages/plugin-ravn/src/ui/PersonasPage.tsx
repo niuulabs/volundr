@@ -17,9 +17,13 @@ const PERSONA_STORAGE_KEY = 'ravn.persona';
 
 type TabId = 'form' | 'yaml' | 'subs';
 
-function pickDefaultPersona(personas: PersonaSummary[], preferredName: string | null): string | null {
+function pickDefaultPersona(
+  personas: PersonaSummary[],
+  preferredName: string | null,
+): string | null {
   if (personas.length === 0) return null;
-  if (preferredName && personas.some((persona) => persona.name === preferredName)) return preferredName;
+  if (preferredName && personas.some((persona) => persona.name === preferredName))
+    return preferredName;
   return personas.find((persona) => persona.name === 'reviewer')?.name ?? personas[0]!.name;
 }
 
@@ -199,7 +203,9 @@ export function PersonasPage() {
     return (
       <div className="rv-personas" data-testid="personas-page">
         <div className="rv-personas__state" data-testid="personas-error">
-          <ErrorState message={error instanceof Error ? error.message : 'Failed to load personas'} />
+          <ErrorState
+            message={error instanceof Error ? error.message : 'Failed to load personas'}
+          />
         </div>
       </div>
     );
@@ -209,7 +215,10 @@ export function PersonasPage() {
     <div className="rv-personas" data-testid="personas-page">
       <div className="rv-personas__content">
         <aside
-          className={cn('rv-personas__sidebar', sidebarCollapsed && 'rv-personas__sidebar--collapsed')}
+          className={cn(
+            'rv-personas__sidebar',
+            sidebarCollapsed && 'rv-personas__sidebar--collapsed',
+          )}
           aria-label="Personas directory"
           data-testid="personas-sidebar"
         >

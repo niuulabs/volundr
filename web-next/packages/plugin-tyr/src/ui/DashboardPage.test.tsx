@@ -109,9 +109,7 @@ describe('DashboardPage', () => {
     await waitFor(() =>
       expect(screen.getByText('Flokk subscription validation')).toBeInTheDocument(),
     );
-    fireEvent.click(
-      screen.getByText('Flokk subscription validation').closest('[role="button"]')!,
-    );
+    fireEvent.click(screen.getByText('Flokk subscription validation').closest('[role="button"]')!);
     expect(mockNavigate).toHaveBeenCalledWith({
       to: '/tyr/sagas/$sagaId',
       params: { sagaId: '00000000-0000-0000-0000-000000000004' },

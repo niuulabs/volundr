@@ -464,9 +464,7 @@ describe('buildVolundrHttpAdapter', () => {
       return [];
     });
 
-    let onEvent:
-      | ((frame: { event?: string; data: string }) => void)
-      | undefined;
+    let onEvent: ((frame: { event?: string; data: string }) => void) | undefined;
     const close = vi.fn();
     const openStream = vi.fn((_url: string, options: { onEvent?: typeof onEvent }) => {
       onEvent = options.onEvent;
@@ -477,7 +475,9 @@ describe('buildVolundrHttpAdapter', () => {
     const sessionSeen: Array<Array<{ id: string }>> = [];
     const statsSeen: Array<{ activeSessions: number }> = [];
 
-    const unsubSessions = svc.subscribe((sessions) => sessionSeen.push(sessions as Array<{ id: string }>));
+    const unsubSessions = svc.subscribe((sessions) =>
+      sessionSeen.push(sessions as Array<{ id: string }>),
+    );
     const unsubStats = svc.subscribeStats((stats) =>
       statsSeen.push(stats as { activeSessions: number }),
     );
@@ -543,9 +543,7 @@ describe('buildVolundrHttpAdapter', () => {
       return [];
     });
 
-    let onEvent:
-      | ((frame: { event?: string; data: string }) => void)
-      | undefined;
+    let onEvent: ((frame: { event?: string; data: string }) => void) | undefined;
     const openStream = vi.fn((_url: string, options: { onEvent?: typeof onEvent }) => {
       onEvent = options.onEvent;
       return { close: vi.fn() };
@@ -554,7 +552,8 @@ describe('buildVolundrHttpAdapter', () => {
     const seen: Array<{ tokenBurn: number[]; events: Array<{ label: string }> }> = [];
     const unsub = buildVolundrHttpAdapter(client, openStream as never).subscribeChronicle(
       'sess-1',
-      (chronicle) => seen.push(chronicle as { tokenBurn: number[]; events: Array<{ label: string }> }),
+      (chronicle) =>
+        seen.push(chronicle as { tokenBurn: number[]; events: Array<{ label: string }> }),
     );
     await Promise.resolve();
 
@@ -586,7 +585,9 @@ describe('buildVolundrHttpAdapter', () => {
       if (endpoint !== '/sessions/sess-1/conversation') return [];
       if (client.get.mock.calls.length <= 1) {
         return {
-          turns: [{ id: 'msg-1', role: 'user', content: 'hello', created_at: '2026-04-24T10:00:00Z' }],
+          turns: [
+            { id: 'msg-1', role: 'user', content: 'hello', created_at: '2026-04-24T10:00:00Z' },
+          ],
         };
       }
       return {

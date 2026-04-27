@@ -41,7 +41,9 @@ export function MetaPanel({ page, sources, allPages, onNavigate }: MetaPanelProp
         </div>
         <div className="mm-meta-row">
           <span className="mm-meta-k">by</span>
-          <span className="mm-meta-v" style={{ color: 'var(--brand-300)', cursor: 'pointer' }}>{page.updatedBy}</span>
+          <span className="mm-meta-v" style={{ color: 'var(--brand-300)', cursor: 'pointer' }}>
+            {page.updatedBy}
+          </span>
         </div>
       </div>
 

@@ -4,8 +4,6 @@ import { cn } from '../../../utils/cn';
 import type { MeshVerdict } from '../../types';
 import './OutcomeCard.css';
 
-const OUTCOME_BLOCK_RE = /```outcome\n([\s\S]*?)```|<outcome>([\s\S]*?)<\/outcome>/;
-
 const VERDICT_ICONS: Record<MeshVerdict, typeof CheckCircle> = {
   approve: CheckCircle,
   pass: CheckCircle,
@@ -82,10 +80,51 @@ export function OutcomeCard({ raw }: OutcomeCardProps) {
 export function extractOutcomeBlock(
   text: string,
 ): { before: string; raw: string; after: string } | null {
-  const match = OUTCOME_BLOCK_RE.exec(text);
-  if (!match) return null;
-  const raw = (match[1] ?? match[2] ?? '').trim();
-  const before = text.slice(0, match.index);
-  const after = text.slice(match.index + match[0].length);
-  return { before, raw, after };
+  const fenced = extractFencedOutcomeBlock(text);
+  const tagged = extractTaggedOutcomeBlock(text);
+
+  if (!fenced) return tagged;
+  if (!tagged) return fenced;
+  return fenced.before.length <= tagged.before.length ? fenced : tagged;
+}
+
+function extractFencedOutcomeBlock(
+  text: string,
+): { before: string; raw: string; after: string } | null {
+  const marker = '```outcome';
+  const start = text.indexOf(marker);
+  if (start === -1) return null;
+
+  let contentStart = start + marker.length;
+  if (text[contentStart] === '\n') {
+    contentStart += 1;
+  }
+
+  const end = text.indexOf('```', contentStart);
+  if (end === -1) return null;
+
+  return {
+    before: text.slice(0, start),
+    raw: text.slice(contentStart, end).trim(),
+    after: text.slice(end + 3),
+  };
+}
+
+function extractTaggedOutcomeBlock(
+  text: string,
+): { before: string; raw: string; after: string } | null {
+  const openTag = '<outcome>';
+  const closeTag = '</outcome>';
+  const start = text.indexOf(openTag);
+  if (start === -1) return null;
+
+  const contentStart = start + openTag.length;
+  const end = text.indexOf(closeTag, contentStart);
+  if (end === -1) return null;
+
+  return {
+    before: text.slice(0, start),
+    raw: text.slice(contentStart, end).trim(),
+    after: text.slice(end + closeTag.length),
+  };
 }

@@ -21,11 +21,7 @@ export function normalizeSessionUrl(url: string | null | undefined): string | nu
 
     const current = new URL(window.location.origin);
     const samePort = parsed.port === current.port;
-    if (
-      isLoopbackHostname(parsed.hostname) &&
-      isLoopbackHostname(current.hostname) &&
-      samePort
-    ) {
+    if (isLoopbackHostname(parsed.hostname) && isLoopbackHostname(current.hostname) && samePort) {
       parsed.protocol = publicProtocolFor(parsed.protocol, current.protocol);
       parsed.hostname = current.hostname;
       parsed.port = current.port;

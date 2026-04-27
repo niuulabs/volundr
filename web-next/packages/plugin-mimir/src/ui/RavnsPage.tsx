@@ -43,7 +43,8 @@ function RavnCard({ ravn, onClick }: RavnCardProps) {
           style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)' }}
           aria-hidden
         >
-          {ravn.ravnId.charAt(0)}{ravn.ravnId.charAt(ravn.ravnId.length - 1)}
+          {ravn.ravnId.charAt(0)}
+          {ravn.ravnId.charAt(ravn.ravnId.length - 1)}
         </span>
         <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-flex-1 niuu-min-w-0">
           <span className="niuu-font-mono niuu-text-sm niuu-font-semibold niuu-text-text-primary niuu-truncate">
@@ -137,7 +138,8 @@ function RavnProfile({ ravn, onBack }: RavnProfileProps) {
           style={{ width: 48, height: 48, borderRadius: 'var(--radius-sm)' }}
           aria-hidden
         >
-          {ravn.ravnId.charAt(0)}{ravn.ravnId.charAt(ravn.ravnId.length - 1)}
+          {ravn.ravnId.charAt(0)}
+          {ravn.ravnId.charAt(ravn.ravnId.length - 1)}
         </span>
         <div className="niuu-flex niuu-flex-col niuu-gap-2">
           <h2 className="niuu-m-0 niuu-text-xl niuu-font-mono">{ravn.ravnId}</h2>

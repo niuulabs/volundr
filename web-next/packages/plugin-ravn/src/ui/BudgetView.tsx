@@ -203,13 +203,7 @@ function HeroCard({
   );
 }
 
-function AttentionItem({
-  analysis,
-  rightLabel,
-}: {
-  analysis: Analysis;
-  rightLabel: string;
-}) {
+function AttentionItem({ analysis, rightLabel }: { analysis: Analysis; rightLabel: string }) {
   return (
     <div className="rv-budget-attention-item">
       <div className="rv-budget-attention-item__head">
@@ -299,13 +293,7 @@ function FleetBurnChart({
   );
 }
 
-function TopDriversTable({
-  analysis,
-  totalSpent,
-}: {
-  analysis: Analysis[];
-  totalSpent: number;
-}) {
+function TopDriversTable({ analysis, totalSpent }: { analysis: Analysis[]; totalSpent: number }) {
   const drivers = [...analysis]
     .sort((a, b) => b.budget.spentUsd - a.budget.spentUsd)
     .slice(0, TOP_DRIVERS_COUNT);
@@ -364,10 +352,7 @@ interface Recommendation {
   actionLabel: string;
 }
 
-function buildRecommendations(
-  willExceed: Analysis[],
-  underUtilized: Analysis[],
-): Recommendation[] {
+function buildRecommendations(willExceed: Analysis[], underUtilized: Analysis[]): Recommendation[] {
   const recs: Recommendation[] = [];
   for (const entry of willExceed.slice(0, 3)) {
     const suggestedCap = Math.ceil(entry.projected * 1.2 * 100) / 100;
@@ -467,7 +452,8 @@ function FullFleetTable({ analysis }: { analysis: Analysis[] }) {
         onClick={() => setOpen((value) => !value)}
       >
         <span className="rv-budget-fleet__toggle-title">
-          Full fleet table <span className="rv-budget-fleet__toggle-count">{sorted.length} ravens</span>
+          Full fleet table{' '}
+          <span className="rv-budget-fleet__toggle-count">{sorted.length} ravens</span>
         </span>
         <span className="rv-budget-fleet__toggle-icon">{open ? '−' : '+'}</span>
       </button>
@@ -488,7 +474,11 @@ function FullFleetTable({ analysis }: { analysis: Analysis[] }) {
             </thead>
             <tbody>
               {sorted.map((entry) => (
-                <tr key={entry.ravn.id} className="rv-budget-fleet-row" data-attention={pctClass(entry.pct)}>
+                <tr
+                  key={entry.ravn.id}
+                  className="rv-budget-fleet-row"
+                  data-attention={pctClass(entry.pct)}
+                >
                   <td className="rv-budget-fleet-row__name">
                     <StateDot
                       state={
@@ -520,11 +510,18 @@ function FullFleetTable({ analysis }: { analysis: Analysis[] }) {
                   <td className="rv-budget-fleet-row__spent">{USD(entry.budget.spentUsd)}</td>
                   <td className="rv-budget-fleet-row__cap">{USD(entry.budget.capUsd)}</td>
                   <td className="rv-budget-fleet-row__pct">{PCT(entry.pct)}</td>
-                  <td className={`rv-budget-fleet-row__proj rv-budget-fleet-row__proj--${pctClass(entry.projPct)}`}>
+                  <td
+                    className={`rv-budget-fleet-row__proj rv-budget-fleet-row__proj--${pctClass(entry.projPct)}`}
+                  >
                     {USD(entry.projected)}
                   </td>
                   <td className="rv-budget-fleet-row__sparkline">
-                    <Sparkline values={entry.hours} id={`fleet-${entry.ravn.id}`} width={120} height={24} />
+                    <Sparkline
+                      values={entry.hours}
+                      id={`fleet-${entry.ravn.id}`}
+                      width={120}
+                      height={24}
+                    />
                   </td>
                 </tr>
               ))}

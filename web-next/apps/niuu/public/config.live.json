@@ -16,9 +16,18 @@
     "audit": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1" },
     "mimir": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/mimir" },
     "observatory": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/observatory" },
-    "observatory.registry": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/observatory/registry" },
-    "observatory.topology": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/observatory/topology" },
-    "observatory.events": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/observatory/events" },
+    "observatory.registry": {
+      "mode": "http",
+      "baseUrl": "http://localhost:8080/api/v1/observatory/registry"
+    },
+    "observatory.topology": {
+      "mode": "http",
+      "baseUrl": "http://localhost:8080/api/v1/observatory/topology"
+    },
+    "observatory.events": {
+      "mode": "http",
+      "baseUrl": "http://localhost:8080/api/v1/observatory/events"
+    },
     "ravn": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/ravn" },
     "ravn.personas": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/ravn/personas" },
     "ravn.ravens": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/ravn/ravens" },

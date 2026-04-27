@@ -304,7 +304,9 @@ function PageContent({
       <h1 className="niuu-text-3xl niuu-font-semibold niuu-text-text-primary niuu-m-0 niuu-mb-2 niuu-tracking-tight">
         {page.title}
       </h1>
-      <p className="niuu-text-base niuu-leading-relaxed niuu-text-text-secondary niuu-m-0 niuu-mb-4">{page.summary}</p>
+      <p className="niuu-text-base niuu-leading-relaxed niuu-text-text-secondary niuu-m-0 niuu-mb-4">
+        {page.summary}
+      </p>
 
       {/* action bar — matches web2 layout: actions first, then chips */}
       <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-mb-4 niuu-flex-wrap">

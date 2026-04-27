@@ -121,7 +121,9 @@ describe('SagaDetailPage', () => {
     render(<SagaDetailPage sagaId={SAGA_ID} />, {
       wrapper: wrap({ tyr: createMockTyrService() }),
     });
-    await waitFor(() => expect(screen.getByRole('region', { name: /workflow/i })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: /workflow/i })).toBeInTheDocument(),
+    );
     expect(screen.getByRole('region', { name: /stage progress/i })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: /confidence drift/i })).toBeInTheDocument();
   });

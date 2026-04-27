@@ -356,10 +356,7 @@ function normalizeSecretTypeInfo(secretType: CanonicalSecretTypePayload): Secret
   };
 }
 
-function normalizeMessages(
-  sessionId: string,
-  payload: ConversationPayload,
-): VolundrMessage[] {
+function normalizeMessages(sessionId: string, payload: ConversationPayload): VolundrMessage[] {
   return payload.turns.map((turn) => ({
     id: turn.id,
     sessionId,
@@ -379,7 +376,9 @@ function normalizeLogLevel(level?: string): VolundrLog['level'] {
   return 'error';
 }
 
-function makeLogFingerprint(log: Pick<VolundrLog, 'timestamp' | 'level' | 'source' | 'message'>): string {
+function makeLogFingerprint(
+  log: Pick<VolundrLog, 'timestamp' | 'level' | 'source' | 'message'>,
+): string {
   return `${log.timestamp}:${log.level}:${log.source}:${log.message}`;
 }
 
@@ -424,16 +423,16 @@ function normalizeRepo(payload: SharedRepoPayload): VolundrRepo {
   };
 }
 
-function normalizeRepoList(payload: SharedRepoResponse | SharedRepoPayload[] | VolundrRepo[]): VolundrRepo[] {
+function normalizeRepoList(
+  payload: SharedRepoResponse | SharedRepoPayload[] | VolundrRepo[],
+): VolundrRepo[] {
   if (Array.isArray(payload)) {
     return payload.map((repo) =>
       'cloneUrl' in repo ? repo : normalizeRepo(repo as SharedRepoPayload),
     );
   }
 
-  return Object.values(payload)
-    .flat()
-    .map(normalizeRepo);
+  return Object.values(payload).flat().map(normalizeRepo);
 }
 
 function normalizeModel(payload: ApiModelInfo): VolundrModel {
@@ -443,9 +442,7 @@ function normalizeModel(payload: ApiModelInfo): VolundrModel {
     tier: payload.tier,
     color: payload.color,
     cost:
-      payload.cost_per_million_tokens != null
-        ? `$${payload.cost_per_million_tokens}/M`
-        : undefined,
+      payload.cost_per_million_tokens != null ? `$${payload.cost_per_million_tokens}/M` : undefined,
     vram: payload.vram_required ?? undefined,
   };
 }
@@ -495,9 +492,7 @@ function applyChronicleEvent(
   const existingEvents = existing?.events ?? [];
   const hasEvent = existingEvents.some(
     (event) =>
-      event.t === nextEvent.t &&
-      event.type === nextEvent.type &&
-      event.label === nextEvent.label,
+      event.t === nextEvent.t && event.type === nextEvent.type && event.label === nextEvent.label,
   );
 
   return {
@@ -520,8 +515,24 @@ function trimTrailingSlash(value: string): string {
   return value.endsWith('/') ? value.slice(0, -1) : value;
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '/') {
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
+
+function trimLeadingSlashes(value: string): string {
+  let start = 0;
+  while (start < value.length && value[start] === '/') {
+    start += 1;
+  }
+  return value.slice(start);
+}
+
 function splitSessionPath(path: string): { root: 'workspace' | 'home'; relativePath: string } {
-  const normalized = path.replace(/\/+$/, '') || '/workspace';
+  const normalized = trimTrailingSlashes(path) || '/workspace';
   if (normalized === '/workspace') return { root: 'workspace', relativePath: '' };
   if (normalized === '/home') return { root: 'home', relativePath: '' };
   if (normalized.startsWith('/workspace/')) {
@@ -530,7 +541,7 @@ function splitSessionPath(path: string): { root: 'workspace' | 'home'; relativeP
   if (normalized.startsWith('/home/')) {
     return { root: 'home', relativePath: normalized.slice('/home/'.length) };
   }
-  return { root: 'workspace', relativePath: normalized.replace(/^\/+/, '') };
+  return { root: 'workspace', relativePath: trimLeadingSlashes(normalized) };
 }
 
 function toSessionPath(root: 'workspace' | 'home', relativePath: string): string {
@@ -648,9 +659,11 @@ export function buildVolundrFileSystemHttpAdapter(options: {
       for (const path of paths) {
         const { root, relativePath } = splitSessionPath(path);
         const params = new URLSearchParams({ root, path: relativePath });
-        await ensureOk(await fetchImpl(`${sessionApi(sessionId)}/files?${params.toString()}`, {
-          method: 'DELETE',
-        }));
+        await ensureOk(
+          await fetchImpl(`${sessionApi(sessionId)}/files?${params.toString()}`, {
+            method: 'DELETE',
+          }),
+        );
       }
     },
   };
@@ -741,7 +754,9 @@ export function buildVolundrHttpAdapter(
   }
 
   async function loadChronicle(sessionId: string): Promise<SessionChronicle | null> {
-    const payload = await forgeClient.get<ChroniclePayload | null>(`/chronicles/${sessionId}/timeline`);
+    const payload = await forgeClient.get<ChroniclePayload | null>(
+      `/chronicles/${sessionId}/timeline`,
+    );
     if (!payload) {
       chronicleCache.delete(sessionId);
       return null;
@@ -917,10 +932,14 @@ export function buildVolundrHttpAdapter(
     getActiveSessions: () => loadSessions('/sessions?active=true'),
     getStats: () => loadStats(),
     getModels: async () =>
-      normalizeModelList(await forgeClient.get<ApiModelInfo[] | Record<string, VolundrModel>>('/models')),
+      normalizeModelList(
+        await forgeClient.get<ApiModelInfo[] | Record<string, VolundrModel>>('/models'),
+      ),
     getRepos: async () =>
       normalizeRepoList(
-        await (niuuClient ?? forgeClient).get<SharedRepoResponse | SharedRepoPayload[] | VolundrRepo[]>('/repos'),
+        await (niuuClient ?? forgeClient).get<
+          SharedRepoResponse | SharedRepoPayload[] | VolundrRepo[]
+        >('/repos'),
       ),
 
     subscribe: (callback) => {
@@ -987,8 +1006,7 @@ export function buildVolundrHttpAdapter(
         .get<SessionPayload[]>('/sessions?status=archived')
         .then((sessions) => sessions.map(normalizeSession)),
 
-    getMessages: (sessionId) =>
-      loadMessages(sessionId),
+    getMessages: (sessionId) => loadMessages(sessionId),
     sendMessage: (sessionId, content) =>
       forgeClient.post<VolundrMessage>(`/sessions/${sessionId}/messages`, { content }),
     subscribeMessages: (sessionId, callback) => {
@@ -1005,8 +1023,7 @@ export function buildVolundrHttpAdapter(
       };
     },
 
-    getLogs: (sessionId, limit) =>
-      loadLogs(sessionId, limit),
+    getLogs: (sessionId, limit) => loadLogs(sessionId, limit),
     subscribeLogs: (sessionId, callback) => {
       const connection = ensurePollingConnection(
         logSubscribers,
@@ -1118,7 +1135,9 @@ export function buildVolundrHttpAdapter(
       );
     },
     getCredential: async (name) => {
-      const payload = await credentialsClient.get<CanonicalCredentialPayload | null>(`/user/${name}`);
+      const payload = await credentialsClient.get<CanonicalCredentialPayload | null>(
+        `/user/${name}`,
+      );
       return payload ? normalizeStoredCredential(payload) : null;
     },
     createCredential: async (req: CredentialCreateRequest) => {
@@ -1156,7 +1175,8 @@ export function buildVolundrHttpAdapter(
       sharedClient.get<FeatureModule[]>(`/features/modules${scope ? `?scope=${scope}` : ''}`),
     toggleFeature: (key, enabled) =>
       sharedClient.post<FeatureModule>(`/features/modules/${key}/toggle`, { enabled }),
-    getUserFeaturePreferences: () => sharedClient.get<UserFeaturePreference[]>('/features/preferences'),
+    getUserFeaturePreferences: () =>
+      sharedClient.get<UserFeaturePreference[]>('/features/preferences'),
     updateUserFeaturePreferences: (preferences) =>
       sharedClient.put<UserFeaturePreference[]>('/features/preferences', preferences),
 

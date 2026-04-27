@@ -6,7 +6,7 @@
 /* React Query devtools floating button — present in web-next dev mode,
    absent in web2 prototypes. */
 .tsqd-parent-container,
-[class*="ReactQueryDevtools"],
-button[aria-label="Open Tanstack query devtools"] {
+[class*='ReactQueryDevtools'],
+button[aria-label='Open Tanstack query devtools'] {
   display: none !important;
 }

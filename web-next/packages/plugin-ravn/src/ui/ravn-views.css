@@ -1390,7 +1390,10 @@
   font-size: 11px;
   color: #9ca4b1;
   cursor: pointer;
-  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  transition:
+    border-color 0.12s,
+    color 0.12s,
+    background 0.12s;
   font-family: var(--font-mono);
   font-weight: 700;
   text-transform: lowercase;
@@ -1987,7 +1990,9 @@
   border: none;
   cursor: pointer;
   border-right: 1px solid var(--color-border);
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s;
 }
 .rv-pr-seg__btn:last-child {
   border-right: none;
@@ -2011,7 +2016,9 @@
   border-radius: var(--radius-md);
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s;
   white-space: nowrap;
 }
 .rv-pr-action-btn:hover {

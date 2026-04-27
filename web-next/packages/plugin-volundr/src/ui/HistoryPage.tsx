@@ -147,7 +147,11 @@ export function HistoryPage() {
           </label>
           <div className="history-page__field">
             <span className="history-page__field-label">Outcome</span>
-            <div className="history-page__outcome-group" role="group" aria-label="Filter by outcome">
+            <div
+              className="history-page__outcome-group"
+              role="group"
+              aria-label="Filter by outcome"
+            >
               {(['', 'terminated', 'failed'] as const).map((o) => (
                 <button
                   key={o || 'all'}

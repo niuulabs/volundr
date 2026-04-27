@@ -83,7 +83,9 @@ describe('ClustersPage', () => {
     const user = userEvent.setup();
     renderWithVolundr(<ClustersPage />);
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /Valhalla/i })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Valhalla/i })).toBeInTheDocument(),
+    );
     await user.click(screen.getByRole('button', { name: /Valhalla/i }));
 
     expect(screen.getAllByText('Valhalla').length).toBeGreaterThan(0);
@@ -95,7 +97,9 @@ describe('ClustersPage', () => {
     renderWithVolundr(<ClustersPage />);
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /collapse clusters sidebar/i })).toBeInTheDocument(),
+      expect(
+        screen.getByRole('button', { name: /collapse clusters sidebar/i }),
+      ).toBeInTheDocument(),
     );
 
     await user.click(screen.getByRole('button', { name: /collapse clusters sidebar/i }));

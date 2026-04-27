@@ -111,7 +111,10 @@ function workspaceLabel(workspace: VolundrWorkspace): string {
 }
 
 function normalizeRepoUrl(url: string): string {
-  return url.replace(/^https?:\/\//, '').replace(/\.git$/, '').replace(/\/$/, '');
+  return url
+    .replace(/^https?:\/\//, '')
+    .replace(/\.git$/, '')
+    .replace(/\/$/, '');
 }
 
 function pickDefaultModel(models: Record<string, VolundrModel>): string {
@@ -226,7 +229,8 @@ function getResourceErrors(form: WizardForm, clusterResources: ClusterResourceIn
       continue;
     }
     if (requested > capacity.total) {
-      errors[request.key] = `Exceeds available capacity (${formatResourceValue(capacity.total, capacity.unit)})`;
+      errors[request.key] =
+        `Exceeds available capacity (${formatResourceValue(capacity.total, capacity.unit)})`;
     }
   }
 
@@ -282,9 +286,7 @@ function buildSessionSource(form: WizardForm): SessionSource {
     return {
       type: 'local_mount',
       local_path: hostPath,
-      paths: hostPath
-        ? [{ host_path: hostPath, mount_path: '/workspace', read_only: false }]
-        : [],
+      paths: hostPath ? [{ host_path: hostPath, mount_path: '/workspace', read_only: false }] : [],
     };
   }
 
@@ -316,7 +318,9 @@ function buildResourceConfig(form: WizardForm): Record<string, string> | undefin
 }
 
 function normalizeEnvVars(entries: Array<{ key: string; value: string }>): Record<string, string> {
-  return Object.fromEntries(entries.filter((entry) => entry.key.trim()).map((entry) => [entry.key.trim(), entry.value]));
+  return Object.fromEntries(
+    entries.filter((entry) => entry.key.trim()).map((entry) => [entry.key.trim(), entry.value]),
+  );
 }
 
 function buildPresetRuntimePayload(
@@ -327,7 +331,7 @@ function buildPresetRuntimePayload(
     name: (presetName ?? form.presetId) || 'launch-preset',
     description: '',
     isDefault: false,
-    cliTool: form.cli,
+    cliTool: form.cli as VolundrPreset['cliTool'],
     workloadType: `skuld-${form.cli}`,
     model: form.model || null,
     systemPrompt: form.systemPrompt || null,
@@ -345,7 +349,9 @@ function buildPresetRuntimePayload(
           ? {
               type: 'local_mount',
               local_path: form.mountPath.trim(),
-              paths: [{ host_path: form.mountPath.trim(), mount_path: '/workspace', read_only: false }],
+              paths: [
+                { host_path: form.mountPath.trim(), mount_path: '/workspace', read_only: false },
+              ],
             }
           : null,
     integrationIds: form.selectedIntegrations,
@@ -361,7 +367,9 @@ function buildPresetPayload(
   return buildPresetRuntimePayload(form, presetName);
 }
 
-function buildPresetComparisonPayload(preset: VolundrPreset): Omit<VolundrPreset, 'id' | 'createdAt' | 'updatedAt'> {
+function buildPresetComparisonPayload(
+  preset: VolundrPreset,
+): Omit<VolundrPreset, 'id' | 'createdAt' | 'updatedAt'> {
   return {
     name: preset.name,
     description: preset.description,
@@ -519,7 +527,9 @@ function SectionCard({
     <section className="niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4">
       <div className="niuu-mb-4 niuu-border-b niuu-border-border-subtle niuu-pb-3">
         <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">{title}</h3>
-        {description ? <p className="niuu-mt-1 niuu-text-xs niuu-text-text-faint">{description}</p> : null}
+        {description ? (
+          <p className="niuu-mt-1 niuu-text-xs niuu-text-text-faint">{description}</p>
+        ) : null}
       </div>
       <div className="niuu-flex niuu-flex-col niuu-gap-4">{children}</div>
     </section>
@@ -583,7 +593,9 @@ function RuntimePanel({
     <div className="niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-4">
       <div className="niuu-mb-3">
         <div className="niuu-text-sm niuu-font-medium niuu-text-text-primary">{title}</div>
-        {description ? <div className="niuu-mt-1 niuu-text-xs niuu-text-text-faint">{description}</div> : null}
+        {description ? (
+          <div className="niuu-mt-1 niuu-text-xs niuu-text-text-faint">{description}</div>
+        ) : null}
       </div>
       <div className="niuu-flex niuu-flex-col niuu-gap-4">{children}</div>
     </div>
@@ -802,8 +814,14 @@ function RuntimeStep({
       label: workspaceLabel(workspace),
     })),
   ];
-  const resourceCapacities = useMemo(() => aggregateResourceCapacity(clusterResources), [clusterResources]);
-  const resourceErrors = useMemo(() => getResourceErrors(form, clusterResources), [form, clusterResources]);
+  const resourceCapacities = useMemo(
+    () => aggregateResourceCapacity(clusterResources),
+    [clusterResources],
+  );
+  const resourceErrors = useMemo(
+    () => getResourceErrors(form, clusterResources),
+    [form, clusterResources],
+  );
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [presetName, setPresetName] = useState('');
   const [yamlError, setYamlError] = useState<string | null>(null);
@@ -817,7 +835,9 @@ function RuntimeStep({
   const [customMcpEnvValue, setCustomMcpEnvValue] = useState('');
   const [customMcpEnv, setCustomMcpEnv] = useState<Record<string, string>>({});
   const selectedMcpNames = new Set(form.mcpServers.map((server) => server.name));
-  const availablePresetServers = availableMcpServers.filter((server) => !selectedMcpNames.has(server.name));
+  const availablePresetServers = availableMcpServers.filter(
+    (server) => !selectedMcpNames.has(server.name),
+  );
 
   const resetCustomMcp = useCallback(() => {
     setShowCustomMcp(false);
@@ -903,7 +923,9 @@ function RuntimeStep({
     };
 
     if (!server.name) return;
-    update({ mcpServers: [...form.mcpServers.filter((item) => item.name !== server.name), server] });
+    update({
+      mcpServers: [...form.mcpServers.filter((item) => item.name !== server.name), server],
+    });
     resetCustomMcp();
   }, [
     customMcpArgs,
@@ -955,19 +977,24 @@ function RuntimeStep({
           </div>
           {selectedPreset ? (
             <div className="niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-3 niuu-text-xs niuu-text-text-faint">
-              loaded <span className="niuu-font-mono niuu-text-text-primary">{selectedPreset.name}</span>
+              loaded{' '}
+              <span className="niuu-font-mono niuu-text-text-primary">{selectedPreset.name}</span>
               {selectedPreset.description ? ` · ${selectedPreset.description}` : ''}
             </div>
           ) : (
             <div className="niuu-rounded-lg niuu-border niuu-border-dashed niuu-border-border-subtle niuu-bg-bg-primary niuu-p-3 niuu-text-xs niuu-text-text-faint">
-              No preset loaded. Advanced runtime values will be materialized into a preset at launch if needed.
+              No preset loaded. Advanced runtime values will be materialized into a preset at launch
+              if needed.
             </div>
           )}
         </SectionCard>
       ) : null}
 
       <div className="niuu-grid niuu-grid-cols-[1.2fr_0.8fr] niuu-gap-6">
-        <SectionCard title="Runtime" description="Choose the CLI agent, model, workspace, and launch prompts.">
+        <SectionCard
+          title="Runtime"
+          description="Choose the CLI agent, model, workspace, and launch prompts."
+        >
           <div className="niuu-flex niuu-flex-wrap niuu-gap-2">
             {CLI_OPTIONS.map((opt) => (
               <button
@@ -1043,7 +1070,10 @@ function RuntimeStep({
           </RuntimePanel>
         </SectionCard>
 
-        <SectionCard title="Resources" description="Request runtime capacity with live guardrails from Forge.">
+        <SectionCard
+          title="Resources"
+          description="Request runtime capacity with live guardrails from Forge."
+        >
           <Field label="CPU (cores)">
             <Input
               value={form.cpu}
@@ -1093,10 +1123,15 @@ function RuntimeStep({
         </SectionCard>
       </div>
 
-      <SectionCard title="Access" description="Attach credentials and enabled integrations to the session.">
+      <SectionCard
+        title="Access"
+        description="Attach credentials and enabled integrations to the session."
+      >
         <div className="niuu-grid niuu-grid-cols-2 niuu-gap-6">
           <div className="niuu-flex niuu-flex-col niuu-gap-2">
-            <span className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">Credentials</span>
+            <span className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">
+              Credentials
+            </span>
             <div className="niuu-grid niuu-grid-cols-2 niuu-gap-2">
               {credentials.map((credential) => (
                 <label
@@ -1120,7 +1155,9 @@ function RuntimeStep({
             </div>
           </div>
           <div className="niuu-flex niuu-flex-col niuu-gap-2">
-            <span className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">Integrations</span>
+            <span className="niuu-text-sm niuu-font-medium niuu-text-text-secondary">
+              Integrations
+            </span>
             <div className="niuu-grid niuu-grid-cols-2 niuu-gap-2">
               {integrations.map((integration) => (
                 <label
@@ -1153,7 +1190,10 @@ function RuntimeStep({
         </div>
       </SectionCard>
 
-      <SectionCard title="Advanced" description="Prompts, MCP wiring, environment variables, and setup scripts.">
+      <SectionCard
+        title="Advanced"
+        description="Prompts, MCP wiring, environment variables, and setup scripts."
+      >
         <div className="niuu-flex niuu-items-center niuu-gap-2">
           <button
             type="button"
@@ -1186,7 +1226,10 @@ function RuntimeStep({
         ) : null}
         {showAdvanced && !form.yamlMode ? (
           <div className="niuu-flex niuu-flex-col niuu-gap-6">
-            <RuntimePanel title="System prompt" description="Override the default agent behavior for this run.">
+            <RuntimePanel
+              title="System prompt"
+              description="Override the default agent behavior for this run."
+            >
               <Textarea
                 value={form.systemPrompt}
                 onChange={(e) => update({ systemPrompt: e.target.value })}
@@ -1195,7 +1238,10 @@ function RuntimeStep({
               />
             </RuntimePanel>
 
-            <RuntimePanel title="MCP servers" description="Attach preset-backed tools and custom MCP definitions.">
+            <RuntimePanel
+              title="MCP servers"
+              description="Attach preset-backed tools and custom MCP definitions."
+            >
               <div className="niuu-flex niuu-flex-col niuu-gap-2">
                 {form.mcpServers.length > 0 ? (
                   <div className="niuu-grid niuu-grid-cols-2 niuu-gap-2">
@@ -1205,12 +1251,18 @@ function RuntimeStep({
                         className="niuu-flex niuu-flex-col niuu-gap-1 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-px-3 niuu-py-2 niuu-text-xs"
                       >
                         <div className="niuu-flex niuu-items-center niuu-justify-between niuu-gap-2">
-                          <span className="niuu-font-mono niuu-text-text-primary">{server.name}</span>
+                          <span className="niuu-font-mono niuu-text-text-primary">
+                            {server.name}
+                          </span>
                           <button
                             type="button"
                             className="niuu-text-text-faint hover:niuu-text-text-primary"
                             onClick={() =>
-                              update({ mcpServers: form.mcpServers.filter((item) => item.name !== server.name) })
+                              update({
+                                mcpServers: form.mcpServers.filter(
+                                  (item) => item.name !== server.name,
+                                ),
+                              })
                             }
                           >
                             remove
@@ -1219,7 +1271,7 @@ function RuntimeStep({
                         <span className="niuu-text-text-faint">
                           {server.type === 'stdio'
                             ? [server.command, ...(server.args ?? [])].filter(Boolean).join(' ')
-                            : server.url ?? server.type}
+                            : (server.url ?? server.type)}
                         </span>
                       </div>
                     ))}
@@ -1256,7 +1308,11 @@ function RuntimeStep({
                 {showCustomMcp ? (
                   <div className="niuu-grid niuu-grid-cols-2 niuu-gap-3 niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-3">
                     <Field label="Name">
-                      <Input value={customMcpName} onChange={(e) => setCustomMcpName(e.target.value)} placeholder="filesystem" />
+                      <Input
+                        value={customMcpName}
+                        onChange={(e) => setCustomMcpName(e.target.value)}
+                        placeholder="filesystem"
+                      />
                     </Field>
                     <Field label="Type">
                       <WizardSelect
@@ -1272,21 +1328,36 @@ function RuntimeStep({
                     {customMcpType === 'stdio' ? (
                       <>
                         <Field label="Command">
-                          <Input value={customMcpCommand} onChange={(e) => setCustomMcpCommand(e.target.value)} placeholder="uvx" />
+                          <Input
+                            value={customMcpCommand}
+                            onChange={(e) => setCustomMcpCommand(e.target.value)}
+                            placeholder="uvx"
+                          />
                         </Field>
                         <Field label="Args">
-                          <Input value={customMcpArgs} onChange={(e) => setCustomMcpArgs(e.target.value)} placeholder="mcp-filesystem /workspace" />
+                          <Input
+                            value={customMcpArgs}
+                            onChange={(e) => setCustomMcpArgs(e.target.value)}
+                            placeholder="mcp-filesystem /workspace"
+                          />
                         </Field>
                       </>
                     ) : (
                       <Field label="URL">
-                        <Input value={customMcpUrl} onChange={(e) => setCustomMcpUrl(e.target.value)} placeholder="http://localhost:3000/sse" />
+                        <Input
+                          value={customMcpUrl}
+                          onChange={(e) => setCustomMcpUrl(e.target.value)}
+                          placeholder="http://localhost:3000/sse"
+                        />
                       </Field>
                     )}
                     <div className="niuu-col-span-2 niuu-flex niuu-flex-col niuu-gap-2">
                       <span className="niuu-text-xs niuu-text-text-faint">Custom environment</span>
                       {Object.entries(customMcpEnv).map(([key, value]) => (
-                        <div key={key} className="niuu-grid niuu-grid-cols-[1fr_1fr_auto] niuu-gap-2">
+                        <div
+                          key={key}
+                          className="niuu-grid niuu-grid-cols-[1fr_1fr_auto] niuu-gap-2"
+                        >
                           <Input value={key} readOnly />
                           <Input value={value} readOnly />
                           <button
@@ -1303,8 +1374,16 @@ function RuntimeStep({
                         </div>
                       ))}
                       <div className="niuu-grid niuu-grid-cols-[1fr_1fr_auto] niuu-gap-2">
-                        <Input value={customMcpEnvKey} onChange={(e) => setCustomMcpEnvKey(e.target.value)} placeholder="KEY" />
-                        <Input value={customMcpEnvValue} onChange={(e) => setCustomMcpEnvValue(e.target.value)} placeholder="value" />
+                        <Input
+                          value={customMcpEnvKey}
+                          onChange={(e) => setCustomMcpEnvKey(e.target.value)}
+                          placeholder="KEY"
+                        />
+                        <Input
+                          value={customMcpEnvValue}
+                          onChange={(e) => setCustomMcpEnvValue(e.target.value)}
+                          placeholder="value"
+                        />
                         <button
                           type="button"
                           className={MUTED_BUTTON_CLASS}
@@ -1328,7 +1407,9 @@ function RuntimeStep({
                           onClick={handleAddCustomMcp}
                           disabled={
                             !customMcpName.trim() ||
-                            (customMcpType === 'stdio' ? !customMcpCommand.trim() : !customMcpUrl.trim())
+                            (customMcpType === 'stdio'
+                              ? !customMcpCommand.trim()
+                              : !customMcpUrl.trim())
                           }
                         >
                           add server
@@ -1348,7 +1429,10 @@ function RuntimeStep({
             </RuntimePanel>
 
             <div className="niuu-grid niuu-grid-cols-2 niuu-gap-6">
-              <RuntimePanel title="Environment variables" description="Inline env overrides for the launched session.">
+              <RuntimePanel
+                title="Environment variables"
+                description="Inline env overrides for the launched session."
+              >
                 {form.envVars.length === 0 ? (
                   <div className="niuu-rounded-md niuu-border niuu-border-dashed niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-3 niuu-text-xs niuu-text-text-faint">
                     No environment variables yet. Add one below.
@@ -1356,7 +1440,10 @@ function RuntimeStep({
                 ) : null}
                 <div className="niuu-flex niuu-flex-col niuu-gap-2">
                   {form.envVars.map((entry, index) => (
-                    <div key={`${entry.key}-${index}`} className="niuu-grid niuu-grid-cols-[1fr_1fr_auto] niuu-gap-2">
+                    <div
+                      key={`${entry.key}-${index}`}
+                      className="niuu-grid niuu-grid-cols-[1fr_1fr_auto] niuu-gap-2"
+                    >
                       <Input
                         value={entry.key}
                         onChange={(e) =>
@@ -1383,7 +1470,9 @@ function RuntimeStep({
                         type="button"
                         className={SECONDARY_BUTTON_CLASS}
                         onClick={() =>
-                          update({ envVars: form.envVars.filter((_, itemIndex) => itemIndex !== index) })
+                          update({
+                            envVars: form.envVars.filter((_, itemIndex) => itemIndex !== index),
+                          })
                         }
                       >
                         remove
@@ -1399,7 +1488,10 @@ function RuntimeStep({
                   add env var
                 </button>
               </RuntimePanel>
-              <RuntimePanel title="Setup scripts" description="Commands to run before the first prompt hits the pod.">
+              <RuntimePanel
+                title="Setup scripts"
+                description="Commands to run before the first prompt hits the pod."
+              >
                 {form.setupScripts.length === 0 ? (
                   <div className="niuu-rounded-md niuu-border niuu-border-dashed niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-3 niuu-text-xs niuu-text-text-faint">
                     No setup scripts yet. Add one below.
@@ -1407,7 +1499,10 @@ function RuntimeStep({
                 ) : null}
                 <div className="niuu-flex niuu-flex-col niuu-gap-2">
                   {form.setupScripts.map((script, index) => (
-                    <div key={`${index}-${script}`} className="niuu-grid niuu-grid-cols-[1fr_auto] niuu-gap-2">
+                    <div
+                      key={`${index}-${script}`}
+                      className="niuu-grid niuu-grid-cols-[1fr_auto] niuu-gap-2"
+                    >
                       <Input
                         value={script}
                         onChange={(e) =>
@@ -1424,7 +1519,9 @@ function RuntimeStep({
                         className={SECONDARY_BUTTON_CLASS}
                         onClick={() =>
                           update({
-                            setupScripts: form.setupScripts.filter((_, itemIndex) => itemIndex !== index),
+                            setupScripts: form.setupScripts.filter(
+                              (_, itemIndex) => itemIndex !== index,
+                            ),
                           })
                         }
                       >
@@ -1472,7 +1569,10 @@ function ConfirmStep({
   });
   return (
     <div className="niuu-flex niuu-flex-col niuu-gap-4" data-testid="step-confirm-content">
-      <SectionCard title="Launch summary" description="Final review before Forge provisions the session.">
+      <SectionCard
+        title="Launch summary"
+        description="Final review before Forge provisions the session."
+      >
         <div className="niuu-flex niuu-flex-col niuu-divide-y niuu-divide-border-subtle">
           <ConfirmRow label="session" value={deriveSessionName(form, tpl)} />
           <ConfirmRow label="template" value={tpl?.name ?? form.templateId} />
@@ -1495,14 +1595,21 @@ function ConfirmStep({
           <ConfirmRow label="workspace" value={form.workspaceId || 'new'} />
           <ConfirmRow
             label="tracker"
-            value={form.trackerIssue ? `${form.trackerIssue.identifier} · ${form.trackerIssue.title}` : 'none'}
+            value={
+              form.trackerIssue
+                ? `${form.trackerIssue.identifier} · ${form.trackerIssue.title}`
+                : 'none'
+            }
           />
           <ConfirmRow label="permission" value={form.permission} />
         </div>
       </SectionCard>
 
       <div className="niuu-grid niuu-grid-cols-2 niuu-gap-4">
-        <SectionCard title="Attached access" description="Secrets and integrations that will be available immediately.">
+        <SectionCard
+          title="Attached access"
+          description="Secrets and integrations that will be available immediately."
+        >
           <ConfirmChipList
             title="Credentials"
             items={form.selectedCredentials}
@@ -1515,7 +1622,10 @@ function ConfirmStep({
           />
         </SectionCard>
 
-        <SectionCard title="Advanced runtime" description="Additional runtime wiring and bootstrap instructions.">
+        <SectionCard
+          title="Advanced runtime"
+          description="Additional runtime wiring and bootstrap instructions."
+        >
           <ConfirmChipList
             title="MCP servers"
             items={form.mcpServers.map((server) => server.name)}
@@ -1523,7 +1633,9 @@ function ConfirmStep({
           />
           <ConfirmChipList
             title="Environment"
-            items={form.envVars.filter((entry) => entry.key.trim()).map((entry) => `${entry.key}=${entry.value}`)}
+            items={form.envVars
+              .filter((entry) => entry.key.trim())
+              .map((entry) => `${entry.key}=${entry.value}`)}
             emptyLabel="No custom environment variables"
           />
           <ConfirmChipList
@@ -1531,17 +1643,19 @@ function ConfirmStep({
             items={form.setupScripts.filter((script) => script.trim())}
             emptyLabel="No setup scripts"
           />
-          {(form.systemPrompt.trim() || form.initialPrompt.trim()) ? (
+          {form.systemPrompt.trim() || form.initialPrompt.trim() ? (
             <div className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-3">
               <div className="niuu-text-xs niuu-text-text-faint">Prompt overrides</div>
               {form.systemPrompt.trim() ? (
                 <div className="niuu-mt-2 niuu-text-xs niuu-text-text-secondary">
-                  <span className="niuu-font-mono niuu-text-text-primary">system</span> · {form.systemPrompt}
+                  <span className="niuu-font-mono niuu-text-text-primary">system</span> ·{' '}
+                  {form.systemPrompt}
                 </div>
               ) : null}
               {form.initialPrompt.trim() ? (
                 <div className="niuu-mt-2 niuu-text-xs niuu-text-text-secondary">
-                  <span className="niuu-font-mono niuu-text-text-primary">initial</span> · {form.initialPrompt}
+                  <span className="niuu-font-mono niuu-text-text-primary">initial</span> ·{' '}
+                  {form.initialPrompt}
                 </div>
               ) : null}
             </div>
@@ -1758,15 +1872,15 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
         nextPresets,
         nextMcpServers,
       ]) => {
-      if (cancelled) return;
-      setRepos(nextRepos);
-      setModels(nextModels);
-      setWorkspaces(nextWorkspaces);
-      setCredentials(nextCredentials);
-      setIntegrations(nextIntegrations);
-      setClusterResources(nextClusterResources);
-      setPresets(nextPresets);
-      setAvailableMcpServers(nextMcpServers);
+        if (cancelled) return;
+        setRepos(nextRepos);
+        setModels(nextModels);
+        setWorkspaces(nextWorkspaces);
+        setCredentials(nextCredentials);
+        setIntegrations(nextIntegrations);
+        setClusterResources(nextClusterResources);
+        setPresets(nextPresets);
+        setAvailableMcpServers(nextMcpServers);
       },
     );
 
@@ -1919,11 +2033,7 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
       setForm((current) => {
         const next = { ...current, ...patch };
 
-        if (
-          patch.sourcetype === 'git' &&
-          !next.repo &&
-          repos.length > 0
-        ) {
+        if (patch.sourcetype === 'git' && !next.repo && repos.length > 0) {
           next.repo = repos[0]!.cloneUrl;
           next.branch = repos[0]!.defaultBranch;
         }

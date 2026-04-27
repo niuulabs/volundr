@@ -355,13 +355,15 @@
   gap: 10px;
 }
 
-.rv-personas__detail-body .niuu-flex.niuu-items-start.niuu-gap-2.niuu-p-3.niuu-bg-bg-secondary.niuu-rounded-md.niuu-border.niuu-border-border-subtle {
+.rv-personas__detail-body
+  .niuu-flex.niuu-items-start.niuu-gap-2.niuu-p-3.niuu-bg-bg-secondary.niuu-rounded-md.niuu-border.niuu-border-border-subtle {
   padding: 10px 12px;
   gap: 10px;
 }
 
 .rv-personas__detail-body .niuu-inline-flex.niuu-items-center.niuu-gap-1.niuu-px-2.niuu-py-0,
-.rv-personas__detail-body .niuu-inline-flex.niuu-items-center.niuu-gap-1.niuu-px-2.niuu-py-0.niuu-rounded {
+.rv-personas__detail-body
+  .niuu-inline-flex.niuu-items-center.niuu-gap-1.niuu-px-2.niuu-py-0.niuu-rounded {
   min-height: 24px;
   font-size: 10px;
 }

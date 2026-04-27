@@ -105,6 +105,7 @@ export interface MountMapping {
 export interface LocalMountSource {
   type: 'local_mount';
   local_path?: string;
+  path?: string;
   paths: MountMapping[];
   node_selector?: Record<string, string>;
 }
@@ -327,6 +328,8 @@ export interface TerminalSidecarConfig {
   restricted?: boolean;
 }
 
+export type CliTool = 'claude' | 'codex' | 'gemini' | 'aider';
+
 export interface VolundrTemplate {
   name: string;
   description: string;
@@ -334,7 +337,7 @@ export interface VolundrTemplate {
   repos: TemplateRepo[];
   setupScripts: string[];
   workspaceLayout: Record<string, unknown>;
-  cliTool: string;
+  cliTool: CliTool;
   workloadType: string;
   model: string | null;
   systemPrompt: string | null;
@@ -355,7 +358,7 @@ export interface VolundrPreset {
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;
-  cliTool: string;
+  cliTool: CliTool;
   workloadType: string;
   model: string | null;
   systemPrompt: string | null;

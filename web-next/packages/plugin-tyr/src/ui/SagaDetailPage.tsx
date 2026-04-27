@@ -1,10 +1,5 @@
 import { useNavigate, useParams } from '@tanstack/react-router';
-import {
-  LoadingState,
-  ErrorState,
-  EmptyState,
-  PersonaAvatar,
-} from '@niuulabs/ui';
+import { LoadingState, ErrorState, EmptyState, PersonaAvatar } from '@niuulabs/ui';
 import type { PersonaRole } from '@niuulabs/domain';
 import type { RaidStatus, Saga, Phase, Raid } from '../domain/saga';
 import { useSaga } from './useSaga';
@@ -41,7 +36,8 @@ function statusLabel(status: RaidStatus | Saga['status'] | Phase['status']): str
 function statusClasses(status: RaidStatus | Saga['status'] | Phase['status']): string {
   const base =
     'niuu-inline-flex niuu-items-center niuu-gap-2 niuu-min-w-[116px] niuu-justify-center niuu-rounded-full niuu-border niuu-px-3 niuu-py-1 niuu-text-[11px] niuu-font-mono niuu-tracking-[0.1em]';
-  if (status === 'failed') return `${base} niuu-border-critical/50 niuu-text-critical-fg niuu-bg-critical-bg`;
+  if (status === 'failed')
+    return `${base} niuu-border-critical/50 niuu-text-critical-fg niuu-bg-critical-bg`;
   if (status === 'complete' || status === 'merged')
     return `${base} niuu-border-border niuu-text-text-primary niuu-bg-bg-tertiary`;
   if (status === 'active' || status === 'running' || status === 'review')
@@ -103,8 +99,10 @@ function glyphForRole(role: PersonaRole): string {
 
 function phaseDotClasses(status: Phase['status']): string {
   const base = 'niuu-w-3 niuu-h-3 niuu-rounded-full niuu-shrink-0';
-  if (status === 'complete') return `${base} niuu-bg-brand/90 niuu-shadow-[0_0_0_2px_rgba(125,211,252,0.14)]`;
-  if (status === 'active') return `${base} niuu-bg-brand niuu-shadow-[0_0_0_4px_rgba(125,211,252,0.10)]`;
+  if (status === 'complete')
+    return `${base} niuu-bg-brand/90 niuu-shadow-[0_0_0_2px_rgba(125,211,252,0.14)]`;
+  if (status === 'active')
+    return `${base} niuu-bg-brand niuu-shadow-[0_0_0_4px_rgba(125,211,252,0.10)]`;
   if (status === 'gated') return `${base} niuu-bg-accent-amber`;
   return `${base} niuu-bg-text-muted/40`;
 }
@@ -227,7 +225,9 @@ export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPag
               <div className="niuu-mb-1 niuu-text-[12px] niuu-font-mono niuu-tracking-[0.08em] niuu-text-text-muted niuu-uppercase">
                 {`${saga.trackerId} · ${saga.name}`}
               </div>
-              <div className="niuu-text-[13px] niuu-font-mono niuu-text-text-muted">{branchLabel}</div>
+              <div className="niuu-text-[13px] niuu-font-mono niuu-text-text-muted">
+                {branchLabel}
+              </div>
             </div>
           </div>
 

@@ -76,7 +76,8 @@ export function PersonaList({
   const data = personas ?? query.data;
   const isLoading = isLoadingOverride ?? query.isLoading;
   const errorMessage =
-    errorOverride ?? (query.error instanceof Error ? query.error.message : 'Failed to load personas');
+    errorOverride ??
+    (query.error instanceof Error ? query.error.message : 'Failed to load personas');
   const isError = errorOverride != null || query.isError;
 
   if (isLoading) {
@@ -120,7 +121,10 @@ export function PersonaList({
   return (
     <nav
       aria-label="Personas"
-      className={cn('niuu-flex niuu-flex-col niuu-overflow-y-auto niuu-h-full niuu-py-2', className)}
+      className={cn(
+        'niuu-flex niuu-flex-col niuu-overflow-y-auto niuu-h-full niuu-py-2',
+        className,
+      )}
       data-testid={dataTestId}
     >
       {PERSONA_ROLE_ORDER.map((role) => {
@@ -138,7 +142,9 @@ export function PersonaList({
                 <span className="rv-persona-role-header__title">
                   {ROLE_LABEL[role].toLowerCase()}
                 </span>
-                {showRoleHint && <span className="rv-persona-role-header__hint">{ROLE_HINT[role]}</span>}
+                {showRoleHint && (
+                  <span className="rv-persona-role-header__hint">{ROLE_HINT[role]}</span>
+                )}
               </div>
               <span className="rv-persona-role-header__count">{personas.length}</span>
             </div>

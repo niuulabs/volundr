@@ -105,7 +105,9 @@ describe('useSkuldChat', () => {
     const running = result.current.messages.at(-1);
     expect(running?.status).toBe('running');
     expect(running?.visibility).toBe('internal');
-    expect(running?.parts).toEqual([{ type: 'reasoning', text: 'Need to inspect the config first.' }]);
+    expect(running?.parts).toEqual([
+      { type: 'reasoning', text: 'Need to inspect the config first.' },
+    ]);
   });
 
   it('creates a single Skuld participant for non-room assistant sessions', async () => {
@@ -174,7 +176,7 @@ describe('useSkuldChat', () => {
           type: 'content_block_delta',
           delta: {
             type: 'input_json_delta',
-            partial_json: '{\"file_path\":\"/tmp/demo.ts\"}',
+            partial_json: '{"file_path":"/tmp/demo.ts"}',
           },
         }),
       );

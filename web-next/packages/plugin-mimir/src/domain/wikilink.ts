@@ -8,8 +8,6 @@
 
 import type { PageMeta } from './page';
 
-const WIKILINK_RE = /\[\[([^\]]+)]]/g;
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -28,6 +26,23 @@ export interface WikilinkTarget {
 /** A single part produced by {@link splitWikilinks}. */
 export type WikilinkPart = { kind: 'text'; value: string } | { kind: 'link'; slug: string };
 
+function findNextWikilink(
+  text: string,
+  startAt: number,
+): { start: number; end: number; slug: string } | null {
+  const open = text.indexOf('[[', startAt);
+  if (open === -1) return null;
+
+  const close = text.indexOf(']]', open + 2);
+  if (close === -1) return null;
+
+  return {
+    start: open,
+    end: close + 2,
+    slug: text.slice(open + 2, close).trim(),
+  };
+}
+
 /**
  * Split text into interleaved plain-text and wikilink parts for inline rendering.
  *
@@ -42,15 +57,18 @@ export type WikilinkPart = { kind: 'text'; value: string } | { kind: 'link'; slu
  */
 export function splitWikilinks(text: string): WikilinkPart[] {
   const parts: WikilinkPart[] = [];
-  const re = /\[\[([^\]]+)]]/g;
   let last = 0;
-  for (const match of text.matchAll(re)) {
-    if (match.index > last) {
-      parts.push({ kind: 'text', value: text.slice(last, match.index) });
+  let next = findNextWikilink(text, 0);
+
+  while (next) {
+    if (next.start > last) {
+      parts.push({ kind: 'text', value: text.slice(last, next.start) });
     }
-    parts.push({ kind: 'link', slug: match[1]!.trim() });
-    last = match.index + match[0].length;
+    parts.push({ kind: 'link', slug: next.slug });
+    last = next.end;
+    next = findNextWikilink(text, last);
   }
+
   if (last < text.length) {
     parts.push({ kind: 'text', value: text.slice(last) });
   }
@@ -60,9 +78,13 @@ export function splitWikilinks(text: string): WikilinkPart[] {
 /** Extract all [[slug]] patterns from a text string. */
 export function parseWikilinks(text: string): string[] {
   const slugs: string[] = [];
-  for (const match of text.matchAll(WIKILINK_RE)) {
-    if (match[1] !== undefined) slugs.push(match[1].trim());
+  let next = findNextWikilink(text, 0);
+
+  while (next) {
+    slugs.push(next.slug);
+    next = findNextWikilink(text, next.end);
   }
+
   return slugs;
 }
 

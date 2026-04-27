@@ -248,9 +248,7 @@ describe('useWorkflowBuilder — startConnect / cancelConnect / completeConnect'
       (e) => e.source === 'stage-1' && e.target === 'gate-1',
     );
     expect(edges).toHaveLength(2);
-    expect(
-      edges.filter((e) => e.label === 'qa.report -> review.verdict'),
-    ).toHaveLength(1);
+    expect(edges.filter((e) => e.label === 'qa.report -> review.verdict')).toHaveLength(1);
   });
 
   it('completeConnect to self does nothing', () => {

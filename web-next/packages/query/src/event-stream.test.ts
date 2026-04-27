@@ -60,7 +60,9 @@ describe('openEventStream', () => {
   });
 
   it('passes through SSE event names when provided', async () => {
-    global.fetch = vi.fn(async () => mockSseResponse(['event: stats_updated\ndata: {"count":1}\n\n']));
+    global.fetch = vi.fn(async () =>
+      mockSseResponse(['event: stats_updated\ndata: {"count":1}\n\n']),
+    );
     const seen: Array<{ event?: string; data: string }> = [];
 
     const handle = openEventStream('/stream', {

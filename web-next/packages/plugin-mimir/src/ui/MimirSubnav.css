@@ -55,7 +55,9 @@
   cursor: pointer;
   text-align: left;
   width: 100%;
-  transition: background 0.1s, border-color 0.1s;
+  transition:
+    background 0.1s,
+    border-color 0.1s;
 }
 
 .mm-mount-row:hover {
@@ -128,7 +130,9 @@
   color: var(--color-text-secondary);
   border-radius: var(--radius-sm);
   font-size: 13px;
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s;
 }
 
 .mm-subnav-btn:hover {

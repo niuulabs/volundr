@@ -45,8 +45,10 @@ from niuu.domain.mimir import (
     compute_content_hash,
 )
 from niuu.ports.mimir import MimirPort
+from ravn.adapters.tools._url_security import check_ssrf
 
 logger = logging.getLogger(__name__)
+_ALLOWED_INGEST_URL_SCHEMES = {"http", "https"}
 
 # ---------------------------------------------------------------------------
 # Request / response models
@@ -230,6 +232,26 @@ class DreamCycleResponse(BaseModel):
     entities_created: int
     lint_fixes: int
     duration_ms: int
+
+
+def _validated_ingest_url(raw_url: str) -> str:
+    parsed = urlparse(raw_url)
+    if parsed.scheme not in _ALLOWED_INGEST_URL_SCHEMES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported URL scheme: {parsed.scheme or 'unknown'}",
+        )
+    if not parsed.hostname:
+        raise HTTPException(status_code=400, detail="Invalid URL: no hostname")
+
+    block_reason = check_ssrf(parsed.hostname)
+    if block_reason:
+        raise HTTPException(status_code=400, detail=block_reason)
+
+    safe_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path or ''}"
+    if parsed.query:
+        safe_url = f"{safe_url}?{parsed.query}"
+    return safe_url
 
 
 class ActivityEventResponse(BaseModel):
@@ -1153,9 +1175,10 @@ class MimirRouter:
             request: UrlIngestRequest,
             _auth: None = Depends(_require_write_auth),
         ) -> SourceResponse:
+            safe_url = _validated_ingest_url(request.url)
             try:
                 async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
-                    response = await client.get(request.url)
+                    response = await client.get(safe_url)
                     response.raise_for_status()
             except httpx.HTTPError as exc:
                 raise HTTPException(

@@ -147,9 +147,7 @@ export function OverviewView() {
                     <span className="niuu-font-mono niuu-text-xs niuu-text-text-secondary">
                       <strong
                         className={
-                          mount.lintIssues > 10
-                            ? 'niuu-text-brand-400'
-                            : 'niuu-text-text-primary'
+                          mount.lintIssues > 10 ? 'niuu-text-brand-400' : 'niuu-text-text-primary'
                         }
                       >
                         {mount.lintIssues}
@@ -256,7 +254,8 @@ export function OverviewView() {
                         style={{ width: 28, height: 28, borderRadius: 'var(--radius-sm)' }}
                         aria-hidden
                       >
-                        {ravn.ravnId.charAt(0)}{ravn.ravnId.charAt(ravn.ravnId.length - 1)}
+                        {ravn.ravnId.charAt(0)}
+                        {ravn.ravnId.charAt(ravn.ravnId.length - 1)}
                       </span>
                       <div className="niuu-flex-1 niuu-min-w-0">
                         <div className="niuu-flex niuu-items-center niuu-gap-2">

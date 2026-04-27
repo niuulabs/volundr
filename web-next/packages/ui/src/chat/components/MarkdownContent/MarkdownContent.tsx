@@ -81,14 +81,14 @@ type Segment =
 
 function parseSegments(text: string): Segment[] {
   const segments: Segment[] = [];
-  const remaining = text;
-  const codeBlockRe = /```(\w*)\n?([\s\S]*?)```/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  let cursor = 0;
 
-  while ((match = codeBlockRe.exec(remaining)) !== null) {
-    if (match.index > lastIndex) {
-      const textChunk = remaining.slice(lastIndex, match.index);
+  while (cursor < text.length) {
+    const fenceStart = text.indexOf('```', cursor);
+    if (fenceStart === -1) break;
+
+    if (fenceStart > cursor) {
+      const textChunk = text.slice(cursor, fenceStart);
       const outcome = extractOutcomeBlock(textChunk);
       if (outcome) {
         if (outcome.before.trim()) segments.push({ type: 'text', content: outcome.before });
@@ -98,17 +98,26 @@ function parseSegments(text: string): Segment[] {
         segments.push({ type: 'text', content: textChunk });
       }
     }
-    const lang = match[1] === 'outcome' ? 'outcome' : (match[1] ?? '');
+
+    const languageStart = fenceStart + 3;
+    const newlineIndex = text.indexOf('\n', languageStart);
+    if (newlineIndex === -1) break;
+
+    const fenceEnd = text.indexOf('```', newlineIndex + 1);
+    if (fenceEnd === -1) break;
+
+    const lang = text.slice(languageStart, newlineIndex).trim();
+    const code = text.slice(newlineIndex + 1, fenceEnd);
     if (lang === 'outcome') {
-      segments.push({ type: 'outcome', raw: (match[2] ?? '').trim() });
+      segments.push({ type: 'outcome', raw: code.trim() });
     } else {
-      segments.push({ type: 'code', language: lang, content: match[2] ?? '' });
+      segments.push({ type: 'code', language: lang, content: code });
     }
-    lastIndex = match.index + match[0].length;
+    cursor = fenceEnd + 3;
   }
 
-  if (lastIndex < remaining.length) {
-    const textChunk = remaining.slice(lastIndex);
+  if (cursor < text.length) {
+    const textChunk = text.slice(cursor);
     const outcome = extractOutcomeBlock(textChunk);
     if (outcome) {
       if (outcome.before.trim()) segments.push({ type: 'text', content: outcome.before });
@@ -139,13 +148,13 @@ function TextSegment({ content, isStreaming }: { content: string; isStreaming?: 
     }
 
     // Heading
-    const headingMatch = /^(#{1,6})\s+(.+)$/.exec(line);
+    const headingMatch = parseHeading(line);
     if (headingMatch) {
-      const level = (headingMatch[1] ?? '').length as 1 | 2 | 3 | 4 | 5 | 6;
+      const level = headingMatch.level;
       const Tag = `h${level}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
       elements.push(
         <Tag key={i} className={`niuu-chat-md-h${level}`}>
-          {headingMatch[2] ?? ''}
+          {headingMatch.text}
         </Tag>,
       );
       i++;
@@ -164,12 +173,15 @@ function TextSegment({ content, isStreaming }: { content: string; isStreaming?: 
     }
 
     // Unordered list item
-    if (/^[-*+]\s/.test(line)) {
+    const unorderedItem = parseUnorderedListItem(line);
+    if (unorderedItem !== null) {
       const listItems: string[] = [];
       while (i < lines.length) {
         const ln = lines[i];
-        if (!ln || !/^[-*+]\s/.test(ln)) break;
-        listItems.push(ln.replace(/^[-*+]\s/, ''));
+        if (!ln) break;
+        const item = parseUnorderedListItem(ln);
+        if (item === null) break;
+        listItems.push(item);
         i++;
       }
       elements.push(
@@ -183,12 +195,15 @@ function TextSegment({ content, isStreaming }: { content: string; isStreaming?: 
     }
 
     // Ordered list item
-    if (/^\d+\.\s/.test(line)) {
+    const orderedItem = parseOrderedListItem(line);
+    if (orderedItem !== null) {
       const listItems: string[] = [];
       while (i < lines.length) {
         const ln = lines[i];
-        if (!ln || !/^\d+\.\s/.test(ln)) break;
-        listItems.push(ln.replace(/^\d+\.\s/, ''));
+        if (!ln) break;
+        const item = parseOrderedListItem(ln);
+        if (item === null) break;
+        listItems.push(item);
         i++;
       }
       elements.push(
@@ -223,43 +238,120 @@ function TextSegment({ content, isStreaming }: { content: string; isStreaming?: 
 }
 
 function renderInline(text: string): React.ReactNode {
-  // Handle bold (**text**), inline code (`code`), and links [text](url)
   const parts: React.ReactNode[] = [];
-  const inlineRe = /(\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
-  let last = 0;
-  let match: RegExpExecArray | null;
+  let cursor = 0;
   let key = 0;
 
-  while ((match = inlineRe.exec(text)) !== null) {
-    if (match.index > last) {
-      parts.push(text.slice(last, match.index));
+  while (cursor < text.length) {
+    if (text.startsWith('**', cursor)) {
+      const end = text.indexOf('**', cursor + 2);
+      if (end !== -1) {
+        parts.push(<strong key={key++}>{text.slice(cursor + 2, end)}</strong>);
+        cursor = end + 2;
+        continue;
+      }
     }
-    if (match[2]) {
-      parts.push(<strong key={key++}>{match[2]}</strong>);
-    } else if (match[3]) {
-      parts.push(
-        <code key={key++} className="niuu-chat-md-inline-code">
-          {match[3]}
-        </code>,
-      );
-    } else if (match[4] && match[5]) {
-      parts.push(
-        <a
-          key={key++}
-          href={match[5]}
-          className="niuu-chat-md-link"
-          target="_blank"
-          rel="noreferrer"
-        >
-          {match[4]}
-        </a>,
-      );
+
+    if (text[cursor] === '`') {
+      const end = text.indexOf('`', cursor + 1);
+      if (end !== -1) {
+        const code = text.slice(cursor + 1, end);
+        parts.push(
+          <code key={key++} className="niuu-chat-md-inline-code">
+            {code}
+          </code>,
+        );
+        cursor = end + 1;
+        continue;
+      }
     }
-    last = match.index + match[0].length;
+
+    if (text[cursor] === '[') {
+      const labelEnd = text.indexOf('](', cursor + 1);
+      if (labelEnd !== -1) {
+        const urlEnd = text.indexOf(')', labelEnd + 2);
+        if (urlEnd !== -1) {
+          const label = text.slice(cursor + 1, labelEnd);
+          const href = text.slice(labelEnd + 2, urlEnd);
+          parts.push(
+            <a
+              key={key++}
+              href={href}
+              className="niuu-chat-md-link"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {label}
+            </a>,
+          );
+          cursor = urlEnd + 1;
+          continue;
+        }
+      }
+    }
+
+    const next = findNextInlineToken(text, cursor);
+    if (next === cursor) {
+      parts.push(text[cursor]);
+      cursor += 1;
+      continue;
+    }
+    parts.push(text.slice(cursor, next));
+    cursor = next;
   }
 
-  if (last < text.length) parts.push(text.slice(last));
   return parts.length === 1 ? parts[0] : parts;
+}
+
+function parseHeading(line: string): { level: 1 | 2 | 3 | 4 | 5 | 6; text: string } | null {
+  let level = 0;
+  while (level < line.length && line[level] === '#') {
+    level += 1;
+  }
+
+  if (level < 1 || level > 6) return null;
+  if (line[level] !== ' ') return null;
+
+  const text = line.slice(level + 1);
+  if (!text) return null;
+
+  return { level: level as 1 | 2 | 3 | 4 | 5 | 6, text };
+}
+
+function parseUnorderedListItem(line: string): string | null {
+  if (line.length < 2) return null;
+  if (!['-', '*', '+'].includes(line[0] ?? '')) return null;
+  if (line[1] !== ' ') return null;
+  return line.slice(2);
+}
+
+function parseOrderedListItem(line: string): string | null {
+  let index = 0;
+  while (index < line.length && isDigit(line[index] ?? '')) {
+    index += 1;
+  }
+
+  if (index === 0) return null;
+  if (line[index] !== '.' || line[index + 1] !== ' ') return null;
+  return line.slice(index + 2);
+}
+
+function isDigit(char: string): boolean {
+  return char >= '0' && char <= '9';
+}
+
+function findNextInlineToken(text: string, startAt: number): number {
+  const candidates = [
+    text.indexOf('**', startAt),
+    text.indexOf('`', startAt),
+    text.indexOf('[', startAt),
+  ].filter((index) => index !== -1);
+
+  if (candidates.length === 0) {
+    return text.length;
+  }
+
+  return Math.min(...candidates);
 }
 
 interface MarkdownContentProps {

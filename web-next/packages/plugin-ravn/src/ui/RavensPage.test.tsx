@@ -104,9 +104,7 @@ describe('RavensPage', () => {
     render(<RavensPage />, { wrapper: wrap() });
 
     await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: /collapse ravens sidebar/i }),
-      ).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: /collapse ravens sidebar/i })).toBeInTheDocument(),
     );
 
     fireEvent.click(screen.getByRole('button', { name: /collapse ravens sidebar/i }));

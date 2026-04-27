@@ -49,7 +49,8 @@ export function PlanPrompt({ onSubmit, loading, error }: PlanPromptProps) {
             Describe your goal
           </h2>
           <p className="niuu-text-sm niuu-text-text-secondary">
-            Rough is fine. A tracker ID, sentence, or paragraph all work; the planning raid will sharpen it next.
+            Rough is fine. A tracker ID, sentence, or paragraph all work; the planning raid will
+            sharpen it next.
           </p>
         </div>
       </div>

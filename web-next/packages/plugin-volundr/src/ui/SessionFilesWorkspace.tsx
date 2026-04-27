@@ -20,10 +20,7 @@ interface UploadItem {
   error?: string;
 }
 
-export function SessionFilesWorkspace({
-  sessionId,
-  filesystem,
-}: SessionFilesWorkspaceProps) {
+export function SessionFilesWorkspace({ sessionId, filesystem }: SessionFilesWorkspaceProps) {
   const queryClient = useQueryClient();
   const uploadRef = useRef<HTMLInputElement | null>(null);
 
@@ -54,15 +51,13 @@ export function SessionFilesWorkspace({
   const index = useMemo(() => buildIndex(roots), [roots]);
 
   const rootOptions = roots.map((node) => ({ name: node.name, path: node.path }));
-  const currentRoot =
-    rootOptions.find((root) => currentDir === root.path || currentDir.startsWith(`${root.path}/`)) ??
-    rootOptions[0] ??
-    { name: 'workspace', path: '/workspace' };
+  const currentRoot = rootOptions.find(
+    (root) => currentDir === root.path || currentDir.startsWith(`${root.path}/`),
+  ) ??
+    rootOptions[0] ?? { name: 'workspace', path: '/workspace' };
   const currentNode = index.get(currentDir) ?? index.get(currentRoot.path);
   const breadcrumbs = buildBreadcrumbs(currentDir, index);
-  const entries = sortEntries(
-    currentNode?.children ?? [],
-  );
+  const entries = sortEntries(currentNode?.children ?? []);
   const selectedNodes = selectedPaths
     .map((path) => index.get(path))
     .filter((node): node is BrowserNode => Boolean(node));
@@ -257,8 +252,16 @@ export function SessionFilesWorkspace({
 
         <div className="niuu-ml-auto niuu-flex niuu-flex-shrink-0 niuu-items-center niuu-gap-2">
           <ActionButton label="upload" onClick={() => setShowUploadDialog(true)} />
-          <ActionButton label="download" onClick={() => setShowDownloadDialog(true)} disabled={!canDownload} />
-          <ActionButton label="delete" onClick={() => setShowDeleteDialog(true)} disabled={!canDelete} />
+          <ActionButton
+            label="download"
+            onClick={() => setShowDownloadDialog(true)}
+            disabled={!canDownload}
+          />
+          <ActionButton
+            label="delete"
+            onClick={() => setShowDeleteDialog(true)}
+            disabled={!canDelete}
+          />
           <ActionButton label="create folder" onClick={() => setShowMkdirDialog(true)} />
           <ActionButton label="refresh" onClick={() => void refresh()} />
         </div>
@@ -319,10 +322,14 @@ export function SessionFilesWorkspace({
 
         <div className="niuu-min-h-0 niuu-flex-1 niuu-overflow-auto">
           {treeQuery.isLoading && (
-            <div className="niuu-p-4 niuu-font-mono niuu-text-[11px] niuu-text-text-muted">loading files…</div>
+            <div className="niuu-p-4 niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
+              loading files…
+            </div>
           )}
           {treeQuery.isError && (
-            <div className="niuu-p-4 niuu-font-mono niuu-text-[11px] niuu-text-critical">failed to load files</div>
+            <div className="niuu-p-4 niuu-font-mono niuu-text-[11px] niuu-text-critical">
+              failed to load files
+            </div>
           )}
           {!treeQuery.isLoading && !treeQuery.isError && (
             <table className="niuu-session-files-table niuu-w-full niuu-table-fixed">
@@ -340,9 +347,7 @@ export function SessionFilesWorkspace({
                       className="niuu-session-files-row niuu-cursor-pointer niuu-border-b niuu-border-border-subtle niuu-transition-colors"
                       data-selected={selected ? 'true' : 'false'}
                       data-testid={`file-browser-row-${node.path}`}
-                      onClick={(e) =>
-                        handleRowClick(node, e.metaKey || e.ctrlKey || e.shiftKey)
-                      }
+                      onClick={(e) => handleRowClick(node, e.metaKey || e.ctrlKey || e.shiftKey)}
                       onDoubleClick={() => void handleRowDoubleClick(node)}
                     >
                       <td className="niuu-session-files-cell niuu-session-files-cell--name niuu-px-2 niuu-py-1">
@@ -412,7 +417,11 @@ export function SessionFilesWorkspace({
               <button
                 type="button"
                 className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted"
-                onClick={() => setUploads((prev) => prev.filter((u) => u.status !== 'done' && u.status !== 'error'))}
+                onClick={() =>
+                  setUploads((prev) =>
+                    prev.filter((u) => u.status !== 'done' && u.status !== 'error'),
+                  )
+                }
               >
                 clear
               </button>
@@ -434,7 +443,11 @@ export function SessionFilesWorkspace({
                           : 'niuu-text-text-muted'
                     }
                   >
-                    {item.status === 'done' ? 'done' : item.status === 'error' ? item.error ?? 'failed' : item.status}
+                    {item.status === 'done'
+                      ? 'done'
+                      : item.status === 'error'
+                        ? (item.error ?? 'failed')
+                        : item.status}
                   </span>
                 </div>
               ))}
@@ -446,7 +459,9 @@ export function SessionFilesWorkspace({
       {dropActive && (
         <div className="niuu-pointer-events-none niuu-absolute niuu-inset-0 niuu-z-20 niuu-flex niuu-flex-col niuu-items-center niuu-justify-center niuu-gap-2 niuu-bg-bg-primary/80">
           <div className="niuu-font-mono niuu-text-[18px] niuu-text-brand">upload</div>
-          <div className="niuu-font-mono niuu-text-[12px] niuu-text-brand">drop files to upload</div>
+          <div className="niuu-font-mono niuu-text-[12px] niuu-text-brand">
+            drop files to upload
+          </div>
         </div>
       )}
 
@@ -484,7 +499,10 @@ export function SessionFilesWorkspace({
             </div>
             <div className="niuu-max-h-40 niuu-space-y-1 niuu-overflow-auto niuu-rounded niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-2">
               {selectedNodes.map((node) => (
-                <div key={node.path} className="niuu-font-mono niuu-text-[11px] niuu-text-text-secondary">
+                <div
+                  key={node.path}
+                  className="niuu-font-mono niuu-text-[11px] niuu-text-text-secondary"
+                >
                   {node.name}
                 </div>
               ))}
@@ -620,7 +638,11 @@ function DialogShell({
 }) {
   return (
     <>
-      <div className="niuu-absolute niuu-inset-0 niuu-z-30 niuu-bg-black/40" onClick={onClose} role="presentation" />
+      <div
+        className="niuu-absolute niuu-inset-0 niuu-z-30 niuu-bg-black/40"
+        onClick={onClose}
+        role="presentation"
+      />
       <div className="niuu-absolute niuu-left-1/2 niuu-top-1/2 niuu-z-40 niuu-w-[360px] niuu--translate-x-1/2 niuu--translate-y-1/2 niuu-rounded niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4">
         <div className="niuu-mb-3 niuu-flex niuu-items-center niuu-justify-between">
           <div className="niuu-font-mono niuu-text-[11px] niuu-text-text-primary">{title}</div>

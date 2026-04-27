@@ -114,47 +114,53 @@ export function SessionTerminalLive({ url, readOnly = false }: SessionTerminalLi
     })();
   }, [httpBase]);
 
-  const mountTerminal = useCallback((tabId: string, container: HTMLDivElement | null) => {
-    if (!container || instanceRefs.current.has(tabId)) return;
-    containerRefs.current.set(tabId, container);
+  const mountTerminal = useCallback(
+    (tabId: string, container: HTMLDivElement | null) => {
+      if (!container || instanceRefs.current.has(tabId)) return;
+      containerRefs.current.set(tabId, container);
 
-    const term = new XTerm({
-      cursorBlink: true,
-      cursorStyle: 'block',
-      fontFamily: '"JetBrainsMono Nerd Font", "JetBrains Mono", monospace',
-      fontSize: 13,
-      lineHeight: 1.3,
-      disableStdin: readOnly,
-      theme: {
-        background: '#09090b',
-        foreground: '#fafafa',
-        cursor: '#a1a1aa',
-        selectionBackground: '#3f3f46',
-      },
-    });
-    const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
-    term.loadAddon(fitAddon);
-    term.loadAddon(webLinksAddon);
-    term.open(container);
-    fitAddon.fit();
-
-    instanceRefs.current.set(tabId, { term, fitAddon });
-
-    if (!readOnly) {
-      term.onData((data) => {
-        const socket = socketRefs.current.get(tabId);
-        if (socket?.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: 'input', data }));
-        }
+      const term = new XTerm({
+        cursorBlink: true,
+        cursorStyle: 'block',
+        fontFamily: '"JetBrainsMono Nerd Font", "JetBrains Mono", monospace',
+        fontSize: 13,
+        lineHeight: 1.3,
+        disableStdin: readOnly,
+        theme: {
+          background: '#09090b',
+          foreground: '#fafafa',
+          cursor: '#a1a1aa',
+          selectionBackground: '#3f3f46',
+        },
       });
-    }
-  }, [readOnly]);
+      const fitAddon = new FitAddon();
+      const webLinksAddon = new WebLinksAddon();
+      term.loadAddon(fitAddon);
+      term.loadAddon(webLinksAddon);
+      term.open(container);
+      fitAddon.fit();
+
+      instanceRefs.current.set(tabId, { term, fitAddon });
+
+      if (!readOnly) {
+        term.onData((data) => {
+          const socket = socketRefs.current.get(tabId);
+          if (socket?.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'input', data }));
+          }
+        });
+      }
+    },
+    [readOnly],
+  );
 
   useEffect(() => {
     if (!activeWsUrl || !activeTabId || unavailable) return;
 
-    const socket = new WebSocket(activeWsUrl + (getAccessToken() ? `?access_token=${encodeURIComponent(getAccessToken()!)}` : ''));
+    const socket = new WebSocket(
+      activeWsUrl +
+        (getAccessToken() ? `?access_token=${encodeURIComponent(getAccessToken()!)}` : ''),
+    );
     socketRefs.current.set(activeTabId, socket);
 
     socket.onopen = () => {
@@ -250,4 +256,3 @@ export function SessionTerminalLive({ url, readOnly = false }: SessionTerminalLi
     </div>
   );
 }
-

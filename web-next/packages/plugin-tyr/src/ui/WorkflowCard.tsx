@@ -65,7 +65,9 @@ export function WorkflowCard({ workflow, workflowVersion }: WorkflowCardProps) {
             i
           </span>
           <span>
-            Override this workflow per-dispatch from the <span className="niuu-underline">Dispatch</span> view. The saga&apos;s workflow is the default; overrides apply only to that run.
+            Override this workflow per-dispatch from the{' '}
+            <span className="niuu-underline">Dispatch</span> view. The saga&apos;s workflow is the
+            default; overrides apply only to that run.
           </span>
         </div>
 

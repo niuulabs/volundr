@@ -12,17 +12,45 @@ type TabId = 'types' | 'containment' | 'json';
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const ALL_SHAPES: EntityShape[] = [
-  'dot', 'ring', 'ring-dashed', 'rounded-rect', 'diamond', 'triangle',
-  'hex', 'chevron', 'square', 'square-sm', 'pentagon', 'halo', 'mimir', 'mimir-small',
+  'dot',
+  'ring',
+  'ring-dashed',
+  'rounded-rect',
+  'diamond',
+  'triangle',
+  'hex',
+  'chevron',
+  'square',
+  'square-sm',
+  'pentagon',
+  'halo',
+  'mimir',
+  'mimir-small',
 ];
 
 const ALL_COLORS: ShapeColor[] = [
-  'brand', 'brand-100', 'brand-200', 'brand-300', 'brand-400', 'brand-500',
-  'ice-100', 'ice-200', 'ice-300', 'slate-300', 'slate-400',
+  'brand',
+  'brand-100',
+  'brand-200',
+  'brand-300',
+  'brand-400',
+  'brand-500',
+  'ice-100',
+  'ice-200',
+  'ice-300',
+  'slate-300',
+  'slate-400',
 ];
 
 const ALL_CATEGORIES: EntityCategory[] = [
-  'topology', 'hardware', 'agent', 'coordinator', 'knowledge', 'infrastructure', 'device', 'composite',
+  'topology',
+  'hardware',
+  'agent',
+  'coordinator',
+  'knowledge',
+  'infrastructure',
+  'device',
+  'composite',
 ];
 
 const INPUT_CLS =
@@ -112,7 +140,9 @@ function TypePreviewDrawer({ type, registry, onClose, onUpdate }: TypePreviewDra
             data-testid="edit-category"
           >
             {ALL_CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c} value={c}>
+                {c}
+              </option>
             ))}
           </select>
         </div>
@@ -298,7 +328,10 @@ function TypePreviewDrawer({ type, registry, onClose, onUpdate }: TypePreviewDra
               value={f.type}
               onChange={(e) => {
                 const fields = [...type.fields];
-                fields[i] = { ...f, type: e.target.value as 'string' | 'number' | 'boolean' | 'select' | 'tags' };
+                fields[i] = {
+                  ...f,
+                  type: e.target.value as 'string' | 'number' | 'boolean' | 'select' | 'tags',
+                };
                 onUpdate(type.id, { fields });
               }}
             >
