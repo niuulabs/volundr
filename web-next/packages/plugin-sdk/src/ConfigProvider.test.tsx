@@ -80,12 +80,28 @@ describe('ConfigProvider', () => {
 });
 
 describe('resolveSafeConfigEndpoint', () => {
-  it('normalizes same-origin absolute URLs back to a path', () => {
-    expect(
+  it('accepts the default config endpoint', () => {
+    expect(resolveSafeConfigEndpoint('/config.json')).toBe('/config.json');
+  });
+
+  it('normalizes an empty endpoint back to the default path', () => {
+    expect(resolveSafeConfigEndpoint('')).toBe('/config.json');
+  });
+
+  it('rejects same-origin non-default URLs', () => {
+    expect(() =>
       resolveSafeConfigEndpoint('http://localhost:3000/config.live.json?ts=1', {
         origin: 'http://localhost:3000',
       }),
-    ).toBe('/config.live.json?ts=1');
+    ).toThrow(/only supports the default/);
+  });
+
+  it('rejects root-relative non-default URLs', () => {
+    expect(() =>
+      resolveSafeConfigEndpoint('/config.live.json', {
+        origin: 'http://localhost:3000',
+      }),
+    ).toThrow(/only supports the default/);
   });
 
   it('rejects cross-origin URLs', () => {

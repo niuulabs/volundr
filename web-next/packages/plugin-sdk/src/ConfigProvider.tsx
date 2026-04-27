@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { niuuConfigSchema, type NiuuConfig } from './config';
 
 const ConfigContext = createContext<NiuuConfig | null>(null);
+const DEFAULT_CONFIG_ENDPOINT = '/config.json';
+const DEFAULT_CONFIG_ENDPOINTS = new Set([DEFAULT_CONFIG_ENDPOINT, '']);
 
 interface ConfigProviderProps {
   endpoint?: string;
@@ -16,29 +18,21 @@ export function resolveSafeConfigEndpoint(
   location: Pick<Location, 'origin'> = window.location,
 ): string {
   const trimmed = endpoint.trim();
-  if (!trimmed) {
-    throw new Error('Config endpoint is required');
+  if (DEFAULT_CONFIG_ENDPOINTS.has(trimmed)) {
+    return DEFAULT_CONFIG_ENDPOINT;
   }
 
-  let parsed: URL;
-  try {
-    parsed = new URL(trimmed, location.origin);
-  } catch {
-    throw new Error(`Invalid config endpoint: ${endpoint}`);
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    const parsed = new URL(trimmed);
+    if (parsed.origin !== location.origin) {
+      throw new Error('Config endpoint must stay on the current origin');
+    }
   }
-
-  if (!['http:', 'https:'].includes(parsed.protocol)) {
-    throw new Error(`Unsupported config endpoint protocol: ${parsed.protocol}`);
-  }
-  if (parsed.origin !== location.origin) {
-    throw new Error('Config endpoint must stay on the current origin');
-  }
-
-  return `${parsed.pathname}${parsed.search}`;
+  throw new Error('ConfigProvider only supports the default /config.json endpoint');
 }
 
 export function ConfigProvider({
-  endpoint = '/config.json',
+  endpoint = DEFAULT_CONFIG_ENDPOINT,
   value,
   fallback = null,
   errorFallback = (err) => <div role="alert">Config error: {err.message}</div>,
@@ -56,9 +50,8 @@ export function ConfigProvider({
       return;
     }
 
-    let safeEndpoint: string;
     try {
-      safeEndpoint = resolveSafeConfigEndpoint(endpoint);
+      resolveSafeConfigEndpoint(endpoint);
     } catch (error: unknown) {
       setState({
         status: 'error',
@@ -68,9 +61,9 @@ export function ConfigProvider({
     }
 
     let cancelled = false;
-    fetch(safeEndpoint, { cache: 'no-store' })
+    fetch(DEFAULT_CONFIG_ENDPOINT, { cache: 'no-store' })
       .then(async (r) => {
-        if (!r.ok) throw new Error(`GET ${safeEndpoint} returned ${r.status}`);
+        if (!r.ok) throw new Error(`GET ${DEFAULT_CONFIG_ENDPOINT} returned ${r.status}`);
         const raw = await r.json();
         return niuuConfigSchema.parse(raw);
       })

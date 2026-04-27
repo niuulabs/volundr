@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider } from '@niuulabs/design-tokens';
@@ -7,6 +7,8 @@ import {
   FeatureCatalogProvider,
   ServicesProvider,
   type IFeatureCatalogService,
+  niuuConfigSchema,
+  type NiuuConfig,
   useConfig,
 } from '@niuulabs/plugin-sdk';
 import { createQueryClient } from '@niuulabs/query';
@@ -17,11 +19,16 @@ import { plugins } from './plugins';
 import { buildServiceBackendStatus, buildServices } from './services';
 
 const DEFAULT_CONFIG_ENDPOINT = '/config.json';
+const LIVE_CONFIG_ENDPOINT = '/config.live.json';
 const CONFIG_ENDPOINT_QUERY_KEY = 'config';
 const CONFIG_ENDPOINT_STORAGE_KEY = 'niuu.config.endpoint';
+type ConfigMode = 'default' | 'live';
 
-function isSafeConfigOverride(value: string | null): value is string {
-  return Boolean(value && value.startsWith('/') && !value.startsWith('//'));
+function normalizeConfigMode(value: string | null): ConfigMode | null {
+  if (!value) return null;
+  if (value === 'default' || value === DEFAULT_CONFIG_ENDPOINT) return 'default';
+  if (value === 'live' || value === LIVE_CONFIG_ENDPOINT) return 'live';
+  return null;
 }
 
 export function publishServiceBackends(
@@ -66,32 +73,71 @@ export function resolveConfigEndpoint(
   storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> = window.localStorage,
 ): string {
   const params = new URLSearchParams(location.search);
-  const requested = params.get(CONFIG_ENDPOINT_QUERY_KEY);
+  const requested = normalizeConfigMode(params.get(CONFIG_ENDPOINT_QUERY_KEY));
 
   if (requested === 'default') {
     storage.removeItem(CONFIG_ENDPOINT_STORAGE_KEY);
     return DEFAULT_CONFIG_ENDPOINT;
   }
 
-  if (isSafeConfigOverride(requested)) {
-    storage.setItem(CONFIG_ENDPOINT_STORAGE_KEY, requested);
-    return requested;
+  if (requested === 'live') {
+    storage.setItem(CONFIG_ENDPOINT_STORAGE_KEY, LIVE_CONFIG_ENDPOINT);
+    return LIVE_CONFIG_ENDPOINT;
   }
 
-  const stored = storage.getItem(CONFIG_ENDPOINT_STORAGE_KEY);
-  if (isSafeConfigOverride(stored)) return stored;
+  const stored = normalizeConfigMode(storage.getItem(CONFIG_ENDPOINT_STORAGE_KEY));
+  if (stored === 'live') return LIVE_CONFIG_ENDPOINT;
   return DEFAULT_CONFIG_ENDPOINT;
 }
 
 export function App() {
   const configEndpoint = resolveConfigEndpoint();
+  const [state, setState] = useState<
+    | { status: 'loading' }
+    | { status: 'ready'; config: NiuuConfig }
+    | { status: 'error'; error: Error }
+  >({ status: 'loading' });
+
+  useEffect(() => {
+    const requestUrl =
+      configEndpoint === LIVE_CONFIG_ENDPOINT ? LIVE_CONFIG_ENDPOINT : DEFAULT_CONFIG_ENDPOINT;
+    let cancelled = false;
+
+    fetch(requestUrl, { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`GET ${requestUrl} returned ${response.status}`);
+        }
+        return niuuConfigSchema.parse(await response.json());
+      })
+      .then((config) => {
+        if (!cancelled) {
+          setState({ status: 'ready', config });
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setState({
+            status: 'error',
+            error: error instanceof Error ? error : new Error(String(error)),
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [configEndpoint]);
+
+  if (state.status === 'loading') {
+    return <BootScreen label="loading config…" />;
+  }
+  if (state.status === 'error') {
+    return <BootScreen label={`config error: ${state.error.message}`} />;
+  }
 
   return (
-    <ConfigProvider
-      endpoint={configEndpoint}
-      fallback={<BootScreen label="loading config…" />}
-      errorFallback={(err) => <BootScreen label={`config error: ${err.message}`} />}
-    >
+    <ConfigProvider value={state.config}>
       <ThemeProvider theme="ice">
         <QueryClientProvider client={queryClient}>
           <AppInner />

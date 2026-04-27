@@ -13,6 +13,11 @@ import niuu.domain.services.connection_tester as _ct
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def allow_public_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_ct, "check_ssrf", lambda hostname: None)
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_code_forge_success():
@@ -73,6 +78,29 @@ async def test_code_forge_connection_error():
     result = await _ct.test_code_forge(url="http://unreachable", token="tok")
     assert result.success is False
     assert "unreachable" in result.message
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_code_forge_ignores_user_supplied_paths_and_queries():
+    respx.get("http://my-server/api/v1/identity/me").mock(
+        return_value=httpx.Response(200, json={"email": "dev@example.com"})
+    )
+    result = await _ct.test_code_forge(url="http://my-server/custom/path?x=1", token="tok")
+    assert result.success is False
+    assert "base origin only" in result.message
+
+
+@pytest.mark.asyncio
+async def test_code_forge_rejects_private_hosts(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        _ct,
+        "check_ssrf",
+        lambda hostname: f"Blocked: '{hostname}' resolves to a private/reserved address",
+    )
+    result = await _ct.test_code_forge(url="http://127.0.0.1", token="tok")
+    assert result.success is False
+    assert "private/reserved" in result.message
 
 
 # ---------------------------------------------------------------------------

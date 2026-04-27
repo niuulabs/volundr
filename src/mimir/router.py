@@ -30,8 +30,9 @@ import logging
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
+from posixpath import normpath
 from typing import Annotated, Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
@@ -49,6 +50,8 @@ from ravn.adapters.tools._url_security import check_ssrf
 
 logger = logging.getLogger(__name__)
 _ALLOWED_INGEST_URL_SCHEMES = {"http", "https"}
+_SAFE_INGEST_PATH_RE = re.compile(r"^/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$")
+_SAFE_INGEST_QUERY_RE = re.compile(r"^[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*$")
 
 # ---------------------------------------------------------------------------
 # Request / response models
@@ -243,13 +246,34 @@ def _validated_ingest_url(raw_url: str) -> str:
         )
     if not parsed.hostname:
         raise HTTPException(status_code=400, detail="Invalid URL: no hostname")
+    if parsed.username or parsed.password:
+        raise HTTPException(status_code=400, detail="Invalid URL: embedded credentials")
+    if parsed.fragment:
+        raise HTTPException(status_code=400, detail="Invalid URL: fragments are not supported")
 
     block_reason = check_ssrf(parsed.hostname)
     if block_reason:
         raise HTTPException(status_code=400, detail=block_reason)
 
-    safe_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path or ''}"
+    raw_path = parsed.path or "/"
+    decoded_path = unquote(raw_path)
+    if any(ord(ch) < 32 for ch in decoded_path):
+        raise HTTPException(status_code=400, detail="Invalid URL path")
+    if any(segment in {".", ".."} for segment in decoded_path.split("/")):
+        raise HTTPException(status_code=400, detail="Invalid URL path")
+    if not _SAFE_INGEST_PATH_RE.fullmatch(decoded_path):
+        raise HTTPException(status_code=400, detail="Invalid URL path")
+
+    normalized_path = normpath(decoded_path)
+    if not normalized_path.startswith("/"):
+        normalized_path = f"/{normalized_path}"
+    safe_netloc = parsed.hostname if parsed.port is None else f"{parsed.hostname}:{parsed.port}"
+    safe_url = f"{parsed.scheme}://{safe_netloc}{normalized_path}"
     if parsed.query:
+        if any(ord(ch) < 32 for ch in parsed.query):
+            raise HTTPException(status_code=400, detail="Invalid URL query")
+        if not _SAFE_INGEST_QUERY_RE.fullmatch(parsed.query):
+            raise HTTPException(status_code=400, detail="Invalid URL query")
         safe_url = f"{safe_url}?{parsed.query}"
     return safe_url
 

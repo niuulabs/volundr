@@ -499,6 +499,30 @@ def test_url_ingest_rejects_unsupported_schemes(client: TestClient) -> None:
     assert "Unsupported URL scheme" in resp.json()["detail"]
 
 
+def test_url_ingest_rejects_fragments(client: TestClient) -> None:
+    resp = client.post("/mimir/sources/ingest/url", json={"url": "https://example.com/doc#frag"})
+
+    assert resp.status_code == 400
+    assert "fragments are not supported" in resp.json()["detail"]
+
+
+def test_url_ingest_rejects_embedded_credentials(client: TestClient) -> None:
+    resp = client.post(
+        "/mimir/sources/ingest/url",
+        json={"url": "https://user:pass@example.com/private"},
+    )
+
+    assert resp.status_code == 400
+    assert "embedded credentials" in resp.json()["detail"]
+
+
+def test_url_ingest_rejects_path_traversal(client: TestClient) -> None:
+    resp = client.post("/mimir/sources/ingest/url", json={"url": "https://example.com/a/../b"})
+
+    assert resp.status_code == 400
+    assert "Invalid URL path" in resp.json()["detail"]
+
+
 def test_dreams_endpoint_parses_dream_cycle_entries(tmp_path: Path) -> None:
     app = _make_app(tmp_path)
     log_path = tmp_path / "mimir" / "wiki" / "log.md"
