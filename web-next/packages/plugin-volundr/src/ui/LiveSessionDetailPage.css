@@ -1,0 +1,31 @@
+.niuu-live-chronicles-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2.15fr) 320px;
+  height: 100%;
+  min-height: 0;
+}
+
+.niuu-live-chronicles-timeline {
+  position: relative;
+}
+
+.niuu-live-chronicles-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 58px;
+  width: 1px;
+  background: var(--color-border-subtle);
+}
+
+.niuu-live-chronicles-row {
+  display: grid;
+  grid-template-columns: 44px 28px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.niuu-live-diffs-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+}

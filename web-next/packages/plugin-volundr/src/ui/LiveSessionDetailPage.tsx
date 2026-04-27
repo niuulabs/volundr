@@ -3,7 +3,20 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useService } from '@niuulabs/plugin-sdk';
 import { getAccessToken } from '@niuulabs/query';
 import { ErrorState, LoadingState, SessionChat, cn, type PermissionBehavior } from '@niuulabs/ui';
-import { ExternalLink, FileCode2, FileDiff, FolderOpen, MessageSquareText, ScrollText, SquareTerminal } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  Copy,
+  ExternalLink,
+  FileCode2,
+  FileDiff,
+  FilePenLine,
+  FolderOpen,
+  GitCommitHorizontal,
+  MessageSquareText,
+  ScrollText,
+  SquareTerminal,
+} from 'lucide-react';
 import type { IVolundrService } from '../ports/IVolundrService';
 import type { IFileSystemPort } from '../ports/IFileSystemPort';
 import type { SessionChronicle, SessionFile, VolundrLog, VolundrSession } from '../models/volundr.model';
@@ -12,6 +25,7 @@ import { SessionFilesWorkspace } from './SessionFilesWorkspace';
 import { useSkuldChat } from './hooks/useSkuldChat';
 import { deriveTerminalWsUrl, normalizeSessionUrl, wsUrlToHttpBase } from './liveSessionTransport';
 import { SessionTerminalLive } from './SessionTerminalLive';
+import './LiveSessionDetailPage.css';
 
 type SessionTab = 'chat' | 'terminal' | 'diffs' | 'files' | 'chronicles' | 'logs';
 
@@ -109,6 +123,65 @@ function eventTone(type: SessionChronicle['events'][number]['type']) {
         badge: 'niuu-text-text-secondary niuu-bg-bg-elevated niuu-border-border-subtle',
         dot: 'niuu-bg-text-muted',
       };
+  }
+}
+
+function eventIcon(type: SessionChronicle['events'][number]['type']) {
+  switch (type) {
+    case 'message':
+      return MessageSquareText;
+    case 'file':
+      return FilePenLine;
+    case 'git':
+      return GitCommitHorizontal;
+    case 'terminal':
+      return SquareTerminal;
+    case 'error':
+      return AlertTriangle;
+    default:
+      return ScrollText;
+  }
+}
+
+function eventLabel(type: SessionChronicle['events'][number]['type']): string {
+  switch (type) {
+    case 'message':
+      return 'Message';
+    case 'file':
+      return 'File';
+    case 'git':
+      return 'Commit';
+    case 'terminal':
+      return 'Terminal';
+    case 'error':
+      return 'Error';
+    default:
+      return 'Session';
+  }
+}
+
+function truncateLeadingPath(value: string, maxLength = 42): string {
+  if (value.length <= maxLength) return value;
+  const parts = value.split('/').filter(Boolean);
+  if (parts.length <= 2) return `…${value.slice(-(maxLength - 1))}`;
+  let suffix = parts[parts.length - 1] ?? value;
+  let index = parts.length - 2;
+  while (index >= 0) {
+    const candidate = `${parts[index]}/${suffix}`;
+    if (candidate.length + 2 > maxLength) break;
+    suffix = candidate;
+    index -= 1;
+  }
+  return `…/${suffix}`;
+}
+
+async function copyText(text: string): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -560,6 +633,7 @@ function LiveChroniclesTab({
 }) {
   const [chronicle, setChronicle] = useState<SessionChronicle | null>(null);
   const [loading, setLoading] = useState(true);
+  const [copiedPath, setCopiedPath] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -578,6 +652,16 @@ function LiveChroniclesTab({
       unsubscribe();
     };
   }, [sessionId, volundr]);
+
+  const handleCopyPath = useCallback((path: string) => {
+    void copyText(path).then((ok) => {
+      if (!ok) return;
+      setCopiedPath(path);
+      window.setTimeout(() => {
+        setCopiedPath((current) => (current === path ? null : current));
+      }, 1400);
+    });
+  }, []);
 
   if (loading) {
     return (
@@ -599,16 +683,15 @@ function LiveChroniclesTab({
   const totalTokens = chronicle.events.reduce((sum, event) => sum + (event.tokens ?? 0), 0);
 
   return (
-    <div
-      className="niuu-grid niuu-h-full niuu-min-h-0"
-      style={{ gridTemplateColumns: 'minmax(0, 2.1fr) 360px' }}
-    >
+    <div className="niuu-live-chronicles-layout">
       <div className="niuu-flex niuu-min-h-0 niuu-flex-col niuu-border-r niuu-border-border-subtle niuu-bg-bg-primary">
-        <div className="niuu-border-b niuu-border-border-subtle niuu-px-4 niuu-py-3">
-          <div className="niuu-flex niuu-items-center niuu-justify-between">
-            <div>
-              <div className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Event timeline</div>
-              <div className="niuu-mt-1 niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
+        <div className="niuu-border-b niuu-border-border-subtle niuu-px-4 niuu-py-2.5">
+          <div className="niuu-flex niuu-items-center niuu-justify-between niuu-gap-4">
+            <div className="niuu-min-w-0">
+              <div className="niuu-whitespace-nowrap niuu-text-sm niuu-font-medium niuu-text-text-primary">
+                Event timeline
+              </div>
+              <div className="niuu-mt-1 niuu-whitespace-nowrap niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
                 {chronicle.events.length} events · {formatCount(totalTokens)} tokens
               </div>
             </div>
@@ -628,36 +711,44 @@ function LiveChroniclesTab({
           </div>
         </div>
 
-        <div className="niuu-min-h-0 niuu-flex-1 niuu-overflow-auto niuu-p-4">
-          <div className="niuu-relative niuu-pl-7">
-            <div className="niuu-absolute niuu-bottom-0 niuu-left-2.5 niuu-top-0 niuu-w-px niuu-bg-border-subtle" />
-            <div className="niuu-flex niuu-flex-col niuu-gap-3">
+        <div className="niuu-min-h-0 niuu-flex-1 niuu-overflow-auto niuu-px-4 niuu-py-3">
+          <div className="niuu-live-chronicles-timeline">
+            <div className="niuu-live-chronicles-rail" />
+            <div className="niuu-flex niuu-flex-col">
               {chronicle.events.map((event, index) => {
                 const tone = eventTone(event.type);
+                const Icon = eventIcon(event.type);
                 return (
-                  <div key={`${event.type}-${event.t}-${index}`} className="niuu-relative">
-                    <span
-                      className={cn(
-                        'niuu-absolute niuu-left-[-22px] niuu-top-5 niuu-h-2.5 niuu-w-2.5 niuu-rounded-full niuu-ring-4 niuu-ring-bg-primary',
-                        tone.dot,
-                      )}
-                    />
-                    <div className="niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-3">
+                  <div
+                    key={`${event.type}-${event.t}-${index}`}
+                    className="niuu-live-chronicles-row niuu-border-b niuu-border-border-subtle/60 niuu-py-2.5 last:niuu-border-b-0"
+                  >
+                    <div className="niuu-pt-1 niuu-text-right niuu-font-mono niuu-text-[10px] niuu-text-text-faint">
+                      {formatEventTime(event.t)}
+                    </div>
+                    <div className="niuu-relative niuu-flex niuu-justify-center">
+                      <span
+                        className={cn(
+                          'niuu-relative niuu-z-[1] niuu-mt-1.5 niuu-inline-flex niuu-h-5 niuu-w-5 niuu-items-center niuu-justify-center niuu-rounded-md niuu-border niuu-bg-bg-secondary',
+                          tone.badge,
+                        )}
+                      >
+                        <Icon className="niuu-h-3 niuu-w-3" />
+                      </span>
+                    </div>
+                    <div className="niuu-min-w-0">
                       <div className="niuu-flex niuu-items-start niuu-justify-between niuu-gap-3">
                         <div className="niuu-flex niuu-min-w-0 niuu-items-center niuu-gap-2">
-                          <span
-                            className={cn(
-                              'niuu-inline-flex niuu-rounded-md niuu-border niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.16em]',
-                              tone.badge,
-                            )}
-                          >
-                            {event.type}
+                          <span className="niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.16em] niuu-text-text-faint">
+                            {eventLabel(event.type)}
                           </span>
-                          <span className="niuu-font-mono niuu-text-[11px] niuu-text-text-faint">
-                            {formatEventTime(event.t)}
-                          </span>
+                          {event.action ? (
+                            <span className="niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.14em] niuu-text-text-muted">
+                              {event.action}
+                            </span>
+                          ) : null}
                         </div>
-                        <div className="niuu-flex niuu-flex-wrap niuu-justify-end niuu-gap-2 niuu-font-mono niuu-text-[11px]">
+                        <div className="niuu-flex niuu-flex-wrap niuu-justify-end niuu-gap-x-2 niuu-gap-y-1 niuu-font-mono niuu-text-[10px]">
                           {typeof event.tokens === 'number' && (
                             <span className="niuu-text-text-muted">{formatCount(event.tokens)} tok</span>
                           )}
@@ -675,13 +766,8 @@ function LiveChroniclesTab({
                           )}
                         </div>
                       </div>
-                      <div className="niuu-mt-2 niuu-text-[14px] niuu-leading-6 niuu-text-text-primary">
+                      <div className="niuu-mt-1 niuu-text-[13px] niuu-leading-5 niuu-text-text-primary">
                         {event.label}
-                        {event.action && (
-                          <span className="niuu-ml-2 niuu-font-mono niuu-text-[11px] niuu-uppercase niuu-tracking-[0.12em] niuu-text-text-faint">
-                            {event.action}
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -692,9 +778,9 @@ function LiveChroniclesTab({
         </div>
       </div>
 
-      <div className="niuu-flex niuu-min-h-0 niuu-flex-col niuu-overflow-auto niuu-bg-bg-secondary niuu-p-4">
+      <div className="niuu-flex niuu-min-h-0 niuu-flex-col niuu-overflow-auto niuu-bg-bg-secondary niuu-p-3">
         {session?.trackerIssue && (
-          <section className="niuu-mb-4 niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-4">
+          <section className="niuu-mb-3 niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-3">
             <div className="niuu-mb-2 niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-faint">
               Tracker
             </div>
@@ -712,28 +798,45 @@ function LiveChroniclesTab({
           </section>
         )}
 
-        <section className="niuu-mb-4 niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-4">
-          <div className="niuu-mb-3 niuu-flex niuu-items-center niuu-justify-between">
+        <section className="niuu-mb-3 niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-3">
+          <div className="niuu-mb-2.5 niuu-flex niuu-items-center niuu-justify-between">
             <div className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Files modified</div>
             <div className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted">{chronicle.files.length}</div>
           </div>
-          <div className="niuu-flex niuu-flex-col niuu-gap-2">
+          <div className="niuu-flex niuu-flex-col">
             {chronicle.files.length > 0 ? (
-              chronicle.files.map((file) => (
-                <div
+              chronicle.files.map((file, index) => (
+                <button
                   key={file.path}
-                  className="niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-3 niuu-py-2"
+                  type="button"
+                  onClick={() => handleCopyPath(file.path)}
+                  className={cn(
+                    'niuu-flex niuu-w-full niuu-items-start niuu-gap-2 niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-2.5 niuu-py-2 niuu-text-left hover:niuu-bg-bg-tertiary',
+                    index > 0 && 'niuu-border-t',
+                  )}
+                  title={copiedPath === file.path ? 'Copied' : `${file.path} · click to copy`}
                 >
-                  <div className="niuu-flex niuu-items-start niuu-justify-between niuu-gap-3">
-                    <span className="niuu-break-all niuu-text-[13px] niuu-text-text-primary">{file.path}</span>
-                    <span className="niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.14em] niuu-text-text-faint">
-                      {file.status}
-                    </span>
+                  <span className="niuu-mt-0.5 niuu-inline-flex niuu-h-5 niuu-w-5 niuu-flex-shrink-0 niuu-items-center niuu-justify-center niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-primary">
+                    {copiedPath === file.path ? (
+                      <Check className="niuu-h-3 niuu-w-3 niuu-text-brand" />
+                    ) : (
+                      <FilePenLine className="niuu-h-3 niuu-w-3 niuu-text-text-muted" />
+                    )}
+                  </span>
+                  <div className="niuu-min-w-0 niuu-flex-1">
+                    <div className="niuu-flex niuu-items-start niuu-justify-between niuu-gap-3">
+                      <span className="niuu-truncate niuu-font-mono niuu-text-[11px] niuu-text-text-primary">
+                        {truncateLeadingPath(file.path)}
+                      </span>
+                      <span className="niuu-flex-shrink-0 niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.14em] niuu-text-text-faint">
+                        {file.status}
+                      </span>
+                    </div>
+                    <div className="niuu-mt-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+                      +{file.ins} / -{file.del}
+                    </div>
                   </div>
-                  <div className="niuu-mt-1 niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
-                    +{file.ins} / -{file.del}
-                  </div>
-                </div>
+                </button>
               ))
             ) : (
               <div className="niuu-text-sm niuu-text-text-muted">No file changes yet.</div>
@@ -741,21 +844,31 @@ function LiveChroniclesTab({
           </div>
         </section>
 
-        <section className="niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-4">
-          <div className="niuu-mb-3 niuu-flex niuu-items-center niuu-justify-between">
+        <section className="niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-3">
+          <div className="niuu-mb-2.5 niuu-flex niuu-items-center niuu-justify-between">
             <div className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Commits</div>
             <div className="niuu-font-mono niuu-text-[11px] niuu-text-text-muted">{chronicle.commits.length}</div>
           </div>
-          <div className="niuu-flex niuu-flex-col niuu-gap-2">
+          <div className="niuu-flex niuu-flex-col">
             {chronicle.commits.length > 0 ? (
-              chronicle.commits.map((commit) => (
+              chronicle.commits.map((commit, index) => (
                 <div
                   key={commit.hash}
-                  className="niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-3 niuu-py-2"
+                  className={cn(
+                    'niuu-flex niuu-items-start niuu-gap-2 niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-2.5 niuu-py-2',
+                    index > 0 && 'niuu-border-t',
+                  )}
                 >
-                  <div className="niuu-text-[13px] niuu-text-text-primary">{commit.msg}</div>
-                  <div className="niuu-mt-1 niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
-                    {commit.hash.slice(0, 8)} · {commit.time}
+                  <span className="niuu-mt-0.5 niuu-inline-flex niuu-h-5 niuu-w-5 niuu-flex-shrink-0 niuu-items-center niuu-justify-center niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-primary">
+                    <GitCommitHorizontal className="niuu-h-3 niuu-w-3 niuu-text-text-muted" />
+                  </span>
+                  <div className="niuu-min-w-0 niuu-flex-1">
+                    <div className="niuu-truncate niuu-text-[12px] niuu-text-text-primary">{commit.msg}</div>
+                    <div className="niuu-mt-0.5 niuu-flex niuu-items-center niuu-gap-2 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+                      <span>{commit.hash.slice(0, 8)}</span>
+                      <span className="niuu-text-text-faint">•</span>
+                      <span>{commit.time}</span>
+                    </div>
                   </div>
                 </div>
               ))
@@ -1059,7 +1172,7 @@ function LiveDiffsTab({ chatEndpoint }: { chatEndpoint: string | null }) {
   const selected = files.find((file) => file.path === selectedFile) ?? null;
 
   return (
-    <div className="niuu-grid niuu-h-full niuu-grid-cols-[220px_1fr]" data-testid="diffs-tab">
+    <div className="niuu-live-diffs-layout niuu-h-full" data-testid="diffs-tab">
       <div className="niuu-overflow-hidden niuu-border-r niuu-border-border-subtle niuu-bg-bg-secondary">
         <div className="niuu-flex niuu-flex-shrink-0 niuu-items-center niuu-justify-between niuu-border-b niuu-border-border-subtle niuu-bg-bg-primary niuu-px-4 niuu-py-3">
           <div className="niuu-font-mono niuu-text-[11px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-muted">

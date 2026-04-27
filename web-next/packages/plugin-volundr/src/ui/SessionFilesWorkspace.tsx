@@ -337,10 +337,10 @@ export function SessionFilesWorkspace({
                     <tr
                       key={node.path}
                       className={cn(
-                        'niuu-cursor-pointer niuu-border-b niuu-border-border-subtle niuu-transition-colors',
+                        'niuu-cursor-pointer niuu-border-b niuu-border-border-subtle niuu-transition-colors hover:niuu-bg-bg-secondary/85',
                         selected
-                          ? 'niuu-bg-brand/16 niuu-shadow-[inset_3px_0_0_var(--color-brand),inset_0_1px_0_rgba(255,255,255,0.03)]'
-                          : 'hover:niuu-bg-bg-secondary/70',
+                          ? 'niuu-bg-brand/10 niuu-shadow-[inset_3px_0_0_var(--color-brand),inset_0_1px_0_rgba(255,255,255,0.03)] hover:niuu-bg-brand/14'
+                          : '',
                       )}
                       data-testid={`file-browser-row-${node.path}`}
                       onClick={(e) =>
