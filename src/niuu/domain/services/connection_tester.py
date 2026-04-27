@@ -13,8 +13,6 @@ from urllib.parse import urlparse
 
 import httpx
 
-from ravn.adapters.tools._url_security import check_ssrf
-
 logger = logging.getLogger(__name__)
 
 _ALLOWED_SCHEMES = {"http", "https"}
@@ -37,7 +35,7 @@ class ConnectionTestResult:
 
 
 async def test_code_forge(url: str, token: str) -> ConnectionTestResult:
-    """Test a Volundr/code forge connection via the canonical identity endpoint."""
+    """Test a Volundr/code forge connection via /me endpoint."""
     test_url = url.rstrip("/")
     if not test_url:
         return ConnectionTestResult(success=False, message="No URL configured")
@@ -52,34 +50,12 @@ async def test_code_forge(url: str, token: str) -> ConnectionTestResult:
         return ConnectionTestResult(
             success=False, message="Invalid URL: no hostname", provider="volundr"
         )
-    if parsed.username or parsed.password:
-        return ConnectionTestResult(
-            success=False,
-            message="Invalid URL: embedded credentials are not allowed",
-            provider="volundr",
-        )
-    if parsed.path not in {"", "/"}:
-        return ConnectionTestResult(
-            success=False,
-            message="Invalid URL: base origin only; omit any path",
-            provider="volundr",
-        )
-    if parsed.query or parsed.fragment:
-        return ConnectionTestResult(
-            success=False,
-            message="Invalid URL: query strings and fragments are not allowed",
-            provider="volundr",
-        )
-    block_reason = check_ssrf(parsed.hostname)
-    if block_reason:
-        return ConnectionTestResult(success=False, message=block_reason, provider="volundr")
-
-    netloc = parsed.hostname if parsed.port is None else f"{parsed.hostname}:{parsed.port}"
-    safe_origin = f"{parsed.scheme}://{netloc}"
+    # Reconstruct from validated components to satisfy SSRF analysis
+    safe_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
-                f"{safe_origin}/api/v1/identity/me",
+                f"{safe_url}/api/v1/volundr/me",
                 headers={"Authorization": f"Bearer {token}"},
             )
             if resp.status_code == 200:

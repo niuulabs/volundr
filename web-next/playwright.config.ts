@@ -2,9 +2,6 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
-  // Exclude the baseline capture script from the normal test run.
-  // Run it explicitly with `pnpm capture-baselines`.
-  testIgnore: [/capture-baselines/],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -22,7 +19,7 @@ export default defineConfig({
       animations: 'disabled',
       caret: 'hide',
       // Hide React Query devtools button — it appears in web-next dev mode
-      // but not in web2 prototypes, causing pixel diffs in every screenshot.
+      // but not in the committed visual baselines, causing pixel diffs.
       stylePath: './e2e/visual-test-overrides.css',
     },
   },

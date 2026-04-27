@@ -7,7 +7,7 @@ import type {
 } from '../ports';
 import type { Registry, Topology, TopologyNode, TopologyEdge, ObservatoryEvent } from '../domain';
 
-// ── Seed registry (mirrors DEFAULT_REGISTRY from web2/niuu_handoff/flokk_observatory/design/data.jsx) ──
+// ── Seed registry (mirrors the earlier prototype DEFAULT_REGISTRY seed data) ──
 
 const SEED_REGISTRY: Registry = {
   version: 7,

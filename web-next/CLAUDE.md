@@ -1,7 +1,7 @@
 # Niuu Web (`web-next/`)
 
 This is the new, composable, plugin-based UI for the Niuu platform. It replaces the
-monolithic `web/` app and supersedes the prototype demos in `web2/niuu_handoff/`.
+monolithic `web/` app and supersedes the earlier prototype demos.
 
 **Read this first in any new session.** It captures the non-negotiable architecture
 and the rationale — not a log of past work.
@@ -130,9 +130,9 @@ Three feature-flag tiers, any of which can hide a plugin:
 Styling in `web-next/` uses **Tailwind CSS** mapped to our design tokens. `.claude/rules/web-styles.md`
 bans Tailwind — that ban applies to the legacy `web/` app only, not here.
 
-- **`@niuulabs/design-tokens` owns `tokens.css`** — ported verbatim from
-  `web2/niuu_handoff/flokk_observatory/design/tokens.css`. It is the single source
-  of truth for color, spacing, typography, motion, and theme (ice / amber / spring).
+- **`@niuulabs/design-tokens` owns `tokens.css`** — ported from the earlier
+  prototype system and now treated as the single source of truth for color,
+  spacing, typography, motion, and theme (ice / amber / spring).
 - **Tailwind config reads from tokens** — `tailwind.config.ts` in each package
   pulls from `tokens.css` via `theme.extend`. Never hard-code hex or px in a class
   (`bg-[#09090b]` is a bug — use `bg-bg-primary` mapped to `var(--color-bg-primary)`).
@@ -407,8 +407,6 @@ Edit `apps/niuu/public/config.json` and refresh the browser. No rebuild.
 
 ## References
 
-- Prototype designs: `../web2/niuu_handoff/{flokk_observatory,mimir,ravn,tyr,volundr,niuu_login}/design/`
-- Design READMEs with specs: `../web2/niuu_handoff/*/README.md`
 - Current production UI (reference for API adapters, OIDC, SessionChat): `../web/`
 - Project rules: `../.claude/rules/*.md`
 

@@ -22,7 +22,6 @@
     "test:e2e": "playwright test",
     "test:visual": "playwright test e2e/visual/ --reporter=html",
     "test:visual:update": "playwright test e2e/visual/ --update-snapshots",
-    "capture-baselines": "playwright test e2e/capture-baselines.spec.ts --project=chromium -c playwright.capture.config.ts",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
     "lint": "eslint .",
