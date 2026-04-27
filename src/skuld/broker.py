@@ -111,6 +111,15 @@ def _sanitize_log(value: object) -> str:
     return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
 
+def _resolve_git_workspace_root(workspace_dir: str) -> Path:
+    """Resolve the actual checkout root for git-backed workspaces."""
+    workspace = Path(workspace_dir).resolve()
+    repo_dir = workspace / "repo"
+    if (repo_dir / ".git").exists():
+        return repo_dir
+    return workspace
+
+
 # ---------------------------------------------------------------------------
 # Session artifacts & summary prompt (Part: Chronicle Summary Generation)
 # ---------------------------------------------------------------------------
@@ -2531,7 +2540,7 @@ async def get_diff(
     ),
 ) -> dict:
     """Return parsed git diff for a single file."""
-    workspace = Path(broker.workspace_dir).resolve()
+    workspace = _resolve_git_workspace_root(broker.workspace_dir)
     target = (workspace / file).resolve()
 
     if not str(target).startswith(str(workspace)):
@@ -2572,7 +2581,7 @@ async def get_diff_files(
     ),
 ) -> dict:
     """Return list of changed files with insertion/deletion counts."""
-    workspace = Path(broker.workspace_dir).resolve()
+    workspace = _resolve_git_workspace_root(broker.workspace_dir)
 
     if base == "last-commit":
         cmd = ["git", "diff", "HEAD", "--numstat"]

@@ -3,8 +3,18 @@ import { renderHook, act } from '@testing-library/react';
 import { useMentionMenu } from './useMentionMenu';
 import type { RoomParticipant, FileEntry } from '../types';
 
-const p1: RoomParticipant = { peerId: 'p1', persona: 'Ada', color: '#38bdf8' };
-const p2: RoomParticipant = { peerId: 'p2', persona: 'Björk', color: '#a78bfa' };
+const p1: RoomParticipant = {
+  peerId: 'p1',
+  persona: 'Ada',
+  color: '#38bdf8',
+  participantType: 'ravn',
+};
+const p2: RoomParticipant = {
+  peerId: 'p2',
+  persona: 'Björk',
+  color: '#a78bfa',
+  participantType: 'human',
+};
 const participants = new Map([
   ['p1', p1],
   ['p2', p2],
@@ -38,7 +48,7 @@ describe('useMentionMenu — basic state', () => {
       result.current.handleChange('@', 1);
     });
     expect(result.current.isOpen).toBe(true);
-    expect(result.current.items).toHaveLength(2);
+    expect(result.current.items).toHaveLength(1);
   });
 
   it('closes when space follows @-query', () => {
@@ -60,6 +70,18 @@ describe('useMentionMenu — basic state', () => {
         .persona,
     ).toBe('Ada');
   });
+
+  it('only offers ravn participants for agent mentions', () => {
+    const { result } = renderHook(() => useMentionMenu(null, null, null, participants));
+    act(() => {
+      result.current.handleChange('@', 1);
+    });
+    expect(result.current.items).toHaveLength(1);
+    expect(
+      (result.current.items[0] as { kind: 'agent'; participant: RoomParticipant }).participant
+        .persona,
+    ).toBe('Ada');
+  });
 });
 
 describe('useMentionMenu — keyboard navigation', () => {
@@ -71,7 +93,7 @@ describe('useMentionMenu — keyboard navigation', () => {
     act(() => {
       result.current.handleKeyDown(makeKeyEvent('ArrowDown'));
     });
-    expect(result.current.selectedIndex).toBe(1);
+    expect(result.current.selectedIndex).toBe(0);
   });
 
   it('ArrowUp wraps to last item', () => {
@@ -82,7 +104,7 @@ describe('useMentionMenu — keyboard navigation', () => {
     act(() => {
       result.current.handleKeyDown(makeKeyEvent('ArrowUp'));
     });
-    expect(result.current.selectedIndex).toBe(1);
+    expect(result.current.selectedIndex).toBe(0);
   });
 
   it('Escape closes menu', () => {

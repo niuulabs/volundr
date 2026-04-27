@@ -59,6 +59,15 @@ class TestSkuldPortRegistry:
         reg.register("sess-1", 9200)
         assert reg.get_port("sess-1") == 9200
 
+    def test_get_port_recovers_from_persisted_state(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "forge-state.json"
+        state_file.write_text(
+            '{"sess-1":{"session_id":"sess-1","port":9100,"state":"running"}}',
+            encoding="utf-8",
+        )
+        reg = SkuldPortRegistry(state_file=state_file)
+        assert reg.get_port("sess-1") == 9100
+
 
 class TestGetSkuldRegistry:
     """Tests for the module-level get_skuld_registry function."""

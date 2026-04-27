@@ -3,6 +3,8 @@
 import asyncio
 import json
 import logging
+import os
+from urllib.parse import urlsplit, urlunsplit
 import re
 from uuid import UUID, uuid4
 
@@ -48,6 +50,24 @@ from volundr.domain.services import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _public_session_endpoint(endpoint: str | None) -> str | None:
+    """Normalize loopback session endpoints for browser-facing clients."""
+    if not endpoint:
+        return endpoint
+    try:
+        parsed = urlsplit(endpoint)
+    except ValueError:
+        return endpoint
+    if parsed.hostname != "127.0.0.1":
+        return endpoint
+    host = os.environ.get("NIUU_SERVER_HOST", "127.0.0.1").strip() or "127.0.0.1"
+    public_host = "localhost" if host == "127.0.0.1" else host
+    netloc = public_host
+    if parsed.port is not None:
+        netloc = f"{public_host}:{parsed.port}"
+    return urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))
 
 
 def _sanitize_log(value: object) -> str:
@@ -365,7 +385,7 @@ class SessionResponse(BaseModel):
             model=session.model,
             source=session.source,
             status=session.status,
-            chat_endpoint=session.chat_endpoint,
+            chat_endpoint=_public_session_endpoint(session.chat_endpoint),
             code_endpoint=session.code_endpoint,
             created_at=session.created_at.isoformat(),
             updated_at=session.updated_at.isoformat(),

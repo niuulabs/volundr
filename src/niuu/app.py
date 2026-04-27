@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from collections.abc import AsyncGenerator
@@ -45,8 +46,11 @@ def _sanitize_log(value: object) -> str:
 class SkuldPortRegistry:
     """Maps session IDs to their Skuld subprocess ports."""
 
-    def __init__(self) -> None:
+    def __init__(self, state_file: Path | None = None) -> None:
         self._ports: dict[str, int] = {}
+        self._state_file = state_file or Path(
+            os.environ.get("NIUU_FORGE_STATE_FILE", "~/.niuu/forge-state.json")
+        ).expanduser()
 
     def register(self, session_id: str, port: int) -> None:
         self._ports[session_id] = port
@@ -55,7 +59,30 @@ class SkuldPortRegistry:
         self._ports.pop(session_id, None)
 
     def get_port(self, session_id: str) -> int | None:
-        return self._ports.get(session_id)
+        port = self._ports.get(session_id)
+        if port is not None:
+            return port
+        recovered_port = self._recover_port(session_id)
+        if recovered_port is not None:
+            self._ports[session_id] = recovered_port
+        return recovered_port
+
+    def _recover_port(self, session_id: str) -> int | None:
+        if not self._state_file.exists():
+            return None
+        try:
+            payload = json.loads(self._state_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return None
+        if not isinstance(payload, dict):
+            return None
+        info = payload.get(session_id)
+        if not isinstance(info, dict):
+            return None
+        if info.get("state") not in {"running", "starting"}:
+            return None
+        port = info.get("port")
+        return port if isinstance(port, int) else None
 
 
 _skuld_registry: SkuldPortRegistry | None = None

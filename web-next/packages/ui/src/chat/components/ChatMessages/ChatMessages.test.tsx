@@ -122,6 +122,13 @@ describe('StreamingMessage', () => {
     render(<StreamingMessage content="partial" parts={parts} />);
     expect(screen.getByTestId('tool-block')).toBeInTheDocument();
   });
+
+  it('renders tool blocks while streaming before text content arrives', () => {
+    const parts = [{ type: 'tool_use' as const, id: 't1', name: 'Bash', input: { command: 'ls' } }];
+    render(<StreamingMessage content="" parts={parts} />);
+    expect(screen.getByText('Using tools...')).toBeInTheDocument();
+    expect(screen.getByTestId('tool-block')).toBeInTheDocument();
+  });
 });
 
 describe('AssistantMessage — extended', () => {

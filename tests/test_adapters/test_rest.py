@@ -169,6 +169,21 @@ class TestSessionResponse:
         assert response.pod_name == "volundr-abc123"
         assert session.created_at.isoformat() in response.created_at
 
+    def test_from_session_normalizes_loopback_chat_endpoint(self):
+        """Loopback chat endpoints should prefer localhost for browser clients."""
+        session = Session(
+            id=uuid4(),
+            name="Test",
+            model="claude-sonnet-4",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
+            status=SessionStatus.RUNNING,
+            chat_endpoint="ws://127.0.0.1:8080/s/example/session",
+        )
+
+        response = SessionResponse.from_session(session)
+
+        assert response.chat_endpoint == "ws://localhost:8080/s/example/session"
+
 
 class TestListSessions:
     """Tests for GET /api/v1/volundr/sessions."""

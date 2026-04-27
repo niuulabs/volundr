@@ -65,7 +65,9 @@ export interface ChatMessage {
 
 export interface AgentInternalEvent {
   id: string;
-  frameType: 'thought' | 'tool_start' | 'tool_result';
+  participantId?: string;
+  timestamp?: Date;
+  frameType: 'thought' | 'tool_start' | 'tool_result' | string;
   data: string | Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }

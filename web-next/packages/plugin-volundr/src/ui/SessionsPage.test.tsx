@@ -5,6 +5,7 @@ import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { SessionsPage } from './SessionsPage';
 import {
   createMockSessionStore,
+  createMockVolundrService,
   createMockPtyStream,
   createMockFileSystemPort,
 } from '../adapters/mock';
@@ -54,6 +55,7 @@ function wrap(sessionStore: ISessionStore = createMockSessionStore()) {
     <QueryClientProvider client={client}>
       <ServicesProvider
         services={{
+          volundr: createMockVolundrService(),
           sessionStore,
           ptyStream: createMockPtyStream(),
           filesystem: createMockFileSystemPort(),
@@ -80,9 +82,9 @@ describe('SessionsPage', () => {
     await waitFor(() => expect(screen.getByTestId('pod-list-sidebar')).toBeInTheDocument());
   });
 
-  it('renders sidebar header with Pods title', async () => {
+  it('renders sidebar header with Sessions title', async () => {
     wrap();
-    await waitFor(() => expect(screen.getByText('Pods')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Sessions')).toBeInTheDocument());
   });
 
   it('renders session count badge', async () => {
@@ -119,7 +121,7 @@ describe('SessionsPage', () => {
 
   it('auto-selects the first running session and shows detail page', async () => {
     wrap();
-    await waitFor(() => expect(screen.getByTestId('session-detail-page')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('live-session-detail-page')).toBeInTheDocument());
   });
 
   it('switches detail view when clicking a different session', async () => {
@@ -128,7 +130,7 @@ describe('SessionsPage', () => {
       expect(screen.getByTestId('pod-entry-mimir-bge-reindex')).toBeInTheDocument(),
     );
     fireEvent.click(screen.getByTestId('pod-entry-mimir-bge-reindex'));
-    await waitFor(() => expect(screen.getByTestId('session-detail-page')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('live-session-detail-page')).toBeInTheDocument());
   });
 
   it('filters sidebar entries by search query', async () => {
@@ -150,12 +152,13 @@ describe('SessionsPage', () => {
     expect(screen.getByText(/loading sessions/i)).toBeInTheDocument();
   });
 
-  it('renders connection type badges on sessions', async () => {
+  it('renders session row metadata without crashing', async () => {
     wrap();
     await waitFor(() =>
       expect(screen.getByTestId('pod-entry-laptop-volundr-local')).toBeInTheDocument(),
     );
-    const badges = screen.getAllByTestId('connection-type-badge');
-    expect(badges.length).toBeGreaterThan(0);
+    const row = screen.getByTestId('pod-entry-laptop-volundr-local');
+    expect(row).toHaveTextContent(/reading volundr/i);
+    expect(row).toHaveTextContent(/ago/i);
   });
 });

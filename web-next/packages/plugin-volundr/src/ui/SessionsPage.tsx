@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LoadingState, ErrorState, EmptyState, StateDot, relTime, cn } from '@niuulabs/ui';
 import type { DotState } from '@niuulabs/ui';
+import { Clock3, FolderGit2, Search, SquareTerminal, Ticket } from 'lucide-react';
 import { useSessionList } from './hooks/useSessionStore';
 import { groupByState } from './sessions/groupByState';
-import { ConnectionTypeBadge } from './atoms';
-import { SessionDetailPage } from './SessionDetailPage';
+import { LiveSessionDetailPage } from './LiveSessionDetailPage';
 import type { Session, SessionState } from '../domain/session';
 
 // ---------------------------------------------------------------------------
@@ -39,6 +39,18 @@ const SESSION_DOT: Record<SessionState, DotState> = {
   failed: 'failed',
 };
 
+function looksLikeRepoLabel(value: string): boolean {
+  return value.includes('#') || value.startsWith('~/') || value.startsWith('/') || value.startsWith('http');
+}
+
+function compactSourceParts(value: string): { label: string; branch?: string } {
+  if (value.includes('#')) {
+    const [repo, branch] = value.split('#');
+    return { label: repo ?? value, branch: branch || undefined };
+  }
+  return { label: value };
+}
+
 // ---------------------------------------------------------------------------
 // PodEntry — a single session row in the sidebar
 // ---------------------------------------------------------------------------
@@ -56,33 +68,68 @@ function PodEntry({
 }) {
   const ageLabel = relTime(new Date(session.lastActivityAt ?? session.startedAt).getTime());
   const primaryLabel = session.personaName || session.id;
+  const trackerLabel = session.sagaId ?? session.raidId ?? session.ravnId;
+  const previewLabel = session.preview;
+  const sourceParts =
+    previewLabel && looksLikeRepoLabel(previewLabel) ? compactSourceParts(previewLabel) : null;
+  const showPreviewFallback = previewLabel && !sourceParts;
   return (
     <button
       type="button"
       onClick={onSelect}
       data-testid={`pod-entry-${session.id}`}
       className={cn(
-        'niuu-flex niuu-w-full niuu-items-start niuu-gap-3 niuu-border-l-2 niuu-px-4 niuu-py-2.5 niuu-text-left niuu-transition-colors',
+        'niuu-flex niuu-w-full niuu-items-start niuu-gap-2.5 niuu-border-b niuu-border-l-2 niuu-px-4 niuu-py-2 niuu-text-left niuu-transition-colors',
         selected
-          ? 'niuu-border-brand niuu-bg-[#12212b]'
-          : 'niuu-border-transparent hover:niuu-bg-bg-tertiary',
+          ? 'niuu-border-brand niuu-border-b-white/10 niuu-bg-[#12212b] niuu-shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]'
+          : 'niuu-border-transparent niuu-border-b-white/6 hover:niuu-bg-bg-tertiary',
       )}
     >
       <StateDot state={SESSION_DOT[session.state]} pulse={session.state === 'running'} />
       {collapsed ? null : (
-      <div className="niuu-flex-1 niuu-min-w-0 niuu-flex niuu-flex-col niuu-gap-0.5">
-        <div className="niuu-font-mono niuu-text-[14px] niuu-font-medium niuu-text-text-primary niuu-truncate">
-          {primaryLabel}
-        </div>
-        <div className="niuu-font-mono niuu-text-[10px] niuu-text-text-muted niuu-truncate">
-          {session.id} · {ageLabel}
-        </div>
-      </div>
-      )}
-      {session.connectionType && (
-        <div className="niuu-flex niuu-h-8 niuu-w-8 niuu-items-center niuu-justify-center niuu-rounded-md niuu-bg-bg-elevated">
-          <ConnectionTypeBadge connectionType={session.connectionType} />
-        </div>
+        <>
+          <div className="niuu-flex-1 niuu-min-w-0 niuu-flex niuu-flex-col niuu-gap-0.5">
+            <div className="niuu-font-mono niuu-text-[14px] niuu-font-medium niuu-text-text-primary niuu-truncate">
+              {primaryLabel}
+            </div>
+            <div className="niuu-flex niuu-min-w-0 niuu-flex-wrap niuu-items-center niuu-gap-x-2.5 niuu-gap-y-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted">
+              {trackerLabel ? (
+                <span
+                  className="niuu-flex niuu-min-w-0 niuu-items-center niuu-gap-1.5"
+                  title={trackerLabel}
+                >
+                  <Ticket className="niuu-h-3 niuu-w-3 niuu-flex-shrink-0 niuu-text-text-faint" />
+                  <span className="niuu-truncate niuu-text-brand">{trackerLabel}</span>
+                </span>
+              ) : null}
+              {sourceParts ? (
+                <span
+                  className="niuu-flex niuu-min-w-0 niuu-items-center niuu-gap-1.5"
+                  title={previewLabel}
+                >
+                  <FolderGit2 className="niuu-h-3 niuu-w-3 niuu-flex-shrink-0 niuu-text-text-faint" />
+                  <span className="niuu-truncate">{sourceParts.label}</span>
+                  {sourceParts.branch ? (
+                    <span className="niuu-flex-shrink-0 niuu-text-brand">@{sourceParts.branch}</span>
+                  ) : null}
+                </span>
+              ) : null}
+              {showPreviewFallback ? (
+                <span
+                  className="niuu-flex niuu-min-w-0 niuu-items-center niuu-gap-1.5"
+                  title={previewLabel}
+                >
+                  <SquareTerminal className="niuu-h-3 niuu-w-3 niuu-flex-shrink-0 niuu-text-text-faint" />
+                  <span className="niuu-truncate">{previewLabel}</span>
+                </span>
+              ) : null}
+              <span className="niuu-flex niuu-flex-shrink-0 niuu-items-center niuu-gap-1.5">
+                <Clock3 className="niuu-h-3 niuu-w-3 niuu-flex-shrink-0 niuu-text-text-faint" />
+                <span>{ageLabel}</span>
+              </span>
+            </div>
+          </div>
+        </>
       )}
     </button>
   );
@@ -110,7 +157,7 @@ function PodGroup({
   return (
     <div data-testid={`pod-group-${label.toLowerCase()}`}>
       {!collapsed && (
-      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-px-5 niuu-py-3 niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-muted">
+      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-white/6 niuu-px-5 niuu-py-2.5 niuu-text-[10px] niuu-font-semibold niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-muted">
         <span>{label}</span>
         <span className="niuu-font-mono niuu-text-text-faint" data-testid={`pod-group-${label.toLowerCase()}-count`}>
           {sessions.length}
@@ -181,9 +228,23 @@ export function SessionsPage() {
       {/* ── Left sidebar: pod list ─────────────────────────────── */}
       <nav
         className={cn(
-          'niuu-relative niuu-shrink-0 niuu-overflow-hidden niuu-border-r niuu-border-border-subtle niuu-bg-[#0b0c10] niuu-transition-[width] niuu-duration-200',
-          sidebarCollapsed ? 'niuu-w-[54px]' : 'niuu-w-[272px]',
+          'niuu-relative niuu-shrink-0 niuu-overflow-hidden niuu-bg-[#0b0c10] niuu-transition-[width] niuu-duration-200',
         )}
+        style={
+          sidebarCollapsed
+            ? {
+                width: '48px',
+                minWidth: '48px',
+                maxWidth: '48px',
+                flexBasis: '48px',
+              }
+            : {
+                width: '228px',
+                minWidth: '228px',
+                maxWidth: '228px',
+                flexBasis: '228px',
+              }
+        }
         aria-label="Session list"
         data-testid="pod-list-sidebar"
       >
@@ -215,7 +276,7 @@ export function SessionsPage() {
           </div>
         ) : (
           <div className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-hidden">
-            <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-border-subtle niuu-px-4 niuu-py-3">
+            <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-white/8 niuu-px-4 niuu-py-3">
               <div className="niuu-flex niuu-items-baseline niuu-gap-2">
                 <h2 className="niuu-text-sm niuu-font-semibold niuu-text-text-primary">Sessions</h2>
                 <span
@@ -236,43 +297,28 @@ export function SessionsPage() {
               </button>
             </div>
 
-            <div className="niuu-px-4 niuu-pb-3">
+            <div className="niuu-px-4 niuu-pb-2">
               <p className="niuu-text-[10px] niuu-font-mono niuu-text-text-faint">
                 filter in header · click to open
               </p>
             </div>
 
-            <div className="niuu-px-4 niuu-py-2">
-              <div className="niuu-relative">
-                <svg
-                  className="niuu-pointer-events-none niuu-absolute niuu-left-2 niuu-top-1/2 niuu--translate-y-1/2 niuu-text-text-muted"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.25" />
-                  <path
-                    d="M10 10L12.5 12.5"
-                    stroke="currentColor"
-                    strokeWidth="1.25"
-                    strokeLinecap="round"
-                  />
-                </svg>
+            <div className="niuu-px-4 niuu-py-1.5">
+              <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-px-3 niuu-py-2 niuu-shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] focus-within:niuu-border-brand/50 focus-within:niuu-ring-1 focus-within:niuu-ring-brand/20">
+                <Search className="niuu-h-4 niuu-w-4 niuu-flex-shrink-0 niuu-text-text-muted" aria-hidden="true" />
                 <input
                   type="search"
                   placeholder="filter by name / branch /"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="niuu-w-full niuu-rounded niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-py-1.5 niuu-pl-7 niuu-pr-2 niuu-text-[11px] niuu-text-text-primary placeholder:niuu-text-text-muted focus:niuu-outline-none focus:niuu-ring-1 focus:niuu-ring-brand"
+                  className="niuu-min-w-0 niuu-flex-1 niuu-bg-transparent niuu-py-0.5 niuu-text-[11px] niuu-text-text-primary placeholder:niuu-text-text-muted focus:niuu-outline-none"
                   data-testid="pod-search"
                   aria-label="Filter sessions"
                 />
               </div>
             </div>
 
-            <div className="niuu-flex-1 niuu-overflow-y-auto">
+            <div className="niuu-flex-1 niuu-overflow-y-auto niuu-pb-2">
               {sidebarGroups.map((g) => (
                 <PodGroup
                   key={g.label}
@@ -288,6 +334,16 @@ export function SessionsPage() {
       </nav>
 
       {/* ── Main content: session detail ───────────────────────── */}
+      <div
+        aria-hidden="true"
+        className="niuu-h-full niuu-flex-shrink-0"
+        style={{
+          width: '3px',
+          background:
+            'linear-gradient(to right, rgba(255,255,255,0.12), rgba(255,255,255,0.30), rgba(255,255,255,0.12))',
+        }}
+      />
+
       <div className="niuu-flex niuu-min-w-0 niuu-flex-1 niuu-flex-col niuu-overflow-hidden">
         {sessionsQuery.isLoading && <LoadingState label="Loading sessions…" />}
         {sessionsQuery.isError && (
@@ -302,7 +358,7 @@ export function SessionsPage() {
           <EmptyState title="No session selected" description="Select a session from the sidebar." />
         )}
         {sessionsQuery.data && selectedSessionId && (
-          <SessionDetailPage key={selectedSessionId} sessionId={selectedSessionId} />
+          <LiveSessionDetailPage key={selectedSessionId} sessionId={selectedSessionId} />
         )}
       </div>
     </div>

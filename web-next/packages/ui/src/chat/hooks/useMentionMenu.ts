@@ -126,6 +126,7 @@ export function useMentionMenu(
 
       // Build agent items
       const agentItems: MentionMenuItem[] = Array.from(participants.values())
+        .filter((p) => p.participantType === 'ravn')
         .filter((p) => !query || p.persona.toLowerCase().includes(query.toLowerCase()))
         .map((p) => ({ kind: 'agent', participant: p }));
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -55,6 +56,12 @@ logger = logging.getLogger(__name__)
 def _sanitize_log(value: object) -> str:
     """Sanitize a value for safe log output (prevent log injection)."""
     return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
+def _public_loopback_host() -> str:
+    """Return the loopback host we publish to browser-facing clients."""
+    host = os.environ.get("NIUU_SERVER_HOST", "127.0.0.1").strip() or "127.0.0.1"
+    return "localhost" if host == "127.0.0.1" else host
 
 
 class SessionNotFoundError(Exception):
@@ -563,9 +570,7 @@ class SessionService:
             raise SessionStateError(session_id, "start", session.status)
 
         # Set chat_endpoint eagerly — URL is deterministic from session ID
-        import os
-
-        host = os.environ.get("NIUU_SERVER_HOST", "127.0.0.1")
+        host = _public_loopback_host()
         port = os.environ.get("NIUU_SERVER_PORT", "8080")
         chat_endpoint = f"ws://{host}:{port}/s/{session_id}/session"
 

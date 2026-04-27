@@ -288,6 +288,37 @@ export function StreamingMessage({ content, parts, model }: StreamingMessageProp
   const hasReasoning = reasoningParts.length > 0;
   const hasTools = hasToolParts(parts);
 
+  if (!content && hasTools && parts) {
+    return (
+      <div className="niuu-chat-streaming-wrapper" data-testid="streaming-message">
+        <div className={cn('niuu-chat-avatar', 'niuu-chat-avatar--pulsing')}>
+          <Hammer className="niuu-chat-avatar-icon" />
+        </div>
+        <div className="niuu-chat-assistant-body">
+          <div className="niuu-chat-assistant-header">
+            {model && <span className="niuu-chat-model-badge">{model}</span>}
+            <span className="niuu-chat-generating-label">
+              <Loader2 className="niuu-chat-spinner-icon" />
+              Using tools...
+            </span>
+          </div>
+          {hasReasoning && (
+            <div className="niuu-chat-reasoning-content">
+              {reasoningParts.map((part, i) => (
+                <div key={i} className="niuu-chat-reasoning-text">
+                  {part.text}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="niuu-chat-assistant-content">
+            <AssistantContentWithTools parts={parts} fallbackContent="" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!content && hasReasoning) {
     return (
       <div className="niuu-chat-streaming-wrapper" data-testid="streaming-message">
