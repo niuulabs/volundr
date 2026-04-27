@@ -13,6 +13,17 @@ function activePluginId(pathname: string, ids: string[]): string | null {
   return null;
 }
 
+function PluginSlot({
+  render,
+  ctx,
+}: {
+  render?: ((ctx: unknown) => ReactNode) | null;
+  ctx: unknown;
+}) {
+  if (!render) return null;
+  return <>{render(ctx)}</>;
+}
+
 export function ShellLayout() {
   const config = useConfig();
   const { enabled, brand, version, ctx } = useShellContext();
@@ -68,8 +79,6 @@ export function ShellLayout() {
       }
     };
   }, [navPlugins, register, unregister, handleSelect]);
-
-  const subnavNode: ReactNode = active?.subnav?.(ctx) ?? null;
 
   return (
     <div className="niuu-shell" data-theme={config.theme}>
@@ -158,7 +167,7 @@ export function ShellLayout() {
           )}
         </div>
         <div className="niuu-shell__topbar-right">
-          {active?.topbarRight?.(ctx)}
+          <PluginSlot render={active?.topbarRight ?? null} ctx={ctx} />
           <LiveBadge />
           <div className="niuu-shell__topbar-sep" />
           <button
@@ -172,8 +181,8 @@ export function ShellLayout() {
         </div>
       </header>
 
-      <nav className={clsx('niuu-shell__subnav', !subnavNode && 'niuu-shell__subnav--collapsed')}>
-        {subnavNode}
+      <nav className="niuu-shell__subnav">
+        <PluginSlot render={active?.subnav ?? null} ctx={ctx} />
       </nav>
 
       <main className="niuu-shell__content">
@@ -187,7 +196,7 @@ export function ShellLayout() {
           <span>niuu.world</span>
         </div>
         <div className="niuu-shell__footer-center" data-testid="footer-status">
-          {active?.footer?.(ctx)}
+          <PluginSlot render={active?.footer ?? null} ctx={ctx} />
         </div>
         <div className="niuu-shell__footer-right">
           <span>{enabled.length} plugins loaded</span>

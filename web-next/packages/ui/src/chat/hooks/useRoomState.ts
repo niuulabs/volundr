@@ -16,7 +16,14 @@ const FILTER_ALL = 'all';
 
 function isVisibleMessage(msg: ChatMessage): boolean {
   if (msg.metadata?.messageType === 'system') return false;
-  if (msg.role === 'assistant' && msg.status === 'done' && !msg.content.trim()) return false;
+  if (
+    msg.role === 'assistant' &&
+    msg.status === 'done' &&
+    !msg.content.trim() &&
+    !(msg.parts && msg.parts.length > 0)
+  ) {
+    return false;
+  }
   return true;
 }
 

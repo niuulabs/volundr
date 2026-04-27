@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, type ReactNode } from 'react';
 import { RouterProvider } from '@tanstack/react-router';
 import type { RouterHistory } from '@tanstack/react-router';
 import { useFeatureCatalog, type PluginDescriptor, type PluginCtx } from '@niuulabs/plugin-sdk';
@@ -8,7 +8,7 @@ import { composeRouter } from './composeRouter';
 
 interface ShellProps {
   plugins: PluginDescriptor[];
-  brand?: string;
+  brand?: ReactNode;
   version?: string;
   /** @internal Override the router history — for tests and Storybook only. */
   _testHistory?: RouterHistory;

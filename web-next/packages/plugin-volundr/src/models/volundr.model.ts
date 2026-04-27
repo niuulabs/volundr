@@ -389,6 +389,8 @@ export interface StoredCredential {
   name: string;
   secretType: SecretType;
   keys: string[];
+  scope?: string;
+  used?: number;
   metadata: Record<string, string>;
   createdAt: string;
   updatedAt: string;
@@ -423,6 +425,11 @@ export interface VolundrCredential {
 
 export interface IntegrationConnection {
   id: string;
+  slug?: string;
+  integrationType?: string;
+  credentialName?: string;
+  adapter?: string;
+  enabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }

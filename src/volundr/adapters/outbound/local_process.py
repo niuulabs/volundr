@@ -55,6 +55,12 @@ DEFAULT_ALLOWED_MOUNT_PREFIXES: list[str] = []
 READY_POLL_INTERVAL = 0.5
 
 
+def _public_loopback_host() -> str:
+    """Return the loopback host we publish to browser-facing clients."""
+    host = os.environ.get("NIUU_SERVER_HOST", "127.0.0.1").strip() or "127.0.0.1"
+    return "localhost" if host == "127.0.0.1" else host
+
+
 class ProcessState(StrEnum):
     """State of a managed Claude process."""
 
@@ -212,6 +218,12 @@ class LocalProcessPodManager(PodManager):
     def set_skuld_registry(self, registry: object) -> None:
         """Inject the SkuldPortRegistry for proxy routing."""
         self._skuld_registry = registry
+        register = getattr(registry, "register", None)
+        if not callable(register):
+            return
+        for session_id, info in self._processes.items():
+            if info.state == ProcessState.RUNNING and info.port is not None:
+                register(session_id, info.port)
 
     # ------------------------------------------------------------------
     # PodManager interface
@@ -269,7 +281,7 @@ class LocalProcessPodManager(PodManager):
             raise
 
         # Chat endpoint routes through the root server's proxy
-        server_host = os.environ.get("NIUU_SERVER_HOST", "127.0.0.1")
+        server_host = _public_loopback_host()
         server_port = os.environ.get("NIUU_SERVER_PORT", "8080")
         chat_endpoint = f"ws://{server_host}:{server_port}/s/{session_id}/session"
         code_endpoint = f"file://{workspace}"

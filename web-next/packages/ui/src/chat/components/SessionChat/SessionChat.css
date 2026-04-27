@@ -3,6 +3,7 @@
 .niuu-chat-outer-grid {
   display: grid;
   grid-template-columns: 1fr;
+  height: 100%;
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -38,9 +39,11 @@
 .niuu-chat-wrapper {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  height: 100%;
   min-height: 0;
   min-width: 0;
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   overflow: hidden;
   background-color: var(--color-bg-primary);
 }
@@ -52,8 +55,8 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-2) var(--space-4);
-  background-color: color-mix(in srgb, var(--color-bg-tertiary) 60%, transparent);
-  border-bottom: 1px solid var(--color-border-subtle);
+  background-color: var(--color-bg-secondary);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.18);
   flex-shrink: 0;
 }
 
@@ -241,9 +244,29 @@
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: var(--space-6);
+  padding: var(--space-6) var(--space-6) calc(var(--space-6) + 8.5rem);
   scrollbar-width: thin;
-  scrollbar-color: var(--color-bg-elevated) transparent;
+  scrollbar-color: color-mix(in srgb, var(--color-brand) 35%, var(--color-bg-elevated)) transparent;
+}
+
+.niuu-chat-messages-container::-webkit-scrollbar {
+  width: 10px;
+}
+
+.niuu-chat-messages-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.niuu-chat-messages-container::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-brand) 28%, var(--color-bg-elevated));
+  background-clip: padding-box;
+}
+
+.niuu-chat-messages-container::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--color-brand) 42%, var(--color-bg-elevated));
+  background-clip: padding-box;
 }
 
 .niuu-chat-messages-inner {
@@ -303,8 +326,19 @@
 /* ── Input Area ── */
 
 .niuu-chat-input-area-outer {
-  padding: var(--space-2) var(--space-6) var(--space-4);
+  position: sticky;
+  bottom: 0;
+  z-index: 12;
+  padding: var(--space-3) var(--space-6) var(--space-4);
   flex-shrink: 0;
+  border-top: 1px solid color-mix(in srgb, var(--color-border-subtle) 80%, transparent);
+  background:
+    linear-gradient(
+      to top,
+      color-mix(in srgb, var(--color-bg-primary) 100%, transparent) 72%,
+      color-mix(in srgb, var(--color-bg-primary) 82%, transparent) 100%
+    );
+  backdrop-filter: blur(10px);
 }
 
 .niuu-chat-input-area-inner {

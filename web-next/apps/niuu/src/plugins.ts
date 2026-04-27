@@ -20,6 +20,16 @@ const settingsPlugin = definePlugin({
       path: '/settings',
       component: SettingsPage,
     }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/settings/$providerId',
+      component: SettingsPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/settings/$providerId/$sectionId',
+      component: SettingsPage,
+    }),
   ],
 });
 

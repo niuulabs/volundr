@@ -17,15 +17,28 @@
 
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { cn } from '@niuulabs/ui';
-import type { WorkflowNode, WorkflowEdge } from '../../domain/workflow';
+import type {
+  WorkflowNode,
+  WorkflowEdge,
+  WorkflowStageNode,
+  WorkflowGateNode,
+  WorkflowCondNode,
+  WorkflowTriggerNode,
+  WorkflowEndNode,
+} from '../../domain/workflow';
+import type { WorkflowIssue } from '../../domain/workflowValidation';
 import type { WorkflowBuilderActions } from './useWorkflowBuilder';
+import type { PersonaEntry } from './LibraryPanel';
 import {
   STAGE_WIDTH,
-  STAGE_HEIGHT,
   GATE_SIZE,
   COND_RADIUS,
-  edgeToPath,
+  TRIGGER_WIDTH,
+  TRIGGER_HEIGHT,
+  END_RADIUS,
   nodeCentre,
+  stageNodeHeight,
+  normalizedStageMembers,
 } from './graphUtils';
 
 // ---------------------------------------------------------------------------
@@ -53,6 +66,10 @@ const C = {
   gateStroke: 'var(--status-amber)',
   cond: 'color-mix(in srgb, var(--status-cyan) 20%, var(--color-bg-secondary))',
   condStroke: 'var(--status-cyan)',
+  warnStroke: 'var(--status-amber)',
+  errorStroke: 'var(--color-critical)',
+  warnFill: 'color-mix(in srgb, var(--status-amber) 12%, var(--color-bg-secondary))',
+  errorFill: 'color-mix(in srgb, var(--color-critical) 12%, var(--color-bg-secondary))',
 };
 
 // ---------------------------------------------------------------------------
@@ -103,44 +120,8 @@ function useDragNode({
 }
 
 // ---------------------------------------------------------------------------
-// ConnectButton / DeleteButton — shared SVG button primitives
+// DeleteButton — shared SVG button primitive
 // ---------------------------------------------------------------------------
-
-function ConnectButton({
-  nodeId,
-  cx,
-  cy,
-  onClick,
-}: {
-  nodeId: string;
-  cx: number;
-  cy: number;
-  onClick: () => void;
-}) {
-  return (
-    <g
-      data-testid={`connect-btn-${nodeId}`}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      className="niuu-cursor-pointer"
-    >
-      <circle cx={cx} cy={cy} r={8} fill="var(--color-brand)" />
-      <text
-        x={cx}
-        y={cy}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fill="var(--color-bg-primary)"
-        fontSize={12}
-        className="niuu-pointer-events-none"
-      >
-        →
-      </text>
-    </g>
-  );
-}
 
 function DeleteButton({
   nodeId,
@@ -182,13 +163,14 @@ function DeleteButton({
 // Sub-components
 // ---------------------------------------------------------------------------
 
-interface NodeProps {
-  node: WorkflowNode;
+interface BaseNodeProps<TNode extends WorkflowNode> {
+  node: TNode;
   selected: boolean;
+  issueLevel: 'error' | 'warning' | null;
   onSelect: () => void;
   onInspect: () => void;
-  onStartConnect: () => void;
-  onCompleteConnect: () => void;
+  onStartConnect: (label?: string) => void;
+  onCompleteConnect: (inputLabel?: string) => void;
   onDelete: () => void;
   onDragEnd: (position: { x: number; y: number }) => void;
   isConnectingMode: boolean;
@@ -196,7 +178,10 @@ interface NodeProps {
 
 function StageNode({
   node,
+  personas,
+  connectingFromLabel,
   selected,
+  issueLevel,
   onSelect,
   onInspect,
   onStartConnect,
@@ -204,19 +189,40 @@ function StageNode({
   onDelete,
   onDragEnd,
   isConnectingMode,
-}: NodeProps) {
+}: BaseNodeProps<WorkflowStageNode> & {
+  personas: PersonaEntry[];
+  connectingFromLabel?: string | null;
+}) {
   const { x, y } = node.position;
+  const stageMembers = normalizedStageMembers(node);
+  const personaMap = new Map(personas.map((persona) => [persona.id, persona]));
+  const knownInputs = [...new Set(stageMembers.flatMap((member) => personaMap.get(member.personaId)?.consumes ?? []))];
+  const knownOutputs = [...new Set(stageMembers.flatMap((member) => personaMap.get(member.personaId)?.produces ?? []))];
+  const portRows = Math.max(knownInputs.length, knownOutputs.length, 0);
+  const stageHeight = stageNodeHeight(node) + (portRows > 0 ? 22 + portRows * 14 : 0);
   const { handleMouseDown, handleMouseMove, handleMouseUp } = useDragNode({
     x,
     y,
     isConnectingMode,
     onSelect,
-    onCompleteConnect,
+    onCompleteConnect: () => {},
     onDragEnd,
   });
-  const fill = selected ? 'var(--color-bg-elevated)' : C.nodeFill;
-  const stroke = selected ? C.nodeStrokeSelected : C.nodeStroke;
-  const sw = selected ? 2 : 1;
+  const fill = selected
+    ? 'var(--color-bg-elevated)'
+    : issueLevel === 'error'
+      ? C.errorFill
+      : issueLevel === 'warning'
+        ? C.warnFill
+        : C.nodeFill;
+  const stroke = selected
+    ? C.nodeStrokeSelected
+    : issueLevel === 'error'
+      ? C.errorStroke
+      : issueLevel === 'warning'
+        ? C.warnStroke
+        : C.nodeStroke;
+  const sw = selected || issueLevel ? 2 : 1;
 
   return (
     <g
@@ -236,7 +242,7 @@ function StageNode({
         x={x}
         y={y}
         width={STAGE_WIDTH}
-        height={STAGE_HEIGHT}
+        height={stageHeight}
         rx={6}
         fill={fill}
         stroke={stroke}
@@ -244,11 +250,11 @@ function StageNode({
       />
       <text
         x={x + STAGE_WIDTH / 2}
-        y={y + STAGE_HEIGHT / 2 - 6}
+        y={y + 18}
         textAnchor="middle"
-        dominantBaseline="middle"
         fill={C.text}
-        fontSize={12}
+        fontSize={11}
+        fontWeight="600"
         fontFamily="var(--font-sans)"
         className="niuu-pointer-events-none niuu-select-none"
       >
@@ -256,43 +262,172 @@ function StageNode({
           ? node.label.slice(0, 16) + '…'
           : node.label}
       </text>
-      {node.kind === 'stage' && node.personaIds.length > 0 && (
+      <text
+        x={x + 12}
+        y={y + 34}
+        fill={C.textMuted}
+        fontSize={8}
+        fontFamily="var(--font-mono)"
+        className="niuu-pointer-events-none niuu-select-none"
+      >
+        {(node.executionMode ?? 'parallel').toUpperCase()} · {stageMembers.length} RAVN
+        {stageMembers.length !== 1 ? 'S' : ''}
+      </text>
+      {stageMembers.map((member, index) => (
+        <g key={`${member.personaId}-${index}`}>
+          <rect
+            x={x + 10}
+            y={y + 42 + index * 20}
+            width={STAGE_WIDTH - 20}
+            height={16}
+            rx={4}
+            fill="var(--color-bg-primary)"
+            opacity={0.65}
+          />
+          <text
+            x={x + 16}
+            y={y + 53 + index * 20}
+            fill={C.text}
+            fontSize={8.5}
+            fontFamily="var(--font-sans)"
+            className="niuu-pointer-events-none niuu-select-none"
+          >
+            {member.personaId}
+          </text>
+          <text
+            x={x + STAGE_WIDTH - 16}
+            y={y + 53 + index * 20}
+            textAnchor="end"
+            fill={C.textMuted}
+            fontSize={8}
+            fontFamily="var(--font-mono)"
+            className="niuu-pointer-events-none niuu-select-none"
+          >
+            budget {member.budget}
+          </text>
+        </g>
+      ))}
+      {knownInputs.length > 0 && (
+        <>
+          <text
+            x={x + 12}
+            y={y + stageHeight - (portRows * 14 + 12)}
+            fill={C.textMuted}
+            fontSize={7}
+            fontFamily="var(--font-mono)"
+            className="niuu-pointer-events-none niuu-select-none"
+          >
+            known inputs
+          </text>
+          {knownInputs.map((input, index) => (
+            <g key={`in-${input}-${index}`}>
+              {isConnectingMode && (
+                <circle
+                  cx={x + 10}
+                  cy={y + stageHeight - (portRows * 14) + index * 14 - 4}
+                  r={4}
+                  fill="var(--color-bg-primary)"
+                  stroke="var(--color-brand)"
+                  strokeWidth={1}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCompleteConnect(input);
+                  }}
+                  className="niuu-cursor-pointer"
+                />
+              )}
+              <rect
+                x={x + 18}
+                y={y + stageHeight - (portRows * 14) + index * 14 - 9}
+                width={64}
+                height={10}
+                rx={3}
+                fill="var(--color-bg-primary)"
+                stroke="var(--color-border-subtle)"
+              />
+              <text
+                x={x + 23}
+                y={y + stageHeight - (portRows * 14) + index * 14 - 2}
+                textAnchor="start"
+                fill={C.textMuted}
+                fontSize={6.5}
+                fontFamily="var(--font-mono)"
+                className="niuu-pointer-events-none niuu-select-none"
+              >
+                {input.length > 14 ? `${input.slice(0, 13)}…` : input}
+              </text>
+            </g>
+          ))}
+        </>
+      )}
+      {knownOutputs.length > 0 && (
+        <>
+          <text
+            x={x + STAGE_WIDTH - 12}
+            y={y + stageHeight - (portRows * 14 + 12)}
+            textAnchor="end"
+            fill={C.textMuted}
+            fontSize={7}
+            fontFamily="var(--font-mono)"
+            className="niuu-pointer-events-none niuu-select-none"
+          >
+            known outputs
+          </text>
+          {knownOutputs.map((output, index) => (
+            <g key={`out-${output}-${index}`}>
+              <rect
+                x={x + STAGE_WIDTH - 82}
+                y={y + stageHeight - (portRows * 14) + index * 14 - 9}
+                width={64}
+                height={10}
+                rx={3}
+                fill="var(--color-bg-primary)"
+                stroke="var(--color-border-subtle)"
+              />
+              <circle
+                cx={x + STAGE_WIDTH - 10}
+                cy={y + stageHeight - (portRows * 14) + index * 14 - 4}
+                r={4}
+                fill={connectingFromLabel === output ? 'var(--color-brand)' : 'var(--color-bg-primary)'}
+                stroke="var(--color-brand)"
+                strokeWidth={1}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartConnect(output);
+                }}
+                className="niuu-cursor-pointer"
+              />
+              <text
+                x={x + STAGE_WIDTH - 77}
+                y={y + stageHeight - (portRows * 14) + index * 14 - 2}
+                textAnchor="start"
+                fill={C.text}
+                fontSize={6.5}
+                fontFamily="var(--font-mono)"
+                className="niuu-pointer-events-none niuu-select-none"
+              >
+                {output.length > 14 ? `${output.slice(0, 13)}…` : output}
+              </text>
+            </g>
+          ))}
+        </>
+      )}
+      {issueLevel && (
         <text
-          x={x + STAGE_WIDTH / 2}
-          y={y + STAGE_HEIGHT / 2 + 10}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill={C.textMuted}
-          fontSize={9}
-          fontFamily="var(--font-sans)"
+          x={x + STAGE_WIDTH - 12}
+          y={y + 18}
+          textAnchor="end"
+          fill={issueLevel === 'error' ? C.errorStroke : C.warnStroke}
+          fontSize={8}
+          fontFamily="var(--font-mono)"
           className="niuu-pointer-events-none niuu-select-none"
         >
-          {node.kind === 'stage'
-            ? `${node.personaIds.length} persona${node.personaIds.length !== 1 ? 's' : ''}`
-            : ''}
+          {issueLevel === 'error' ? 'ERR' : 'WARN'}
         </text>
       )}
       {selected && !isConnectingMode && (
-        <>
-          <ConnectButton
-            nodeId={node.id}
-            cx={x + STAGE_WIDTH + 10}
-            cy={y + STAGE_HEIGHT / 2}
-            onClick={onStartConnect}
-          />
-          <DeleteButton nodeId={node.id} cx={x + STAGE_WIDTH / 2} cy={y - 10} onClick={onDelete} />
-        </>
+        <DeleteButton nodeId={node.id} cx={x + STAGE_WIDTH / 2} cy={y - 10} onClick={onDelete} />
       )}
-      {/* Drop target overlay for persona drag */}
-      <rect
-        data-testid={`stage-drop-${node.id}`}
-        x={x}
-        y={y}
-        width={STAGE_WIDTH}
-        height={STAGE_HEIGHT}
-        fill="transparent"
-        className="niuu-pointer-events-none"
-      />
     </g>
   );
 }
@@ -300,14 +435,15 @@ function StageNode({
 function GateNode({
   node,
   selected,
+  issueLevel,
   onSelect,
   onInspect,
-  onStartConnect,
+  onStartConnect: _onStartConnect,
   onCompleteConnect,
   onDelete,
   onDragEnd,
   isConnectingMode,
-}: NodeProps) {
+}: BaseNodeProps<WorkflowGateNode>) {
   const { x, y } = node.position;
   const { handleMouseDown, handleMouseMove, handleMouseUp } = useDragNode({
     x,
@@ -318,8 +454,15 @@ function GateNode({
     onDragEnd,
   });
   const H = GATE_SIZE / 2;
-  const stroke = selected ? C.nodeStrokeSelected : C.gateStroke;
-  const sw = selected ? 2 : 1;
+  const fill = issueLevel === 'error' ? C.errorFill : issueLevel === 'warning' ? C.warnFill : C.gate;
+  const stroke = selected
+    ? C.nodeStrokeSelected
+    : issueLevel === 'error'
+      ? C.errorStroke
+      : issueLevel === 'warning'
+        ? C.warnStroke
+        : C.gateStroke;
+  const sw = selected || issueLevel ? 2 : 1;
   const cx = x + H;
   const cy = y + H;
 
@@ -339,7 +482,7 @@ function GateNode({
     >
       <path
         d={`M ${cx} ${y} L ${x + GATE_SIZE} ${cy} L ${cx} ${y + GATE_SIZE} L ${x} ${cy} Z`}
-        fill={C.gate}
+        fill={fill}
         stroke={stroke}
         strokeWidth={sw}
       />
@@ -356,15 +499,7 @@ function GateNode({
         {node.label.length > 8 ? node.label.slice(0, 7) + '…' : node.label}
       </text>
       {selected && !isConnectingMode && (
-        <>
-          <ConnectButton
-            nodeId={node.id}
-            cx={x + GATE_SIZE + 10}
-            cy={cy}
-            onClick={onStartConnect}
-          />
-          <DeleteButton nodeId={node.id} cx={cx} cy={y - 10} onClick={onDelete} />
-        </>
+        <DeleteButton nodeId={node.id} cx={cx} cy={y - 10} onClick={onDelete} />
       )}
     </g>
   );
@@ -373,14 +508,15 @@ function GateNode({
 function CondNode({
   node,
   selected,
+  issueLevel,
   onSelect,
   onInspect,
-  onStartConnect,
+  onStartConnect: _onStartConnect,
   onCompleteConnect,
   onDelete,
   onDragEnd,
   isConnectingMode,
-}: NodeProps) {
+}: BaseNodeProps<WorkflowCondNode>) {
   const { x, y } = node.position;
   const { handleMouseDown, handleMouseMove, handleMouseUp } = useDragNode({
     x,
@@ -392,8 +528,15 @@ function CondNode({
   });
   const cx = x + COND_RADIUS;
   const cy = y + COND_RADIUS;
-  const stroke = selected ? C.nodeStrokeSelected : C.condStroke;
-  const sw = selected ? 2 : 1;
+  const fill = issueLevel === 'error' ? C.errorFill : issueLevel === 'warning' ? C.warnFill : C.cond;
+  const stroke = selected
+    ? C.nodeStrokeSelected
+    : issueLevel === 'error'
+      ? C.errorStroke
+      : issueLevel === 'warning'
+        ? C.warnStroke
+        : C.condStroke;
+  const sw = selected || issueLevel ? 2 : 1;
 
   return (
     <g
@@ -409,7 +552,7 @@ function CondNode({
       }}
       style={{ cursor: isConnectingMode ? 'crosshair' : 'grab' }}
     >
-      <circle cx={cx} cy={cy} r={COND_RADIUS} fill={C.cond} stroke={stroke} strokeWidth={sw} />
+      <circle cx={cx} cy={cy} r={COND_RADIUS} fill={fill} stroke={stroke} strokeWidth={sw} />
       <text
         x={cx}
         y={cy}
@@ -423,39 +566,249 @@ function CondNode({
         {node.label.length > 6 ? node.label.slice(0, 5) + '…' : node.label}
       </text>
       {selected && !isConnectingMode && (
-        <>
-          <ConnectButton
-            nodeId={node.id}
-            cx={cx + COND_RADIUS + 10}
-            cy={cy}
-            onClick={onStartConnect}
-          />
-          <DeleteButton nodeId={node.id} cx={cx} cy={cy - COND_RADIUS - 10} onClick={onDelete} />
-        </>
+        <DeleteButton nodeId={node.id} cx={cx} cy={cy - COND_RADIUS - 10} onClick={onDelete} />
       )}
     </g>
   );
 }
 
+function TriggerNode({
+  node,
+  selected,
+  issueLevel,
+  onSelect,
+  onInspect,
+  onStartConnect: _onStartConnect,
+  onCompleteConnect,
+  onDelete,
+  onDragEnd,
+  isConnectingMode,
+}: BaseNodeProps<WorkflowTriggerNode>) {
+  const { x, y } = node.position;
+  const { handleMouseDown, handleMouseMove, handleMouseUp } = useDragNode({
+    x,
+    y,
+    isConnectingMode,
+    onSelect,
+    onCompleteConnect,
+    onDragEnd,
+  });
+  const fill = selected
+    ? 'var(--color-bg-elevated)'
+    : issueLevel === 'error'
+      ? C.errorFill
+      : issueLevel === 'warning'
+        ? C.warnFill
+        : 'color-mix(in srgb, var(--status-cyan) 14%, var(--color-bg-secondary))';
+  const stroke = selected
+    ? C.nodeStrokeSelected
+    : issueLevel === 'error'
+      ? C.errorStroke
+      : issueLevel === 'warning'
+        ? C.warnStroke
+        : 'var(--status-cyan)';
+  const sw = selected || issueLevel ? 2 : 1;
+
+  return (
+    <g
+      data-testid={`workflow-node-${node.id}`}
+      data-kind="trigger"
+      data-selected={selected ? 'true' : undefined}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onInspect();
+      }}
+      style={{ cursor: isConnectingMode ? 'crosshair' : 'grab' }}
+    >
+      <rect x={x} y={y} width={TRIGGER_WIDTH} height={TRIGGER_HEIGHT} rx={8} fill={fill} stroke={stroke} strokeWidth={sw} />
+      <text x={x + 14} y={y + 22} fill={C.text} fontSize={11} fontWeight="600" fontFamily="var(--font-sans)">
+        {node.label.length > 20 ? node.label.slice(0, 18) + '…' : node.label}
+      </text>
+      <text x={x + 14} y={y + 38} fill={C.textMuted} fontSize={8.5} fontFamily="var(--font-mono)">
+        {node.source ?? 'manual dispatch'}
+      </text>
+      {selected && !isConnectingMode && (
+        <DeleteButton nodeId={node.id} cx={x + TRIGGER_WIDTH / 2} cy={y - 10} onClick={onDelete} />
+      )}
+    </g>
+  );
+}
+
+function EndNode({
+  node,
+  selected,
+  issueLevel,
+  onSelect,
+  onInspect,
+  onStartConnect: _onStartConnect,
+  onCompleteConnect,
+  onDelete,
+  onDragEnd,
+  isConnectingMode,
+}: BaseNodeProps<WorkflowEndNode>) {
+  const { x, y } = node.position;
+  const { handleMouseDown, handleMouseMove, handleMouseUp } = useDragNode({
+    x,
+    y,
+    isConnectingMode,
+    onSelect,
+    onCompleteConnect,
+    onDragEnd,
+  });
+  const fill = selected
+    ? 'var(--color-bg-elevated)'
+    : issueLevel === 'error'
+      ? C.errorFill
+      : issueLevel === 'warning'
+        ? C.warnFill
+        : 'color-mix(in srgb, var(--status-emerald) 14%, var(--color-bg-secondary))';
+  const stroke = selected
+    ? C.nodeStrokeSelected
+    : issueLevel === 'error'
+      ? C.errorStroke
+      : issueLevel === 'warning'
+        ? C.warnStroke
+        : 'var(--status-emerald)';
+  const sw = selected || issueLevel ? 2 : 1;
+  const cx = x + END_RADIUS;
+  const cy = y + END_RADIUS;
+
+  return (
+    <g
+      data-testid={`workflow-node-${node.id}`}
+      data-kind="end"
+      data-selected={selected ? 'true' : undefined}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onInspect();
+      }}
+      style={{ cursor: isConnectingMode ? 'crosshair' : 'grab' }}
+    >
+      <circle cx={cx} cy={cy} r={END_RADIUS} fill={fill} stroke={stroke} strokeWidth={sw} />
+      <text x={cx} y={cy - 4} textAnchor="middle" fill={C.text} fontSize={16} fontFamily="var(--font-sans)">
+        ●
+      </text>
+      <text x={cx} y={cy + 12} textAnchor="middle" fill={C.textMuted} fontSize={8} fontFamily="var(--font-mono)">
+        {node.label.length > 10 ? node.label.slice(0, 8) + '…' : node.label}
+      </text>
+      {selected && !isConnectingMode && (
+        <DeleteButton nodeId={node.id} cx={cx} cy={y - 10} onClick={onDelete} />
+      )}
+    </g>
+  );
+}
+
+function stagePortLists(node: WorkflowStageNode, personas: PersonaEntry[]) {
+  const stageMembers = normalizedStageMembers(node);
+  const personaMap = new Map(personas.map((persona) => [persona.id, persona]));
+  return {
+    knownInputs: [
+      ...new Set(stageMembers.flatMap((member) => personaMap.get(member.personaId)?.consumes ?? [])),
+    ],
+    knownOutputs: [
+      ...new Set(stageMembers.flatMap((member) => personaMap.get(member.personaId)?.produces ?? [])),
+    ],
+  };
+}
+
+function renderedStageHeight(node: WorkflowStageNode, personas: PersonaEntry[]) {
+  const { knownInputs, knownOutputs } = stagePortLists(node, personas);
+  const portRows = Math.max(knownInputs.length, knownOutputs.length, 0);
+  return stageNodeHeight(node) + (portRows > 0 ? 22 + portRows * 14 : 0);
+}
+
+function splitEdgePorts(label?: string) {
+  if (!label) return { sourcePort: null, targetPort: null };
+  const [rawSourcePort, rawTargetPort] = label.split(' -> ', 2);
+  const sourcePort = rawSourcePort ?? null;
+  const targetPort = rawTargetPort ?? null;
+  if (rawTargetPort !== undefined) {
+    return { sourcePort, targetPort };
+  }
+  return { sourcePort: label, targetPort: label };
+}
+
+function edgeAnchor(
+  node: WorkflowNode,
+  direction: 'source' | 'target',
+  portLabel: string | null,
+  personas: PersonaEntry[],
+) {
+  if (node.kind !== 'stage' || !portLabel) {
+    return nodeCentre(node);
+  }
+  const { knownInputs, knownOutputs } = stagePortLists(node, personas);
+  const portList = direction === 'source' ? knownOutputs : knownInputs;
+  const index = portList.indexOf(portLabel);
+  if (index === -1) {
+    return nodeCentre(node);
+  }
+  const portRows = Math.max(knownInputs.length, knownOutputs.length, 0);
+  const totalHeight = renderedStageHeight(node, personas);
+  return {
+    x: direction === 'source' ? node.position.x + STAGE_WIDTH - 10 : node.position.x + 10,
+    y: node.position.y + totalHeight - (portRows * 14) + index * 14 - 4,
+  };
+}
+
 function WorkflowEdgePath({
   edge,
   nodes,
+  personas,
+  selected,
+  onSelect,
 }: {
   edge: WorkflowEdge;
   nodes: Map<string, WorkflowNode>;
+  personas: PersonaEntry[];
+  selected: boolean;
+  onSelect: () => void;
 }) {
-  const d = edgeToPath(edge, nodes);
+  const src = nodes.get(edge.source);
+  const tgt = nodes.get(edge.target);
+  if (!src || !tgt) return null;
+  const { sourcePort, targetPort } = splitEdgePorts(edge.label);
+  const srcC = edgeAnchor(src, 'source', sourcePort, personas);
+  const tgtC = edgeAnchor(tgt, 'target', targetPort, personas);
+  const c1x = srcC.x + edge.cp1.x;
+  const c1y = srcC.y + edge.cp1.y;
+  const c2x = tgtC.x + edge.cp2.x;
+  const c2y = tgtC.y + edge.cp2.y;
+  const d = `M ${srcC.x} ${srcC.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${tgtC.x} ${tgtC.y}`;
   if (!d) return null;
   return (
     <g data-testid={`workflow-edge-${edge.id}`}>
-      <path d={d} fill="none" stroke={C.edgeStroke} strokeWidth={1.5} markerEnd="url(#arrowhead)" />
+      <path
+        d={d}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={10}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect();
+        }}
+        className="niuu-cursor-pointer"
+      />
+      <path
+        d={d}
+        fill="none"
+        stroke={selected ? C.nodeStrokeSelected : C.edgeStroke}
+        strokeWidth={selected ? 2.25 : 1.5}
+        markerEnd="url(#arrowhead)"
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect();
+        }}
+        className="niuu-cursor-pointer"
+      />
       {edge.label &&
         (() => {
-          const src = nodes.get(edge.source);
-          const tgt = nodes.get(edge.target);
-          if (!src || !tgt) return null;
-          const srcC = nodeCentre(src);
-          const tgtC = nodeCentre(tgt);
           return (
             <text
               x={(srcC.x + tgtC.x) / 2}
@@ -480,40 +833,65 @@ function WorkflowEdgePath({
 export interface GraphViewProps {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
+  personas?: PersonaEntry[];
+  issues?: WorkflowIssue[];
   selectedNodeId: string | null;
   connectingFromId: string | null;
+  connectingFromLabel?: string | null;
   onSelectNode: WorkflowBuilderActions['selectNode'];
   onInspectNode: WorkflowBuilderActions['inspectNode'];
   onAddNode: WorkflowBuilderActions['addNode'];
   onDeleteNode: WorkflowBuilderActions['deleteNode'];
+  onDeleteEdge: WorkflowBuilderActions['deleteEdge'];
   onMoveNode: WorkflowBuilderActions['moveNode'];
   onStartConnect: WorkflowBuilderActions['startConnect'];
   onCancelConnect: WorkflowBuilderActions['cancelConnect'];
   onCompleteConnect: WorkflowBuilderActions['completeConnect'];
+  onAddPersonaToStage?: WorkflowBuilderActions['addPersonaToStage'];
+  onAddStageWithPersona?: WorkflowBuilderActions['addStageWithPersona'];
 }
 
 export function GraphView({
   nodes,
   edges,
+  personas = [],
+  issues = [],
   selectedNodeId,
   connectingFromId,
+  connectingFromLabel,
   onSelectNode,
   onInspectNode,
   onAddNode,
   onDeleteNode,
+  onDeleteEdge,
   onMoveNode,
   onStartConnect,
   onCancelConnect,
   onCompleteConnect,
+  onAddPersonaToStage,
+  onAddStageWithPersona,
 }: GraphViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const panRef = useRef<{ startX: number; startY: number; tx: number; ty: number } | null>(null);
 
   const nodeMap = useMemo(
     () => new Map<string, WorkflowNode>(nodes.map((n) => [n.id, n])),
     [nodes],
   );
+  const safeIssues = Array.isArray(issues) ? issues : [];
+  const issueMap = useMemo(() => {
+    const levels = new Map<string, 'error' | 'warning'>();
+    for (const issue of safeIssues) {
+      if (!issue.nodeId) continue;
+      const existing = levels.get(issue.nodeId);
+      if (issue.severity === 'error' || !existing) {
+        levels.set(issue.nodeId, issue.severity);
+      }
+    }
+    return levels;
+  }, [safeIssues]);
   const isConnectingMode = connectingFromId !== null;
 
   // Wheel zoom
@@ -539,17 +917,23 @@ export function GraphView({
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeId) {
         onDeleteNode(selectedNodeId);
       }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedEdgeId) {
+        onDeleteEdge(selectedEdgeId);
+        setSelectedEdgeId(null);
+      }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onCancelConnect, onDeleteNode, selectedNodeId]);
+  }, [onCancelConnect, onDeleteEdge, onDeleteNode, selectedEdgeId, selectedNodeId]);
 
   function handleSvgMouseDown(e: React.MouseEvent<SVGSVGElement>) {
     if ((e.target as Element).closest('[data-testid^="workflow-node"]')) return;
+    if ((e.target as Element).closest('[data-testid^="workflow-edge"]')) return;
     if (isConnectingMode) {
       onCancelConnect();
       return;
     }
+    setSelectedEdgeId(null);
     onSelectNode(null);
     panRef.current = { startX: e.clientX, startY: e.clientY, tx: transform.x, ty: transform.y };
   }
@@ -567,14 +951,68 @@ export function GraphView({
     panRef.current = null;
   }
 
-  const nodeProps = (node: WorkflowNode): NodeProps => ({
-    node,
+  function eventToCanvasPosition(clientX: number, clientY: number) {
+    const svg = svgRef.current;
+    if (!svg) return { x: 120, y: 120 };
+    const rect = svg.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left - transform.x) / transform.scale,
+      y: (clientY - rect.top - transform.y) / transform.scale,
+    };
+  }
+
+  function findStageAtPoint(x: number, y: number) {
+    return nodes.find(
+      (node) =>
+        node.kind === 'stage' &&
+        x >= node.position.x &&
+        x <= node.position.x + STAGE_WIDTH &&
+        y >= node.position.y &&
+        y <= node.position.y + renderedStageHeight(node, personas),
+    );
+  }
+
+  function handleDrop(e: React.DragEvent<SVGSVGElement>) {
+    e.preventDefault();
+    const position = eventToCanvasPosition(e.clientX, e.clientY);
+    const personaId = e.dataTransfer.getData('application/niuu-persona-id');
+    const nodeKind = e.dataTransfer.getData('application/niuu-node-kind');
+
+    if (personaId) {
+      const targetStage = findStageAtPoint(position.x, position.y);
+      if (targetStage?.kind === 'stage') {
+        onAddPersonaToStage?.(targetStage.id, personaId);
+        onSelectNode(targetStage.id);
+        return;
+      }
+
+      onAddStageWithPersona?.(personaId, position);
+      return;
+    }
+
+    if (
+      nodeKind === 'trigger' ||
+      nodeKind === 'stage' ||
+      nodeKind === 'gate' ||
+      nodeKind === 'cond' ||
+      nodeKind === 'end'
+    ) {
+      onAddNode(nodeKind, position);
+    }
+  }
+
+  const nodeProps = (node: WorkflowNode) => ({
     selected: node.id === selectedNodeId,
+    issueLevel: issueMap.get(node.id) ?? null,
     isConnectingMode,
     onSelect: () => onSelectNode(node.id),
     onInspect: () => onInspectNode(node.id),
-    onStartConnect: () => onStartConnect(node.id),
-    onCompleteConnect: () => onCompleteConnect(node.id),
+    onStartConnect: (label?: string) =>
+      label === undefined ? onStartConnect(node.id) : onStartConnect(node.id, label),
+    onCompleteConnect: (inputLabel?: string) =>
+      inputLabel === undefined
+        ? onCompleteConnect(node.id)
+        : onCompleteConnect(node.id, inputLabel),
     onDelete: () => onDeleteNode(node.id),
     onDragEnd: (pos: { x: number; y: number }) => onMoveNode(node.id, pos),
   });
@@ -590,6 +1028,14 @@ export function GraphView({
       {/* Toolbar */}
       <div className="niuu-absolute niuu-bottom-12 niuu-left-1/2 niuu--translate-x-1/2 niuu-flex niuu-gap-2 niuu-z-10 niuu-bg-bg-secondary niuu-border niuu-border-border niuu-rounded-md niuu-py-1.5 niuu-px-2.5">
         <button
+          data-testid="add-trigger"
+          onClick={() => onAddNode('trigger')}
+          className={toolbarBtnClass}
+          title="Add trigger node"
+        >
+          Trigger
+        </button>
+        <button
           data-testid="add-stage"
           onClick={() => onAddNode('stage')}
           className={toolbarBtnClass}
@@ -603,7 +1049,7 @@ export function GraphView({
           className={toolbarBtnClass}
           title="Add gate node"
         >
-          ◇ Gate
+          Gate
         </button>
         <button
           data-testid="add-cond"
@@ -611,7 +1057,15 @@ export function GraphView({
           className={toolbarBtnClass}
           title="Add condition node"
         >
-          ○ Cond
+          Condition
+        </button>
+        <button
+          data-testid="add-end"
+          onClick={() => onAddNode('end')}
+          className={toolbarBtnClass}
+          title="Add end node"
+        >
+          End
         </button>
         {selectedNodeId && (
           <button
@@ -623,9 +1077,22 @@ export function GraphView({
             Delete
           </button>
         )}
+        {selectedEdgeId && (
+          <button
+            data-testid="delete-selected-edge"
+            onClick={() => {
+              onDeleteEdge(selectedEdgeId);
+              setSelectedEdgeId(null);
+            }}
+            className={cn(toolbarBtnClass, 'niuu-text-critical')}
+            title="Delete selected connection"
+          >
+            Delete connection
+          </button>
+        )}
         {isConnectingMode && (
           <span className="niuu-text-text-secondary niuu-text-xs niuu-self-center">
-            Click target node…
+            Click target input…
           </span>
         )}
       </div>
@@ -640,6 +1107,8 @@ export function GraphView({
         onMouseMove={handleSvgMouseMove}
         onMouseUp={handleSvgMouseUp}
         onMouseLeave={handleSvgMouseUp}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDrop}
       >
         <defs>
           <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
@@ -649,18 +1118,32 @@ export function GraphView({
         <g transform={`translate(${transform.x},${transform.y}) scale(${transform.scale})`}>
           {/* Edges (drawn first, below nodes) */}
           {edges.map((edge) => (
-            <WorkflowEdgePath key={edge.id} edge={edge} nodes={nodeMap} />
+            <WorkflowEdgePath
+              key={edge.id}
+              edge={edge}
+              nodes={nodeMap}
+              personas={personas}
+              selected={edge.id === selectedEdgeId}
+              onSelect={() => {
+                setSelectedEdgeId(edge.id);
+                onSelectNode(null);
+              }}
+            />
           ))}
           {/* Nodes */}
           {nodes.map((node) => {
             const props = nodeProps(node);
             switch (node.kind) {
+              case 'trigger':
+                return <TriggerNode key={node.id} node={node} {...props} />;
               case 'stage':
-                return <StageNode key={node.id} {...props} />;
+                return <StageNode key={node.id} node={node} personas={personas} connectingFromLabel={connectingFromLabel} {...props} />;
               case 'gate':
-                return <GateNode key={node.id} {...props} />;
+                return <GateNode key={node.id} node={node} {...props} />;
               case 'cond':
-                return <CondNode key={node.id} {...props} />;
+                return <CondNode key={node.id} node={node} {...props} />;
+              case 'end':
+                return <EndNode key={node.id} node={node} {...props} />;
             }
           })}
         </g>

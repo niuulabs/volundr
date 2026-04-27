@@ -194,7 +194,12 @@ function DashboardContent() {
           {runningRaids}
           <span className="tyr-kpi__unit">running</span>
         </div>
-        <Sparkline values={throughput.map((v) => v / Math.max(...throughput))} id="throughput" />
+        <Sparkline
+          values={throughput.map((v) => v / Math.max(...throughput))}
+          id="throughput"
+          width={220}
+          className="tyr-kpi__spark"
+        />
       </div>
 
       <div
@@ -217,6 +222,8 @@ function DashboardContent() {
         <Sparkline
           values={[2, 3, 3, 4, 5, 6, 7, 9, 10, 11, 11, 12].map((v) => v / 12)}
           id="merged"
+          width={220}
+          className="tyr-kpi__spark"
         />
       </div>
 
@@ -342,7 +349,9 @@ function DashboardContent() {
         <Sparkline
           values={throughput.map((v) => v / Math.max(...throughput))}
           id="throughput-full"
+          width={520}
           height={60}
+          className="tyr-kpi__spark tyr-kpi__spark--wide"
         />
       </div>
 
@@ -351,7 +360,13 @@ function DashboardContent() {
         <div className="tyr-kpi__val" style={{ fontSize: 18 }}>
           {latestConfidence}%<span className="tyr-kpi__unit">· now</span>
         </div>
-        <Sparkline values={confidence} id="confidence-full" height={60} />
+        <Sparkline
+          values={confidence}
+          id="confidence-full"
+          width={520}
+          height={60}
+          className="tyr-kpi__spark tyr-kpi__spark--wide"
+        />
       </div>
     </div>
   );

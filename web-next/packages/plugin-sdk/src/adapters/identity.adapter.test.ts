@@ -27,10 +27,10 @@ describe('buildIdentityAdapter', () => {
     expect(identity.status).toBe('active');
   });
 
-  it('calls GET /me on the provided client', async () => {
+  it('calls GET /identity/me on the provided client', async () => {
     const client = makeClient();
     await buildIdentityAdapter(client).getIdentity();
-    expect(client.get).toHaveBeenCalledWith('/me');
+    expect(client.get).toHaveBeenCalledWith('/identity/me');
   });
 
   it('propagates errors from the HTTP client', async () => {

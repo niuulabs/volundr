@@ -355,6 +355,15 @@ describe('SessionDetailPage', () => {
       expect(screen.getByTestId('tab-terminal')).toHaveAttribute('aria-selected', 'true');
       await waitFor(() => expect(screen.getByTestId('terminal-container')).toBeInTheDocument());
     });
+
+    it('renders terminal workspace tabs and can add another tab', async () => {
+      wrap(<SessionDetailPage sessionId="ds-1" initialTab="terminal" />);
+      expect(screen.getByTestId('terminal-tab-main')).toBeInTheDocument();
+      expect(screen.getByTestId('terminal-tab-tests')).toBeInTheDocument();
+      expect(screen.getByTestId('terminal-tab-view-io')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('terminal-tab-add'));
+      expect(screen.getByTestId('terminal-tab-term-4')).toBeInTheDocument();
+    });
   });
 
   // ─── Diffs tab ──────────────────────────────────────────
@@ -394,7 +403,11 @@ describe('SessionDetailPage', () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
       fireEvent.click(screen.getByTestId('tab-files'));
       expect(screen.getByTestId('tab-files')).toHaveAttribute('aria-selected', 'true');
-      await waitFor(() => expect(screen.getByTestId('filetree-root')).toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.getByTestId('session-files-workspace')).toBeInTheDocument(),
+      );
+      expect(screen.getByRole('button', { name: 'upload' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'download' })).toBeInTheDocument();
     });
   });
 
@@ -496,10 +509,10 @@ describe('SessionDetailPage', () => {
       });
     });
 
-    it('renders tab panels with role="tabpanel"', () => {
+    it('renders the active tab panel with role="tabpanel"', () => {
       wrap(<SessionDetailPage sessionId="ds-1" />);
-      const panels = screen.getAllByRole('tabpanel', { hidden: true });
-      expect(panels.length).toBe(6);
+      const panels = screen.getAllByRole('tabpanel');
+      expect(panels.length).toBe(1);
     });
   });
 });

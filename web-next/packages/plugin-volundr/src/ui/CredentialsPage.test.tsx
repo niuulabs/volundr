@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { CredentialsPage } from './CredentialsPage';
@@ -19,19 +19,23 @@ function wrap(service = createMockVolundrService()) {
 describe('CredentialsPage', () => {
   it('renders the page header', () => {
     wrap();
-    expect(screen.getByText('Credentials')).toBeInTheDocument();
+    expect(screen.getAllByText('Credentials')).toHaveLength(2);
     expect(screen.getByText(/secrets injected into pods/i)).toBeInTheDocument();
   });
 
   it('renders new credential button', () => {
     wrap();
     expect(screen.getByTestId('new-credential-btn')).toBeInTheDocument();
-    expect(screen.getByText('+ new credential')).toBeInTheDocument();
+    expect(screen.getByText(/new credential/i)).toBeInTheDocument();
   });
 
-  it('shows empty state when no credentials', async () => {
+  it('renders the grouped sidebar and credentials table by default', async () => {
     wrap();
-    await waitFor(() => expect(screen.getByTestId('no-credentials')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('credentials-table')).toBeInTheDocument());
+    expect(screen.getByTestId('credentials-sidebar')).toBeInTheDocument();
+    expect(screen.getAllByText('anthropic-key')).toHaveLength(2);
+    expect(screen.getByText('LINEAR_REFRESH')).toBeInTheDocument();
+    expect(screen.getByText('template:mimir-embeddings')).toBeInTheDocument();
   });
 
   it('shows loading state', () => {
@@ -52,7 +56,16 @@ describe('CredentialsPage', () => {
     await waitFor(() => expect(screen.getByTestId('credentials-error')).toBeInTheDocument());
   });
 
-  it('renders credentials table with data', async () => {
+  it('shows empty state when no credentials', async () => {
+    const emptyService = {
+      ...createMockVolundrService(),
+      getCredentials: vi.fn().mockResolvedValue([]),
+    };
+    wrap(emptyService);
+    await waitFor(() => expect(screen.getByTestId('no-credentials')).toBeInTheDocument());
+  });
+
+  it('renders credentials table with custom data', async () => {
     const serviceWithCreds = {
       ...createMockVolundrService(),
       getCredentials: vi.fn().mockResolvedValue([
@@ -61,6 +74,8 @@ describe('CredentialsPage', () => {
           name: 'anthropic-key',
           secretType: 'api_key',
           keys: ['ANTHROPIC_API_KEY'],
+          scope: 'global',
+          used: 12,
           metadata: {},
           createdAt: '2026-01-01',
           updatedAt: '2d ago',
@@ -68,8 +83,11 @@ describe('CredentialsPage', () => {
       ]),
     };
     wrap(serviceWithCreds);
-    await waitFor(() => expect(screen.getByText('anthropic-key')).toBeInTheDocument());
-    expect(screen.getByText('api key')).toBeInTheDocument();
-    expect(screen.getByText('ANTHROPIC_API_KEY')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('credentials-table')).toBeInTheDocument());
+    const table = within(screen.getByTestId('credentials-table'));
+    expect(table.getByText('anthropic-key')).toBeInTheDocument();
+    expect(table.getByText('api key')).toBeInTheDocument();
+    expect(table.getByText('ANTHROPIC_API_KEY')).toBeInTheDocument();
+    expect(table.getByText('12')).toBeInTheDocument();
   });
 });

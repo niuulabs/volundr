@@ -1,84 +1,111 @@
-import { Table, StateDot } from '@niuulabs/ui';
-import type { TableColumn } from '@niuulabs/ui';
+import { useMemo, useState } from 'react';
+import { EmptyState, ErrorState, LoadingState, cn } from '@niuulabs/ui';
 import { useService } from '@niuulabs/plugin-sdk';
 import { useQuery } from '@tanstack/react-query';
 import type { IVolundrService } from '../ports/IVolundrService';
-import type { StoredCredential } from '../models/volundr.model';
+import type { SecretType, StoredCredential } from '../models/volundr.model';
+import './CredentialsPage.css';
 
-// ---------------------------------------------------------------------------
-// Columns
-// ---------------------------------------------------------------------------
-
-const COLUMNS: TableColumn<StoredCredential>[] = [
-  {
-    key: 'name',
-    header: 'Name',
-    render: (row) => (
-      <div className="niuu-flex niuu-items-center niuu-gap-2">
-        <span className="niuu-inline-block niuu-h-2 niuu-w-2 niuu-rounded-full niuu-bg-brand" />
-        <span className="niuu-font-mono niuu-text-sm niuu-text-text-primary">{row.name}</span>
-      </div>
-    ),
-  },
-  {
-    key: 'type',
-    header: 'Type',
-    render: (row) => (
-      <span className="niuu-font-mono niuu-text-xs niuu-text-text-secondary">
-        {row.secretType.replace(/_/g, ' ')}
-      </span>
-    ),
-  },
-  {
-    key: 'keys',
-    header: 'Keys',
-    render: (row) => (
-      <div className="niuu-flex niuu-flex-wrap niuu-gap-1">
-        {row.keys.map((k) => (
-          <code
-            key={k}
-            className="niuu-rounded niuu-bg-bg-tertiary niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-xs niuu-text-text-secondary"
-          >
-            {k}
-          </code>
-        ))}
-      </div>
-    ),
-  },
-  {
-    key: 'updated',
-    header: 'Updated',
-    render: (row) => (
-      <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">{row.updatedAt}</span>
-    ),
-  },
-  {
-    key: 'actions',
-    header: '',
-    render: () => (
-      <div className="niuu-flex niuu-items-center niuu-gap-1">
-        <button
-          className="niuu-rounded niuu-p-1 niuu-text-text-muted hover:niuu-text-text-primary"
-          title="copy"
-          aria-label="copy"
-        >
-          {'\u2398'}
-        </button>
-        <button
-          className="niuu-rounded niuu-p-1 niuu-text-text-muted hover:niuu-text-critical"
-          title="delete"
-          aria-label="delete credential"
-        >
-          {'\u2715'}
-        </button>
-      </div>
-    ),
-  },
+const SECRET_TYPE_ORDER: SecretType[] = [
+  'api_key',
+  'git_credential',
+  'oauth_token',
+  'ssh_key',
+  'tls_cert',
+  'generic',
 ];
 
-// ---------------------------------------------------------------------------
-// CredentialsPage
-// ---------------------------------------------------------------------------
+const TYPE_LABEL: Record<SecretType, string> = {
+  api_key: 'api key',
+  git_credential: 'git credential',
+  oauth_token: 'oauth token',
+  ssh_key: 'ssh key',
+  tls_cert: 'tls cert',
+  generic: 'generic',
+};
+
+function keyCountLabel(keys: string[]) {
+  return `${keys.length}k`;
+}
+
+function RotateIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="vol-creds__icon">
+      <path
+        d="M13 5.5V2.5M13 2.5H10M13 2.5L9.8 5.7M12.7 8a4.7 4.7 0 1 1-1.4-3.3"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.4"
+      />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="vol-creds__icon">
+      <rect
+        x="5.4"
+        y="3.2"
+        width="7.2"
+        height="9"
+        rx="1.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+      <path
+        d="M3.8 10.8H3.2A1.2 1.2 0 0 1 2 9.6V3.2A1.2 1.2 0 0 1 3.2 2h6.4a1.2 1.2 0 0 1 1.2 1.2v.6"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.4"
+      />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="vol-creds__icon">
+      <path
+        d="M2.8 4.2h10.4M6.2 2.6h3.6M5 4.2v8.2m3-8.2v8.2m3-8.2v8.2M4.4 4.2l.4 8.5c.04.7.62 1.3 1.32 1.3h3.8c.7 0 1.28-.55 1.32-1.3l.4-8.5"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.4"
+      />
+    </svg>
+  );
+}
+
+function sortCredentials(rows: StoredCredential[]) {
+  return [...rows].sort((left, right) => {
+    const typeDelta =
+      SECRET_TYPE_ORDER.indexOf(left.secretType) - SECRET_TYPE_ORDER.indexOf(right.secretType);
+    if (typeDelta !== 0) return typeDelta;
+    return left.name.localeCompare(right.name);
+  });
+}
+
+function groupCredentials(rows: StoredCredential[]) {
+  const groups = new Map<SecretType, StoredCredential[]>();
+
+  for (const row of rows) {
+    const group = groups.get(row.secretType) ?? [];
+    group.push(row);
+    groups.set(row.secretType, group);
+  }
+
+  return SECRET_TYPE_ORDER.map((type) => ({
+    type,
+    label: TYPE_LABEL[type],
+    items: groups.get(type) ?? [],
+  })).filter((group) => group.items.length > 0);
+}
 
 export function CredentialsPage() {
   const service = useService<IVolundrService>('volundr');
@@ -86,52 +113,222 @@ export function CredentialsPage() {
     queryKey: ['volundr', 'credentials'],
     queryFn: () => service.getCredentials(),
   });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [selectedCredential, setSelectedCredential] = useState<string | null>(null);
+
+  const rows = useMemo(() => sortCredentials(credentials.data ?? []), [credentials.data]);
+  const grouped = useMemo(() => groupCredentials(rows), [rows]);
 
   return (
-    <div className="niuu-flex niuu-flex-col niuu-gap-6 niuu-p-6" data-testid="credentials-page">
-      <header className="niuu-flex niuu-items-center niuu-justify-between">
-        <div>
-          <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">Credentials</h2>
-          <p className="niuu-text-sm niuu-text-text-muted">
-            Secrets injected into pods as env vars or mounted files. Rotated centrally.
-          </p>
-        </div>
-        <button
-          className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs"
-          aria-label="New credential"
-          data-testid="new-credential-btn"
-        >
-          + new credential
-        </button>
-      </header>
+    <div className="vol-creds" data-testid="credentials-page">
+      <aside
+        className={cn(
+          'vol-creds__sidebar',
+          sidebarCollapsed && 'vol-creds__sidebar--collapsed',
+        )}
+        aria-label="Credentials by type"
+        data-testid="credentials-sidebar"
+      >
+        {sidebarCollapsed ? (
+          <div className="vol-creds__collapsed">
+            <div className="vol-creds__collapsed-head">
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed(false)}
+                className="vol-creds__toggle"
+                aria-label="Expand credentials sidebar"
+              >
+                ›
+              </button>
+            </div>
+            <div className="vol-creds__collapsed-body">
+              {grouped.map((group) => (
+                <div key={group.type} className="vol-creds__collapsed-group">
+                  {group.items.map((credential) => (
+                    <button
+                      key={credential.id}
+                      type="button"
+                      className={cn(
+                        'vol-creds__collapsed-item',
+                        selectedCredential === credential.id && 'vol-creds__collapsed-item--selected',
+                      )}
+                      onClick={() => setSelectedCredential(credential.id)}
+                      aria-label={credential.name}
+                    >
+                      <span className="vol-creds__dot" />
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="vol-creds__expanded">
+            <div className="vol-creds__sidebar-head">
+              <div className="vol-creds__sidebar-copy">
+                <div className="vol-creds__sidebar-title-row">
+                  <div>
+                    <h1 className="vol-creds__sidebar-title">Credentials</h1>
+                    <p className="vol-creds__sidebar-subtitle">mounted into pods on boot</p>
+                  </div>
+                  <span className="vol-creds__sidebar-count">{rows.length}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed(true)}
+                className="vol-creds__toggle"
+                aria-label="Collapse credentials sidebar"
+              >
+                ‹
+              </button>
+            </div>
 
-      {credentials.isLoading && (
-        <div className="niuu-flex niuu-items-center niuu-gap-2" data-testid="credentials-loading">
-          <StateDot state="processing" pulse />
-          <span className="niuu-text-sm niuu-text-text-muted">Loading credentials\u2026</span>
-        </div>
-      )}
+            <div className="vol-creds__sidebar-body">
+              {grouped.map((group) => (
+                <section key={group.type} className="vol-creds__group">
+                  <header className="vol-creds__group-head">
+                    <span>{group.label}</span>
+                    <span className="vol-creds__group-count">{group.items.length}</span>
+                  </header>
+                  <div className="vol-creds__group-body">
+                    {group.items.map((credential) => (
+                      <button
+                        key={credential.id}
+                        type="button"
+                        className={cn(
+                          'vol-creds__sidebar-item',
+                          selectedCredential === credential.id && 'vol-creds__sidebar-item--selected',
+                        )}
+                        onClick={() => setSelectedCredential(credential.id)}
+                      >
+                        <span className="vol-creds__dot" />
+                        <span className="vol-creds__sidebar-item-name">{credential.name}</span>
+                        <span className="vol-creds__sidebar-item-count">
+                          {keyCountLabel(credential.keys)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
+        )}
+      </aside>
 
-      {credentials.isError && (
-        <div className="niuu-flex niuu-items-center niuu-gap-2" data-testid="credentials-error">
-          <StateDot state="failed" />
-          <span className="niuu-text-sm niuu-text-text-muted">Failed to load credentials</span>
-        </div>
-      )}
+      <section className="vol-creds__detail">
+        <header className="vol-creds__head">
+          <div>
+            <h2 className="vol-creds__title">Credentials</h2>
+            <p className="vol-creds__subtitle">
+              Secrets injected into pods as env vars or mounted files. Rotated centrally.
+            </p>
+          </div>
+          <button
+            className="vol-creds__primary-btn"
+            aria-label="New credential"
+            data-testid="new-credential-btn"
+            type="button"
+          >
+            <span className="vol-creds__primary-plus">+</span>
+            new credential
+          </button>
+        </header>
 
-      {credentials.data && credentials.data.length === 0 && (
-        <p className="niuu-text-sm niuu-text-text-muted" data-testid="no-credentials">
-          No credentials stored yet.
-        </p>
-      )}
+        {credentials.isLoading && (
+          <div className="vol-creds__state" data-testid="credentials-loading">
+            <LoadingState label="Loading credentials…" />
+          </div>
+        )}
 
-      {credentials.data && credentials.data.length > 0 && (
-        <Table<StoredCredential>
-          columns={COLUMNS}
-          rows={credentials.data}
-          aria-label="Credentials"
-        />
-      )}
+        {credentials.isError && (
+          <div className="vol-creds__state" data-testid="credentials-error">
+            <ErrorState title="Failed to load credentials" message="Please retry in a moment." />
+          </div>
+        )}
+
+        {!credentials.isLoading && !credentials.isError && rows.length === 0 && (
+          <div className="vol-creds__state" data-testid="no-credentials">
+            <EmptyState
+              title="No credentials stored yet"
+              description="Add a credential to inject secrets into pods at boot."
+            />
+          </div>
+        )}
+
+        {!credentials.isLoading && !credentials.isError && rows.length > 0 && (
+          <div className="vol-creds__table-wrap" data-testid="credentials-table">
+            <table className="vol-creds__table" aria-label="Credentials">
+              <thead>
+                <tr>
+                  <th>name</th>
+                  <th>type</th>
+                  <th>keys</th>
+                  <th>scope</th>
+                  <th className="vol-creds__num">used</th>
+                  <th>updated</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((credential) => (
+                  <tr
+                    key={credential.id}
+                    className={cn(
+                      selectedCredential === credential.id && 'vol-creds__row--selected',
+                    )}
+                  >
+                    <td>
+                      <div className="vol-creds__namecell">
+                        <span className="vol-creds__dot" />
+                        <span className="vol-creds__name">{credential.name}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="vol-creds__type-pill">{TYPE_LABEL[credential.secretType]}</span>
+                    </td>
+                    <td>
+                      <div className="vol-creds__keys">
+                        {credential.keys.map((key) => (
+                          <code key={key} className="vol-creds__key-chip">
+                            {key}
+                          </code>
+                        ))}
+                      </div>
+                    </td>
+                    <td>
+                      <span className="vol-creds__scope">{credential.scope ?? 'global'}</span>
+                    </td>
+                    <td className="vol-creds__num">{credential.used ?? 0}</td>
+                    <td>
+                      <span className="vol-creds__updated">{credential.updatedAt}</span>
+                    </td>
+                    <td>
+                      <div className="vol-creds__actions">
+                        <button type="button" title="rotate" aria-label="rotate credential">
+                          <RotateIcon />
+                        </button>
+                        <button type="button" title="copy" aria-label="copy credential">
+                          <CopyIcon />
+                        </button>
+                        <button
+                          type="button"
+                          title="delete"
+                          aria-label="delete credential"
+                          className="vol-creds__action-btn--danger"
+                        >
+                          <TrashIcon />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

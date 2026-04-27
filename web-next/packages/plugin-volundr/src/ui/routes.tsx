@@ -1,12 +1,12 @@
 import { useParams } from '@tanstack/react-router';
-import { SessionDetailPage } from './SessionDetailPage';
+import { LiveSessionDetailPage } from './LiveSessionDetailPage';
 
 export function VolundrSessionRoute() {
   const { sessionId } = useParams({ strict: false });
-  return <SessionDetailPage sessionId={sessionId as string} />;
+  return <LiveSessionDetailPage sessionId={sessionId as string} />;
 }
 
 export function VolundrArchivedRoute() {
   const { sessionId } = useParams({ strict: false });
-  return <SessionDetailPage sessionId={sessionId as string} readOnly />;
+  return <LiveSessionDetailPage sessionId={sessionId as string} readOnly />;
 }

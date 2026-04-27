@@ -17,11 +17,20 @@ import { z } from 'zod';
 // Nodes
 // ---------------------------------------------------------------------------
 
-export const workflowNodeKindSchema = z.enum(['stage', 'gate', 'cond']);
-export type WorkflowNodeKind = z.infer<typeof workflowNodeKindSchema>;
+export const workflowNodeKindSchema = z.enum(['stage', 'gate', 'cond', 'trigger', 'end']);
+export type WorkflowNodeKind = z.input<typeof workflowNodeKindSchema>;
 
 /** Spatial position for UI rendering (pixels from top-left). */
 const positionSchema = z.object({ x: z.number(), y: z.number() });
+const stageExecutionModeSchema = z.enum(['parallel', 'sequential']);
+const stageJoinModeSchema = z.enum(['all', 'any', 'merge']);
+const stageMemberSchema = z.object({
+  personaId: z.string().min(1),
+  budget: z.number().int().nonnegative().default(40),
+});
+export type StageExecutionMode = z.input<typeof stageExecutionModeSchema>;
+export type StageJoinMode = z.input<typeof stageJoinModeSchema>;
+export type WorkflowStageMember = z.input<typeof stageMemberSchema>;
 
 export const workflowStageNodeSchema = z.object({
   id: z.string().min(1),
@@ -31,9 +40,17 @@ export const workflowStageNodeSchema = z.object({
   raidId: z.string().nullable(),
   /** Persona IDs assigned to this stage (drives missing_persona validation). */
   personaIds: z.array(z.string()).default([]),
+  /** Rich stage membership used by the workflow editor. */
+  stageMembers: z.array(stageMemberSchema).default([]),
+  /** Parallel or sequential execution for the stage flock. */
+  executionMode: stageExecutionModeSchema.default('parallel'),
+  /** Maximum number of concurrent workers allowed in the stage. */
+  maxConcurrent: z.number().int().positive().default(3),
+  /** How inbound branches join when this stage has fan-in. */
+  joinMode: stageJoinModeSchema.default('all'),
   position: positionSchema,
 });
-export type WorkflowStageNode = z.infer<typeof workflowStageNodeSchema>;
+export type WorkflowStageNode = z.input<typeof workflowStageNodeSchema>;
 
 export const workflowGateNodeSchema = z.object({
   id: z.string().min(1),
@@ -41,9 +58,11 @@ export const workflowGateNodeSchema = z.object({
   label: z.string().min(1),
   /** Human-readable approval condition description. */
   condition: z.string(),
+  approvers: z.array(z.string()).default([]),
+  autoForwardAfter: z.string().default('30m'),
   position: positionSchema,
 });
-export type WorkflowGateNode = z.infer<typeof workflowGateNodeSchema>;
+export type WorkflowGateNode = z.input<typeof workflowGateNodeSchema>;
 
 export const workflowCondNodeSchema = z.object({
   id: z.string().min(1),
@@ -53,14 +72,33 @@ export const workflowCondNodeSchema = z.object({
   predicate: z.string(),
   position: positionSchema,
 });
-export type WorkflowCondNode = z.infer<typeof workflowCondNodeSchema>;
+export type WorkflowCondNode = z.input<typeof workflowCondNodeSchema>;
+
+export const workflowTriggerNodeSchema = z.object({
+  id: z.string().min(1),
+  kind: z.literal('trigger'),
+  label: z.string().min(1),
+  source: z.string().default('manual dispatch'),
+  position: positionSchema,
+});
+export type WorkflowTriggerNode = z.input<typeof workflowTriggerNodeSchema>;
+
+export const workflowEndNodeSchema = z.object({
+  id: z.string().min(1),
+  kind: z.literal('end'),
+  label: z.string().min(1),
+  position: positionSchema,
+});
+export type WorkflowEndNode = z.input<typeof workflowEndNodeSchema>;
 
 export const workflowNodeSchema = z.discriminatedUnion('kind', [
   workflowStageNodeSchema,
   workflowGateNodeSchema,
   workflowCondNodeSchema,
+  workflowTriggerNodeSchema,
+  workflowEndNodeSchema,
 ]);
-export type WorkflowNode = z.infer<typeof workflowNodeSchema>;
+export type WorkflowNode = z.input<typeof workflowNodeSchema>;
 
 // ---------------------------------------------------------------------------
 // Edges (bezier curves)
@@ -79,7 +117,7 @@ export const workflowEdgeSchema = z.object({
   /** Second bezier control point (relative to target). */
   cp2: positionSchema,
 });
-export type WorkflowEdge = z.infer<typeof workflowEdgeSchema>;
+export type WorkflowEdge = z.input<typeof workflowEdgeSchema>;
 
 // ---------------------------------------------------------------------------
 // Workflow DAG invariants
@@ -106,14 +144,14 @@ export const workflowSchema = z.object({
   /** Directed edges. Source and target must reference valid node IDs. */
   edges: z.array(workflowEdgeSchema),
 });
-export type Workflow = z.infer<typeof workflowSchema>;
+export type Workflow = z.input<typeof workflowSchema>;
 
 /**
  * Validate DAG structural invariants beyond Zod schema:
  *  1. Node IDs are unique.
  *  2. Every edge source and target references an existing node.
  *  3. No self-loops.
- *  4. No duplicate edges (same source + target pair).
+ *  4. No duplicate edges (same source + target + label tuple).
  *
  * Throws WorkflowValidationError on the first violated invariant.
  */
@@ -143,9 +181,11 @@ export function validateWorkflow(workflow: Workflow): void {
     if (edge.source === edge.target) {
       throw new WorkflowValidationError(`Edge ${edge.id} is a self-loop on node: ${edge.source}`);
     }
-    const key = `${edge.source}->${edge.target}`;
+    const key = `${edge.source}->${edge.target}->${edge.label ?? ''}`;
     if (edgeKeys.has(key)) {
-      throw new WorkflowValidationError(`Duplicate edge from ${edge.source} to ${edge.target}`);
+      throw new WorkflowValidationError(
+        `Duplicate edge from ${edge.source} to ${edge.target} (${edge.label ?? 'unlabelled'})`,
+      );
     }
     edgeKeys.add(key);
   }

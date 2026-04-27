@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Annotated
 
@@ -29,7 +30,7 @@ class DispatcherStateResponse(BaseModel):
 
 class PatchDispatcherRequest(BaseModel):
     running: bool | None = None
-    threshold: float | None = Field(None, ge=0.0, le=1.0)
+    threshold: float | None = Field(None, ge=0.0, le=100.0)
     max_concurrent_raids: int | None = Field(None, ge=1, le=20)
     auto_continue: bool | None = None
 
@@ -45,6 +46,28 @@ class ActivityEventResponse(BaseModel):
 class ActivityLogResponse(BaseModel):
     events: list[ActivityEventResponse]
     total: int
+
+
+# ---------------------------------------------------------------------------
+# Compatibility helpers
+# ---------------------------------------------------------------------------
+
+
+def _to_api_threshold(value: float) -> float:
+    """Expose dispatcher thresholds as percentages for the frontend contract."""
+    return round(value * 100, 2)
+
+
+def _from_api_threshold(value: float) -> float:
+    """Accept both legacy fractions (0-1) and canonical percentages (0-100)."""
+    return value if value <= 1 else value / 100
+
+
+def _format_activity_log_line(event_type: str, timestamp: datetime, payload: dict) -> str:
+    stamp = timestamp.isoformat()
+    if not payload:
+        return f"[{stamp}] {event_type}"
+    return f"[{stamp}] {event_type} {json.dumps(payload, sort_keys=True)}"
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +107,7 @@ def create_dispatcher_router() -> APIRouter:
         return DispatcherStateResponse(
             id=str(state.id),
             running=state.running,
-            threshold=state.threshold,
+            threshold=_to_api_threshold(state.threshold),
             max_concurrent_raids=state.max_concurrent_raids,
             auto_continue=state.auto_continue,
             updated_at=state.updated_at,
@@ -98,40 +121,61 @@ def create_dispatcher_router() -> APIRouter:
     ) -> DispatcherStateResponse:
         """Partially update the dispatcher state for the authenticated user."""
         updates = body.model_dump(exclude_none=True)
+        if "threshold" in updates:
+            updates["threshold"] = _from_api_threshold(updates["threshold"])
         state = await repo.update(principal.user_id, **updates)
         return DispatcherStateResponse(
             id=str(state.id),
             running=state.running,
-            threshold=state.threshold,
+            threshold=_to_api_threshold(state.threshold),
             max_concurrent_raids=state.max_concurrent_raids,
             auto_continue=state.auto_continue,
             updated_at=state.updated_at,
         )
 
-    @router.get("/log", response_model=ActivityLogResponse)
+    @router.get("/log")
     async def get_activity_log(
-        n: Annotated[int, Query(ge=1, le=1000, description="Number of events to return.")] = 100,
+        n: Annotated[
+            int | None,
+            Query(ge=1, le=1000, description="Number of events to return."),
+        ] = None,
+        limit: Annotated[
+            int | None,
+            Query(ge=1, le=1000, description="Legacy alias for number of events to return."),
+        ] = None,
         _principal: Principal = Depends(extract_principal),
         event_bus: EventBusPort = Depends(resolve_event_bus),
-    ) -> ActivityLogResponse:
+    ) -> ActivityLogResponse | list[str]:
         """Return the last N activity events from the dispatcher event bus.
 
         Events are ordered oldest-first.  Use the ``n`` query parameter to
         control how many events are returned (default 100, max 1000).
         """
-        events = event_bus.get_log(n)
-        return ActivityLogResponse(
-            events=[
-                ActivityEventResponse(
-                    id=e.id,
-                    event=e.event,
-                    data=e.data,
-                    owner_id=e.owner_id,
-                    timestamp=e.timestamp,
-                )
-                for e in events
-            ],
-            total=len(events),
-        )
+        size = limit if limit is not None else (n if n is not None else 100)
+        events = event_bus.get_log(size)
+
+        if limit is not None:
+            return ActivityLogResponse(
+                events=[
+                    ActivityEventResponse(
+                        id=e.id,
+                        event=e.event,
+                        data=e.data,
+                        owner_id=e.owner_id,
+                        timestamp=e.timestamp,
+                    )
+                    for e in events
+                ],
+                total=len(events),
+            )
+
+        return [
+            _format_activity_log_line(
+                event_type=e.event,
+                timestamp=e.timestamp,
+                payload=e.data,
+            )
+            for e in events
+        ]
 
     return router

@@ -35,10 +35,14 @@
 }
 
 .niuu-form-control--error {
-  border-color: var(--color-critical-fg);
+  border-color: color-mix(in srgb, var(--color-critical-fg) 42%, transparent);
+  background: color-mix(in srgb, var(--color-critical) 8%, var(--color-bg-secondary));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
 }
 
 .niuu-form-control--error:focus {
   border-color: var(--color-critical-fg);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-critical-fg) 25%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 4%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--color-critical-fg) 22%, transparent);
 }

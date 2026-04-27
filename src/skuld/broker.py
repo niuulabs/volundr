@@ -101,11 +101,23 @@ def _configure_logging() -> None:
 
 _configure_logging()
 logger = logging.getLogger("skuld.broker")
+FORGE_SESSIONS_PATH = "/api/v1/forge/sessions"
+FORGE_CHRONICLES_PATH = "/api/v1/forge/chronicles"
+FORGE_EVENTS_PATH = "/api/v1/forge/events"
 
 
 def _sanitize_log(value: object) -> str:
     """Sanitize a value for safe log output (prevent log injection)."""
     return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
+def _resolve_git_workspace_root(workspace_dir: str) -> Path:
+    """Resolve the actual checkout root for git-backed workspaces."""
+    workspace = Path(workspace_dir).resolve()
+    repo_dir = workspace / "repo"
+    if (repo_dir / ".git").exists():
+        return repo_dir
+    return workspace
 
 
 # ---------------------------------------------------------------------------
@@ -1281,7 +1293,7 @@ class Broker:
             payload["model"] = model
 
         try:
-            response = await client.post("/api/v1/volundr/events", json=payload)
+            response = await client.post(FORGE_EVENTS_PATH, json=payload)
             if response.status_code < 300:
                 logger.debug("Pipeline event emitted: %s", event_type)
             else:
@@ -1307,7 +1319,7 @@ class Broker:
             return
 
         client = await self._get_http_client()
-        url = f"/api/v1/volundr/sessions/{self.session_id}/usage"
+        url = f"{FORGE_SESSIONS_PATH}/{self.session_id}/usage"
 
         for model_id, usage in model_usage.items():
             tokens = (
@@ -1357,7 +1369,7 @@ class Broker:
             return
 
         client = await self._get_http_client()
-        url = f"/api/v1/volundr/chronicles/{self.session_id}/timeline"
+        url = f"{FORGE_CHRONICLES_PATH}/{self.session_id}/timeline"
 
         try:
             response = await client.post(url, json=event)
@@ -1443,7 +1455,7 @@ class Broker:
         try:
             client = await self._get_http_client()
             resp = await client.post(
-                f"/api/v1/volundr/sessions/{self.session_id}/activity",
+                f"{FORGE_SESSIONS_PATH}/{self.session_id}/activity",
                 json={"state": state, "metadata": metadata},
             )
             logger.info(
@@ -1725,7 +1737,7 @@ class Broker:
             summary_data = await self._generate_summary()
 
             client = await self._get_http_client()
-            url = f"/api/v1/volundr/sessions/{self.session_id}/chronicle"
+            url = f"{FORGE_SESSIONS_PATH}/{self.session_id}/chronicle"
 
             payload: dict = {
                 "duration_seconds": self._artifacts.duration_seconds,
@@ -2528,7 +2540,7 @@ async def get_diff(
     ),
 ) -> dict:
     """Return parsed git diff for a single file."""
-    workspace = Path(broker.workspace_dir).resolve()
+    workspace = _resolve_git_workspace_root(broker.workspace_dir)
     target = (workspace / file).resolve()
 
     if not str(target).startswith(str(workspace)):
@@ -2569,7 +2581,7 @@ async def get_diff_files(
     ),
 ) -> dict:
     """Return list of changed files with insertion/deletion counts."""
-    workspace = Path(broker.workspace_dir).resolve()
+    workspace = _resolve_git_workspace_root(broker.workspace_dir)
 
     if base == "last-commit":
         cmd = ["git", "diff", "HEAD", "--numstat"]
@@ -2625,7 +2637,7 @@ async def send_message_to_session(body: _SendMessageRequest) -> dict:
         raise HTTPException(503, "Volundr API URL not configured")
 
     client = await broker._get_http_client()
-    url = f"/api/v1/volundr/sessions/{body.session_id}/messages"
+    url = f"{FORGE_SESSIONS_PATH}/{body.session_id}/messages"
     try:
         resp = await client.post(url, json={"content": body.content})
         resp.raise_for_status()

@@ -21,8 +21,10 @@
 
 .niuu-chip--critical {
   color: var(--color-critical-fg);
-  border-color: var(--color-critical-bo);
-  background: var(--color-critical-bg);
+  border-color: color-mix(in srgb, var(--color-critical-fg) 36%, transparent);
+  background: color-mix(in srgb, var(--color-critical) 16%, var(--color-bg-secondary));
+  border-style: dashed;
+  border-radius: 8px;
 }
 
 .niuu-chip--muted {

@@ -14,17 +14,22 @@ from pathlib import Path
 def web_dist_dir() -> Path:
     """Return the path to the bundled web UI ``dist/`` directory.
 
-    Falls back to the repository ``web/dist`` when running from source.
+    Falls back to source-tree web builds when running from source.
     """
     pkg_dir = importlib.resources.files("cli") / "web" / "dist"
     pkg_path = _resource_path(pkg_dir)
     if pkg_path.is_dir():
         return pkg_path
 
-    # Fallback: repo-relative for development
-    repo_web = Path(__file__).resolve().parents[2] / "web" / "dist"
-    if repo_web.is_dir():
-        return repo_web
+    repo_root = Path(__file__).resolve().parents[2]
+    repo_candidates = (
+        repo_root / "src" / "cli" / "web" / "dist",
+        repo_root / "web-next" / "apps" / "niuu" / "dist",
+        repo_root / "web" / "dist",
+    )
+    for candidate in repo_candidates:
+        if candidate.is_dir():
+            return candidate
 
     msg = "Web UI assets not found — run 'make build-web' first"
     raise FileNotFoundError(msg)

@@ -16,9 +16,11 @@ import { RoomMessage } from '../RoomMessage';
 import { ThreadGroup } from '../ThreadGroup';
 import { MeshCascadePanel } from '../MeshCascadePanel';
 import { MeshSidebar } from '../MeshSidebar';
+import { AgentDetailPanel } from '../AgentDetailPanel';
 import { ChatInput } from '../ChatInput';
 import { SessionEmptyChat } from '../ChatEmptyStates';
 import type {
+  AgentInternalEvent,
   ChatMessage,
   ChatMessagePart,
   RoomParticipant,
@@ -59,6 +61,8 @@ export interface SessionChatProps {
   participants?: ReadonlyMap<string, RoomParticipant>;
   /** Mesh events for the cascade panel */
   meshEvents?: readonly MeshEvent[];
+  /** Per-agent internal event frames */
+  agentEvents?: ReadonlyMap<string, readonly AgentInternalEvent[]>;
   /** Pending permission requests */
   pendingPermissions?: PermissionRequest[];
   /** Available slash commands */
@@ -109,6 +113,7 @@ export function SessionChat({
   historyLoaded = true,
   participants = new Map(),
   meshEvents = [],
+  agentEvents = new Map(),
   pendingPermissions = [],
   availableCommands,
   capabilities = {},
@@ -162,10 +167,13 @@ export function SessionChat({
     return map;
   }, [participants]);
 
-  const isRoomSession = participantsMap.size > 0;
+  const isRoomSession = Array.from(participantsMap.values()).some(
+    (participant) => participant.participantType && participant.participantType !== 'skuld',
+  );
 
   const selectedAgentId: string | null = activeFilter !== 'all' ? activeFilter : null;
-  const effectiveRightPanelMode = meshEvents.length > 0 ? 'cascade' : null;
+  const [detailPeerId, setDetailPeerId] = useState<string | null>(null);
+  const effectiveRightPanelMode = detailPeerId ? 'detail' : meshEvents.length > 0 ? 'cascade' : null;
 
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
   const handleOutcomeClick = useCallback(
@@ -333,10 +341,19 @@ export function SessionChat({
 
   const handleSelectAgent = useCallback(
     (peerId: string) => {
+      setDetailPeerId(null);
       setActiveFilter(activeFilter === peerId ? 'all' : peerId);
     },
     [activeFilter, setActiveFilter],
   );
+
+  const handleShowDetail = useCallback((peerId: string) => {
+    setDetailPeerId(peerId);
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setDetailPeerId(null);
+  }, []);
 
   const handleCopy = useCallback(
     (text: string) => {
@@ -388,9 +405,15 @@ export function SessionChat({
     [onBookmark],
   );
 
-  const hasSidebar = participants.size > 0;
+  const hasSidebar = Array.from(participants.values()).some(
+    (participant) => participant.participantType === 'ravn',
+  );
   const showRightPanel = effectiveRightPanelMode !== null;
-  const isStreaming = !!streamingContent || (streamingParts && streamingParts.length > 0);
+  const hasRunningAssistantMessage = visibleMessages.some(
+    (message) => message.role === 'assistant' && message.status === 'running',
+  );
+  const isStreaming =
+    !hasRunningAssistantMessage && (!!streamingContent || (streamingParts && streamingParts.length > 0));
 
   return (
     <div
@@ -582,6 +605,7 @@ export function SessionChat({
                         message={msg}
                         onSelectAgent={handleSelectAgent}
                         selectedAgentId={selectedAgentId}
+                        onShowDetail={msg.participant ? handleShowDetail : undefined}
                         onCopy={handleCopy}
                         onRegenerate={handleRegenerate}
                         onBookmark={handleBookmark}
@@ -682,6 +706,17 @@ export function SessionChat({
       {showRightPanel && effectiveRightPanelMode === 'cascade' && meshEvents.length > 0 && (
         <MeshCascadePanel events={meshEvents} onEventClick={handleOutcomeClick} />
       )}
+
+      {showRightPanel &&
+        effectiveRightPanelMode === 'detail' &&
+        detailPeerId &&
+        participants.get(detailPeerId) && (
+          <AgentDetailPanel
+            participant={participants.get(detailPeerId)!}
+            events={agentEvents.get(detailPeerId) ?? []}
+            onClose={handleCloseDetail}
+          />
+        )}
     </div>
   );
 }

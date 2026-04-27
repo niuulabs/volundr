@@ -43,8 +43,8 @@
 
 .niuu-status-badge--crit {
   color: var(--color-critical-fg);
-  background: var(--color-critical-bg);
-  border-color: var(--color-critical-bo);
+  background: color-mix(in srgb, var(--color-critical) 16%, var(--color-bg-secondary));
+  border-color: color-mix(in srgb, var(--color-critical-fg) 36%, transparent);
 }
 
 .niuu-status-badge--mute {

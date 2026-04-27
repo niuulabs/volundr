@@ -1,179 +1,322 @@
+import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { KpiStrip, KpiCard, StateDot, LoadingState, Sparkline } from '@niuulabs/ui';
+import { LoadingState, Sparkline, StateDot } from '@niuulabs/ui';
+import { CliBadge, ConnectionTypeBadge, MiniBar } from './atoms';
 import { useVolundrStats } from './useVolundrSessions';
 import { useVolundrClusters } from './hooks/useVolundrClusters';
 import { useSessionList } from './hooks/useSessionStore';
 import { useTemplates } from './useTemplates';
-import { MiniBar, ConnectionTypeBadge } from './atoms';
-import { tokens, money } from './utils/formatters';
-import type { Session } from '../domain/session';
-import type { Cluster } from '../domain/cluster';
-import type { ClusterKind } from '../domain/cluster';
+import { LaunchWizard } from './LaunchWizard';
+import { money, tokens } from './utils/formatters';
+import type { Cluster, ClusterKind } from '../domain/cluster';
+import type { Session, SessionState } from '../domain/session';
 import type { Template } from '../domain/template';
+import './ForgePage.css';
 
-// ---------------------------------------------------------------------------
-// In-flight pod row
-// ---------------------------------------------------------------------------
+const INFLIGHT_STATES: SessionState[] = ['provisioning', 'requested', 'running', 'idle'];
 
-function InflightRow({ session, onClick }: { session: Session; onClick: () => void }) {
+const SESSION_PRIORITY: Record<SessionState, number> = {
+  provisioning: 0,
+  requested: 1,
+  running: 2,
+  idle: 3,
+  ready: 4,
+  failed: 5,
+  terminating: 6,
+  terminated: 7,
+};
+
+const KIND_LABEL: Record<ClusterKind, string> = {
+  primary: 'PRIMARY',
+  gpu: 'GPU',
+  edge: 'EDGE',
+  local: 'LOCAL',
+  observ: 'OBSERV',
+  media: 'MEDIA',
+};
+
+const FORGE_CLUSTER_DISPLAY: Record<
+  string,
+  { name: string; realm: string; kind?: ClusterKind }
+> = {
+  'cl-eitri': { name: 'Valaskjálf', realm: 'asgard', kind: 'primary' },
+  'cl-valhalla': { name: 'Valhalla', realm: 'asgard', kind: 'gpu' },
+  'cl-noatun': { name: 'Nóatún', realm: 'midgard', kind: 'edge' },
+  'cl-brokkr': { name: 'Eitri', realm: 'svartalfheim', kind: 'local' },
+  'cl-glitnir': { name: 'Glitnir', realm: 'midgard', kind: 'observ' },
+  'cl-jarnvidr': { name: 'Járnviðr', realm: 'jotunheim', kind: 'media' },
+};
+
+const TEMPLATE_TOOL: Record<string, string> = {
+  'tpl-platform': 'claude',
+  'tpl-web': 'claude',
+  'tpl-bifrost': 'codex',
+  'tpl-mimir': 'claude',
+};
+
+const SHOWCASE_SESSION_IDS = new Set([
+  'niuu-integration-tests',
+  'laptop-volundr-local',
+  'mimir-bge-reindex',
+  'aider-css-migration',
+  'ravn-triggers-ui',
+  'observatory-canvas-perf',
+  'ds-7',
+  'ds-8',
+  'ds-9',
+  'ds-4',
+]);
+
+type ForgeClusterView = Cluster & {
+  displayName: string;
+  displayRealm: string;
+  displayKind: ClusterKind;
+  podCount: number;
+  cpuPct: number;
+  memPct: number;
+  gpuPct: number;
+};
+
+function normalizeKey(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function lastTouched(session: Session) {
+  return new Date(session.lastActivityAt ?? session.startedAt).getTime();
+}
+
+function compactAge(timestamp: number) {
+  const diff = Math.max(1_000, Date.now() - timestamp);
+  const seconds = Math.floor(diff / 1_000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
+function formatGi(mi: number) {
+  if (mi >= 1024) return `${Math.round(mi / 1024)}Gi`;
+  return `${mi}Mi`;
+}
+
+function formatTemplateSpec(template: Template) {
+  const cpu = `${template.spec.resources.cpuRequest}c`;
+  const mem = formatGi(template.spec.resources.memRequestMi);
+  const gpu = template.spec.resources.gpuCount > 0 ? `gpu ${template.spec.resources.gpuCount}` : '';
+  const usage = `${template.usageCount ?? 0}×`;
+  return [cpu, mem, gpu, usage].filter(Boolean).join('  ');
+}
+
+function templateCli(template: Template) {
+  return TEMPLATE_TOOL[template.id] ?? 'claude';
+}
+
+function displayCluster(session: Session, clusterMap: Map<string, ForgeClusterView>) {
+  return clusterMap.get(normalizeKey(session.clusterId))?.displayName ?? session.clusterId;
+}
+
+function sessionDotState(session: Session) {
+  if (session.state === 'failed') return 'failed';
+  if (session.state === 'idle') return 'idle';
+  if (session.state === 'running') return 'running';
+  return 'processing';
+}
+
+function statusLabel(session: Session) {
+  if (session.state === 'provisioning') return session.preview ?? 'pulling image…';
+  if (session.state === 'requested') return 'requested';
+  return session.preview ?? session.events[session.events.length - 1]?.body ?? 'idle';
+}
+
+function average(values: number[], count: number) {
+  if (values.length === 0) return 0;
+  const slice = values.slice(-count);
+  return slice.reduce((sum, value) => sum + value, 0) / slice.length;
+}
+
+function clusterAccentClass(kind: ClusterKind) {
+  return `vol-forge__kind--${kind}`;
+}
+
+function MetricTile({
+  label,
+  value,
+  subline,
+  accent = 'brand',
+  children,
+}: {
+  label: string;
+  value: string | number;
+  subline: string;
+  accent?: 'brand' | 'neutral';
+  children?: ReactNode;
+}) {
+  return (
+    <div className={`vol-forge__metric vol-forge__metric--${accent}`}>
+      <div className="vol-forge__metric-label">{label}</div>
+      <div className="vol-forge__metric-value">{value}</div>
+      <div className="vol-forge__metric-sub">{subline}</div>
+      {children ? <div className="vol-forge__metric-viz">{children}</div> : null}
+    </div>
+  );
+}
+
+function GpuStrip({ clusters }: { clusters: ForgeClusterView[] }) {
+  const cells = clusters.flatMap((cluster) =>
+    Array.from({ length: cluster.capacity.gpu }, (_, index) => ({
+      id: `${cluster.id}-${index}`,
+      used: index < cluster.used.gpu,
+      kind: cluster.displayKind,
+    })),
+  );
+
+  return (
+    <div className="vol-forge__gpu-strip" data-testid="gpu-heatmap">
+      {cells.map((cell) => (
+        <span
+          key={cell.id}
+          className={`vol-forge__gpu-cell${cell.used ? ' is-used' : ''} ${cell.kind === 'gpu' ? 'is-gpu' : ''}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function InflightRow({
+  session,
+  clusterLabel,
+  onClick,
+}: {
+  session: Session;
+  clusterLabel: string;
+  onClick: () => void;
+}) {
   const isBooting = session.state === 'provisioning' || session.state === 'requested';
-  const totalTokens = (session.tokensIn ?? 0) + (session.tokensOut ?? 0);
   const cpuPct =
     session.resources.cpuLimit > 0 ? session.resources.cpuUsed / session.resources.cpuLimit : 0;
   const memPct =
     session.resources.memLimitMi > 0
       ? session.resources.memUsedMi / session.resources.memLimitMi
       : 0;
+  const gpuPct = session.resources.gpuCount > 0 ? 0.84 : 0;
+  const tokenTotal = (session.tokensIn ?? 0) + (session.tokensOut ?? 0);
 
   return (
     <button
-      className="niuu-relative niuu-flex niuu-w-full niuu-items-start niuu-gap-3 niuu-rounded niuu-px-3 niuu-py-2 niuu-text-left hover:niuu-bg-bg-tertiary"
+      type="button"
+      className={`vol-forge__inflight-row${isBooting ? ' is-booting' : ''}`}
       onClick={onClick}
       data-testid="inflight-row"
     >
-      <StateDot
-        state={isBooting ? 'processing' : session.state === 'idle' ? 'idle' : 'running'}
-        pulse={isBooting || session.state === 'running'}
-      />
-      <div className="niuu-flex-1 niuu-min-w-0">
-        <div className="niuu-font-mono niuu-text-sm niuu-font-medium niuu-text-text-primary niuu-truncate">
-          {session.id}
-        </div>
-        <div className="niuu-text-xs niuu-text-text-faint">
-          {session.personaName} · {session.clusterId}
+      <div className="vol-forge__inflight-ident">
+        <StateDot state={sessionDotState(session)} pulse={!isBooting && session.state === 'running'} />
+        <div className="vol-forge__inflight-namecol">
+          <div className="vol-forge__inflight-name">{session.id}</div>
+          <div className="vol-forge__inflight-sub">
+            <span>{session.personaName}</span>
+            <span className="vol-forge__sep">·</span>
+            <span>{clusterLabel}</span>
+          </div>
         </div>
       </div>
 
-      {/* Preview / activity text */}
-      {session.preview && !isBooting && (
-        <div
-          className="niuu-flex-[2] niuu-min-w-0 niuu-font-mono niuu-text-xs niuu-text-text-muted niuu-truncate"
-          data-testid="inflight-preview"
-          title={session.preview}
-        >
-          {session.preview}
-        </div>
-      )}
-      {isBooting && (
-        <div className="niuu-flex-[2] niuu-min-w-0 niuu-font-mono niuu-text-xs niuu-text-text-muted">
-          {session.state === 'provisioning' ? 'provisioning…' : 'requested'}
-        </div>
-      )}
+      <div
+        className="vol-forge__inflight-preview"
+        title={statusLabel(session)}
+        data-testid={isBooting ? undefined : 'inflight-preview'}
+      >
+        {statusLabel(session)}
+      </div>
 
-      {/* Inline resource bars */}
-      {!isBooting && (
-        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-w-36">
-          <MiniBar value={cpuPct} label="cpu" />
-          <MiniBar value={memPct} label="mem" />
-          {session.resources.gpuCount > 0 && <MiniBar value={0} label="gpu" />}
-        </div>
-      )}
+      <div className="vol-forge__inflight-resources">
+        {!isBooting ? (
+          <>
+            <MiniBar value={cpuPct} label="cpu" />
+            <MiniBar value={memPct} label="mem" />
+            {session.resources.gpuCount > 0 ? <MiniBar value={gpuPct} label="gpu" /> : null}
+          </>
+        ) : (
+          <div className="vol-forge__booting-copy">{session.preview ?? 'bootstrapping pod…'}</div>
+        )}
+      </div>
 
-      {/* Token + cost */}
-      {!isBooting && (totalTokens > 0 || session.costCents !== undefined) && (
-        <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-font-mono niuu-text-[10px] niuu-text-text-muted niuu-whitespace-nowrap">
-          {totalTokens > 0 && <span data-testid="token-stat">{tokens(totalTokens)}</span>}
-          {totalTokens > 0 && session.costCents !== undefined && (
-            <span className="niuu-text-text-faint">·</span>
-          )}
-          {session.costCents !== undefined && (
-            <span data-testid="cost-stat">{money(session.costCents)}</span>
-          )}
-        </div>
-      )}
+      <div className="vol-forge__inflight-stats">
+        {!isBooting && tokenTotal > 0 ? <span data-testid="token-stat">{tokens(tokenTotal)}</span> : null}
+        {!isBooting && tokenTotal > 0 && session.costCents !== undefined ? (
+          <span className="vol-forge__sep">·</span>
+        ) : null}
+        {!isBooting && session.costCents !== undefined ? (
+          <span data-testid="cost-stat">{money(session.costCents)}</span>
+        ) : null}
+      </div>
 
-      {/* Connection type icon */}
-      {session.connectionType && <ConnectionTypeBadge connectionType={session.connectionType} />}
+      <div className="vol-forge__inflight-badge">
+        {session.connectionType ? (
+          <ConnectionTypeBadge
+            connectionType={session.connectionType}
+            className="vol-forge__connection-badge"
+          />
+        ) : null}
+      </div>
 
-      {/* Boot progress bar */}
-      {isBooting && (
-        <div
-          className="niuu-absolute niuu-bottom-0 niuu-left-0 niuu-h-0.5 niuu-w-full niuu-bg-bg-elevated"
-          aria-hidden="true"
-        >
+      {isBooting ? (
+        <div className="vol-forge__boot-progress">
           <div
-            className="niuu-h-full niuu-bg-brand niuu-transition-all niuu-duration-500"
-            style={{ width: `${Math.round((session.bootProgress ?? 0.1) * 100)}%` }}
+            className="vol-forge__boot-progress-fill"
+            style={{ width: `${Math.round((session.bootProgress ?? 0.08) * 100)}%` }}
             data-testid="boot-progress-bar"
           />
         </div>
-      )}
+      ) : null}
     </button>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Cluster kind badge
-// ---------------------------------------------------------------------------
-
-const KIND_BG: Record<ClusterKind, string> = {
-  primary: 'niuu-bg-brand niuu-text-bg-primary',
-  gpu: 'niuu-bg-state-warn niuu-text-bg-primary',
-  edge: 'niuu-bg-bg-elevated niuu-text-text-secondary',
-  local: 'niuu-bg-bg-elevated niuu-text-text-secondary',
-  observ: 'niuu-bg-bg-elevated niuu-text-text-secondary',
-  media: 'niuu-bg-bg-elevated niuu-text-text-secondary',
-};
-
-function ClusterKindBadge({ kind }: { kind: ClusterKind }) {
+function ForgeLoadRow({ cluster }: { cluster: ForgeClusterView }) {
   return (
-    <span
-      className={`niuu-inline-flex niuu-items-center niuu-rounded niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-font-semibold niuu-uppercase ${KIND_BG[kind] ?? KIND_BG.edge}`}
-      data-testid="cluster-kind-badge"
-    >
-      {kind}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Cluster load row
-// ---------------------------------------------------------------------------
-
-function ClusterLoadRow({ cluster }: { cluster: Cluster }) {
-  const cpuPct = cluster.capacity.cpu > 0 ? cluster.used.cpu / cluster.capacity.cpu : 0;
-  const memPct = cluster.capacity.memMi > 0 ? cluster.used.memMi / cluster.capacity.memMi : 0;
-  const gpuPct = cluster.capacity.gpu > 0 ? cluster.used.gpu / cluster.capacity.gpu : 0;
-
-  return (
-    <div
-      className="niuu-flex niuu-flex-col niuu-gap-1 niuu-py-2"
-      data-testid="cluster-load-row"
-    >
-      {/* Name + realm */}
-      <div className="niuu-flex niuu-items-center niuu-gap-1">
-        <span className="niuu-font-medium niuu-text-sm niuu-text-text-primary">
-          {cluster.name}
-        </span>
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">· {cluster.realm}</span>
+    <div className="vol-forge__cluster-row" data-testid="cluster-load-row">
+      <div className="vol-forge__cluster-head">
+        <div className="vol-forge__cluster-namewrap">
+          <span className="vol-forge__cluster-name">{cluster.displayName}</span>
+          <span className="vol-forge__cluster-realm">· {cluster.displayRealm}</span>
+        </div>
+        <div className="vol-forge__cluster-sub">
+          <span
+            className={`vol-forge__kind ${clusterAccentClass(cluster.displayKind)}`}
+            data-testid="cluster-kind-badge"
+          >
+            {KIND_LABEL[cluster.displayKind]}
+          </span>
+          <span className="vol-forge__cluster-count">
+            {cluster.podCount} pod{cluster.podCount === 1 ? '' : 's'}
+          </span>
+        </div>
       </div>
-      {/* Kind badge + pod count */}
-      <div className="niuu-flex niuu-items-center niuu-gap-2">
-        <ClusterKindBadge kind={cluster.kind} />
-        <span className="niuu-text-xs niuu-text-text-muted">
-          {cluster.runningSessions} pod{cluster.runningSessions !== 1 ? 's' : ''}
-        </span>
-      </div>
-      {/* Full-width resource bars */}
-      <div className="niuu-flex niuu-gap-3 niuu-mt-0.5">
-        <MiniBar value={cpuPct} label="cpu" />
-        <MiniBar value={memPct} label="mem" />
+
+      <div className="vol-forge__cluster-meters">
+        <MiniBar value={cluster.cpuPct} label="cpu" />
+        <MiniBar value={cluster.memPct} label="mem" />
         {cluster.capacity.gpu > 0 ? (
-          <MiniBar value={gpuPct} label="gpu" />
+          <MiniBar value={cluster.gpuPct} label="gpu" />
         ) : (
-          <div className="niuu-flex niuu-flex-col niuu-gap-0.5 niuu-flex-1">
-            <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint">gpu</span>
-            <div className="niuu-h-1 niuu-rounded-full niuu-bg-bg-elevated" />
+          <div className="vol-forge__meter-empty">
+            <span>gpu</span>
+            <div className="vol-forge__meter-empty-track" />
           </div>
         )}
       </div>
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Quick launch card
-// ---------------------------------------------------------------------------
 
 function QuickLaunchCard({
   template,
@@ -181,267 +324,323 @@ function QuickLaunchCard({
   onClick,
 }: {
   template: Template;
-  isDefault?: boolean;
+  isDefault: boolean;
   onClick: () => void;
 }) {
   return (
-    <button
-      className="niuu-relative niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-3 niuu-text-left hover:niuu-border-brand"
-      onClick={onClick}
-      data-testid="quick-launch-card"
-    >
-      {/* Tool badge row */}
-      <div className="niuu-flex niuu-items-center niuu-gap-2">
-        <span className="niuu-inline-flex niuu-items-center niuu-gap-1 niuu-rounded niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-secondary">
-          <span aria-hidden="true">⊡</span> Claude Code
-        </span>
-        {isDefault && (
-          <span className="niuu-rounded niuu-bg-brand niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-font-semibold niuu-text-bg-primary niuu-uppercase">
-            default
-          </span>
-        )}
+    <button type="button" className="vol-forge__launch-card" onClick={onClick} data-testid="quick-launch-card">
+      <div className="vol-forge__launch-head">
+        <CliBadge cli={templateCli(template)} />
+        {isDefault ? <span className="vol-forge__launch-default">DEFAULT</span> : null}
       </div>
-      {/* Template name */}
-      <div className="niuu-font-mono niuu-text-sm niuu-font-medium niuu-text-text-primary">
-        {template.name}
-      </div>
-      {/* Description */}
-      {template.description && (
-        <div className="niuu-text-xs niuu-text-text-muted niuu-line-clamp-2">
-          {template.description}
-        </div>
-      )}
-      {/* Spec line */}
-      <div className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-        {template.spec.resources.cpuRequest}c · {template.spec.resources.memRequestMi}Mi
-        {template.usageCount !== undefined && (
-          <span data-testid="usage-count"> {template.usageCount}×</span>
-        )}
+      <div className="vol-forge__launch-name">{template.name}</div>
+      <div className="vol-forge__launch-desc">{template.description}</div>
+      <div className="vol-forge__launch-foot">
+        <span>{formatTemplateSpec(template)}</span>
+        {template.usageCount !== undefined ? <span data-testid="usage-count">{template.usageCount}×</span> : null}
       </div>
     </button>
   );
 }
 
-// ---------------------------------------------------------------------------
-// GPU heatmap — colored blocks showing GPU utilization
-// ---------------------------------------------------------------------------
-
-function GpuHeatmap({ used, total }: { used: number; total: number }) {
-  const blocks = Array.from({ length: total }, (_, i) => i < used);
+function RecentFleetItem({ session }: { session: Session }) {
   return (
-    <div className="niuu-flex niuu-items-center niuu-gap-0.5" data-testid="gpu-heatmap">
-      {blocks.map((active, i) => (
-        <div
-          key={i}
-          className={`niuu-h-3 niuu-w-2.5 niuu-rounded-sm ${active ? 'niuu-bg-brand' : 'niuu-bg-bg-elevated'}`}
-        />
-      ))}
-    </div>
+    <li className="vol-forge__tail-row">
+      <span className="vol-forge__tail-time">{compactAge(lastTouched(session))}</span>
+      <StateDot state={sessionDotState(session)} />
+      <span className="vol-forge__tail-name">{session.id}</span>
+      <span className="vol-forge__tail-sep">·</span>
+      <span className="vol-forge__tail-preview" title={statusLabel(session)}>
+        {statusLabel(session)}
+      </span>
+    </li>
   );
 }
 
-// ---------------------------------------------------------------------------
-// ForgePage
-// ---------------------------------------------------------------------------
-
-/** Forge overview — the primary landing page for Volundr. */
 export function ForgePage() {
   const navigate = useNavigate();
-
   const stats = useVolundrStats();
   const clusters = useVolundrClusters();
-  const domainSessions = useSessionList();
+  const sessionsQuery = useSessionList();
   const templates = useTemplates();
 
-  // Derive categorized sessions
-  const allSessions = domainSessions.data ?? [];
-  const activeSessions = allSessions.filter((s) => s.state === 'running' || s.state === 'idle');
-  const bootingSessions = allSessions.filter(
-    (s) => s.state === 'provisioning' || s.state === 'requested',
+  const [launchOpen, setLaunchOpen] = useState(false);
+  const [launchTemplateId, setLaunchTemplateId] = useState<string | null>(null);
+
+  const allSessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
+  const dashboardSessions = useMemo(() => {
+    const showcase = allSessions.filter((session) => SHOWCASE_SESSION_IDS.has(session.id));
+    return showcase.length >= 6 ? showcase : allSessions;
+  }, [allSessions]);
+
+  const activeSessions = useMemo(
+    () =>
+      dashboardSessions.filter((session) => session.state === 'running' || session.state === 'idle'),
+    [dashboardSessions],
   );
-  const erroredSessions = allSessions.filter((s) => s.state === 'failed');
-  const inflightSessions = [...bootingSessions, ...activeSessions].slice(0, 6);
+  const bootingSessions = useMemo(
+    () =>
+      dashboardSessions.filter(
+        (session) => session.state === 'provisioning' || session.state === 'requested',
+      ),
+    [dashboardSessions],
+  );
+  const erroredSessions = useMemo(
+    () => dashboardSessions.filter((session) => session.state === 'failed'),
+    [dashboardSessions],
+  );
 
-  // Cluster aggregates
-  const totalGpuCap = clusters.data?.reduce((s, c) => s + c.capacity.gpu, 0) ?? 0;
-  const totalGpuUsed = clusters.data?.reduce((s, c) => s + c.used.gpu, 0) ?? 0;
+  const forgeClusters = useMemo(() => {
+    const sessionsByCluster = new Map<string, number>();
+    for (const session of dashboardSessions) {
+      if (!INFLIGHT_STATES.includes(session.state)) continue;
+      const key = normalizeKey(session.clusterId);
+      sessionsByCluster.set(key, (sessionsByCluster.get(key) ?? 0) + 1);
+    }
 
-  // Sparkline data from stats
-  const sparklines = stats.data?.sparklines;
+    return (clusters.data ?? []).map((cluster) => {
+      const display = FORGE_CLUSTER_DISPLAY[cluster.id] ?? {
+        name: cluster.name,
+        realm: cluster.realm,
+        kind: cluster.kind,
+      };
+      return {
+        ...cluster,
+        displayName: display.name,
+        displayRealm: display.realm,
+        displayKind: display.kind ?? cluster.kind,
+        podCount: sessionsByCluster.get(normalizeKey(cluster.name)) ?? sessionsByCluster.get(normalizeKey(cluster.id)) ?? cluster.runningSessions,
+        cpuPct: cluster.capacity.cpu > 0 ? cluster.used.cpu / cluster.capacity.cpu : 0,
+        memPct: cluster.capacity.memMi > 0 ? cluster.used.memMi / cluster.capacity.memMi : 0,
+        gpuPct: cluster.capacity.gpu > 0 ? cluster.used.gpu / cluster.capacity.gpu : 0,
+      } satisfies ForgeClusterView;
+    });
+  }, [dashboardSessions, clusters.data]);
 
-  function handleOpenSession(sessionId: string) {
-    void navigate({ to: '/volundr/session/$sessionId', params: { sessionId } });
+  const clusterLookup = useMemo(() => {
+    const entries: Array<[string, ForgeClusterView]> = [];
+    for (const cluster of forgeClusters) {
+      entries.push([normalizeKey(cluster.id), cluster]);
+      entries.push([normalizeKey(cluster.name), cluster]);
+      entries.push([normalizeKey(cluster.displayName), cluster]);
+    }
+    return new Map(entries);
+  }, [forgeClusters]);
+
+  const inflightSessions = useMemo(
+    () =>
+      dashboardSessions
+        .filter((session) => INFLIGHT_STATES.includes(session.state))
+        .sort((left, right) => {
+          const priorityDiff = SESSION_PRIORITY[left.state] - SESSION_PRIORITY[right.state];
+          if (priorityDiff !== 0) return priorityDiff;
+          return lastTouched(right) - lastTouched(left);
+        })
+        .slice(0, 6),
+    [dashboardSessions],
+  );
+
+  const recentFleet = useMemo(
+    () =>
+      dashboardSessions
+        .filter((session) => session.state !== 'terminated')
+        .sort((left, right) => lastTouched(right) - lastTouched(left))
+        .slice(0, 8),
+    [dashboardSessions],
+  );
+
+  const totalGpuUsed = forgeClusters.reduce((sum, cluster) => sum + cluster.used.gpu, 0);
+  const totalGpuCap = forgeClusters.reduce((sum, cluster) => sum + cluster.capacity.gpu, 0);
+  const tokenSparkline = stats.data?.sparklines?.tokensToday ?? [];
+  const activePodSparkline = stats.data?.sparklines?.activePods ?? [];
+  const tokenRate = tokenSparkline.length > 0 ? Math.round(average(tokenSparkline, 5) / 100) : 0;
+  const projectedCost = stats.data ? Math.round(stats.data.costToday * 1.07) : 0;
+
+  const isLoading =
+    stats.isLoading || clusters.isLoading || sessionsQuery.isLoading || templates.isLoading;
+
+  function openWizard(templateId?: string) {
+    setLaunchTemplateId(templateId ?? null);
+    setLaunchOpen(true);
   }
 
-  const isLoading = domainSessions.isLoading || clusters.isLoading;
+  if (isLoading) {
+    return (
+      <div className="vol-forge vol-forge--loading" data-testid="forge-page">
+        <LoadingState label="Loading metrics…" />
+      </div>
+    );
+  }
 
   return (
-    <div className="niuu-flex niuu-flex-col niuu-gap-6 niuu-p-6" data-testid="forge-page">
-      {/* Metric strip */}
-      <section aria-label="Forge metrics">
-        {isLoading ? (
-          <LoadingState label="Loading metrics…" />
-        ) : (
-          <KpiStrip>
-            <KpiCard
-              label="active pods"
-              value={activeSessions.length}
-              delta={`${bootingSessions.length} booting · ${erroredSessions.length} error`}
-              deltaTrend="neutral"
-              sparkline={
-                sparklines?.activePods ? (
-                  <Sparkline
-                    values={sparklines.activePods}
-                    width={200}
-                    height={40}
-                    fill
-                  />
-                ) : undefined
-              }
-            />
-            <KpiCard
-              label="tokens today"
-              value={stats.data ? tokens(stats.data.tokensToday) : '—'}
-              delta={
-                stats.data
-                  ? `${tokens(Math.round(stats.data.tokensToday / 24))}/s · 5m avg`
-                  : 'burn rate'
-              }
-              deltaTrend="neutral"
-            />
-            <KpiCard
-              label="cost today"
-              value={stats.data ? `$${stats.data.costToday.toFixed(2)}` : '—'}
-              delta={
-                stats.data
-                  ? `$${Math.round(stats.data.costToday * 1.25)} projected 24h`
-                  : 'projected 24h'
-              }
-              deltaTrend="neutral"
-            />
-            <KpiCard
-              label="GPUs"
-              value={`${totalGpuUsed}/${totalGpuCap}`}
-              delta={`across ${clusters.data?.length ?? 0} clusters`}
-              deltaTrend="neutral"
-              sparkline={<GpuHeatmap used={totalGpuUsed} total={totalGpuCap} />}
-            />
-          </KpiStrip>
-        )}
-      </section>
-
-      {/* Body grid — 2-column: left (inflight + quick launch), right (forge load) */}
-      <div className="niuu-grid niuu-grid-cols-[3fr_2fr] niuu-gap-6">
-        {/* Left column */}
-        <div className="niuu-flex niuu-flex-col niuu-gap-6">
-          {/* In-flight pods */}
-          <section
-            className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
-            aria-label="In-flight pods"
-            data-testid="inflight-panel"
+    <>
+      <div className="vol-forge" data-testid="forge-page">
+        <section className="vol-forge__metrics" aria-label="Forge metrics">
+          <MetricTile
+            label="ACTIVE PODS"
+            value={activeSessions.length}
+            subline={`${bootingSessions.length} booting · ${erroredSessions.length} error`}
           >
-            <div className="niuu-flex niuu-items-center niuu-justify-between">
-              <div className="niuu-flex niuu-items-baseline niuu-gap-2">
-                <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">
-                  In-flight pods
-                </h2>
-                <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-                  {inflightSessions.length}
-                </span>
+            {activePodSparkline.length > 0 ? (
+              <Sparkline values={activePodSparkline} width={180} height={46} fill />
+            ) : null}
+          </MetricTile>
+          <MetricTile
+            label="TOKENS TODAY"
+            value={stats.data ? tokens(stats.data.tokensToday) : '—'}
+            subline={`${tokenRate}/s · 5m avg`}
+          />
+          <MetricTile
+            label="COST TODAY"
+            value={stats.data ? `$${stats.data.costToday.toFixed(2)}` : '—'}
+            subline={`$${projectedCost} projected 24h`}
+          />
+          <MetricTile
+            label="GPUs"
+            value={`${totalGpuUsed}/${totalGpuCap}`}
+            subline={`across ${forgeClusters.length} clusters`}
+            accent="neutral"
+          >
+            <GpuStrip clusters={forgeClusters} />
+          </MetricTile>
+        </section>
+
+        <div className="vol-forge__grid">
+          <section className="vol-forge__panel vol-forge__panel--inflight" data-testid="inflight-panel">
+            <header className="vol-forge__panel-head">
+              <div className="vol-forge__panel-title">
+                <h2>In-flight pods</h2>
+                <span>{activeSessions.length + bootingSessions.length}</span>
               </div>
               <button
-                className="niuu-text-xs niuu-text-text-muted hover:niuu-text-text-primary"
+                type="button"
+                className="vol-forge__panel-link"
                 onClick={() => void navigate({ to: '/volundr/sessions' })}
                 data-testid="all-sessions-link"
               >
                 all sessions ›
               </button>
-            </div>
-            {inflightSessions.length === 0 && (
-              <p className="niuu-text-xs niuu-text-text-muted">No active pods.</p>
-            )}
-            {inflightSessions.map((s) => (
-              <InflightRow key={s.id} session={s} onClick={() => handleOpenSession(s.id)} />
-            ))}
-          </section>
+            </header>
 
-          {/* Quick launch */}
-          <section
-            className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
-            aria-label="Quick launch"
-            data-testid="quick-launch-panel"
-          >
-            <div className="niuu-flex niuu-items-baseline niuu-gap-2">
-              <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Quick launch</h2>
-              <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-                from a template
-              </span>
-            </div>
-            <div className="niuu-grid niuu-grid-cols-2 niuu-gap-2">
-              {templates.data?.slice(0, 4).map((t, i) => (
-                <QuickLaunchCard
-                  key={t.id}
-                  template={t}
-                  isDefault={i === 0}
-                  onClick={() => void navigate({ to: '/volundr/templates' })}
+            <div className="vol-forge__inflight-list">
+              {inflightSessions.map((session) => (
+                <InflightRow
+                  key={session.id}
+                  session={session}
+                  clusterLabel={displayCluster(session, clusterLookup)}
+                  onClick={() =>
+                    void navigate({
+                      to: '/volundr/session/$sessionId',
+                      params: { sessionId: session.id },
+                    })
+                  }
                 />
               ))}
             </div>
           </section>
-        </div>
 
-        {/* Right column — Forge load */}
-        <section
-          className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
-          aria-label="Forge load"
-          data-testid="forge-load-panel"
-        >
-          <div className="niuu-flex niuu-items-center niuu-justify-between">
-            <div className="niuu-flex niuu-items-baseline niuu-gap-2">
-              <h2 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Forge load</h2>
-              <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-                {clusters.data?.length ?? 0} clusters
-              </span>
+          <section className="vol-forge__panel vol-forge__panel--load" data-testid="forge-load-panel">
+            <header className="vol-forge__panel-head">
+              <div className="vol-forge__panel-title">
+                <h2>Forge load</h2>
+                <span>{forgeClusters.length} clusters</span>
+              </div>
+              <button
+                type="button"
+                className="vol-forge__panel-link"
+                onClick={() => void navigate({ to: '/volundr/clusters' })}
+                data-testid="cluster-details-link"
+              >
+                details ›
+              </button>
+            </header>
+
+            <div className="vol-forge__load-list">
+              {forgeClusters.map((cluster) => (
+                <ForgeLoadRow key={cluster.id} cluster={cluster} />
+              ))}
             </div>
-            <button
-              className="niuu-text-xs niuu-text-text-muted hover:niuu-text-text-primary"
-              onClick={() => void navigate({ to: '/volundr/clusters' })}
-              data-testid="cluster-details-link"
-            >
-              details ›
+          </section>
+
+          <section className="vol-forge__panel vol-forge__panel--launch" data-testid="quick-launch-panel">
+            <header className="vol-forge__panel-head">
+              <div className="vol-forge__panel-title">
+                <h2>Quick launch</h2>
+                <span>from a template</span>
+              </div>
+            </header>
+
+            <div className="vol-forge__launch-grid">
+              {(templates.data ?? []).slice(0, 4).map((template, index) => (
+                <QuickLaunchCard
+                  key={template.id}
+                  template={template}
+                  isDefault={index === 0}
+                  onClick={() => openWizard(template.id)}
+                />
+              ))}
+            </div>
+
+            <button type="button" className="vol-forge__launch-cta" onClick={() => openWizard()}>
+              <span>+</span>
+              <span>custom launch...</span>
             </button>
-          </div>
-          {clusters.isLoading && <LoadingState label="Loading clusters…" />}
-          {clusters.data?.map((c) => (
-            <ClusterLoadRow key={c.id} cluster={c} />
-          ))}
-        </section>
+          </section>
+
+          <section className="vol-forge__panel vol-forge__panel--recent" data-testid="recent-panel">
+            <header className="vol-forge__panel-head">
+              <div className="vol-forge__panel-title">
+                <h2>Recent across fleet</h2>
+                <span>last 30m</span>
+              </div>
+            </header>
+
+            <ol className="vol-forge__tail-list">
+              {recentFleet.map((session) => (
+                <RecentFleetItem key={session.id} session={session} />
+              ))}
+            </ol>
+          </section>
+
+          {erroredSessions.length > 0 ? (
+            <section className="vol-forge__panel vol-forge__panel--errors" data-testid="error-strip">
+              <header className="vol-forge__panel-head">
+                <div className="vol-forge__panel-title vol-forge__panel-title--critical">
+                  <h2>Needs attention</h2>
+                  <span>{erroredSessions.length}</span>
+                </div>
+              </header>
+
+              <div className="vol-forge__error-list">
+                {erroredSessions.map((session) => (
+                  <div key={session.id} className="vol-forge__error-row">
+                    <StateDot state="failed" />
+                    <div className="vol-forge__error-body">
+                      <div className="vol-forge__error-title">
+                        <span>{session.id}</span>
+                        <span>{session.personaName}</span>
+                      </div>
+                      <div className="vol-forge__error-message">
+                        {session.events[session.events.length - 1]?.body ?? 'unknown error'}
+                      </div>
+                    </div>
+                    <button type="button" className="vol-forge__retry-btn">
+                      retry
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </div>
       </div>
 
-      {/* Error strip */}
-      {erroredSessions.length > 0 && (
-        <section
-          className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-critical-bo niuu-bg-bg-secondary niuu-p-4"
-          aria-label="Needs attention"
-          data-testid="error-strip"
-        >
-          <h2 className="niuu-text-sm niuu-font-medium niuu-text-critical">Needs attention</h2>
-          {erroredSessions.map((s) => (
-            <div key={s.id} className="niuu-flex niuu-items-center niuu-gap-3">
-              <StateDot state="failed" />
-              <div className="niuu-flex-1">
-                <div className="niuu-font-mono niuu-text-sm niuu-text-text-primary">{s.id}</div>
-                <div className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-                  {s.events[s.events.length - 1]?.body ?? 'unknown error'}
-                </div>
-              </div>
-              <button className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs">
-                retry
-              </button>
-            </div>
-          ))}
-        </section>
-      )}
-    </div>
+      <LaunchWizard
+        key={launchTemplateId ?? 'forge-custom'}
+        open={launchOpen}
+        onOpenChange={setLaunchOpen}
+        initialTemplateId={launchTemplateId ?? undefined}
+      />
+    </>
   );
 }

@@ -119,16 +119,21 @@ export function PagesView() {
   const breadcrumbs = activePagePath ? activePagePath.split('/').filter(Boolean) : [];
 
   return (
-    <div className="niuu-grid niuu-grid-cols-[260px_1fr_360px] niuu-h-full niuu-overflow-hidden">
+    <div className="niuu-grid niuu-grid-cols-[280px_1fr_380px] niuu-h-full niuu-overflow-hidden">
       {/* ── File tree sidebar ──────────────────────────────────── */}
       <aside
         className="niuu-bg-bg-secondary niuu-border-r niuu-border-border-subtle niuu-flex niuu-flex-col niuu-overflow-hidden"
         aria-label="page tree"
       >
-        <div className="niuu-flex niuu-items-center niuu-justify-between niuu-px-4 niuu-py-3 niuu-border-b niuu-border-border-subtle niuu-flex-shrink-0">
-          <span className="niuu-text-xs niuu-uppercase niuu-tracking-widest niuu-text-text-muted">
-            Pages
-          </span>
+        <div className="niuu-flex niuu-items-start niuu-justify-between niuu-px-4 niuu-py-3 niuu-border-b niuu-border-border-subtle niuu-flex-shrink-0">
+          <div className="niuu-flex niuu-flex-col niuu-gap-0.5">
+            <span className="niuu-text-xs niuu-uppercase niuu-tracking-widest niuu-text-text-muted">
+              Pages
+            </span>
+            <span className="niuu-font-mono niuu-text-[10px] niuu-text-text-faint">
+              merged mount tree
+            </span>
+          </div>
           <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
             {allPages.length}
           </span>
@@ -152,7 +157,7 @@ export function PagesView() {
         {page ? (
           <>
             {/* Reader layout toggle */}
-            <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-px-6 niuu-py-2 niuu-border-b niuu-border-border-subtle niuu-flex-shrink-0">
+            <div className="niuu-flex niuu-items-center niuu-gap-1 niuu-px-6 niuu-py-2.5 niuu-border-b niuu-border-border-subtle niuu-flex-shrink-0">
               <button
                 type="button"
                 className={[

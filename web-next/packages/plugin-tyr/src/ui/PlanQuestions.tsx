@@ -45,23 +45,22 @@ export function PlanQuestions({
     <form
       onSubmit={handleSubmit}
       aria-label="Clarifying questions form"
-      className="niuu-flex niuu-flex-col niuu-gap-4"
+      className="tyr-plan-card niuu-flex niuu-flex-col niuu-gap-4"
     >
-      <div className="niuu-flex niuu-flex-col niuu-gap-1">
-        <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">
-          Clarify your plan
-        </h2>
-        <p className="niuu-text-sm niuu-text-text-secondary">
-          Answer as many questions as you can. Answers are optional — skip any that don&apos;t
-          apply.
-        </p>
+      <div className="tyr-plan-step-head">
+        <div className="tyr-plan-step-index">2</div>
+        <div className="niuu-flex niuu-flex-col niuu-gap-1">
+          <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">
+            Clarify your plan
+          </h2>
+          <p className="niuu-text-sm niuu-text-text-secondary">
+            Sharpen the planning raid&apos;s output. Skip anything optional and the draft will surface assumptions.
+          </p>
+        </div>
       </div>
 
       {prompt && (
-        <div
-          className="niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-elevated niuu-px-4 niuu-py-3"
-          aria-label="Your brief"
-        >
+        <div className="tyr-plan-quote" aria-label="Your brief">
           <p className="niuu-text-xs niuu-font-semibold niuu-text-text-muted niuu-uppercase niuu-tracking-wider niuu-font-mono niuu-mb-1">
             Your Brief
           </p>
@@ -106,10 +105,8 @@ export function PlanQuestions({
                       onClick={() => handleChange(q.id, wf.id)}
                       aria-pressed={isSelected}
                       className={[
-                        'niuu-rounded-md niuu-border niuu-p-3 niuu-text-left niuu-transition-colors',
-                        isSelected
-                          ? 'niuu-border-brand-500 niuu-bg-brand-500/10'
-                          : 'niuu-border-border niuu-bg-bg-secondary hover:niuu-bg-bg-elevated',
+                        'tyr-plan-workflow-chip',
+                        isSelected ? 'tyr-plan-workflow-chip--selected' : '',
                       ].join(' ')}
                     >
                       <div className="niuu-text-xs niuu-font-medium niuu-text-text-primary">
@@ -135,7 +132,7 @@ export function PlanQuestions({
                 onChange={(e) => handleChange(q.id, e.target.value)}
                 aria-describedby={q.hint ? `q-${q.id}-hint` : undefined}
                 placeholder="Your answer (optional)"
-                className="niuu-w-full niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-secondary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary niuu-placeholder-text-muted focus:niuu-outline-none focus:niuu-ring-2 focus:niuu-ring-brand-500/40"
+                className="tyr-plan-input"
               />
             )}
           </li>
@@ -146,13 +143,13 @@ export function PlanQuestions({
         <button
           type="button"
           onClick={onBack}
-          className="niuu-rounded-md niuu-px-4 niuu-py-2 niuu-text-sm niuu-font-medium niuu-text-text-secondary niuu-border niuu-border-border hover:niuu-bg-bg-elevated niuu-transition-colors"
+          className="tyr-plan-secondary-btn"
         >
           ← Back
         </button>
         <button
           type="submit"
-          className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs"
+          className="tyr-plan-primary-btn"
         >
           Decompose →
         </button>

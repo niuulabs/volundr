@@ -60,3 +60,12 @@
   color: var(--color-critical-fg);
   opacity: 0.8;
 }
+
+.niuu-state--error {
+  background: color-mix(in srgb, var(--color-critical) 14%, var(--color-bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--color-critical-fg) 34%, transparent);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 3%, transparent),
+    0 0 0 1px color-mix(in srgb, black 10%, transparent);
+}

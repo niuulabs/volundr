@@ -28,8 +28,9 @@
   font-size: var(--text-xs);
   color: var(--color-critical-fg);
   line-height: 1.4;
+  margin-top: 2px;
 }
 
 .niuu-field--error .niuu-field__label {
-  color: var(--color-text-primary);
+  color: var(--color-critical-fg);
 }

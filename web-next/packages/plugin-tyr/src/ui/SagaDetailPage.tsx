@@ -1,134 +1,184 @@
-import { useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import {
-  StatusBadge,
-  ConfidenceBadge,
   LoadingState,
   ErrorState,
   EmptyState,
-  Pipe,
   PersonaAvatar,
-  Rune,
-  StateDot,
 } from '@niuulabs/ui';
-import type { Raid } from '../domain/saga';
+import type { PersonaRole } from '@niuulabs/domain';
+import type { RaidStatus, Saga, Phase, Raid } from '../domain/saga';
 import { useSaga } from './useSaga';
 import { usePhases } from './usePhases';
-import { phaseStatusToCell, phaseStatusToStateDot } from './mappers';
 import { WorkflowCard } from './WorkflowCard';
 import { StageProgressRail } from './StageProgressRail';
 import { ConfidenceDriftCard } from './ConfidenceDriftCard';
 
-interface RaidPanelProps {
-  raid: Raid;
-  onClose: () => void;
-  onOpenSession: (sessionId: string) => void;
+function statusLabel(status: RaidStatus | Saga['status'] | Phase['status']): string {
+  switch (status) {
+    case 'active':
+      return 'ACTIVE';
+    case 'complete':
+      return 'COMPLETE';
+    case 'failed':
+      return 'FAILED';
+    case 'pending':
+      return 'PENDING';
+    case 'queued':
+      return 'QUEUED';
+    case 'running':
+      return 'RUNNING';
+    case 'review':
+      return 'REVIEW';
+    case 'escalated':
+      return 'ESCALATED';
+    case 'merged':
+      return 'MERGED';
+    case 'gated':
+      return 'GATED';
+  }
 }
 
-function RaidPanel({ raid, onClose, onOpenSession }: RaidPanelProps) {
+function statusClasses(status: RaidStatus | Saga['status'] | Phase['status']): string {
+  const base =
+    'niuu-inline-flex niuu-items-center niuu-gap-2 niuu-min-w-[116px] niuu-justify-center niuu-rounded-full niuu-border niuu-px-3 niuu-py-1 niuu-text-[11px] niuu-font-mono niuu-tracking-[0.1em]';
+  if (status === 'failed') return `${base} niuu-border-critical/50 niuu-text-critical-fg niuu-bg-critical-bg`;
+  if (status === 'complete' || status === 'merged')
+    return `${base} niuu-border-border niuu-text-text-primary niuu-bg-bg-tertiary`;
+  if (status === 'active' || status === 'running' || status === 'review')
+    return `${base} niuu-border-brand/45 niuu-text-brand-200 niuu-bg-brand/10`;
+  if (status === 'escalated' || status === 'gated')
+    return `${base} niuu-border-accent-amber/45 niuu-text-accent-amber niuu-bg-accent-amber/10`;
+  return `${base} niuu-border-border niuu-text-text-muted niuu-bg-bg-tertiary`;
+}
+
+function confidenceTone(value: number): string {
+  if (value >= 85) return 'niuu-bg-brand';
+  if (value >= 65) return 'niuu-bg-brand/80';
+  if (value >= 45) return 'niuu-bg-accent-amber';
+  return 'niuu-bg-critical';
+}
+
+function ConfidenceMeter({ value }: { value: number }) {
+  const clamped = Math.max(0, Math.min(100, value));
   return (
-    <div
-      className="niuu-mt-3 niuu-p-4 niuu-rounded-md niuu-bg-bg-elevated niuu-border niuu-border-border niuu-space-y-4"
-      role="region"
-      aria-label={`Raid detail: ${raid.name}`}
-    >
-      <div className="niuu-flex niuu-items-center niuu-justify-between">
-        <div className="niuu-flex niuu-items-center niuu-gap-2">
-          <StatusBadge status={raid.status} />
-          <span className="niuu-font-semibold niuu-text-text-primary">{raid.name}</span>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close raid panel"
-          className="niuu-text-text-muted hover:niuu-text-text-primary niuu-text-lg niuu-leading-none"
-        >
-          ×
-        </button>
+    <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-justify-end">
+      <div className="niuu-w-14 niuu-h-1 niuu-rounded-full niuu-bg-bg-elevated niuu-overflow-hidden">
+        <div
+          className={['niuu-h-full niuu-rounded-full', confidenceTone(clamped)].join(' ')}
+          style={{ width: `${clamped}%` }}
+        />
       </div>
-
-      {raid.description && (
-        <p className="niuu-m-0 niuu-text-sm niuu-text-text-secondary">{raid.description}</p>
-      )}
-
-      {/* Members */}
-      <section aria-label="Raid members">
-        <h4 className="niuu-text-xs niuu-font-semibold niuu-text-text-muted niuu-uppercase niuu-tracking-wide niuu-mb-2">
-          Members
-        </h4>
-        <div className="niuu-flex niuu-gap-2">
-          {raid.sessionId && (
-            <PersonaAvatar
-              role="build"
-              letter={raid.name.charAt(0)}
-              size={28}
-              title={`Build · ${raid.name}`}
-            />
-          )}
-          {raid.reviewerSessionId && (
-            <PersonaAvatar role="review" letter="R" size={28} title="Reviewer" />
-          )}
-          {!raid.sessionId && !raid.reviewerSessionId && (
-            <span className="niuu-text-xs niuu-text-text-muted">No members assigned</span>
-          )}
-        </div>
-      </section>
-
-      {/* Events / Chronicle */}
-      {raid.chronicleSummary && (
-        <section aria-label="Raid events">
-          <h4 className="niuu-text-xs niuu-font-semibold niuu-text-text-muted niuu-uppercase niuu-tracking-wide niuu-mb-2">
-            Events
-          </h4>
-          <p className="niuu-m-0 niuu-text-sm niuu-text-text-secondary niuu-font-mono">
-            {raid.chronicleSummary}
-          </p>
-        </section>
-      )}
-
-      {/* Artefacts */}
-      {raid.declaredFiles.length > 0 && (
-        <section aria-label="Raid artefacts">
-          <h4 className="niuu-text-xs niuu-font-semibold niuu-text-text-muted niuu-uppercase niuu-tracking-wide niuu-mb-2">
-            Artefacts
-          </h4>
-          <ul className="niuu-list-none niuu-p-0 niuu-m-0 niuu-space-y-1">
-            {raid.declaredFiles.map((file) => (
-              <li key={file} className="niuu-text-xs niuu-font-mono niuu-text-text-secondary">
-                {file}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Open session link */}
-      {raid.sessionId && (
-        <div className="niuu-pt-2">
-          <button
-            type="button"
-            className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs"
-            onClick={() => onOpenSession(raid.sessionId!)}
-            aria-label={`Open Völundr session for ${raid.name}`}
-          >
-            Open session →
-          </button>
-        </div>
-      )}
+      <span className="niuu-min-w-6 niuu-text-right niuu-font-mono niuu-text-[12px] niuu-text-text-muted">
+        {Math.round(clamped)}
+      </span>
     </div>
+  );
+}
+
+function roleForRaid(raid: Raid): PersonaRole {
+  const label = `${raid.name} ${raid.trackerId}`.toLowerCase();
+  if (label.includes('review')) return 'review';
+  if (label.includes('qa') || label.includes('test') || label.includes('validate')) return 'verify';
+  if (label.includes('ship') || label.includes('release')) return 'ship';
+  if (label.includes('plan') || label.includes('decompose')) return 'plan';
+  return 'build';
+}
+
+function glyphForRole(role: PersonaRole): string {
+  switch (role) {
+    case 'plan':
+      return 'D';
+    case 'build':
+      return 'C';
+    case 'verify':
+      return 'V';
+    case 'review':
+      return 'R';
+    case 'ship':
+      return 'S';
+    default:
+      return '•';
+  }
+}
+
+function phaseDotClasses(status: Phase['status']): string {
+  const base = 'niuu-w-3 niuu-h-3 niuu-rounded-full niuu-shrink-0';
+  if (status === 'complete') return `${base} niuu-bg-brand/90 niuu-shadow-[0_0_0_2px_rgba(125,211,252,0.14)]`;
+  if (status === 'active') return `${base} niuu-bg-brand niuu-shadow-[0_0_0_4px_rgba(125,211,252,0.10)]`;
+  if (status === 'gated') return `${base} niuu-bg-accent-amber`;
+  return `${base} niuu-bg-text-muted/40`;
+}
+
+function raidDotClasses(status: RaidStatus): string {
+  const base = 'niuu-w-2.5 niuu-h-2.5 niuu-rounded-full niuu-shrink-0';
+  if (status === 'merged') return `${base} niuu-bg-brand/90`;
+  if (status === 'running' || status === 'review') return `${base} niuu-bg-brand`;
+  if (status === 'failed') return `${base} niuu-bg-critical`;
+  if (status === 'escalated') return `${base} niuu-bg-accent-amber`;
+  return `${base} niuu-bg-text-muted/35`;
+}
+
+function RaidPersona({ raid }: { raid: Raid }) {
+  const role = roleForRaid(raid);
+  return (
+    <div className="niuu-flex niuu-items-center niuu-justify-center">
+      <PersonaAvatar role={role} letter={glyphForRole(role)} size={22} title={raid.name} />
+    </div>
+  );
+}
+
+function PhaseCard({ phase }: { phase: Phase }) {
+  return (
+    <section className="niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-overflow-hidden">
+      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-gap-3 niuu-px-5 niuu-py-3.5">
+        <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-min-w-0">
+          <span className={phaseDotClasses(phase.status)} />
+          <h3 className="niuu-m-0 niuu-text-[17px] niuu-font-semibold niuu-text-text-primary">
+            {`Phase ${phase.number} · ${phase.name}`}
+          </h3>
+        </div>
+        <div className="niuu-flex niuu-items-center niuu-gap-4 niuu-shrink-0">
+          <span className={statusClasses(phase.status)}>{statusLabel(phase.status)}</span>
+          <ConfidenceMeter value={phase.confidence} />
+        </div>
+      </div>
+      <div className="niuu-px-5 niuu-pb-3">
+        {phase.raids.length === 0 ? (
+          <div className="niuu-py-3 niuu-text-sm niuu-text-text-muted">No raids in this phase.</div>
+        ) : (
+          <div className="niuu-space-y-1">
+            {phase.raids.map((raid) => (
+              <div
+                key={raid.id}
+                className="niuu-grid niuu-items-center niuu-gap-4 niuu-py-3 niuu-border-t niuu-border-border-subtle"
+                style={{ gridTemplateColumns: '18px 96px minmax(0,1fr) 34px 170px 78px' }}
+              >
+                <span className={raidDotClasses(raid.status)} />
+                <span className="niuu-font-mono niuu-text-[12px] niuu-text-text-secondary">
+                  {raid.trackerId}
+                </span>
+                <span className="niuu-text-[14px] niuu-font-medium niuu-text-text-primary niuu-truncate">
+                  {raid.name}
+                </span>
+                <RaidPersona raid={raid} />
+                <span className={statusClasses(raid.status)}>{statusLabel(raid.status)}</span>
+                <ConfidenceMeter value={raid.confidence} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
 interface SagaDetailPageProps {
   sagaId: string;
-  /** Hide the "← Sagas" back button (used when embedded in a split-panel). */
   hideBackButton?: boolean;
 }
 
 export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPageProps) {
   const navigate = useNavigate();
-  const [expandedRaidId, setExpandedRaidId] = useState<string | null>(null);
-
   const {
     data: saga,
     isLoading: sagaLoading,
@@ -141,10 +191,6 @@ export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPag
     isError: phasesError,
     error: phasesErr,
   } = usePhases(sagaId);
-
-  function handleOpenSession(sessionId: string) {
-    void navigate({ to: '/volundr/session/$sessionId', params: { sessionId } });
-  }
 
   if (sagaLoading || phasesLoading) return <LoadingState label="Loading saga…" />;
   if (sagaError)
@@ -160,149 +206,41 @@ export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPag
   if (!saga) return <ErrorState message={`Saga "${sagaId}" not found`} />;
 
   const allPhases = phases ?? [];
+  const branchLabel = `${saga.featureBranch} → ${saga.baseBranch}`;
 
   return (
-    <div className="niuu-p-6">
-      {/* Back navigation */}
+    <div className="niuu-space-y-4">
       {!hideBackButton && (
         <button
           type="button"
           onClick={() => void navigate({ to: '/tyr/sagas' })}
-          className="niuu-text-sm niuu-text-text-secondary hover:niuu-text-text-primary niuu-flex niuu-items-center niuu-gap-1 niuu-mb-6"
-          aria-label="Back to sagas"
+          className="niuu-text-sm niuu-text-text-secondary hover:niuu-text-text-primary"
         >
           ← Sagas
         </button>
       )}
 
-      {/* 2-column layout: content left, cards right */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 320px',
-          gap: '24px',
-          alignItems: 'start',
-        }}
-      >
-        {/* ── Left column: header + phases ─── */}
-        <div className="niuu-space-y-6">
-          {/* Saga header */}
-          <header className="niuu-space-y-3">
-            <div className="niuu-flex niuu-items-center niuu-gap-3">
-              <Rune glyph="ᚦ" size={28} />
-              <h2 className="niuu-m-0 niuu-text-xl niuu-font-semibold niuu-text-text-primary">
-                {saga.name}
-              </h2>
-              <StatusBadge status={saga.status} />
-              <ConfidenceBadge value={saga.confidence / 100} />
+      <div className="niuu-grid niuu-gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) 340px' }}>
+        <div className="niuu-space-y-4">
+          <div className="niuu-flex niuu-items-end niuu-justify-between niuu-gap-4 niuu-px-1">
+            <div className="niuu-min-w-0">
+              <div className="niuu-mb-1 niuu-text-[12px] niuu-font-mono niuu-tracking-[0.08em] niuu-text-text-muted niuu-uppercase">
+                {`${saga.trackerId} · ${saga.name}`}
+              </div>
+              <div className="niuu-text-[13px] niuu-font-mono niuu-text-text-muted">{branchLabel}</div>
             </div>
-            <p className="niuu-m-0 niuu-text-sm niuu-text-text-muted">
-              {saga.trackerId} · {saga.featureBranch} → {saga.baseBranch}
-            </p>
+          </div>
 
-            {/* Phase pipeline */}
-            {allPhases.length > 0 && (
-              <Pipe
-                cells={allPhases.map((p) => ({
-                  status: phaseStatusToCell(p.status),
-                  label: p.name,
-                }))}
-              />
-            )}
-          </header>
-
-          {/* Phases and raids */}
           {allPhases.length === 0 ? (
             <EmptyState
               title="No phases yet"
               description="This saga has not been decomposed into phases."
             />
           ) : (
-            <div className="niuu-space-y-6">
-              {allPhases.map((phase) => (
-                <section key={phase.id} aria-label={`Phase ${phase.number}: ${phase.name}`}>
-                  <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-mb-3">
-                    <StateDot
-                      state={phaseStatusToStateDot(phase.status)}
-                      pulse={phase.status === 'active'}
-                      size={10}
-                      title={phase.status}
-                    />
-                    <span className="niuu-text-xs niuu-font-mono niuu-text-text-muted">
-                      Phase {phase.number}
-                    </span>
-                    <h3 className="niuu-m-0 niuu-text-base niuu-font-semibold niuu-text-text-primary">
-                      {phase.name}
-                    </h3>
-                    <StatusBadge status={phase.status} />
-                    <ConfidenceBadge value={phase.confidence / 100} />
-                  </div>
-
-                  {phase.raids.length === 0 ? (
-                    <p className="niuu-text-sm niuu-text-text-muted">No raids in this phase.</p>
-                  ) : (
-                    <ul className="niuu-list-none niuu-p-0 niuu-m-0 niuu-space-y-2">
-                      {phase.raids.map((raid) => (
-                        <li key={raid.id}>
-                          <button
-                            type="button"
-                            className="niuu-w-full niuu-text-left niuu-p-3 niuu-rounded-md niuu-bg-bg-secondary niuu-border niuu-border-border niuu-cursor-pointer"
-                            onClick={() =>
-                              setExpandedRaidId(expandedRaidId === raid.id ? null : raid.id)
-                            }
-                            aria-expanded={expandedRaidId === raid.id}
-                            aria-controls={`raid-panel-${raid.id}`}
-                            aria-label={`${expandedRaidId === raid.id ? 'Collapse' : 'Expand'} raid ${raid.name}`}
-                          >
-                            <div className="niuu-flex niuu-items-center niuu-justify-between niuu-gap-3">
-                              <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-min-w-0">
-                                <StatusBadge status={raid.status} />
-                                <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted niuu-shrink-0">
-                                  {raid.trackerId}
-                                </span>
-                                <span className="niuu-text-sm niuu-font-medium niuu-text-text-primary niuu-truncate">
-                                  {raid.name}
-                                </span>
-                              </div>
-                              <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-flex-shrink-0">
-                                {/* Member avatars */}
-                                <div className="niuu-flex niuu-gap-1">
-                                  {raid.sessionId && (
-                                    <PersonaAvatar
-                                      role="build"
-                                      letter={raid.name.charAt(0)}
-                                      size={22}
-                                    />
-                                  )}
-                                  {raid.reviewerSessionId && (
-                                    <PersonaAvatar role="review" letter="R" size={22} />
-                                  )}
-                                </div>
-                                <ConfidenceBadge value={raid.confidence / 100} />
-                              </div>
-                            </div>
-                          </button>
-
-                          {expandedRaidId === raid.id && (
-                            <div id={`raid-panel-${raid.id}`}>
-                              <RaidPanel
-                                raid={raid}
-                                onClose={() => setExpandedRaidId(null)}
-                                onOpenSession={handleOpenSession}
-                              />
-                            </div>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              ))}
-            </div>
+            allPhases.map((phase) => <PhaseCard key={phase.id} phase={phase} />)
           )}
         </div>
 
-        {/* ── Right column: workflow / progress / confidence cards ─── */}
         <div className="niuu-space-y-4">
           <WorkflowCard workflow={saga.workflow} workflowVersion={saga.workflowVersion} />
           <StageProgressRail phases={allPhases} />

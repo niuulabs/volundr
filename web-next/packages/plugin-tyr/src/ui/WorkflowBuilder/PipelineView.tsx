@@ -8,8 +8,9 @@
  */
 
 import { cn } from '@niuulabs/ui';
-import type { WorkflowNode, WorkflowEdge } from '../../domain/workflow';
+import type { WorkflowNode, WorkflowEdge, WorkflowStageNode } from '../../domain/workflow';
 import { topologicalSort } from '../../domain/topologicalSort';
+import { normalizedStageMembers } from './graphUtils';
 
 export interface PipelineViewProps {
   nodes: WorkflowNode[];
@@ -19,16 +20,30 @@ export interface PipelineViewProps {
 }
 
 const KIND_LABEL: Record<WorkflowNode['kind'], string> = {
+  trigger: 'Trigger',
   stage: 'Stage',
   gate: 'Gate',
   cond: 'Cond',
+  end: 'End',
 };
 
 const KIND_BADGE_CLASS: Record<WorkflowNode['kind'], string> = {
+  trigger: 'niuu-text-status-cyan',
   stage: 'niuu-text-brand',
   gate: 'niuu-text-status-amber',
   cond: 'niuu-text-status-cyan',
+  end: 'niuu-text-status-emerald',
 };
+
+function stageSummary(node: WorkflowStageNode) {
+  const members = normalizedStageMembers(node);
+  return {
+    members,
+    mode: node.executionMode ?? 'parallel',
+    joinMode: node.joinMode ?? 'all',
+    maxConcurrent: node.maxConcurrent ?? 3,
+  };
+}
 
 export function PipelineView({ nodes, edges, selectedNodeId, onSelectNode }: PipelineViewProps) {
   const layers = topologicalSort(
@@ -95,9 +110,30 @@ export function PipelineView({ nodes, edges, selectedNodeId, onSelectNode }: Pip
                   <span className="niuu-text-sm niuu-text-text-primary niuu-font-medium">
                     {node.label}
                   </span>
-                  {node.kind === 'stage' && node.personaIds.length > 0 && (
+                  {node.kind === 'trigger' && (
+                    <span className="niuu-text-xs niuu-text-text-muted">{node.source ?? 'manual dispatch'}</span>
+                  )}
+                  {node.kind === 'stage' && (() => {
+                    const summary = stageSummary(node);
+                    return (
+                      <>
+                        <span className="niuu-text-xs niuu-text-text-muted">
+                          {summary.members.length} persona{summary.members.length !== 1 ? 's' : ''} · {summary.members.length} ravn{summary.members.length !== 1 ? 's' : ''} · {summary.mode}
+                        </span>
+                        <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-faint">
+                          join {summary.joinMode} · max {summary.maxConcurrent}
+                        </span>
+                      </>
+                    );
+                  })()}
+                  {node.kind === 'gate' && (
                     <span className="niuu-text-xs niuu-text-text-muted">
-                      {node.personaIds.length} persona{node.personaIds.length !== 1 ? 's' : ''}
+                      {(node.approvers ?? []).length || 1} approver{(node.approvers ?? []).length === 1 ? '' : 's'}
+                    </span>
+                  )}
+                  {node.kind === 'cond' && (
+                    <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-faint niuu-max-w-[180px] niuu-truncate">
+                      {node.predicate || 'expr …'}
                     </span>
                   )}
                 </button>

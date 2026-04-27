@@ -237,7 +237,7 @@ describe('createMockTriggerStore', () => {
   it('returns seeded triggers', async () => {
     const store = createMockTriggerStore();
     const triggers = await store.listTriggers();
-    expect(triggers.length).toBe(6);
+    expect(triggers.length).toBe(10);
   });
 
   it('createTrigger adds a trigger and returns it', async () => {
@@ -253,14 +253,14 @@ describe('createMockTriggerStore', () => {
     expect(trigger.createdAt).toBeDefined();
 
     const all = await store.listTriggers();
-    expect(all.length).toBe(7);
+    expect(all.length).toBe(11);
   });
 
   it('deleteTrigger removes a trigger', async () => {
     const store = createMockTriggerStore();
     await store.deleteTrigger('aa000001-0000-4000-8000-000000000001');
     const all = await store.listTriggers();
-    expect(all.length).toBe(5);
+    expect(all.length).toBe(9);
   });
 });
 

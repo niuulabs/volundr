@@ -37,4 +37,10 @@ export interface IFileSystemPort {
    * Throws if the path belongs to a secret mount.
    */
   readFile(sessionId: string, path: string): Promise<string>;
+
+  /** Write or overwrite a file in the session workspace. */
+  writeFile(sessionId: string, path: string, content: string): Promise<void>;
+
+  /** Delete one or more paths from the session workspace. */
+  deletePaths(sessionId: string, paths: string[]): Promise<void>;
 }

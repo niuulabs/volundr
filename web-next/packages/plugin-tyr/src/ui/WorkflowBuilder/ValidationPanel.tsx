@@ -31,7 +31,7 @@ const KIND_ICON: Record<WorkflowIssue['kind'], string> = {
 };
 
 const ZOOM_BTN =
-  'niuu-bg-bg-elevated niuu-border niuu-border-border niuu-text-text-secondary niuu-rounded niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-cursor-pointer niuu-font-mono hover:niuu-text-text-primary niuu-transition-colors';
+  'niuu-bg-bg-elevated niuu-border niuu-border-border niuu-text-text-secondary niuu-rounded-md niuu-px-2.5 niuu-py-1 niuu-text-xs niuu-cursor-pointer niuu-font-mono hover:niuu-text-text-primary niuu-transition-colors';
 
 export function ValidationPanel({ workflow, onSelectNode, errorCount, warnCount }: ValidationPanelProps) {
   const [expanded, setExpanded] = useState(false);
@@ -78,7 +78,7 @@ export function ValidationPanel({ workflow, onSelectNode, errorCount, warnCount 
       )}
 
       {/* Bottom bar */}
-      <div className="niuu-w-full niuu-flex niuu-items-center niuu-justify-between niuu-bg-bg-secondary niuu-border-t niuu-border-border niuu-px-3 niuu-py-1.5">
+      <div className="niuu-w-full niuu-flex niuu-items-center niuu-justify-between niuu-bg-bg-secondary/95 niuu-backdrop-blur-sm niuu-border-t niuu-border-border niuu-px-3 niuu-py-2">
         {/* Left: validation badges */}
         <button
           data-testid="validation-pill"
@@ -107,8 +107,8 @@ export function ValidationPanel({ workflow, onSelectNode, errorCount, warnCount 
             </span>
           )}
           {reviewCount > 0 && (
-            <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-muted niuu-ml-1">
-              REVIEW
+            <span className="niuu-inline-flex niuu-items-center niuu-gap-0.5 niuu-rounded niuu-border niuu-border-border niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-text-[10px] niuu-font-mono niuu-font-semibold niuu-text-text-secondary">
+              REVIEW {reviewCount}
             </span>
           )}
           {issues.length > 0 && (
@@ -119,7 +119,7 @@ export function ValidationPanel({ workflow, onSelectNode, errorCount, warnCount 
         </button>
 
         {/* Center: help text */}
-        <span className="niuu-text-[10px] niuu-text-text-faint niuu-font-mono">
+        <span className="niuu-text-[10px] niuu-text-text-faint niuu-font-mono niuu-uppercase niuu-tracking-wide">
           ⌘/ctrl + scroll to zoom · drag bg to pan
         </span>
 

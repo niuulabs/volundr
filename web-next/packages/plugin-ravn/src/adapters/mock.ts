@@ -685,7 +685,7 @@ const SEED_TRIGGERS: Trigger[] = [
     spec: '0 * * * *',
     enabled: true,
     createdAt: '2026-01-01T00:00:00Z',
-    lastFiredAt: '2026-01-15T08:00:00Z',
+    lastFiredAt: '2026-01-15T08:24:12Z',
     fireCount: 336,
   },
   {
@@ -695,7 +695,7 @@ const SEED_TRIGGERS: Trigger[] = [
     spec: 'code.changed',
     enabled: true,
     createdAt: '2026-01-01T00:00:00Z',
-    lastFiredAt: '2026-01-15T09:10:00Z',
+    lastFiredAt: '2026-01-15T08:25:50Z',
     fireCount: 47,
   },
   {
@@ -705,7 +705,7 @@ const SEED_TRIGGERS: Trigger[] = [
     spec: 'review.completed',
     enabled: true,
     createdAt: '2026-01-01T00:00:00Z',
-    lastFiredAt: '2026-01-15T08:55:00Z',
+    lastFiredAt: '2026-01-15T08:27:03Z',
     fireCount: 31,
   },
   {
@@ -715,7 +715,7 @@ const SEED_TRIGGERS: Trigger[] = [
     spec: '/hooks/dispatch',
     enabled: false,
     createdAt: '2026-01-10T12:00:00Z',
-    lastFiredAt: '2026-01-12T14:30:00Z',
+    lastFiredAt: '2026-01-15T08:18:44Z',
     fireCount: 3,
   },
   {
@@ -725,18 +725,58 @@ const SEED_TRIGGERS: Trigger[] = [
     spec: 'investigate-incident',
     enabled: true,
     createdAt: '2026-01-12T09:00:00Z',
-    lastFiredAt: '2026-01-14T22:10:00Z',
+    lastFiredAt: '2026-01-15T08:23:31Z',
     fireCount: 8,
   },
   {
     id: 'aa000001-0000-4000-8000-000000000006',
     kind: 'webhook',
-    personaName: 'coder',
+    personaName: 'sindri',
     spec: '/hooks/dispatch',
     enabled: true,
     createdAt: '2026-01-10T12:00:00Z',
-    lastFiredAt: '2026-01-14T16:30:00Z',
+    lastFiredAt: '2026-01-15T08:26:48Z',
     fireCount: 5,
+  },
+  {
+    id: 'aa000001-0000-4000-8000-000000000007',
+    kind: 'event',
+    personaName: 'muninn',
+    spec: 'mimir.index.requested',
+    enabled: true,
+    createdAt: '2026-01-04T12:00:00Z',
+    lastFiredAt: '2026-01-15T08:26:31Z',
+    fireCount: 28,
+  },
+  {
+    id: 'aa000001-0000-4000-8000-000000000008',
+    kind: 'event',
+    personaName: 'gefjon',
+    spec: 'security.audit.requested',
+    enabled: true,
+    createdAt: '2026-01-05T12:00:00Z',
+    lastFiredAt: '2026-01-15T08:24:58Z',
+    fireCount: 19,
+  },
+  {
+    id: 'aa000001-0000-4000-8000-000000000009',
+    kind: 'manual',
+    personaName: 'víðar',
+    spec: 'drain-incident-queue',
+    enabled: true,
+    createdAt: '2026-01-06T12:00:00Z',
+    lastFiredAt: '2026-01-15T08:27:12Z',
+    fireCount: 11,
+  },
+  {
+    id: 'aa000001-0000-4000-8000-000000000010',
+    kind: 'event',
+    personaName: 'saga',
+    spec: 'recap.requested',
+    enabled: true,
+    createdAt: '2026-01-08T12:00:00Z',
+    lastFiredAt: '2026-01-15T08:25:12Z',
+    fireCount: 42,
   },
 ];
 
@@ -792,32 +832,62 @@ const SEED_MESSAGES: Message[] = [
 // ---------------------------------------------------------------------------
 
 function toDetail(summary: PersonaSummary, req?: PersonaCreateRequest): PersonaDetail {
+  const isReviewer = summary.name === 'reviewer';
   return {
     ...summary,
     description:
       req?.description ??
-      `${summary.summary} Configured as a ${summary.role} persona with ${summary.permissionMode} permissions.`,
+      (isReviewer
+        ? 'Careful code reviewer. Blocks on clarity, correctness, tests, and risky tool or permission use.'
+        : `${summary.summary} Configured as a ${summary.role} persona with ${summary.permissionMode} permissions.`),
     systemPromptTemplate:
-      req?.systemPromptTemplate ?? `# ${summary.name}\nYou are the ${summary.name} persona.`,
-    forbiddenTools: req?.forbiddenTools ?? [],
+      req?.systemPromptTemplate ??
+      (isReviewer
+        ? [
+            '# reviewer',
+            'You are {{name}}, a {{role}} persona.',
+            'Review code changes for correctness, clarity, tests, and operational risk.',
+            'Block when the diff introduces regressions, missing tests, unsafe permissions, or unbounded side effects.',
+            'Emit {{produces.event}} only after a complete pass.',
+          ].join('\n')
+        : `# ${summary.name}\nYou are the ${summary.name} persona.`),
+    forbiddenTools: req?.forbiddenTools ?? (isReviewer ? ['write', 'bash', 'apply_patch'] : []),
     llm: {
-      primaryAlias: req?.llmPrimaryAlias ?? 'claude-sonnet-4-6',
-      thinkingEnabled: req?.llmThinkingEnabled ?? false,
+      primaryAlias: req?.llmPrimaryAlias ?? (isReviewer ? 'sonnet-primary' : 'claude-sonnet-4-6'),
+      thinkingEnabled: req?.llmThinkingEnabled ?? isReviewer,
       maxTokens: req?.llmMaxTokens ?? 8192,
       temperature: req?.llmTemperature,
     },
     produces: {
       eventType: req?.producesEventType ?? summary.producesEvent,
-      schemaDef: req?.producesSchema ?? {},
+      schemaDef:
+        req?.producesSchema ??
+        (isReviewer
+          ? {
+              verdict: 'string',
+              confidence: 'number',
+              findings: 'array',
+            }
+          : {}),
     },
     consumes: {
-      events: req?.consumesEvents ?? summary.consumesEvents.map((name) => ({ name })),
+      events:
+        req?.consumesEvents ??
+        (isReviewer
+          ? [
+              { name: 'code.changed', injects: ['diff', 'commit_summary'], trust: 0.8 },
+              { name: 'review.requested', injects: ['scope', 'owner'], trust: 0.9 },
+            ]
+          : summary.consumesEvents.map((name) => ({ name }))),
     },
     fanIn: req?.fanInStrategy
       ? { strategy: req.fanInStrategy, params: req.fanInParams ?? {} }
-      : { strategy: 'merge', params: {} },
-    mimirWriteRouting: req?.mimirWriteRouting,
+      : { strategy: 'merge', params: isReviewer ? { mode: 'review.final' } : {} },
+    mimirWriteRouting: req?.mimirWriteRouting ?? (isReviewer ? 'local' : undefined),
     yamlSource: '[mock]',
+    overrideSource: summary.hasOverride
+      ? `volundr/src/ravn/personas/overrides/${summary.name}.yaml`
+      : undefined,
   };
 }
 

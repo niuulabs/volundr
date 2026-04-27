@@ -98,11 +98,11 @@ describe('BudgetView', () => {
     fireEvent.click(screen.getByText(/full fleet table/i));
     const table = screen.getByLabelText(/fleet budget table/i);
     expect(table).toBeInTheDocument();
-    expect(table.querySelector('th:first-child')).toHaveTextContent('ravn');
+    expect(table.querySelector('th:first-child')).toHaveTextContent('Raven');
     const headers = table.querySelectorAll('th');
     const headerTexts = Array.from(headers).map((h) => h.textContent);
-    expect(headerTexts).toContain('spent');
-    expect(headerTexts).toContain('cap');
+    expect(headerTexts).toContain('Spent');
+    expect(headerTexts).toContain('Cap');
   });
 
   it('shows top drivers section after budgets load', async () => {

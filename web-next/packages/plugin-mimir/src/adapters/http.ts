@@ -52,14 +52,14 @@ interface RawPageMeta {
   title: string;
   summary: string;
   category: string;
-  type: string;
-  confidence: string;
+  type?: string;
+  confidence?: string;
   entity_type?: string;
-  mounts: string[];
+  mounts?: string[];
   updated_at: string;
-  updated_by: string;
+  updated_by?: string;
   source_ids: string[];
-  size: number;
+  size?: number;
 }
 
 interface RawPage extends RawPageMeta {
@@ -82,18 +82,20 @@ interface RawSearchResult {
   title: string;
   summary: string;
   category: string;
-  type: string;
-  confidence: string;
+  type?: string;
+  confidence?: string;
 }
 
 interface RawLintIssue {
   id: string;
-  rule: string;
   severity: string;
-  page: string;
-  mount: string;
+  rule?: string;
+  page?: string;
+  page_path?: string;
+  mount?: string;
   assignee?: string;
-  auto_fix: boolean;
+  auto_fix?: boolean;
+  auto_fixable?: boolean;
   message: string;
 }
 
@@ -121,15 +123,17 @@ interface RawRecentWrite {
 }
 
 interface RawSource {
-  id: string;
+  id?: string;
+  source_id?: string;
   title: string;
-  origin_type: string;
+  origin_type?: string;
+  source_type?: string;
   origin_url?: string;
   origin_path?: string;
   ingested_at: string;
-  ingest_agent: string;
-  compiled_into: string[];
-  content: string;
+  ingest_agent?: string;
+  compiled_into?: string[];
+  content?: string;
 }
 
 interface RawDreamCycle {
@@ -207,14 +211,14 @@ function toPageMeta(raw: RawPageMeta): PageMeta {
     title: raw.title,
     summary: raw.summary,
     category: raw.category,
-    type: raw.type as PageMeta['type'],
-    confidence: raw.confidence as PageMeta['confidence'],
+    type: (raw.type ?? inferPageType(raw.path, raw.category)) as PageMeta['type'],
+    confidence: (raw.confidence ?? 'medium') as PageMeta['confidence'],
     entityType: raw.entity_type,
-    mounts: raw.mounts,
+    mounts: raw.mounts ?? ['local'],
     updatedAt: raw.updated_at,
-    updatedBy: raw.updated_by,
+    updatedBy: raw.updated_by ?? 'mimir',
     sourceIds: raw.source_ids,
-    size: raw.size,
+    size: raw.size ?? 0,
   };
 }
 
@@ -228,12 +232,12 @@ function toPage(raw: RawPage): Page {
 function toLintIssue(raw: RawLintIssue): LintIssue {
   return {
     id: raw.id,
-    rule: raw.rule as LintRule,
-    severity: raw.severity as IssueSeverity,
-    page: raw.page,
-    mount: raw.mount,
+    rule: (raw.rule ?? raw.id) as LintRule,
+    severity: normalizeSeverity(raw.severity),
+    page: raw.page ?? raw.page_path ?? '',
+    mount: raw.mount ?? 'local',
     assignee: raw.assignee,
-    autoFix: raw.auto_fix,
+    autoFix: raw.auto_fix ?? raw.auto_fixable ?? false,
     message: raw.message,
   };
 }
@@ -271,15 +275,15 @@ function toRecentWrite(raw: RawRecentWrite): RecentWrite {
 
 function toSource(raw: RawSource): Source {
   return {
-    id: raw.id,
+    id: raw.id ?? raw.source_id ?? raw.title,
     title: raw.title,
-    originType: raw.origin_type as OriginType,
+    originType: normalizeOriginType(raw.origin_type ?? raw.source_type),
     originUrl: raw.origin_url,
     originPath: raw.origin_path,
     ingestedAt: raw.ingested_at,
-    ingestAgent: raw.ingest_agent,
-    compiledInto: raw.compiled_into,
-    content: raw.content,
+    ingestAgent: raw.ingest_agent ?? 'mimir',
+    compiledInto: raw.compiled_into ?? [],
+    content: raw.content ?? '',
   };
 }
 
@@ -338,6 +342,69 @@ function toEntityMeta(raw: RawEntityMeta): EntityMeta {
   };
 }
 
+function isMissingRouteError(error: unknown): error is { status: number } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    typeof (error as { status?: unknown }).status === 'number' &&
+    (((error as { status: number }).status >= 404 && (error as { status: number }).status < 406) ||
+      (error as { status: number }).status === 501)
+  );
+}
+
+function inferPageType(path: string, category: string): PageMeta['type'] {
+  if (path.startsWith('/entities/') || category === 'entity') return 'entity';
+  if (path.includes('/decisions/') || category === 'decision') return 'decision';
+  if (path.includes('/preferences/') || category === 'preference') return 'preference';
+  if (path.includes('/directives/') || category === 'directive') return 'directive';
+  return 'topic';
+}
+
+function normalizeSeverity(severity: string): IssueSeverity {
+  if (severity === 'warning') return 'warn';
+  return severity as IssueSeverity;
+}
+
+function normalizeOriginType(originType: string | undefined): OriginType {
+  switch (originType) {
+    case 'web':
+    case 'rss':
+    case 'arxiv':
+    case 'file':
+    case 'mail':
+    case 'chat':
+      return originType;
+    case 'document':
+      return 'file';
+    case 'conversation':
+      return 'chat';
+    default:
+      return 'file';
+  }
+}
+
+function inferEntityKind(path: string, title: string, summary: string): EntityKind {
+  const haystack = `${path} ${title} ${summary}`.toLowerCase();
+  if (haystack.includes('/people/') || haystack.includes(' person ')) return 'person';
+  if (
+    haystack.includes('/org') ||
+    haystack.includes(' organization') ||
+    haystack.includes(' organisation')
+  ) {
+    return 'org';
+  }
+  if (haystack.includes('/project') || haystack.includes(' project ')) return 'project';
+  if (haystack.includes('/component') || haystack.includes(' component ')) return 'component';
+  if (haystack.includes('/tech') || haystack.includes(' technology ')) return 'technology';
+  return 'concept';
+}
+
+async function listLegacySources(client: ApiClient): Promise<Source[]> {
+  const raw = await client.get<RawSource[]>('/sources');
+  return raw.map(toSource);
+}
+
 // ---------------------------------------------------------------------------
 // Adapter factory
 // ---------------------------------------------------------------------------
@@ -346,12 +413,40 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
   return {
     mounts: {
       async listMounts(): Promise<Mount[]> {
-        const raw = await client.get<RawMount[]>('/mounts');
-        return raw.map(toMount);
+        try {
+          const raw = await client.get<RawMount[]>('/mounts');
+          return raw.map(toMount);
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          const stats = await client.get<RawStats>('/stats');
+          return [
+            {
+              name: 'local',
+              role: 'local',
+              host: 'embedded',
+              url: '',
+              priority: 1,
+              categories: stats.categories,
+              status: stats.healthy ? 'healthy' : 'degraded',
+              pages: stats.page_count,
+              sources: 0,
+              lintIssues: 0,
+              lastWrite: '',
+              embedding: 'fts',
+              sizeKb: 0,
+              desc: 'Current Mimir instance',
+            },
+          ];
+        }
       },
 
       async listRoutingRules(): Promise<WriteRoutingRule[]> {
-        return client.get<WriteRoutingRule[]>('/routing/rules');
+        try {
+          return await client.get<WriteRoutingRule[]>('/routing/rules');
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          return [];
+        }
       },
 
       async upsertRoutingRule(rule: WriteRoutingRule): Promise<WriteRoutingRule> {
@@ -363,13 +458,35 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
       },
 
       async listRavnBindings(): Promise<RavnBinding[]> {
-        return client.get<RavnBinding[]>('/ravns/bindings');
+        try {
+          return await client.get<RavnBinding[]>('/ravns/bindings');
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          return [];
+        }
       },
 
       async getRecentWrites(limit?: number): Promise<RecentWrite[]> {
         const qs = limit != null ? `?limit=${limit}` : '';
-        const raw = await client.get<RawRecentWrite[]>(`/mounts/recent-writes${qs}`);
-        return raw.map(toRecentWrite);
+        try {
+          const raw = await client.get<RawRecentWrite[]>(`/mounts/recent-writes${qs}`);
+          return raw.map(toRecentWrite);
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          const sources = await listLegacySources(client);
+          return [...sources]
+            .sort((a, b) => b.ingestedAt.localeCompare(a.ingestedAt))
+            .slice(0, limit ?? sources.length)
+            .map((source) => ({
+              id: source.id,
+              timestamp: source.ingestedAt,
+              mount: 'local',
+              page: source.compiledInto[0] ?? '',
+              ravn: source.ingestAgent,
+              kind: 'compile',
+              message: source.title,
+            }));
+        }
       },
     },
 
@@ -395,9 +512,14 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
       async getPage(path: string, mountName?: string): Promise<Page | null> {
         const params = new URLSearchParams({ path });
         if (mountName) params.set('mount', mountName);
-        const raw = await client.get<RawPage | null>(`/page?${params.toString()}`);
-        if (!raw) return null;
-        return toPage(raw);
+        try {
+          const raw = await client.get<RawPage | null>(`/page?${params.toString()}`);
+          if (!raw) return null;
+          return toPage(raw);
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          return null;
+        }
       },
 
       async upsertPage(path: string, content: string, mountName?: string): Promise<void> {
@@ -415,8 +537,8 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
           title: r.title,
           summary: r.summary,
           category: r.category,
-          type: r.type as SearchResult['type'],
-          confidence: r.confidence as SearchResult['confidence'],
+          type: (r.type ?? inferPageType(r.path, r.category)) as SearchResult['type'],
+          confidence: (r.confidence ?? 'medium') as SearchResult['confidence'],
         }));
       },
 
@@ -428,8 +550,23 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
 
       async listEntities(options): Promise<EntityMeta[]> {
         const qs = options?.kind ? `?kind=${encodeURIComponent(options.kind)}` : '';
-        const raw = await client.get<RawEntityMeta[]>(`/entities${qs}`);
-        return raw.map(toEntityMeta);
+        try {
+          const raw = await client.get<RawEntityMeta[]>(`/entities${qs}`);
+          return raw.map(toEntityMeta);
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          const pages = await client.get<RawPageMeta[]>('/pages');
+          return pages
+            .filter((page) => page.path.startsWith('/entities/') || page.category === 'entity')
+            .map((page) => ({
+              path: page.path,
+              title: page.title,
+              entityKind: inferEntityKind(page.path, page.title, page.summary),
+              summary: page.summary,
+              relationshipCount: 0,
+            }))
+            .filter((entity) => (options?.kind ? entity.entityKind === options.kind : true));
+        }
       },
 
       async listSources(options?: {
@@ -440,25 +577,73 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
         if (options?.originType) params.set('origin_type', options.originType);
         if (options?.mountName) params.set('mount', options.mountName);
         const qs = params.toString() ? `?${params.toString()}` : '';
-        const raw = await client.get<RawSource[]>(`/sources${qs}`);
-        return raw.map(toSource);
+        try {
+          const raw = await client.get<RawSource[]>(`/sources${qs}`);
+          return raw.map(toSource);
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          const sources = await listLegacySources(client);
+          return sources.filter((source) =>
+            options?.originType ? source.originType === options.originType : true,
+          );
+        }
       },
 
       async getPageSources(path: string): Promise<Source[]> {
-        const raw = await client.get<RawSource[]>(`/page/sources?path=${encodeURIComponent(path)}`);
-        return raw.map(toSource);
+        try {
+          const raw = await client.get<RawSource[]>(`/page/sources?path=${encodeURIComponent(path)}`);
+          return raw.map(toSource);
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          const page = await this.getPage(path);
+          if (!page || page.sourceIds.length === 0) return [];
+          const sources = await Promise.all(
+            page.sourceIds.map((sourceId) =>
+              client.get<RawSource>(`/source?source_id=${encodeURIComponent(sourceId)}`),
+            ),
+          );
+          return sources.map(toSource);
+        }
       },
 
       async ingestUrl(url: string): Promise<Source> {
-        const raw = await client.post<RawSource>('/sources/ingest/url', { url });
-        return toSource(raw);
+        try {
+          const raw = await client.post<RawSource>('/sources/ingest/url', { url });
+          return toSource(raw);
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          throw new Error('URL ingest is not supported by the current Mimir backend');
+        }
       },
 
       async ingestFile(file: File): Promise<Source> {
         const form = new FormData();
         form.append('file', file);
-        const raw = await client.post<RawSource>('/sources/ingest/file', form);
-        return toSource(raw);
+        try {
+          const raw = await client.post<RawSource>('/sources/ingest/file', form);
+          return toSource(raw);
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          const fileContent =
+            typeof file.text === 'function'
+              ? await file.text()
+              : new TextDecoder().decode(await file.arrayBuffer());
+          const raw = await client.post<{ source_id: string; pages_updated: string[] }>('/ingest', {
+            title: file.name,
+            content: fileContent,
+            source_type: 'document',
+          });
+          return {
+            id: raw.source_id,
+            title: file.name,
+            originType: 'file',
+            originPath: file.name,
+            ingestedAt: new Date().toISOString(),
+            ingestAgent: 'mimir',
+            compiledInto: raw.pages_updated,
+            content: '',
+          };
+        }
       },
     },
 
@@ -470,10 +655,22 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
       ): Promise<EmbeddingSearchResult[]> {
         const params = new URLSearchParams({ q: query, top_k: String(topK) });
         if (mountName) params.set('mount', mountName);
-        const raw = await client.get<RawEmbeddingResult[]>(
-          `/embeddings/search?${params.toString()}`,
-        );
-        return raw.map(toEmbeddingResult);
+        try {
+          const raw = await client.get<RawEmbeddingResult[]>(`/embeddings/search?${params.toString()}`);
+          return raw.map(toEmbeddingResult);
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          const results = await client.get<RawSearchResult[]>(
+            `/search?q=${encodeURIComponent(query)}&mode=fts`,
+          );
+          return results.slice(0, topK).map((result, index) => ({
+            path: result.path,
+            title: result.title,
+            summary: result.summary,
+            score: Math.max(0, 1 - index * 0.1),
+            mountName: mountName ?? 'local',
+          }));
+        }
       },
     },
 
@@ -491,13 +688,23 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
       },
 
       async getDreamCycles(limit = 20): Promise<DreamCycle[]> {
-        const raw = await client.get<RawDreamCycle[]>(`/dreams?limit=${limit}`);
-        return raw.map(toDreamCycle);
+        try {
+          const raw = await client.get<RawDreamCycle[]>(`/dreams?limit=${limit}`);
+          return raw.map(toDreamCycle);
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          return [];
+        }
       },
 
       async getActivityLog(limit = 50): Promise<ActivityEvent[]> {
-        const raw = await client.get<RawActivityEvent[]>(`/activity?limit=${limit}`);
-        return raw.map(toActivityEvent);
+        try {
+          const raw = await client.get<RawActivityEvent[]>(`/activity?limit=${limit}`);
+          return raw.map(toActivityEvent);
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          return [];
+        }
       },
 
       async reassignIssues(issueIds: string[], assignee: string): Promise<LintReport> {

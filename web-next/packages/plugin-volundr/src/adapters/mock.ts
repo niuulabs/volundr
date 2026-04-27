@@ -14,6 +14,15 @@ import type {
   VolundrMessage,
   StoredCredential,
   FeatureModule,
+  SecretType,
+  IntegrationConnection,
+  ClusterResourceInfo,
+  McpServerConfig,
+  VolundrModel,
+  VolundrPreset,
+  VolundrRepo,
+  TrackerIssue,
+  VolundrWorkspace,
 } from '../models/volundr.model';
 import type { Cluster } from '../domain/cluster';
 import type { Session } from '../domain/session';
@@ -69,6 +78,278 @@ const SEED_STATS: VolundrStats = {
   },
 };
 
+const SEED_CREDENTIALS: StoredCredential[] = [
+  {
+    id: 'cred-1',
+    name: 'anthropic-key',
+    secretType: 'api_key',
+    keys: ['ANTHROPIC_API_KEY'],
+    scope: 'global',
+    used: 42,
+    metadata: {},
+    createdAt: '2026-01-03T12:00:00Z',
+    updatedAt: '2d ago',
+  },
+  {
+    id: 'cred-2',
+    name: 'openai-key',
+    secretType: 'api_key',
+    keys: ['OPENAI_API_KEY'],
+    scope: 'global',
+    used: 17,
+    metadata: {},
+    createdAt: '2026-01-03T12:00:00Z',
+    updatedAt: '2d ago',
+  },
+  {
+    id: 'cred-3',
+    name: 'google-key',
+    secretType: 'api_key',
+    keys: ['GOOGLE_API_KEY'],
+    scope: 'global',
+    used: 3,
+    metadata: {},
+    createdAt: '2026-01-03T12:00:00Z',
+    updatedAt: '2d ago',
+  },
+  {
+    id: 'cred-4',
+    name: 'aws-mimir',
+    secretType: 'api_key',
+    keys: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'],
+    scope: 'template:mimir-embeddings',
+    used: 6,
+    metadata: {},
+    createdAt: '2026-01-02T12:00:00Z',
+    updatedAt: '3d ago',
+  },
+  {
+    id: 'cred-5',
+    name: 'hf-hub',
+    secretType: 'api_key',
+    keys: ['HF_TOKEN'],
+    scope: 'global',
+    used: 4,
+    metadata: {},
+    createdAt: '2026-01-01T12:00:00Z',
+    updatedAt: '2w ago',
+  },
+  {
+    id: 'cred-6',
+    name: 'github-niuu',
+    secretType: 'git_credential',
+    keys: ['GIT_USERNAME', 'GIT_PASSWORD'],
+    scope: 'global',
+    used: 128,
+    metadata: {},
+    createdAt: '2025-12-18T12:00:00Z',
+    updatedAt: '1w ago',
+  },
+  {
+    id: 'cred-7',
+    name: 'linear-oauth',
+    secretType: 'oauth_token',
+    keys: ['LINEAR_TOKEN', 'LINEAR_REFRESH'],
+    scope: 'global',
+    used: 14,
+    metadata: {},
+    createdAt: '2025-12-27T12:00:00Z',
+    updatedAt: '6h ago',
+  },
+  {
+    id: 'cred-8',
+    name: 'ssh-deploy',
+    secretType: 'ssh_key',
+    keys: ['id_ed25519', 'id_ed25519.pub'],
+    scope: 'template:niuu-platform',
+    used: 2,
+    metadata: {},
+    createdAt: '2025-11-15T12:00:00Z',
+    updatedAt: '1mo ago',
+  },
+  {
+    id: 'cred-9',
+    name: 'tls-niuu-internal',
+    secretType: 'tls_cert',
+    keys: ['tls.crt', 'tls.key', 'ca.crt'],
+    scope: 'cluster:valaskjalf',
+    used: 0,
+    metadata: {},
+    createdAt: '2025-10-18T12:00:00Z',
+    updatedAt: '3mo ago',
+  },
+];
+
+const SEED_MODELS: Record<string, VolundrModel> = {
+  'sonnet-primary': {
+    name: 'Claude Sonnet',
+    provider: 'cloud',
+    tier: 'balanced',
+    color: '#e7d2b4',
+    cost: '$$$',
+  },
+  'gpt-5-codex': {
+    name: 'GPT-5 Codex',
+    provider: 'cloud',
+    tier: 'execution',
+    color: '#b9d8ff',
+    cost: '$$$',
+  },
+};
+
+const SEED_REPOS: VolundrRepo[] = [
+  {
+    provider: 'github',
+    org: 'niuulabs',
+    name: 'volundr',
+    cloneUrl: 'github.com/niuulabs/volundr',
+    url: 'https://github.com/niuulabs/volundr',
+    defaultBranch: 'main',
+    branches: ['main', 'develop', 'feat/host-profiles'],
+  },
+  {
+    provider: 'github',
+    org: 'niuulabs',
+    name: 'bifrost',
+    cloneUrl: 'github.com/niuulabs/bifrost',
+    url: 'https://github.com/niuulabs/bifrost',
+    defaultBranch: 'main',
+    branches: ['main', 'feat/provider-router'],
+  },
+];
+
+const SEED_WORKSPACES: VolundrWorkspace[] = [
+  {
+    id: 'ws-1',
+    pvcName: 'pvc-volundr-main',
+    sessionId: 'sess-arch-1',
+    ownerId: 'dev-user',
+    tenantId: 't1',
+    sizeGb: 14,
+    status: 'archived',
+    createdAt: '2026-04-01T12:00:00Z',
+    archivedAt: '2026-04-20T12:00:00Z',
+    sessionName: 'main',
+    sourceUrl: 'github.com/niuulabs/volundr',
+    sourceRef: 'main',
+  },
+  {
+    id: 'ws-2',
+    pvcName: 'pvc-bifrost-provider-router',
+    sessionId: 'sess-arch-2',
+    ownerId: 'dev-user',
+    tenantId: 't1',
+    sizeGb: 8,
+    status: 'archived',
+    createdAt: '2026-04-02T12:00:00Z',
+    archivedAt: '2026-04-18T12:00:00Z',
+    sessionName: 'provider-router',
+    sourceUrl: 'github.com/niuulabs/bifrost',
+    sourceRef: 'feat/provider-router',
+  },
+];
+
+const SEED_INTEGRATIONS: IntegrationConnection[] = [
+  {
+    id: 'github-primary',
+    createdAt: '2026-04-01T12:00:00Z',
+    updatedAt: '2026-04-24T12:00:00Z',
+  },
+  {
+    id: 'linear-main',
+    createdAt: '2026-04-02T12:00:00Z',
+    updatedAt: '2026-04-23T12:00:00Z',
+  },
+];
+
+const SEED_TRACKER_ISSUES: TrackerIssue[] = [
+  {
+    id: 'issue-1',
+    identifier: 'NIU-801',
+    title: 'Polish forge launch defaults',
+    status: 'in_progress',
+    url: 'https://linear.app/niuu/issue/NIU-801',
+  },
+  {
+    id: 'issue-2',
+    identifier: 'NIU-802',
+    title: 'Hook tracker issue launch context into sessions',
+    status: 'todo',
+    url: 'https://linear.app/niuu/issue/NIU-802',
+  },
+];
+
+const SEED_CLUSTER_RESOURCES: ClusterResourceInfo = {
+  resourceTypes: [
+    { name: 'cpu', resourceKey: 'cpu', displayName: 'CPU', unit: 'cores', category: 'compute' },
+    {
+      name: 'memory',
+      resourceKey: 'memory',
+      displayName: 'Memory',
+      unit: 'bytes',
+      category: 'memory',
+    },
+    { name: 'gpu', resourceKey: 'gpu', displayName: 'GPU', unit: 'count', category: 'accelerator' },
+  ],
+  nodes: [
+    {
+      name: 'forge-a',
+      labels: {},
+      allocatable: { cpu: '16', memory: '32Gi', gpu: '1' },
+      allocated: { cpu: '4', memory: '8Gi', gpu: '0' },
+      available: { cpu: '12', memory: '24Gi', gpu: '1' },
+    },
+    {
+      name: 'forge-b',
+      labels: {},
+      allocatable: { cpu: '24', memory: '48Gi', gpu: '2' },
+      allocated: { cpu: '8', memory: '16Gi', gpu: '1' },
+      available: { cpu: '16', memory: '32Gi', gpu: '1' },
+    },
+  ],
+};
+
+const SEED_MCP_SERVERS: McpServerConfig[] = [
+  {
+    name: 'filesystem',
+    type: 'stdio',
+    command: 'uvx',
+    args: ['mcp-filesystem', '/workspace'],
+  },
+  {
+    name: 'git',
+    type: 'stdio',
+    command: 'uvx',
+    args: ['mcp-git'],
+  },
+];
+
+const SEED_PRESETS: VolundrPreset[] = [
+  {
+    id: 'preset-fast-review',
+    name: 'fast-review',
+    description: 'Quick review setup for the main repo',
+    isDefault: true,
+    createdAt: '2026-04-01T12:00:00Z',
+    updatedAt: '2026-04-20T12:00:00Z',
+    cliTool: 'claude',
+    workloadType: 'skuld-claude',
+    model: 'sonnet-primary',
+    systemPrompt: 'Review changes and summarize the main risks.',
+    resourceConfig: { cpu: '2', memory: '8Gi' },
+    mcpServers: [SEED_MCP_SERVERS[0]!],
+    terminalSidecar: { enabled: true, allowedCommands: [] },
+    skills: [],
+    rules: [],
+    envVars: { LOG_LEVEL: 'info' },
+    envSecretRefs: ['github-niuu'],
+    source: { type: 'git', repo: 'github.com/niuulabs/volundr', branch: 'main' },
+    integrationIds: ['github-primary'],
+    setupScripts: ['pnpm install'],
+    workloadConfig: {},
+  },
+];
+
 const SEED_CLUSTERS: Cluster[] = [
   // ── Original clusters (other tests depend on exact shape) ─────────────
   {
@@ -79,7 +360,7 @@ const SEED_CLUSTERS: Cluster[] = [
     status: 'healthy',
     region: 'ca-hamilton-1',
     capacity: { cpu: 64, memMi: 131_072, gpu: 4 },
-    used: { cpu: 12, memMi: 24_576, gpu: 1 },
+    used: { cpu: 12, memMi: 24_576, gpu: 2 },
     disk: { usedGi: 820, totalGi: 2048, systemGi: 120, podsGi: 580, logsGi: 120 },
     nodes: [
       { id: 'n-1', status: 'ready', role: 'worker' },
@@ -193,8 +474,8 @@ const SEED_CLUSTERS: Cluster[] = [
     kind: 'media',
     status: 'healthy',
     region: 'ap-tokyo',
-    capacity: { cpu: 16, memMi: 32_768, gpu: 2 },
-    used: { cpu: 1, memMi: 4_096, gpu: 0 },
+    capacity: { cpu: 16, memMi: 32_768, gpu: 3 },
+    used: { cpu: 1, memMi: 4_096, gpu: 1 },
     disk: { usedGi: 90, totalGi: 512, systemGi: 30, podsGi: 40, logsGi: 20 },
     nodes: [{ id: 'n-9', status: 'ready', role: 'worker' }],
     pods: [],
@@ -546,7 +827,7 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
   {
     id: 'ds-4',
     ravnId: 'r4',
-    personaName: 'sage',
+    personaName: 's-4855',
     templateId: 'tpl-default',
     clusterId: 'cl-eitri',
     state: 'failed',
@@ -564,7 +845,11 @@ const SEED_DOMAIN_SESSIONS: Session[] = [
     env: {},
     events: [
       { ts: new Date(Date.now() - 86_400_000).toISOString(), kind: 'requested', body: 'session requested' },
-      { ts: new Date(Date.now() - 86_000_000).toISOString(), kind: 'failed', body: 'pod failed to start: OOMKilled' },
+      {
+        ts: new Date(Date.now() - 86_000_000).toISOString(),
+        kind: 'failed',
+        body: 'CredentialNotFound: google-key scope=global — key rotation in progress',
+      },
     ],
   },
   {
@@ -724,6 +1009,134 @@ const SEED_TEMPLATES: Template[] = [
     createdAt: '2025-12-15T00:00:00Z',
     updatedAt: '2025-12-15T00:00:00Z',
   },
+  {
+    id: 'tpl-bifrost',
+    name: 'bifrost-gateway',
+    description: 'LLM gateway · provider adapters',
+    version: 1,
+    usageCount: 23,
+    spec: {
+      image: 'ghcr.io/niuulabs/skuld',
+      tag: 'codex-primary',
+      mounts: [
+        {
+          name: 'niuu/bifrost',
+          mountPath: '/workspace',
+          source: { kind: 'git', repo: 'niuu/bifrost', branch: 'main' },
+          readOnly: false,
+        },
+      ],
+      env: {},
+      envSecretRefs: [],
+      tools: [],
+      mcpServers: [
+        {
+          name: 'filesystem',
+          transport: 'stdio',
+          connectionString: 'uvx mcp-filesystem',
+          tools: [],
+        },
+        {
+          name: 'git',
+          transport: 'stdio',
+          connectionString: 'uvx mcp-git',
+          tools: [],
+        },
+      ],
+      resources: {
+        cpuRequest: '2',
+        cpuLimit: '2',
+        memRequestMi: 4096,
+        memLimitMi: 4096,
+        gpuCount: 0,
+      },
+      ttlSec: 3600,
+      idleTimeoutSec: 600,
+    },
+    createdAt: '2025-12-18T00:00:00Z',
+    updatedAt: '2025-12-18T00:00:00Z',
+  },
+  {
+    id: 'tpl-mimir',
+    name: 'mimir-embeddings',
+    description: 'Indexer · needs GPU for local embeds',
+    version: 1,
+    usageCount: 14,
+    spec: {
+      image: 'ghcr.io/niuulabs/skuld',
+      tag: 'latest',
+      mounts: [],
+      env: {},
+      envSecretRefs: [],
+      tools: [],
+      mcpServers: [],
+      resources: {
+        cpuRequest: '4',
+        cpuLimit: '4',
+        memRequestMi: 32_768,
+        memLimitMi: 32_768,
+        gpuCount: 1,
+      },
+      ttlSec: 5400,
+      idleTimeoutSec: 900,
+    },
+    createdAt: '2025-12-20T00:00:00Z',
+    updatedAt: '2025-12-20T00:00:00Z',
+  },
+  {
+    id: 'tpl-scratch',
+    name: 'scratch',
+    description: 'Blank workspace · ad hoc shell',
+    version: 1,
+    usageCount: 12,
+    spec: {
+      image: 'ghcr.io/niuulabs/skuld',
+      tag: 'latest',
+      mounts: [],
+      env: {},
+      envSecretRefs: [],
+      tools: [],
+      mcpServers: [],
+      resources: {
+        cpuRequest: '1',
+        cpuLimit: '2',
+        memRequestMi: 1024,
+        memLimitMi: 2048,
+        gpuCount: 0,
+      },
+      ttlSec: 3600,
+      idleTimeoutSec: 600,
+    },
+    createdAt: '2025-12-22T00:00:00Z',
+    updatedAt: '2025-12-22T00:00:00Z',
+  },
+  {
+    id: 'tpl-local',
+    name: 'local-laptop',
+    description: 'Laptop bridge · local runtime shell',
+    version: 1,
+    usageCount: 9,
+    spec: {
+      image: 'ghcr.io/niuulabs/skuld',
+      tag: 'latest',
+      mounts: [],
+      env: {},
+      envSecretRefs: [],
+      tools: [],
+      mcpServers: [],
+      resources: {
+        cpuRequest: '1',
+        cpuLimit: '2',
+        memRequestMi: 2048,
+        memLimitMi: 4096,
+        gpuCount: 0,
+      },
+      ttlSec: 3600,
+      idleTimeoutSec: 600,
+    },
+    createdAt: '2025-12-23T00:00:00Z',
+    updatedAt: '2025-12-23T00:00:00Z',
+  },
   // ── Original templates (other tests depend on these) ─────────────────
   {
     id: 'tpl-default',
@@ -801,6 +1214,8 @@ const SEED_TEMPLATES: Template[] = [
 
 export function createMockVolundrService(): IVolundrService {
   const sessions = [...SEED_SESSIONS];
+  const credentials = new Map(SEED_CREDENTIALS.map((credential) => [credential.name, credential]));
+  const presets = [...SEED_PRESETS];
 
   return {
     getFeatures: async () => ({
@@ -818,9 +1233,9 @@ export function createMockVolundrService(): IVolundrService {
 
     getStats: async () => ({ ...SEED_STATS }),
 
-    getModels: async () => ({}),
+    getModels: async () => ({ ...SEED_MODELS }),
 
-    getRepos: async () => [],
+    getRepos: async () => [...SEED_REPOS],
 
     subscribe: (callback) => {
       callback(sessions);
@@ -880,20 +1295,29 @@ export function createMockVolundrService(): IVolundrService {
     },
     saveTemplate: async (t) => t,
 
-    getPresets: async () => [],
-    getPreset: async () => null,
-    savePreset: async (p) => ({
-      ...p,
-      id: p.id ?? 'preset-new',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }),
+    getPresets: async () => [...presets],
+    getPreset: async (id) => presets.find((preset) => preset.id === id) ?? null,
+    savePreset: async (p) => {
+      const saved = {
+        ...p,
+        id: p.id ?? `preset-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const existingIndex = presets.findIndex((preset) => preset.id === saved.id);
+      if (existingIndex >= 0) {
+        presets[existingIndex] = saved;
+      } else {
+        presets.push(saved);
+      }
+      return saved;
+    },
     deletePreset: async () => {},
 
-    getAvailableMcpServers: async () => [],
+    getAvailableMcpServers: async () => [...SEED_MCP_SERVERS],
     getAvailableSecrets: async () => [],
     createSecret: async (name) => ({ name, keys: [] }),
-    getClusterResources: async () => ({ resourceTypes: [], nodes: [] }),
+    getClusterResources: async () => SEED_CLUSTER_RESOURCES,
 
     startSession: async (config) => ({
       id: 'sess-new',
@@ -962,7 +1386,12 @@ export function createMockVolundrService(): IVolundrService {
 
     getSessionMcpServers: async () => [],
 
-    searchTrackerIssues: async () => [],
+    searchTrackerIssues: async (query) =>
+      SEED_TRACKER_ISSUES.filter(
+        (issue) =>
+          issue.identifier.toLowerCase().includes(query.toLowerCase()) ||
+          issue.title.toLowerCase().includes(query.toLowerCase()),
+      ),
     getProjectRepoMappings: async () => [],
     updateTrackerIssueStatus: async (issueId, status) => ({
       id: issueId,
@@ -1014,7 +1443,7 @@ export function createMockVolundrService(): IVolundrService {
     deleteTenantCredential: async () => {},
 
     getIntegrationCatalog: async () => [],
-    getIntegrations: async () => [],
+    getIntegrations: async () => [...SEED_INTEGRATIONS],
     createIntegration: async () => ({
       id: `int-${Date.now()}`,
       createdAt: new Date().toISOString(),
@@ -1023,21 +1452,33 @@ export function createMockVolundrService(): IVolundrService {
     deleteIntegration: async () => {},
     testIntegration: async () => ({ success: true }),
 
-    getCredentials: async (): Promise<StoredCredential[]> => [],
-    getCredential: async () => null,
-    createCredential: async (req) => ({
-      id: `cred-${Date.now()}`,
-      name: req.name,
-      secretType: req.secretType,
-      keys: Object.keys(req.data),
-      metadata: req.metadata ?? {},
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }),
-    deleteCredential: async () => {},
+    getCredentials: async (type?: SecretType): Promise<StoredCredential[]> => {
+      const rows = Array.from(credentials.values());
+      return type ? rows.filter((credential) => credential.secretType === type) : rows;
+    },
+    getCredential: async (name) => credentials.get(name) ?? null,
+    createCredential: async (req) => {
+      const created = {
+        id: `cred-${Date.now()}`,
+        name: req.name,
+        secretType: req.secretType,
+        keys: Object.keys(req.data),
+        scope: 'global',
+        used: 0,
+        metadata: req.metadata ?? {},
+        createdAt: new Date().toISOString(),
+        updatedAt: 'just now',
+      };
+      credentials.set(created.name, created);
+      return created;
+    },
+    deleteCredential: async (name) => {
+      credentials.delete(name);
+    },
     getCredentialTypes: async () => [],
 
-    listWorkspaces: async () => [],
+    listWorkspaces: async (status) =>
+      status ? SEED_WORKSPACES.filter((workspace) => workspace.status === status) : [...SEED_WORKSPACES],
     listAllWorkspaces: async () => [],
     restoreWorkspace: async () => {},
     deleteWorkspace: async () => {},
@@ -1193,9 +1634,65 @@ export function createMockTemplateStore(): ITemplateStore {
 
 export function createMockPtyStream(): IPtyStream {
   const subscribers = new Map<string, Array<(chunk: string) => void>>();
+  const buffers = new Map<string, string>();
 
   function notify(sessionId: string, chunk: string) {
     for (const cb of subscribers.get(sessionId) ?? []) cb(chunk);
+  }
+
+  function buildTranscript(sessionId: string): string {
+    const [baseSessionId, terminalId = 'main'] = sessionId.split('::');
+
+    if (baseSessionId === 'laptop-volundr-local' && terminalId === 'main') {
+      return [
+        'workspace $ git log --oneline -5',
+        'a019be2 perf: throttle pan to rAF',
+        'f2b9c1a perf: quadtree cull @ 60fps',
+        'c44001d chore: add perf test harness',
+        '7b2adb0 obs: viewport-box math',
+        '1e7bc22 obs: initial canvas skeleton',
+        'workspace $ git diff --stat HEAD~1',
+        ' observatory.jsx   | 248 ++++++++++++++++++++++++----',
+        ' canvas/quadtree.js |  96 +++++++++',
+        ' styles.css        |  10 +--',
+        ' 3 files changed, 340 insertions(+), 14 deletions(-)',
+        'workspace $ ',
+      ].join('\r\n');
+    }
+    if (baseSessionId === 'laptop-volundr-local' && terminalId === 'tests') {
+      return [
+        'tests $ pnpm test observatory.perf.test.ts',
+        ' PASS  observatory.perf.test.ts',
+        '  quadtree culls off-screen entities',
+        '  reduced motion pan stays under 8ms',
+        '',
+        ' Test Files  1 passed (1)',
+        'tests $ ',
+      ].join('\r\n');
+    }
+    if (baseSessionId === 'laptop-volundr-local' && terminalId === 'view-io') {
+      return [
+        'view $ jq . metrics/render.json',
+        '{',
+        '  "sast_findings": 0,',
+        '  "deps_changed": 0,',
+        '  "scope": "frontend-only"',
+        '}',
+        'view $ ',
+      ].join('\r\n');
+    }
+    if (baseSessionId === 'laptop-volundr-local') {
+      return [`${terminalId} $ `].join('\r\n');
+    }
+    return '$ ';
+  }
+
+  function ensureBuffer(sessionId: string): string {
+    const existing = buffers.get(sessionId);
+    if (existing !== undefined) return existing;
+    const seeded = buildTranscript(sessionId);
+    buffers.set(sessionId, seeded);
+    return seeded;
   }
 
   return {
@@ -1203,9 +1700,8 @@ export function createMockPtyStream(): IPtyStream {
       const existing = subscribers.get(sessionId) ?? [];
       existing.push(onData);
       subscribers.set(sessionId, existing);
-      // Emit a prompt after a short delay to simulate connection.
       setTimeout(() => {
-        notify(sessionId, `\x1b[1;32m[mock]\x1b[0m connected to ${sessionId}\r\n$ `);
+        notify(sessionId, ensureBuffer(sessionId));
       }, 50);
       return () => {
         const updated = (subscribers.get(sessionId) ?? []).filter((cb) => cb !== onData);
@@ -1213,12 +1709,16 @@ export function createMockPtyStream(): IPtyStream {
       };
     },
     send: (sessionId, data) => {
-      // Echo input back so the terminal shows what was typed.
       if (data === '\r') {
-        notify(sessionId, '\r\nmock-output\r\n$ ');
-      } else {
-        notify(sessionId, data);
+        const chunk = '\r\nmock-output\r\n$ ';
+        const next = `${ensureBuffer(sessionId)}${chunk}`;
+        buffers.set(sessionId, next);
+        notify(sessionId, chunk);
+        return;
       }
+      const next = `${ensureBuffer(sessionId)}${data}`;
+      buffers.set(sessionId, next);
+      notify(sessionId, data);
     },
   };
 }
@@ -1265,27 +1765,82 @@ const SEED_FILE_CONTENTS: Record<string, string> = {
 };
 
 export function createMockFileSystemPort(): IFileSystemPort {
+  let tree = structuredClone(SEED_FILE_TREE);
+  const contents = { ...SEED_FILE_CONTENTS };
+
+  function findNode(nodes: FileTreeNode[], target: string): FileTreeNode | null {
+    for (const node of nodes) {
+      if (node.path === target) return node;
+      if (node.children) {
+        const found = findNode(node.children, target);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function findParent(nodes: FileTreeNode[], target: string): FileTreeNode | null {
+    for (const node of nodes) {
+      if (node.children?.some((child) => child.path === target)) return node;
+      if (node.children) {
+        const found = findParent(node.children, target);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function removePath(target: string) {
+    const parent = findParent(tree, target);
+    if (parent?.children) {
+      parent.children = parent.children.filter((child) => child.path !== target);
+      return;
+    }
+    tree = tree.filter((node) => node.path !== target);
+  }
+
   return {
-    listTree: async (_sessionId) => SEED_FILE_TREE,
+    listTree: async (_sessionId) => tree,
 
     expandDirectory: async (_sessionId, path) => {
-      function findNode(nodes: FileTreeNode[], target: string): FileTreeNode | null {
-        for (const node of nodes) {
-          if (node.path === target) return node;
-          if (node.children) {
-            const found = findNode(node.children, target);
-            if (found) return found;
-          }
-        }
-        return null;
-      }
-      return findNode(SEED_FILE_TREE, path)?.children ?? [];
+      return findNode(tree, path)?.children ?? [];
     },
 
     readFile: async (_sessionId, path) => {
-      const content = SEED_FILE_CONTENTS[path];
+      const content = contents[path];
       if (!content) throw new Error(`File not found: ${path}`);
       return content;
+    },
+
+    writeFile: async (_sessionId, path, content) => {
+      contents[path] = content;
+      const existing = findNode(tree, path);
+      if (existing) {
+        existing.size = content.length;
+        return;
+      }
+      const parentPath = path.slice(0, path.lastIndexOf('/'));
+      const parent = findNode(tree, parentPath);
+      const newNode: FileTreeNode = {
+        name: path.split('/').at(-1) ?? path,
+        path,
+        kind: 'file',
+        size: content.length,
+      };
+      if (parent?.children) {
+        parent.children = [...parent.children, newNode].sort((a, b) =>
+          a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'directory' ? -1 : 1,
+        );
+      } else {
+        tree = [...tree, newNode];
+      }
+    },
+
+    deletePaths: async (_sessionId, paths) => {
+      for (const path of paths) {
+        delete contents[path];
+        removePath(path);
+      }
     },
   };
 }

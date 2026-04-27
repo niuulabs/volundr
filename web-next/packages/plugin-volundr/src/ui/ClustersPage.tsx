@@ -1,672 +1,749 @@
 import { useMemo, useState } from 'react';
-import { cn, ErrorState, LoadingState, Meter, relTime, StateDot } from '@niuulabs/ui';
-import type {
-  Cluster,
-  ClusterNode,
-  ClusterPod,
-  ClusterDisk,
-  ClusterStatus,
-  NodeStatus,
-  PodStatus,
-} from '../domain/cluster';
+import { EmptyState, ErrorState, LoadingState, Meter, StateDot, cn } from '@niuulabs/ui';
+import { ConnectionTypeBadge, MiniBar } from './atoms';
+import { useSessionList } from './hooks/useSessionStore';
 import { useClusters } from './useClusters';
-import { MiniBar } from './atoms';
+import type { Cluster, ClusterNode } from '../domain/cluster';
+import type { Session, SessionState } from '../domain/session';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const DISK_SEGMENT_COLORS = {
-  system: 'niuu-bg-brand',
-  pods: 'niuu-bg-state-warn',
-  logs: 'niuu-bg-state-ok',
-} as const;
-
-type SortField = 'name' | 'status' | 'age' | 'cpu' | 'memory' | 'restarts';
-type SortDir = 'asc' | 'desc';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function nodeStatusState(status: NodeStatus): 'healthy' | 'observing' | 'failed' {
-  if (status === 'ready') return 'healthy';
-  if (status === 'cordoned') return 'observing';
-  return 'failed';
-}
-
-function nodeStatusLabel(status: NodeStatus): string {
-  if (status === 'ready') return 'ready';
-  if (status === 'notready') return 'not ready';
-  return 'cordoned';
-}
-
-function podStatusState(
-  status: PodStatus,
-): 'running' | 'idle' | 'observing' | 'failed' | 'healthy' {
-  if (status === 'running') return 'running';
-  if (status === 'idle') return 'idle';
-  if (status === 'pending') return 'observing';
-  if (status === 'failed') return 'failed';
-  return 'healthy';
-}
-
-function clusterStatusState(status: ClusterStatus): 'healthy' | 'attention' | 'failed' {
-  if (status === 'healthy') return 'healthy';
-  if (status === 'warning') return 'attention';
-  return 'failed';
-}
-
-function pct(used: number, capacity: number): number {
-  if (capacity === 0) return 0;
-  return used / capacity;
-}
-
-function comparePods(a: ClusterPod, b: ClusterPod, field: SortField, dir: SortDir): number {
-  let cmp = 0;
-  if (field === 'name') cmp = a.name.localeCompare(b.name);
-  else if (field === 'status') cmp = a.status.localeCompare(b.status);
-  else if (field === 'age') cmp = new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime();
-  else if (field === 'cpu') {
-    const aPct = a.cpuLimit > 0 ? a.cpuUsed / a.cpuLimit : 0;
-    const bPct = b.cpuLimit > 0 ? b.cpuUsed / b.cpuLimit : 0;
-    cmp = aPct - bPct;
-  } else if (field === 'memory') {
-    const aPct = a.memLimitMi > 0 ? a.memUsedMi / a.memLimitMi : 0;
-    const bPct = b.memLimitMi > 0 ? b.memUsedMi / b.memLimitMi : 0;
-    cmp = aPct - bPct;
-  } else if (field === 'restarts') cmp = a.restarts - b.restarts;
-  return dir === 'asc' ? cmp : -cmp;
-}
-
-// ---------------------------------------------------------------------------
-// ClusterDetailHeader
-// ---------------------------------------------------------------------------
-
-interface ClusterDetailHeaderProps {
-  cluster: Cluster;
-}
-
-function ClusterDetailHeader({ cluster }: ClusterDetailHeaderProps) {
-  const readyCount = cluster.nodes.filter((n) => n.status === 'ready').length;
-  const totalNodes = cluster.nodes.length;
-
-  return (
-    <header className="niuu-flex niuu-flex-col niuu-gap-3" data-testid="cluster-detail-header">
-      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-flex-wrap niuu-gap-3">
-        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-flex-wrap">
-          <span
-            className={cn(
-              'niuu-rounded niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-font-medium niuu-uppercase',
-              cluster.kind === 'gpu'
-                ? 'niuu-bg-state-warn-bg niuu-text-state-warn'
-                : 'niuu-bg-brand-subtle niuu-text-brand',
-            )}
-            data-testid="kind-badge"
-          >
-            {cluster.kind}
-          </span>
-          <h3 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">{cluster.name}</h3>
-          <span
-            className="niuu-rounded niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-font-mono niuu-text-text-muted niuu-bg-bg-tertiary"
-            data-testid="realm-badge"
-          >
-            {cluster.realm}
-          </span>
-          <span className="niuu-flex niuu-items-center niuu-gap-1" data-testid="status-indicator">
-            <StateDot state={clusterStatusState(cluster.status)} />
-            <span className="niuu-text-xs niuu-text-text-muted">{cluster.status}</span>
-          </span>
-        </div>
-        <div className="niuu-flex niuu-items-center niuu-gap-2" data-testid="action-buttons">
-          <button
-            type="button"
-            className="niuu-rounded niuu-border niuu-border-state-warn niuu-px-3 niuu-py-1.5 niuu-text-xs niuu-font-medium niuu-text-state-warn hover:niuu-bg-state-warn-bg niuu-transition-colors"
-            data-testid="cordon-btn"
-          >
-            Cordon
-          </button>
-          <button
-            type="button"
-            className="niuu-rounded niuu-border niuu-border-critical niuu-px-3 niuu-py-1.5 niuu-text-xs niuu-font-medium niuu-text-critical hover:niuu-bg-critical/10 niuu-transition-colors"
-            data-testid="drain-btn"
-          >
-            Drain
-          </button>
-          <button
-            type="button"
-            className="niuu-py-1 niuu-px-3 niuu-bg-brand niuu-text-bg-primary niuu-border niuu-border-brand niuu-rounded-sm niuu-cursor-pointer niuu-font-mono niuu-text-xs"
-            data-testid="forge-here-btn"
-          >
-            Forge Here
-          </button>
-        </div>
-      </div>
-      <div className="niuu-flex niuu-flex-wrap niuu-gap-4 niuu-text-xs niuu-text-text-muted niuu-font-mono">
-        <span>{cluster.region}</span>
-        <span>
-          {readyCount}/{totalNodes} nodes ready
-        </span>
-        <span>
-          <strong className="niuu-text-text-primary">{cluster.runningSessions}</strong> running
-        </span>
-        {cluster.queuedProvisions > 0 && (
-          <span>
-            <strong className="niuu-text-state-warn">{cluster.queuedProvisions}</strong> queued
-          </span>
-        )}
-      </div>
-    </header>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// ResourcePanel — matches web2 ResourcePanel with Meter atom
-// ---------------------------------------------------------------------------
-
-interface ResourcePanelProps {
+type ClusterMetricCard = {
   label: string;
   used: number;
-  total: number;
-  unit?: string;
+  limit: number;
+  unitLabel: string;
+  footer: string;
+};
+
+type ClusterNodeView = {
+  id: string;
+  status: ClusterNode['status'];
+  cpuPct: number;
+  memPct: number;
+};
+
+type ClusterSessionView = {
+  id: string;
+  status: SessionState;
+  cpuLabel: string;
+  memoryLabel: string;
+  connectionType: Session['connectionType'] | null;
+};
+
+type ClusterPresentation = {
+  name?: string;
+  realm?: string;
+  region?: string;
+  readyNodes?: number;
+  totalNodes?: number;
+  listCount?: number;
+  metrics?: ClusterMetricCard[];
+  pods?: ClusterSessionView[];
+  nodes?: ClusterNodeView[];
+};
+
+type DisplayCluster = Cluster & {
+  displayName: string;
+  displayRealm: string;
+  displayRegion: string;
+  readyNodes: number;
+  totalNodes: number;
+  listCount: number;
+  metrics: ClusterMetricCard[];
+  nodeRows: ClusterNodeView[];
+};
+
+const REALM_ORDER = ['asgard', 'midgard', 'svartalfheim', 'jotunheim'];
+const CLUSTER_ORDER = ['cl-eitri', 'cl-valhalla', 'cl-noatun', 'cl-glitnir', 'cl-brokkr', 'cl-jarnvidr'];
+const ACTIVE_SESSION_STATES: SessionState[] = ['requested', 'provisioning', 'ready', 'running', 'idle'];
+
+const SESSION_STATE_ORDER: Record<SessionState, number> = {
+  running: 0,
+  idle: 1,
+  ready: 2,
+  provisioning: 3,
+  requested: 4,
+  failed: 5,
+  terminating: 6,
+  terminated: 7,
+};
+
+const PANEL_SURFACE_STYLE = {
+  backgroundColor: '#1b1b20',
+  borderColor: 'rgba(90, 94, 107, 0.72)',
+} as const;
+
+const NODE_SURFACE_STYLE = {
+  backgroundColor: '#111216',
+  borderColor: 'rgba(90, 94, 107, 0.68)',
+} as const;
+
+const PRIMARY_BADGE_STYLE = {
+  backgroundColor: 'rgba(58, 155, 228, 0.16)',
+  color: '#8fd8ff',
+} as const;
+
+const STATUS_PILL_STYLE = {
+  backgroundColor: '#141922',
+} as const;
+
+const FORGE_BUTTON_STYLE = {
+  backgroundColor: 'rgba(28, 124, 173, 0.18)',
+  borderColor: 'rgba(81, 178, 232, 0.65)',
+} as const;
+
+const CLUSTER_PRESENTATION: Record<string, ClusterPresentation> = {
+  'cl-eitri': {
+    name: 'Valaskjálf',
+    realm: 'asgard',
+    region: 'ca-hamilton-1',
+    readyNodes: 4,
+    totalNodes: 4,
+    listCount: 12,
+    metrics: [
+      { label: 'CPU', used: 68, limit: 128, unitLabel: 'cores', footer: '53% used' },
+      { label: 'MEMORY', used: 420, limit: 768, unitLabel: 'GiB', footer: '55% used' },
+      { label: 'GPU', used: 2, limit: 4, unitLabel: 'H100', footer: '50% used' },
+      { label: 'DISK', used: 3.2, limit: 8, unitLabel: 'TiB', footer: '40% used' },
+    ],
+    pods: [
+      {
+        id: 'observatory-canvas-perf',
+        status: 'running',
+        cpuLabel: '2.1c',
+        memoryLabel: '5.4Gi',
+        connectionType: 'cli',
+      },
+      {
+        id: 'ravn-triggers-ui',
+        status: 'running',
+        cpuLabel: '1.3c',
+        memoryLabel: '4.8Gi',
+        connectionType: 'cli',
+      },
+      {
+        id: 'bifrost-ollama-adapter',
+        status: 'idle',
+        cpuLabel: '0.2c',
+        memoryLabel: '1.1Gi',
+        connectionType: null,
+      },
+      {
+        id: 'tyr-raid-cohesion',
+        status: 'idle',
+        cpuLabel: '0.3c',
+        memoryLabel: '3.2Gi',
+        connectionType: 'cli',
+      },
+      {
+        id: 'aider-css-migration',
+        status: 'running',
+        cpuLabel: '1.1c',
+        memoryLabel: '3.4Gi',
+        connectionType: 'ide',
+      },
+      {
+        id: 'docs-release-notes',
+        status: 'idle',
+        cpuLabel: '0.1c',
+        memoryLabel: '0.9Gi',
+        connectionType: 'cli',
+      },
+      {
+        id: 'niuu-integration-tests',
+        status: 'requested',
+        cpuLabel: '—',
+        memoryLabel: '—',
+        connectionType: 'cli',
+      },
+    ],
+    nodes: [
+      { id: 'valaskjalf-01', status: 'ready', cpuPct: 0.56, memPct: 0.22 },
+      { id: 'valaskjalf-02', status: 'ready', cpuPct: 0.58, memPct: 0.54 },
+      { id: 'valaskjalf-03', status: 'ready', cpuPct: 0.18, memPct: 0.66 },
+      { id: 'valaskjalf-04', status: 'ready', cpuPct: 0.12, memPct: 0.72 },
+    ],
+  },
+  'cl-valhalla': {
+    listCount: 6,
+  },
+  'cl-noatun': {
+    listCount: 2,
+  },
+  'cl-glitnir': {
+    listCount: 0,
+  },
+  'cl-brokkr': {
+    name: 'Eitri',
+    realm: 'svartalfheim',
+    listCount: 1,
+  },
+  'cl-jarnvidr': {
+    listCount: 0,
+  },
+};
+
+function normalizeKey(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
-function ResourcePanel({ label, used, total, unit = '' }: ResourcePanelProps) {
-  const ratio = pct(used, total);
-  const pctNum = Math.round(ratio * 100);
-
-  return (
-    <div
-      className="niuu-flex niuu-flex-col niuu-gap-1 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
-      data-testid={`resource-panel-${label.toLowerCase()}`}
-    >
-      <div className="niuu-flex niuu-items-center niuu-justify-between">
-        <span className="niuu-text-xs niuu-font-medium niuu-uppercase niuu-tracking-wider niuu-text-text-muted">
-          {label}
-        </span>
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">{unit}</span>
-      </div>
-      <div className="niuu-font-mono niuu-text-lg niuu-font-semibold niuu-text-text-primary">
-        {total === 0 ? (
-          <span className="niuu-text-text-faint">&mdash;</span>
-        ) : (
-          <>
-            {used}
-            <span className="niuu-text-text-faint">/</span>
-            {total}
-          </>
-        )}
-      </div>
-      <Meter used={used} limit={total} />
-      <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-        {total === 0 ? 'not provisioned' : `${pctNum}% used`}
-      </span>
-    </div>
-  );
+function realmLabel(realm: string) {
+  return realm.toUpperCase();
 }
 
-// ---------------------------------------------------------------------------
-// DiskResourcePanel — segmented bar with system/pods/logs breakdown
-// ---------------------------------------------------------------------------
-
-interface DiskResourcePanelProps {
-  disk: ClusterDisk;
+function formatPercent(used: number, limit: number) {
+  if (!limit) return '—';
+  return `${Math.round((used / limit) * 100)}% used`;
 }
 
-function DiskResourcePanel({ disk }: DiskResourcePanelProps) {
-  const { totalGi, usedGi, systemGi, podsGi, logsGi } = disk;
-  const pctUsed = totalGi > 0 ? Math.round((usedGi / totalGi) * 100) : 0;
-
-  const segments = [
-    { label: 'system', value: systemGi, color: DISK_SEGMENT_COLORS.system },
-    { label: 'pods', value: podsGi, color: DISK_SEGMENT_COLORS.pods },
-    { label: 'logs', value: logsGi, color: DISK_SEGMENT_COLORS.logs },
-  ];
-
-  return (
-    <div
-      className="niuu-flex niuu-flex-col niuu-gap-1 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4"
-      data-testid="resource-panel-disk"
-    >
-      <div className="niuu-flex niuu-items-center niuu-justify-between">
-        <span className="niuu-text-xs niuu-font-medium niuu-uppercase niuu-tracking-wider niuu-text-text-muted">
-          Disk
-        </span>
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">GiB</span>
-      </div>
-      <div className="niuu-font-mono niuu-text-lg niuu-font-semibold niuu-text-text-primary">
-        {totalGi === 0 ? (
-          <span className="niuu-text-text-faint">&mdash;</span>
-        ) : (
-          <>
-            {usedGi}
-            <span className="niuu-text-text-faint">/</span>
-            {totalGi}
-          </>
-        )}
-      </div>
-
-      {/* Segmented bar */}
-      <div
-        className="niuu-flex niuu-h-1.5 niuu-overflow-hidden niuu-rounded-full niuu-bg-bg-elevated"
-        role="meter"
-        aria-valuenow={pctUsed}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={`Disk ${pctUsed}%`}
-        data-testid="disk-segmented-bar"
-      >
-        {totalGi > 0 &&
-          segments.map((seg) => (
-            <div
-              key={seg.label}
-              className={cn('niuu-h-full', seg.color)}
-              style={{ width: `${((seg.value / totalGi) * 100).toFixed(1)}%` }}
-              data-testid={`disk-segment-${seg.label}`}
-            />
-          ))}
-      </div>
-
-      <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-        {totalGi === 0 ? 'not provisioned' : `${pctUsed}% used`}
-      </span>
-
-      {/* Legend */}
-      {totalGi > 0 && (
-        <div className="niuu-flex niuu-flex-wrap niuu-gap-3 niuu-mt-1" data-testid="disk-legend">
-          {segments.map((seg) => (
-            <span
-              key={seg.label}
-              className="niuu-flex niuu-items-center niuu-gap-1 niuu-text-[10px] niuu-font-mono niuu-text-text-faint"
-            >
-              <span
-                className={cn('niuu-inline-block niuu-h-2 niuu-w-2 niuu-rounded-full', seg.color)}
-              />
-              {seg.label} {seg.value}Gi
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// SortableHeader — column header for the pods table
-// ---------------------------------------------------------------------------
-
-interface SortableHeaderProps {
-  label: string;
-  field: SortField;
-  activeField: SortField;
-  dir: SortDir;
-  onSort: (field: SortField) => void;
-  className?: string;
-}
-
-function SortableHeader({
-  label,
-  field,
-  activeField,
-  dir,
-  onSort,
-  className,
-}: SortableHeaderProps) {
-  const isActive = field === activeField;
-  return (
-    <button
-      className={cn(
-        'niuu-text-[10px] niuu-uppercase niuu-tracking-wider niuu-font-medium niuu-text-text-muted hover:niuu-text-text-primary niuu-transition-colors niuu-cursor-pointer niuu-select-none niuu-text-left',
-        isActive && 'niuu-text-text-primary',
-        className,
-      )}
-      onClick={() => onSort(field)}
-      data-testid={`sort-${field}`}
-    >
-      {label}
-      {isActive && <span className="niuu-ml-0.5">{dir === 'asc' ? '↑' : '↓'}</span>}
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// PodRow — single pod row in the pods table
-// ---------------------------------------------------------------------------
-
-interface PodRowProps {
-  pod: ClusterPod;
-}
-
-function PodRow({ pod }: PodRowProps) {
-  const cpuPct = pod.cpuLimit > 0 ? pod.cpuUsed / pod.cpuLimit : 0;
-  const memPct = pod.memLimitMi > 0 ? pod.memUsedMi / pod.memLimitMi : 0;
-
-  return (
-    <li
-      className="niuu-grid niuu-grid-cols-[1fr_auto_auto_80px_80px_auto] niuu-items-center niuu-gap-3 niuu-rounded niuu-px-2 niuu-py-1.5 hover:niuu-bg-bg-tertiary"
-      data-testid="pod-row"
-    >
-      <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-min-w-0">
-        <StateDot state={podStatusState(pod.status)} pulse={pod.status === 'running'} />
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-primary niuu-truncate">
-          {pod.name}
-        </span>
-      </div>
-      <span
-        className={cn(
-          'niuu-rounded-full niuu-px-1.5 niuu-py-0.5 niuu-text-[10px] niuu-font-medium',
-          pod.status === 'running' && 'niuu-bg-state-ok-bg niuu-text-state-ok',
-          pod.status === 'idle' && 'niuu-bg-bg-elevated niuu-text-text-muted',
-          pod.status === 'pending' && 'niuu-bg-state-warn-bg niuu-text-state-warn',
-          pod.status === 'failed' && 'niuu-bg-critical/10 niuu-text-critical',
-          pod.status === 'succeeded' && 'niuu-bg-state-ok-bg niuu-text-state-ok',
-        )}
-        data-testid="pod-status-badge"
-      >
-        {pod.status}
-      </span>
-      <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint" data-testid="pod-age">
-        {relTime(pod.startedAt)}
-      </span>
-      <div className="niuu-flex niuu-gap-1">
-        <MiniBar value={cpuPct} label="cpu" />
-      </div>
-      <div className="niuu-flex niuu-gap-1">
-        <MiniBar value={memPct} label="mem" />
-      </div>
-      <span
-        className="niuu-font-mono niuu-text-xs niuu-text-text-faint niuu-text-right"
-        data-testid="pod-restarts"
-      >
-        {pod.restarts > 0 ? pod.restarts : '—'}
-      </span>
-    </li>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// PodsPanel — pod list with sortable columns
-// ---------------------------------------------------------------------------
-
-interface PodsPanelProps {
-  cluster: Cluster;
-}
-
-function PodsPanel({ cluster }: PodsPanelProps) {
-  const [sortField, setSortField] = useState<SortField>('name');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
-
-  const sortedPods = useMemo(() => {
-    return [...cluster.pods].sort((a, b) => comparePods(a, b, sortField, sortDir));
-  }, [cluster.pods, sortField, sortDir]);
-
-  function handleSort(field: SortField) {
-    if (field === sortField) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-      return;
-    }
-    setSortField(field);
-    setSortDir('asc');
+function formatDiskUnit(usedGi: number, totalGi: number) {
+  if (totalGi >= 1024) {
+    const used = Number((usedGi / 1024).toFixed(1));
+    const total = Number((totalGi / 1024).toFixed(1));
+    return { used, limit: total, unitLabel: 'TiB', footer: formatPercent(usedGi, totalGi) };
   }
+  return { used: usedGi, limit: totalGi, unitLabel: 'GiB', footer: formatPercent(usedGi, totalGi) };
+}
 
+function slugify(value: string) {
+  return normalizeKey(value);
+}
+
+function clusterStatusLabel(status: Cluster['status']) {
+  if (status === 'healthy') return 'active';
+  if (status === 'warning') return 'booting';
+  return 'error';
+}
+
+function statusToDotState(
+  status: Cluster['status'] | ClusterNode['status'] | SessionState,
+) {
+  switch (status) {
+    case 'healthy':
+    case 'ready':
+      return 'healthy';
+    case 'running':
+      return 'running';
+    case 'warning':
+    case 'requested':
+    case 'provisioning':
+    case 'notready':
+      return 'attention';
+    case 'error':
+    case 'failed':
+      return 'failed';
+    case 'idle':
+    case 'cordoned':
+      return 'idle';
+    case 'terminated':
+      return 'archived';
+    case 'terminating':
+      return 'degraded';
+    default:
+      return 'unknown';
+  }
+}
+
+function metricCardsFor(cluster: Cluster): ClusterMetricCard[] {
+  const override = CLUSTER_PRESENTATION[cluster.id]?.metrics;
+  if (override) return override;
+
+  const disk = formatDiskUnit(cluster.disk.usedGi, cluster.disk.totalGi);
+  return [
+    {
+      label: 'CPU',
+      used: cluster.used.cpu,
+      limit: cluster.capacity.cpu,
+      unitLabel: 'cores',
+      footer: formatPercent(cluster.used.cpu, cluster.capacity.cpu),
+    },
+    {
+      label: 'MEMORY',
+      used: Math.round(cluster.used.memMi / 1024),
+      limit: Math.round(cluster.capacity.memMi / 1024),
+      unitLabel: 'GiB',
+      footer: formatPercent(cluster.used.memMi, cluster.capacity.memMi),
+    },
+    {
+      label: 'GPU',
+      used: cluster.used.gpu,
+      limit: cluster.capacity.gpu,
+      unitLabel: cluster.capacity.gpu > 0 ? 'GPU' : '—',
+      footer: cluster.capacity.gpu > 0 ? formatPercent(cluster.used.gpu, cluster.capacity.gpu) : 'not provisioned',
+    },
+    {
+      label: 'DISK',
+      used: disk.used,
+      limit: disk.limit,
+      unitLabel: disk.unitLabel,
+      footer: disk.footer,
+    },
+  ];
+}
+
+function nodeRowsFor(cluster: Cluster, displayName: string): ClusterNodeView[] {
+  const override = CLUSTER_PRESENTATION[cluster.id]?.nodes;
+  if (override) return override;
+
+  return cluster.nodes.map((node, index) => {
+    const base = ((index + 2) * 17 + cluster.id.length * 11) % 60;
+    return {
+      id: `${slugify(displayName)}-${String(index + 1).padStart(2, '0')}`,
+      status: node.status,
+      cpuPct: Math.min(0.86, 0.14 + base / 100),
+      memPct: Math.min(0.9, 0.22 + ((base + 19) % 55) / 100),
+    };
+  });
+}
+
+function displayCluster(cluster: Cluster, sessionCount: number): DisplayCluster {
+  const presentation = CLUSTER_PRESENTATION[cluster.id];
+  const displayName = presentation?.name ?? cluster.name;
+  const readyNodes =
+    presentation?.readyNodes ?? cluster.nodes.filter((node) => node.status === 'ready').length;
+  const totalNodes = presentation?.totalNodes ?? cluster.nodes.length;
+
+  return {
+    ...cluster,
+    displayName,
+    displayRealm: presentation?.realm ?? cluster.realm,
+    displayRegion: presentation?.region ?? cluster.region,
+    readyNodes,
+    totalNodes,
+    listCount: presentation?.listCount ?? sessionCount,
+    metrics: metricCardsFor(cluster),
+    nodeRows: nodeRowsFor(cluster, displayName),
+  };
+}
+
+function formatSessionResource(value: number | undefined, unit: string) {
+  if (value == null || value <= 0) return '—';
+  return `${value.toFixed(1)}${unit}`;
+}
+
+function compareSessions(a: Session, b: Session) {
+  const stateDelta = SESSION_STATE_ORDER[a.state] - SESSION_STATE_ORDER[b.state];
+  if (stateDelta !== 0) return stateDelta;
+
+  const aActivity = new Date(a.lastActivityAt ?? a.readyAt ?? a.startedAt).getTime();
+  const bActivity = new Date(b.lastActivityAt ?? b.readyAt ?? b.startedAt).getTime();
+  return bActivity - aActivity;
+}
+
+function sessionBelongsToCluster(session: Session, cluster: DisplayCluster) {
+  const clusterKeys = new Set([
+    normalizeKey(cluster.id),
+    normalizeKey(cluster.name),
+    normalizeKey(cluster.displayName),
+  ]);
+  return clusterKeys.has(normalizeKey(session.clusterId));
+}
+
+function sessionRowsFor(cluster: DisplayCluster, sessions: Session[]): ClusterSessionView[] {
+  const override = CLUSTER_PRESENTATION[cluster.id]?.pods;
+  if (override) return override;
+
+  return sessions
+    .filter((session) => ACTIVE_SESSION_STATES.includes(session.state))
+    .filter((session) => sessionBelongsToCluster(session, cluster))
+    .sort(compareSessions)
+    .map((session) => ({
+      id: session.id,
+      status: session.state,
+      cpuLabel: formatSessionResource(session.resources.cpuUsed, 'c'),
+      memoryLabel: formatSessionResource(session.resources.memUsedMi / 1024, 'Gi'),
+      connectionType: session.connectionType ?? null,
+    }));
+}
+
+function MetricCard({ card }: { card: ClusterMetricCard }) {
   return (
-    <section
-      className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-4"
-      aria-label={`Pods on ${cluster.name}`}
-      data-testid="pods-panel"
-    >
-      <div className="niuu-flex niuu-items-center niuu-justify-between">
-        <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Pods on this forge</h3>
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint" data-testid="pod-count">
-          {cluster.pods.length}
+    <section className="niuu-rounded-xl niuu-border niuu-p-4" style={PANEL_SURFACE_STYLE}>
+      <div className="niuu-flex niuu-items-baseline niuu-justify-between">
+        <span className="niuu-font-mono niuu-text-xs niuu-uppercase niuu-tracking-[0.22em] niuu-text-text-faint">
+          {card.label}
         </span>
+        <span className="niuu-font-mono niuu-text-[11px] niuu-text-text-faint">{card.unitLabel}</span>
       </div>
-      {cluster.pods.length === 0 ? (
-        <p className="niuu-font-mono niuu-text-xs niuu-text-text-muted" data-testid="no-pods">
-          no active pods
-        </p>
+      <div className="niuu-mt-2 niuu-font-sans niuu-text-[18px] niuu-font-semibold niuu-tracking-tight niuu-text-text-primary">
+        {card.used}/{card.limit}
+      </div>
+      <Meter className="niuu-mt-3" used={card.used} limit={card.limit} />
+      <div className="niuu-mt-2 niuu-font-mono niuu-text-[11px] niuu-text-text-faint">{card.footer}</div>
+    </section>
+  );
+}
+
+function PodsPanel({
+  pods,
+  isLoading,
+}: {
+  pods: ClusterSessionView[];
+  isLoading: boolean;
+}) {
+  return (
+    <section className="niuu-rounded-xl niuu-border" style={PANEL_SURFACE_STYLE}>
+      <header className="niuu-flex niuu-items-baseline niuu-gap-3 niuu-border-b niuu-border-border niuu-px-4 niuu-py-3">
+        <h3 className="niuu-text-base niuu-font-semibold niuu-text-text-primary">Pods on this forge</h3>
+        <span className="niuu-font-mono niuu-text-base niuu-text-text-faint">{pods.length}</span>
+      </header>
+      {isLoading ? (
+        <div className="niuu-p-4">
+          <LoadingState label="Loading sessions…" />
+        </div>
+      ) : pods.length === 0 ? (
+        <div className="niuu-p-4 niuu-font-mono niuu-text-xs niuu-text-text-faint">
+          no niuu sessions active on this forge
+        </div>
       ) : (
-        <>
-          {/* Sortable column headers */}
-          <div
-            className="niuu-grid niuu-grid-cols-[1fr_auto_auto_80px_80px_auto] niuu-items-center niuu-gap-3 niuu-px-2 niuu-border-b niuu-border-border-subtle niuu-pb-1"
-            data-testid="pods-table-header"
-          >
-            <SortableHeader
-              label="Name"
-              field="name"
-              activeField={sortField}
-              dir={sortDir}
-              onSort={handleSort}
-            />
-            <SortableHeader
-              label="Status"
-              field="status"
-              activeField={sortField}
-              dir={sortDir}
-              onSort={handleSort}
-            />
-            <SortableHeader
-              label="Age"
-              field="age"
-              activeField={sortField}
-              dir={sortDir}
-              onSort={handleSort}
-            />
-            <SortableHeader
-              label="CPU"
-              field="cpu"
-              activeField={sortField}
-              dir={sortDir}
-              onSort={handleSort}
-            />
-            <SortableHeader
-              label="Mem"
-              field="memory"
-              activeField={sortField}
-              dir={sortDir}
-              onSort={handleSort}
-            />
-            <SortableHeader
-              label="Restarts"
-              field="restarts"
-              activeField={sortField}
-              dir={sortDir}
-              onSort={handleSort}
-              className="niuu-text-right"
-            />
-          </div>
-          <ul
-            className="niuu-flex niuu-flex-col niuu-gap-0.5 niuu-list-none niuu-p-0"
-            aria-label="Pod list"
-          >
-            {sortedPods.map((pod) => (
-              <PodRow key={pod.name} pod={pod} />
-            ))}
-          </ul>
-        </>
+        <ul className="niuu-divide-y niuu-divide-border">
+          {pods.map((pod) => (
+            <li
+              key={pod.id}
+              className="niuu-grid niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-3"
+              style={{ gridTemplateColumns: 'auto minmax(0, 1fr) auto auto' }}
+            >
+              <StateDot state={statusToDotState(pod.status)} pulse={pod.status === 'running'} size={10} />
+              <span className="niuu-font-mono niuu-text-[14px] niuu-font-medium niuu-text-text-primary">
+                {pod.id}
+              </span>
+              <span className="niuu-font-mono niuu-text-[12px] niuu-text-text-faint">
+                {pod.cpuLabel} • {pod.memoryLabel}
+              </span>
+              <span className="niuu-inline-flex niuu-items-center niuu-justify-end">
+                {pod.connectionType ? (
+                  <ConnectionTypeBadge connectionType={pod.connectionType} />
+                ) : (
+                  <span className="niuu-font-mono niuu-text-[11px] niuu-text-text-faint">—</span>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );
 }
 
-// ---------------------------------------------------------------------------
-// NodeCard — a node tile with status dot + mini bars
-// ---------------------------------------------------------------------------
-
-function NodeCard({
-  node,
-  clusterId,
-  cpuPct,
-  memPct,
+function NodesPanel({
+  nodes,
+  readyNodes,
+  totalNodes,
 }: {
-  node: ClusterNode;
-  clusterId: string;
-  cpuPct?: number;
-  memPct?: number;
+  nodes: ClusterNodeView[];
+  readyNodes: number;
+  totalNodes: number;
 }) {
-  const hasMiniMetrics = node.status === 'ready' && cpuPct != null && memPct != null;
-
   return (
-    <div
-      className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-3"
-      data-testid="cluster-node"
-    >
-      <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-font-mono niuu-text-xs">
-        <StateDot state={nodeStatusState(node.status)} />
-        <span className="niuu-text-text-primary">
-          {clusterId}-{node.id}
+    <section className="niuu-rounded-xl niuu-border" style={PANEL_SURFACE_STYLE}>
+      <header className="niuu-flex niuu-items-baseline niuu-gap-3 niuu-border-b niuu-border-border niuu-px-4 niuu-py-3">
+        <h3 className="niuu-text-base niuu-font-semibold niuu-text-text-primary">Nodes</h3>
+        <span className="niuu-font-mono niuu-text-base niuu-text-text-faint">
+          {readyNodes}/{totalNodes}
         </span>
-        <span className="niuu-ml-auto niuu-text-text-faint">{node.role}</span>
+      </header>
+      <div className="niuu-grid niuu-grid-cols-2 niuu-gap-3 niuu-p-4">
+        {nodes.map((node) => (
+          <article
+            key={node.id}
+            className="niuu-rounded-lg niuu-border niuu-p-3"
+            style={NODE_SURFACE_STYLE}
+          >
+            <div className="niuu-flex niuu-items-center niuu-gap-3">
+              <StateDot state={statusToDotState(node.status)} size={9} />
+              <span className="niuu-font-mono niuu-text-[13px] niuu-font-medium niuu-text-text-primary">
+                {node.id}
+              </span>
+            </div>
+            <div className="niuu-mt-3 niuu-space-y-2">
+              <MiniBar label="cpu" value={node.cpuPct} />
+              <MiniBar label="mem" value={node.memPct} />
+            </div>
+          </article>
+        ))}
       </div>
-      {hasMiniMetrics ? (
-        <div className="niuu-flex niuu-gap-2" data-testid="node-meters">
-          <MiniBar value={cpuPct} label="cpu" />
-          <MiniBar value={memPct} label="mem" />
-        </div>
-      ) : node.status === 'ready' ? (
-        <div
-          className="niuu-flex niuu-gap-2 niuu-font-mono niuu-text-[10px] niuu-text-text-faint"
-          data-testid="node-meters"
-        >
-          <span>cpu —</span>
-          <span>mem —</span>
-        </div>
-      ) : null}
-      <span className="niuu-text-xs niuu-text-text-muted">{nodeStatusLabel(node.status)}</span>
-    </div>
+    </section>
   );
 }
 
-// ---------------------------------------------------------------------------
-// ClusterCard — full card matching web2 ClustersView
-// ---------------------------------------------------------------------------
+export function ClustersPage() {
+  const { data, isLoading, isError, error } = useClusters();
+  const sessionsQuery = useSessionList();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-interface ClusterCardProps {
-  cluster: Cluster;
-}
+  const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
+  const clusters = useMemo(() => {
+    const mappedClusters = (data ?? []).map((cluster) => {
+      const sessionCount = sessions.filter((session) => {
+        const presentation = CLUSTER_PRESENTATION[cluster.id];
+        const displayName = presentation?.name ?? cluster.name;
+        const keys = new Set([
+          normalizeKey(cluster.id),
+          normalizeKey(cluster.name),
+          normalizeKey(displayName),
+        ]);
+        return keys.has(normalizeKey(session.clusterId));
+      }).length;
+      return displayCluster(cluster, sessionCount);
+    });
 
-function ClusterCard({ cluster }: ClusterCardProps) {
-  const readyCount = cluster.nodes.filter((n) => n.status === 'ready').length;
-  const totalNodes = cluster.nodes.length;
+    return mappedClusters.sort((left, right) => {
+      const clusterDelta = CLUSTER_ORDER.indexOf(left.id) - CLUSTER_ORDER.indexOf(right.id);
+      if (clusterDelta !== 0) return clusterDelta;
+      const realmDelta = REALM_ORDER.indexOf(left.displayRealm) - REALM_ORDER.indexOf(right.displayRealm);
+      if (realmDelta !== 0) return realmDelta;
+      return left.displayName.localeCompare(right.displayName);
+    });
+  }, [data, sessions]);
+
+  const selectedCluster = useMemo(
+    () => clusters.find((cluster) => cluster.id === selectedId) ?? clusters[0] ?? null,
+    [clusters, selectedId],
+  );
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, DisplayCluster[]>();
+    for (const cluster of clusters) {
+      const key = cluster.displayRealm;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(cluster);
+    }
+    return REALM_ORDER.map((realm) => [realm, map.get(realm) ?? []] as const).filter(
+      ([, items]) => items.length > 0,
+    );
+  }, [clusters]);
+
+  const clusterSessions = useMemo(() => {
+    if (!selectedCluster) return [];
+    return sessionRowsFor(selectedCluster, sessions);
+  }, [selectedCluster, sessions]);
+
+  if (isLoading) {
+    return (
+      <div
+        className="niuu-flex niuu-min-h-0 niuu-flex-1 niuu-items-center niuu-justify-center"
+        data-testid="clusters-page"
+      >
+        <LoadingState label="Loading clusters…" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div
+        className="niuu-flex niuu-min-h-0 niuu-flex-1 niuu-items-center niuu-justify-center"
+        data-testid="clusters-page"
+      >
+        <ErrorState
+          title="Failed to load clusters"
+          message={error instanceof Error ? error.message : 'Unknown error'}
+        />
+      </div>
+    );
+  }
+
+  if (!selectedCluster) {
+    return (
+      <div
+        className="niuu-flex niuu-min-h-0 niuu-flex-1 niuu-items-center niuu-justify-center"
+        data-testid="clusters-page"
+      >
+        <EmptyState
+          title="No clusters registered"
+          description="Connect a realm to start placing sessions on a forge."
+        />
+      </div>
+    );
+  }
 
   return (
-    <article
-      className="niuu-flex niuu-flex-col niuu-gap-5 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-5"
-      data-testid="cluster-card"
-    >
-      {/* Detail header with kind/realm/status + actions */}
-      <ClusterDetailHeader cluster={cluster} />
-
-      {/* Resource meters */}
-      <section
-        className="niuu-grid niuu-grid-cols-2 niuu-gap-3 lg:niuu-grid-cols-4"
-        aria-label="Resource utilization"
-        data-testid="resource-meters"
-      >
-        <ResourcePanel
-          label="CPU"
-          used={cluster.used.cpu}
-          total={cluster.capacity.cpu}
-          unit="cores"
-        />
-        <ResourcePanel
-          label="Memory"
-          used={cluster.used.memMi}
-          total={cluster.capacity.memMi}
-          unit="Mi"
-        />
-        <ResourcePanel
-          label="GPU"
-          used={cluster.used.gpu}
-          total={cluster.capacity.gpu}
-          unit="gpu"
-        />
-        <DiskResourcePanel disk={cluster.disk} />
-      </section>
-
-      {/* Two-column grid: pods + nodes */}
-      <div className="niuu-grid niuu-gap-4 lg:niuu-grid-cols-2">
-        {/* Pods panel */}
-        <PodsPanel cluster={cluster} />
-
-        {/* Nodes grid */}
-        <section
-          className="niuu-flex niuu-flex-col niuu-gap-2 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-4"
-          aria-label={`Nodes for ${cluster.name}`}
-          data-testid="nodes-panel"
+    <div className="niuu-flex niuu-min-h-0 niuu-flex-1 niuu-bg-bg-primary" data-testid="clusters-page">
+      <div className="niuu-relative niuu-flex niuu-min-h-0 niuu-flex-1">
+        <aside
+          className={cn(
+            'niuu-flex niuu-min-h-0 niuu-shrink-0 niuu-flex-col niuu-overflow-hidden niuu-border-r niuu-border-border-subtle niuu-bg-[#0b0c10] niuu-transition-[width] niuu-duration-200',
+            sidebarCollapsed ? 'niuu-w-[54px]' : 'niuu-w-[350px]',
+          )}
+          aria-label="Clusters by realm"
+          data-testid="clusters-sidebar"
         >
-          <div className="niuu-flex niuu-items-center niuu-justify-between">
-            <h3 className="niuu-text-sm niuu-font-medium niuu-text-text-primary">Nodes</h3>
-            <span className="niuu-font-mono niuu-text-xs niuu-text-text-faint">
-              {readyCount}/{totalNodes}
-            </span>
-          </div>
-          <div
-            className="niuu-grid niuu-grid-cols-1 niuu-gap-2 sm:niuu-grid-cols-2"
-            data-testid="nodes-grid"
-          >
-            {cluster.nodes.map((node) => (
-              <NodeCard key={node.id} node={node} clusterId={cluster.id} />
+          {sidebarCollapsed ? (
+            <div className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-hidden">
+              <div className="niuu-flex niuu-items-center niuu-justify-center niuu-border-b niuu-border-border-subtle niuu-py-3">
+                <button
+                  type="button"
+                  onClick={() => setSidebarCollapsed(false)}
+                  className="niuu-font-mono niuu-text-sm niuu-text-text-muted"
+                  aria-label="Expand clusters sidebar"
+                >
+                  ›
+                </button>
+              </div>
+              <div className="niuu-flex-1 niuu-overflow-y-auto">
+                {grouped.map(([realm, items]) => (
+                  <div key={realm} className="niuu-mb-5 niuu-flex niuu-flex-col niuu-gap-2">
+                    {items.map((cluster) => (
+                      <button
+                        key={cluster.id}
+                        type="button"
+                        onClick={() => setSelectedId(cluster.id)}
+                        className={cn(
+                          'niuu-flex niuu-w-full niuu-items-center niuu-justify-center niuu-border-l-2 niuu-py-2',
+                          selectedCluster.id === cluster.id
+                            ? 'niuu-border-brand niuu-bg-[#12212b]'
+                            : 'niuu-border-transparent hover:niuu-bg-bg-tertiary',
+                        )}
+                        aria-label={cluster.displayName}
+                      >
+                        <StateDot state={statusToDotState(cluster.status)} size={9} />
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-hidden">
+              <div className="niuu-flex niuu-items-start niuu-justify-between niuu-border-b niuu-border-border-subtle niuu-px-5 niuu-py-4">
+                <div className="niuu-flex niuu-items-baseline niuu-gap-2">
+                  <div>
+                    <h1 className="niuu-text-[15px] niuu-font-semibold niuu-text-text-primary">Clusters</h1>
+                    <p className="niuu-mt-1 niuu-font-sans niuu-text-[11px] niuu-text-text-secondary">by realm</p>
+                  </div>
+                  <span className="niuu-font-mono niuu-text-[12px] niuu-text-text-faint">
+                    {clusters.length}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSidebarCollapsed(true)}
+                  className="niuu-font-mono niuu-text-lg niuu-text-text-muted"
+                  aria-label="Collapse clusters sidebar"
+                >
+                  ‹
+                </button>
+              </div>
+
+              <div className="niuu-flex-1 niuu-overflow-y-auto niuu-pb-6">
+                {grouped.map(([realm, items]) => (
+                  <section key={realm} className="niuu-mt-6">
+                    <header className="niuu-mb-2 niuu-flex niuu-items-center niuu-justify-between niuu-px-5">
+                      <h2 className="niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.24em] niuu-text-text-faint">
+                        {realmLabel(realm)}
+                      </h2>
+                      <span className="niuu-font-mono niuu-text-[12px] niuu-text-text-faint">
+                        {items.length}
+                      </span>
+                    </header>
+                    <ul className="niuu-space-y-0.5">
+                      {items.map((cluster) => (
+                        <li key={cluster.id}>
+                          <button
+                            className={cn(
+                              'niuu-grid niuu-w-full niuu-items-center niuu-gap-3 niuu-px-5 niuu-py-2.5 niuu-text-left niuu-transition-colors',
+                              selectedCluster.id === cluster.id
+                                ? 'niuu-bg-[#12212b] niuu-text-text-primary'
+                                : 'niuu-text-text-secondary hover:niuu-bg-bg-panel',
+                            )}
+                            onClick={() => setSelectedId(cluster.id)}
+                            type="button"
+                            style={{ gridTemplateColumns: 'auto minmax(0, 1fr) auto' }}
+                          >
+                            <StateDot state={statusToDotState(cluster.status)} size={8} />
+                            <span className="niuu-font-mono niuu-text-[13px] niuu-font-medium">
+                              {cluster.displayName}
+                            </span>
+                            <span className="niuu-font-mono niuu-text-[12px] niuu-text-text-faint">
+                              {cluster.listCount}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            </div>
+          )}
+        </aside>
+
+        <section className="niuu-flex niuu-min-h-0 niuu-flex-1 niuu-flex-col niuu-px-8 niuu-py-5">
+          <header className="niuu-flex niuu-items-start niuu-justify-between niuu-gap-6 niuu-border-b niuu-border-border-subtle niuu-pb-5">
+            <div className="niuu-flex niuu-flex-col niuu-gap-2">
+              <div className="niuu-flex niuu-items-center niuu-gap-4">
+                <span
+                  className="niuu-inline-flex niuu-rounded-md niuu-px-3 niuu-py-1 niuu-font-mono niuu-text-[11px] niuu-uppercase niuu-tracking-[0.18em]"
+                  style={PRIMARY_BADGE_STYLE}
+                >
+                  {selectedCluster.kind === 'primary' ? 'PRIMARY' : selectedCluster.kind}
+                </span>
+                <h2 className="niuu-text-[17px] niuu-font-semibold niuu-leading-none niuu-tracking-tight niuu-text-text-primary">
+                  {selectedCluster.displayName}
+                </h2>
+                <span className="niuu-font-mono niuu-text-[13px] niuu-text-text-faint">
+                  · {selectedCluster.displayRealm}
+                </span>
+                <span
+                  className="niuu-inline-flex niuu-items-center niuu-gap-2 niuu-rounded-full niuu-px-3 niuu-py-1 niuu-font-mono niuu-text-[11px] niuu-text-text-secondary"
+                  style={STATUS_PILL_STYLE}
+                >
+                  <StateDot state={statusToDotState(selectedCluster.status)} size={9} />
+                  {clusterStatusLabel(selectedCluster.status)}
+                </span>
+              </div>
+              <div className="niuu-font-mono niuu-text-[13px] niuu-text-text-faint">
+                {selectedCluster.displayRegion} · {selectedCluster.readyNodes}/{selectedCluster.totalNodes} nodes ready
+              </div>
+            </div>
+            <div className="niuu-flex niuu-items-center niuu-gap-8 niuu-pt-1">
+              <button
+                className="niuu-font-mono niuu-text-[13px] niuu-text-text-secondary hover:niuu-text-text-primary"
+                type="button"
+              >
+                cordon
+              </button>
+              <button
+                className="niuu-font-mono niuu-text-[13px] niuu-text-text-secondary hover:niuu-text-text-primary"
+                type="button"
+              >
+                drain
+              </button>
+              <button
+                className="niuu-inline-flex niuu-items-center niuu-gap-3 niuu-rounded-xl niuu-border niuu-px-5 niuu-py-2.5 niuu-font-mono niuu-text-[13px] niuu-text-text-primary"
+                style={FORGE_BUTTON_STYLE}
+                type="button"
+              >
+                <span className="niuu-text-lg">+</span>
+                forge here
+              </button>
+            </div>
+          </header>
+
+          <div className="niuu-mt-6 niuu-grid niuu-grid-cols-4 niuu-gap-4">
+            {selectedCluster.metrics.map((card) => (
+              <MetricCard key={card.label} card={card} />
             ))}
+          </div>
+
+          <div
+            className="niuu-mt-5 niuu-grid niuu-min-h-0 niuu-flex-1 niuu-gap-5"
+            style={{ gridTemplateColumns: 'minmax(0, 1.45fr) minmax(0, 1fr)' }}
+          >
+            <PodsPanel pods={clusterSessions} isLoading={sessionsQuery.isLoading} />
+            <NodesPanel
+              nodes={selectedCluster.nodeRows}
+              readyNodes={selectedCluster.readyNodes}
+              totalNodes={selectedCluster.totalNodes}
+            />
           </div>
         </section>
       </div>
-    </article>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// ClustersPage
-// ---------------------------------------------------------------------------
-
-export function ClustersPage() {
-  const clusters = useClusters();
-
-  return (
-    <div className="niuu-flex niuu-flex-col niuu-gap-6 niuu-p-6" data-testid="clusters-page">
-      {/* Header */}
-      <div>
-        <h2 className="niuu-text-lg niuu-font-semibold niuu-text-text-primary">Clusters</h2>
-        <p className="niuu-text-sm niuu-text-text-muted">
-          Infrastructure clusters available for session scheduling — capacity, utilisation, and node
-          health.
-        </p>
-      </div>
-
-      {/* Loading */}
-      {clusters.isLoading && <LoadingState label="Loading clusters…" />}
-
-      {/* Error */}
-      {clusters.isError && (
-        <ErrorState
-          title="Failed to load clusters"
-          message={
-            clusters.error instanceof Error ? clusters.error.message : 'Failed to load clusters'
-          }
-        />
-      )}
-
-      {/* Empty */}
-      {clusters.data && clusters.data.length === 0 && (
-        <p className="niuu-text-sm niuu-text-text-muted" data-testid="no-clusters">
-          No clusters registered.
-        </p>
-      )}
-
-      {/* Cluster cards */}
-      {clusters.data && clusters.data.length > 0 && (
-        <ul
-          className="niuu-flex niuu-flex-col niuu-gap-5 niuu-list-none niuu-p-0"
-          aria-label="Clusters"
-        >
-          {clusters.data.map((c) => (
-            <li key={c.id}>
-              <ClusterCard cluster={c} />
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

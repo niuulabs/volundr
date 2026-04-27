@@ -114,11 +114,11 @@ export function NodeInspector({
                 <span className="niuu-block niuu-text-xs niuu-text-text-muted niuu-mb-1">
                   Personas
                 </span>
-                {node.personaIds.length === 0 ? (
+                {(node.personaIds ?? []).length === 0 ? (
                   <div className="niuu-text-text-muted niuu-text-xs">None assigned</div>
                 ) : (
                   <div className="niuu-flex niuu-flex-wrap niuu-gap-1">
-                    {node.personaIds.map((pid) => (
+                    {(node.personaIds ?? []).map((pid) => (
                       <span
                         key={pid}
                         data-testid={`inspector-persona-${pid}`}

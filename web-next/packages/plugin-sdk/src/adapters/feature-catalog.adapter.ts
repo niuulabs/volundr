@@ -1,8 +1,5 @@
 /**
- * Feature catalog adapter — delegates to the Volundr API for now.
- *
- * When a shared /api/v1/features endpoint exists, update the base path in
- * the factory call site — no other code changes needed.
+ * Feature catalog adapter — targets the canonical shared feature routes.
  */
 
 import type {
@@ -55,13 +52,13 @@ function rowToPref(p: ApiUserFeaturePreference): UserFeaturePreference {
 
 /**
  * Build a feature-catalog service backed by a live HTTP client.
- * Pass `createApiClient('/api/v1/volundr')` from @niuulabs/query.
+ * Pass `createApiClient('/api/v1')` from @niuulabs/query.
  */
 export function buildFeatureCatalogAdapter(client: HttpClient): IFeatureCatalogService {
   return {
     async getFeatureModules(scope?: FeatureScope): Promise<FeatureModule[]> {
       const params = scope ? `?scope=${scope}` : '';
-      const response = await client.get<ApiFeatureModule[]>(`/features${params}`);
+      const response = await client.get<ApiFeatureModule[]>(`/features/modules${params}`);
       return response.map(rowToModule);
     },
 
@@ -83,7 +80,10 @@ export function buildFeatureCatalogAdapter(client: HttpClient): IFeatureCatalogS
     },
 
     async toggleFeature(key: string, enabled: boolean): Promise<FeatureModule> {
-      const response = await client.patch<ApiFeatureModule>(`/features/${key}`, { enabled });
+      const response = await client.patch<ApiFeatureModule>(
+        `/features/modules/${key}/toggle`,
+        { enabled },
+      );
       return rowToModule(response);
     },
   };

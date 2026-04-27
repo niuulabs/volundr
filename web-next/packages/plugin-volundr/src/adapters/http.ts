@@ -4,7 +4,14 @@
  * Accepts any HTTP client with `get` and `post` / `delete` methods —
  * structurally compatible with `createApiClient(baseUrl)` from @niuulabs/query.
  */
+import {
+  createApiClient,
+  openEventStream,
+  type EventStreamHandle,
+  type EventStreamOptions,
+} from '@niuulabs/query';
 import type { IVolundrService } from '../ports/IVolundrService';
+import type { IFileSystemPort, FileTreeNode } from '../ports/IFileSystemPort';
 import type {
   VolundrSession,
   VolundrStats,
@@ -27,7 +34,6 @@ import type {
   VolundrIdentity,
   VolundrUser,
   VolundrTenant,
-  VolundrCredential,
   IntegrationConnection,
   IntegrationTestResult,
   CatalogEntry,
@@ -35,6 +41,7 @@ import type {
   CredentialCreateRequest,
   SecretType,
   SecretTypeInfo,
+  SecretTypeField,
   VolundrWorkspace,
   WorkspaceStatus,
   VolundrMember,
@@ -50,6 +57,7 @@ import type {
 
 /** Minimal HTTP client — structurally compatible with ApiClient from @niuulabs/query. */
 export interface HttpClient {
+  basePath?: string;
   get<T>(endpoint: string): Promise<T>;
   post<T>(endpoint: string, body?: unknown): Promise<T>;
   delete<T>(endpoint: string): Promise<T>;
@@ -57,92 +65,1011 @@ export interface HttpClient {
   put<T>(endpoint: string, body?: unknown): Promise<T>;
 }
 
-export function buildVolundrHttpAdapter(client: HttpClient): IVolundrService {
+type EventStreamOpener = (url: string, options: EventStreamOptions) => EventStreamHandle;
+const LIVE_POLL_MS = 2_000;
+
+interface FileEntryPayload {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  size?: number;
+}
+
+interface FileListPayload {
+  entries: FileEntryPayload[];
+}
+
+type SessionPayload = {
+  id: string;
+  name: string;
+  source: VolundrSession['source'];
+  status: VolundrSession['status'];
+  model: string;
+  lastActive?: number;
+  last_active?: string;
+  messageCount?: number;
+  message_count?: number;
+  tokensUsed?: number;
+  tokens_used?: number;
+  podName?: string;
+  pod_name?: string | null;
+  error?: string | null;
+  origin?: VolundrSession['origin'];
+  hostname?: string;
+  chatEndpoint?: string | null;
+  chat_endpoint?: string | null;
+  codeEndpoint?: string | null;
+  code_endpoint?: string | null;
+  taskType?: string | null;
+  task_type?: string | null;
+  archivedAt?: Date | string | null;
+  archived_at?: string | null;
+  trackerIssue?: TrackerIssue;
+  activityState?: VolundrSession['activityState'];
+  activity_state?: VolundrSession['activityState'];
+  ownerId?: string | null;
+  owner_id?: string | null;
+  tenantId?: string | null;
+  tenant_id?: string | null;
+};
+
+type StatsPayload = {
+  activeSessions?: number;
+  active_sessions?: number;
+  totalSessions?: number;
+  total_sessions?: number;
+  tokensToday?: number;
+  tokens_today?: number;
+  localTokens?: number;
+  local_tokens?: number;
+  cloudTokens?: number;
+  cloud_tokens?: number;
+  costToday?: number;
+  cost_today?: number;
+  sparklines?: VolundrStats['sparklines'];
+};
+
+type ConversationPayload = {
+  turns: Array<{
+    id: string;
+    role: string;
+    content: string;
+    created_at?: string;
+    metadata?: {
+      tokens_in?: number;
+      tokens_out?: number;
+      latency?: number;
+    };
+  }>;
+};
+
+type LogPayload = {
+  lines: Array<{
+    timestamp?: number | string;
+    time?: string;
+    level?: string;
+    logger?: string;
+    message: string;
+  }>;
+};
+
+type ChroniclePayload = {
+  events: SessionChronicle['events'];
+  files: SessionChronicle['files'];
+  commits: SessionChronicle['commits'];
+  token_burn?: number[];
+  tokenBurn?: number[];
+};
+
+type ChronicleEventPayload = {
+  session_id: string;
+  event: SessionChronicle['events'][number];
+  files: SessionChronicle['files'];
+  commits: SessionChronicle['commits'];
+  token_burn?: number[];
+};
+
+type CanonicalCredentialPayload = {
+  id: string;
+  name: string;
+  secret_type?: SecretType;
+  secretType?: SecretType;
+  keys: string[];
+  metadata: Record<string, string>;
+  created_at?: string;
+  createdAt?: string;
+  updated_at?: string;
+  updatedAt?: string;
+};
+
+type CanonicalCredentialListPayload = {
+  credentials: CanonicalCredentialPayload[];
+};
+
+type CanonicalSecretTypeFieldPayload = {
+  key?: string;
+  name?: string;
+  label?: string;
+  type?: SecretTypeField['type'];
+  required?: boolean;
+};
+
+type CanonicalSecretTypePayload = {
+  type: SecretType;
+  label: string;
+  description: string;
+  fields: CanonicalSecretTypeFieldPayload[];
+  default_mount_type?: 'env_file' | 'file' | 'template';
+  defaultMountType?: 'env' | 'file' | 'template';
+};
+
+type SharedRepoPayload = {
+  provider: string;
+  org: string;
+  name: string;
+  url: string;
+  clone_url?: string;
+  default_branch?: string;
+  branches?: string[];
+};
+
+type SharedRepoResponse = Record<string, SharedRepoPayload[]>;
+
+type ApiModelInfo = {
+  id: string;
+  name: string;
+  provider: VolundrModel['provider'];
+  tier: VolundrModel['tier'];
+  color: string;
+  cost_per_million_tokens?: number | null;
+  vram_required?: string | null;
+};
+
+function toEpochMs(value?: number | string | null): number {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return 0;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function toDate(value?: Date | string | null): Date | undefined {
+  if (!value) return undefined;
+  if (value instanceof Date) return value;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? undefined : new Date(parsed);
+}
+
+function normalizeSession(session: SessionPayload): VolundrSession {
   return {
-    getFeatures: () => client.get<VolundrFeatures>('/features'),
-    getSessions: () => client.get<VolundrSession[]>('/sessions'),
-    getSession: (id) => client.get<VolundrSession | null>(`/sessions/${id}`),
-    getActiveSessions: () => client.get<VolundrSession[]>('/sessions?active=true'),
-    getStats: () => client.get<VolundrStats>('/stats'),
-    getModels: () => client.get<Record<string, VolundrModel>>('/models'),
-    getRepos: () => client.get<VolundrRepo[]>('/repos'),
+    id: session.id,
+    name: session.name,
+    source: session.source,
+    status: session.status,
+    model: session.model,
+    lastActive: toEpochMs(session.lastActive ?? session.last_active),
+    messageCount: session.messageCount ?? session.message_count ?? 0,
+    tokensUsed: session.tokensUsed ?? session.tokens_used ?? 0,
+    podName: session.podName ?? session.pod_name ?? undefined,
+    error: session.error ?? undefined,
+    origin: session.origin,
+    hostname: session.hostname,
+    chatEndpoint: session.chatEndpoint ?? session.chat_endpoint ?? undefined,
+    codeEndpoint: session.codeEndpoint ?? session.code_endpoint ?? undefined,
+    taskType: session.taskType ?? session.task_type ?? undefined,
+    archivedAt: toDate(session.archivedAt ?? session.archived_at),
+    trackerIssue: session.trackerIssue,
+    activityState: session.activityState ?? session.activity_state ?? undefined,
+    ownerId: session.ownerId ?? session.owner_id ?? undefined,
+    tenantId: session.tenantId ?? session.tenant_id ?? undefined,
+  };
+}
 
-    subscribe: (_callback) => () => {},
-    subscribeStats: (_callback) => () => {},
+function normalizeStats(stats: StatsPayload): VolundrStats {
+  return {
+    activeSessions: stats.activeSessions ?? stats.active_sessions ?? 0,
+    totalSessions: stats.totalSessions ?? stats.total_sessions ?? 0,
+    tokensToday: stats.tokensToday ?? stats.tokens_today ?? 0,
+    localTokens: stats.localTokens ?? stats.local_tokens ?? 0,
+    cloudTokens: stats.cloudTokens ?? stats.cloud_tokens ?? 0,
+    costToday: stats.costToday ?? stats.cost_today ?? 0,
+    sparklines: stats.sparklines,
+  };
+}
 
-    getTemplates: () => client.get<VolundrTemplate[]>('/templates'),
-    getTemplate: (name) => client.get<VolundrTemplate | null>(`/templates/${name}`),
-    saveTemplate: (template) => client.post<VolundrTemplate>('/templates', template),
+function normalizeMessageRole(role: string): VolundrMessage['role'] {
+  return role === 'user' ? 'user' : 'assistant';
+}
 
-    getPresets: () => client.get<VolundrPreset[]>('/presets'),
-    getPreset: (id) => client.get<VolundrPreset | null>(`/presets/${id}`),
+function deriveCanonicalCredentialsBasePath(basePath?: string): string | null {
+  if (!basePath) return null;
+
+  const normalized = basePath.replace(/\/$/, '');
+  if (normalized.endsWith('/api/v1/credentials')) return normalized;
+  if (normalized.endsWith('/api/v1')) return `${normalized}/credentials`;
+
+  const derived = normalized.replace(/\/api\/v1\/(?:forge|volundr)$/, '/api/v1/credentials');
+  return derived === normalized ? null : derived;
+}
+
+function deriveSharedApiBasePath(basePath?: string): string | null {
+  if (!basePath) return null;
+
+  const normalized = basePath.replace(/\/$/, '');
+  if (normalized.endsWith('/api/v1')) return normalized;
+
+  const derived = normalized.replace(/\/api\/v1\/(?:forge|volundr)$/, '/api/v1');
+  return derived === normalized ? null : derived;
+}
+
+function deriveCanonicalForgeBasePath(basePath?: string): string | null {
+  if (!basePath) return null;
+
+  const normalized = basePath.replace(/\/$/, '');
+  if (normalized.endsWith('/api/v1/forge')) return normalized;
+  if (normalized.endsWith('/api/v1')) return `${normalized}/forge`;
+
+  const derived = normalized.replace(/\/api\/v1\/volundr$/, '/api/v1/forge');
+  return derived === normalized ? null : derived;
+}
+
+function deriveNiuuBasePath(basePath?: string): string | null {
+  if (!basePath) return null;
+
+  const normalized = basePath.replace(/\/$/, '');
+  if (normalized.endsWith('/api/v1/niuu')) return normalized;
+
+  const sharedBasePath = deriveSharedApiBasePath(normalized);
+  return sharedBasePath ? `${sharedBasePath}/niuu` : null;
+}
+
+function normalizeStoredCredential(
+  credential: CanonicalCredentialPayload,
+  fallbackSecretType: SecretType = 'generic',
+): StoredCredential {
+  return {
+    id: credential.id,
+    name: credential.name,
+    secretType: credential.secretType ?? credential.secret_type ?? fallbackSecretType,
+    keys: credential.keys,
+    metadata: credential.metadata ?? {},
+    createdAt: credential.createdAt ?? credential.created_at ?? '',
+    updatedAt: credential.updatedAt ?? credential.updated_at ?? '',
+  };
+}
+
+function normalizeSecretTypeInfo(secretType: CanonicalSecretTypePayload): SecretTypeInfo {
+  return {
+    type: secretType.type,
+    label: secretType.label,
+    description: secretType.description,
+    fields: (secretType.fields ?? []).map((field) => ({
+      key: field.key ?? field.name ?? '',
+      label: field.label ?? field.key ?? field.name ?? '',
+      type: field.type ?? 'text',
+      required: Boolean(field.required),
+    })),
+    defaultMountType:
+      secretType.defaultMountType ??
+      (secretType.default_mount_type === 'file' || secretType.default_mount_type === 'template'
+        ? secretType.default_mount_type
+        : 'env'),
+  };
+}
+
+function normalizeMessages(
+  sessionId: string,
+  payload: ConversationPayload,
+): VolundrMessage[] {
+  return payload.turns.map((turn) => ({
+    id: turn.id,
+    sessionId,
+    role: normalizeMessageRole(turn.role),
+    content: turn.content,
+    timestamp: toEpochMs(turn.created_at),
+    tokensIn: turn.metadata?.tokens_in,
+    tokensOut: turn.metadata?.tokens_out,
+    latency: turn.metadata?.latency,
+  }));
+}
+
+function normalizeLogLevel(level?: string): VolundrLog['level'] {
+  const normalized = (level ?? 'INFO').toLowerCase();
+  if (normalized === 'warning') return 'warn';
+  if (normalized === 'debug' || normalized === 'info' || normalized === 'warn') return normalized;
+  return 'error';
+}
+
+function makeLogFingerprint(log: Pick<VolundrLog, 'timestamp' | 'level' | 'source' | 'message'>): string {
+  return `${log.timestamp}:${log.level}:${log.source}:${log.message}`;
+}
+
+function normalizeLogs(sessionId: string, payload: LogPayload): VolundrLog[] {
+  const seenCounts = new Map<string, number>();
+  return payload.lines.map((line) => {
+    const normalized: Omit<VolundrLog, 'id'> = {
+      sessionId,
+      timestamp: toEpochMs(line.timestamp ?? line.time),
+      level: normalizeLogLevel(line.level),
+      source: line.logger ?? 'broker',
+      message: line.message,
+    };
+    const fingerprint = makeLogFingerprint(normalized);
+    const occurrence = (seenCounts.get(fingerprint) ?? 0) + 1;
+    seenCounts.set(fingerprint, occurrence);
+    return {
+      id: `${sessionId}-log-${fingerprint}:${occurrence}`,
+      ...normalized,
+    };
+  });
+}
+
+function normalizeChronicle(payload: ChroniclePayload): SessionChronicle {
+  return {
+    events: payload.events,
+    files: payload.files,
+    commits: payload.commits,
+    tokenBurn: payload.tokenBurn ?? payload.token_burn ?? [],
+  };
+}
+
+function normalizeRepo(payload: SharedRepoPayload): VolundrRepo {
+  return {
+    provider: payload.provider as VolundrRepo['provider'],
+    org: payload.org,
+    name: payload.name,
+    cloneUrl: payload.clone_url ?? `${payload.url}.git`,
+    url: payload.url,
+    defaultBranch: payload.default_branch ?? 'main',
+    branches: payload.branches ?? [],
+  };
+}
+
+function normalizeRepoList(payload: SharedRepoResponse | SharedRepoPayload[] | VolundrRepo[]): VolundrRepo[] {
+  if (Array.isArray(payload)) {
+    return payload.map((repo) =>
+      'cloneUrl' in repo ? repo : normalizeRepo(repo as SharedRepoPayload),
+    );
+  }
+
+  return Object.values(payload)
+    .flat()
+    .map(normalizeRepo);
+}
+
+function normalizeModel(payload: ApiModelInfo): VolundrModel {
+  return {
+    name: payload.name,
+    provider: payload.provider,
+    tier: payload.tier,
+    color: payload.color,
+    cost:
+      payload.cost_per_million_tokens != null
+        ? `$${payload.cost_per_million_tokens}/M`
+        : undefined,
+    vram: payload.vram_required ?? undefined,
+  };
+}
+
+function normalizeModelList(
+  payload: ApiModelInfo[] | Record<string, VolundrModel>,
+): Record<string, VolundrModel> {
+  if (Array.isArray(payload)) {
+    return Object.fromEntries(payload.map((model) => [model.id, normalizeModel(model)]));
+  }
+  return payload;
+}
+
+type SubscriberSet<T> = Set<(item: T) => void>;
+
+interface PollingConnection<T> {
+  subscribers: SubscriberSet<T>;
+  knownKeys: string[];
+  knownKeySet: Set<string>;
+  timer: ReturnType<typeof setInterval> | null;
+  loading: boolean;
+  hydrated: boolean;
+}
+
+function rememberKnownKey<T>(
+  connection: PollingConnection<T>,
+  key: string,
+  maxEntries = 500,
+): void {
+  if (connection.knownKeySet.has(key)) return;
+  connection.knownKeySet.add(key);
+  connection.knownKeys.push(key);
+  if (connection.knownKeys.length <= maxEntries) return;
+  const oldest = connection.knownKeys.shift();
+  if (oldest) connection.knownKeySet.delete(oldest);
+}
+
+function makeLogKey(log: VolundrLog): string {
+  return log.id;
+}
+
+function applyChronicleEvent(
+  existing: SessionChronicle | undefined,
+  payload: ChronicleEventPayload,
+): SessionChronicle {
+  const nextEvent = payload.event;
+  const existingEvents = existing?.events ?? [];
+  const hasEvent = existingEvents.some(
+    (event) =>
+      event.t === nextEvent.t &&
+      event.type === nextEvent.type &&
+      event.label === nextEvent.label,
+  );
+
+  return {
+    events: hasEvent ? existingEvents : [...existingEvents, nextEvent],
+    files: payload.files,
+    commits: payload.commits,
+    tokenBurn: payload.token_burn ?? [],
+  };
+}
+
+function inferEventType(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+  if ('active_sessions' in payload || 'activeSessions' in payload) return 'stats_updated';
+  if ('id' in payload && ('status' in payload || 'name' in payload)) return 'session_updated';
+  if ('id' in payload) return 'session_deleted';
+  return null;
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.endsWith('/') ? value.slice(0, -1) : value;
+}
+
+function splitSessionPath(path: string): { root: 'workspace' | 'home'; relativePath: string } {
+  const normalized = path.replace(/\/+$/, '') || '/workspace';
+  if (normalized === '/workspace') return { root: 'workspace', relativePath: '' };
+  if (normalized === '/home') return { root: 'home', relativePath: '' };
+  if (normalized.startsWith('/workspace/')) {
+    return { root: 'workspace', relativePath: normalized.slice('/workspace/'.length) };
+  }
+  if (normalized.startsWith('/home/')) {
+    return { root: 'home', relativePath: normalized.slice('/home/'.length) };
+  }
+  return { root: 'workspace', relativePath: normalized.replace(/^\/+/, '') };
+}
+
+function toSessionPath(root: 'workspace' | 'home', relativePath: string): string {
+  const prefix = root === 'home' ? '/home' : '/workspace';
+  return relativePath ? `${prefix}/${relativePath}` : prefix;
+}
+
+function toTreeNode(
+  entry: FileEntryPayload,
+  root: 'workspace' | 'home',
+  children?: FileTreeNode[],
+): FileTreeNode {
+  return {
+    name: entry.name,
+    path: toSessionPath(root, entry.path),
+    kind: entry.type,
+    size: entry.type === 'file' ? entry.size : undefined,
+    children,
+  };
+}
+
+async function readJson<T>(response: Response): Promise<T> {
+  return (await response.json()) as T;
+}
+
+async function ensureOk(response: Response): Promise<Response> {
+  if (response.ok) return response;
+  const detail = await response.text();
+  throw new Error(detail || `Request failed with ${response.status}`);
+}
+
+export function buildVolundrFileSystemHttpAdapter(options: {
+  baseUrl: string;
+  fetchImpl?: typeof fetch;
+}): IFileSystemPort {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const baseUrl = trimTrailingSlash(options.baseUrl);
+
+  function sessionApi(sessionId: string): string {
+    return `${baseUrl}/s/${encodeURIComponent(sessionId)}/api`;
+  }
+
+  async function listDirectory(
+    sessionId: string,
+    root: 'workspace' | 'home',
+    relativePath = '',
+  ): Promise<FileTreeNode[]> {
+    const params = new URLSearchParams({ root });
+    if (relativePath) params.set('path', relativePath);
+    const response = await ensureOk(
+      await fetchImpl(`${sessionApi(sessionId)}/files?${params.toString()}`),
+    );
+    const payload = await readJson<FileListPayload>(response);
+    return payload.entries.map((entry) => toTreeNode(entry, root));
+  }
+
+  return {
+    async listTree(sessionId: string): Promise<FileTreeNode[]> {
+      const nodes = await listDirectory(sessionId, 'workspace');
+      const withChildren = await Promise.all(
+        nodes.map(async (node) => {
+          if (node.kind !== 'directory') return node;
+          const { root, relativePath } = splitSessionPath(node.path);
+          const children = await listDirectory(sessionId, root, relativePath);
+          return { ...node, children };
+        }),
+      );
+      return withChildren;
+    },
+
+    async expandDirectory(sessionId: string, path: string): Promise<FileTreeNode[]> {
+      const { root, relativePath } = splitSessionPath(path);
+      return listDirectory(sessionId, root, relativePath);
+    },
+
+    async readFile(sessionId: string, path: string): Promise<string> {
+      const { root, relativePath } = splitSessionPath(path);
+      const params = new URLSearchParams({ root, path: relativePath });
+      const response = await ensureOk(
+        await fetchImpl(`${sessionApi(sessionId)}/files/download?${params.toString()}`),
+      );
+      return response.text();
+    },
+
+    async writeFile(sessionId: string, path: string, content: string): Promise<void> {
+      const { root, relativePath } = splitSessionPath(path);
+      const segments = relativePath.split('/').filter(Boolean);
+      const fileName = segments.pop() ?? 'untitled';
+      const parentPath = segments.join('/');
+
+      if (parentPath) {
+        const mkdirResponse = await fetchImpl(`${sessionApi(sessionId)}/files/mkdir`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ path: parentPath, root }),
+        });
+        if (!mkdirResponse.ok && mkdirResponse.status !== 409) {
+          await ensureOk(mkdirResponse);
+        }
+      }
+
+      const form = new FormData();
+      form.append('files', new Blob([content], { type: 'text/plain' }), fileName);
+      const params = new URLSearchParams({ root });
+      if (parentPath) params.set('path', parentPath);
+      await ensureOk(
+        await fetchImpl(`${sessionApi(sessionId)}/files/upload?${params.toString()}`, {
+          method: 'POST',
+          body: form,
+        }),
+      );
+    },
+
+    async deletePaths(sessionId: string, paths: string[]): Promise<void> {
+      for (const path of paths) {
+        const { root, relativePath } = splitSessionPath(path);
+        const params = new URLSearchParams({ root, path: relativePath });
+        await ensureOk(await fetchImpl(`${sessionApi(sessionId)}/files?${params.toString()}`, {
+          method: 'DELETE',
+        }));
+      }
+    },
+  };
+}
+
+export function buildVolundrHttpAdapter(
+  client: HttpClient,
+  openStream: EventStreamOpener = openEventStream,
+): IVolundrService {
+  const forgeClient = (() => {
+    const forgeBasePath = deriveCanonicalForgeBasePath(client.basePath);
+    return forgeBasePath && forgeBasePath !== client.basePath
+      ? createApiClient(forgeBasePath)
+      : client;
+  })();
+  const credentialsClient = (() => {
+    const credentialsBasePath = deriveCanonicalCredentialsBasePath(client.basePath);
+    return credentialsBasePath ? createApiClient(credentialsBasePath) : client;
+  })();
+  const sharedClient = (() => {
+    const sharedBasePath = deriveSharedApiBasePath(client.basePath);
+    return sharedBasePath ? createApiClient(sharedBasePath) : client;
+  })();
+  const niuuClient = (() => {
+    const niuuBasePath = deriveNiuuBasePath(client.basePath);
+    return niuuBasePath ? createApiClient(niuuBasePath) : null;
+  })();
+  const trackerClient = sharedClient;
+
+  const sessionSubscribers = new Set<(sessions: VolundrSession[]) => void>();
+  const statsSubscribers = new Set<(stats: VolundrStats) => void>();
+  const chronicleSubscribers = new Map<string, Set<(chronicle: SessionChronicle) => void>>();
+  const messageSubscribers = new Map<string, PollingConnection<VolundrMessage>>();
+  const logSubscribers = new Map<string, PollingConnection<VolundrLog>>();
+  const sessionCache = new Map<string, VolundrSession>();
+  const chronicleCache = new Map<string, SessionChronicle>();
+  let statsCache: VolundrStats | null = null;
+  let streamHandle: EventStreamHandle | null = null;
+  let sessionsHydration: Promise<void> | null = null;
+  let statsHydration: Promise<void> | null = null;
+  const chronicleHydration = new Map<string, Promise<void>>();
+
+  function publishSessions(): void {
+    const snapshot = Array.from(sessionCache.values());
+    for (const subscriber of sessionSubscribers) subscriber(snapshot);
+  }
+
+  function publishStats(): void {
+    if (!statsCache) return;
+    for (const subscriber of statsSubscribers) subscriber(statsCache);
+  }
+
+  function publishChronicle(sessionId: string): void {
+    const chronicle = chronicleCache.get(sessionId);
+    if (!chronicle) return;
+    for (const subscriber of chronicleSubscribers.get(sessionId) ?? []) subscriber(chronicle);
+  }
+
+  function updateSessionCache(sessions: VolundrSession[]): void {
+    sessionCache.clear();
+    for (const session of sessions) sessionCache.set(session.id, session);
+  }
+
+  async function loadSessions(endpoint: string): Promise<VolundrSession[]> {
+    const sessions = (await forgeClient.get<SessionPayload[]>(endpoint)).map(normalizeSession);
+    updateSessionCache(sessions);
+    publishSessions();
+    return sessions;
+  }
+
+  async function loadSession(id: string): Promise<VolundrSession | null> {
+    const session = await forgeClient.get<SessionPayload | null>(`/sessions/${id}`);
+    if (!session) {
+      sessionCache.delete(id);
+      publishSessions();
+      return null;
+    }
+    const normalized = normalizeSession(session);
+    sessionCache.set(normalized.id, normalized);
+    publishSessions();
+    return normalized;
+  }
+
+  async function loadStats(): Promise<VolundrStats> {
+    statsCache = normalizeStats(await forgeClient.get<StatsPayload>('/stats'));
+    publishStats();
+    return statsCache;
+  }
+
+  async function loadChronicle(sessionId: string): Promise<SessionChronicle | null> {
+    const payload = await forgeClient.get<ChroniclePayload | null>(`/chronicles/${sessionId}/timeline`);
+    if (!payload) {
+      chronicleCache.delete(sessionId);
+      return null;
+    }
+    const chronicle = normalizeChronicle(payload);
+    chronicleCache.set(sessionId, chronicle);
+    publishChronicle(sessionId);
+    return chronicle;
+  }
+
+  async function loadMessages(sessionId: string): Promise<VolundrMessage[]> {
+    return forgeClient
+      .get<ConversationPayload>(`/sessions/${sessionId}/conversation`)
+      .then((payload) => normalizeMessages(sessionId, payload));
+  }
+
+  async function loadLogs(sessionId: string, limit?: number): Promise<VolundrLog[]> {
+    return forgeClient
+      .get<LogPayload>(`/sessions/${sessionId}/logs${limit ? `?lines=${limit}` : ''}`)
+      .then((payload) => normalizeLogs(sessionId, payload));
+  }
+
+  function ensurePollingConnection<T>(
+    registry: Map<string, PollingConnection<T>>,
+    sessionId: string,
+    fetchItems: () => Promise<T[]>,
+    keyOf: (item: T) => string,
+  ): PollingConnection<T> {
+    const existing = registry.get(sessionId);
+    if (existing) return existing;
+
+    const connection: PollingConnection<T> = {
+      subscribers: new Set(),
+      knownKeys: [],
+      knownKeySet: new Set(),
+      timer: null,
+      loading: false,
+      hydrated: false,
+    };
+
+    const poll = async (): Promise<void> => {
+      if (connection.loading) return;
+      connection.loading = true;
+      try {
+        const items = await fetchItems();
+        if (!connection.hydrated) {
+          for (const item of items) rememberKnownKey(connection, keyOf(item));
+          connection.hydrated = true;
+          return;
+        }
+        for (const item of items) {
+          const key = keyOf(item);
+          if (connection.knownKeySet.has(key)) continue;
+          rememberKnownKey(connection, key);
+          for (const subscriber of connection.subscribers) subscriber(item);
+        }
+      } catch {
+        // Best-effort live polling on top of stable snapshot endpoints.
+      } finally {
+        connection.loading = false;
+      }
+    };
+
+    void poll();
+    connection.timer = setInterval(() => {
+      void poll();
+    }, LIVE_POLL_MS);
+    registry.set(sessionId, connection);
+    return connection;
+  }
+
+  function maybeClosePollingConnection<T>(
+    registry: Map<string, PollingConnection<T>>,
+    sessionId: string,
+  ): void {
+    const connection = registry.get(sessionId);
+    if (!connection || connection.subscribers.size > 0) return;
+    if (connection.timer) clearInterval(connection.timer);
+    registry.delete(sessionId);
+  }
+
+  function ensureStream(): void {
+    if (streamHandle || !forgeClient.basePath) return;
+    streamHandle = openStream(`${forgeClient.basePath}/sessions/stream`, {
+      onMessage: () => {},
+      onEvent: ({ event, data }) => {
+        try {
+          const payload = JSON.parse(data) as SessionPayload | StatsPayload | { id?: string };
+          const eventType = event ?? inferEventType(payload);
+          if (eventType === 'session_created' || eventType === 'session_updated') {
+            const session = normalizeSession(payload as SessionPayload);
+            sessionCache.set(session.id, session);
+            publishSessions();
+            return;
+          }
+          if (eventType === 'session_deleted') {
+            const sessionId =
+              typeof payload === 'object' && payload && 'id' in payload ? payload.id : null;
+            if (typeof sessionId === 'string') {
+              sessionCache.delete(sessionId);
+              publishSessions();
+            }
+            return;
+          }
+          if (eventType === 'stats_updated') {
+            statsCache = normalizeStats(payload as StatsPayload);
+            publishStats();
+            return;
+          }
+          if (eventType === 'chronicle_event') {
+            const chronicleEvent = payload as ChronicleEventPayload;
+            const sessionId = chronicleEvent.session_id;
+            if (typeof sessionId !== 'string') return;
+            chronicleCache.set(
+              sessionId,
+              applyChronicleEvent(chronicleCache.get(sessionId), chronicleEvent),
+            );
+            publishChronicle(sessionId);
+          }
+        } catch {
+          // Drop malformed frames.
+        }
+      },
+    });
+  }
+
+  function maybeCloseStream(): void {
+    const hasChronicleSubscribers = Array.from(chronicleSubscribers.values()).some(
+      (subscribers) => subscribers.size > 0,
+    );
+    if (sessionSubscribers.size > 0 || statsSubscribers.size > 0 || hasChronicleSubscribers) return;
+    streamHandle?.close();
+    streamHandle = null;
+  }
+
+  function hydrateSessions(): void {
+    if (sessionCache.size > 0 || sessionsHydration) return;
+    sessionsHydration = loadSessions('/sessions')
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => {
+        sessionsHydration = null;
+      });
+  }
+
+  function hydrateStats(): void {
+    if (statsCache || statsHydration) return;
+    statsHydration = loadStats()
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => {
+        statsHydration = null;
+      });
+  }
+
+  function hydrateChronicle(sessionId: string): void {
+    if (chronicleCache.has(sessionId) || chronicleHydration.has(sessionId)) return;
+    chronicleHydration.set(
+      sessionId,
+      loadChronicle(sessionId)
+        .then(() => undefined)
+        .catch(() => undefined)
+        .finally(() => {
+          chronicleHydration.delete(sessionId);
+        }),
+    );
+  }
+
+  return {
+    getFeatures: () => sharedClient.get<VolundrFeatures>('/features'),
+    getSessions: () => loadSessions('/sessions'),
+    getSession: (id) => loadSession(id),
+    getActiveSessions: () => loadSessions('/sessions?active=true'),
+    getStats: () => loadStats(),
+    getModels: async () =>
+      normalizeModelList(await forgeClient.get<ApiModelInfo[] | Record<string, VolundrModel>>('/models')),
+    getRepos: async () =>
+      normalizeRepoList(
+        await (niuuClient ?? forgeClient).get<SharedRepoResponse | SharedRepoPayload[] | VolundrRepo[]>('/repos'),
+      ),
+
+    subscribe: (callback) => {
+      sessionSubscribers.add(callback);
+      ensureStream();
+      if (sessionCache.size > 0) {
+        callback(Array.from(sessionCache.values()));
+      } else {
+        hydrateSessions();
+      }
+      return () => {
+        sessionSubscribers.delete(callback);
+        maybeCloseStream();
+      };
+    },
+    subscribeStats: (callback) => {
+      statsSubscribers.add(callback);
+      ensureStream();
+      if (statsCache) {
+        callback(statsCache);
+      } else {
+        hydrateStats();
+      }
+      return () => {
+        statsSubscribers.delete(callback);
+        maybeCloseStream();
+      };
+    },
+
+    getTemplates: () => forgeClient.get<VolundrTemplate[]>('/templates'),
+    getTemplate: (name) => forgeClient.get<VolundrTemplate | null>(`/templates/${name}`),
+    saveTemplate: (template) => forgeClient.post<VolundrTemplate>('/templates', template),
+
+    getPresets: () => forgeClient.get<VolundrPreset[]>('/presets'),
+    getPreset: (id) => forgeClient.get<VolundrPreset | null>(`/presets/${id}`),
     savePreset: (preset) =>
       preset.id
-        ? client.put<VolundrPreset>(`/presets/${preset.id}`, preset)
-        : client.post<VolundrPreset>('/presets', preset),
-    deletePreset: (id) => client.delete<void>(`/presets/${id}`),
+        ? forgeClient.put<VolundrPreset>(`/presets/${preset.id}`, preset)
+        : forgeClient.post<VolundrPreset>('/presets', preset),
+    deletePreset: (id) => forgeClient.delete<void>(`/presets/${id}`),
 
-    getAvailableMcpServers: () => client.get<McpServerConfig[]>('/mcp-servers'),
+    getAvailableMcpServers: () => forgeClient.get<McpServerConfig[]>('/mcp-servers'),
     getAvailableSecrets: () => client.get<string[]>('/secrets'),
     createSecret: (name, data) =>
       client.post<{ name: string; keys: string[] }>('/secrets', { name, data }),
-    getClusterResources: () => client.get<ClusterResourceInfo>('/cluster/resources'),
+    getClusterResources: () => forgeClient.get<ClusterResourceInfo>('/cluster/resources'),
 
-    startSession: (config) => client.post<VolundrSession>('/sessions', config),
-    connectSession: (config) => client.post<VolundrSession>('/sessions/connect', config),
+    startSession: async (config) =>
+      normalizeSession(await forgeClient.post<SessionPayload>('/sessions', config)),
+    connectSession: async (config) =>
+      normalizeSession(await forgeClient.post<SessionPayload>('/sessions/connect', config)),
     updateSession: (sessionId, updates) =>
-      client.patch<VolundrSession>(`/sessions/${sessionId}`, updates),
-    stopSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/stop`),
-    resumeSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/resume`),
+      forgeClient.patch<SessionPayload>(`/sessions/${sessionId}`, updates).then(normalizeSession),
+    stopSession: (sessionId) => forgeClient.post<void>(`/sessions/${sessionId}/stop`),
+    resumeSession: (sessionId) => forgeClient.post<void>(`/sessions/${sessionId}/resume`),
     deleteSession: (sessionId, cleanup) =>
-      client.delete<void>(
+      forgeClient.delete<void>(
         `/sessions/${sessionId}${cleanup ? `?cleanup=${cleanup.join(',')}` : ''}`,
       ),
-    archiveSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/archive`),
-    restoreSession: (sessionId) => client.post<void>(`/sessions/${sessionId}/restore`),
-    listArchivedSessions: () => client.get<VolundrSession[]>('/sessions/archived'),
+    archiveSession: (sessionId) => forgeClient.post<void>(`/sessions/${sessionId}/archive`),
+    restoreSession: (sessionId) => forgeClient.post<void>(`/sessions/${sessionId}/restore`),
+    listArchivedSessions: () =>
+      forgeClient
+        .get<SessionPayload[]>('/sessions?status=archived')
+        .then((sessions) => sessions.map(normalizeSession)),
 
-    getMessages: (sessionId) => client.get<VolundrMessage[]>(`/sessions/${sessionId}/messages`),
+    getMessages: (sessionId) =>
+      loadMessages(sessionId),
     sendMessage: (sessionId, content) =>
-      client.post<VolundrMessage>(`/sessions/${sessionId}/messages`, { content }),
-    subscribeMessages: (_sessionId, _callback) => () => {},
+      forgeClient.post<VolundrMessage>(`/sessions/${sessionId}/messages`, { content }),
+    subscribeMessages: (sessionId, callback) => {
+      const connection = ensurePollingConnection(
+        messageSubscribers,
+        sessionId,
+        () => loadMessages(sessionId),
+        (message) => message.id,
+      );
+      connection.subscribers.add(callback);
+      return () => {
+        connection.subscribers.delete(callback);
+        maybeClosePollingConnection(messageSubscribers, sessionId);
+      };
+    },
 
     getLogs: (sessionId, limit) =>
-      client.get<VolundrLog[]>(`/sessions/${sessionId}/logs${limit ? `?limit=${limit}` : ''}`),
-    subscribeLogs: (_sessionId, _callback) => () => {},
+      loadLogs(sessionId, limit),
+    subscribeLogs: (sessionId, callback) => {
+      const connection = ensurePollingConnection(
+        logSubscribers,
+        sessionId,
+        () => loadLogs(sessionId),
+        makeLogKey,
+      );
+      connection.subscribers.add(callback);
+      return () => {
+        connection.subscribers.delete(callback);
+        maybeClosePollingConnection(logSubscribers, sessionId);
+      };
+    },
 
     getCodeServerUrl: (sessionId) =>
-      client.get<string | null>(`/sessions/${sessionId}/code-server-url`),
+      forgeClient.get<string | null>(`/sessions/${sessionId}/code-server-url`),
 
-    getChronicle: (sessionId) =>
-      client.get<SessionChronicle | null>(`/sessions/${sessionId}/chronicle`),
-    subscribeChronicle: (_sessionId, _callback) => () => {},
+    getChronicle: (sessionId) => loadChronicle(sessionId),
+    subscribeChronicle: (sessionId, callback) => {
+      const subscribers = chronicleSubscribers.get(sessionId) ?? new Set();
+      subscribers.add(callback);
+      chronicleSubscribers.set(sessionId, subscribers);
+      ensureStream();
+      const chronicle = chronicleCache.get(sessionId);
+      if (chronicle) {
+        callback(chronicle);
+      } else {
+        hydrateChronicle(sessionId);
+      }
+      return () => {
+        const active = chronicleSubscribers.get(sessionId);
+        if (!active) return;
+        active.delete(callback);
+        if (active.size === 0) chronicleSubscribers.delete(sessionId);
+        maybeCloseStream();
+      };
+    },
 
     getPullRequests: (repoUrl, status) =>
-      client.get<PullRequest[]>(
+      forgeClient.get<PullRequest[]>(
         `/repos/prs?url=${encodeURIComponent(repoUrl)}${status ? `&status=${status}` : ''}`,
       ),
     createPullRequest: (sessionId, title, targetBranch) =>
-      client.post<PullRequest>(`/sessions/${sessionId}/pr`, { title, targetBranch }),
+      forgeClient.post<PullRequest>(`/sessions/${sessionId}/pr`, { title, targetBranch }),
     mergePullRequest: (prNumber, repoUrl, mergeMethod) =>
-      client.post<MergeResult>(`/repos/prs/${prNumber}/merge`, { repoUrl, mergeMethod }),
+      forgeClient.post<MergeResult>(`/repos/prs/${prNumber}/merge`, { repoUrl, mergeMethod }),
     getCIStatus: (prNumber, repoUrl, branch) =>
-      client.get<CIStatusValue>(
+      forgeClient.get<CIStatusValue>(
         `/repos/prs/${prNumber}/ci?url=${encodeURIComponent(repoUrl)}&branch=${encodeURIComponent(branch)}`,
       ),
 
     getSessionMcpServers: (sessionId) =>
-      client.get<McpServer[]>(`/sessions/${sessionId}/mcp-servers`),
+      forgeClient.get<McpServer[]>(`/sessions/${sessionId}/mcp-servers`),
 
     searchTrackerIssues: (query, projectId) =>
-      client.get<TrackerIssue[]>(
+      trackerClient.get<TrackerIssue[]>(
         `/tracker/issues?q=${encodeURIComponent(query)}${projectId ? `&projectId=${projectId}` : ''}`,
       ),
-    getProjectRepoMappings: () => client.get<ProjectRepoMapping[]>('/tracker/repo-mappings'),
+    getProjectRepoMappings: () => trackerClient.get<ProjectRepoMapping[]>('/tracker/repo-mappings'),
     updateTrackerIssueStatus: (issueId, status) =>
-      client.patch<TrackerIssue>(`/tracker/issues/${issueId}`, { status }),
+      trackerClient.patch<TrackerIssue>(`/tracker/issues/${issueId}`, { status }),
 
-    getIdentity: () => client.get<VolundrIdentity>('/identity'),
+    getIdentity: () => sharedClient.get<VolundrIdentity>('/identity'),
     listUsers: () => client.get<VolundrUser[]>('/admin/users'),
 
     getTenants: () => client.get<VolundrTenant[]>('/tenants'),
@@ -156,36 +1083,67 @@ export function buildVolundrHttpAdapter(client: HttpClient): IVolundrService {
     reprovisionTenant: (tenantId) =>
       client.post<VolundrProvisioningResult[]>(`/tenants/${tenantId}/reprovision`),
 
-    getUserCredentials: () => client.get<VolundrCredential[]>('/credentials/user'),
-    storeUserCredential: (name, data) => client.post<void>('/credentials/user', { name, data }),
-    deleteUserCredential: (name) => client.delete<void>(`/credentials/user/${name}`),
-    getTenantCredentials: () => client.get<VolundrCredential[]>('/credentials/tenant'),
-    storeTenantCredential: (name, data) => client.post<void>('/credentials/tenant', { name, data }),
-    deleteTenantCredential: (name) => client.delete<void>(`/credentials/tenant/${name}`),
+    getUserCredentials: async () => {
+      const payload = await credentialsClient.get<CanonicalCredentialListPayload>('/user');
+      return payload.credentials.map((credential) => ({
+        name: credential.name,
+        keys: credential.keys,
+      }));
+    },
+    storeUserCredential: (name, data) => credentialsClient.post<void>('/user', { name, data }),
+    deleteUserCredential: (name) => credentialsClient.delete<void>(`/user/${name}`),
+    getTenantCredentials: async () => {
+      const payload = await credentialsClient.get<CanonicalCredentialListPayload>('/tenant');
+      return payload.credentials.map((credential) => ({
+        name: credential.name,
+        keys: credential.keys,
+      }));
+    },
+    storeTenantCredential: (name, data) => credentialsClient.post<void>('/tenant', { name, data }),
+    deleteTenantCredential: (name) => credentialsClient.delete<void>(`/tenant/${name}`),
 
-    getIntegrationCatalog: () => client.get<CatalogEntry[]>('/integrations/catalog'),
-    getIntegrations: () => client.get<IntegrationConnection[]>('/integrations'),
+    getIntegrationCatalog: () => sharedClient.get<CatalogEntry[]>('/integrations/catalog'),
+    getIntegrations: () => sharedClient.get<IntegrationConnection[]>('/integrations'),
     createIntegration: (connection) =>
-      client.post<IntegrationConnection>('/integrations', connection),
-    deleteIntegration: (id) => client.delete<void>(`/integrations/${id}`),
-    testIntegration: (id) => client.post<IntegrationTestResult>(`/integrations/${id}/test`),
+      sharedClient.post<IntegrationConnection>('/integrations', connection),
+    deleteIntegration: (id) => sharedClient.delete<void>(`/integrations/${id}`),
+    testIntegration: (id) => sharedClient.post<IntegrationTestResult>(`/integrations/${id}/test`),
 
-    getCredentials: (type?: SecretType) =>
-      client.get<StoredCredential[]>(`/secrets/store${type ? `?type=${type}` : ''}`),
-    getCredential: (name) => client.get<StoredCredential | null>(`/secrets/store/${name}`),
-    createCredential: (req: CredentialCreateRequest) =>
-      client.post<StoredCredential>('/secrets/store', req),
-    deleteCredential: (name) => client.delete<void>(`/secrets/store/${name}`),
-    getCredentialTypes: () => client.get<SecretTypeInfo[]>('/secrets/types'),
+    getCredentials: async (type?: SecretType) => {
+      const payload = await credentialsClient.get<CanonicalCredentialListPayload>(
+        `/user${type ? `?secret_type=${type}` : ''}`,
+      );
+      return payload.credentials.map((credential) =>
+        normalizeStoredCredential(credential, type ?? 'generic'),
+      );
+    },
+    getCredential: async (name) => {
+      const payload = await credentialsClient.get<CanonicalCredentialPayload | null>(`/user/${name}`);
+      return payload ? normalizeStoredCredential(payload) : null;
+    },
+    createCredential: async (req: CredentialCreateRequest) => {
+      const payload = await credentialsClient.post<CanonicalCredentialPayload>('/user', {
+        name: req.name,
+        secret_type: req.secretType,
+        data: req.data,
+        metadata: req.metadata,
+      });
+      return normalizeStoredCredential(payload, req.secretType);
+    },
+    deleteCredential: (name) => credentialsClient.delete<void>(`/user/${name}`),
+    getCredentialTypes: async () => {
+      const payload = await credentialsClient.get<CanonicalSecretTypePayload[]>('/types');
+      return payload.map(normalizeSecretTypeInfo);
+    },
 
     listWorkspaces: (status?: WorkspaceStatus) =>
-      client.get<VolundrWorkspace[]>(`/workspaces${status ? `?status=${status}` : ''}`),
+      forgeClient.get<VolundrWorkspace[]>(`/workspaces${status ? `?status=${status}` : ''}`),
     listAllWorkspaces: (status?: WorkspaceStatus) =>
-      client.get<VolundrWorkspace[]>(`/admin/workspaces${status ? `?status=${status}` : ''}`),
-    restoreWorkspace: (id) => client.post<void>(`/workspaces/${id}/restore`),
-    deleteWorkspace: (id) => client.delete<void>(`/workspaces/${id}`),
+      forgeClient.get<VolundrWorkspace[]>(`/admin/workspaces${status ? `?status=${status}` : ''}`),
+    restoreWorkspace: (id) => forgeClient.post<void>(`/workspaces/${id}/restore`),
+    deleteWorkspace: (id) => forgeClient.delete<void>(`/workspaces/${id}`),
     bulkDeleteWorkspaces: (sessionIds) =>
-      client.post<{ deleted: number; failed: Array<{ session_id: string; error: string }> }>(
+      forgeClient.post<{ deleted: number; failed: Array<{ session_id: string; error: string }> }>(
         '/workspaces/bulk-delete',
         { sessionIds },
       ),
@@ -195,15 +1153,15 @@ export function buildVolundrHttpAdapter(client: HttpClient): IVolundrService {
       client.patch<AdminSettings>('/admin/settings', data),
 
     getFeatureModules: (scope?: FeatureScope) =>
-      client.get<FeatureModule[]>(`/features/modules${scope ? `?scope=${scope}` : ''}`),
+      sharedClient.get<FeatureModule[]>(`/features/modules${scope ? `?scope=${scope}` : ''}`),
     toggleFeature: (key, enabled) =>
-      client.post<FeatureModule>(`/features/modules/${key}/toggle`, { enabled }),
-    getUserFeaturePreferences: () => client.get<UserFeaturePreference[]>('/features/preferences'),
+      sharedClient.post<FeatureModule>(`/features/modules/${key}/toggle`, { enabled }),
+    getUserFeaturePreferences: () => sharedClient.get<UserFeaturePreference[]>('/features/preferences'),
     updateUserFeaturePreferences: (preferences) =>
-      client.put<UserFeaturePreference[]>('/features/preferences', preferences),
+      sharedClient.put<UserFeaturePreference[]>('/features/preferences', preferences),
 
-    listTokens: () => client.get<PersonalAccessToken[]>('/tokens'),
-    createToken: (name) => client.post<CreatePATResult>('/tokens', { name }),
-    revokeToken: (id) => client.delete<void>(`/tokens/${id}`),
+    listTokens: () => sharedClient.get<PersonalAccessToken[]>('/tokens'),
+    createToken: (name) => sharedClient.post<CreatePATResult>('/tokens', { name }),
+    revokeToken: (id) => sharedClient.delete<void>(`/tokens/${id}`),
   };
 }

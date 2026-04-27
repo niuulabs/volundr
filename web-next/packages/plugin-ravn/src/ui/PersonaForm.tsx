@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   cn,
   EventPicker,
@@ -121,18 +121,6 @@ const FAN_IN_DIAGRAMS: Record<FanInStrategy, React.ReactElement> = {
   weighted_score: <WeightedScoreDiagram />,
 };
 
-// ── System prompt preview ──────────────────────────────────────────────────
-
-function renderPromptPreview(template: string): React.ReactNode[] {
-  const parts = template.split(/({{[^}]+}})/g);
-  return parts.map((part, i) => {
-    if (/^{{[^}]+}}$/.test(part)) {
-      return <mark key={i}>{part}</mark>;
-    }
-    return part;
-  });
-}
-
 // ── Form state ─────────────────────────────────────────────────────────────
 
 function detailToRequest(d: PersonaDetail): PersonaCreateRequest {
@@ -219,7 +207,6 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
   const [dirty, setDirty] = useState(false);
   const [showAllowPicker, setShowAllowPicker] = useState(false);
   const [showDenyPicker, setShowDenyPicker] = useState(false);
-  const [showPromptPreview, setShowPromptPreview] = useState(false);
 
   // Sync form when persona prop changes (navigating to another persona).
   // Intentionally depend only on persona.name — not the full persona object —
@@ -274,14 +261,8 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
     [form.consumesEvents, update],
   );
 
-  const promptCharCount = useMemo(
-    () => (form.systemPromptTemplate ?? '').length,
-    [form.systemPromptTemplate],
-  );
-  const promptTokenEstimate = useMemo(() => Math.ceil(promptCharCount / 4), [promptCharCount]);
-
   return (
-    <div className="niuu-flex niuu-flex-col niuu-h-full" data-testid="persona-form">
+    <div className="rv-persona-form" data-testid="persona-form">
       {/* Save bar */}
       {dirty && (
         <div className="niuu-flex niuu-items-center niuu-justify-between niuu-px-4 niuu-py-2 niuu-bg-bg-secondary niuu-border-b niuu-border-border">
@@ -307,7 +288,7 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
         </div>
       )}
 
-      <div className="niuu-flex-1 niuu-overflow-y-auto niuu-p-4 niuu-flex niuu-flex-col niuu-gap-4">
+      <div className="rv-persona-form__content">
         {validationErrors.length > 0 && (
           <ValidationSummary
             errors={validationErrors.map((e) => ({
@@ -410,46 +391,6 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
             </label>
           </div>
         </Section>
-
-        {/* System prompt */}
-        <Section title="System prompt" subtitle="Jinja2 template rendered at session start.">
-          <FieldRow label="Template" htmlFor="pf-system-prompt">
-            <textarea
-              id="pf-system-prompt"
-              data-testid="pf-system-prompt"
-              className="niuu-form-control niuu-font-mono niuu-text-xs"
-              rows={8}
-              value={form.systemPromptTemplate ?? ''}
-              placeholder="Enter Jinja2 template… Use {{variable}} for dynamic values."
-              onChange={(e) => update('systemPromptTemplate', e.target.value)}
-            />
-            <div className="niuu-flex niuu-items-center niuu-justify-between niuu-mt-1">
-              <button
-                type="button"
-                onClick={() => setShowPromptPreview((v) => !v)}
-                className="niuu-text-xs niuu-text-text-muted niuu-bg-transparent niuu-border-0 niuu-cursor-pointer hover:niuu-text-text-secondary niuu-p-0"
-              >
-                {showPromptPreview ? 'Hide preview' : 'Show preview'}
-              </button>
-              <span
-                className="niuu-text-xs niuu-text-text-muted niuu-font-mono"
-                data-testid="pf-prompt-char-count"
-              >
-                {promptCharCount} chars · ~{promptTokenEstimate} tokens
-              </span>
-            </div>
-          </FieldRow>
-          {showPromptPreview && form.systemPromptTemplate && (
-            <div
-              data-testid="pf-prompt-preview"
-              className="rv-prompt-preview niuu-p-3 niuu-bg-bg-secondary niuu-rounded-md niuu-border niuu-border-border-subtle"
-            >
-              {renderPromptPreview(form.systemPromptTemplate)}
-            </div>
-          )}
-        </Section>
-
-        {/* LLM settings are now inside the Runtime section above */}
 
         {/* Tool access */}
         <Section title="Tool access" subtitle={`Enforced at dispatch. Destructive tools (${form.allowedTools.filter(t => SEED_TOOL_REGISTRY.find(r => r.id === t)?.destructive).length} granted) require permission_mode ≥ normal.`}>

@@ -35,25 +35,27 @@ export function ConfidenceDriftCard({ sagaId, confidence }: ConfidenceDriftCardP
   return (
     <section
       aria-label="Confidence drift"
-      className="niuu-rounded-lg niuu-border niuu-border-border niuu-bg-bg-secondary niuu-overflow-hidden"
+      className="niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-overflow-hidden"
     >
-      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-px-4 niuu-py-3 niuu-border-b niuu-border-border">
-        <h3 className="niuu-m-0 niuu-text-sm niuu-font-semibold niuu-text-text-primary">
+      <div className="niuu-flex niuu-items-center niuu-justify-between niuu-px-5 niuu-py-4 niuu-border-b niuu-border-border-subtle">
+        <h3 className="niuu-m-0 niuu-text-[17px] niuu-font-semibold niuu-text-text-primary">
           Confidence drift
         </h3>
-        <span className="niuu-font-mono niuu-text-xs niuu-text-text-muted">
+        <span className="niuu-font-mono niuu-text-[12px] niuu-text-text-muted">
           aggregate · {values.length} events
         </span>
       </div>
 
-      <div className="niuu-p-4 niuu-space-y-3">
-        <p className="niuu-m-0 niuu-text-xs niuu-text-text-secondary">
+      <div className="niuu-p-5 niuu-space-y-4">
+        <p className="niuu-m-0 niuu-text-[13px] niuu-leading-6 niuu-text-text-secondary">
           How this saga&apos;s overall confidence has moved as raids reported back. Dips call for
           attention — a QA fail or security flag will pull it down.
         </p>
-        <Sparkline values={values} id={sagaId} height={56} />
+        <div className="niuu-rounded-lg niuu-bg-[#15191e] niuu-p-3">
+          <Sparkline values={values} id={sagaId} height={126} />
+        </div>
         <div
-          className="niuu-flex niuu-flex-wrap niuu-gap-3 niuu-font-mono niuu-text-xs niuu-text-text-muted"
+          className="niuu-flex niuu-flex-wrap niuu-gap-4 niuu-font-mono niuu-text-[12px] niuu-text-text-muted"
           aria-label="Confidence metrics"
         >
           <span>

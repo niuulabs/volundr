@@ -42,7 +42,7 @@ export function SegmentedFilter<T extends string = string>({
           onClick={() => onChange(opt.value)}
           aria-pressed={value === opt.value}
           className={cn(
-            'niuu-rounded niuu-px-3 niuu-py-1 niuu-text-xs niuu-font-medium niuu-transition-colors',
+            'niuu-rounded niuu-font-medium niuu-transition-colors niuu-px-3.5 niuu-py-1.5 niuu-text-xs',
             value === opt.value
               ? 'niuu-bg-bg-elevated niuu-text-text-primary'
               : 'niuu-text-text-muted hover:niuu-text-text-secondary',
