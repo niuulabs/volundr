@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@niuulabs/ui';
 import type { IFileSystemPort, FileTreeNode } from '../ports/IFileSystemPort';
 import { FileViewer } from './FileTree/FileViewer';
+import './SessionFilesWorkspace.css';
 
 interface SessionFilesWorkspaceProps {
   sessionId: string;
@@ -308,7 +309,7 @@ export function SessionFilesWorkspace({
 
       <section className="niuu-min-h-0 niuu-flex niuu-flex-1 niuu-flex-col niuu-overflow-hidden">
         <div
-          className="niuu-grid niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-3 niuu-py-2 niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.16em] niuu-text-text-muted"
+          className="niuu-grid niuu-border-b niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-2 niuu-py-1 niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.16em] niuu-text-text-muted"
           style={{ gridTemplateColumns: 'minmax(0, 1.9fr) 128px 112px' }}
         >
           <div>Name</div>
@@ -324,7 +325,7 @@ export function SessionFilesWorkspace({
             <div className="niuu-p-4 niuu-font-mono niuu-text-[11px] niuu-text-critical">failed to load files</div>
           )}
           {!treeQuery.isLoading && !treeQuery.isError && (
-            <table className="niuu-w-full niuu-table-fixed">
+            <table className="niuu-session-files-table niuu-w-full niuu-table-fixed">
               <colgroup>
                 <col />
                 <col style={{ width: '128px' }} />
@@ -336,20 +337,16 @@ export function SessionFilesWorkspace({
                   return (
                     <tr
                       key={node.path}
-                      className={cn(
-                        'niuu-cursor-pointer niuu-border-b niuu-border-border-subtle niuu-transition-colors hover:niuu-bg-bg-secondary/85',
-                        selected
-                          ? 'niuu-bg-brand/10 niuu-shadow-[inset_3px_0_0_var(--color-brand),inset_0_1px_0_rgba(255,255,255,0.03)] hover:niuu-bg-brand/14'
-                          : '',
-                      )}
+                      className="niuu-session-files-row niuu-cursor-pointer niuu-border-b niuu-border-border-subtle niuu-transition-colors"
+                      data-selected={selected ? 'true' : 'false'}
                       data-testid={`file-browser-row-${node.path}`}
                       onClick={(e) =>
                         handleRowClick(node, e.metaKey || e.ctrlKey || e.shiftKey)
                       }
                       onDoubleClick={() => void handleRowDoubleClick(node)}
                     >
-                      <td className="niuu-px-3 niuu-py-2">
-                        <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-overflow-hidden">
+                      <td className="niuu-session-files-cell niuu-session-files-cell--name niuu-px-2 niuu-py-1">
+                        <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-overflow-hidden">
                           <span
                             aria-hidden="true"
                             className={cn(
@@ -357,12 +354,12 @@ export function SessionFilesWorkspace({
                               selected ? 'niuu-bg-brand' : 'niuu-bg-transparent',
                             )}
                           />
-                          <span className="niuu-inline-flex niuu-h-5 niuu-w-5 niuu-flex-shrink-0 niuu-items-center niuu-justify-center">
+                          <span className="niuu-inline-flex niuu-h-4 niuu-w-4 niuu-flex-shrink-0 niuu-items-center niuu-justify-center">
                             <NodeGlyph kind={node.kind} />
                           </span>
                           <span
                             className={cn(
-                              'niuu-truncate niuu-font-mono niuu-text-[14px] niuu-leading-6',
+                              'niuu-truncate niuu-font-mono niuu-text-[14px] niuu-leading-5',
                               selected ? 'niuu-text-text-primary' : 'niuu-text-text-primary',
                             )}
                           >
@@ -375,12 +372,12 @@ export function SessionFilesWorkspace({
                           )}
                         </div>
                       </td>
-                      <td className="niuu-px-3 niuu-py-2">
+                      <td className="niuu-session-files-cell niuu-px-2 niuu-py-1">
                         <span className="niuu-inline-flex niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.12em] niuu-text-text-muted">
                           {node.kind === 'directory' ? 'folder' : 'file'}
                         </span>
                       </td>
-                      <td className="niuu-px-3 niuu-py-2 niuu-whitespace-nowrap niuu-text-right niuu-font-mono niuu-text-[12px] niuu-text-text-muted">
+                      <td className="niuu-session-files-cell niuu-px-2 niuu-py-1 niuu-whitespace-nowrap niuu-text-right niuu-font-mono niuu-text-[12px] niuu-text-text-muted">
                         {node.kind === 'file' && node.size != null ? formatSize(node.size) : '—'}
                       </td>
                     </tr>
@@ -399,7 +396,7 @@ export function SessionFilesWorkspace({
       </section>
 
       <div className="niuu-border-t niuu-border-border-subtle niuu-bg-bg-primary">
-        <div className="niuu-flex niuu-items-center niuu-gap-4 niuu-px-3 niuu-py-2 niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
+        <div className="niuu-flex niuu-items-center niuu-gap-3 niuu-px-2 niuu-py-1 niuu-font-mono niuu-text-[11px] niuu-text-text-muted">
           <span>
             {selectedPaths.length === 0 ? 'no files selected' : `${selectedPaths.length} selected`}
           </span>
