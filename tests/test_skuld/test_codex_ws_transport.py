@@ -253,6 +253,7 @@ class TestSendMessage:
         assert params["threadId"] == "thread-1"
         assert params["input"][0]["type"] == "text"
         assert params["input"][0]["text"] == "hello world"
+        assert params["input"][0]["textElements"] == []
 
     @pytest.mark.asyncio
     async def test_send_message_resets_state(self, tmp_path):
@@ -810,7 +811,7 @@ class TestApprovals:
 
         sent = json.loads(t._ws.sent[0])
         assert sent["id"] == 42
-        assert sent["result"]["decision"] == "allow"
+        assert sent["result"]["decision"] == "accept"
         assert "42" not in t._pending_approvals
 
     @pytest.mark.asyncio
@@ -822,7 +823,7 @@ class TestApprovals:
         await t.send_control_response("42", {"behavior": "deny"})
 
         sent = json.loads(t._ws.sent[0])
-        assert sent["result"]["decision"] == "deny"
+        assert sent["result"]["decision"] == "decline"
 
     @pytest.mark.asyncio
     async def test_unknown_request_auto_approved(self, tmp_path):
@@ -840,7 +841,7 @@ class TestApprovals:
 
         sent = json.loads(t._ws.sent[0])
         assert sent["id"] == 77
-        assert sent["result"]["decision"] == "allow"
+        assert sent["result"]["decision"] == "accept"
 
 
 # ---------------------------------------------------------------------------

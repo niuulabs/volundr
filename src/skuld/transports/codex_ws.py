@@ -499,7 +499,7 @@ class CodexWebSocketTransport(CLITransport):
 
         # Default: auto-approve unknown requests
         logger.debug("Auto-approving Codex server request: %s", method)
-        await self._send_rpc_response(rid, {"decision": "allow"})
+        await self._send_rpc_response(rid, {"decision": "accept"})
 
     async def _send_rpc_response(self, rid: int, result: dict) -> None:
         """Send a JSON-RPC response for a server-initiated request."""
@@ -662,7 +662,7 @@ class CodexWebSocketTransport(CLITransport):
         self._block_index = 0
         params: dict = {
             "threadId": self._thread_id,
-            "input": [{"type": "text", "text": content, "text_elements": []}],
+            "input": [{"type": "text", "text": content, "textElements": []}],
         }
         if self._model:
             params["model"] = self._model
@@ -677,9 +677,13 @@ class CodexWebSocketTransport(CLITransport):
             logger.warning("No pending approval for request_id=%s", request_id)
             return
 
-        # Map broker permission response to Codex approval decision
+        # Map broker permission response to Codex approval decision.
+        # Codex uses camelCase enum variants: accept, acceptForSession, decline, cancel.
         behavior = response.get("behavior", "allow")
-        decision = "allow" if behavior == "allow" else "deny"
+        if behavior in ("allow", "allowForever"):
+            decision = "accept"
+        else:
+            decision = "decline"
         await self._send_rpc_response(rid, {"decision": decision})
 
     async def send_control(self, subtype: str, **kwargs: object) -> None:
