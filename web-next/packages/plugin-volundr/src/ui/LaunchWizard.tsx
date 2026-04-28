@@ -80,7 +80,13 @@ const DEFINITION_RUNES: Record<string, string> = {
 };
 
 const FALLBACK_SESSION_DEFINITIONS: SessionDefinition[] = [
-  { key: 'skuld-claude', displayName: 'Claude Code', description: '', labels: [], defaultModel: '' },
+  {
+    key: 'skuld-claude',
+    displayName: 'Claude Code',
+    description: '',
+    labels: [],
+    defaultModel: '',
+  },
   { key: 'skuld-codex', displayName: 'Codex', description: '', labels: [], defaultModel: '' },
   { key: 'skuld-gemini', displayName: 'Gemini', description: '', labels: [], defaultModel: '' },
   { key: 'skuld-aider', displayName: 'Aider', description: '', labels: [], defaultModel: '' },
@@ -356,7 +362,9 @@ function buildPresetRuntimePayload(
     description: '',
     isDefault: false,
     cliTool: deriveCliTool(form.definition) as VolundrPreset['cliTool'],
-    workloadType: form.definition.startsWith('skuld-') ? form.definition : `skuld-${form.definition}`,
+    workloadType: form.definition.startsWith('skuld-')
+      ? form.definition
+      : `skuld-${form.definition}`,
     model: form.model || null,
     systemPrompt: form.systemPrompt || null,
     resourceConfig: buildResourceConfig(form) ?? {},
@@ -419,7 +427,9 @@ function buildPresetComparisonPayload(
 function buildYamlRuntimeFields(form: WizardForm) {
   return {
     cliTool: deriveCliTool(form.definition) as 'claude' | 'codex' | 'gemini' | 'aider',
-    workloadType: form.definition.startsWith('skuld-') ? form.definition : `skuld-${form.definition}`,
+    workloadType: form.definition.startsWith('skuld-')
+      ? form.definition
+      : `skuld-${form.definition}`,
     model: form.model,
     systemPrompt: form.systemPrompt,
     resourceConfig: buildResourceConfig(form) ?? {},
@@ -2157,7 +2167,9 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
         templateName: selectedTemplate?.name,
         presetId,
         definition: form.definition,
-        taskType: form.definition.startsWith('skuld-') ? form.definition : `skuld-${form.definition}`,
+        taskType: form.definition.startsWith('skuld-')
+          ? form.definition
+          : `skuld-${form.definition}`,
         trackerIssue: form.trackerIssue ?? undefined,
         terminalRestricted: form.permission === 'restricted',
         workspaceId: form.workspaceId || undefined,

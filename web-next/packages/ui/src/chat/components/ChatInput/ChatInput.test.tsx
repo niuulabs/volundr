@@ -129,7 +129,9 @@ describe('ChatInput', () => {
   it('calls onSendDirected when agent mentions present', () => {
     const onSend = vi.fn();
     const onSendDirected = vi.fn();
-    const participants = new Map([['p1', { peerId: 'p1', persona: 'Ada', participantType: 'ravn' }]]);
+    const participants = new Map([
+      ['p1', { peerId: 'p1', persona: 'Ada', participantType: 'ravn' }],
+    ]);
     render(
       <ChatInput
         {...defaultProps}
