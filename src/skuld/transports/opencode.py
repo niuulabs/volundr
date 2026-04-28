@@ -70,6 +70,7 @@ class OpenCodeHttpTransport(CLITransport):
         self._alive = False
         self._block_index: int = 0
         self._pending_permissions: dict[str, dict] = {}
+        self._user_message_ids: set[str] = set()
 
     @property
     def _base_url(self) -> str:
@@ -223,8 +224,24 @@ class OpenCodeHttpTransport(CLITransport):
         event_type = event.get("type", "")
         props = event.get("properties", {})
 
+        # --- Message updated (full message state) ---
+        # Process this FIRST to track user vs assistant messages.
+        if event_type == "message.updated":
+            info = props.get("info", {})
+            msg_id = info.get("id", "")
+            role = info.get("role", "")
+            if role == "user" and msg_id:
+                self._user_message_ids.add(msg_id)
+            model = info.get("model", "")
+            if model and not self._model:
+                self._model = model
+            return
+
         # --- Streaming text delta ---
         if event_type == "message.part.delta":
+            # Skip deltas for user messages (echoed prompt)
+            if props.get("messageID", "") in self._user_message_ids:
+                return
             field = props.get("field", "")
             delta = props.get("delta", "")
             if not delta:
@@ -242,18 +259,11 @@ class OpenCodeHttpTransport(CLITransport):
 
         # --- Message part updated (tool calls, reasoning blocks) ---
         if event_type == "message.part.updated":
+            # Skip parts for user messages
+            if props.get("messageID", "") in self._user_message_ids:
+                return
             part = props.get("part", props)
             await self._handle_part_updated(part, props)
-            return
-
-        # --- Message updated (full message state) ---
-        if event_type == "message.updated":
-            # The message.part.delta events handle streaming.
-            # message.updated is the full state — we use it for model info.
-            info = props.get("info", {})
-            model = info.get("model", "")
-            if model and not self._model:
-                self._model = model
             return
 
         # --- Permission request ---
@@ -386,7 +396,8 @@ class OpenCodeHttpTransport(CLITransport):
             return
 
         if part_type == "text":
-            # Full text part — initial block start (deltas follow via message.part.delta)
+            # Open a text block — actual content arrives via message.part.delta.
+            # Do NOT emit the text field here to avoid duplication.
             idx = self._next_block_index()
             await self._emit(
                 {
@@ -395,9 +406,6 @@ class OpenCodeHttpTransport(CLITransport):
                     "content_block": {"type": "text"},
                 }
             )
-            text = part.get("text", "")
-            if text:
-                await self._emit_text_delta(text)
             return
 
         if part_type == "reasoning":
