@@ -44,18 +44,32 @@ revisionHistoryLimit: 10
 # Available AI models — used by the wizard, profiles, and pricing
 # Override via global.models from the niuu umbrella chart
 aiModels:
+  # Anthropic Claude
   - id: "claude-opus-4-6"
-    name: "Opus 4.6"
+    name: "Claude Opus 4.6"
     costPerMillionTokens: 15.00
   - id: "claude-opus-4-5-20251101"
-    name: "Opus 4.5"
+    name: "Claude Opus 4.5"
     costPerMillionTokens: 15.00
   - id: "claude-sonnet-4-6"
-    name: "Sonnet 4.6"
+    name: "Claude Sonnet 4.6"
     costPerMillionTokens: 3.00
   - id: "claude-haiku-4-5-20251001"
-    name: "Haiku 4.5"
+    name: "Claude Haiku 4.5"
     costPerMillionTokens: 1.00
+  # OpenAI GPT
+  - id: "gpt-5.5"
+    name: "GPT-5.5"
+    costPerMillionTokens: 10.00
+  - id: "gpt-5.4"
+    name: "GPT-5.4"
+    costPerMillionTokens: 5.00
+  - id: "o4-mini"
+    name: "o4-mini"
+    costPerMillionTokens: 1.10
+  - id: "o3"
+    name: "o3"
+    costPerMillionTokens: 10.00
 
 # Image configuration
 image:
