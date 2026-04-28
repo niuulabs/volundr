@@ -554,6 +554,760 @@ class TestConfigIntegration:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# send_message body variants
+# ---------------------------------------------------------------------------
+
+
+class TestSendMessageBody:
+    @pytest.mark.asyncio
+    async def test_send_message_with_model_includes_model_field(self, tmp_path):
+        """When model is set, body should contain model.modelID."""
+        t = _make_transport(tmp_path, model="anthropic/claude-sonnet-4-6")
+        t._session_id = "s1"
+
+        mock_client = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 204
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        t._client = mock_client
+
+        await t.send_message("hello")
+
+        body = mock_client.post.call_args[1]["json"]
+        assert body["model"]["modelID"] == "anthropic/claude-sonnet-4-6"
+
+    @pytest.mark.asyncio
+    async def test_send_message_without_model_omits_model_field(self, tmp_path):
+        """When model is empty string, body should not contain model key."""
+        t = _make_transport(tmp_path, model="")
+        t._session_id = "s1"
+
+        mock_client = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 204
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        t._client = mock_client
+
+        await t.send_message("hello")
+
+        body = mock_client.post.call_args[1]["json"]
+        assert "model" not in body
+
+    @pytest.mark.asyncio
+    async def test_send_message_without_system_prompt_omits_system(self, tmp_path):
+        """When system_prompt is empty, body should not contain system key."""
+        t = _make_transport(tmp_path, system_prompt="")
+        t._session_id = "s1"
+
+        mock_client = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 204
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        t._client = mock_client
+
+        await t.send_message("hello")
+
+        body = mock_client.post.call_args[1]["json"]
+        assert "system" not in body
+
+    @pytest.mark.asyncio
+    async def test_send_message_error_response_emits_error(self, tmp_path):
+        """When server returns non-200/204, an error event is emitted."""
+        t = _make_transport(tmp_path)
+        t._session_id = "s1"
+        emit = _collect_emits(t)
+
+        mock_client = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.text = "Internal Server Error"
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        t._client = mock_client
+
+        await t.send_message("hello")
+
+        error_events = _events_of_type(emit, "error")
+        assert len(error_events) == 1
+        assert "Internal Server Error" in error_events[0]["error"]
+
+
+# ---------------------------------------------------------------------------
+# send_control edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestControlEdgeCases:
+    @pytest.mark.asyncio
+    async def test_send_control_unknown_subtype_is_noop(self, tmp_path):
+        """Unknown control subtypes are logged but otherwise ignored."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t.send_control("unknown_subtype", foo="bar")
+
+        emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_interrupt_without_session_is_noop(self, tmp_path):
+        """Interrupt with no session_id should not call client."""
+        t = _make_transport(tmp_path)
+        t._session_id = None
+
+        mock_client = AsyncMock()
+        t._client = mock_client
+
+        await t.send_control("interrupt")
+
+        mock_client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_interrupt_exception_is_swallowed(self, tmp_path):
+        """If the abort POST throws, the exception is caught."""
+        t = _make_transport(tmp_path)
+        t._session_id = "s1"
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(side_effect=Exception("connection refused"))
+        t._client = mock_client
+
+        # Should not raise
+        await t.send_control("interrupt")
+
+
+# ---------------------------------------------------------------------------
+# send_control_response edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestControlResponseEdgeCases:
+    @pytest.mark.asyncio
+    async def test_permission_not_found_is_noop(self, tmp_path):
+        """Responding to a permission not in pending is still fine (no-op pop)."""
+        t = _make_transport(tmp_path)
+
+        mock_client = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        t._client = mock_client
+
+        # No pending permission for "nonexistent"
+        await t.send_control_response("nonexistent", {"behavior": "allow"})
+
+        # Still posts the reply
+        mock_client.post.assert_called_once()
+        assert "nonexistent" not in t._pending_permissions
+
+    @pytest.mark.asyncio
+    async def test_permission_reply_error_status_logged(self, tmp_path):
+        """Non-200/204 reply status is handled gracefully."""
+        t = _make_transport(tmp_path)
+        t._pending_permissions["perm-x"] = {"id": "perm-x"}
+
+        mock_client = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        mock_resp.text = "Not Found"
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        t._client = mock_client
+
+        # Should not raise
+        await t.send_control_response("perm-x", {"behavior": "allow"})
+
+    @pytest.mark.asyncio
+    async def test_permission_reply_exception_swallowed(self, tmp_path):
+        """If the permission POST throws, the exception is caught."""
+        t = _make_transport(tmp_path)
+        t._pending_permissions["perm-y"] = {"id": "perm-y"}
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(side_effect=Exception("timeout"))
+        t._client = mock_client
+
+        # Should not raise
+        await t.send_control_response("perm-y", {"behavior": "deny"})
+
+    @pytest.mark.asyncio
+    async def test_permission_allow_forever(self, tmp_path):
+        """allowForever maps to 'allow' reply."""
+        t = _make_transport(tmp_path)
+        t._pending_permissions["perm-z"] = {"id": "perm-z"}
+
+        mock_client = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        t._client = mock_client
+
+        await t.send_control_response("perm-z", {"behavior": "allowForever"})
+
+        call_args = mock_client.post.call_args
+        assert call_args[1]["json"]["reply"] == "allow"
+
+
+# ---------------------------------------------------------------------------
+# _handle_sse_event: message.updated model tracking
+# ---------------------------------------------------------------------------
+
+
+class TestMessageUpdated:
+    @pytest.mark.asyncio
+    async def test_message_updated_sets_model(self, tmp_path):
+        """message.updated with model should set transport model when unset."""
+        t = _make_transport(tmp_path, model="")
+        emit = _collect_emits(t)
+
+        await t._handle_sse_event(
+            {
+                "type": "message.updated",
+                "properties": {
+                    "info": {
+                        "id": "m1",
+                        "role": "assistant",
+                        "model": "gpt-4o-mini",
+                    }
+                },
+            }
+        )
+
+        assert t._model == "gpt-4o-mini"
+        # message.updated returns early, no emit
+        emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_message_updated_does_not_overwrite_existing_model(self, tmp_path):
+        """message.updated should NOT overwrite an already-set model."""
+        t = _make_transport(tmp_path, model="claude-sonnet-4-6")
+        _collect_emits(t)
+
+        await t._handle_sse_event(
+            {
+                "type": "message.updated",
+                "properties": {
+                    "info": {
+                        "id": "m1",
+                        "role": "assistant",
+                        "model": "gpt-4o",
+                    }
+                },
+            }
+        )
+
+        assert t._model == "claude-sonnet-4-6"
+
+    @pytest.mark.asyncio
+    async def test_message_updated_tracks_user_message_ids(self, tmp_path):
+        """User messages should be tracked so their deltas are skipped."""
+        t = _make_transport(tmp_path)
+        _collect_emits(t)
+
+        await t._handle_sse_event(
+            {
+                "type": "message.updated",
+                "properties": {
+                    "info": {
+                        "id": "user-msg-1",
+                        "role": "user",
+                    }
+                },
+            }
+        )
+
+        assert "user-msg-1" in t._user_message_ids
+
+    @pytest.mark.asyncio
+    async def test_user_message_deltas_skipped(self, tmp_path):
+        """Deltas for user messages (echoed prompt) should be ignored."""
+        t = _make_transport(tmp_path)
+        t._user_message_ids.add("user-msg-1")
+        emit = _collect_emits(t)
+
+        await t._handle_sse_event(
+            {
+                "type": "message.part.delta",
+                "properties": {
+                    "messageID": "user-msg-1",
+                    "partID": "p1",
+                    "field": "text",
+                    "delta": "echoed prompt",
+                },
+            }
+        )
+
+        emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_user_message_parts_skipped(self, tmp_path):
+        """Parts for user messages should be ignored."""
+        t = _make_transport(tmp_path)
+        t._user_message_ids.add("user-msg-1")
+        emit = _collect_emits(t)
+
+        await t._handle_sse_event(
+            {
+                "type": "message.part.updated",
+                "properties": {
+                    "messageID": "user-msg-1",
+                    "part": {"type": "text", "text": "echoed"},
+                },
+            }
+        )
+
+        emit.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# session.status "executing" emits assistant
+# ---------------------------------------------------------------------------
+
+
+class TestSessionStatusExecuting:
+    @pytest.mark.asyncio
+    async def test_session_status_executing_emits_assistant(self, tmp_path):
+        """session.status with status=executing should emit assistant event."""
+        t = _make_transport(tmp_path, model="claude-sonnet-4-6")
+        emit = _collect_emits(t)
+
+        await t._handle_sse_event(
+            {
+                "type": "session.status",
+                "properties": {"status": "executing"},
+            }
+        )
+
+        assistant_events = _events_of_type(emit, "assistant")
+        assert len(assistant_events) == 1
+        assert assistant_events[0]["message"]["model"] == "claude-sonnet-4-6"
+
+    @pytest.mark.asyncio
+    async def test_session_status_other_no_emit(self, tmp_path):
+        """session.status with unknown status should not emit."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_sse_event(
+            {
+                "type": "session.status",
+                "properties": {"status": "idle"},
+            }
+        )
+
+        emit.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Part handling: tool-invocation with string args
+# ---------------------------------------------------------------------------
+
+
+class TestPartHandlingStringArgs:
+    @pytest.mark.asyncio
+    async def test_tool_invocation_string_args_json_parse(self, tmp_path):
+        """tool-invocation with string args that are valid JSON should be parsed."""
+        t = _make_transport(tmp_path, model="gpt-4o")
+        emit = _collect_emits(t)
+
+        await t._handle_part_updated(
+            {
+                "type": "tool-invocation",
+                "id": "tool-2",
+                "toolName": "shell",
+                "args": '{"command": "echo hi"}',
+            },
+            {},
+        )
+
+        assistant_events = _events_of_type(emit, "assistant")
+        tool_block = assistant_events[0]["message"]["content"][0]
+        assert tool_block["input"] == {"command": "echo hi"}
+
+    @pytest.mark.asyncio
+    async def test_tool_invocation_string_args_invalid_json(self, tmp_path):
+        """tool-invocation with non-JSON string args wraps in {command: ...}."""
+        t = _make_transport(tmp_path, model="gpt-4o")
+        emit = _collect_emits(t)
+
+        await t._handle_part_updated(
+            {
+                "type": "tool-invocation",
+                "id": "tool-3",
+                "toolName": "shell",
+                "args": "echo hello world",
+            },
+            {},
+        )
+
+        assistant_events = _events_of_type(emit, "assistant")
+        tool_block = assistant_events[0]["message"]["content"][0]
+        assert tool_block["input"] == {"command": "echo hello world"}
+
+
+# ---------------------------------------------------------------------------
+# Part handling: tool-result with empty content
+# ---------------------------------------------------------------------------
+
+
+class TestPartHandlingEmptyResult:
+    @pytest.mark.asyncio
+    async def test_tool_result_empty_content_only_stop(self, tmp_path):
+        """tool-result with empty content emits only content_block_stop, no text."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_part_updated(
+            {
+                "type": "tool-result",
+                "result": "",
+                "isError": False,
+            },
+            {},
+        )
+
+        events = _emitted_events(emit)
+        # Should only have the stop event, no text block
+        assert len(events) == 1
+        assert events[0]["type"] == "content_block_stop"
+
+    @pytest.mark.asyncio
+    async def test_tool_result_none_content_only_stop(self, tmp_path):
+        """tool-result with no result key emits only stop."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_part_updated(
+            {
+                "type": "tool-result",
+                "isError": False,
+            },
+            {},
+        )
+
+        events = _emitted_events(emit)
+        assert len(events) == 1
+        assert events[0]["type"] == "content_block_stop"
+
+
+# ---------------------------------------------------------------------------
+# stop() edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestStopEdgeCases:
+    @pytest.mark.asyncio
+    async def test_stop_no_process_no_client(self, tmp_path):
+        """stop() with no process and no client should not raise."""
+        t = _make_transport(tmp_path)
+        t._alive = True
+        t._process = None
+        t._client = None
+        t._sse_task = None
+
+        await t.stop()
+
+        assert t._alive is False
+
+    @pytest.mark.asyncio
+    async def test_stop_cancels_sse_task(self, tmp_path):
+        """stop() should cancel the SSE task if running."""
+        t = _make_transport(tmp_path)
+        t._alive = True
+        t._process = None
+        t._client = None
+
+        mock_task = MagicMock()
+        mock_task.done.return_value = False
+        mock_task.cancel = MagicMock()
+        t._sse_task = mock_task
+
+        await t.stop()
+
+        mock_task.cancel.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_stop_skips_done_sse_task(self, tmp_path):
+        """stop() should not cancel an already-done SSE task."""
+        t = _make_transport(tmp_path)
+        t._alive = True
+        t._process = None
+        t._client = None
+
+        mock_task = MagicMock()
+        mock_task.done.return_value = True
+        mock_task.cancel = MagicMock()
+        t._sse_task = mock_task
+
+        await t.stop()
+
+        mock_task.cancel.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# _emit_text_delta edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestEmitTextDelta:
+    @pytest.mark.asyncio
+    async def test_empty_string_noop(self, tmp_path):
+        """_emit_text_delta with empty string should not emit anything."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._emit_text_delta("")
+
+        emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_nonempty_string_emits(self, tmp_path):
+        """_emit_text_delta with content should emit a text_delta event."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._emit_text_delta("hello")
+
+        assert emit.call_count == 1
+        event = emit.call_args[0][0]
+        assert event["type"] == "content_block_delta"
+        assert event["delta"]["type"] == "text_delta"
+        assert event["delta"]["text"] == "hello"
+
+
+# ---------------------------------------------------------------------------
+# _next_block_index
+# ---------------------------------------------------------------------------
+
+
+class TestNextBlockIndex:
+    def test_increments_correctly(self, tmp_path):
+        t = _make_transport(tmp_path)
+        assert t._next_block_index() == 0
+        assert t._next_block_index() == 1
+        assert t._next_block_index() == 2
+        assert t._block_index == 3
+
+    @pytest.mark.asyncio
+    async def test_reset_after_send_message(self, tmp_path):
+        """send_message resets _block_index to 0."""
+        t = _make_transport(tmp_path)
+        t._block_index = 5
+        t._session_id = "s1"
+
+        mock_client = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 204
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        t._client = mock_client
+
+        await t.send_message("test")
+
+        assert t._block_index == 0
+
+
+# ---------------------------------------------------------------------------
+# Resume
+# ---------------------------------------------------------------------------
+
+
+class TestResumeExtended:
+    @pytest.mark.asyncio
+    async def test_resume_sets_session_id_and_emits_init(self, tmp_path):
+        """resume() sets session_id and emits system/init with model and tools."""
+        t = _make_transport(tmp_path, model="claude-sonnet-4-6")
+        emit = _collect_emits(t)
+
+        await t.resume("resumed-session-42")
+
+        assert t._session_id == "resumed-session-42"
+        events = _emitted_events(emit)
+        assert len(events) == 1
+        init = events[0]
+        assert init["type"] == "system"
+        assert init["subtype"] == "init"
+        assert init["session_id"] == "resumed-session-42"
+        assert init["model"] == "claude-sonnet-4-6"
+        assert init["tools"] == []
+
+
+# ---------------------------------------------------------------------------
+# Reasoning part ID tracking across delta events
+# ---------------------------------------------------------------------------
+
+
+class TestReasoningPartTracking:
+    @pytest.mark.asyncio
+    async def test_reasoning_part_routes_deltas_as_thinking(self, tmp_path):
+        """After a reasoning part.updated, subsequent deltas with field=text
+        should still be routed as thinking_delta because the partID is tracked."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        # Register reasoning part
+        await t._handle_part_updated(
+            {"type": "reasoning", "id": "reason-1"},
+            {"partID": "reason-1"},
+        )
+
+        # Now a delta with field="text" but for a reasoning partID
+        await t._handle_sse_event(
+            {
+                "type": "message.part.delta",
+                "properties": {
+                    "messageID": "m1",
+                    "partID": "reason-1",
+                    "field": "text",
+                    "delta": "deep thought",
+                },
+            }
+        )
+
+        events = _emitted_events(emit)
+        thinking_deltas = [
+            e
+            for e in events
+            if e.get("type") == "content_block_delta"
+            and e.get("delta", {}).get("type") == "thinking_delta"
+        ]
+        assert len(thinking_deltas) == 1
+        assert thinking_deltas[0]["delta"]["thinking"] == "deep thought"
+
+
+# ---------------------------------------------------------------------------
+# Misc coverage: _base_url, unhandled events, set_model edge cases
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# start() and _create_session with mocked internals
+# ---------------------------------------------------------------------------
+
+
+class TestStartAndCreateSession:
+    @pytest.mark.asyncio
+    async def test_start_calls_spawn_connect_create(self, tmp_path):
+        """start() orchestrates _spawn_server, _connect, _create_session."""
+        t = _make_transport(tmp_path)
+        t._spawn_server = AsyncMock()
+        t._connect = AsyncMock()
+        t._create_session = AsyncMock()
+
+        await t.start()
+
+        t._spawn_server.assert_awaited_once()
+        t._connect.assert_awaited_once()
+        t._create_session.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_start_with_initial_prompt_sends_message(self, tmp_path):
+        """start() with initial_prompt calls send_message after setup."""
+        t = _make_transport(tmp_path, initial_prompt="bootstrap prompt")
+        t._spawn_server = AsyncMock()
+        t._connect = AsyncMock()
+        t._create_session = AsyncMock()
+        t.send_message = AsyncMock()
+
+        await t.start()
+
+        t.send_message.assert_awaited_once_with("bootstrap prompt")
+
+    @pytest.mark.asyncio
+    async def test_start_without_initial_prompt_no_send(self, tmp_path):
+        """start() without initial_prompt does not call send_message."""
+        t = _make_transport(tmp_path, initial_prompt="")
+        t._spawn_server = AsyncMock()
+        t._connect = AsyncMock()
+        t._create_session = AsyncMock()
+        t.send_message = AsyncMock()
+
+        await t.start()
+
+        t.send_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_create_session_extracts_id(self, tmp_path):
+        """_create_session POSTs to /session and extracts session ID."""
+        t = _make_transport(tmp_path, model="test-model")
+        emit = _collect_emits(t)
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"id": "new-session-123"}
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        t._client = mock_client
+
+        await t._create_session()
+
+        assert t._session_id == "new-session-123"
+        mock_client.post.assert_awaited_once_with("/session", json={})
+
+        events = _emitted_events(emit)
+        assert len(events) == 1
+        assert events[0]["type"] == "system"
+        assert events[0]["subtype"] == "init"
+        assert events[0]["session_id"] == "new-session-123"
+
+    @pytest.mark.asyncio
+    async def test_create_session_extracts_session_id_key(self, tmp_path):
+        """_create_session falls back to sessionID key."""
+        t = _make_transport(tmp_path)
+        _collect_emits(t)
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"sessionID": "fallback-456"}
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        t._client = mock_client
+
+        await t._create_session()
+
+        assert t._session_id == "fallback-456"
+
+
+class TestMiscCoverage:
+    def test_base_url_property(self, tmp_path):
+        t = _make_transport(tmp_path, opencode_port=12345)
+        assert t._base_url == "http://127.0.0.1:12345"
+
+    @pytest.mark.asyncio
+    async def test_unhandled_event_type_no_emit(self, tmp_path):
+        """Unknown event types are logged but produce no emit."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_sse_event({"type": "some.future.event", "properties": {"foo": "bar"}})
+
+        emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_set_model_non_string_ignored(self, tmp_path):
+        """set_model with non-string model should not update _model."""
+        t = _make_transport(tmp_path, model="original")
+
+        await t.send_control("set_model", model=123)
+
+        assert t._model == "original"
+
+    @pytest.mark.asyncio
+    async def test_set_model_none_ignored(self, tmp_path):
+        """set_model with model=None should not update _model."""
+        t = _make_transport(tmp_path, model="original")
+
+        await t.send_control("set_model", model=None)
+
+        assert t._model == "original"
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: full turn simulation
+# ---------------------------------------------------------------------------
+
+
 class TestFullTurnFlow:
     @pytest.mark.asyncio
     async def test_text_turn_lifecycle(self, tmp_path):

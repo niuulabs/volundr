@@ -1163,6 +1163,689 @@ class TestFullTurnFlow:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# _send_rpc timeout
+# ---------------------------------------------------------------------------
+
+
+class TestSendRpcTimeout:
+    @pytest.mark.asyncio
+    async def test_send_rpc_timeout_raises_runtime_error(self, tmp_path):
+        """When the RPC future times out, _send_rpc should raise RuntimeError."""
+        t = _make_transport(tmp_path)
+        ws = FakeWebSocket()
+        t._ws = ws
+
+        # Patch wait_for to always raise TimeoutError
+        async def fake_wait_for(fut, timeout):
+            raise TimeoutError
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(asyncio, "wait_for", fake_wait_for)
+            with pytest.raises(RuntimeError, match="RPC timeout"):
+                await t._send_rpc("test/method", {"foo": "bar"})
+
+        # The pending future should have been cleaned up
+        # (the rid was popped from _pending on timeout)
+        assert len(t._pending) == 0
+
+    @pytest.mark.asyncio
+    async def test_send_rpc_ws_none_raises(self, tmp_path):
+        """_send_rpc with no websocket raises RuntimeError."""
+        t = _make_transport(tmp_path)
+        t._ws = None
+
+        with pytest.raises(RuntimeError, match="WebSocket not connected"):
+            await t._send_rpc("test/method")
+
+
+# ---------------------------------------------------------------------------
+# _send_notification when ws is None
+# ---------------------------------------------------------------------------
+
+
+class TestSendNotification:
+    @pytest.mark.asyncio
+    async def test_send_notification_ws_none_is_noop(self, tmp_path):
+        """When ws is None, _send_notification should silently do nothing."""
+        t = _make_transport(tmp_path)
+        t._ws = None
+
+        # Should not raise
+        await t._send_notification("initialized")
+
+    @pytest.mark.asyncio
+    async def test_send_notification_with_ws_sends(self, tmp_path):
+        """When ws is set, _send_notification should send the message."""
+        t = _make_transport(tmp_path)
+        ws = FakeWebSocket()
+        t._ws = ws
+
+        await t._send_notification("initialized")
+
+        assert len(ws.sent) == 1
+        msg = json.loads(ws.sent[0])
+        assert msg["method"] == "initialized"
+        assert "id" not in msg
+
+
+# ---------------------------------------------------------------------------
+# send_message edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestSendMessageEdgeCases:
+    @pytest.mark.asyncio
+    async def test_send_message_without_model(self, tmp_path):
+        """When model is empty string, params should not include 'model'."""
+        t = _make_transport(tmp_path, model="")
+        t._thread_id = "thread-1"
+
+        calls = []
+
+        async def fake_send_rpc(method, params=None):
+            calls.append((method, params))
+            return {}
+
+        t._send_rpc = fake_send_rpc
+
+        await t.send_message("hello")
+
+        params = calls[0][1]
+        assert "model" not in params
+
+
+# ---------------------------------------------------------------------------
+# _handle_server_message with unknown notification
+# ---------------------------------------------------------------------------
+
+
+class TestUnknownNotification:
+    @pytest.mark.asyncio
+    async def test_unknown_notification_ignored(self, tmp_path):
+        """Unknown notification methods should be silently ignored (no emit)."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_server_message(
+            {"method": "some/totally/unknown/notification", "params": {}}
+        )
+
+        # Nothing should have been emitted
+        assert emit.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_thread_status_changed_ignored(self, tmp_path):
+        """Informational notifications like thread/status/changed are no-ops."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_server_message(
+            {"method": "thread/status/changed", "params": {"status": "idle"}}
+        )
+
+        assert emit.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_thread_name_updated_ignored(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_server_message(
+            {"method": "thread/name/updated", "params": {"name": "new name"}}
+        )
+
+        assert emit.call_count == 0
+
+
+# ---------------------------------------------------------------------------
+# _resolve_pending edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestResolvePendingEdgeCases:
+    @pytest.mark.asyncio
+    async def test_resolve_unknown_id_is_noop(self, tmp_path):
+        """Resolving a response with an unknown id should not raise."""
+        t = _make_transport(tmp_path)
+
+        # No pending futures at all
+        t._resolve_pending({"id": 999, "result": {"ok": True}})
+        # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_resolve_already_done_future_is_noop(self, tmp_path):
+        """If the future is already done (e.g. cancelled), _resolve_pending skips it."""
+        t = _make_transport(tmp_path)
+        loop = asyncio.get_event_loop()
+        fut = loop.create_future()
+        fut.cancel()  # Mark as done
+        t._pending[5] = fut
+
+        # Should not raise even though future is cancelled
+        t._resolve_pending({"id": 5, "result": {"ok": True}})
+
+    @pytest.mark.asyncio
+    async def test_resolve_pending_with_no_result_key(self, tmp_path):
+        """Response with 'result' key missing should resolve with empty dict."""
+        t = _make_transport(tmp_path)
+        loop = asyncio.get_event_loop()
+        fut = loop.create_future()
+        t._pending[10] = fut
+
+        # data has "id" but result is missing — falls through to data.get("result", {})
+        t._resolve_pending({"id": 10, "jsonrpc": "2.0"})
+
+        assert fut.done()
+        assert fut.result() == {}
+
+
+# ---------------------------------------------------------------------------
+# capabilities property values
+# ---------------------------------------------------------------------------
+
+
+class TestCapabilitiesValues:
+    def test_set_permission_mode_is_false(self, tmp_path):
+        t = _make_transport(tmp_path)
+        assert t.capabilities.set_permission_mode is False
+
+    def test_session_resume_is_true(self, tmp_path):
+        t = _make_transport(tmp_path)
+        assert t.capabilities.session_resume is True
+
+    def test_permission_requests_is_true(self, tmp_path):
+        t = _make_transport(tmp_path)
+        assert t.capabilities.permission_requests is True
+
+
+# ---------------------------------------------------------------------------
+# stop() edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestStopEdgeCases:
+    @pytest.mark.asyncio
+    async def test_stop_already_stopped_is_safe(self, tmp_path):
+        """Calling stop() when already stopped (no ws, no process) should not raise."""
+        t = _make_transport(tmp_path)
+        t._alive = False
+        t._ws = None
+        t._process = None
+        t._receive_task = None
+        t._pending.clear()
+
+        await t.stop()
+
+        assert t._alive is False
+        assert t._ws is None
+        assert t._process is None
+
+    @pytest.mark.asyncio
+    async def test_stop_with_receive_task_already_done(self, tmp_path):
+        """If receive_task is already done, stop() should not try to cancel it."""
+        t = _make_transport(tmp_path)
+        t._alive = True
+        t._ws = None
+        t._process = None
+
+        # Create an already-finished task
+        async def noop():
+            pass
+
+        task = asyncio.ensure_future(noop())
+        await task  # Let it finish
+        t._receive_task = task
+
+        await t.stop()
+        assert t._alive is False
+
+    @pytest.mark.asyncio
+    async def test_stop_ws_close_error_handled(self, tmp_path):
+        """If ws.close() raises, stop() should still complete."""
+        t = _make_transport(tmp_path)
+        t._alive = True
+        t._process = None
+        t._receive_task = None
+
+        ws = FakeWebSocket()
+
+        async def bad_close():
+            raise ConnectionError("already closed")
+
+        ws.close = bad_close
+        t._ws = ws
+
+        await t.stop()
+
+        assert t._ws is None
+        assert t._alive is False
+
+
+# ---------------------------------------------------------------------------
+# _emit_tool_use with different tool types
+# ---------------------------------------------------------------------------
+
+
+class TestEmitToolUse:
+    @pytest.mark.asyncio
+    async def test_emit_tool_use_bash(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._emit_tool_use("id-1", "Bash", {"command": "ls"})
+
+        events = _emitted_events(emit)
+        # Should have: assistant, content_block_start, content_block_delta
+        assert len(events) == 3
+        assert events[0]["type"] == "assistant"
+        assert events[0]["message"]["content"][0]["name"] == "Bash"
+        assert events[1]["type"] == "content_block_start"
+        assert events[1]["content_block"]["name"] == "Bash"
+        assert events[2]["type"] == "content_block_delta"
+        assert events[2]["delta"]["type"] == "input_json_delta"
+
+    @pytest.mark.asyncio
+    async def test_emit_tool_use_edit(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._emit_tool_use("id-2", "Edit", {"path": "foo.py"})
+
+        events = _emitted_events(emit)
+        assert events[0]["message"]["content"][0]["name"] == "Edit"
+        assert events[0]["message"]["content"][0]["input"] == {"path": "foo.py"}
+
+    @pytest.mark.asyncio
+    async def test_emit_tool_use_websearch(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._emit_tool_use("id-3", "WebSearch", {"query": "test"})
+
+        events = _emitted_events(emit)
+        assert events[0]["message"]["content"][0]["name"] == "WebSearch"
+
+    @pytest.mark.asyncio
+    async def test_emit_tool_use_custom_tool(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._emit_tool_use("id-4", "CustomTool", {"key": "value"})
+
+        events = _emitted_events(emit)
+        assert events[0]["message"]["content"][0]["name"] == "CustomTool"
+        # Verify the input_json_delta contains the serialized input
+        partial = json.loads(events[2]["delta"]["partial_json"])
+        assert partial == {"key": "value"}
+
+
+# ---------------------------------------------------------------------------
+# _handle_item_completed for fileChange, webSearch, mcpToolCall
+# ---------------------------------------------------------------------------
+
+
+class TestItemCompletedEdgeCases:
+    @pytest.mark.asyncio
+    async def test_file_change_completed_emits_stop(self, tmp_path):
+        """fileChange completion should emit content_block_stop."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_item_completed({"type": "fileChange", "id": "fc-1", "changes": []})
+
+        stops = _events_of_type(emit, "content_block_stop")
+        assert len(stops) == 1
+
+    @pytest.mark.asyncio
+    async def test_web_search_completed_emits_stop(self, tmp_path):
+        """webSearch completion should emit content_block_stop."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_item_completed({"type": "webSearch", "id": "ws-1", "query": "test"})
+
+        stops = _events_of_type(emit, "content_block_stop")
+        assert len(stops) == 1
+
+    @pytest.mark.asyncio
+    async def test_mcp_tool_call_completed_emits_stop(self, tmp_path):
+        """mcpToolCall completion should emit content_block_stop."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_item_completed({"type": "mcpToolCall", "id": "mcp-1", "tool": "read_file"})
+
+        stops = _events_of_type(emit, "content_block_stop")
+        assert len(stops) == 1
+
+    @pytest.mark.asyncio
+    async def test_command_completed_no_output_no_text_block(self, tmp_path):
+        """Command with empty output should still emit stop but no text block."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_item_completed(
+            {"type": "commandExecution", "id": "cmd-1", "aggregatedOutput": "", "exitCode": 0}
+        )
+
+        events = _emitted_events(emit)
+        stops = _events_of_type(emit, "content_block_stop")
+        # Only one stop (for the tool_use block), no text block started
+        assert len(stops) == 1
+        # No text delta emitted
+        text_deltas = [
+            e
+            for e in events
+            if e.get("type") == "content_block_delta"
+            and e.get("delta", {}).get("type") == "text_delta"
+        ]
+        assert len(text_deltas) == 0
+
+    @pytest.mark.asyncio
+    async def test_unknown_item_completed_no_emit(self, tmp_path):
+        """An unknown item type completing should not emit anything."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_item_completed({"type": "unknownType", "id": "x-1"})
+
+        assert emit.call_count == 0
+
+
+# ---------------------------------------------------------------------------
+# _send_rpc_response
+# ---------------------------------------------------------------------------
+
+
+class TestSendRpcResponse:
+    @pytest.mark.asyncio
+    async def test_send_rpc_response_sends_json(self, tmp_path):
+        t = _make_transport(tmp_path)
+        ws = FakeWebSocket()
+        t._ws = ws
+
+        await t._send_rpc_response(42, {"decision": "accept"})
+
+        msg = json.loads(ws.sent[0])
+        assert msg["jsonrpc"] == "2.0"
+        assert msg["id"] == 42
+        assert msg["result"]["decision"] == "accept"
+
+    @pytest.mark.asyncio
+    async def test_send_rpc_response_ws_none_is_noop(self, tmp_path):
+        """If ws is None, _send_rpc_response should silently do nothing."""
+        t = _make_transport(tmp_path)
+        t._ws = None
+
+        # Should not raise
+        await t._send_rpc_response(42, {"decision": "accept"})
+
+
+# ---------------------------------------------------------------------------
+# resume edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestResumeEdgeCases:
+    @pytest.mark.asyncio
+    async def test_resume_with_skip_permissions(self, tmp_path):
+        t = _make_transport(tmp_path, skip_permissions=True)
+
+        calls = []
+
+        async def fake_send_rpc(method, params=None):
+            calls.append((method, params))
+            return {"thread": {"id": "resumed-t"}}
+
+        t._send_rpc = fake_send_rpc
+        _collect_emits(t)
+
+        await t.resume("old-id")
+
+        params = calls[0][1]
+        assert params["approvalPolicy"] == "never"
+        assert params["sandbox"] == "danger-full-access"
+
+    @pytest.mark.asyncio
+    async def test_resume_with_model(self, tmp_path):
+        t = _make_transport(tmp_path, model="gpt-4")
+
+        calls = []
+
+        async def fake_send_rpc(method, params=None):
+            calls.append((method, params))
+            return {"thread": {"id": "resumed-t"}}
+
+        t._send_rpc = fake_send_rpc
+        _collect_emits(t)
+
+        await t.resume("old-id")
+
+        params = calls[0][1]
+        assert params["model"] == "gpt-4"
+
+    @pytest.mark.asyncio
+    async def test_resume_without_model(self, tmp_path):
+        t = _make_transport(tmp_path, model="")
+
+        calls = []
+
+        async def fake_send_rpc(method, params=None):
+            calls.append((method, params))
+            return {"thread": {"id": "resumed-t"}}
+
+        t._send_rpc = fake_send_rpc
+        _collect_emits(t)
+
+        await t.resume("old-id")
+
+        params = calls[0][1]
+        assert "model" not in params
+
+    @pytest.mark.asyncio
+    async def test_resume_fallback_thread_id(self, tmp_path):
+        """When the response thread has no id, resume uses the passed thread_id."""
+        t = _make_transport(tmp_path)
+
+        async def fake_send_rpc(method, params=None):
+            return {"thread": {}}  # No "id" in thread
+
+        t._send_rpc = fake_send_rpc
+        _collect_emits(t)
+
+        await t.resume("fallback-id")
+
+        assert t._thread_id == "fallback-id"
+
+
+# ---------------------------------------------------------------------------
+# send_control_response edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestSendControlResponseEdgeCases:
+    @pytest.mark.asyncio
+    async def test_unknown_request_id_logs_warning(self, tmp_path):
+        """Responding to an unknown request_id should be a no-op (warning logged)."""
+        t = _make_transport(tmp_path)
+        t._ws = FakeWebSocket()
+
+        await t.send_control_response("nonexistent", {"behavior": "allow"})
+
+        # Nothing sent
+        assert len(t._ws.sent) == 0
+
+    @pytest.mark.asyncio
+    async def test_allow_forever_maps_to_accept(self, tmp_path):
+        t = _make_transport(tmp_path)
+        t._ws = FakeWebSocket()
+        t._pending_approvals["10"] = 10
+
+        await t.send_control_response("10", {"behavior": "allowForever"})
+
+        msg = json.loads(t._ws.sent[0])
+        assert msg["result"]["decision"] == "accept"
+
+
+# ---------------------------------------------------------------------------
+# send_control edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestSendControlEdgeCases:
+    @pytest.mark.asyncio
+    async def test_unknown_subtype_is_noop(self, tmp_path):
+        """Unknown control subtypes should not raise."""
+        t = _make_transport(tmp_path)
+        await t.send_control("totally_unknown")
+
+    @pytest.mark.asyncio
+    async def test_set_model_non_string_ignored(self, tmp_path):
+        t = _make_transport(tmp_path, model="o4-mini")
+        await t.send_control("set_model", model=123)
+        assert t._model == "o4-mini"  # Unchanged
+
+    @pytest.mark.asyncio
+    async def test_set_model_none_ignored(self, tmp_path):
+        t = _make_transport(tmp_path, model="o4-mini")
+        await t.send_control("set_model", model=None)
+        assert t._model == "o4-mini"  # Unchanged
+
+
+# ---------------------------------------------------------------------------
+# _handle_server_message dispatches to _handle_server_request
+# ---------------------------------------------------------------------------
+
+
+class TestServerMessageWithId:
+    @pytest.mark.asyncio
+    async def test_message_with_id_dispatches_to_server_request(self, tmp_path):
+        """If a message has both 'method' and 'id' (no result/error), it's a server request."""
+        t = _make_transport(tmp_path)
+        t._ws = FakeWebSocket()
+        emit = _collect_emits(t)
+
+        await t._handle_server_message(
+            {
+                "id": 55,
+                "method": "item/commandExecution/requestApproval",
+                "params": {"command": "echo hi"},
+            }
+        )
+
+        event = emit.call_args[0][0]
+        assert event["type"] == "control_request"
+        assert event["tool"] == "Bash"
+
+
+# ---------------------------------------------------------------------------
+# thread/started notification sets thread_id
+# ---------------------------------------------------------------------------
+
+
+class TestThreadStartedNotification:
+    @pytest.mark.asyncio
+    async def test_thread_started_sets_thread_id(self, tmp_path):
+        t = _make_transport(tmp_path)
+        _collect_emits(t)
+
+        await t._handle_server_message(
+            {
+                "method": "thread/started",
+                "params": {"thread": {"id": "new-thread-123"}},
+            }
+        )
+
+        assert t._thread_id == "new-thread-123"
+
+    @pytest.mark.asyncio
+    async def test_thread_started_no_id_keeps_existing(self, tmp_path):
+        t = _make_transport(tmp_path)
+        t._thread_id = "existing"
+        _collect_emits(t)
+
+        await t._handle_server_message(
+            {
+                "method": "thread/started",
+                "params": {"thread": {}},
+            }
+        )
+
+        # tid was falsy, so _thread_id not updated
+        assert t._thread_id == "existing"
+
+
+# ---------------------------------------------------------------------------
+# fileChange/outputDelta notification
+# ---------------------------------------------------------------------------
+
+
+class TestFileChangeOutputDelta:
+    @pytest.mark.asyncio
+    async def test_file_change_output_delta_emits_text(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_server_message(
+            {
+                "method": "item/fileChange/outputDelta",
+                "params": {"delta": "patching file.py"},
+            }
+        )
+
+        events = _emitted_events(emit)
+        assert len(events) == 1
+        assert events[0]["delta"]["text"] == "patching file.py"
+
+    @pytest.mark.asyncio
+    async def test_file_change_output_delta_empty_ignored(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_server_message(
+            {
+                "method": "item/fileChange/outputDelta",
+                "params": {"delta": ""},
+            }
+        )
+
+        assert emit.call_count == 0
+
+
+# ---------------------------------------------------------------------------
+# _emit_text_delta edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestEmitTextDelta:
+    @pytest.mark.asyncio
+    async def test_empty_text_not_emitted(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._emit_text_delta("")
+
+        assert emit.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_nonempty_text_emitted(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._emit_text_delta("hello")
+
+        assert emit.call_count == 1
+        event = emit.call_args[0][0]
+        assert event["delta"]["type"] == "text_delta"
+        assert event["delta"]["text"] == "hello"
+
+
+# ---------------------------------------------------------------------------
+# Config integration
+# ---------------------------------------------------------------------------
+
+
 class TestConfigIntegration:
     def test_codex_ws_cli_type_resolves_adapter(self):
         from skuld.config import SkuldSettings
