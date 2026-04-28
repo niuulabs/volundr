@@ -29,20 +29,33 @@ def _make_transport(tmp_path, **kwargs):
     return CodexWebSocketTransport(**defaults)
 
 
+def _collect_emits(transport):
+    """Attach an AsyncMock to _emit and return it for assertion."""
+    mock = AsyncMock()
+    transport._emit = mock
+    return mock
+
+
+def _emitted_events(mock):
+    """Return all events passed to _emit as a list."""
+    return [call[0][0] for call in mock.call_args_list]
+
+
+def _events_of_type(mock, event_type):
+    """Filter emitted events by type."""
+    return [e for e in _emitted_events(mock) if e.get("type") == event_type]
+
+
 class FakeWebSocket:
     """Simulates a websockets ClientConnection for testing."""
 
-    def __init__(self, responses=None):
+    def __init__(self):
         self.sent: list[str] = []
-        self._responses = list(responses or [])
         self._closed = False
         self._recv_queue: asyncio.Queue = asyncio.Queue()
 
     async def send(self, data: str) -> None:
         self.sent.append(data)
-
-    async def recv(self) -> str:
-        return await self._recv_queue.get()
 
     async def close(self) -> None:
         self._closed = True
@@ -133,14 +146,10 @@ class TestHandshake:
         t._ws = ws
         t._alive = True
 
-        # Mock _send_rpc to return expected responses
-        call_count = 0
         original_params = []
 
         async def fake_send_rpc(method, params=None):
-            nonlocal call_count
             original_params.append((method, params))
-            call_count += 1
             if method == "initialize":
                 return {"userAgent": "codex/0.114.0"}
             if method == "thread/start":
@@ -149,24 +158,17 @@ class TestHandshake:
 
         t._send_rpc = fake_send_rpc
         t._send_notification = AsyncMock()
-        t._emit = AsyncMock()
+        emit = _collect_emits(t)
 
         await t._handshake()
 
-        # Verify initialize was called
         assert original_params[0][0] == "initialize"
         assert original_params[0][1]["clientInfo"]["name"] == "skuld"
-
-        # Verify initialized notification
         t._send_notification.assert_called_once_with("initialized")
-
-        # Verify thread/start
         assert original_params[1][0] == "thread/start"
         assert t._thread_id == "thread-abc-123"
 
-        # Verify synthetic init event emitted
-        t._emit.assert_called_once()
-        init_event = t._emit.call_args[0][0]
+        init_event = emit.call_args[0][0]
         assert init_event["type"] == "system"
         assert init_event["subtype"] == "init"
         assert init_event["session_id"] == "thread-abc-123"
@@ -189,7 +191,7 @@ class TestHandshake:
 
         t._send_rpc = fake_send_rpc
         t._send_notification = AsyncMock()
-        t._emit = AsyncMock()
+        _collect_emits(t)
 
         await t._handshake()
 
@@ -214,7 +216,7 @@ class TestHandshake:
 
         t._send_rpc = fake_send_rpc
         t._send_notification = AsyncMock()
-        t._emit = AsyncMock()
+        _collect_emits(t)
 
         await t._handshake()
 
@@ -253,6 +255,25 @@ class TestSendMessage:
         assert params["input"][0]["text"] == "hello world"
 
     @pytest.mark.asyncio
+    async def test_send_message_resets_state(self, tmp_path):
+        t = _make_transport(tmp_path)
+        t._thread_id = "thread-1"
+        t._last_result = {"old": True}
+        t._last_usage = {"old": True}
+        t._block_index = 5
+
+        async def fake_send_rpc(method, params=None):
+            return {}
+
+        t._send_rpc = fake_send_rpc
+
+        await t.send_message("test")
+
+        assert t._last_result is None
+        assert t._last_usage is None
+        assert t._block_index == 0
+
+    @pytest.mark.asyncio
     async def test_send_message_without_thread_raises(self, tmp_path):
         t = _make_transport(tmp_path)
         with pytest.raises(RuntimeError, match="No active thread"):
@@ -268,7 +289,7 @@ class TestEventNormalization:
     @pytest.mark.asyncio
     async def test_agent_message_delta(self, tmp_path):
         t = _make_transport(tmp_path)
-        t._emit = AsyncMock()
+        emit = _collect_emits(t)
 
         await t._handle_server_message(
             {
@@ -282,16 +303,16 @@ class TestEventNormalization:
             }
         )
 
-        t._emit.assert_called_once()
-        event = t._emit.call_args[0][0]
-        assert event["type"] == "content_block_delta"
-        assert event["delta"]["type"] == "text_delta"
-        assert event["delta"]["text"] == "Hello "
+        events = _emitted_events(emit)
+        assert len(events) == 1
+        assert events[0]["type"] == "content_block_delta"
+        assert events[0]["delta"]["type"] == "text_delta"
+        assert events[0]["delta"]["text"] == "Hello "
 
     @pytest.mark.asyncio
     async def test_reasoning_delta(self, tmp_path):
         t = _make_transport(tmp_path)
-        t._emit = AsyncMock()
+        emit = _collect_emits(t)
 
         await t._handle_server_message(
             {
@@ -300,14 +321,29 @@ class TestEventNormalization:
             }
         )
 
-        event = t._emit.call_args[0][0]
+        event = emit.call_args[0][0]
         assert event["delta"]["type"] == "thinking_delta"
         assert event["delta"]["thinking"] == "thinking..."
 
     @pytest.mark.asyncio
-    async def test_turn_started_sets_turn_id(self, tmp_path):
+    async def test_reasoning_summary_delta(self, tmp_path):
         t = _make_transport(tmp_path)
-        t._emit = AsyncMock()
+        emit = _collect_emits(t)
+
+        await t._handle_server_message(
+            {
+                "method": "item/reasoning/summaryTextDelta",
+                "params": {"threadId": "t1", "turnId": "turn1", "delta": "summary"},
+            }
+        )
+
+        event = emit.call_args[0][0]
+        assert event["delta"]["type"] == "thinking_delta"
+
+    @pytest.mark.asyncio
+    async def test_turn_started_emits_assistant_event(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
 
         await t._handle_server_message(
             {
@@ -320,12 +356,28 @@ class TestEventNormalization:
         )
 
         assert t._current_turn_id == "turn-42"
+        assert t._block_index == 0
+
+        # Should emit an assistant event to start a new streaming message
+        events = _events_of_type(emit, "assistant")
+        assert len(events) == 1
+        assert events[0]["message"]["model"] == "o4-mini"
+        assert events[0]["message"]["content"] == []
 
     @pytest.mark.asyncio
-    async def test_turn_completed_emits_result(self, tmp_path):
+    async def test_turn_completed_emits_result_with_usage(self, tmp_path):
         t = _make_transport(tmp_path)
         t._current_turn_id = "turn-42"
-        t._emit = AsyncMock()
+        # Simulate usage arriving before turn/completed
+        t._last_usage = {
+            "o4-mini": {
+                "inputTokens": 500,
+                "outputTokens": 200,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0,
+            }
+        }
+        emit = _collect_emits(t)
 
         await t._handle_server_message(
             {
@@ -343,15 +395,37 @@ class TestEventNormalization:
         )
 
         assert t._current_turn_id is None
-        t._emit.assert_called_once()
-        event = t._emit.call_args[0][0]
-        assert event["type"] == "result"
-        assert event["stop_reason"] == "end_turn"
+        result_events = _events_of_type(emit, "result")
+        assert len(result_events) == 1
+        result = result_events[0]
+        assert result["stop_reason"] == "end_turn"
+        assert result["modelUsage"]["o4-mini"]["inputTokens"] == 500
+        assert result["modelUsage"]["o4-mini"]["outputTokens"] == 200
 
     @pytest.mark.asyncio
-    async def test_token_usage_updated(self, tmp_path):
+    async def test_turn_completed_without_usage(self, tmp_path):
+        t = _make_transport(tmp_path)
+        t._current_turn_id = "turn-1"
+        t._last_usage = None
+        emit = _collect_emits(t)
+
+        await t._handle_server_message(
+            {
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "t1",
+                    "turn": {"id": "turn-1", "items": [], "status": "completed", "error": None},
+                },
+            }
+        )
+
+        result = _events_of_type(emit, "result")[0]
+        assert result["modelUsage"] == {}
+
+    @pytest.mark.asyncio
+    async def test_token_usage_saves_and_emits_message_delta(self, tmp_path):
         t = _make_transport(tmp_path, model="o4-mini")
-        t._emit = AsyncMock()
+        emit = _collect_emits(t)
 
         await t._handle_server_message(
             {
@@ -367,22 +441,35 @@ class TestEventNormalization:
                             "outputTokens": 300,
                             "reasoningOutputTokens": 0,
                         },
-                        "last": {},
+                        "last": {
+                            "totalTokens": 500,
+                            "inputTokens": 400,
+                            "cachedInputTokens": 50,
+                            "outputTokens": 100,
+                            "reasoningOutputTokens": 0,
+                        },
                     },
                 },
             }
         )
 
-        assert t._last_result is not None
-        usage = t._last_result["modelUsage"]["o4-mini"]
-        assert usage["inputTokens"] == 1000
-        assert usage["outputTokens"] == 300
-        assert usage["cacheReadInputTokens"] == 200
+        # Usage saved for later result event
+        assert t._last_usage is not None
+        usage = t._last_usage["o4-mini"]
+        # Should prefer "last" over "total"
+        assert usage["inputTokens"] == 400
+        assert usage["outputTokens"] == 100
+        assert usage["cacheReadInputTokens"] == 50
+
+        # message_delta emitted for browser token counter
+        delta_events = _events_of_type(emit, "message_delta")
+        assert len(delta_events) == 1
+        assert delta_events[0]["usage"]["output_tokens"] == 100
 
     @pytest.mark.asyncio
-    async def test_error_notification(self, tmp_path):
+    async def test_error_notification_uses_error_field(self, tmp_path):
         t = _make_transport(tmp_path)
-        t._emit = AsyncMock()
+        emit = _collect_emits(t)
 
         await t._handle_server_message(
             {
@@ -396,15 +483,15 @@ class TestEventNormalization:
             }
         )
 
-        event = t._emit.call_args[0][0]
+        event = emit.call_args[0][0]
         assert event["type"] == "error"
-        assert "rate limit" in event["content"]
+        assert event["error"] == "rate limit exceeded"
 
     @pytest.mark.asyncio
     async def test_thread_closed_sets_not_alive(self, tmp_path):
         t = _make_transport(tmp_path)
         t._alive = True
-        t._emit = AsyncMock()
+        _collect_emits(t)
 
         await t._handle_server_message({"method": "thread/closed", "params": {"threadId": "t1"}})
 
@@ -412,15 +499,16 @@ class TestEventNormalization:
 
 
 # ---------------------------------------------------------------------------
-# Item lifecycle (tool calls)
+# Item lifecycle (tool calls) — browser + broker event shapes
 # ---------------------------------------------------------------------------
 
 
 class TestItemLifecycle:
     @pytest.mark.asyncio
-    async def test_command_execution_started(self, tmp_path):
+    async def test_command_execution_started_emits_assistant_and_blocks(self, tmp_path):
+        """Tool start should emit both assistant (broker) and content_block (browser) events."""
         t = _make_transport(tmp_path)
-        t._emit = AsyncMock()
+        emit = _collect_emits(t)
 
         await t._handle_item_started(
             {
@@ -431,15 +519,40 @@ class TestItemLifecycle:
             }
         )
 
-        event = t._emit.call_args[0][0]
-        assert event["type"] == "assistant"
-        assert event["content"][0]["name"] == "Bash"
-        assert event["content"][0]["input"]["command"] == "ls -la"
+        events = _emitted_events(emit)
+
+        # 1. assistant event for broker artifact tracking
+        assistant_events = [e for e in events if e.get("type") == "assistant"]
+        assert len(assistant_events) == 1
+        msg = assistant_events[0]["message"]
+        assert msg["model"] == "o4-mini"
+        tool_block = msg["content"][0]
+        assert tool_block["type"] == "tool_use"
+        assert tool_block["id"] == "cmd-1"
+        assert tool_block["name"] == "Bash"
+        assert tool_block["input"]["command"] == "ls -la"
+
+        # 2. content_block_start for browser rendering
+        block_starts = [e for e in events if e.get("type") == "content_block_start"]
+        assert len(block_starts) == 1
+        assert block_starts[0]["content_block"]["type"] == "tool_use"
+        assert block_starts[0]["content_block"]["name"] == "Bash"
+
+        # 3. input_json_delta for browser tool input
+        deltas = [
+            e
+            for e in events
+            if e.get("type") == "content_block_delta"
+            and e.get("delta", {}).get("type") == "input_json_delta"
+        ]
+        assert len(deltas) == 1
+        parsed = json.loads(deltas[0]["delta"]["partial_json"])
+        assert parsed["command"] == "ls -la"
 
     @pytest.mark.asyncio
     async def test_file_change_started(self, tmp_path):
         t = _make_transport(tmp_path)
-        t._emit = AsyncMock()
+        emit = _collect_emits(t)
 
         await t._handle_item_started(
             {
@@ -449,13 +562,14 @@ class TestItemLifecycle:
             }
         )
 
-        event = t._emit.call_args[0][0]
-        assert event["content"][0]["name"] == "Edit"
+        assistant_events = _events_of_type(emit, "assistant")
+        assert assistant_events[0]["message"]["content"][0]["name"] == "Edit"
 
     @pytest.mark.asyncio
-    async def test_command_execution_completed(self, tmp_path):
+    async def test_command_execution_completed_emits_stop_and_output(self, tmp_path):
+        """Command completion should close the tool block and show output as text."""
         t = _make_transport(tmp_path)
-        t._emit = AsyncMock()
+        emit = _collect_emits(t)
 
         await t._handle_item_completed(
             {
@@ -466,14 +580,26 @@ class TestItemLifecycle:
             }
         )
 
-        event = t._emit.call_args[0][0]
-        assert event["type"] == "tool_result"
-        assert event["is_error"] is False
+        events = _emitted_events(emit)
+
+        # content_block_stop for the tool_use block
+        stops = [e for e in events if e.get("type") == "content_block_stop"]
+        assert len(stops) >= 1
+
+        # Output shown as text block
+        text_deltas = [
+            e
+            for e in events
+            if e.get("type") == "content_block_delta"
+            and e.get("delta", {}).get("type") == "text_delta"
+        ]
+        assert len(text_deltas) == 1
+        assert "file1.py" in text_deltas[0]["delta"]["text"]
 
     @pytest.mark.asyncio
-    async def test_command_execution_failed(self, tmp_path):
+    async def test_command_execution_failed_shows_exit_code(self, tmp_path):
         t = _make_transport(tmp_path)
-        t._emit = AsyncMock()
+        emit = _collect_emits(t)
 
         await t._handle_item_completed(
             {
@@ -484,13 +610,60 @@ class TestItemLifecycle:
             }
         )
 
-        event = t._emit.call_args[0][0]
-        assert event["is_error"] is True
+        text_deltas = [
+            e
+            for e in _emitted_events(emit)
+            if e.get("type") == "content_block_delta"
+            and e.get("delta", {}).get("type") == "text_delta"
+        ]
+        assert len(text_deltas) == 1
+        assert "[exit code 1]" in text_deltas[0]["delta"]["text"]
+
+    @pytest.mark.asyncio
+    async def test_agent_message_started_emits_text_block(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_item_started({"type": "agentMessage", "id": "msg-1", "text": ""})
+
+        block_starts = _events_of_type(emit, "content_block_start")
+        assert len(block_starts) == 1
+        assert block_starts[0]["content_block"]["type"] == "text"
+
+    @pytest.mark.asyncio
+    async def test_agent_message_completed_emits_stop(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_item_completed({"type": "agentMessage", "id": "msg-1", "text": "done"})
+
+        stops = _events_of_type(emit, "content_block_stop")
+        assert len(stops) == 1
+
+    @pytest.mark.asyncio
+    async def test_reasoning_started_emits_thinking_block(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_item_started({"type": "reasoning", "id": "r-1"})
+
+        block_starts = _events_of_type(emit, "content_block_start")
+        assert block_starts[0]["content_block"]["type"] == "thinking"
+
+    @pytest.mark.asyncio
+    async def test_reasoning_completed_emits_stop(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_item_completed({"type": "reasoning", "id": "r-1"})
+
+        stops = _events_of_type(emit, "content_block_stop")
+        assert len(stops) == 1
 
     @pytest.mark.asyncio
     async def test_mcp_tool_call_started(self, tmp_path):
         t = _make_transport(tmp_path)
-        t._emit = AsyncMock()
+        emit = _collect_emits(t)
 
         await t._handle_item_started(
             {
@@ -502,8 +675,31 @@ class TestItemLifecycle:
             }
         )
 
-        event = t._emit.call_args[0][0]
-        assert event["content"][0]["name"] == "Read"
+        assistant_events = _events_of_type(emit, "assistant")
+        assert assistant_events[0]["message"]["content"][0]["name"] == "Read"
+
+    @pytest.mark.asyncio
+    async def test_web_search_started(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_item_started({"type": "webSearch", "id": "ws-1", "query": "python async"})
+
+        assistant_events = _events_of_type(emit, "assistant")
+        assert assistant_events[0]["message"]["content"][0]["name"] == "WebSearch"
+        assert assistant_events[0]["message"]["content"][0]["input"]["query"] == "python async"
+
+    @pytest.mark.asyncio
+    async def test_block_index_increments(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_item_started({"type": "agentMessage", "id": "m1", "text": ""})
+        await t._handle_item_started({"type": "reasoning", "id": "r1"})
+
+        block_starts = _events_of_type(emit, "content_block_start")
+        assert block_starts[0]["index"] == 0
+        assert block_starts[1]["index"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -565,7 +761,7 @@ class TestApprovals:
     @pytest.mark.asyncio
     async def test_command_approval_emits_control_request(self, tmp_path):
         t = _make_transport(tmp_path)
-        t._emit = AsyncMock()
+        emit = _collect_emits(t)
 
         await t._handle_server_request(
             {
@@ -580,36 +776,71 @@ class TestApprovals:
             }
         )
 
-        event = t._emit.call_args[0][0]
+        event = emit.call_args[0][0]
         assert event["type"] == "control_request"
         assert event["tool"] == "Bash"
         assert event["input"]["command"] == "rm -rf /tmp/test"
-
-        # Verify the approval is stored for later response
         assert "42" in t._pending_approvals
+
+    @pytest.mark.asyncio
+    async def test_file_change_approval(self, tmp_path):
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        await t._handle_server_request(
+            {
+                "id": 99,
+                "method": "item/fileChange/requestApproval",
+                "params": {"threadId": "t1", "turnId": "turn1", "itemId": "fc-1"},
+            }
+        )
+
+        event = emit.call_args[0][0]
+        assert event["type"] == "control_request"
+        assert event["tool"] == "Edit"
+        assert "99" in t._pending_approvals
 
     @pytest.mark.asyncio
     async def test_send_control_response_approves(self, tmp_path):
         t = _make_transport(tmp_path)
         t._ws = FakeWebSocket()
-        t._pending_approvals = {"42": 42}
+        t._pending_approvals["42"] = 42
 
         await t.send_control_response("42", {"behavior": "allow"})
 
         sent = json.loads(t._ws.sent[0])
         assert sent["id"] == 42
         assert sent["result"]["decision"] == "allow"
+        assert "42" not in t._pending_approvals
 
     @pytest.mark.asyncio
     async def test_send_control_response_denies(self, tmp_path):
         t = _make_transport(tmp_path)
         t._ws = FakeWebSocket()
-        t._pending_approvals = {"42": 42}
+        t._pending_approvals["42"] = 42
 
         await t.send_control_response("42", {"behavior": "deny"})
 
         sent = json.loads(t._ws.sent[0])
         assert sent["result"]["decision"] == "deny"
+
+    @pytest.mark.asyncio
+    async def test_unknown_request_auto_approved(self, tmp_path):
+        t = _make_transport(tmp_path)
+        t._ws = FakeWebSocket()
+        _collect_emits(t)
+
+        await t._handle_server_request(
+            {
+                "id": 77,
+                "method": "some/unknown/request",
+                "params": {},
+            }
+        )
+
+        sent = json.loads(t._ws.sent[0])
+        assert sent["id"] == 77
+        assert sent["result"]["decision"] == "allow"
 
 
 # ---------------------------------------------------------------------------
@@ -629,7 +860,7 @@ class TestResume:
             return {"thread": {"id": "resumed-thread"}}
 
         t._send_rpc = fake_send_rpc
-        t._emit = AsyncMock()
+        emit = _collect_emits(t)
 
         await t.resume("old-thread-id")
 
@@ -637,7 +868,7 @@ class TestResume:
         assert calls[0][1]["threadId"] == "old-thread-id"
         assert t._thread_id == "resumed-thread"
 
-        init_event = t._emit.call_args[0][0]
+        init_event = emit.call_args[0][0]
         assert init_event["type"] == "system"
         assert init_event["session_id"] == "resumed-thread"
 
@@ -651,9 +882,6 @@ class TestReceiveLoop:
     @pytest.mark.asyncio
     async def test_rpc_response_resolves_future(self, tmp_path):
         t = _make_transport(tmp_path)
-        ws = FakeWebSocket()
-        t._ws = ws
-        t._alive = True
 
         loop = asyncio.get_event_loop()
         fut = loop.create_future()
@@ -710,6 +938,223 @@ class TestStopCleanup:
         assert t._process is None
         assert ws._closed is True
         assert fut.cancelled()
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: full turn simulation
+# ---------------------------------------------------------------------------
+
+
+class TestFullTurnFlow:
+    """Simulate a complete Codex turn and verify the browser sees the right event sequence."""
+
+    @pytest.mark.asyncio
+    async def test_text_turn_lifecycle(self, tmp_path):
+        """turn/started → item/started(agentMessage) → deltas → item/completed → turn/completed."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        # 1. Turn starts
+        await t._handle_server_message(
+            {
+                "method": "turn/started",
+                "params": {
+                    "threadId": "t1",
+                    "turn": {"id": "turn-1", "items": [], "status": "running", "error": None},
+                },
+            }
+        )
+
+        # 2. Agent message item starts
+        await t._handle_server_message(
+            {
+                "method": "item/started",
+                "params": {
+                    "item": {"type": "agentMessage", "id": "msg-1", "text": "", "phase": None},
+                    "threadId": "t1",
+                    "turnId": "turn-1",
+                },
+            }
+        )
+
+        # 3. Text deltas
+        await t._handle_server_message(
+            {
+                "method": "item/agentMessage/delta",
+                "params": {
+                    "threadId": "t1",
+                    "turnId": "turn-1",
+                    "itemId": "msg-1",
+                    "delta": "Hello ",
+                },
+            }
+        )
+        await t._handle_server_message(
+            {
+                "method": "item/agentMessage/delta",
+                "params": {
+                    "threadId": "t1",
+                    "turnId": "turn-1",
+                    "itemId": "msg-1",
+                    "delta": "world!",
+                },
+            }
+        )
+
+        # 4. Item completed
+        await t._handle_server_message(
+            {
+                "method": "item/completed",
+                "params": {
+                    "item": {
+                        "type": "agentMessage",
+                        "id": "msg-1",
+                        "text": "Hello world!",
+                        "phase": None,
+                    },
+                    "threadId": "t1",
+                    "turnId": "turn-1",
+                },
+            }
+        )
+
+        # 5. Token usage
+        await t._handle_server_message(
+            {
+                "method": "thread/tokenUsage/updated",
+                "params": {
+                    "threadId": "t1",
+                    "turnId": "turn-1",
+                    "tokenUsage": {
+                        "total": {
+                            "totalTokens": 100,
+                            "inputTokens": 80,
+                            "cachedInputTokens": 0,
+                            "outputTokens": 20,
+                            "reasoningOutputTokens": 0,
+                        },
+                        "last": {},
+                    },
+                },
+            }
+        )
+
+        # 6. Turn completed
+        await t._handle_server_message(
+            {
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "t1",
+                    "turn": {"id": "turn-1", "items": [], "status": "completed", "error": None},
+                },
+            }
+        )
+
+        events = _emitted_events(emit)
+        types = [e["type"] for e in events]
+
+        # Verify expected sequence
+        assert "assistant" in types  # Turn start signal
+        assert "content_block_start" in types  # Text block opens
+        assert types.count("content_block_delta") >= 2  # Text deltas
+        assert "content_block_stop" in types  # Text block closes
+        assert "message_delta" in types  # Token counter
+        assert "result" in types  # Turn complete
+
+        # Result has usage
+        result = _events_of_type(emit, "result")[0]
+        assert result["modelUsage"]["o4-mini"]["inputTokens"] == 80
+
+    @pytest.mark.asyncio
+    async def test_tool_turn_lifecycle(self, tmp_path):
+        """Tool call: item/started(commandExecution) → output → item/completed."""
+        t = _make_transport(tmp_path)
+        emit = _collect_emits(t)
+
+        # Turn starts
+        await t._handle_server_message(
+            {
+                "method": "turn/started",
+                "params": {
+                    "threadId": "t1",
+                    "turn": {"id": "turn-2", "items": [], "status": "running", "error": None},
+                },
+            }
+        )
+
+        # Command execution starts
+        await t._handle_server_message(
+            {
+                "method": "item/started",
+                "params": {
+                    "item": {
+                        "type": "commandExecution",
+                        "id": "cmd-1",
+                        "command": "git status",
+                        "cwd": "/workspace",
+                    },
+                    "threadId": "t1",
+                    "turnId": "turn-2",
+                },
+            }
+        )
+
+        # Command output delta
+        await t._handle_server_message(
+            {
+                "method": "item/commandExecution/outputDelta",
+                "params": {
+                    "threadId": "t1",
+                    "turnId": "turn-2",
+                    "itemId": "cmd-1",
+                    "delta": "On branch main\n",
+                },
+            }
+        )
+
+        # Command completed
+        await t._handle_server_message(
+            {
+                "method": "item/completed",
+                "params": {
+                    "item": {
+                        "type": "commandExecution",
+                        "id": "cmd-1",
+                        "command": "git status",
+                        "cwd": "/workspace",
+                        "aggregatedOutput": "On branch main\nnothing to commit",
+                        "exitCode": 0,
+                    },
+                    "threadId": "t1",
+                    "turnId": "turn-2",
+                },
+            }
+        )
+
+        events = _emitted_events(emit)
+
+        # Assistant event for broker tracking
+        assistant_events = _events_of_type(emit, "assistant")
+        assert len(assistant_events) >= 2  # Turn start + tool use
+        tool_assistant = [e for e in assistant_events if e.get("message", {}).get("content")]
+        assert len(tool_assistant) >= 1
+        tool_block = tool_assistant[-1]["message"]["content"][0]
+        assert tool_block["name"] == "Bash"
+        assert tool_block["id"] == "cmd-1"
+
+        # content_block_start for tool_use
+        block_starts = _events_of_type(emit, "content_block_start")
+        tool_starts = [b for b in block_starts if b["content_block"].get("type") == "tool_use"]
+        assert len(tool_starts) >= 1
+
+        # Output text shown
+        text_deltas = [
+            e
+            for e in events
+            if e.get("type") == "content_block_delta"
+            and e.get("delta", {}).get("type") == "text_delta"
+        ]
+        assert any("branch main" in d["delta"]["text"] for d in text_deltas)
 
 
 # ---------------------------------------------------------------------------

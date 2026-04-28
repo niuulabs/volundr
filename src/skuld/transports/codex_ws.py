@@ -85,10 +85,14 @@ class CodexWebSocketTransport(CLITransport):
         self._thread_id: str | None = None
         self._current_turn_id: str | None = None
         self._last_result: dict | None = None
+        self._last_usage: dict | None = None
         self._alive = False
+        self._block_index: int = 0
 
         # Pending RPC response futures keyed by request id.
         self._pending: dict[int, asyncio.Future] = {}
+        # Pending approval RPC ids keyed by string request_id.
+        self._pending_approvals: dict[str, int] = {}
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -328,65 +332,80 @@ class CodexWebSocketTransport(CLITransport):
             await self._handle_server_request(data)
             return
 
-        # --- Notifications ---
+        # --- Streaming text ---
         if method == "item/agentMessage/delta":
             await self._emit_text_delta(params.get("delta", ""))
             return
 
-        if method == "item/reasoning/textDelta":
+        # --- Reasoning / thinking ---
+        if method in ("item/reasoning/textDelta", "item/reasoning/summaryTextDelta"):
             delta = params.get("delta", "")
             if delta:
-                event = {
-                    "type": "content_block_delta",
-                    "delta": {"type": "thinking_delta", "thinking": delta},
-                }
-                await self._emit(event)
+                await self._emit(
+                    {
+                        "type": "content_block_delta",
+                        "delta": {"type": "thinking_delta", "thinking": delta},
+                    }
+                )
             return
 
-        if method == "item/reasoning/summaryTextDelta":
-            delta = params.get("delta", "")
-            if delta:
-                event = {
-                    "type": "content_block_delta",
-                    "delta": {"type": "thinking_delta", "thinking": delta},
-                }
-                await self._emit(event)
-            return
-
+        # --- Turn lifecycle ---
         if method == "turn/started":
             turn = params.get("turn", {})
             self._current_turn_id = turn.get("id")
+            self._block_index = 0
+            # Emit an assistant event to signal a new streaming message.
+            # The browser uses this to create a new message with status 'running'.
+            await self._emit(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "model": self._model,
+                        "content": [],
+                    },
+                }
+            )
             return
 
         if method == "turn/completed":
             self._current_turn_id = None
-            # Emit a result event
+            # Merge saved usage into result event.
+            usage = self._last_usage or {}
             self._last_result = {
                 "type": "result",
                 "stop_reason": "end_turn",
-                "modelUsage": {},
+                "modelUsage": usage,
             }
             await self._emit(self._last_result)
             return
 
+        # --- Token usage (arrives before turn/completed) ---
         if method == "thread/tokenUsage/updated":
             usage = params.get("tokenUsage", {})
             total = usage.get("total", {})
+            last = usage.get("last", {})
             model_id = self._model
-            self._last_result = {
-                "type": "result",
-                "stop_reason": "end_turn",
-                "modelUsage": {
-                    model_id: {
-                        "inputTokens": total.get("inputTokens", 0),
-                        "outputTokens": total.get("outputTokens", 0),
-                        "cacheReadInputTokens": total.get("cachedInputTokens", 0),
-                        "cacheCreationInputTokens": 0,
-                    }
-                },
+            self._last_usage = {
+                model_id: {
+                    "inputTokens": last.get("inputTokens", 0) or total.get("inputTokens", 0),
+                    "outputTokens": last.get("outputTokens", 0) or total.get("outputTokens", 0),
+                    "cacheReadInputTokens": last.get("cachedInputTokens", 0)
+                    or total.get("cachedInputTokens", 0),
+                    "cacheCreationInputTokens": 0,
+                }
             }
+            # Emit message_delta so the browser can update token counters live.
+            output_tokens = last.get("outputTokens", 0) or total.get("outputTokens", 0)
+            if output_tokens:
+                await self._emit(
+                    {
+                        "type": "message_delta",
+                        "usage": {"output_tokens": output_tokens},
+                    }
+                )
             return
 
+        # --- Item lifecycle (tool calls, agent text blocks) ---
         if method == "item/started":
             item = params.get("item", {})
             await self._handle_item_started(item)
@@ -397,6 +416,7 @@ class CodexWebSocketTransport(CLITransport):
             await self._handle_item_completed(item)
             return
 
+        # --- Command / file output deltas (show in chat as text) ---
         if method == "item/commandExecution/outputDelta":
             delta = params.get("delta", "")
             if delta:
@@ -409,13 +429,15 @@ class CodexWebSocketTransport(CLITransport):
                 await self._emit_text_delta(delta)
             return
 
+        # --- Errors ---
         if method == "error":
             error = params.get("error", {})
             message = error.get("message", str(params))
             logger.warning("Codex error notification: %s", message)
-            await self._emit({"type": "error", "content": message})
+            await self._emit({"type": "error", "error": message})
             return
 
+        # --- Thread lifecycle ---
         if method == "thread/started":
             thread = params.get("thread", {})
             tid = thread.get("id")
@@ -423,10 +445,7 @@ class CodexWebSocketTransport(CLITransport):
                 self._thread_id = tid
             return
 
-        if method == "thread/status/changed":
-            return  # Informational, no action needed
-
-        if method == "thread/name/updated":
+        if method in ("thread/status/changed", "thread/name/updated"):
             return  # Informational
 
         if method == "thread/closed":
@@ -446,7 +465,6 @@ class CodexWebSocketTransport(CLITransport):
         params = data.get("params", {})
 
         if method == "item/commandExecution/requestApproval":
-            # Emit as permission request to browser
             request_id = str(rid)
             command = params.get("command", "")
             await self._emit(
@@ -458,8 +476,6 @@ class CodexWebSocketTransport(CLITransport):
                     "input": {"command": command},
                 }
             )
-            # Store the RPC id so send_control_response can reply
-            self._pending_approvals: dict[str, int] = getattr(self, "_pending_approvals", {})
             self._pending_approvals[request_id] = rid
             return
 
@@ -478,7 +494,6 @@ class CodexWebSocketTransport(CLITransport):
                     "input": params,
                 }
             )
-            self._pending_approvals = getattr(self, "_pending_approvals", {})
             self._pending_approvals[request_id] = rid
             return
 
@@ -494,104 +509,128 @@ class CodexWebSocketTransport(CLITransport):
         await self._ws.send(json.dumps(msg))
 
     # ------------------------------------------------------------------
-    # Item handling (tool calls)
+    # Item handling (tool calls, agent text, reasoning)
     # ------------------------------------------------------------------
 
-    async def _handle_item_started(self, item: dict) -> None:
-        """Emit a tool_use event when an item starts."""
-        item_type = item.get("type", "")
+    def _next_block_index(self) -> int:
+        """Return and increment the content block index for this turn."""
+        idx = self._block_index
+        self._block_index += 1
+        return idx
 
-        if item_type == "commandExecution":
-            await self._emit(
-                {
-                    "type": "assistant",
+    async def _emit_content_block_start(self, block: dict) -> None:
+        """Emit a content_block_start event with the given block descriptor."""
+        idx = self._next_block_index()
+        await self._emit(
+            {
+                "type": "content_block_start",
+                "index": idx,
+                "content_block": block,
+            }
+        )
+
+    async def _emit_content_block_stop(self) -> None:
+        """Emit a content_block_stop event."""
+        await self._emit({"type": "content_block_stop"})
+
+    async def _emit_tool_use(self, item_id: str, name: str, tool_input: dict) -> None:
+        """Emit an assistant event (for broker tracking) + content_block lifecycle (for browser).
+
+        The broker reads ``assistant.message.content`` to track artifacts.
+        The browser renders via ``content_block_start/delta/stop``.
+        Both are needed.
+        """
+        # Broker-facing: assistant event with message.content
+        await self._emit(
+            {
+                "type": "assistant",
+                "message": {
+                    "model": self._model,
                     "content": [
                         {
                             "type": "tool_use",
-                            "name": "Bash",
-                            "input": {"command": item.get("command", "")},
+                            "id": item_id,
+                            "name": name,
+                            "input": tool_input,
                         }
                     ],
-                }
-            )
+                },
+            }
+        )
+        # Browser-facing: content_block lifecycle
+        await self._emit_content_block_start({"type": "tool_use", "id": item_id, "name": name})
+        input_json = json.dumps(tool_input)
+        await self._emit(
+            {
+                "type": "content_block_delta",
+                "delta": {"type": "input_json_delta", "partial_json": input_json},
+            }
+        )
+
+    async def _handle_item_started(self, item: dict) -> None:
+        """Emit proper content_block lifecycle events when an item starts."""
+        item_type = item.get("type", "")
+        item_id = item.get("id", "")
+
+        if item_type == "commandExecution":
+            await self._emit_tool_use(item_id, "Bash", {"command": item.get("command", "")})
             return
 
         if item_type == "fileChange":
-            changes = item.get("changes", [])
-            await self._emit(
-                {
-                    "type": "assistant",
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "name": "Edit",
-                            "input": {"changes": changes},
-                        }
-                    ],
-                }
-            )
+            await self._emit_tool_use(item_id, "Edit", {"changes": item.get("changes", [])})
             return
 
         if item_type == "mcpToolCall":
             tool = item.get("tool", "")
             args = item.get("arguments", {})
             normalized = _map_codex_tool(tool)
-            await self._emit(
-                {
-                    "type": "assistant",
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "name": normalized,
-                            "input": args if isinstance(args, dict) else {},
-                        }
-                    ],
-                }
-            )
+            await self._emit_tool_use(item_id, normalized, args if isinstance(args, dict) else {})
             return
 
         if item_type == "agentMessage":
-            # Start of agent text — nothing to emit yet, deltas follow
+            # Start a text content block — deltas will follow via agentMessage/delta.
+            await self._emit_content_block_start({"type": "text"})
             return
 
         if item_type == "reasoning":
+            await self._emit_content_block_start({"type": "thinking"})
             return
 
         if item_type == "webSearch":
-            await self._emit(
-                {
-                    "type": "assistant",
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "name": "WebSearch",
-                            "input": {"query": item.get("query", "")},
-                        }
-                    ],
-                }
-            )
+            await self._emit_tool_use(item_id, "WebSearch", {"query": item.get("query", "")})
             return
 
     async def _handle_item_completed(self, item: dict) -> None:
-        """Emit tool result events when an item completes."""
+        """Emit content_block_stop and any final content when an item completes."""
         item_type = item.get("type", "")
 
         if item_type == "commandExecution":
+            # Close the tool_use block
+            await self._emit_content_block_stop()
+            # Emit the output as a text block so the user sees the result
             output = item.get("aggregatedOutput", "")
-            exit_code = item.get("exitCode", 0)
-            await self._emit(
-                {
-                    "type": "tool_result",
-                    "content": output,
-                    "is_error": exit_code != 0,
-                }
-            )
+            if output:
+                await self._emit_content_block_start({"type": "text"})
+                exit_code = item.get("exitCode", 0)
+                prefix = "" if exit_code == 0 else f"[exit code {exit_code}] "
+                await self._emit_text_delta(prefix + output)
+                await self._emit_content_block_stop()
             return
 
         if item_type == "agentMessage":
+            # The final text may include content not sent via deltas.
             text = item.get("text", "")
             if text:
                 await self._emit_text_delta(text)
+            await self._emit_content_block_stop()
+            return
+
+        if item_type == "reasoning":
+            await self._emit_content_block_stop()
+            return
+
+        if item_type in ("fileChange", "mcpToolCall", "webSearch"):
+            await self._emit_content_block_stop()
             return
 
     # ------------------------------------------------------------------
@@ -619,6 +658,8 @@ class CodexWebSocketTransport(CLITransport):
             raise RuntimeError("No active thread — call start() first")
 
         self._last_result = None
+        self._last_usage = None
+        self._block_index = 0
         params: dict = {
             "threadId": self._thread_id,
             "input": [{"type": "text", "text": content, "text_elements": []}],
@@ -631,8 +672,7 @@ class CodexWebSocketTransport(CLITransport):
 
     async def send_control_response(self, request_id: str, response: dict) -> None:
         """Respond to a Codex approval request."""
-        approvals: dict[str, int] = getattr(self, "_pending_approvals", {})
-        rid = approvals.pop(request_id, None)
+        rid = self._pending_approvals.pop(request_id, None)
         if rid is None:
             logger.warning("No pending approval for request_id=%s", request_id)
             return
