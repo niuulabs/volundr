@@ -25,6 +25,7 @@ async def test_create_and_start_session_delegates_to_session_service() -> None:
         name="demo",
         model="claude",
         source=SimpleNamespace(),
+        definition="skuldClaude",
         template_name="template",
         preset_id=None,
         workspace_id=None,
@@ -47,6 +48,7 @@ async def test_create_and_start_session_delegates_to_session_service() -> None:
     session_service.create_session.assert_awaited_once()
     session_service.start_session.assert_awaited_once_with(
         created.id,
+        definition="skuldClaude",
         profile_name="default",
         template_name="template",
         principal=None,
