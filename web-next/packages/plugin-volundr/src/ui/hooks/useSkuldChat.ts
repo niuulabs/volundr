@@ -1023,7 +1023,7 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
         }
       }
     },
-    [finalizeStreaming, getDefaultAssistantParticipant],
+    [ensureSingleParticipant, finalizeStreaming, getDefaultAssistantParticipant],
   );
 
   const { sendJson } = useWebSocket(url, {

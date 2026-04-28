@@ -536,7 +536,7 @@ function FullFleetTable({ analysis }: { analysis: Analysis[] }) {
 export function BudgetView() {
   const { data: ravens, isLoading: ravensLoading } = useRavens();
   const { data: fleetBudget, isLoading: fleetLoading } = useFleetBudget();
-  const ravnList = ravens ?? [];
+  const ravnList = useMemo(() => ravens ?? [], [ravens]);
   const budgets = useRavnBudgets(ravnList.map((ravn) => ravn.id));
 
   const analysis = useMemo(

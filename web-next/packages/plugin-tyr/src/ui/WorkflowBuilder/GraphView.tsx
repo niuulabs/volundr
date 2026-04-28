@@ -922,7 +922,7 @@ export function GraphView({
     () => new Map<string, WorkflowNode>(nodes.map((n) => [n.id, n])),
     [nodes],
   );
-  const safeIssues = Array.isArray(issues) ? issues : [];
+  const safeIssues = useMemo(() => (Array.isArray(issues) ? issues : []), [issues]);
   const issueMap = useMemo(() => {
     const levels = new Map<string, 'error' | 'warning'>();
     for (const issue of safeIssues) {

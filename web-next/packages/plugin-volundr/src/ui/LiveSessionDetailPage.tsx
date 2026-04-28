@@ -1289,8 +1289,11 @@ export function LiveSessionDetailPage({
   const terminalUrl = deriveTerminalWsUrl(chatEndpoint);
   const chat = useSkuldChat(chatEndpoint);
   const sessionName = sessionQuery.data?.personaName ?? liveSession?.name ?? sessionId;
-  const sessionFeatures = sessionFeaturesQuery.data ?? [];
-  const featurePrefs = featurePrefsQuery.data ?? [];
+  const sessionFeatures = useMemo(
+    () => sessionFeaturesQuery.data ?? [],
+    [sessionFeaturesQuery.data],
+  );
+  const featurePrefs = useMemo(() => featurePrefsQuery.data ?? [], [featurePrefsQuery.data]);
   const modelCatalog = modelsQuery.data ?? {};
   const modelInfo = liveSession?.model ? modelCatalog[liveSession.model] : undefined;
   const modelLabel = modelInfo?.name ?? liveSession?.model ?? 'unknown';
@@ -1376,7 +1379,7 @@ export function LiveSessionDetailPage({
             </div>
           )
         : undefined,
-    [chat.pendingPermissions.length],
+    [chat],
   );
 
   async function refreshSessionData() {
