@@ -258,8 +258,20 @@ def _create_contributors(
     can accept the ports they need and ignore others via **_extra.
     """
     from volundr.adapters.outbound.contributors.local_mount import LocalMountContributor
+    from volundr.adapters.outbound.contributors.session_def import SessionDefinitionContributor
 
     contributors: list[SessionContributor] = []
+
+    # Auto-wire SessionDefinitionContributor first so definition defaults
+    # (broker.cliType, transportAdapter, etc.) are the base layer that
+    # later contributors (templates, profiles, resources) can override.
+    if settings.session_definitions:
+        contributors.append(SessionDefinitionContributor(definitions=settings.session_definitions))
+        logger.info(
+            "Session contributor: session_definition (auto-wired, %d definitions)",
+            len(settings.session_definitions),
+        )
+
     for cfg in settings.session_contributors:
         cls = import_class(cfg.adapter)
         resolved_kwargs = _resolve_secret_kwargs(cfg.kwargs, cfg.secret_kwargs_env)
