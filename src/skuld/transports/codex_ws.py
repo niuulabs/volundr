@@ -618,10 +618,8 @@ class CodexWebSocketTransport(CLITransport):
             return
 
         if item_type == "agentMessage":
-            # The final text may include content not sent via deltas.
-            text = item.get("text", "")
-            if text:
-                await self._emit_text_delta(text)
+            # The full text was already streamed via item/agentMessage/delta
+            # notifications, so just close the block without re-emitting.
             await self._emit_content_block_stop()
             return
 
