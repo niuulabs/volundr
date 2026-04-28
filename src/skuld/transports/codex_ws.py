@@ -240,7 +240,11 @@ class CodexWebSocketTransport(CLITransport):
             thread_params["approvalPolicy"] = "never"
             thread_params["sandbox"] = "danger-full-access"
         if self._system_prompt:
-            thread_params["developerInstructions"] = self._system_prompt
+            # baseInstructions = role/persona ("you are a service developer…")
+            # developerInstructions = per-session task instructions
+            # Skuld provides a single system_prompt that combines both,
+            # so we set it as baseInstructions (persistent identity).
+            thread_params["baseInstructions"] = self._system_prompt
 
         result = await self._send_rpc("thread/start", thread_params)
         # The response triggers a thread/started notification with the thread info.

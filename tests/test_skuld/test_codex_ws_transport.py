@@ -196,7 +196,7 @@ class TestHandshake:
         await t._handshake()
 
         thread_params = params_captured[1][1]
-        assert thread_params["developerInstructions"] == "Be helpful"
+        assert thread_params["baseInstructions"] == "Be helpful"
 
     @pytest.mark.asyncio
     async def test_handshake_skip_permissions(self, tmp_path):
