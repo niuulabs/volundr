@@ -69,10 +69,10 @@ RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
 RUN npm install -g npm@11.3.0
 
 # Install Claude Code CLI globally via npm
-RUN npm install -g @anthropic-ai/claude-code@2.1.81
+RUN npm install -g @anthropic-ai/claude-code@2.1.121
 
 # Install OpenAI Codex CLI globally via npm
-RUN npm install -g @openai/codex@0.114.0
+RUN npm install -g @openai/codex@0.125.0
 
 # Install OpenCode (opencode.ai) — download binary to /usr/local/bin
 # The install script puts it in ~/.opencode/bin which isn't accessible
