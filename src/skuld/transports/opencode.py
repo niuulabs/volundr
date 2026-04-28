@@ -71,6 +71,9 @@ class OpenCodeHttpTransport(CLITransport):
         self._block_index: int = 0
         self._pending_permissions: dict[str, dict] = {}
         self._user_message_ids: set[str] = set()
+        # Track partIDs that are reasoning/thinking so we route their
+        # deltas correctly even when the field name is ambiguous.
+        self._reasoning_part_ids: set[str] = set()
 
     @property
     def _base_url(self) -> str:
@@ -242,11 +245,15 @@ class OpenCodeHttpTransport(CLITransport):
             # Skip deltas for user messages (echoed prompt)
             if props.get("messageID", "") in self._user_message_ids:
                 return
+            part_id = props.get("partID", "")
             field = props.get("field", "")
             delta = props.get("delta", "")
             if not delta:
                 return
-            if field == "thinking":
+            # Route as thinking if the field says so OR if this partID
+            # was registered as a reasoning part.
+            is_thinking = field == "thinking" or part_id in self._reasoning_part_ids
+            if is_thinking:
                 await self._emit(
                     {
                         "type": "content_block_delta",
@@ -409,6 +416,7 @@ class OpenCodeHttpTransport(CLITransport):
             return
 
         if part_type == "reasoning":
+            self._reasoning_part_ids.add(part_id)
             idx = self._next_block_index()
             await self._emit(
                 {
@@ -462,6 +470,8 @@ class OpenCodeHttpTransport(CLITransport):
         self._last_result = None
         self._last_usage = None
         self._block_index = 0
+        self._user_message_ids.clear()
+        self._reasoning_part_ids.clear()
 
         body: dict = {
             "parts": [{"type": "text", "text": content}],

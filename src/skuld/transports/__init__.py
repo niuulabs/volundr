@@ -169,12 +169,12 @@ async def _stop_process(process: asyncio.subprocess.Process) -> None:
     if process.returncode is not None:
         return
 
-    logger.info("Stopping Claude Code CLI")
+    logger.info("Stopping CLI process (pid=%s)", process.pid)
     process.terminate()
     try:
         await asyncio.wait_for(process.wait(), timeout=5.0)
     except TimeoutError:
-        logger.warning("Claude Code CLI did not terminate, killing")
+        logger.warning("CLI process did not terminate (pid=%s), killing", process.pid)
         process.kill()
         await process.wait()
 
