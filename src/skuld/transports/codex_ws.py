@@ -222,7 +222,7 @@ class CodexWebSocketTransport(CLITransport):
             "initialize",
             {
                 "clientInfo": {"name": "skuld", "version": "1.0.0"},
-                "capabilities": {"experimentalApi": False},
+                "capabilities": {"experimentalApi": True},
             },
         )
         logger.info("Codex initialize response: %s", result)
