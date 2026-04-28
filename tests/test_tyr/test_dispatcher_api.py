@@ -115,7 +115,7 @@ class TestGetDispatcherState:
         assert resp.status_code == 200
         data = resp.json()
         assert data["running"] is True
-        assert data["threshold"] == 75.0
+        assert data["threshold"] == 0.75
         assert data["max_concurrent_raids"] == 3
         assert data["auto_continue"] is False
         assert "id" in data
@@ -138,7 +138,7 @@ class TestGetDispatcherState:
         assert resp.status_code == 200
         data = resp.json()
         assert data["running"] is False
-        assert data["threshold"] == 50.0
+        assert data["threshold"] == 0.5
         assert data["max_concurrent_raids"] == 5
         assert data["id"] == str(existing.id)
 
@@ -174,22 +174,9 @@ class TestPatchDispatcherState:
         assert resp.status_code == 200
         data = resp.json()
         assert data["running"] is False
-        assert data["threshold"] == 75.0  # unchanged
+        assert data["threshold"] == 0.75  # unchanged
 
     def test_updates_threshold(self, client: TestClient):
-        client.get("/api/v1/tyr/dispatcher", headers=_auth_headers())
-
-        resp = client.patch(
-            "/api/v1/tyr/dispatcher",
-            json={"threshold": 90},
-            headers=_auth_headers(),
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["threshold"] == 90.0
-        assert data["running"] is True  # unchanged
-
-    def test_updates_threshold_with_legacy_fraction_payload(self, client: TestClient):
         client.get("/api/v1/tyr/dispatcher", headers=_auth_headers())
 
         resp = client.patch(
@@ -198,7 +185,20 @@ class TestPatchDispatcherState:
             headers=_auth_headers(),
         )
         assert resp.status_code == 200
-        assert resp.json()["threshold"] == 90.0
+        data = resp.json()
+        assert data["threshold"] == 0.9
+        assert data["running"] is True  # unchanged
+
+    def test_updates_threshold_boundary(self, client: TestClient):
+        client.get("/api/v1/tyr/dispatcher", headers=_auth_headers())
+
+        resp = client.patch(
+            "/api/v1/tyr/dispatcher",
+            json={"threshold": 1.0},
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["threshold"] == 1.0
 
     def test_updates_max_concurrent_raids(self, client: TestClient):
         client.get("/api/v1/tyr/dispatcher", headers=_auth_headers())
@@ -227,7 +227,7 @@ class TestPatchDispatcherState:
     def test_validates_threshold_range_too_high(self, client: TestClient):
         resp = client.patch(
             "/api/v1/tyr/dispatcher",
-            json={"threshold": 150},
+            json={"threshold": 1.5},
             headers=_auth_headers(),
         )
         assert resp.status_code == 422
@@ -267,7 +267,7 @@ class TestPatchDispatcherState:
         assert resp.status_code == 200
         data = resp.json()
         assert data["running"] is True
-        assert data["threshold"] == 75.0
+        assert data["threshold"] == 0.75
         assert data["max_concurrent_raids"] == 3
         assert data["auto_continue"] is False
 
@@ -276,7 +276,7 @@ class TestPatchDispatcherState:
             "/api/v1/tyr/dispatcher",
             json={
                 "running": False,
-                "threshold": 60,
+                "threshold": 0.6,
                 "max_concurrent_raids": 7,
                 "auto_continue": True,
             },
@@ -285,7 +285,7 @@ class TestPatchDispatcherState:
         assert resp.status_code == 200
         data = resp.json()
         assert data["running"] is False
-        assert data["threshold"] == 60.0
+        assert data["threshold"] == 0.6
         assert data["max_concurrent_raids"] == 7
         assert data["auto_continue"] is True
 
