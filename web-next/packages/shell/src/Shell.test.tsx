@@ -169,7 +169,9 @@ describe('Shell', () => {
       expect(screen.getByTestId('flat-content')).toBeInTheDocument();
     });
     const subnav = document.querySelector('.niuu-shell__subnav');
-    expect(subnav?.classList.contains('niuu-shell__subnav--collapsed')).toBe(true);
+    expect(subnav).toBeInTheDocument();
+    // No subnav content renders — the :empty CSS pseudo-class collapses the nav
+    expect(subnav?.childElementCount).toBe(0);
   });
 
   it('does not collapse subnav when plugin has subnav', async () => {
@@ -178,16 +180,19 @@ describe('Shell', () => {
       expect(screen.getByTestId('tabbed-content')).toBeInTheDocument();
     });
     const subnav = document.querySelector('.niuu-shell__subnav');
-    expect(subnav?.classList.contains('niuu-shell__subnav--collapsed')).toBe(false);
+    expect(subnav).toBeInTheDocument();
+    // Subnav has content rendered by the plugin
+    expect(subnav?.childElementCount).toBeGreaterThan(0);
   });
 
-  it('renders subnav collapsed element when no subnav content', async () => {
+  it('renders subnav element when no subnav content', async () => {
     wrap(<Shell plugins={[pluginNoSubnav]} _testHistory={memHistory('/flat')} />);
     await waitFor(() => {
       expect(screen.getByTestId('flat-content')).toBeInTheDocument();
     });
     const subnav = document.querySelector('.niuu-shell__subnav');
     expect(subnav).toBeInTheDocument();
-    expect(subnav?.classList.contains('niuu-shell__subnav--collapsed')).toBe(true);
+    // Empty subnav — collapsed via :empty CSS rule
+    expect(subnav?.childElementCount).toBe(0);
   });
 });
