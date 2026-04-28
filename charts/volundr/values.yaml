@@ -935,16 +935,16 @@ sessionDefinitions:
 
     defaults:
       session:
-        # -- Default Codex model
-        model: "o4-mini"
+        # -- Default Codex model (empty = let Codex pick based on subscription)
+        model: ""
 
       broker:
-        # -- AI CLI backend: "codex" (OpenAI Codex)
-        cliType: codex
-        # -- Codex always uses subprocess transport
-        transport: subprocess
+        # -- AI CLI backend: "codex-ws" uses the app-server WebSocket protocol
+        # -- which supports session resume, interrupt, streaming, and approvals.
+        # -- Use "codex" for the legacy one-subprocess-per-message transport.
+        cliType: codex-ws
         # -- Fully-qualified transport adapter class path
-        transportAdapter: "skuld.transports.codex.CodexSubprocessTransport"
+        transportAdapter: "skuld.transports.codex_ws.CodexWebSocketTransport"
         # -- Skip tool permission prompts (--full-auto for Codex)
         skipPermissions: true
         agentTeams: false
