@@ -30,7 +30,7 @@ class DispatcherStateResponse(BaseModel):
 
 class PatchDispatcherRequest(BaseModel):
     running: bool | None = None
-    threshold: float | None = Field(None, ge=0.0, le=100.0)
+    threshold: float | None = Field(None, ge=0.0, le=1.0)
     max_concurrent_raids: int | None = Field(None, ge=1, le=20)
     auto_continue: bool | None = None
 
@@ -46,21 +46,6 @@ class ActivityEventResponse(BaseModel):
 class ActivityLogResponse(BaseModel):
     events: list[ActivityEventResponse]
     total: int
-
-
-# ---------------------------------------------------------------------------
-# Compatibility helpers
-# ---------------------------------------------------------------------------
-
-
-def _to_api_threshold(value: float) -> float:
-    """Expose dispatcher thresholds as percentages for the frontend contract."""
-    return round(value * 100, 2)
-
-
-def _from_api_threshold(value: float) -> float:
-    """Accept both legacy fractions (0-1) and canonical percentages (0-100)."""
-    return value if value <= 1 else value / 100
 
 
 def _format_activity_log_line(event_type: str, timestamp: datetime, payload: dict) -> str:
@@ -107,7 +92,7 @@ def create_dispatcher_router() -> APIRouter:
         return DispatcherStateResponse(
             id=str(state.id),
             running=state.running,
-            threshold=_to_api_threshold(state.threshold),
+            threshold=state.threshold,
             max_concurrent_raids=state.max_concurrent_raids,
             auto_continue=state.auto_continue,
             updated_at=state.updated_at,
@@ -121,13 +106,11 @@ def create_dispatcher_router() -> APIRouter:
     ) -> DispatcherStateResponse:
         """Partially update the dispatcher state for the authenticated user."""
         updates = body.model_dump(exclude_none=True)
-        if "threshold" in updates:
-            updates["threshold"] = _from_api_threshold(updates["threshold"])
         state = await repo.update(principal.user_id, **updates)
         return DispatcherStateResponse(
             id=str(state.id),
             running=state.running,
-            threshold=_to_api_threshold(state.threshold),
+            threshold=state.threshold,
             max_concurrent_raids=state.max_concurrent_raids,
             auto_continue=state.auto_continue,
             updated_at=state.updated_at,
