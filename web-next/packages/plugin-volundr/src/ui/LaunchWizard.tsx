@@ -11,6 +11,7 @@ import type {
   ClusterResourceInfo,
   McpServerConfig,
   SessionSource,
+  SessionDefinition,
   IntegrationConnection,
   StoredCredential,
   TrackerIssue,
@@ -45,7 +46,7 @@ interface WizardForm {
   mcpServers: McpServerConfig[];
   envVars: Array<{ key: string; value: string }>;
   setupScripts: string[];
-  cli: string;
+  definition: string;
   model: string;
   permission: string;
   cpu: string;
@@ -65,12 +66,35 @@ const STEP_LABELS: Record<string, string> = {
   confirm: 'Confirm',
 };
 
-const CLI_OPTIONS = [
-  { id: 'claude', label: 'Claude Code', rune: '\u16D7' },
-  { id: 'codex', label: 'Codex', rune: '\u16B2' },
-  { id: 'gemini', label: 'Gemini', rune: '\u16C7' },
-  { id: 'aider', label: 'Aider', rune: '\u16A8' },
+/** Map definition keys to runes for visual branding. */
+const DEFINITION_RUNES: Record<string, string> = {
+  'skuld-claude': '\u16D7',
+  'skuld-codex': '\u16B2',
+  'skuld-gemini': '\u16C7',
+  'skuld-aider': '\u16A8',
+  // Legacy short keys
+  claude: '\u16D7',
+  codex: '\u16B2',
+  gemini: '\u16C7',
+  aider: '\u16A8',
+};
+
+const FALLBACK_SESSION_DEFINITIONS: SessionDefinition[] = [
+  { key: 'skuld-claude', displayName: 'Claude Code', description: '', labels: [], defaultModel: '' },
+  { key: 'skuld-codex', displayName: 'Codex', description: '', labels: [], defaultModel: '' },
+  { key: 'skuld-gemini', displayName: 'Gemini', description: '', labels: [], defaultModel: '' },
+  { key: 'skuld-aider', displayName: 'Aider', description: '', labels: [], defaultModel: '' },
 ];
+
+function getDefinitionRune(key: string): string {
+  return DEFINITION_RUNES[key] ?? '\u16A0';
+}
+
+/** Derive a CLI tool name from a definition key for backward compat. */
+function deriveCliTool(definitionKey: string): string {
+  if (definitionKey.startsWith('skuld-')) return definitionKey.slice('skuld-'.length);
+  return definitionKey;
+}
 
 const BOOT_STEPS = [
   { id: 'schedule', label: 'schedule pod' },
@@ -331,8 +355,8 @@ function buildPresetRuntimePayload(
     name: (presetName ?? form.presetId) || 'launch-preset',
     description: '',
     isDefault: false,
-    cliTool: form.cli as VolundrPreset['cliTool'],
-    workloadType: `skuld-${form.cli}`,
+    cliTool: deriveCliTool(form.definition) as VolundrPreset['cliTool'],
+    workloadType: form.definition.startsWith('skuld-') ? form.definition : `skuld-${form.definition}`,
     model: form.model || null,
     systemPrompt: form.systemPrompt || null,
     resourceConfig: buildResourceConfig(form) ?? {},
@@ -394,8 +418,8 @@ function buildPresetComparisonPayload(
 
 function buildYamlRuntimeFields(form: WizardForm) {
   return {
-    cliTool: form.cli as 'claude' | 'codex' | 'gemini' | 'aider',
-    workloadType: `skuld-${form.cli}`,
+    cliTool: deriveCliTool(form.definition) as 'claude' | 'codex' | 'gemini' | 'aider',
+    workloadType: form.definition.startsWith('skuld-') ? form.definition : `skuld-${form.definition}`,
     model: form.model,
     systemPrompt: form.systemPrompt,
     resourceConfig: buildResourceConfig(form) ?? {},
@@ -783,6 +807,7 @@ function RuntimeStep({
   presets,
   selectedPreset,
   availableMcpServers,
+  sessionDefinitions,
   onApplyPreset,
   onSavePreset,
 }: {
@@ -796,6 +821,7 @@ function RuntimeStep({
   presets: VolundrPreset[];
   selectedPreset: VolundrPreset | null;
   availableMcpServers: McpServerConfig[];
+  sessionDefinitions: SessionDefinition[];
   onApplyPreset: (presetId: string) => void;
   onSavePreset: (name: string) => Promise<void>;
 }) {
@@ -865,7 +891,7 @@ function RuntimeStep({
       const parsed = parsePresetYaml(form.yamlContent);
       const patch: Partial<WizardForm> = { yamlMode: false };
 
-      if (parsed.cliTool) patch.cli = parsed.cliTool;
+      if (parsed.cliTool) patch.definition = `skuld-${parsed.cliTool}`;
       if (parsed.model !== undefined) patch.model = parsed.model;
       if (parsed.systemPrompt !== undefined) patch.systemPrompt = parsed.systemPrompt;
       if (parsed.resourceConfig) {
@@ -996,19 +1022,26 @@ function RuntimeStep({
           description="Choose the CLI agent, model, workspace, and launch prompts."
         >
           <div className="niuu-flex niuu-flex-wrap niuu-gap-2">
-            {CLI_OPTIONS.map((opt) => (
+            {sessionDefinitions.map((def) => (
               <button
-                key={opt.id}
+                key={def.key}
                 className={`niuu-flex niuu-items-center niuu-gap-1.5 niuu-rounded-md niuu-border niuu-px-3 niuu-py-2 niuu-text-xs niuu-text-text-primary ${
-                  form.cli === opt.id
+                  form.definition === def.key
                     ? 'niuu-border-brand niuu-bg-bg-tertiary'
                     : 'niuu-border-border-subtle niuu-bg-bg-primary hover:niuu-border-brand hover:niuu-bg-bg-tertiary'
                 }`}
-                onClick={() => update({ cli: opt.id })}
-                data-testid={`cli-option-${opt.id}`}
+                onClick={() => {
+                  const patch: Partial<WizardForm> = { definition: def.key };
+                  if (def.defaultModel && models[def.defaultModel]) {
+                    patch.model = def.defaultModel;
+                  }
+                  update(patch);
+                }}
+                data-testid={`cli-option-${deriveCliTool(def.key)}`}
+                title={def.description || undefined}
               >
-                <span className="niuu-font-mono niuu-text-base">{opt.rune}</span>
-                <span className="niuu-font-mono">{opt.label}</span>
+                <span className="niuu-font-mono niuu-text-base">{getDefinitionRune(def.key)}</span>
+                <span className="niuu-font-mono">{def.displayName}</span>
               </button>
             ))}
           </div>
@@ -1555,14 +1588,18 @@ function ConfirmStep({
   templates,
   models,
   integrations,
+  sessionDefinitions,
 }: {
   form: WizardForm;
   templates: Template[];
   models: Record<string, VolundrModel>;
   integrations: IntegrationConnection[];
+  sessionDefinitions: SessionDefinition[];
 }) {
   const tpl = templates.find((t) => t.id === form.templateId);
   const modelLabel = formatModelOption(form.model, models[form.model]);
+  const definitionLabel =
+    sessionDefinitions.find((d) => d.key === form.definition)?.displayName ?? form.definition;
   const integrationLabels = form.selectedIntegrations.map((id) => {
     const integration = integrations.find((item) => item.id === id);
     return integration ? formatIntegrationLabel(integration) : id;
@@ -1576,7 +1613,7 @@ function ConfirmStep({
         <div className="niuu-flex niuu-flex-col niuu-divide-y niuu-divide-border-subtle">
           <ConfirmRow label="session" value={deriveSessionName(form, tpl)} />
           <ConfirmRow label="template" value={tpl?.name ?? form.templateId} />
-          <ConfirmRow label="cli" value={form.cli} />
+          <ConfirmRow label="definition" value={definitionLabel} />
           <ConfirmRow label="model" value={modelLabel} />
           <ConfirmRow
             label="source"
@@ -1806,6 +1843,7 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
   const [clusterResources, setClusterResources] = useState<ClusterResourceInfo | null>(null);
   const [presets, setPresets] = useState<VolundrPreset[]>([]);
   const [availableMcpServers, setAvailableMcpServers] = useState<McpServerConfig[]>([]);
+  const [sessionDefinitions, setSessionDefinitions] = useState<SessionDefinition[]>([]);
   const [trackerResults, setTrackerResults] = useState<TrackerIssue[]>([]);
   const [trackerLoading, setTrackerLoading] = useState(false);
 
@@ -1828,7 +1866,7 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
     mcpServers: [],
     envVars: [],
     setupScripts: [],
-    cli: 'claude',
+    definition: 'skuld-claude',
     model: 'sonnet-primary',
     permission: 'restricted',
     cpu: '2',
@@ -1861,6 +1899,7 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
       volundr.getClusterResources().catch(() => null),
       volundr.getPresets().catch(() => []),
       volundr.getAvailableMcpServers().catch(() => []),
+      volundr.getSessionDefinitions().catch(() => FALLBACK_SESSION_DEFINITIONS),
     ]).then(
       ([
         nextRepos,
@@ -1871,6 +1910,7 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
         nextClusterResources,
         nextPresets,
         nextMcpServers,
+        nextSessionDefinitions,
       ]) => {
         if (cancelled) return;
         setRepos(nextRepos);
@@ -1881,6 +1921,9 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
         setClusterResources(nextClusterResources);
         setPresets(nextPresets);
         setAvailableMcpServers(nextMcpServers);
+        setSessionDefinitions(
+          nextSessionDefinitions.length > 0 ? nextSessionDefinitions : FALLBACK_SESSION_DEFINITIONS,
+        );
       },
     );
 
@@ -1966,7 +2009,7 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
       setForm((current) => ({
         ...current,
         presetId,
-        cli: preset.cliTool,
+        definition: preset.workloadType || `skuld-${preset.cliTool}`,
         model: preset.model ?? current.model,
         systemPrompt: preset.systemPrompt ?? '',
         selectedCredentials: [...preset.envSecretRefs],
@@ -2113,7 +2156,8 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
         model: form.model.trim(),
         templateName: selectedTemplate?.name,
         presetId,
-        taskType: `skuld-${form.cli}`,
+        definition: form.definition,
+        taskType: form.definition.startsWith('skuld-') ? form.definition : `skuld-${form.definition}`,
         trackerIssue: form.trackerIssue ?? undefined,
         terminalRestricted: form.permission === 'restricted',
         workspaceId: form.workspaceId || undefined,
@@ -2207,6 +2251,9 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
               presets={presets}
               selectedPreset={presets.find((preset) => preset.id === form.presetId) ?? null}
               availableMcpServers={availableMcpServers}
+              sessionDefinitions={
+                sessionDefinitions.length > 0 ? sessionDefinitions : FALLBACK_SESSION_DEFINITIONS
+              }
               onApplyPreset={handleApplyPreset}
               onSavePreset={handleSavePreset}
             />
@@ -2217,6 +2264,9 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
               templates={allTemplates}
               models={models}
               integrations={integrations}
+              sessionDefinitions={
+                sessionDefinitions.length > 0 ? sessionDefinitions : FALLBACK_SESSION_DEFINITIONS
+              }
             />
           )}
           {step === 'booting' && <BootingStep bootStep={bootStep} progress={bootProgress} />}

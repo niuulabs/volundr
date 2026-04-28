@@ -170,6 +170,23 @@ class MCPServerEntry(BaseModel):
     description: str = ""
 
 
+class SessionDefinitionConfig(BaseModel):
+    """Configuration for a single session definition (e.g. skuldClaude, skuldCodex).
+
+    Session definitions describe available AI backend configurations.
+    Each definition has a unique key, display metadata, and a ``defaults``
+    dict that gets merged into Helm values when a session is created with
+    this definition.
+    """
+
+    enabled: bool = True
+    display_name: str = ""
+    description: str = ""
+    labels: list[str] = Field(default_factory=list)
+    default_model: str = ""
+    defaults: dict[str, Any] = Field(default_factory=dict)
+
+
 class ProfileConfig(BaseModel):
     """Configuration for a single forge profile."""
 
@@ -1074,6 +1091,10 @@ class Settings(BaseSettings):
     local_git: LocalGitConfig = Field(default_factory=LocalGitConfig)
     local_mounts: LocalMountsConfig = Field(default_factory=LocalMountsConfig)
     session_contributors: list[SessionContributorConfig] = Field(default_factory=list)
+    session_definitions: dict[str, SessionDefinitionConfig] = Field(
+        default_factory=dict,
+        description="Session definitions keyed by name (e.g. skuldClaude, skuldCodex).",
+    )
     models: list[AIModelConfig] = Field(default_factory=list)
     profiles: list[ProfileConfig] = Field(default_factory=list)
     templates: list[TemplateConfig] = Field(default_factory=list)

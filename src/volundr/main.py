@@ -691,7 +691,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.include_router(router)
 
-            profiles_router = create_profiles_router(profile_service, template_service)
+            profiles_router = create_profiles_router(
+                profile_service, template_service, settings.session_definitions
+            )
             app.include_router(profiles_router)
 
             # Resource discovery endpoint

@@ -291,6 +291,18 @@ export interface McpServerConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Session definitions
+// ---------------------------------------------------------------------------
+
+export interface SessionDefinition {
+  key: string;
+  displayName: string;
+  description: string;
+  labels: string[];
+  defaultModel: string;
+}
+
+// ---------------------------------------------------------------------------
 // Templates and presets
 // ---------------------------------------------------------------------------
 

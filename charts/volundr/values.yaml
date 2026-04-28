@@ -798,6 +798,12 @@ sessionDefinitions:
   skuldClaude:
     # -- Enable skuld-claude session definition
     enabled: true
+    # -- Human-readable name shown in the UI
+    displayName: "Claude Code"
+    # -- Short description for the session picker
+    description: "Anthropic Claude — full IDE with terminal, tools, and MCP"
+    # -- Default model for this definition (empty = use server default)
+    defaultModel: "claude-sonnet-4-6"
     # -- Labels for agent routing - only agents with matching labels will load this
     labels:
       - session
@@ -920,6 +926,12 @@ sessionDefinitions:
   skuldCodex:
     # -- Enable skuld-codex session definition (disabled by default)
     enabled: false
+    # -- Human-readable name shown in the UI
+    displayName: "OpenAI Codex"
+    # -- Short description for the session picker
+    description: "OpenAI Codex — WebSocket protocol with streaming and tools"
+    # -- Default model for this definition (empty = use Codex default based on subscription)
+    defaultModel: ""
     # -- Labels for agent routing
     labels:
       - session
