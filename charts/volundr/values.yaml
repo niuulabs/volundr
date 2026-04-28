@@ -1023,6 +1023,83 @@ sessionDefinitions:
       volundr:
         apiUrl: ""
 
+  # Skuld-OpenCode session definition (OpenCode — model-neutral)
+  # Supports Claude, OpenAI, Gemini, Ollama, and other providers.
+  skuldOpenCode:
+    # -- Enable skuld-opencode session definition (disabled by default)
+    enabled: false
+    # -- Human-readable name shown in the UI
+    displayName: "OpenCode"
+    # -- Short description for the session picker
+    description: "Model-neutral AI coding agent — supports Claude, OpenAI, Gemini, local models"
+    # -- Default model for this definition (empty = use OpenCode default)
+    defaultModel: ""
+    # -- Labels for agent routing
+    labels:
+      - session
+    # -- Whether this session definition is active
+    active: true
+
+    # Helm chart configuration (same chart as skuld-claude)
+    helm:
+      chart: skuld
+      repo: "oci://ghcr.io/niuulabs/charts"
+      repoName: ""
+      version: "0.1.0"
+
+    defaults:
+      session:
+        # -- Default OpenCode model (empty = let OpenCode pick)
+        model: ""
+
+      broker:
+        # -- AI CLI backend: "opencode" uses HTTP REST + SSE protocol
+        cliType: opencode
+        # -- Fully-qualified transport adapter class path
+        transportAdapter: "skuld.transports.opencode.OpenCodeHttpTransport"
+        # -- Skip tool permission prompts
+        skipPermissions: true
+        agentTeams: false
+
+      image:
+        repository: ghcr.io/niuulabs/skuld
+        tag: "latest"
+
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
+
+      imagePullSecrets:
+        - ghcr-pull-secret
+
+      ingress:
+        className: ""
+        annotations: {}
+        tls:
+          enabled: false
+          secretName: "skuld-wildcard-tls"
+
+      persistence:
+        mountPath: "/volundr/sessions"
+
+      homeVolume:
+        enabled: true
+        mountPath: "/volundr/home"
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      runtimeClassName: ""
+
+      volundr:
+        apiUrl: ""
+
   # Skuld-Reviewer session definition (lightweight LLM reviewer — no IDE)
   skuldReviewer:
     # -- Enable skuld-reviewer session definition
