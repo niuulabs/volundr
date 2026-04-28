@@ -38,7 +38,7 @@ FROM ubuntu:24.04@sha256:84e77dee7d1bc93fb029a45e3c6cb9d8aa4831ccfcc7103d36e8769
 
 
 LABEL org.opencontainers.image.title="skuld"
-LABEL org.opencontainers.image.description="Skuld — remote AI coding session broker (Claude Code + Codex)"
+LABEL org.opencontainers.image.description="Skuld — remote AI coding session broker (Claude Code, Codex, OpenCode)"
 LABEL org.opencontainers.image.vendor="Niuu Labs"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL org.opencontainers.image.source="https://github.com/niuulabs/volundr"
@@ -73,6 +73,14 @@ RUN npm install -g @anthropic-ai/claude-code@2.1.81
 
 # Install OpenAI Codex CLI globally via npm
 RUN npm install -g @openai/codex@0.114.0
+
+# Install OpenCode (opencode.ai) — download binary to /usr/local/bin
+# The install script puts it in ~/.opencode/bin which isn't accessible
+# to the runtime user, so we use --no-modify-path and move it.
+RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
+    && mv /root/.opencode/bin/opencode /usr/local/bin/opencode \
+    && chmod 755 /usr/local/bin/opencode \
+    && rm -rf /root/.opencode
 
 # Create app user with UID 1000 (matches helm chart runAsUser)
 RUN existing=$(getent passwd 1000 | cut -d: -f1) && \
