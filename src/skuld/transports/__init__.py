@@ -185,12 +185,14 @@ from skuld.transports.codex import (  # noqa: E402
     CodexSubprocessTransport,
     _map_codex_tool,
 )
+from skuld.transports.codex_ws import CodexWebSocketTransport  # noqa: E402
 from skuld.transports.sdk_websocket import SdkWebSocketTransport  # noqa: E402
 from skuld.transports.subprocess import SubprocessTransport  # noqa: E402
 
 __all__ = [
     "CLITransport",
     "CodexSubprocessTransport",
+    "CodexWebSocketTransport",
     "EventCallback",
     "SdkWebSocketTransport",
     "SubprocessTransport",
