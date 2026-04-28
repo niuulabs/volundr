@@ -74,13 +74,8 @@ RUN npm install -g @anthropic-ai/claude-code@2.1.121
 # Install OpenAI Codex CLI globally via npm
 RUN npm install -g @openai/codex@0.125.0
 
-# Install OpenCode (opencode.ai) — download binary to /usr/local/bin
-# The install script puts it in ~/.opencode/bin which isn't accessible
-# to the runtime user, so we use --no-modify-path and move it.
-RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
-    && mv /root/.opencode/bin/opencode /usr/local/bin/opencode \
-    && chmod 755 /usr/local/bin/opencode \
-    && rm -rf /root/.opencode
+# Install OpenCode (opencode.ai) globally via npm
+RUN npm install -g opencode-ai@1.14.29
 
 # Create app user with UID 1000 (matches helm chart runAsUser)
 RUN existing=$(getent passwd 1000 | cut -d: -f1) && \
