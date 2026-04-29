@@ -1102,6 +1102,25 @@ class AIModelConfig(BaseModel):
     cost_per_million_tokens: float = 0.0
 
 
+def _default_models() -> list[AIModelConfig]:
+    """Built-in model catalog so the wizard works without Helm config."""
+    return [
+        AIModelConfig(
+            id="claude-opus-4-6", name="Claude Opus 4.6", cost_per_million_tokens=15.0,
+        ),
+        AIModelConfig(
+            id="claude-sonnet-4-6", name="Claude Sonnet 4.6", cost_per_million_tokens=3.0,
+        ),
+        AIModelConfig(
+            id="claude-haiku-4-5-20251001", name="Claude Haiku 4.5", cost_per_million_tokens=1.0,
+        ),
+        AIModelConfig(id="gpt-5.5", name="GPT-5.5", cost_per_million_tokens=10.0),
+        AIModelConfig(id="gpt-5.4", name="GPT-5.4", cost_per_million_tokens=5.0),
+        AIModelConfig(id="o4-mini", name="o4-mini", cost_per_million_tokens=1.1),
+        AIModelConfig(id="o3", name="o3", cost_per_million_tokens=10.0),
+    ]
+
+
 class Settings(BaseSettings):
     """Application settings.
 
@@ -1155,7 +1174,7 @@ class Settings(BaseSettings):
         default="skuldClaude",
         description="Fallback definition key when no explicit definition is specified.",
     )
-    models: list[AIModelConfig] = Field(default_factory=list)
+    models: list[AIModelConfig] = Field(default_factory=_default_models)
     profiles: list[ProfileConfig] = Field(default_factory=list)
     templates: list[TemplateConfig] = Field(default_factory=list)
     mcp_servers: list[MCPServerEntry] = Field(default_factory=list)
