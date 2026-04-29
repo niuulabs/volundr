@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { VolundrSessionRoute, VolundrArchivedRoute } from './routes';
@@ -92,25 +92,30 @@ function wrap(ui: React.ReactNode) {
 // ---------------------------------------------------------------------------
 
 describe('VolundrSessionRoute', () => {
-  it('renders the session page with the param sessionId', () => {
+  it('renders the session page with the param sessionId', async () => {
     wrap(<VolundrSessionRoute />);
-    expect(screen.getByTestId('session-id-label')).toHaveTextContent('sess-route-test');
+    const label = await screen.findByTestId('session-id-label');
+    expect(label).toHaveTextContent('sess-rou');
   });
 
-  it('renders in interactive (non-read-only) mode', () => {
+  it('renders in interactive (non-read-only) mode', async () => {
     wrap(<VolundrSessionRoute />);
-    expect(screen.queryByText('archived')).not.toBeInTheDocument();
+    await screen.findByTestId('live-session-detail-page');
+    expect(screen.queryByText('Archived')).not.toBeInTheDocument();
   });
 });
 
 describe('VolundrArchivedRoute', () => {
-  it('renders the session page with the param sessionId', () => {
+  it('renders the session page with the param sessionId', async () => {
     wrap(<VolundrArchivedRoute />);
-    expect(screen.getByTestId('session-id-label')).toHaveTextContent('sess-route-test');
+    const label = await screen.findByTestId('session-id-label');
+    expect(label).toHaveTextContent('sess-rou');
   });
 
-  it('renders with the archived (read-only) badge', () => {
+  it('renders with the archived (read-only) badge', async () => {
     wrap(<VolundrArchivedRoute />);
-    expect(screen.getByText('archived')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Archived')).toBeInTheDocument();
+    });
   });
 });

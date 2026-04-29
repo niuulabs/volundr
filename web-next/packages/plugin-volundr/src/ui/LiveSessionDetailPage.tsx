@@ -327,6 +327,7 @@ function SessionIdChip({ sessionId }: { sessionId: string }) {
     <button
       type="button"
       title={sessionId}
+      data-testid="session-id-label"
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(sessionId);
