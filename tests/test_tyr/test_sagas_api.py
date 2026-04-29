@@ -193,7 +193,7 @@ class TestListSagas:
         assert saga["repos"] == ["org/repo"]
         assert saga["milestone_count"] == 2
         assert saga["issue_count"] == 3
-        assert saga["status"] == "started"
+        assert saga["status"] == "active"
         assert saga["url"] == "https://linear.app/test/project/alpha-abc123"
         assert saga["base_branch"] == "dev"
         assert saga["confidence"] == 0.0
@@ -223,6 +223,7 @@ class TestGetSaga:
         assert data["base_branch"] == "dev"
         assert data["confidence"] == 0.0
         assert data["created_at"]
+        assert data["status"] == "active"
         assert data["phase_summary"] == {"total": 1, "completed": 0}
         assert len(data["phases"]) == 3  # 2 milestones + unassigned
         assert data["phases"][0]["name"] == "Phase 1"
@@ -258,6 +259,25 @@ class TestGetSaga:
         assert data[0]["raids"][0]["tracker_id"] == "A-2"
         assert data[0]["raids"][0]["reviewer_session_id"] == "reviewer-1"
         assert data[0]["raids"][0]["review_round"] == 2
+
+    def test_synthesizes_tracker_backed_phases_when_repo_has_none(
+        self,
+        client: TestClient,
+        saga_repo: MockSagaRepo,
+    ):
+        saga_repo.phases.clear()
+        saga_repo.raids.clear()
+        saga_id = str(saga_repo.sagas[0].id)
+
+        resp = client.get(f"/api/v1/tyr/sagas/{saga_id}/phases")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 3
+        assert data[0]["name"] == "Phase 1"
+        assert data[0]["raids"][0]["name"] == "R1"
+        assert data[1]["name"] == "Phase 2"
+        assert data[2]["name"] == "Unassigned"
 
 
 class TestGetSagaErrors:

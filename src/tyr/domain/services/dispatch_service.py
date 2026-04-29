@@ -52,6 +52,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _READY_STATUSES = {"todo", "backlog", "triage"}
+_READY_STATUS_TYPES = {"unstarted"}
 _ACTIVE_SESSION_STATUSES = {"running", "starting", "creating"}
 _COMPLETED_LINEAR_STATES = {"completed", "cancelled"}
 
@@ -109,7 +110,10 @@ def is_ready(
     blocked_identifiers: set[str],
 ) -> bool:
     """Check if an issue is ready for dispatch."""
-    if issue.status.lower() not in _READY_STATUSES:
+    status_name = issue.status.lower()
+    status_type = issue.status_type.lower()
+
+    if status_type not in _READY_STATUS_TYPES and status_name not in _READY_STATUSES:
         return False
     if issue.identifier in active_issue_ids:
         return False

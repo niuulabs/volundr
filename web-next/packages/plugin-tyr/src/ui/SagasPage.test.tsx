@@ -4,8 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { ToastProvider } from '@niuulabs/ui';
 import { SagasPage } from './SagasPage';
-import { createMockTyrService } from '../adapters/mock';
+import { createMockTyrService, createMockTrackerService } from '../adapters/mock';
 import type { Saga } from '../domain/saga';
+import type { ITrackerBrowserService } from '../ports';
 
 const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
@@ -23,6 +24,14 @@ function wrap(services: Record<string, unknown>) {
         </QueryClientProvider>
       </ToastProvider>
     );
+  };
+}
+
+function withDefaults(services: Record<string, unknown>) {
+  return {
+    tyr: createMockTyrService(),
+    'tyr.tracker': createMockTrackerService(),
+    ...services,
   };
 }
 
@@ -48,12 +57,12 @@ function makeSaga(overrides: Partial<Saga> = {}): Saga {
 
 describe('SagasPage', () => {
   it('renders the sagas heading', async () => {
-    render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
+    render(<SagasPage />, { wrapper: wrap(withDefaults({})) });
     await waitFor(() => expect(screen.getByText('Sagas')).toBeInTheDocument());
   });
 
   it('shows grouped left-rail sections', async () => {
-    render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
+    render(<SagasPage />, { wrapper: wrap(withDefaults({})) });
     await waitFor(() => expect(screen.getByText('ACTIVE')).toBeInTheDocument());
     expect(screen.getByText('IN REVIEW')).toBeInTheDocument();
     expect(screen.getAllByText('COMPLETE').length).toBeGreaterThan(0);
@@ -61,7 +70,7 @@ describe('SagasPage', () => {
   });
 
   it('filters sagas from the page-head search', async () => {
-    render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
+    render(<SagasPage />, { wrapper: wrap(withDefaults({})) });
     await waitFor(() => expect(screen.getAllByText('Auth Rewrite').length).toBeGreaterThan(0));
     fireEvent.change(screen.getByRole('searchbox', { name: /Filter sagas/i }), {
       target: { value: 'auth' },
@@ -71,7 +80,7 @@ describe('SagasPage', () => {
   });
 
   it('shows empty state when search matches nothing', async () => {
-    render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
+    render(<SagasPage />, { wrapper: wrap(withDefaults({})) });
     await waitFor(() => expect(screen.getAllByText('Auth Rewrite').length).toBeGreaterThan(0));
     fireEvent.change(screen.getByRole('searchbox', { name: /Filter sagas/i }), {
       target: { value: 'zzznomatch' },
@@ -81,7 +90,7 @@ describe('SagasPage', () => {
 
   it('clicking a saga row navigates to saga detail', async () => {
     mockNavigate.mockClear();
-    render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
+    render(<SagasPage />, { wrapper: wrap(withDefaults({})) });
     await waitFor(() => expect(screen.getAllByText('Auth Rewrite').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('button', { pressed: true }));
     expect(mockNavigate).toHaveBeenCalled();
@@ -89,7 +98,7 @@ describe('SagasPage', () => {
 
   it('shows loading state initially', () => {
     const slowSvc = { getSagas: () => new Promise(() => undefined) };
-    render(<SagasPage />, { wrapper: wrap({ tyr: slowSvc }) });
+    render(<SagasPage />, { wrapper: wrap(withDefaults({ tyr: slowSvc })) });
     expect(screen.getByText(/Loading sagas/i)).toBeInTheDocument();
   });
 
@@ -99,13 +108,13 @@ describe('SagasPage', () => {
         throw new Error('fetch error');
       },
     };
-    render(<SagasPage />, { wrapper: wrap({ tyr: failingSvc }) });
+    render(<SagasPage />, { wrapper: wrap(withDefaults({ tyr: failingSvc })) });
     await waitFor(() => expect(screen.getByText('fetch error')).toBeInTheDocument());
   });
 
   it('shows empty state when no sagas exist', async () => {
     const emptySvc = { getSagas: async (): Promise<Saga[]> => [] };
-    render(<SagasPage />, { wrapper: wrap({ tyr: emptySvc }) });
+    render(<SagasPage />, { wrapper: wrap(withDefaults({ tyr: emptySvc })) });
     await waitFor(() => expect(screen.getByText('No sagas found')).toBeInTheDocument());
   });
 
@@ -115,17 +124,55 @@ describe('SagasPage', () => {
     Object.defineProperty(URL, 'createObjectURL', { value: mockCreateObjectURL, writable: true });
     Object.defineProperty(URL, 'revokeObjectURL', { value: mockRevokeObjectURL, writable: true });
 
-    render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
+    render(<SagasPage />, { wrapper: wrap(withDefaults({})) });
     await waitFor(() => expect(screen.getAllByText('Auth Rewrite').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('button', { name: /Export sagas as JSON/i }));
     await waitFor(() => expect(screen.getByText(/Exported \d+ sagas/i)).toBeInTheDocument());
   });
 
   it('opens new saga modal', async () => {
-    render(<SagasPage />, { wrapper: wrap({ tyr: createMockTyrService() }) });
+    render(<SagasPage />, { wrapper: wrap(withDefaults({})) });
     await waitFor(() => expect(screen.getAllByText('Auth Rewrite').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('button', { name: /Create new saga/i }));
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+  });
+
+  it('opens tracker import modal', async () => {
+    render(<SagasPage />, { wrapper: wrap(withDefaults({})) });
+    await waitFor(() => expect(screen.getAllByText('Auth Rewrite').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: /Import saga from tracker/i }));
+    await waitFor(() => expect(screen.getByText('Import From Tracker')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('Niuu Core').length).toBeGreaterThan(0));
+  });
+
+  it('imports a tracker project', async () => {
+    const tracker = createMockTrackerService();
+    const importProject = vi.fn(tracker.importProject.bind(tracker));
+    const trackerSvc: ITrackerBrowserService = {
+      ...tracker,
+      importProject,
+    };
+
+    render(<SagasPage />, { wrapper: wrap(withDefaults({ 'tyr.tracker': trackerSvc })) });
+    await waitFor(() => expect(screen.getAllByText('Auth Rewrite').length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByRole('button', { name: /Import saga from tracker/i }));
+    await waitFor(() => expect(screen.getByText('Import From Tracker')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('Niuu Core').length).toBeGreaterThan(0));
+
+    const projectButton = screen
+      .getAllByRole('button')
+      .find((button) => button.textContent?.includes('Niuu Core'));
+    expect(projectButton).toBeDefined();
+    fireEvent.click(projectButton!);
+    fireEvent.change(screen.getByPlaceholderText('org/repo, org/other-repo'), {
+      target: { value: 'niuulabs/volundr' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Import saga' }));
+
+    await waitFor(() =>
+      expect(importProject).toHaveBeenCalledWith('proj-niuu-core', ['niuulabs/volundr'], 'main'),
+    );
   });
 
   it('renders grouped bucket items from mixed data', async () => {
@@ -143,7 +190,7 @@ describe('SagasPage', () => {
         makeSaga({ id: '4', name: 'Broken', status: 'failed', slug: 'broken' }),
       ],
     };
-    render(<SagasPage />, { wrapper: wrap({ tyr: mixedSvc }) });
+    render(<SagasPage />, { wrapper: wrap(withDefaults({ tyr: mixedSvc })) });
     await waitFor(() => expect(screen.getAllByText('Active').length).toBeGreaterThan(0));
     expect(screen.getAllByText('Review').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Done').length).toBeGreaterThan(0);

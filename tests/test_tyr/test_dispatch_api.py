@@ -598,6 +598,35 @@ class TestGetQueue:
         assert "ALPHA-3" in ids
         assert "ALPHA-2" not in ids
 
+    def test_returns_unstarted_linear_issues(
+        self,
+        mock_tracker: MockTracker,
+        saga_repo: MockSagaRepo,
+        mock_volundr: MockVolundr,
+    ):
+        mock_tracker.issues["proj-1"].append(
+            TrackerIssue(
+                id="i-4",
+                identifier="ALPHA-4",
+                title="Plan rollout",
+                description="Create rollout checklist",
+                status="Planned",
+                status_type="unstarted",
+                priority=4,
+                priority_label="Low",
+                url="https://linear.app/i-4",
+                milestone_id="ms-1",
+            )
+        )
+        factory = MockVolundrFactory(adapters=[mock_volundr])
+        app = _make_test_app(mock_tracker, saga_repo, mock_volundr, factory, MockDispatcherRepo())
+        client = TestClient(app)
+
+        resp = client.get("/api/v1/tyr/dispatch/queue")
+        assert resp.status_code == 200
+        ids = [item["identifier"] for item in resp.json()]
+        assert "ALPHA-4" in ids
+
     def test_queue_sorted_by_priority(self, client: TestClient):
         resp = client.get("/api/v1/tyr/dispatch/queue")
         data = resp.json()

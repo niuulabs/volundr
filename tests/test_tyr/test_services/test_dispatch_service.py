@@ -193,6 +193,17 @@ class TestIsReady:
         issue = TrackerIssue(id="1", identifier="X-1", title="t", description="", status="Triage")
         assert is_ready(issue, set(), set()) is True
 
+    def test_ready_unstarted_status_type(self):
+        issue = TrackerIssue(
+            id="1",
+            identifier="X-1",
+            title="t",
+            description="",
+            status="Planned",
+            status_type="unstarted",
+        )
+        assert is_ready(issue, set(), set()) is True
+
     def test_not_ready_in_progress(self):
         issue = TrackerIssue(
             id="1", identifier="X-1", title="t", description="", status="In Progress"
@@ -312,6 +323,31 @@ class TestFindReadyIssues:
         ids = [i.identifier for i in items]
         assert "ALPHA-1" not in ids
         assert "ALPHA-3" in ids
+
+    @pytest.mark.asyncio
+    async def test_includes_unstarted_linear_issues(
+        self,
+        tracker: MockTracker,
+        service: DispatchService,
+    ):
+        tracker.issues["proj-1"].append(
+            TrackerIssue(
+                id="i-4",
+                identifier="ALPHA-4",
+                title="Plan rollout",
+                description="Create rollout checklist",
+                status="Planned",
+                status_type="unstarted",
+                priority=4,
+                priority_label="Low",
+                url="https://linear.app/i-4",
+                milestone_id="ms-1",
+            )
+        )
+
+        items = await service.find_ready_issues("dev-user")
+        ids = [i.identifier for i in items]
+        assert "ALPHA-4" in ids
 
     @pytest.mark.asyncio
     async def test_empty_when_no_sagas(

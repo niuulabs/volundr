@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useService } from '@niuulabs/plugin-sdk';
 import {
   LoadingState,
   ErrorState,
@@ -12,6 +14,7 @@ import {
 } from '@niuulabs/ui';
 import type { Saga } from '../domain/saga';
 import type { SagaStatus } from '../domain/saga';
+import type { ITrackerBrowserService, TrackerProject } from '../ports';
 import { useSagas } from './useSagas';
 import { phaseStatusToCell } from './mappers';
 import { SagaDetailPage } from './SagaDetailPage';
@@ -66,6 +69,13 @@ function relTime(date: string): string {
   const days = Math.max(1, Math.floor(diffMs / 86_400_000));
   if (days < 1) return 'today';
   return `${days}d ago`;
+}
+
+function parseRepoList(value: string): string[] {
+  return value
+    .split(',')
+    .map((repo) => repo.trim())
+    .filter(Boolean);
 }
 
 function ConfidenceMeter({ value }: { value: number }) {
@@ -234,12 +244,19 @@ export function SagasPage() {
 
 function SagasPageContent() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const params = useParams({ strict: false }) as { sagaId?: string };
+  const tracker = useService<ITrackerBrowserService>('tyr.tracker');
   const { data: sagas, isLoading, isError, error } = useSagas();
   const [showNewSagaModal, setShowNewSagaModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedSagaId, setSelectedSagaId] = useState<string | null>(params.sagaId ?? null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [repoList, setRepoList] = useState('');
+  const [baseBranch, setBaseBranch] = useState('main');
+  const [isImporting, setIsImporting] = useState(false);
 
   useEffect(() => {
     if (!selectedSagaId && sagas && sagas.length > 0) {
@@ -248,11 +265,49 @@ function SagasPageContent() {
   }, [sagas, selectedSagaId]);
 
   const allSagas = sagas ?? [];
+  const importedTrackerIds = useMemo(
+    () => new Set(allSagas.map((saga) => saga.trackerId)),
+    [allSagas],
+  );
   const filtered = allSagas.filter((saga) => {
     if (!search) return true;
     const haystack = `${saga.name} ${saga.trackerId} ${saga.featureBranch}`.toLowerCase();
     return haystack.includes(search.toLowerCase());
   });
+
+  const trackerProjectsQuery = useQuery({
+    queryKey: ['tyr', 'tracker', 'projects'],
+    queryFn: () => tracker.listProjects(),
+    enabled: showImportModal,
+  });
+
+  const trackerProjects = trackerProjectsQuery.data ?? [];
+  const selectedProject =
+    trackerProjects.find((project) => project.id === selectedProjectId) ?? null;
+  const parsedRepos = parseRepoList(repoList);
+  const canImportSelectedProject =
+    selectedProject !== null &&
+    parsedRepos.length > 0 &&
+    !importedTrackerIds.has(selectedProject.id) &&
+    !isImporting;
+
+  useEffect(() => {
+    if (!showImportModal) return;
+    if (repoList) return;
+    const defaultRepos = allSagas[0]?.repos.join(', ') ?? '';
+    const defaultBaseBranch = allSagas[0]?.baseBranch ?? 'main';
+    setRepoList(defaultRepos);
+    setBaseBranch(defaultBaseBranch);
+  }, [allSagas, repoList, showImportModal]);
+
+  useEffect(() => {
+    if (!showImportModal) return;
+    if (selectedProjectId) return;
+    if (trackerProjects.length === 0) return;
+    const firstProject =
+      trackerProjects.find((project) => !importedTrackerIds.has(project.id)) ?? trackerProjects[0]!;
+    setSelectedProjectId(firstProject.id);
+  }, [importedTrackerIds, selectedProjectId, showImportModal, trackerProjects]);
 
   const groups = useMemo(() => {
     return {
@@ -272,6 +327,38 @@ function SagasPageContent() {
   function handleSelectSaga(saga: Saga) {
     setSelectedSagaId(saga.id);
     void navigate({ to: '/tyr/sagas/$sagaId', params: { sagaId: saga.id } });
+  }
+
+  function handleImportModalToggle(open: boolean) {
+    setShowImportModal(open);
+    if (!open) {
+      setSelectedProjectId(null);
+      setIsImporting(false);
+    }
+  }
+
+  async function handleImportProject() {
+    if (!selectedProject) return;
+    if (!canImportSelectedProject) return;
+
+    setIsImporting(true);
+    try {
+      const importedSaga = await tracker.importProject(selectedProject.id, parsedRepos, baseBranch);
+      await queryClient.invalidateQueries({ queryKey: ['tyr', 'sagas'] });
+      setSelectedSagaId(importedSaga.id);
+      setShowImportModal(false);
+      setSelectedProjectId(null);
+      toast({ title: `Imported ${selectedProject.name}`, tone: 'success' });
+      void navigate({ to: '/tyr/sagas/$sagaId', params: { sagaId: importedSaga.id } });
+    } catch (importError) {
+      toast({
+        title:
+          importError instanceof Error ? importError.message : 'Failed to import tracker project',
+        tone: 'critical',
+      });
+    } finally {
+      setIsImporting(false);
+    }
   }
 
   return (
@@ -348,6 +435,14 @@ function SagasPageContent() {
             <button
               type="button"
               className="niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2.5 niuu-text-[14px] niuu-font-medium niuu-text-text-primary"
+              onClick={() => setShowImportModal(true)}
+              aria-label="Import saga from tracker"
+            >
+              Import
+            </button>
+            <button
+              type="button"
+              className="niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-4 niuu-py-2.5 niuu-text-[14px] niuu-font-medium niuu-text-text-primary"
               onClick={() => {
                 const data = JSON.stringify(allSagas, null, 2);
                 const blob = new Blob([data], { type: 'application/json' });
@@ -420,6 +515,147 @@ function SagasPageContent() {
           ]}
         >
           <p className="niuu-m-0 niuu-text-sm niuu-text-text-secondary">Want to go there now?</p>
+        </Modal>
+
+        <Modal
+          open={showImportModal}
+          onOpenChange={handleImportModalToggle}
+          title="Import From Tracker"
+          description="Browse tracker projects, choose a target repo, and register the project as a Tyr saga."
+          className="niuu-max-w-[920px]"
+          actions={[
+            { label: 'Cancel', variant: 'secondary', closes: true },
+            {
+              label: isImporting ? 'Importing…' : 'Import saga',
+              variant: 'primary',
+              disabled: !canImportSelectedProject,
+              closes: false,
+              onClick: () => void handleImportProject(),
+            },
+          ]}
+        >
+          {trackerProjectsQuery.isLoading ? (
+            <div className="niuu-py-6">
+              <LoadingState label="Loading tracker projects…" />
+            </div>
+          ) : trackerProjectsQuery.isError ? (
+            <ErrorState
+              message={
+                trackerProjectsQuery.error instanceof Error
+                  ? trackerProjectsQuery.error.message
+                  : 'Failed to load tracker projects'
+              }
+            />
+          ) : (
+            <div className="niuu-grid niuu-grid-cols-[minmax(0,1.3fr)_minmax(280px,0.9fr)] niuu-gap-4">
+              <div className="niuu-space-y-2 niuu-max-h-[420px] niuu-overflow-y-auto">
+                {trackerProjects.length === 0 ? (
+                  <EmptyState
+                    title="No tracker projects found"
+                    description="Connect a tracker in Tyr settings, then try again."
+                  />
+                ) : (
+                  trackerProjects.map((project: TrackerProject) => {
+                    const imported = importedTrackerIds.has(project.id);
+                    const selected = selectedProjectId === project.id;
+                    return (
+                      <button
+                        key={project.id}
+                        type="button"
+                        onClick={() => setSelectedProjectId(project.id)}
+                        className={[
+                          'niuu-w-full niuu-rounded-lg niuu-border niuu-p-3 niuu-text-left niuu-transition-colors',
+                          selected
+                            ? 'niuu-border-brand/50 niuu-bg-[#1d232b]'
+                            : 'niuu-border-border-subtle niuu-bg-bg-secondary hover:niuu-bg-bg-tertiary',
+                        ].join(' ')}
+                      >
+                        <div className="niuu-flex niuu-items-start niuu-gap-3">
+                          <div className="niuu-min-w-0 niuu-flex-1">
+                            <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-flex-wrap">
+                              <span className="niuu-text-sm niuu-font-semibold niuu-text-text-primary">
+                                {project.name}
+                              </span>
+                              <span className="niuu-rounded niuu-bg-bg-elevated niuu-px-2 niuu-py-0.5 niuu-text-[11px] niuu-font-mono niuu-text-text-muted">
+                                {project.status}
+                              </span>
+                              {imported && (
+                                <span className="niuu-rounded niuu-bg-brand/15 niuu-px-2 niuu-py-0.5 niuu-text-[11px] niuu-font-mono niuu-text-brand">
+                                  imported
+                                </span>
+                              )}
+                            </div>
+                            {project.description && (
+                              <p className="niuu-m-0 niuu-mt-2 niuu-text-sm niuu-leading-5 niuu-text-text-secondary">
+                                {project.description}
+                              </p>
+                            )}
+                            <div className="niuu-mt-2 niuu-flex niuu-items-center niuu-gap-3 niuu-text-[11px] niuu-font-mono niuu-text-text-muted">
+                              <span>{project.issueCount} issues</span>
+                              <span>{project.milestoneCount} milestones</span>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-4 niuu-space-y-4">
+                {selectedProject ? (
+                  <>
+                    <div>
+                      <h3 className="niuu-m-0 niuu-text-sm niuu-font-semibold niuu-text-text-primary">
+                        {selectedProject.name}
+                      </h3>
+                      <p className="niuu-m-0 niuu-mt-2 niuu-text-sm niuu-leading-5 niuu-text-text-secondary">
+                        Import registers this tracker project as a saga. Tyr will keep the saga
+                        linked to the tracker instead of copying the project into local-only state.
+                      </p>
+                    </div>
+
+                    <label className="niuu-block">
+                      <span className="niuu-block niuu-mb-1.5 niuu-text-xs niuu-font-mono niuu-text-text-muted">
+                        Repositories
+                      </span>
+                      <input
+                        type="text"
+                        value={repoList}
+                        onChange={(e) => setRepoList(e.target.value)}
+                        placeholder="org/repo, org/other-repo"
+                        className="niuu-w-full niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-tertiary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary niuu-outline-none focus:niuu-border-brand"
+                      />
+                    </label>
+
+                    <label className="niuu-block">
+                      <span className="niuu-block niuu-mb-1.5 niuu-text-xs niuu-font-mono niuu-text-text-muted">
+                        Base branch
+                      </span>
+                      <input
+                        type="text"
+                        value={baseBranch}
+                        onChange={(e) => setBaseBranch(e.target.value)}
+                        placeholder="main"
+                        className="niuu-w-full niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-tertiary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary niuu-outline-none focus:niuu-border-brand"
+                      />
+                    </label>
+
+                    <div className="niuu-rounded-md niuu-bg-bg-tertiary niuu-p-3 niuu-text-xs niuu-leading-5 niuu-text-text-secondary">
+                      {importedTrackerIds.has(selectedProject.id)
+                        ? 'This tracker project is already imported into Tyr.'
+                        : 'Use a comma-separated repo list when the saga spans more than one repository.'}
+                    </div>
+                  </>
+                ) : (
+                  <EmptyState
+                    title="Select a project"
+                    description="Pick a tracker project to configure the import."
+                  />
+                )}
+              </div>
+            </div>
+          )}
         </Modal>
       </main>
     </div>

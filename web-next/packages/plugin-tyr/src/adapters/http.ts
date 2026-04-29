@@ -17,6 +17,10 @@ import type {
   ITyrIntegrationService,
   IDispatchBus,
   DispatchResult,
+  DispatchQueueItem,
+  DispatchApprovalItem,
+  DispatchApprovalOptions,
+  DispatchApprovalResult,
   ITyrSettingsService,
   IAuditLogService,
   CommitSagaRequest,
@@ -153,6 +157,32 @@ interface RawIntegrationConnection {
   created_at: string;
 }
 
+interface RawDispatchQueueItem {
+  saga_id: string;
+  saga_name: string;
+  saga_slug: string;
+  repos: string[];
+  feature_branch: string;
+  phase_name: string;
+  issue_id: string;
+  identifier: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: number;
+  priority_label: string;
+  estimate: number | null;
+  url: string;
+}
+
+interface RawDispatchApprovalResult {
+  issue_id: string;
+  session_id: string;
+  session_name: string;
+  status: string;
+  cluster_name: string;
+}
+
 // ---------------------------------------------------------------------------
 // Transform functions
 // ---------------------------------------------------------------------------
@@ -283,6 +313,36 @@ function toIntegrationConnection(raw: RawIntegrationConnection): IntegrationConn
     enabled: raw.enabled,
     status: raw.status,
     createdAt: raw.created_at,
+  };
+}
+
+function toDispatchQueueItem(raw: RawDispatchQueueItem): DispatchQueueItem {
+  return {
+    sagaId: raw.saga_id,
+    sagaName: raw.saga_name,
+    sagaSlug: raw.saga_slug,
+    repos: raw.repos,
+    featureBranch: raw.feature_branch,
+    phaseName: raw.phase_name,
+    issueId: raw.issue_id,
+    identifier: raw.identifier,
+    title: raw.title,
+    description: raw.description,
+    status: raw.status,
+    priority: raw.priority,
+    priorityLabel: raw.priority_label,
+    estimate: raw.estimate,
+    url: raw.url,
+  };
+}
+
+function toDispatchApprovalResult(raw: RawDispatchApprovalResult): DispatchApprovalResult {
+  return {
+    issueId: raw.issue_id,
+    sessionId: raw.session_id,
+    sessionName: raw.session_name,
+    status: raw.status,
+    clusterName: raw.cluster_name,
   };
 }
 
@@ -532,6 +592,31 @@ export function buildTyrIntegrationHttpAdapter(client: ApiClient): ITyrIntegrati
 
 export function buildDispatchBusHttpAdapter(client: ApiClient): IDispatchBus {
   return {
+    async getQueue(): Promise<DispatchQueueItem[]> {
+      const items = await client.get<RawDispatchQueueItem[]>('/dispatch/queue');
+      return items.map(toDispatchQueueItem);
+    },
+
+    async approve(
+      items: DispatchApprovalItem[],
+      options: DispatchApprovalOptions = {},
+    ): Promise<DispatchApprovalResult[]> {
+      const results = await client.post<RawDispatchApprovalResult[]>('/dispatch/approve', {
+        items: items.map((item) => ({
+          saga_id: item.sagaId,
+          issue_id: item.issueId,
+          repo: item.repo,
+          ...(item.connectionId ? { connection_id: item.connectionId } : {}),
+        })),
+        ...(options.model ? { model: options.model } : {}),
+        ...(options.systemPrompt ? { system_prompt: options.systemPrompt } : {}),
+        ...(options.connectionId ? { connection_id: options.connectionId } : {}),
+        ...(options.workloadType ? { workload_type: options.workloadType } : {}),
+        ...(options.workloadConfig ? { workload_config: options.workloadConfig } : {}),
+      });
+      return results.map(toDispatchApprovalResult);
+    },
+
     async dispatch(raidId: string): Promise<void> {
       await client.post<void>(`/dispatch/${encodeURIComponent(raidId)}`, {});
     },

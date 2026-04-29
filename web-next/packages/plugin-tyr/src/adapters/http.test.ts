@@ -8,6 +8,7 @@ import {
   buildTyrSessionHttpAdapter,
   buildTrackerHttpAdapter,
   buildTyrIntegrationHttpAdapter,
+  buildDispatchBusHttpAdapter,
 } from './http';
 import type {
   ITyrService,
@@ -15,6 +16,7 @@ import type {
   ITyrSessionService,
   ITrackerBrowserService,
   ITyrIntegrationService,
+  IDispatchBus,
   CommitSagaRequest,
   CreateIntegrationParams,
 } from '../ports';
@@ -110,6 +112,32 @@ const rawProject = {
   url: 'https://linear.app/niuu/proj/1',
   milestone_count: 3,
   issue_count: 12,
+};
+
+const rawDispatchQueueItem = {
+  saga_id: '00000000-0000-0000-0000-000000000001',
+  saga_name: 'Auth Rewrite',
+  saga_slug: 'auth-rewrite',
+  repos: ['niuulabs/volundr'],
+  feature_branch: 'feat/auth-rewrite',
+  phase_name: 'Foundation',
+  issue_id: 'issue-1',
+  identifier: 'NIU-010',
+  title: 'Implement JWT refresh',
+  description: 'Add silent token refresh.',
+  status: 'todo',
+  priority: 1,
+  priority_label: 'urgent',
+  estimate: 4,
+  url: 'https://linear.app/issue/NIU-010',
+};
+
+const rawDispatchApprovalResult = {
+  issue_id: 'issue-1',
+  session_id: 'sess-1',
+  session_name: 'NIU-010',
+  status: 'spawned',
+  cluster_name: 'Default',
 };
 
 const rawMilestone = {
@@ -580,5 +608,69 @@ describe('buildTyrIntegrationHttpAdapter', () => {
     expect(typeof svc.toggleIntegration).toBe('function');
     expect(typeof svc.testConnection).toBe('function');
     expect(typeof svc.getTelegramSetup).toBe('function');
+  });
+});
+
+describe('buildDispatchBusHttpAdapter', () => {
+  it('calls GET /dispatch/queue and camelizes queue items', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue([rawDispatchQueueItem]);
+
+    const [item] = await buildDispatchBusHttpAdapter(client).getQueue();
+
+    expect(client.get).toHaveBeenCalledWith('/dispatch/queue');
+    expect(item?.sagaId).toBe(rawDispatchQueueItem.saga_id);
+    expect(item?.phaseName).toBe(rawDispatchQueueItem.phase_name);
+    expect(item?.priorityLabel).toBe(rawDispatchQueueItem.priority_label);
+  });
+
+  it('calls POST /dispatch/approve with snake_case request fields', async () => {
+    const client = makeClient();
+    client.post.mockResolvedValue([rawDispatchApprovalResult]);
+
+    const [result] = await buildDispatchBusHttpAdapter(client).approve(
+      [
+        {
+          sagaId: '00000000-0000-0000-0000-000000000001',
+          issueId: 'issue-1',
+          repo: 'niuulabs/volundr',
+          connectionId: 'cluster-1',
+        },
+      ],
+      {
+        model: 'gpt-test',
+        systemPrompt: 'Ship it',
+        connectionId: 'cluster-default',
+        workloadType: 'ravn_flock',
+        workloadConfig: { personas: ['coder'] },
+      },
+    );
+
+    expect(client.post).toHaveBeenCalledWith('/dispatch/approve', {
+      items: [
+        {
+          saga_id: '00000000-0000-0000-0000-000000000001',
+          issue_id: 'issue-1',
+          repo: 'niuulabs/volundr',
+          connection_id: 'cluster-1',
+        },
+      ],
+      model: 'gpt-test',
+      system_prompt: 'Ship it',
+      connection_id: 'cluster-default',
+      workload_type: 'ravn_flock',
+      workload_config: { personas: ['coder'] },
+    });
+    expect(result?.issueId).toBe(rawDispatchApprovalResult.issue_id);
+    expect(result?.clusterName).toBe(rawDispatchApprovalResult.cluster_name);
+  });
+
+  it('satisfies IDispatchBus', () => {
+    const client = makeClient();
+    const svc: IDispatchBus = buildDispatchBusHttpAdapter(client);
+    expect(typeof svc.getQueue).toBe('function');
+    expect(typeof svc.approve).toBe('function');
+    expect(typeof svc.dispatch).toBe('function');
+    expect(typeof svc.dispatchBatch).toBe('function');
   });
 });

@@ -529,15 +529,26 @@ function DispatchViewContent() {
 
   async function handleDispatch() {
     const ids = Array.from(selectedIds);
+    const items = selectedEntries.map((entry) => ({
+      sagaId: entry.queueItem.sagaId,
+      issueId: entry.queueItem.issueId,
+      repo: entry.queueItem.repos[0] ?? '',
+    }));
     setIsDispatching(true);
     setOptimisticQueued((prev) => new Set([...prev, ...ids]));
     setSelectedIds(new Set());
 
     try {
-      await dispatchBus.dispatchBatch(ids);
+      const results = await dispatchBus.approve(items);
+      await queueQuery.refetch();
+      setOptimisticQueued(new Set());
+      const spawned = results.filter((result) => result.status === 'spawned').length;
       toast({
-        title: `Dispatched ${ids.length} raid${ids.length !== 1 ? 's' : ''}`,
-        tone: 'success',
+        title:
+          spawned === ids.length
+            ? `Dispatched ${ids.length} raid${ids.length !== 1 ? 's' : ''}`
+            : `Dispatched ${spawned} of ${ids.length} raids`,
+        tone: spawned > 0 ? 'success' : 'critical',
       });
     } catch {
       setOptimisticQueued((prev) => {

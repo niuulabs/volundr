@@ -1335,6 +1335,20 @@ export function createMockTrackerService(): ITrackerBrowserService {
  */
 export function createMockDispatchBus(): IDispatchBus {
   return {
+    async getQueue() {
+      return [];
+    },
+
+    async approve(items) {
+      return items.map((item) => ({
+        issueId: item.issueId,
+        sessionId: `sess-${item.issueId}`,
+        sessionName: item.issueId,
+        status: 'spawned',
+        clusterName: '',
+      }));
+    },
+
     async dispatch(_raidId: string): Promise<void> {
       // No-op in mock; UI handles optimistic status update.
     },

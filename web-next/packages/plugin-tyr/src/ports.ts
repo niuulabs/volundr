@@ -242,6 +242,47 @@ export interface DispatchResult {
   failed: { raidId: string; reason: string }[];
 }
 
+export interface DispatchQueueItem {
+  sagaId: string;
+  sagaName: string;
+  sagaSlug: string;
+  repos: string[];
+  featureBranch: string;
+  phaseName: string;
+  issueId: string;
+  identifier: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: number;
+  priorityLabel: string;
+  estimate: number | null;
+  url: string;
+}
+
+export interface DispatchApprovalItem {
+  sagaId: string;
+  issueId: string;
+  repo: string;
+  connectionId?: string;
+}
+
+export interface DispatchApprovalOptions {
+  model?: string;
+  systemPrompt?: string;
+  connectionId?: string;
+  workloadType?: string;
+  workloadConfig?: Record<string, unknown>;
+}
+
+export interface DispatchApprovalResult {
+  issueId: string;
+  sessionId: string;
+  sessionName: string;
+  status: string;
+  clusterName: string;
+}
+
 /**
  * Sleipnir dispatch bus port.
  *
@@ -249,6 +290,11 @@ export interface DispatchResult {
  * Implementations: RabbitMQ (production), in-memory mock (dev/test).
  */
 export interface IDispatchBus {
+  getQueue(): Promise<DispatchQueueItem[]>;
+  approve(
+    items: DispatchApprovalItem[],
+    options?: DispatchApprovalOptions,
+  ): Promise<DispatchApprovalResult[]>;
   dispatch(raidId: string): Promise<void>;
   dispatchBatch(raidIds: string[]): Promise<DispatchResult>;
 }
