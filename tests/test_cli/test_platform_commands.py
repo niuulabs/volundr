@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+import typer
 from typer.testing import CliRunner
 
 from cli.commands.platform import (
@@ -173,6 +175,7 @@ class TestDynamicUpCallback:
         assert "all" in sig.parameters
         assert "host_profile" in sig.parameters
         assert "mounts" in sig.parameters
+        assert "workspaces_dir" in sig.parameters
 
     def test_up_flag_defaults_are_none_for_services(self) -> None:
         service_defs = {"skuld": _make_svc_def("skuld", default_enabled=False)}
@@ -233,8 +236,103 @@ class TestDynamicUpCallback:
             True,
             "api",
             {"niuu-api", "runtime-config"},
+            workspaces_dir_override="",
         )
         shutdown.assert_awaited_once_with(manager)
+
+    def test_up_callback_sets_mini_mode_runtime_overrides(self) -> None:
+        service_defs = {"volundr": _make_svc_def("volundr")}
+        manager = MagicMock()
+        settings = CLISettings(mode="mini")
+        up_fn = _build_up_callback(service_defs, manager, settings)
+
+        fake_event = MagicMock()
+        fake_event.wait = AsyncMock(side_effect=asyncio.CancelledError())
+        startup = AsyncMock()
+        shutdown = AsyncMock()
+
+        with (
+            patch("cli.commands.platform._startup", startup),
+            patch("cli.commands.platform._shutdown", shutdown),
+            patch("cli.commands.platform.asyncio.Event", return_value=fake_event),
+            patch("cli.commands.platform.asyncio.run", side_effect=asyncio.run),
+            patch.dict("os.environ", {}, clear=True),
+        ):
+            up_fn(
+                skip_preflight=True,
+                all=False,
+                no_web=False,
+                host_profile="full",
+                mounts="",
+                volundr=True,
+            )
+
+            assert os.environ["LOCAL_MOUNTS__ENABLED"] == "true"
+            assert os.environ["LOCAL_MOUNTS__MINI_MODE"] == "true"
+            assert os.environ["POD_MANAGER__ADAPTER"] == settings.pod_manager.adapter
+            assert (
+                os.environ["POD_MANAGER__KWARGS__WORKSPACES_DIR"]
+                == "~/.niuu/workspaces"
+            )
+            assert os.environ["POD_MANAGER__KWARGS__CLAUDE_BINARY"] == "claude"
+            assert os.environ["POD_MANAGER__KWARGS__MAX_CONCURRENT"] == "4"
+            assert os.environ["POD_MANAGER__KWARGS__SDK_PORT_START"] == "9100"
+            assert os.environ["GIT__VALIDATE_ON_CREATE"] == "false"
+
+        startup.assert_awaited_once()
+        shutdown.assert_awaited_once_with(manager)
+
+    def test_up_callback_applies_workspaces_dir_override_in_mini_mode(self) -> None:
+        service_defs = {"volundr": _make_svc_def("volundr")}
+        manager = MagicMock()
+        settings = CLISettings(mode="mini")
+        up_fn = _build_up_callback(service_defs, manager, settings)
+
+        fake_event = MagicMock()
+        fake_event.wait = AsyncMock(side_effect=asyncio.CancelledError())
+        startup = AsyncMock()
+        shutdown = AsyncMock()
+
+        with (
+            patch("cli.commands.platform._startup", startup),
+            patch("cli.commands.platform._shutdown", shutdown),
+            patch("cli.commands.platform.asyncio.Event", return_value=fake_event),
+            patch("cli.commands.platform.asyncio.run", side_effect=asyncio.run),
+            patch.dict("os.environ", {}, clear=True),
+        ):
+            up_fn(
+                skip_preflight=True,
+                all=False,
+                no_web=False,
+                host_profile="full",
+                mounts="",
+                workspaces_dir="/tmp/mini-workspaces",
+                volundr=True,
+            )
+
+            assert os.environ["POD_MANAGER__KWARGS__WORKSPACES_DIR"] == "/tmp/mini-workspaces"
+
+        assert startup.await_count == 1
+        called_settings = startup.await_args.args[1]
+        assert called_settings.pod_manager.workspaces_dir == "/tmp/mini-workspaces"
+        shutdown.assert_awaited_once_with(manager)
+
+    def test_up_callback_rejects_workspaces_dir_override_outside_mini_mode(self) -> None:
+        service_defs = {"volundr": _make_svc_def("volundr")}
+        manager = MagicMock()
+        settings = CLISettings(mode="cluster")
+        up_fn = _build_up_callback(service_defs, manager, settings)
+
+        with pytest.raises(typer.BadParameter, match="only supported in mini mode"):
+            up_fn(
+                skip_preflight=True,
+                all=False,
+                no_web=False,
+                host_profile="full",
+                mounts="",
+                workspaces_dir="/tmp/mini-workspaces",
+                volundr=True,
+            )
 
     def test_up_callback_rejects_unknown_mounts(self) -> None:
         service_defs = {"volundr": _make_svc_def("volundr")}
@@ -329,6 +427,7 @@ class TestCreatePlatformCommands:
         assert "--start-all" not in plain
         assert "--host-profile" in plain
         assert "--mounts" in plain
+        assert "--workspaces-dir" in plain
 
 
 class TestDependencyResolutionViaEnabledServices:
@@ -355,6 +454,14 @@ class TestBuildPreflightConfig:
         assert config.mode == "mini"
         assert config.claude_binary == "claude"
         assert config.workspaces_dir == "~/.niuu/workspaces"
+
+    def test_mini_mode_uses_workspaces_dir_override(self) -> None:
+        settings = CLISettings()
+        config = _build_preflight_config(
+            settings,
+            workspaces_dir_override="/tmp/mini-workspaces",
+        )
+        assert config.workspaces_dir == "/tmp/mini-workspaces"
 
     def test_cluster_mode_from_settings(self) -> None:
         settings = CLISettings(

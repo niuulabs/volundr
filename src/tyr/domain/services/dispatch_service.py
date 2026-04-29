@@ -34,7 +34,9 @@ from tyr.domain.models import (
     SagaStatus,
     TrackerIssue,
     TrackerProject,
+    WorkflowScope,
 )
+from tyr.domain.workflow_snapshot import workflow_name_from_snapshot, workflow_personas_from_snapshot
 from tyr.domain.templates import BUNDLED_TEMPLATES_DIR, TemplatePhase, load_template
 from tyr.domain.utils import _slugify
 from tyr.ports.dispatcher_repository import DispatcherRepository
@@ -43,6 +45,7 @@ from tyr.ports.flock_flow import FlockFlowProvider
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerFactory, TrackerPort
 from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrPort
+from tyr.ports.workflow_repository import WorkflowRepository
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +79,9 @@ class QueueItem:
     priority_label: str = ""
     estimate: float | None = None
     url: str = ""
+    workflow_id: str | None = None
+    workflow: str | None = None
+    workflow_version: str | None = None
 
 
 @dataclass(frozen=True)
@@ -97,6 +103,8 @@ class DispatchItem:
     issue_id: str
     repo: str
     connection_id: str | None = None
+    workflow_id: str | None = None
+    session_definition: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -305,6 +313,7 @@ class DispatchService:
         sleipnir_publisher: object | None = None,
         event_bus: EventBusPort | None = None,
         flow_provider: FlockFlowProvider | None = None,
+        workflow_repo: WorkflowRepository | None = None,
     ) -> None:
         self._tracker_factory = tracker_factory
         self._volundr_factory = volundr_factory
@@ -315,6 +324,7 @@ class DispatchService:
         self._sleipnir_publisher = sleipnir_publisher
         self._event_bus = event_bus
         self._flow_provider = flow_provider
+        self._workflow_repo = workflow_repo
 
     async def find_ready_issues(
         self,
@@ -392,6 +402,7 @@ class DispatchService:
         model: str = "",
         system_prompt: str = "",
         connection_id: str | None = None,
+        session_definition: str | None = None,
         persona_overrides: list[dict] | None = None,
     ) -> list[DispatchResult]:
         """Spawn Volundr sessions for the given items."""
@@ -443,6 +454,18 @@ class DispatchService:
 
             target_connection = item.connection_id or connection_id
             target_volundr = resolve_target_adapter(target_connection, adapter_by_name, volundr)
+            workflow_snapshot, workflow_error = await self._resolve_workflow_snapshot(item, saga)
+            if workflow_error:
+                logger.warning("Workflow resolution failed for issue %s: %s", item.issue_id, workflow_error)
+                results.append(
+                    DispatchResult(
+                        issue_id=item.issue_id,
+                        session_id="",
+                        session_name="",
+                        status="failed",
+                    )
+                )
+                continue
 
             result = await self._spawn_single(
                 target_volundr=target_volundr,
@@ -453,9 +476,11 @@ class DispatchService:
                 effective_model=effective_model,
                 effective_prompt=effective_prompt,
                 integration_ids=integration_ids,
+                session_definition=item.session_definition or session_definition,
                 auth_token=auth_token,
                 owner_id=owner_id,
                 persona_overrides=persona_overrides,
+                workflow_snapshot=workflow_snapshot,
             )
             results.append(result)
 
@@ -799,6 +824,14 @@ class DispatchService:
                             priority_label=issue.priority_label,
                             estimate=issue.estimate,
                             url=issue.url,
+                            workflow_id=str(saga.workflow_id) if saga.workflow_id else None,
+                            workflow=workflow_name_from_snapshot(saga.workflow_snapshot),
+                            workflow_version=(
+                                str(saga.workflow_snapshot.get("version"))
+                                if saga.workflow_snapshot
+                                and saga.workflow_snapshot.get("version") is not None
+                                else None
+                            ),
                         )
                     )
                 return items, False
@@ -868,8 +901,10 @@ class DispatchService:
         effective_model: str,
         effective_prompt: str,
         integration_ids: list[str],
+        session_definition: str | None = None,
         flock_flow: str = "",
         persona_overrides: list[dict] | None = None,
+        workflow_snapshot: dict[str, Any] | None = None,
     ) -> SpawnRequest:
         """Build a SpawnRequest — flock or solo — based on config.
 
@@ -879,7 +914,14 @@ class DispatchService:
         which in turn take precedence over persona defaults.
         """
         session_name = issue.identifier.lower()
-        if not self._config.flock_enabled:
+        workflow_personas = workflow_personas_from_snapshot(workflow_snapshot)
+        use_workflow_flock = bool(
+            workflow_snapshot
+            and workflow_snapshot.get("definition_yaml")
+            and workflow_personas
+        )
+
+        if not self._config.flock_enabled and not use_workflow_flock:
             return SpawnRequest(
                 name=session_name,
                 repo=item.repo,
@@ -895,6 +937,8 @@ class DispatchService:
                     saga.feature_branch,
                     template=self._config.dispatch_prompt_template,
                 ),
+                definition=session_definition,
+                workload_config={"workflow": workflow_snapshot} if workflow_snapshot else {},
                 integration_ids=integration_ids,
             )
 
@@ -904,15 +948,19 @@ class DispatchService:
         mimir_url = self._config.flock_mimir_hosted_url
         sleipnir_urls = list(self._config.flock_sleipnir_publish_urls)
 
-        flow = self._flow_provider.get(flock_flow) if flock_flow and self._flow_provider else None
-        if flow is None and flock_flow:
-            logger.warning("Flock flow '%s' not found, using default personas", flock_flow)
-        if flow is not None:
-            flow_name_for_log = flow.name
-            personas = [p.to_dict() for p in flow.personas]
-            mimir_url = flow.mimir_hosted_url or mimir_url
-            if flow.sleipnir_publish_urls:
-                sleipnir_urls = list(flow.sleipnir_publish_urls)
+        if use_workflow_flock:
+            personas = copy.deepcopy(workflow_personas)
+            flow_name_for_log = str(workflow_snapshot.get("name") or "")
+        else:
+            flow = self._flow_provider.get(flock_flow) if flock_flow and self._flow_provider else None
+            if flow is None and flock_flow:
+                logger.warning("Flock flow '%s' not found, using default personas", flock_flow)
+            if flow is not None:
+                flow_name_for_log = flow.name
+                personas = [p.to_dict() for p in flow.personas]
+                mimir_url = flow.mimir_hosted_url or mimir_url
+                if flow.sleipnir_publish_urls:
+                    sleipnir_urls = list(flow.sleipnir_publish_urls)
 
         # Apply per-dispatch persona overrides (precedence: dispatch > flow > defaults)
         if persona_overrides:
@@ -948,15 +996,25 @@ class DispatchService:
                 ", ".join(_format_persona_label(p) for p in personas),
             )
 
+        initiative_context = build_flock_prompt(
+            issue,
+            item.repo,
+            saga.feature_branch,
+            mimir_hosted_url=mimir_url,
+        )
+        if workflow_snapshot and workflow_snapshot.get("definition_yaml"):
+            initiative_context = (
+                f"{initiative_context}\n\n<workflow_definition>\n"
+                f"{workflow_snapshot['definition_yaml']}\n"
+                "</workflow_definition>"
+            )
+
         workload_config: dict = {
             "personas": personas,
-            "initiative_context": build_flock_prompt(
-                issue,
-                item.repo,
-                saga.feature_branch,
-                mimir_hosted_url=mimir_url,
-            ),
+            "initiative_context": initiative_context,
         }
+        if workflow_snapshot:
+            workload_config["workflow"] = workflow_snapshot
         if sleipnir_urls:
             workload_config["sleipnir_publish_urls"] = sleipnir_urls
         if mimir_url:
@@ -974,6 +1032,7 @@ class DispatchService:
             tracker_issue_url=issue.url,
             system_prompt=effective_prompt,
             initial_prompt=workload_config["initiative_context"],
+            definition=session_definition,
             workload_type="ravn_flock",
             workload_config=workload_config,
             integration_ids=integration_ids,
@@ -990,9 +1049,11 @@ class DispatchService:
         effective_model: str,
         effective_prompt: str,
         integration_ids: list[str],
+        session_definition: str | None,
         auth_token: str | None,
         owner_id: str,
         persona_overrides: list[dict] | None = None,
+        workflow_snapshot: dict[str, Any] | None = None,
     ) -> DispatchResult:
         """Spawn a single session and update raid progress."""
         try:
@@ -1003,7 +1064,9 @@ class DispatchService:
                 effective_model=effective_model,
                 effective_prompt=effective_prompt,
                 integration_ids=integration_ids,
+                session_definition=session_definition,
                 persona_overrides=persona_overrides,
+                workflow_snapshot=workflow_snapshot,
             )
             session = await target_volundr.spawn_session(
                 request=request,
@@ -1062,3 +1125,31 @@ class DispatchService:
                 session_name="",
                 status="failed",
             )
+
+    async def _resolve_workflow_snapshot(
+        self,
+        item: DispatchItem,
+        saga: Saga,
+    ) -> tuple[dict[str, Any] | None, str | None]:
+        if item.workflow_id is None:
+            return saga.workflow_snapshot, None
+
+        if self._workflow_repo is None:
+            return None, "workflow repository not configured"
+
+        try:
+            workflow_uuid = uuid.UUID(item.workflow_id)
+        except ValueError:
+            return None, f"invalid workflow_id {item.workflow_id!r}"
+
+        workflow = await self._workflow_repo.get_workflow(workflow_uuid)
+        if workflow is None:
+            return None, f"workflow {item.workflow_id!r} not found"
+        if workflow.scope != WorkflowScope.SYSTEM and workflow.owner_id != saga.owner_id:
+            return None, f"workflow {item.workflow_id!r} is not visible to this saga owner"
+        if workflow.definition_yaml is None:
+            return None, f"workflow {item.workflow_id!r} is not executable"
+
+        from tyr.domain.workflow_snapshot import build_workflow_snapshot  # noqa: PLC0415
+
+        return build_workflow_snapshot(workflow), None

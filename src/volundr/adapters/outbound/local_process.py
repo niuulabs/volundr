@@ -49,6 +49,8 @@ DEFAULT_MAX_CONCURRENT = 4
 DEFAULT_SDK_PORT_START = 9100
 DEFAULT_STOP_TIMEOUT = 10
 DEFAULT_STATE_FILE = "~/.niuu/forge-state.json"
+DEFAULT_FLOCK_BASE_PORT = 7480
+DEFAULT_FLOCK_PORT_SCAN_LIMIT = 1000
 DEFAULT_ALLOWED_MOUNT_PREFIXES: list[str] = []
 
 # Poll interval for wait_for_ready
@@ -100,6 +102,17 @@ class ProcessInfo:
             error=data.get("error"),
             flock_dir=data.get("flock_dir", ""),
         )
+
+
+@dataclass(frozen=True)
+class FlockPortPlan:
+    """Per-session local mesh ports shared by Skuld and Ravn sidecars."""
+
+    session_base_port: int
+    ravn_base_port: int
+    skuld_pub_port: int
+    skuld_rep_port: int
+    skuld_handshake_port: int
 
 
 class SdkPortAllocator:
@@ -201,14 +214,20 @@ class LocalProcessPodManager(PodManager):
         allowed_mount_prefixes: list[str] | None = None,
         **_extra: object,
     ):
-        self._workspaces_dir = Path(workspaces_dir).expanduser()
-        self._claude_binary = claude_binary
-        self._max_concurrent = max_concurrent
-        self._stop_timeout = stop_timeout
-        self._state_file = Path(state_file).expanduser()
+        self._workspaces_dir = Path(str(workspaces_dir)).expanduser()
+        self._claude_binary = str(claude_binary)
+        self._max_concurrent = int(max_concurrent)
+        self._stop_timeout = int(stop_timeout)
+        self._state_file = Path(str(state_file)).expanduser()
+        if isinstance(allowed_mount_prefixes, str):
+            allowed_mount_prefixes = [
+                prefix.strip()
+                for prefix in allowed_mount_prefixes.split(",")
+                if prefix.strip()
+            ]
         self._allowed_mount_prefixes = allowed_mount_prefixes or DEFAULT_ALLOWED_MOUNT_PREFIXES
 
-        self._port_allocator = SdkPortAllocator(start_port=sdk_port_start)
+        self._port_allocator = SdkPortAllocator(start_port=int(sdk_port_start))
         self._processes: dict[str, ProcessInfo] = {}
         self._monitors: dict[str, asyncio.Task] = {}
         self._skuld_registry: object | None = None  # Set via set_skuld_registry()
@@ -242,6 +261,17 @@ class LocalProcessPodManager(PodManager):
 
         workspace = await self._provision_workspace(session, spec)
         port = self._port_allocator.allocate()
+        flock_plan: FlockPortPlan | None = None
+        if spec.pod_spec and spec.pod_spec.extra_containers:
+            persona_count = sum(
+                1
+                for container in spec.pod_spec.extra_containers
+                if container.get("name", "").startswith("ravn-")
+            )
+            if persona_count > 0:
+                flock_plan = self._flock_port_plan(
+                    self._pick_flock_base_port(persona_count)
+                )
 
         info = ProcessInfo(
             session_id=session_id,
@@ -253,14 +283,20 @@ class LocalProcessPodManager(PodManager):
         self._persist_state()
 
         try:
-            pid = await self._spawn_skuld(session, spec, workspace, port)
+            pid = await self._spawn_skuld(
+                session,
+                spec,
+                workspace,
+                port,
+                flock_plan=flock_plan,
+            )
             info.pid = pid
             info.state = ProcessState.RUNNING
             self._persist_state()
 
             # Spawn ravn flock sidecars if the contributor produced extra containers
-            if spec.pod_spec and spec.pod_spec.extra_containers:
-                flock_dir = await self._start_flock(spec, workspace)
+            if spec.pod_spec and spec.pod_spec.extra_containers and flock_plan is not None:
+                flock_dir = await self._start_flock(spec, workspace, flock_plan)
                 info.flock_dir = str(flock_dir)
                 self._persist_state()
 
@@ -482,6 +518,36 @@ class LocalProcessPodManager(PodManager):
             for prefix in self._allowed_mount_prefixes
         )
 
+    def _pick_flock_base_port(self, node_count: int) -> int:
+        """Pick a free shared base port for a local flocked session.
+
+        Local mini mode runs one Skuld broker plus ``node_count`` ravn peers.
+        Skuld uses the session base directly, while the generated ravn flock is
+        shifted by one mesh slot so its first persona does not collide with the
+        primary broker.
+        """
+        for offset in range(DEFAULT_FLOCK_PORT_SCAN_LIMIT):
+            base_port = DEFAULT_FLOCK_BASE_PORT + offset
+            required_ports: list[int] = [base_port, base_port + 1, base_port + 100]
+            for index in range(node_count):
+                ravn_index = index + 1
+                required_ports.extend(
+                    [
+                        base_port + ravn_index * 2,
+                        base_port + ravn_index * 2 + 1,
+                        base_port + 100 + ravn_index,
+                        base_port + 200 + ravn_index,
+                    ]
+                )
+
+            if all(SdkPortAllocator._is_port_free(port) for port in required_ports):
+                return base_port
+
+        raise RuntimeError(
+            "Could not find a free ravn flock base port "
+            f"after scanning {DEFAULT_FLOCK_PORT_SCAN_LIMIT} candidates"
+        )
+
     @staticmethod
     def _write_claude_md(workspace: Path, spec: SessionSpec) -> None:
         """Write CLAUDE.md with system prompt and session config."""
@@ -503,12 +569,24 @@ class LocalProcessPodManager(PodManager):
     # Process spawning & monitoring
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _flock_port_plan(base_port: int) -> FlockPortPlan:
+        """Return the shared local mesh port layout for one flocked session."""
+        return FlockPortPlan(
+            session_base_port=base_port,
+            ravn_base_port=base_port + 2,
+            skuld_pub_port=base_port,
+            skuld_rep_port=base_port + 1,
+            skuld_handshake_port=base_port + 100,
+        )
+
     async def _spawn_skuld(
         self,
         session: Session,
         spec: SessionSpec,
         workspace: Path,
         port: int,
+        flock_plan: FlockPortPlan | None = None,
     ) -> int:
         """Spawn a Skuld broker subprocess that internally manages Claude.
 
@@ -558,6 +636,15 @@ class LocalProcessPodManager(PodManager):
                 ]
             )
 
+        if flock_plan is not None:
+            env["SKULD__MESH__NNG__PUB_SUB_ADDRESS"] = (
+                f"tcp://0.0.0.0:{flock_plan.skuld_pub_port}"
+            )
+            env["SKULD__MESH__NNG__REQ_REP_ADDRESS"] = (
+                f"tcp://0.0.0.0:{flock_plan.skuld_rep_port}"
+            )
+            env["SKULD__MESH__HANDSHAKE_PORT"] = str(flock_plan.skuld_handshake_port)
+
         env["SKULD__SESSION__ID"] = session_id
         env["SKULD__SESSION__NAME"] = session.name
         model = session.model or spec.values.get("model", "claude-sonnet-4-6")
@@ -565,8 +652,8 @@ class LocalProcessPodManager(PodManager):
         env["SKULD__SESSION__WORKSPACE_DIR"] = str(workspace)
         env["SKULD__HOST"] = "127.0.0.1"
         env["SKULD__PORT"] = str(port)
-        env["SKULD__TRANSPORT"] = "sdk"
-        env["SKULD__SKIP_PERMISSIONS"] = "true"
+        env.setdefault("SKULD__TRANSPORT", "sdk")
+        env.setdefault("SKULD__SKIP_PERMISSIONS", "true")
         env["SKULD__PERSISTENCE_MOUNT_PATH"] = str(self._workspaces_dir)
 
         # Volundr API URL so Skuld can post chronicles/timeline events back
@@ -582,8 +669,9 @@ class LocalProcessPodManager(PodManager):
         if initial_prompt:
             env["SKULD__SESSION__INITIAL_PROMPT"] = initial_prompt
 
-        # Pass through the claude binary location
-        env["SKULD__CLI_BINARY"] = self._resolve_claude_binary()
+        # Claude transports still need the CLI binary location.
+        if env.get("SKULD__CLI_TYPE", "claude") == "claude":
+            env["SKULD__CLI_BINARY"] = self._resolve_claude_binary()
 
         log_path = workspace / ".skuld.log"
         log_file = log_path.open("w", encoding="utf-8")
@@ -610,6 +698,7 @@ class LocalProcessPodManager(PodManager):
         self,
         spec: SessionSpec,
         workspace: Path,
+        flock_plan: FlockPortPlan,
     ) -> Path:
         """Init and start a ravn flock alongside the Skuld session.
 
@@ -632,8 +721,9 @@ class LocalProcessPodManager(PodManager):
         if not personas:
             return flock_dir
 
-        # ravn flock init with static discovery (no mDNS).
-        # Use base-port 7490 to avoid collision with Skuld's ports (7480-7489).
+        # ravn flock init with static discovery (no mDNS). The ravn sidecars
+        # start at index 1 because the primary Skuld broker occupies index 0.
+        ravn_base_port = flock_plan.ravn_base_port
         sp.run(
             [
                 sys.executable,
@@ -647,30 +737,32 @@ class LocalProcessPodManager(PodManager):
                 "--discovery",
                 "static",
                 "--base-port",
-                "7490",
+                str(ravn_base_port),
                 "--force",
             ],
             check=True,
             capture_output=True,
         )
-        logger.info("Flock init: personas=%s dir=%s", personas, flock_dir)
+        logger.info(
+            "Flock init: personas=%s dir=%s session_base_port=%d ravn_base_port=%d",
+            personas,
+            flock_dir,
+            flock_plan.session_base_port,
+            ravn_base_port,
+        )
 
         # Append Skuld as a peer in cluster.yaml so ravn nodes discover it
         cluster_path = flock_dir / "cluster.yaml"
         if cluster_path.exists():
             cluster = yaml.safe_load(cluster_path.read_text())
-            skuld_pub = ""
-            skuld_rep = ""
+            skuld_pub = f"tcp://127.0.0.1:{flock_plan.skuld_pub_port}"
+            skuld_rep = f"tcp://127.0.0.1:{flock_plan.skuld_rep_port}"
             skuld_peer_id = ""
             if spec.pod_spec and spec.pod_spec.env:
                 for entry in spec.pod_spec.env:
                     name = entry.get("name", "")
                     value = entry.get("value", "")
-                    if name == "MESH_PUB_ADDRESS":
-                        skuld_pub = value
-                    elif name == "MESH_REP_ADDRESS":
-                        skuld_rep = value
-                    elif name == "MESH_PEER_ID":
+                    if name == "MESH_PEER_ID":
                         skuld_peer_id = value
 
             if skuld_peer_id and skuld_pub:
@@ -758,7 +850,7 @@ class LocalProcessPodManager(PodManager):
 
     @staticmethod
     def _build_env(spec: SessionSpec, workspace: Path) -> dict[str, str]:
-        """Build environment variables for the Claude process."""
+        """Build environment variables for the Skuld process."""
         env = dict(os.environ)
         env["WORKSPACE_DIR"] = str(workspace)
 
@@ -774,6 +866,26 @@ class LocalProcessPodManager(PodManager):
         if isinstance(extra_env, dict):
             for key, value in extra_env.items():
                 env[str(key)] = str(value)
+
+        broker = spec.values.get("broker", {})
+        if isinstance(broker, dict):
+            cli_type = broker.get("cliType")
+            if cli_type:
+                env["SKULD__CLI_TYPE"] = str(cli_type)
+
+            transport = broker.get("transport")
+            if transport:
+                env["SKULD__TRANSPORT"] = str(transport)
+
+            transport_adapter = broker.get("transportAdapter")
+            if transport_adapter:
+                env["SKULD__TRANSPORT_ADAPTER"] = str(transport_adapter)
+
+            if "skipPermissions" in broker:
+                env["SKULD__SKIP_PERMISSIONS"] = str(bool(broker["skipPermissions"])).lower()
+
+            if "agentTeams" in broker:
+                env["SKULD__AGENT_TEAMS"] = str(bool(broker["agentTeams"])).lower()
 
         return env
 

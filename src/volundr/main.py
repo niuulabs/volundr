@@ -38,6 +38,7 @@ from volundr.adapters.inbound.rest_oauth import create_canonical_oauth_router, c
 from volundr.adapters.inbound.rest_presets import create_presets_router
 from volundr.adapters.inbound.rest_profiles import create_profiles_router
 from volundr.adapters.inbound.rest_prompts import create_prompts_router
+from volundr.adapters.inbound.rest_ravn_personas import create_ravn_personas_router
 from volundr.adapters.inbound.rest_resources import create_resources_router
 from volundr.adapters.inbound.rest_secrets import (
     create_canonical_secrets_router,
@@ -68,6 +69,7 @@ from volundr.adapters.outbound.postgres_timeline import PostgresTimelineReposito
 from volundr.adapters.outbound.postgres_tokens import PostgresTokenTracker
 from volundr.adapters.outbound.postgres_users import PostgresUserRepository
 from volundr.adapters.outbound.pricing import HardcodedPricingProvider
+from ravn.adapters.personas.postgres_registry import PostgresPersonaRegistry
 from volundr.config import LoggingConfig, Settings
 from volundr.domain.ports import SessionContributor
 from volundr.domain.services import (
@@ -732,6 +734,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             prompt_service = PromptService(prompt_repository)
             prompts_router = create_prompts_router(prompt_service)
             app.include_router(prompts_router)
+
+            # Ravn personas
+            ravn_persona_registry = PostgresPersonaRegistry(pool)
+            ravn_personas_router = create_ravn_personas_router(ravn_persona_registry)
+            app.include_router(ravn_personas_router)
 
             # Presets (DB-stored runtime config)
             preset_repository = PostgresPresetRepository(pool)

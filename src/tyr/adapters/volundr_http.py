@@ -75,6 +75,7 @@ class VolundrHTTPAdapter(VolundrPort):
                     "initial_prompt": request.initial_prompt,
                     "issue_id": request.tracker_issue_id,
                     "issue_url": request.tracker_issue_url,
+                    "definition": request.definition,
                     "workload_type": request.workload_type,
                     "workload_config": request.workload_config,
                     "profile_name": request.profile,

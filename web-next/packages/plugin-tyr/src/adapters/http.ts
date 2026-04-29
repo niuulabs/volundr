@@ -21,6 +21,7 @@ import type {
   DispatchApprovalItem,
   DispatchApprovalOptions,
   DispatchApprovalResult,
+  IWorkflowService,
   ITyrSettingsService,
   IAuditLogService,
   CommitSagaRequest,
@@ -41,6 +42,7 @@ import type { Saga, Phase, Raid } from '../domain/saga';
 import type { DispatcherState } from '../domain/dispatcher';
 import type { SessionInfo } from '../domain/session';
 import type { TrackerProject, TrackerMilestone, TrackerIssue } from '../domain/tracker';
+import type { Workflow } from '../domain/workflow';
 
 // ---------------------------------------------------------------------------
 // Raw server types (snake_case)
@@ -58,6 +60,9 @@ interface RawSaga {
   status: string;
   confidence: number;
   created_at: string;
+  workflow_id?: string | null;
+  workflow?: string | null;
+  workflow_version?: string | null;
   phase_summary: {
     total: number;
     completed: number;
@@ -173,6 +178,9 @@ interface RawDispatchQueueItem {
   priority_label: string;
   estimate: number | null;
   url: string;
+  workflow_id?: string | null;
+  workflow?: string | null;
+  workflow_version?: string | null;
 }
 
 interface RawDispatchApprovalResult {
@@ -181,6 +189,19 @@ interface RawDispatchApprovalResult {
   session_name: string;
   status: string;
   cluster_name: string;
+}
+
+interface RawWorkflow {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  scope: 'system' | 'user';
+  owner_id: string | null;
+  nodes: Workflow['nodes'];
+  edges: Workflow['edges'];
+  definition_yaml: string | null;
+  compile_errors: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +257,9 @@ function toSaga(raw: RawSaga): Saga {
     status: raw.status as Saga['status'],
     confidence: raw.confidence,
     createdAt: raw.created_at,
+    workflowId: raw.workflow_id ?? undefined,
+    workflow: raw.workflow ?? undefined,
+    workflowVersion: raw.workflow_version ?? undefined,
     phaseSummary: {
       total: raw.phase_summary.total,
       completed: raw.phase_summary.completed,
@@ -333,6 +357,9 @@ function toDispatchQueueItem(raw: RawDispatchQueueItem): DispatchQueueItem {
     priorityLabel: raw.priority_label,
     estimate: raw.estimate,
     url: raw.url,
+    workflowId: raw.workflow_id ?? undefined,
+    workflow: raw.workflow ?? undefined,
+    workflowVersion: raw.workflow_version ?? undefined,
   };
 }
 
@@ -364,6 +391,33 @@ function toCommitRequestBody(req: CommitSagaRequest): Record<string, unknown> {
       })),
     })),
     transcript: req.transcript,
+  };
+}
+
+function toWorkflow(raw: RawWorkflow): Workflow {
+  return {
+    id: raw.id,
+    name: raw.name,
+    description: raw.description || undefined,
+    version: raw.version || undefined,
+    scope: raw.scope,
+    ownerId: raw.owner_id,
+    definitionYaml: raw.definition_yaml,
+    compileErrors: raw.compile_errors ?? [],
+    nodes: raw.nodes,
+    edges: raw.edges,
+  };
+}
+
+function toWorkflowBody(workflow: Workflow): Record<string, unknown> {
+  return {
+    name: workflow.name,
+    description: workflow.description ?? '',
+    version: workflow.version ?? 'draft',
+    scope: workflow.scope ?? 'user',
+    nodes: workflow.nodes,
+    edges: workflow.edges,
+    definition_yaml: workflow.definitionYaml ?? null,
   };
 }
 
@@ -431,6 +485,13 @@ export function buildTyrHttpAdapter(client: ApiClient): ITyrService {
         structure: { name: string; phases: PhaseSpec[] } | null;
       }>('/sagas/extract-structure', { text });
       return raw satisfies ExtractedStructure;
+    },
+
+    async assignWorkflow(sagaId: string, workflowId: string | null) {
+      const raw = await client.put<RawSaga>(`/sagas/${encodeURIComponent(sagaId)}/workflow`, {
+        workflow_id: workflowId,
+      });
+      return toSaga(raw);
     },
   };
 }
@@ -607,10 +668,15 @@ export function buildDispatchBusHttpAdapter(client: ApiClient): IDispatchBus {
           issue_id: item.issueId,
           repo: item.repo,
           ...(item.connectionId ? { connection_id: item.connectionId } : {}),
+          ...(item.workflowId ? { workflow_id: item.workflowId } : {}),
+          ...(item.sessionDefinition ? { session_definition: item.sessionDefinition } : {}),
         })),
         ...(options.model ? { model: options.model } : {}),
         ...(options.systemPrompt ? { system_prompt: options.systemPrompt } : {}),
         ...(options.connectionId ? { connection_id: options.connectionId } : {}),
+        ...(options.sessionDefinition
+          ? { session_definition: options.sessionDefinition }
+          : {}),
         ...(options.workloadType ? { workload_type: options.workloadType } : {}),
         ...(options.workloadConfig ? { workload_config: options.workloadConfig } : {}),
       });
@@ -623,6 +689,47 @@ export function buildDispatchBusHttpAdapter(client: ApiClient): IDispatchBus {
 
     async dispatchBatch(raidIds: string[]): Promise<DispatchResult> {
       return client.post<DispatchResult>('/dispatch/batch', { raid_ids: raidIds });
+    },
+  };
+}
+
+export function buildWorkflowHttpAdapter(client: ApiClient): IWorkflowService {
+  return {
+    async listWorkflows() {
+      const raw = await client.get<RawWorkflow[]>('/workflows');
+      return raw.map(toWorkflow);
+    },
+
+    async getWorkflow(id: string) {
+      try {
+        const raw = await client.get<RawWorkflow>(`/workflows/${encodeURIComponent(id)}`);
+        return toWorkflow(raw);
+      } catch {
+        return null;
+      }
+    },
+
+    async saveWorkflow(workflow: Workflow) {
+      const body = toWorkflowBody(workflow);
+      try {
+        const existing = await client.get<RawWorkflow>(`/workflows/${encodeURIComponent(workflow.id)}`);
+        if (existing) {
+          const raw = await client.put<RawWorkflow>(
+            `/workflows/${encodeURIComponent(workflow.id)}`,
+            body,
+          );
+          return toWorkflow(raw);
+        }
+      } catch {
+        // Fall through to create when the workflow doesn't exist yet.
+      }
+
+      const raw = await client.post<RawWorkflow>('/workflows', body);
+      return toWorkflow(raw);
+    },
+
+    async deleteWorkflow(id: string) {
+      await client.delete<void>(`/workflows/${encodeURIComponent(id)}`);
     },
   };
 }

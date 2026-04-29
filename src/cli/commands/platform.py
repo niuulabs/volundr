@@ -32,7 +32,11 @@ if TYPE_CHECKING:
     from niuu.ports.plugin import ServiceDefinition
 
 
-def _build_preflight_config(settings: CLISettings) -> PreflightConfig:
+def _build_preflight_config(
+    settings: CLISettings,
+    *,
+    workspaces_dir_override: str = "",
+) -> PreflightConfig:
     """Build a PreflightConfig from CLISettings."""
     ports = [settings.server.port]
     for plugin_cfg in settings.plugins.extra:
@@ -41,10 +45,11 @@ def _build_preflight_config(settings: CLISettings) -> PreflightConfig:
             ports.append(plugin_port)
 
     kwargs = settings.pod_manager.adapter_kwargs()
+    workspaces_dir = workspaces_dir_override or kwargs.get("workspaces_dir", "~/.niuu/workspaces")
     return PreflightConfig(
         claude_binary=kwargs.get("claude_binary", "claude"),
         ports=ports,
-        workspaces_dir=kwargs.get("workspaces_dir", "~/.niuu/workspaces"),
+        workspaces_dir=workspaces_dir,
         database_mode=settings.database.mode,
         database_dsn=settings.database.dsn,
         mode=settings.mode,
@@ -129,11 +134,15 @@ async def _startup(
     skip_preflight: bool,
     host_profile: str,
     enabled_mounts: set[str] | None,
+    workspaces_dir_override: str = "",
 ) -> None:
     """Run preflight checks, start infrastructure, then the root server."""
     if not skip_preflight:
         typer.echo("Running preflight checks...")
-        config = _build_preflight_config(settings)
+        config = _build_preflight_config(
+            settings,
+            workspaces_dir_override=workspaces_dir_override,
+        )
         results = run_preflight_checks(config)
         typer.echo(format_results(results))
 
@@ -221,10 +230,23 @@ def _build_up_callback(
         if settings.anthropic.api_key:
             os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic.api_key)
 
+        workspaces_dir = str(kwargs.pop("workspaces_dir", "") or "").strip()
+        effective_settings = settings
+        if workspaces_dir:
+            if settings.mode != "mini":
+                raise typer.BadParameter(
+                    "--workspaces-dir is only supported in mini mode",
+                    param_hint="workspaces-dir",
+                )
+            effective_settings = settings.model_copy(deep=True)
+            effective_settings.pod_manager.workspaces_dir = workspaces_dir
+
         # In mini mode, enable local mounts and mini_mode feature flag.
-        if settings.mode == "mini":
+        if effective_settings.mode == "mini":
             os.environ.setdefault("LOCAL_MOUNTS__ENABLED", "true")
             os.environ.setdefault("LOCAL_MOUNTS__MINI_MODE", "true")
+            for key, value in _resolve_mini_pod_manager_env(effective_settings).items():
+                os.environ[key] = value
 
         skip_preflight: bool = bool(kwargs.pop("skip_preflight", False))
         start_all: bool = bool(kwargs.pop("all", False))
@@ -246,11 +268,12 @@ def _build_up_callback(
         async def _run() -> None:
             await _startup(
                 manager,
-                settings,
+                effective_settings,
                 enabled,
                 skip_preflight,
                 host_profile,
                 enabled_mounts,
+                workspaces_dir_override=workspaces_dir,
             )
 
             # Wait forever until cancelled by KeyboardInterrupt
@@ -302,6 +325,12 @@ def _build_up_callback(
             default="",
             annotation=str,
         ),
+        inspect.Parameter(
+            "workspaces_dir",
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            default="",
+            annotation=str,
+        ),
     ]
     for svc_name in sorted(service_defs.keys()):
         params.append(
@@ -337,6 +366,18 @@ MINI_POD_MANAGER_DEFAULTS: dict[str, Any] = {
     "workspaces_dir": "~/.niuu/workspaces",
     "claude_binary": "claude",
 }
+
+def _resolve_mini_pod_manager_env(settings: CLISettings) -> dict[str, str]:
+    """Build env overrides for Volundr mini-mode runtime configuration."""
+    kwargs = dict(settings.pod_manager.adapter_kwargs())
+
+    env = {
+        "POD_MANAGER__ADAPTER": settings.pod_manager.adapter,
+        "GIT__VALIDATE_ON_CREATE": "false",
+    }
+    for key, value in kwargs.items():
+        env[f"POD_MANAGER__KWARGS__{key.upper()}"] = str(value)
+    return env
 
 
 def _prompt_mode_selection() -> str:

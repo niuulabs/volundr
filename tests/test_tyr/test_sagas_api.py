@@ -24,9 +24,63 @@ from tyr.domain.models import (
     TrackerIssue,
     TrackerMilestone,
     TrackerProject,
+    WorkflowDefinition,
+    WorkflowScope,
 )
+from tyr.ports.workflow_repository import WorkflowRepository
 
 from .test_tracker_api import MockSagaRepo, MockTracker
+
+
+class InMemoryWorkflowRepository(WorkflowRepository):
+    def __init__(self, workflows: list[WorkflowDefinition] | None = None) -> None:
+        self._workflows = {workflow.id: workflow for workflow in workflows or []}
+
+    async def list_workflows(
+        self,
+        *,
+        owner_id: str,
+        scope: WorkflowScope | None = None,
+    ) -> list[WorkflowDefinition]:
+        return list(self._workflows.values())
+
+    async def get_workflow(self, workflow_id):
+        return self._workflows.get(workflow_id)
+
+    async def save_workflow(self, workflow: WorkflowDefinition) -> WorkflowDefinition:
+        self._workflows[workflow.id] = workflow
+        return workflow
+
+    async def delete_workflow(self, workflow_id) -> bool:
+        return self._workflows.pop(workflow_id, None) is not None
+
+
+def _workflow(*, executable: bool = True) -> WorkflowDefinition:
+    now = datetime.now(UTC)
+    return WorkflowDefinition(
+        id=uuid4(),
+        name="Review Flow",
+        description="",
+        version="1.0.0",
+        scope=WorkflowScope.USER,
+        owner_id="dev-user",
+        definition_yaml="name: Review Flow\nstages: []" if executable else None,
+        graph={
+            "nodes": [
+                {"id": "trigger-1", "kind": "trigger", "label": "Start"},
+                {
+                    "id": "stage-1",
+                    "kind": "stage",
+                    "label": "Review",
+                    "personaIds": ["reviewer"],
+                    "stageMembers": [{"personaId": "reviewer", "budget": 40}],
+                },
+            ],
+            "edges": [{"id": "e1", "source": "trigger-1", "target": "stage-1"}],
+        },
+        created_at=now,
+        updated_at=now,
+    )
 
 
 def _dev_settings() -> MagicMock:
@@ -229,6 +283,93 @@ class TestGetSaga:
         assert data["phases"][0]["name"] == "Phase 1"
         assert data["phases"][1]["name"] == "Phase 2"
         assert data["phases"][2]["name"] == "Unassigned"
+
+    def test_returns_assigned_workflow_fields(self, mock_tracker: MockTracker, saga_repo: MockSagaRepo):
+        workflow = _workflow()
+        saga = saga_repo.sagas[0]
+        saga_repo.sagas[0] = Saga(
+            id=saga.id,
+            tracker_id=saga.tracker_id,
+            tracker_type=saga.tracker_type,
+            slug=saga.slug,
+            name=saga.name,
+            repos=saga.repos,
+            feature_branch=saga.feature_branch,
+            status=saga.status,
+            confidence=saga.confidence,
+            created_at=saga.created_at,
+            base_branch=saga.base_branch,
+            owner_id=saga.owner_id,
+            workflow_id=workflow.id,
+            workflow_version=workflow.version,
+            workflow_snapshot={
+                "workflow_id": str(workflow.id),
+                "name": workflow.name,
+                "version": workflow.version,
+                "definition_yaml": workflow.definition_yaml,
+                "graph": workflow.graph,
+                "scope": workflow.scope.value,
+            },
+        )
+
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.state.settings = _dev_settings()
+        client = TestClient(app)
+
+        response = client.get(f"/api/v1/tyr/sagas/{saga.id}")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["workflow_id"] == str(workflow.id)
+        assert body["workflow"] == workflow.name
+        assert body["workflow_version"] == workflow.version
+
+
+class TestAssignWorkflow:
+    def test_assigns_executable_workflow(self, mock_tracker: MockTracker, saga_repo: MockSagaRepo):
+        workflow = _workflow()
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.state.settings = _dev_settings()
+        app.state.workflow_repo = InMemoryWorkflowRepository([workflow])
+        client = TestClient(app)
+
+        response = client.put(
+            f"/api/v1/tyr/sagas/{saga_repo.sagas[0].id}/workflow",
+            json={"workflow_id": str(workflow.id)},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["workflow_id"] == str(workflow.id)
+        assert body["workflow"] == workflow.name
+        assert body["workflow_version"] == workflow.version
+
+    def test_rejects_non_executable_workflow(
+        self,
+        mock_tracker: MockTracker,
+        saga_repo: MockSagaRepo,
+    ):
+        workflow = _workflow(executable=False)
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.state.settings = _dev_settings()
+        app.state.workflow_repo = InMemoryWorkflowRepository([workflow])
+        client = TestClient(app)
+
+        response = client.put(
+            f"/api/v1/tyr/sagas/{saga_repo.sagas[0].id}/workflow",
+            json={"workflow_id": str(workflow.id)},
+        )
+
+        assert response.status_code == 422
 
     def test_phases_contain_raids(self, client: TestClient, saga_repo: MockSagaRepo):
         saga_id = str(saga_repo.sagas[0].id)

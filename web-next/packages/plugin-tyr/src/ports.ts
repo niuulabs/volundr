@@ -120,6 +120,7 @@ export interface ITyrService {
   decompose(spec: string, repo: string): Promise<Phase[]>;
   spawnPlanSession(spec: string, repo: string): Promise<PlanSession>;
   extractStructure(text: string): Promise<ExtractedStructure>;
+  assignWorkflow(sagaId: string, workflowId: string | null): Promise<Saga>;
 }
 
 // ---------------------------------------------------------------------------
@@ -258,6 +259,9 @@ export interface DispatchQueueItem {
   priorityLabel: string;
   estimate: number | null;
   url: string;
+  workflowId?: string;
+  workflow?: string;
+  workflowVersion?: string;
 }
 
 export interface DispatchApprovalItem {
@@ -265,12 +269,15 @@ export interface DispatchApprovalItem {
   issueId: string;
   repo: string;
   connectionId?: string;
+  workflowId?: string;
+  sessionDefinition?: string;
 }
 
 export interface DispatchApprovalOptions {
   model?: string;
   systemPrompt?: string;
   connectionId?: string;
+  sessionDefinition?: string;
   workloadType?: string;
   workloadConfig?: Record<string, unknown>;
 }

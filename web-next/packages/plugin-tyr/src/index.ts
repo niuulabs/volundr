@@ -131,6 +131,7 @@ export {
   buildTyrSessionHttpAdapter,
   buildTrackerHttpAdapter,
   buildTyrIntegrationHttpAdapter,
+  buildWorkflowHttpAdapter,
   buildDispatchBusHttpAdapter,
   buildTyrSettingsHttpAdapter,
   buildTyrAuditLogHttpAdapter,

@@ -139,6 +139,14 @@ export const workflowSchema = z.object({
   version: z.string().optional(),
   /** Human-readable description. */
   description: z.string().optional(),
+  /** Visibility scope in the persisted workflow catalog. */
+  scope: z.enum(['system', 'user']).optional(),
+  /** Owning user for user-scoped workflows. */
+  ownerId: z.string().nullable().optional(),
+  /** Compiled Tyr runtime YAML, when the workflow is executable. */
+  definitionYaml: z.string().nullable().optional(),
+  /** Backend compile diagnostics for non-executable graph shapes. */
+  compileErrors: z.array(z.string()).optional(),
   /** Nodes in the DAG. IDs must be unique within a workflow. */
   nodes: z.array(workflowNodeSchema),
   /** Directed edges. Source and target must reference valid node IDs. */

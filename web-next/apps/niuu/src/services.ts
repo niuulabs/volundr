@@ -23,6 +23,7 @@ import {
   buildDispatcherHttpAdapter,
   buildTyrSessionHttpAdapter,
   buildTrackerHttpAdapter,
+  buildWorkflowHttpAdapter,
   buildDispatchBusHttpAdapter,
   buildTyrSettingsHttpAdapter,
   buildTyrAuditLogHttpAdapter,
@@ -214,7 +215,13 @@ function resolveFilesystemBase(config: Pick<NiuuConfig, 'services'>): string | n
 
 function resolveTyrServiceBase(
   config: Pick<NiuuConfig, 'services'>,
-  serviceKey: 'tyr' | 'tyr.dispatcher' | 'tyr.sessions' | 'tyr.dispatch' | 'tyr.settings',
+  serviceKey:
+    | 'tyr'
+    | 'tyr.dispatcher'
+    | 'tyr.sessions'
+    | 'tyr.dispatch'
+    | 'tyr.settings'
+    | 'tyr.workflows',
 ): string | null {
   const explicitBase = resolveDirectServiceBase(config, serviceKey);
   if (!explicitBase) return resolveDirectServiceBase(config, 'tyr');
@@ -228,6 +235,8 @@ function resolveTyrServiceBase(
       return explicitBase.replace(/\/dispatch\/?$/, '');
     case 'tyr.settings':
       return explicitBase.replace(/\/settings\/?$/, '');
+    case 'tyr.workflows':
+      return explicitBase.replace(/\/workflows\/?$/, '');
     default:
       return explicitBase;
   }
@@ -416,13 +425,7 @@ export function buildServiceBackendStatus(
     'tyr.settings': resolveDirectServiceStatus(config, 'http', 'tyr.settings', 'tyr'),
     'tyr.tracker': resolveCanonicalServiceStatus(config, 'tracker'),
     'tyr.audit': resolveCanonicalServiceStatus(config, 'audit'),
-    'tyr.workflows': {
-      mode: 'mock',
-      transport: 'mock',
-      target: null,
-      source: 'mock',
-      note: 'No live workflow API is wired yet; see NIU-756.',
-    },
+    'tyr.workflows': resolveDirectServiceStatus(config, 'http', 'tyr.workflows', 'tyr'),
     filesystem: (() => {
       const explicit = resolveDirectServiceStatus(config, 'http', 'filesystem');
       if (explicit.mode === 'live') return explicit;
@@ -1050,6 +1053,8 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const trackerClient = trackerBase ? createApiClient(trackerBase) : null;
   const auditBase = resolveCanonicalServiceBase(config, 'audit');
   const auditClient = auditBase ? createApiClient(auditBase) : null;
+  const workflowBase = resolveTyrServiceBase(config, 'tyr.workflows');
+  const workflowClient = workflowBase ? createApiClient(workflowBase) : null;
   const tyrService = tyrClient ? buildTyrHttpAdapter(tyrClient) : createMockTyrService();
   const dispatcherService = dispatcherClient
     ? buildDispatcherHttpAdapter(dispatcherClient)
@@ -1060,7 +1065,9 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const trackerService = trackerClient
     ? buildTrackerHttpAdapter(trackerClient)
     : createMockTrackerService();
-  const workflowService = createMockWorkflowService();
+  const workflowService = workflowClient
+    ? buildWorkflowHttpAdapter(workflowClient)
+    : createMockWorkflowService();
   const dispatchBus = dispatchClient
     ? buildDispatchBusHttpAdapter(dispatchClient)
     : createMockDispatchBus();

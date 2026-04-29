@@ -9,17 +9,24 @@ const FLOCK_PERSONAS: Array<{ role: PersonaRole; label: string }> = [
   { role: 'ship', label: 'Ship Agent' },
 ];
 
-const DEFAULT_WORKFLOW = 'ship';
-const DEFAULT_VERSION = '1.0.0';
-
 interface WorkflowCardProps {
   workflow?: string;
   workflowVersion?: string;
+  isUpdating?: boolean;
+  onAssign?: () => void;
+  onClear?: () => void;
 }
 
-export function WorkflowCard({ workflow, workflowVersion }: WorkflowCardProps) {
-  const name = workflow ?? DEFAULT_WORKFLOW;
-  const version = workflowVersion ?? DEFAULT_VERSION;
+export function WorkflowCard({
+  workflow,
+  workflowVersion,
+  isUpdating = false,
+  onAssign,
+  onClear,
+}: WorkflowCardProps) {
+  const hasAssignedWorkflow = Boolean(workflow);
+  const name = workflow ?? 'No workflow assigned';
+  const version = workflowVersion ?? null;
 
   return (
     <section
@@ -31,16 +38,31 @@ export function WorkflowCard({ workflow, workflowVersion }: WorkflowCardProps) {
           Workflow
         </h3>
         <div className="niuu-flex niuu-items-center niuu-gap-2">
-          <span className="niuu-rounded-full niuu-bg-bg-elevated niuu-px-2.5 niuu-py-1 niuu-text-[12px] niuu-font-mono niuu-text-text-muted">
-            v{version}
-          </span>
-          <button
-            type="button"
-            className="niuu-text-[18px] niuu-leading-none niuu-text-text-muted hover:niuu-text-text-primary"
-            aria-label="Workflow options"
-          >
-            …
-          </button>
+          {version && (
+            <span className="niuu-rounded-full niuu-bg-bg-elevated niuu-px-2.5 niuu-py-1 niuu-text-[12px] niuu-font-mono niuu-text-text-muted">
+              v{version}
+            </span>
+          )}
+          {onAssign && (
+            <button
+              type="button"
+              onClick={onAssign}
+              disabled={isUpdating}
+              className="niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-elevated niuu-px-3 niuu-py-1.5 niuu-text-[12px] niuu-font-mono niuu-text-text-secondary hover:niuu-text-text-primary disabled:niuu-opacity-50"
+            >
+              {hasAssignedWorkflow ? 'Change' : 'Assign'}
+            </button>
+          )}
+          {onClear && hasAssignedWorkflow && (
+            <button
+              type="button"
+              onClick={onClear}
+              disabled={isUpdating}
+              className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-transparent niuu-px-3 niuu-py-1.5 niuu-text-[12px] niuu-font-mono niuu-text-text-muted hover:niuu-text-text-primary disabled:niuu-opacity-50"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
@@ -50,10 +72,12 @@ export function WorkflowCard({ workflow, workflowVersion }: WorkflowCardProps) {
             APPLIED · PER-SAGA
           </div>
           <div className="niuu-mb-1 niuu-text-[15px] niuu-font-semibold niuu-text-text-primary">
-            {name} — default release cycle
+            {name}
           </div>
           <p className="niuu-m-0 niuu-text-[13px] niuu-leading-6 niuu-text-text-secondary">
-            qa → pre-ship review → version bump → release PR.
+            {hasAssignedWorkflow
+              ? 'Saved as the saga default. Dispatch can override this workflow for a single run.'
+              : 'This saga will use the system dispatch default until a workflow is assigned.'}
           </p>
         </div>
 
@@ -65,9 +89,8 @@ export function WorkflowCard({ workflow, workflowVersion }: WorkflowCardProps) {
             i
           </span>
           <span>
-            Override this workflow per-dispatch from the{' '}
-            <span className="niuu-underline">Dispatch</span> view. The saga&apos;s workflow is the
-            default; overrides apply only to that run.
+            The saga workflow is the default. Per-dispatch overrides from Dispatch apply only to
+            that single launch.
           </span>
         </div>
 

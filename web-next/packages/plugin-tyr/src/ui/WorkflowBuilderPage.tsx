@@ -11,17 +11,29 @@
 import { useState } from 'react';
 import { StateDot, cn } from '@niuulabs/ui';
 import type { Workflow } from '../domain/workflow';
-import { useWorkflows, useCreateWorkflow, useDeleteWorkflow } from './useWorkflows';
+import { useWorkflows, useCreateWorkflow, useDeleteWorkflow, useSaveWorkflow } from './useWorkflows';
+import { usePersonasBrowser } from './settings/usePersonasBrowser';
 import { WorkflowBuilder } from './WorkflowBuilder';
+import type { PersonaEntry } from './WorkflowBuilder/LibraryPanel';
 
 export function WorkflowBuilderPage() {
   const { data: workflows, isLoading, isError, error } = useWorkflows();
+  const { data: personas } = usePersonasBrowser();
   const [activeWorkflow, setActiveWorkflow] = useState<Workflow | null>(null);
   const createMutation = useCreateWorkflow();
+  const saveMutation = useSaveWorkflow();
   const deleteMutation = useDeleteWorkflow();
 
   const displayed = activeWorkflow ?? workflows?.[0] ?? null;
   const activeCount = workflows?.length ?? 0;
+
+  const workflowPersonas: PersonaEntry[] | undefined = personas?.map((persona) => ({
+    id: persona.name,
+    label: persona.name,
+    role: persona.role ?? 'build',
+    produces: persona.producesEvent ? [persona.producesEvent] : [],
+    consumes: persona.consumesEvents ?? [],
+  }));
 
   function handleNew() {
     createMutation.mutate(undefined, {
@@ -155,7 +167,12 @@ export function WorkflowBuilderPage() {
           <WorkflowBuilder
             key={displayed.id}
             initialWorkflow={displayed}
-            onSave={(updated) => setActiveWorkflow(updated)}
+            personas={workflowPersonas}
+            onSave={(updated) =>
+              saveMutation.mutate(updated, {
+                onSuccess: (saved) => setActiveWorkflow(saved),
+              })
+            }
           />
         </div>
       )}

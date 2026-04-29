@@ -50,6 +50,7 @@ class SpawnRequest:
     base_branch: str
     workload_type: str = "default"
     workload_config: dict = field(default_factory=dict)
+    definition: str | None = None
     profile: str | None = None
     integration_ids: list[str] = field(default_factory=list)
 

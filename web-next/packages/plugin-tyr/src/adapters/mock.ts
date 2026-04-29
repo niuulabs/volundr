@@ -1217,6 +1217,22 @@ export function createMockTyrService(): ITyrService {
         },
       };
     },
+
+    async assignWorkflow(sagaId: string, workflowId: string | null) {
+      const saga = sagas.get(sagaId);
+      if (!saga) {
+        throw new Error(`Saga not found: ${sagaId}`);
+      }
+
+      const updated: Saga = {
+        ...saga,
+        workflowId: workflowId ?? undefined,
+        workflow: workflowId ? 'custom-workflow' : undefined,
+        workflowVersion: workflowId ? '1.0.0' : undefined,
+      };
+      sagas.set(sagaId, updated);
+      return updated;
+    },
   };
 }
 

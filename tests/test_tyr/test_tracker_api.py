@@ -340,6 +340,44 @@ class MockSagaRepo(SagaRepository):
     async def update_saga_status(self, saga_id: UUID, status: SagaStatus) -> None:
         pass
 
+    async def update_saga_workflow(
+        self,
+        saga_id: UUID,
+        *,
+        workflow_id: UUID | None,
+        workflow_version: str | None,
+        workflow_snapshot: dict | None,
+        owner_id: str | None = None,
+    ) -> None:
+        updated: list[Saga] = []
+        for saga in self.sagas:
+            if saga.id != saga_id:
+                updated.append(saga)
+                continue
+            if owner_id is not None and saga.owner_id != owner_id:
+                updated.append(saga)
+                continue
+            updated.append(
+                Saga(
+                    id=saga.id,
+                    tracker_id=saga.tracker_id,
+                    tracker_type=saga.tracker_type,
+                    slug=saga.slug,
+                    name=saga.name,
+                    repos=saga.repos,
+                    feature_branch=saga.feature_branch,
+                    status=saga.status,
+                    confidence=saga.confidence,
+                    created_at=saga.created_at,
+                    base_branch=saga.base_branch,
+                    owner_id=saga.owner_id,
+                    workflow_id=workflow_id,
+                    workflow_version=workflow_version,
+                    workflow_snapshot=workflow_snapshot,
+                )
+            )
+        self.sagas = updated
+
     async def get_phases_by_saga(self, saga_id: UUID) -> list[Phase]:
         return [phase for phase in self.phases if phase.saga_id == saga_id]
 

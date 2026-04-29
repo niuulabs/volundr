@@ -24,6 +24,7 @@ const tyrMocks = vi.hoisted(() => ({
   buildDispatcherHttpAdapter: vi.fn((client) => ({ kind: 'dispatcher', client })),
   buildTyrSessionHttpAdapter: vi.fn((client) => ({ kind: 'sessions', client })),
   buildTrackerHttpAdapter: vi.fn((client) => ({ kind: 'tracker', client })),
+  buildWorkflowHttpAdapter: vi.fn((client) => ({ kind: 'workflows', client })),
   buildDispatchBusHttpAdapter: vi.fn((client) => ({ kind: 'dispatch', client })),
   buildTyrSettingsHttpAdapter: vi.fn((client) => ({ kind: 'settings', client })),
   buildTyrAuditLogHttpAdapter: vi.fn((client) => ({ kind: 'audit', client })),
@@ -491,7 +492,6 @@ describe('buildServiceBackendStatus', () => {
       transport: 'mock',
       target: null,
       source: 'mock',
-      note: 'No live workflow API is wired yet; see NIU-756.',
     });
     expect(status.filesystem).toEqual({
       mode: 'mock',
@@ -637,6 +637,10 @@ describe('buildServices', () => {
           mode: 'http',
           baseUrl: 'http://localhost:8080/api/v1/tyr/settings',
         },
+        'tyr.workflows': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/tyr/workflows',
+        },
       },
     } as any);
 
@@ -650,6 +654,9 @@ describe('buildServices', () => {
       basePath: 'http://localhost:8080/api/v1/tyr',
     });
     expect(tyrMocks.buildTyrSettingsHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/tyr',
+    });
+    expect(tyrMocks.buildWorkflowHttpAdapter).toHaveBeenCalledWith({
       basePath: 'http://localhost:8080/api/v1/tyr',
     });
   });

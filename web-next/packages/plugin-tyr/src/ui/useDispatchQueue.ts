@@ -75,6 +75,9 @@ function toDispatchEntry(item: DispatchQueueItem): DispatchEntry {
     confidence: 100,
     createdAt: now,
     phaseSummary: { total: 1, completed: 0 },
+    workflowId: item.workflowId,
+    workflow: item.workflow,
+    workflowVersion: item.workflowVersion,
   };
 
   return { queueItem: item, raid, phase, saga, allPhases: [phase] };

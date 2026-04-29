@@ -515,7 +515,7 @@ function DispatchViewContent() {
           sagaName: entry.saga.name,
           trackerId: entry.saga.trackerId,
           featureBranch: entry.saga.featureBranch,
-          workflowName: entry.saga.workflow ?? 'ship',
+          workflowName: entry.saga.workflow ?? '',
           entries: [entry],
         });
       }
@@ -533,6 +533,7 @@ function DispatchViewContent() {
       sagaId: entry.queueItem.sagaId,
       issueId: entry.queueItem.issueId,
       repo: entry.queueItem.repos[0] ?? '',
+      workflowId: workflowOverride.get(entry.raid.id)?.id,
     }));
     setIsDispatching(true);
     setOptimisticQueued((prev) => new Set([...prev, ...ids]));
