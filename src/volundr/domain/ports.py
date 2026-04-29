@@ -1087,6 +1087,7 @@ class SessionContext:
     """Read-only context for contributors."""
 
     principal: Principal | None = None
+    definition: str | None = None
     template_name: str | None = None
     profile_name: str | None = None
     terminal_restricted: bool = False

@@ -143,8 +143,8 @@ export function OverviewPage() {
   const fleetBudget = useFleetBudget();
   const activityLog = useActivityLog();
 
-  const ravnList = ravens.data ?? [];
-  const sessionList = sessions.data ?? [];
+  const ravnList = useMemo(() => ravens.data ?? [], [ravens.data]);
+  const sessionList = useMemo(() => sessions.data ?? [], [sessions.data]);
   const triggerList = triggers.data ?? [];
   const ravnIds = ravnList.map((ravn) => ravn.id);
   const budgets = useRavnBudgets(ravnIds);

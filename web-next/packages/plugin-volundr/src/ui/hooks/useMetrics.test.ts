@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { binMetricValues } from './useMetrics';
+import { describe, it, expect, vi } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import { createElement } from 'react';
+import type { ReactNode } from 'react';
+import { ServicesProvider } from '@niuulabs/plugin-sdk';
+import { useMetrics, binMetricValues } from './useMetrics';
 import type { MetricPoint } from '../../ports/IMetricsStream';
+import type { IMetricsStream } from '../../ports/IMetricsStream';
 
 function makePoints(cpus: number[]): MetricPoint[] {
   return cpus.map((cpu, i) => ({ timestamp: i * 1000, cpu, memMi: cpu * 100, gpu: 0 }));
@@ -50,5 +55,92 @@ describe('binMetricValues', () => {
     const result = binMetricValues(points, (p) => p.cpu, 1);
     expect(result).toHaveLength(1);
     expect(result[0]).toBeCloseTo(0.4, 5);
+  });
+});
+
+function makeStreamWrapper(stream: IMetricsStream) {
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return createElement(ServicesProvider, { services: { metricsStream: stream } }, children);
+  };
+}
+
+describe('useMetrics', () => {
+  it('starts with empty points and undefined latest', () => {
+    const stream: IMetricsStream = { subscribe: vi.fn().mockReturnValue(() => {}) };
+    const { result } = renderHook(() => useMetrics('sess-1'), {
+      wrapper: makeStreamWrapper(stream),
+    });
+
+    expect(result.current.points).toEqual([]);
+    expect(result.current.latest).toBeUndefined();
+  });
+
+  it('subscribes with the given sessionId', () => {
+    const subscribe = vi.fn().mockReturnValue(() => {});
+    const stream: IMetricsStream = { subscribe };
+    renderHook(() => useMetrics('sess-42'), { wrapper: makeStreamWrapper(stream) });
+
+    expect(subscribe).toHaveBeenCalledWith('sess-42', expect.any(Function));
+  });
+
+  it('accumulates metric points from the stream callback', () => {
+    let callback: ((point: MetricPoint) => void) | undefined;
+    const stream: IMetricsStream = {
+      subscribe: vi.fn((_id, cb) => {
+        callback = cb;
+        return () => {};
+      }),
+    };
+
+    const { result } = renderHook(() => useMetrics('sess-1'), {
+      wrapper: makeStreamWrapper(stream),
+    });
+
+    const point: MetricPoint = { timestamp: 1000, cpu: 0.5, memMi: 256, gpu: 0 };
+    act(() => {
+      callback!(point);
+    });
+
+    expect(result.current.points).toHaveLength(1);
+    expect(result.current.points[0]).toEqual(point);
+    expect(result.current.latest).toEqual(point);
+  });
+
+  it('trims points beyond MAX_HISTORY_POINTS (60)', () => {
+    let callback: ((point: MetricPoint) => void) | undefined;
+    const stream: IMetricsStream = {
+      subscribe: vi.fn((_id, cb) => {
+        callback = cb;
+        return () => {};
+      }),
+    };
+
+    const { result } = renderHook(() => useMetrics('sess-1'), {
+      wrapper: makeStreamWrapper(stream),
+    });
+
+    // Push 65 points
+    act(() => {
+      for (let i = 0; i < 65; i++) {
+        callback!({ timestamp: i * 1000, cpu: i / 100, memMi: i, gpu: 0 });
+      }
+    });
+
+    expect(result.current.points).toHaveLength(60);
+    // The first 5 should have been trimmed, so the first point should be i=5
+    expect(result.current.points[0]?.timestamp).toBe(5000);
+    expect(result.current.latest?.timestamp).toBe(64000);
+  });
+
+  it('calls the unsubscribe function on unmount', () => {
+    const unsub = vi.fn();
+    const stream: IMetricsStream = { subscribe: vi.fn().mockReturnValue(unsub) };
+
+    const { unmount } = renderHook(() => useMetrics('sess-1'), {
+      wrapper: makeStreamWrapper(stream),
+    });
+
+    unmount();
+    expect(unsub).toHaveBeenCalled();
   });
 });

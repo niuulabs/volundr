@@ -42,6 +42,7 @@ import type {
   SecretType,
   SecretTypeInfo,
   SecretTypeField,
+  SessionDefinition,
   VolundrWorkspace,
   WorkspaceStatus,
   VolundrMember,
@@ -224,6 +225,26 @@ type ApiModelInfo = {
   cost_per_million_tokens?: number | null;
   vram_required?: string | null;
 };
+
+type SessionDefinitionPayload = {
+  key: string;
+  display_name?: string;
+  displayName?: string;
+  description: string;
+  labels: string[];
+  default_model?: string;
+  defaultModel?: string;
+};
+
+function normalizeSessionDefinition(payload: SessionDefinitionPayload): SessionDefinition {
+  return {
+    key: payload.key,
+    displayName: payload.displayName ?? payload.display_name ?? payload.key,
+    description: payload.description,
+    labels: payload.labels,
+    defaultModel: payload.defaultModel ?? payload.default_model ?? '',
+  };
+}
 
 function toEpochMs(value?: number | string | null): number {
   if (typeof value === 'number') return value;
@@ -927,6 +948,10 @@ export function buildVolundrHttpAdapter(
 
   return {
     getFeatures: () => sharedClient.get<VolundrFeatures>('/features'),
+    getSessionDefinitions: async () => {
+      const payload = await forgeClient.get<SessionDefinitionPayload[]>('/session-definitions');
+      return payload.map(normalizeSessionDefinition);
+    },
     getSessions: () => loadSessions('/sessions'),
     getSession: (id) => loadSession(id),
     getActiveSessions: () => loadSessions('/sessions?active=true'),

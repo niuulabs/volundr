@@ -15,6 +15,7 @@ import type {
   StoredCredential,
   FeatureModule,
   SecretType,
+  SessionDefinition,
   IntegrationConnection,
   ClusterResourceInfo,
   McpServerConfig,
@@ -1248,6 +1249,37 @@ const SEED_TEMPLATES: Template[] = [
   },
 ];
 
+const SEED_SESSION_DEFINITIONS: SessionDefinition[] = [
+  {
+    key: 'skuld-claude',
+    displayName: 'Claude Code',
+    description: 'Anthropic Claude-powered coding agent with full tool access.',
+    labels: ['anthropic', 'coding'],
+    defaultModel: 'sonnet-primary',
+  },
+  {
+    key: 'skuld-codex',
+    displayName: 'Codex',
+    description: 'OpenAI Codex-powered coding agent for autonomous tasks.',
+    labels: ['openai', 'coding'],
+    defaultModel: 'gpt-5-codex',
+  },
+  {
+    key: 'skuld-gemini',
+    displayName: 'Gemini',
+    description: 'Google Gemini-powered coding agent with multimodal support.',
+    labels: ['google', 'coding', 'multimodal'],
+    defaultModel: 'gemini-primary',
+  },
+  {
+    key: 'skuld-aider',
+    displayName: 'Aider',
+    description: 'Aider CLI coding assistant — model-agnostic pair programmer.',
+    labels: ['open-source', 'coding'],
+    defaultModel: 'sonnet-primary',
+  },
+];
+
 // ---------------------------------------------------------------------------
 // IVolundrService mock
 // ---------------------------------------------------------------------------
@@ -1263,6 +1295,8 @@ export function createMockVolundrService(): IVolundrService {
       fileManagerEnabled: true,
       miniMode: false,
     }),
+
+    getSessionDefinitions: async () => [...SEED_SESSION_DEFINITIONS],
 
     getSessions: async () => sessions,
 

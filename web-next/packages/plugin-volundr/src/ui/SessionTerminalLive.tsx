@@ -157,11 +157,12 @@ export function SessionTerminalLive({ url, readOnly = false }: SessionTerminalLi
   useEffect(() => {
     if (!activeWsUrl || !activeTabId || unavailable) return;
 
+    const currentSocketRefs = socketRefs.current;
     const socket = new WebSocket(
       activeWsUrl +
         (getAccessToken() ? `?access_token=${encodeURIComponent(getAccessToken()!)}` : ''),
     );
-    socketRefs.current.set(activeTabId, socket);
+    currentSocketRefs.set(activeTabId, socket);
 
     socket.onopen = () => {
       setConnected(true);
@@ -191,12 +192,12 @@ export function SessionTerminalLive({ url, readOnly = false }: SessionTerminalLi
 
     socket.onclose = () => {
       setConnected(false);
-      socketRefs.current.delete(activeTabId);
+      currentSocketRefs.delete(activeTabId);
     };
 
     return () => {
       socket.close();
-      socketRefs.current.delete(activeTabId);
+      currentSocketRefs.delete(activeTabId);
     };
   }, [activeTabId, activeWsUrl, unavailable]);
 

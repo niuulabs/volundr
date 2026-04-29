@@ -170,6 +170,79 @@ class MCPServerEntry(BaseModel):
     description: str = ""
 
 
+class SessionDefinitionConfig(BaseModel):
+    """Configuration for a single session definition (e.g. skuldClaude, skuldCodex).
+
+    Session definitions describe available AI backend configurations.
+    Each definition has a unique key, display metadata, and a ``defaults``
+    dict that gets merged into Helm values when a session is created with
+    this definition.
+    """
+
+    enabled: bool = True
+    display_name: str = ""
+    description: str = ""
+    labels: list[str] = Field(default_factory=list)
+    default_model: str = ""
+    defaults: dict[str, Any] = Field(default_factory=dict)
+
+
+def _default_session_definitions() -> dict[str, SessionDefinitionConfig]:
+    """Built-in session definitions so the wizard works without Helm config.
+
+    These carry only broker-level config (cliType, transportAdapter).
+    Helm values merge on top when running in Kubernetes.
+    """
+    return {
+        "skuldClaude": SessionDefinitionConfig(
+            enabled=True,
+            display_name="Claude Code",
+            description="Anthropic Claude — full IDE with terminal, tools, and MCP",
+            labels=["session", "claude"],
+            default_model="claude-sonnet-4-6",
+            defaults={
+                "broker": {
+                    "cliType": "claude",
+                    "transport": "sdk",
+                    "transportAdapter": "skuld.transports.sdk_websocket.SdkWebSocketTransport",
+                    "skipPermissions": True,
+                    "agentTeams": False,
+                },
+            },
+        ),
+        "skuldCodex": SessionDefinitionConfig(
+            enabled=True,
+            display_name="OpenAI Codex",
+            description="OpenAI Codex — WebSocket protocol with streaming and tools",
+            labels=["session", "codex"],
+            default_model="",
+            defaults={
+                "broker": {
+                    "cliType": "codex-ws",
+                    "transportAdapter": "skuld.transports.codex_ws.CodexWebSocketTransport",
+                    "skipPermissions": True,
+                    "agentTeams": False,
+                },
+            },
+        ),
+        "skuldOpenCode": SessionDefinitionConfig(
+            enabled=True,
+            display_name="OpenCode",
+            description="Model-neutral AI coding agent — Claude, OpenAI, Gemini, local",
+            labels=["session", "opencode"],
+            default_model="",
+            defaults={
+                "broker": {
+                    "cliType": "opencode",
+                    "transportAdapter": "skuld.transports.opencode.OpenCodeHttpTransport",
+                    "skipPermissions": True,
+                    "agentTeams": False,
+                },
+            },
+        ),
+    }
+
+
 class ProfileConfig(BaseModel):
     """Configuration for a single forge profile."""
 
@@ -1074,6 +1147,14 @@ class Settings(BaseSettings):
     local_git: LocalGitConfig = Field(default_factory=LocalGitConfig)
     local_mounts: LocalMountsConfig = Field(default_factory=LocalMountsConfig)
     session_contributors: list[SessionContributorConfig] = Field(default_factory=list)
+    session_definitions: dict[str, SessionDefinitionConfig] = Field(
+        default_factory=_default_session_definitions,
+        description="Session definitions keyed by name (e.g. skuldClaude, skuldCodex).",
+    )
+    default_definition: str = Field(
+        default="skuldClaude",
+        description="Fallback definition key when no explicit definition is specified.",
+    )
     models: list[AIModelConfig] = Field(default_factory=list)
     profiles: list[ProfileConfig] = Field(default_factory=list)
     templates: list[TemplateConfig] = Field(default_factory=list)

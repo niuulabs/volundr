@@ -1547,6 +1547,7 @@ class TestStopProcess:
     async def test_terminate_succeeds(self):
         proc = MagicMock(spec=asyncio.subprocess.Process)
         proc.returncode = None
+        proc.pid = 12345
         proc.terminate = MagicMock()
 
         wait_future: asyncio.Future[int] = asyncio.get_event_loop().create_future()
@@ -1560,6 +1561,7 @@ class TestStopProcess:
     async def test_kill_on_timeout(self):
         proc = MagicMock(spec=asyncio.subprocess.Process)
         proc.returncode = None
+        proc.pid = 12345
         proc.terminate = MagicMock()
         proc.kill = MagicMock()
 

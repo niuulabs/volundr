@@ -151,7 +151,7 @@ export function PersonasPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { data: personas, isLoading, isError, error } = usePersonas();
 
-  const personaList = personas ?? [];
+  const personaList = useMemo(() => personas ?? [], [personas]);
 
   useEffect(() => {
     const handleSelect = (event: Event) => {

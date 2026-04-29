@@ -104,6 +104,30 @@ describe('buildVolundrHttpAdapter', () => {
     expect(sharedClient.get).toHaveBeenCalledWith('/features');
   });
 
+  it('getSessionDefinitions calls GET /session-definitions and normalizes snake_case', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValueOnce([
+      {
+        key: 'skuld-claude',
+        display_name: 'Claude Code',
+        description: 'Anthropic Claude agent',
+        labels: ['anthropic'],
+        default_model: 'sonnet-primary',
+      },
+    ]);
+    const definitions = await buildVolundrHttpAdapter(client).getSessionDefinitions();
+    expect(client.get).toHaveBeenCalledWith('/session-definitions');
+    expect(definitions).toEqual([
+      {
+        key: 'skuld-claude',
+        displayName: 'Claude Code',
+        description: 'Anthropic Claude agent',
+        labels: ['anthropic'],
+        defaultModel: 'sonnet-primary',
+      },
+    ]);
+  });
+
   it('getRepos uses the shared niuu repo catalog and normalizes grouped provider payloads', async () => {
     const client = makeClientWithBase('http://localhost:8080/api/v1/volundr');
     const svc = buildVolundrHttpAdapter(client);

@@ -269,6 +269,14 @@ class SkuldSettings(BaseSettings):
             self.transport_adapter = "skuld.transports.codex.CodexSubprocessTransport"
             return self
 
+        if self.cli_type == "codex-ws":
+            self.transport_adapter = "skuld.transports.codex_ws.CodexWebSocketTransport"
+            return self
+
+        if self.cli_type == "opencode":
+            self.transport_adapter = "skuld.transports.opencode.OpenCodeHttpTransport"
+            return self
+
         if self.transport == "subprocess":
             self.transport_adapter = "skuld.transports.subprocess.SubprocessTransport"
 

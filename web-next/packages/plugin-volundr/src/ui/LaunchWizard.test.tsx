@@ -118,6 +118,7 @@ describe('LaunchWizard', () => {
           source: { type: 'git', repo: 'github.com/niuulabs/volundr', branch: 'main' },
           model: 'sonnet-primary',
           templateName: 'niuu-platform',
+          definition: 'skuld-claude',
           taskType: 'skuld-claude',
           terminalRestricted: true,
           resourceConfig: { cpu: '2', memory: '8Gi' },

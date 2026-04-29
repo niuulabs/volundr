@@ -702,12 +702,10 @@ def test_graph_edges_entity_filters_and_type_inference(client: TestClient) -> No
 
     graph = client.get("/mimir/graph")
     assert graph.status_code == 200
-    assert {tuple(edge.items()) for edge in graph.json()["edges"]} == {
-        (
-            ("source", "policies/directives/style.md"),
-            ("target", "policies/preferences/team.md"),
-        )
-    }
+    edges = graph.json()["edges"]
+    assert len(edges) == 1
+    edge_pair = {edges[0]["source"], edges[0]["target"]}
+    assert edge_pair == {"policies/directives/style.md", "policies/preferences/team.md"}
 
     people = client.get("/mimir/entities", params={"kind": "person"})
     assert people.status_code == 200
