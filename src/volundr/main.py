@@ -258,8 +258,26 @@ def _create_contributors(
     can accept the ports they need and ignore others via **_extra.
     """
     from volundr.adapters.outbound.contributors.local_mount import LocalMountContributor
+    from volundr.adapters.outbound.contributors.session_def import SessionDefinitionContributor
 
     contributors: list[SessionContributor] = []
+
+    # Auto-wire SessionDefinitionContributor first so definition defaults
+    # (broker.cliType, transportAdapter, etc.) are the base layer that
+    # later contributors (templates, profiles, resources) can override.
+    if settings.session_definitions:
+        contributors.append(
+            SessionDefinitionContributor(
+                definitions=settings.session_definitions,
+                default_definition=settings.default_definition,
+            )
+        )
+        logger.info(
+            "Session contributor: session_definition (auto-wired, %d definitions, default=%s)",
+            len(settings.session_definitions),
+            settings.default_definition or "(none)",
+        )
+
     for cfg in settings.session_contributors:
         cls = import_class(cfg.adapter)
         resolved_kwargs = _resolve_secret_kwargs(cfg.kwargs, cfg.secret_kwargs_env)
@@ -691,7 +709,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.include_router(router)
 
-            profiles_router = create_profiles_router(profile_service, template_service)
+            profiles_router = create_profiles_router(
+                profile_service, template_service, settings.session_definitions
+            )
             app.include_router(profiles_router)
 
             # Resource discovery endpoint

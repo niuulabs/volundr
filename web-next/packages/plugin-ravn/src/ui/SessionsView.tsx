@@ -958,7 +958,7 @@ export function SessionsView() {
   const [filter, setFilter] = useState<TranscriptFilter>('all');
   const transcriptRef = useRef<HTMLDivElement>(null);
 
-  const sessionList = sessions ?? [];
+  const sessionList = useMemo(() => sessions ?? [], [sessions]);
   const sortedSessions = useMemo(
     () => [...sessionList].sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
     [sessionList],

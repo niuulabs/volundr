@@ -139,4 +139,5 @@ export type {
   StoredCredential,
   SecretType,
   SessionSource,
+  SessionDefinition,
 } from './models/volundr.model';

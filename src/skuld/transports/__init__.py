@@ -169,12 +169,12 @@ async def _stop_process(process: asyncio.subprocess.Process) -> None:
     if process.returncode is not None:
         return
 
-    logger.info("Stopping Claude Code CLI")
+    logger.info("Stopping CLI process (pid=%s)", process.pid)
     process.terminate()
     try:
         await asyncio.wait_for(process.wait(), timeout=5.0)
     except TimeoutError:
-        logger.warning("Claude Code CLI did not terminate, killing")
+        logger.warning("CLI process did not terminate (pid=%s), killing", process.pid)
         process.kill()
         await process.wait()
 
@@ -185,13 +185,17 @@ from skuld.transports.codex import (  # noqa: E402
     CodexSubprocessTransport,
     _map_codex_tool,
 )
+from skuld.transports.codex_ws import CodexWebSocketTransport  # noqa: E402
+from skuld.transports.opencode import OpenCodeHttpTransport  # noqa: E402
 from skuld.transports.sdk_websocket import SdkWebSocketTransport  # noqa: E402
 from skuld.transports.subprocess import SubprocessTransport  # noqa: E402
 
 __all__ = [
     "CLITransport",
     "CodexSubprocessTransport",
+    "CodexWebSocketTransport",
     "EventCallback",
+    "OpenCodeHttpTransport",
     "SdkWebSocketTransport",
     "SubprocessTransport",
     "TransportCapabilities",

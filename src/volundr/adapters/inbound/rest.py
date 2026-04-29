@@ -133,6 +133,11 @@ class SessionCreate(BaseModel):
         default_factory=GitSource,
         description="Workspace source (git repo or local mount)",
     )
+    definition: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Session definition key (e.g. 'skuldClaude', 'skuldCodex')",
+    )
     template_name: str | None = Field(
         default=None,
         max_length=255,

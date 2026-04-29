@@ -542,6 +542,7 @@ class SessionService:
     async def start_session(
         self,
         session_id: UUID,
+        definition: str | None = None,
         profile_name: str | None = None,
         template_name: str | None = None,
         principal: Principal | None = None,
@@ -585,6 +586,7 @@ class SessionService:
             self._provision_background(
                 starting,
                 principal=principal,
+                definition=definition,
                 template_name=template_name,
                 profile_name=profile_name,
                 terminal_restricted=terminal_restricted,
@@ -607,6 +609,7 @@ class SessionService:
         self,
         session: Session,
         principal: Principal | None = None,
+        definition: str | None = None,
         template_name: str | None = None,
         profile_name: str | None = None,
         terminal_restricted: bool = False,
@@ -623,6 +626,7 @@ class SessionService:
             result = await self._start_with_pipeline(
                 session,
                 principal,
+                definition,
                 template_name,
                 profile_name,
                 terminal_restricted,
@@ -665,6 +669,7 @@ class SessionService:
         self,
         session: Session,
         principal: Principal | None,
+        definition: str | None,
         template_name: str | None,
         profile_name: str | None,
         terminal_restricted: bool,
@@ -695,6 +700,7 @@ class SessionService:
 
         context = SessionContext(
             principal=principal,
+            definition=definition,
             template_name=template_name,
             profile_name=profile_name,
             terminal_restricted=terminal_restricted,

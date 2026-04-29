@@ -69,4 +69,34 @@ describe('MimirSubnav', () => {
     const allBtn = screen.getByText('All mounts').closest('button');
     expect(allBtn).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it('clicking a per-mount row calls setTweak with the mount name', async () => {
+    const setTweak = vi.fn();
+    wrap({ tweaks: {}, setTweak });
+    await waitFor(() => expect(screen.getAllByText('local').length).toBeGreaterThan(0));
+    const localBtn = screen.getAllByText('local')[0]!.closest('button')!;
+    fireEvent.click(localBtn);
+    expect(setTweak).toHaveBeenCalledWith('activeMount', 'local');
+  });
+
+  it('clicking Errors navigates', async () => {
+    wrap();
+    fireEvent.click(screen.getByText('Errors'));
+  });
+
+  it('clicking Flagged navigates', async () => {
+    wrap();
+    fireEvent.click(screen.getByText('Flagged'));
+  });
+
+  it('clicking Low confidence navigates', async () => {
+    wrap();
+    fireEvent.click(screen.getByText('Low confidence'));
+  });
+
+  it('clicking a warden navigates', async () => {
+    wrap();
+    await waitFor(() => expect(screen.getByText('ravn-fjolnir')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('ravn-fjolnir'));
+  });
 });

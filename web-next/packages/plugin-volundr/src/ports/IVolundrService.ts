@@ -40,6 +40,7 @@ import type {
   VolundrMember,
   VolundrProvisioningResult,
   SessionSource,
+  SessionDefinition,
   AdminSettings,
   AdminStorageSettings,
   FeatureModule,
@@ -52,6 +53,9 @@ import type {
 export interface IVolundrService {
   // Feature flags
   getFeatures(): Promise<VolundrFeatures>;
+
+  // Session definitions
+  getSessionDefinitions(): Promise<SessionDefinition[]>;
 
   // Sessions
   getSessions(): Promise<VolundrSession[]>;
@@ -95,6 +99,7 @@ export interface IVolundrService {
     model: string;
     templateName?: string;
     presetId?: string;
+    definition?: string;
     taskType?: string;
     trackerIssue?: TrackerIssue;
     terminalRestricted?: boolean;

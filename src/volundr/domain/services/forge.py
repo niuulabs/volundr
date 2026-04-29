@@ -100,6 +100,7 @@ class ForgeService:
         )
         return await self._session_service.start_session(
             session.id,
+            definition=data.definition,
             profile_name=data.profile_name,
             template_name=data.template_name,
             principal=principal,

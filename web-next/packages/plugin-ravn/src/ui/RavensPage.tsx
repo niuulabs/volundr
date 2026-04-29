@@ -168,7 +168,7 @@ export function RavensPage() {
   const { data: ravens, isLoading, isError, error } = useRavens();
   const { data: sessions } = useSessions();
 
-  const ravnList = ravens ?? [];
+  const ravnList = useMemo(() => ravens ?? [], [ravens]);
   const budgets = useRavnBudgets(ravnList.map((ravn) => ravn.id));
 
   const sessionCounts = useMemo(() => {

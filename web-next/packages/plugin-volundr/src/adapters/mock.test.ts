@@ -198,6 +198,20 @@ describe('createMockVolundrService', () => {
     expect(preset.id).toBeTruthy();
     expect(preset.name).toBe('fast');
   });
+
+  it('getSessionDefinitions returns seeded session definitions', async () => {
+    const svc = createMockVolundrService();
+    const definitions = await svc.getSessionDefinitions();
+    expect(definitions.length).toBeGreaterThan(0);
+    expect(definitions[0]).toHaveProperty('key');
+    expect(definitions[0]).toHaveProperty('displayName');
+    expect(definitions[0]).toHaveProperty('description');
+    expect(definitions[0]).toHaveProperty('labels');
+    expect(definitions[0]).toHaveProperty('defaultModel');
+    const keys = definitions.map((d) => d.key);
+    expect(keys).toContain('skuld-claude');
+    expect(keys).toContain('skuld-codex');
+  });
 });
 
 // ---------------------------------------------------------------------------

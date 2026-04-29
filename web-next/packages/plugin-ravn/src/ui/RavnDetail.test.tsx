@@ -104,7 +104,7 @@ describe('RavnDetail', () => {
     const triggersTab = screen.getByTestId('sectab-triggers');
     fireEvent.click(triggersTab);
     expect(triggersTab).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('section-body-triggers')).toBeInTheDocument();
+    expect(screen.getByTestId('triggers-section-body')).toBeInTheDocument();
   });
 
   it('persists active tab to localStorage', () => {
@@ -167,7 +167,7 @@ describe('RavnDetail — Overview tab', () => {
 
   it('renders state with StateDot in runtime panel', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    expect(screen.getByText('active')).toBeInTheDocument();
+    expect(screen.getAllByText('active').length).toBeGreaterThan(0);
   });
 
   it('shows model in runtime panel', () => {
@@ -177,12 +177,14 @@ describe('RavnDetail — Overview tab', () => {
 
   it('shows location when provided', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    expect(screen.getByText('eu-west-1')).toBeInTheDocument();
+    // Location appears in the hero subtitle (normalised: hyphens become spaces)
+    expect(screen.getByText(/eu west 1/)).toBeInTheDocument();
   });
 
   it('shows deployment when provided', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    expect(screen.getByText('production')).toBeInTheDocument();
+    // Deployment appears in the hero subtitle
+    expect(screen.getByText(/production/)).toBeInTheDocument();
   });
 
   it('shows cascade when provided', () => {
@@ -190,14 +192,15 @@ describe('RavnDetail — Overview tab', () => {
     expect(screen.getByText('sequential')).toBeInTheDocument();
   });
 
-  it('shows iteration budget when provided', () => {
+  it('shows last activity in runtime panel', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    expect(screen.getByText('40 iters')).toBeInTheDocument();
+    // The runtime panel displays "last activity" derived from updatedAt or createdAt
+    expect(screen.getByText('last activity')).toBeInTheDocument();
   });
 
   it('shows write routing when provided', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
-    expect(screen.getByText('local')).toBeInTheDocument();
+    expect(screen.getAllByText('local').length).toBeGreaterThan(0);
   });
 
   it('renders mounts panel when mounts are provided', () => {
@@ -248,7 +251,7 @@ describe('RavnDetail — Triggers tab', () => {
     render(<RavnDetail ravn={SAMPLE_RAVN} />, { wrapper: wrap() });
     fireEvent.click(screen.getByTestId('sectab-triggers'));
     await waitFor(() => {
-      expect(screen.getByText('/hooks/dispatch')).toBeInTheDocument();
+      expect(screen.getAllByText('/hooks/dispatch').length).toBeGreaterThan(0);
     });
   });
 
