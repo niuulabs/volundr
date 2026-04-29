@@ -228,7 +228,7 @@ def _default_session_definitions() -> dict[str, SessionDefinitionConfig]:
         "skuldOpenCode": SessionDefinitionConfig(
             enabled=True,
             display_name="OpenCode",
-            description="Model-neutral AI coding agent — supports Claude, OpenAI, Gemini, local models",
+            description="Model-neutral AI coding agent — Claude, OpenAI, Gemini, local",
             labels=["session", "opencode"],
             default_model="",
             defaults={
