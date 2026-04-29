@@ -102,11 +102,56 @@ function buildFilesystem(): IFileSystemPort {
 }
 
 const SESSION_FEATURES = [
-  { key: 'chat', label: 'Chat', icon: '', scope: 'session' as const, enabled: true, defaultEnabled: true, adminOnly: false, order: 10 },
-  { key: 'terminal', label: 'Terminal', icon: '', scope: 'session' as const, enabled: true, defaultEnabled: true, adminOnly: false, order: 20 },
-  { key: 'files', label: 'Files', icon: '', scope: 'session' as const, enabled: true, defaultEnabled: true, adminOnly: false, order: 40 },
-  { key: 'chronicles', label: 'Chronicle', icon: '', scope: 'session' as const, enabled: true, defaultEnabled: true, adminOnly: false, order: 50 },
-  { key: 'logs', label: 'Logs', icon: '', scope: 'session' as const, enabled: true, defaultEnabled: true, adminOnly: false, order: 60 },
+  {
+    key: 'chat',
+    label: 'Chat',
+    icon: '',
+    scope: 'session' as const,
+    enabled: true,
+    defaultEnabled: true,
+    adminOnly: false,
+    order: 10,
+  },
+  {
+    key: 'terminal',
+    label: 'Terminal',
+    icon: '',
+    scope: 'session' as const,
+    enabled: true,
+    defaultEnabled: true,
+    adminOnly: false,
+    order: 20,
+  },
+  {
+    key: 'files',
+    label: 'Files',
+    icon: '',
+    scope: 'session' as const,
+    enabled: true,
+    defaultEnabled: true,
+    adminOnly: false,
+    order: 40,
+  },
+  {
+    key: 'chronicles',
+    label: 'Chronicle',
+    icon: '',
+    scope: 'session' as const,
+    enabled: true,
+    defaultEnabled: true,
+    adminOnly: false,
+    order: 50,
+  },
+  {
+    key: 'logs',
+    label: 'Logs',
+    icon: '',
+    scope: 'session' as const,
+    enabled: true,
+    defaultEnabled: true,
+    adminOnly: false,
+    order: 60,
+  },
 ];
 
 function buildVolundrService(session: VolundrSession | null = RUNNING_SESSION): IVolundrService {
@@ -115,7 +160,13 @@ function buildVolundrService(session: VolundrSession | null = RUNNING_SESSION): 
     ...base,
     getSession: vi.fn().mockResolvedValue(session),
     getModels: vi.fn().mockResolvedValue({
-      'claude-sonnet': { name: 'Claude Sonnet', provider: 'cloud', tier: 'balanced', color: '#f59e0b', cost: '$3/MTok' },
+      'claude-sonnet': {
+        name: 'Claude Sonnet',
+        provider: 'cloud',
+        tier: 'balanced',
+        color: '#f59e0b',
+        cost: '$3/MTok',
+      },
     }),
     getFeatureModules: vi.fn().mockResolvedValue(SESSION_FEATURES),
     getUserFeaturePreferences: vi.fn().mockResolvedValue([]),

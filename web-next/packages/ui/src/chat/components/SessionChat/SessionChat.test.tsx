@@ -482,11 +482,7 @@ describe('SessionChat', () => {
   it('delegates to onCopy callback when provided', () => {
     const onCopy = vi.fn();
     render(
-      <SessionChat
-        {...defaultProps}
-        messages={[userMessage, assistantMessage]}
-        onCopy={onCopy}
-      />,
+      <SessionChat {...defaultProps} messages={[userMessage, assistantMessage]} onCopy={onCopy} />,
     );
     const copyBtn = screen.getByTitle('Copy');
     fireEvent.click(copyBtn);
@@ -601,7 +597,12 @@ describe('SessionChat', () => {
   it('does not render permission UI when no pending permissions', () => {
     const renderPermissions = vi.fn().mockReturnValue(<div data-testid="perm-ui">Allow?</div>);
     render(
-      <SessionChat {...defaultProps} connected pendingPermissions={[]} renderPermissions={renderPermissions} />,
+      <SessionChat
+        {...defaultProps}
+        connected
+        pendingPermissions={[]}
+        renderPermissions={renderPermissions}
+      />,
     );
     expect(screen.queryByTestId('perm-ui')).not.toBeInTheDocument();
   });
@@ -695,12 +696,7 @@ describe('SessionChat', () => {
 
   it('does not show internal toggle in single-participant mode', () => {
     render(
-      <SessionChat
-        {...defaultProps}
-        messages={[userMessage]}
-        connected
-        participants={new Map()}
-      />,
+      <SessionChat {...defaultProps} messages={[userMessage]} connected participants={new Map()} />,
     );
     expect(screen.queryByTestId('internal-toggle')).not.toBeInTheDocument();
   });
@@ -745,12 +741,7 @@ describe('SessionChat', () => {
       },
     ];
     render(
-      <SessionChat
-        {...defaultProps}
-        messages={[userMessage]}
-        connected
-        meshEvents={events}
-      />,
+      <SessionChat {...defaultProps} messages={[userMessage]} connected meshEvents={events} />,
     );
     const outerGrid = screen.getByTestId('session-chat');
     expect(outerGrid).toHaveAttribute('data-right-panel');
@@ -1060,27 +1051,19 @@ describe('SessionChat', () => {
   });
 
   it('hides model switch when onSetModel is not provided', () => {
-    render(
-      <SessionChat {...defaultProps} connected capabilities={{ set_model: true }} />,
-    );
+    render(<SessionChat {...defaultProps} connected capabilities={{ set_model: true }} />);
     expect(screen.queryByTestId('model-switch-toggle')).not.toBeInTheDocument();
   });
 
   it('hides thinking toggle when onSetThinkingTokens is not provided', () => {
     render(
-      <SessionChat
-        {...defaultProps}
-        connected
-        capabilities={{ set_thinking_tokens: true }}
-      />,
+      <SessionChat {...defaultProps} connected capabilities={{ set_thinking_tokens: true }} />,
     );
     expect(screen.queryByTestId('thinking-budget-toggle')).not.toBeInTheDocument();
   });
 
   it('hides rewind files when onRewindFiles is not provided', () => {
-    render(
-      <SessionChat {...defaultProps} connected capabilities={{ rewind_files: true }} />,
-    );
+    render(<SessionChat {...defaultProps} connected capabilities={{ rewind_files: true }} />);
     expect(screen.queryByTestId('rewind-files')).not.toBeInTheDocument();
   });
 });

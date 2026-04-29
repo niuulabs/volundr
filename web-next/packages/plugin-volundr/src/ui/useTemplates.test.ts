@@ -4,7 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { createElement } from 'react';
 import type { ReactNode } from 'react';
-import { useTemplates, useUpdateTemplate, useCreateTemplate, useDeleteTemplate } from './useTemplates';
+import {
+  useTemplates,
+  useUpdateTemplate,
+  useCreateTemplate,
+  useDeleteTemplate,
+} from './useTemplates';
 import type { Template } from '../domain/template';
 import type { PodSpec } from '../domain/pod';
 

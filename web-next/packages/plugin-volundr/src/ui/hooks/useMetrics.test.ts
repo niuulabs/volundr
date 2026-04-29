@@ -60,11 +60,7 @@ describe('binMetricValues', () => {
 
 function makeStreamWrapper(stream: IMetricsStream) {
   return function Wrapper({ children }: { children: ReactNode }) {
-    return createElement(
-      ServicesProvider,
-      { services: { metricsStream: stream } },
-      children,
-    );
+    return createElement(ServicesProvider, { services: { metricsStream: stream } }, children);
   };
 }
 
@@ -101,7 +97,9 @@ describe('useMetrics', () => {
     });
 
     const point: MetricPoint = { timestamp: 1000, cpu: 0.5, memMi: 256, gpu: 0 };
-    act(() => { callback!(point); });
+    act(() => {
+      callback!(point);
+    });
 
     expect(result.current.points).toHaveLength(1);
     expect(result.current.points[0]).toEqual(point);
