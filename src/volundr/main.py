@@ -266,10 +266,16 @@ def _create_contributors(
     # (broker.cliType, transportAdapter, etc.) are the base layer that
     # later contributors (templates, profiles, resources) can override.
     if settings.session_definitions:
-        contributors.append(SessionDefinitionContributor(definitions=settings.session_definitions))
+        contributors.append(
+            SessionDefinitionContributor(
+                definitions=settings.session_definitions,
+                default_definition=settings.default_definition,
+            )
+        )
         logger.info(
-            "Session contributor: session_definition (auto-wired, %d definitions)",
+            "Session contributor: session_definition (auto-wired, %d definitions, default=%s)",
             len(settings.session_definitions),
+            settings.default_definition or "(none)",
         )
 
     for cfg in settings.session_contributors:

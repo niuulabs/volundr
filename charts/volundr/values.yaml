@@ -805,6 +805,9 @@ existingSecrets:
   # Expected keys: ANTHROPIC_API_KEY, optionally ANTHROPIC_BASE_URL
   anthropic: volundr-anthropic-api
 
+# -- Fallback session definition when none is specified in the request
+defaultDefinition: "skuldClaude"
+
 # Session definition templates
 # These define session types for workload instantiation
 sessionDefinitions:
