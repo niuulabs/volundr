@@ -744,12 +744,6 @@ def create_sagas_router() -> APIRouter:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Workflow not found: {body.workflow_id}",
                 )
-            if workflow.definition_yaml is None:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="Workflow is not executable yet; fix compile errors before assignment",
-                )
-
             workflow_version = workflow.version
             workflow_snapshot = build_workflow_snapshot(workflow)
 
@@ -887,11 +881,6 @@ def create_sagas_router() -> APIRouter:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Workflow not found: {body.workflow_id}",
-                )
-            if workflow.definition_yaml is None:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="Workflow is not executable yet; fix compile errors before assignment",
                 )
             workflow_version = workflow.version
             workflow_snapshot = build_workflow_snapshot(workflow)

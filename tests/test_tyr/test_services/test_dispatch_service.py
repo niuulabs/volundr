@@ -1030,7 +1030,6 @@ class TestBuildSpawnRequestPersonaOverrides:
             "workflow_id": str(uuid4()),
             "name": "Review Flow",
             "version": "1.0.0",
-            "definition_yaml": "name: Review Flow\nstages: []",
             "graph": {
                 "nodes": [
                     {

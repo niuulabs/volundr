@@ -915,11 +915,7 @@ class DispatchService:
         """
         session_name = issue.identifier.lower()
         workflow_personas = workflow_personas_from_snapshot(workflow_snapshot)
-        use_workflow_flock = bool(
-            workflow_snapshot
-            and workflow_snapshot.get("definition_yaml")
-            and workflow_personas
-        )
+        use_workflow_flock = bool(workflow_snapshot and workflow_personas)
 
         if not self._config.flock_enabled and not use_workflow_flock:
             return SpawnRequest(
@@ -1002,13 +998,6 @@ class DispatchService:
             saga.feature_branch,
             mimir_hosted_url=mimir_url,
         )
-        if workflow_snapshot and workflow_snapshot.get("definition_yaml"):
-            initiative_context = (
-                f"{initiative_context}\n\n<workflow_definition>\n"
-                f"{workflow_snapshot['definition_yaml']}\n"
-                "</workflow_definition>"
-            )
-
         workload_config: dict = {
             "personas": personas,
             "initiative_context": initiative_context,
@@ -1147,9 +1136,6 @@ class DispatchService:
             return None, f"workflow {item.workflow_id!r} not found"
         if workflow.scope != WorkflowScope.SYSTEM and workflow.owner_id != saga.owner_id:
             return None, f"workflow {item.workflow_id!r} is not visible to this saga owner"
-        if workflow.definition_yaml is None:
-            return None, f"workflow {item.workflow_id!r} is not executable"
-
         from tyr.domain.workflow_snapshot import build_workflow_snapshot  # noqa: PLC0415
 
         return build_workflow_snapshot(workflow), None

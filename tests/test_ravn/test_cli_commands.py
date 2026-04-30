@@ -8,7 +8,14 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from ravn.cli.commands import _chat, _print_usage, _run_turn, app, main
+from ravn.cli.commands import (
+    _chat,
+    _print_usage,
+    _run_turn,
+    _workflow_runtime_for_persona,
+    app,
+    main,
+)
 from ravn.config import Settings
 from ravn.domain.models import (
     StreamEvent,
@@ -266,3 +273,76 @@ class TestMainEntryPoint:
         with patch("ravn.cli.commands.app") as mock_app:
             main()
             mock_app.assert_called_once()
+
+
+class TestWorkflowRuntimeForPersona:
+    def test_returns_incoming_event_types_and_join_mode(self) -> None:
+        settings = Settings.model_validate(
+            {
+                "workflow": {
+                    "workflow_id": "wf-1",
+                    "name": "Code test",
+                    "graph": {
+                        "nodes": [
+                            {
+                                "id": "review-stage",
+                                "kind": "stage",
+                                "label": "Review",
+                                "personaIds": ["reviewer"],
+                                "joinMode": "all",
+                            },
+                            {
+                                "id": "verify-stage",
+                                "kind": "stage",
+                                "label": "Verify",
+                                "personaIds": ["verifier"],
+                                "joinMode": "all",
+                            },
+                        ],
+                        "edges": [
+                            {
+                                "id": "e1",
+                                "source": "review-stage",
+                                "target": "verify-stage",
+                                "label": "review.completed -> review.completed",
+                            },
+                            {
+                                "id": "e2",
+                                "source": "security-stage",
+                                "target": "verify-stage",
+                                "label": "security.completed -> security.completed",
+                            },
+                        ],
+                    },
+                }
+            }
+        )
+
+        runtime = _workflow_runtime_for_persona(settings, "verifier")
+
+        assert runtime is not None
+        assert runtime["event_types"] == ["review.completed", "security.completed"]
+        assert runtime["fan_in_strategy"] == "all_must_pass"
+
+    def test_returns_none_when_workflow_graph_has_no_matching_persona(self) -> None:
+        settings = Settings.model_validate(
+            {
+                "workflow": {
+                    "workflow_id": "wf-1",
+                    "name": "Code test",
+                    "graph": {
+                        "nodes": [
+                            {
+                                "id": "review-stage",
+                                "kind": "stage",
+                                "label": "Review",
+                                "personaIds": ["reviewer"],
+                            },
+                        ],
+                        "edges": [],
+                    },
+                }
+            }
+        )
+
+        assert _workflow_runtime_for_persona(settings, "verifier") is None

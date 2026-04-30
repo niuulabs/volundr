@@ -2388,6 +2388,74 @@ def _derive_capabilities(
     return list(profile_cfg.include_groups)
 
 
+def _split_workflow_edge_label(label: Any) -> tuple[str, str]:
+    if not isinstance(label, str):
+        return "", ""
+    parts = [part.strip() for part in label.split("->", 1)]
+    if len(parts) != 2:
+        return "", ""
+    return parts[0], parts[1]
+
+
+def _join_mode_to_fan_in(join_mode: str) -> str:
+    if join_mode == "all":
+        return "all_must_pass"
+    if join_mode == "any":
+        return "any_pass"
+    return "merge"
+
+
+def _workflow_runtime_for_persona(settings: Settings, persona_name: str) -> dict[str, Any] | None:
+    workflow_cfg = getattr(settings, "workflow", None)
+    graph = getattr(workflow_cfg, "graph", None)
+    if not isinstance(graph, dict):
+        return None
+
+    nodes = list(graph.get("nodes") or [])
+    edges = list(graph.get("edges") or [])
+    if not nodes or not edges:
+        return None
+
+    matching_nodes: list[dict[str, Any]] = []
+    for node in nodes:
+        if not isinstance(node, dict) or node.get("kind") != "stage":
+            continue
+        stage_members = list(node.get("stageMembers") or [])
+        if any(member.get("personaId") == persona_name for member in stage_members):
+            matching_nodes.append(node)
+            continue
+        persona_ids = list(node.get("personaIds") or [])
+        if persona_name in persona_ids:
+            matching_nodes.append(node)
+
+    if not matching_nodes:
+        return None
+
+    node_ids = {str(node.get("id")) for node in matching_nodes if node.get("id") is not None}
+    event_types: list[str] = []
+    fan_in_strategy = "merge"
+
+    for edge in edges:
+        if str(edge.get("target")) not in node_ids:
+            continue
+        _, target_event = _split_workflow_edge_label(edge.get("label"))
+        if target_event and target_event not in event_types:
+            event_types.append(target_event)
+
+    multi_input_nodes = [
+        node
+        for node in matching_nodes
+        if sum(1 for edge in edges if str(edge.get("target")) == str(node.get("id"))) > 1
+    ]
+    if len(multi_input_nodes) == 1:
+        fan_in_strategy = _join_mode_to_fan_in(str(multi_input_nodes[0].get("joinMode") or "all"))
+
+    return {
+        "event_types": event_types,
+        "fan_in_strategy": fan_in_strategy,
+    }
+
+
 def _wire_cascade(
     drive_loop: Any,
     settings: Settings,
@@ -2563,7 +2631,15 @@ def _wire_cascade(
     # Subscribe to event types this persona consumes
     if mesh is not None and persona_config is not None:
         consumes = getattr(persona_config, "consumes", None)
-        event_types = getattr(consumes, "event_types", []) if consumes else []
+        event_types = list(getattr(consumes, "event_types", []) if consumes else [])
+        workflow_runtime = _workflow_runtime_for_persona(settings, persona_config.name)
+        if workflow_runtime is not None and workflow_runtime["event_types"]:
+            event_types = list(workflow_runtime["event_types"])
+            logger.info(
+                "mesh: workflow graph overrides consumed event_types for %s: %s",
+                persona_config.name,
+                event_types,
+            )
 
         # Register fan-in contributors from the persona catalog so the
         # buffer knows how many producer outcomes to collect.
@@ -2600,7 +2676,11 @@ def _wire_cascade(
                     target,
                 )
 
-        fan_in_strategy = persona_config.fan_in.strategy if persona_config else "merge"
+        fan_in_strategy = (
+            str(workflow_runtime["fan_in_strategy"])
+            if workflow_runtime is not None
+            else persona_config.fan_in.strategy
+        )
         fan_in_contributes_to = persona_config.fan_in.contributes_to if persona_config else ""
 
         async def _handle_outcome_event(event: RavnEvent) -> None:

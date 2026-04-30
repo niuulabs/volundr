@@ -935,6 +935,60 @@ class TestProcessSpawning:
         assert "pub_address: tcp://127.0.0.1:7484" in cluster
         assert "rep_address: tcp://127.0.0.1:7485" in cluster
 
+    async def test_start_flock_injects_workflow_into_node_configs(
+        self,
+        manager: LocalProcessPodManager,
+        tmp_workspaces: Path,
+    ) -> None:
+        workspace = tmp_workspaces / "session-with-workflow"
+        workspace.mkdir(parents=True)
+        flock_dir = workspace / ".flock"
+        flock_dir.mkdir()
+        (flock_dir / "cluster.yaml").write_text("peers: []\n", encoding="utf-8")
+        (flock_dir / "node-reviewer.yaml").write_text("persona: reviewer\n", encoding="utf-8")
+
+        spec = SessionSpec(
+            values={
+                "workflow": {
+                    "workflow_id": "wf-1",
+                    "name": "Review Flow",
+                    "version": "draft",
+                    "scope": "user",
+                    "initial_context": "Review this change.",
+                    "graph": {
+                        "nodes": [{"id": "stage-1", "kind": "stage", "label": "Review"}],
+                        "edges": [],
+                    },
+                }
+            },
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        with patch("subprocess.run"):
+            await manager._start_flock(
+                spec,
+                workspace,
+                FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+            )
+
+        node_config = (flock_dir / "node-reviewer.yaml").read_text(encoding="utf-8")
+        assert "workflow_id: wf-1" in node_config
+        assert "name: Review Flow" in node_config
+        assert "initial_context: Review this change." in node_config
+
 
 class TestResolveClaude:
     """Tests for claude binary resolution."""

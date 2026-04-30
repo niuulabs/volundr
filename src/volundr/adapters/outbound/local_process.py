@@ -778,6 +778,20 @@ class LocalProcessPodManager(PodManager):
                 cluster_path.write_text(yaml.safe_dump(cluster, default_flow_style=False))
                 logger.info("Added Skuld peer to cluster.yaml: %s", skuld_peer_id)
 
+        workflow_cfg = spec.values.get("workflow")
+        if isinstance(workflow_cfg, dict):
+            for persona in personas:
+                node_path = flock_dir / f"node-{persona}.yaml"
+                if not node_path.exists():
+                    continue
+                node_config = yaml.safe_load(node_path.read_text()) or {}
+                node_config["workflow"] = workflow_cfg
+                node_path.write_text(yaml.safe_dump(node_config, default_flow_style=False))
+            logger.info(
+                "Injected workflow graph config into local flock node configs: %s",
+                flock_dir,
+            )
+
         # ravn flock start
         sp.run(
             [

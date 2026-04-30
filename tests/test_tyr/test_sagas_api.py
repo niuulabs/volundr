@@ -329,7 +329,7 @@ class TestGetSaga:
 
 
 class TestAssignWorkflow:
-    def test_assigns_executable_workflow(self, mock_tracker: MockTracker, saga_repo: MockSagaRepo):
+    def test_assigns_graph_backed_workflow(self, mock_tracker: MockTracker, saga_repo: MockSagaRepo):
         workflow = _workflow()
         app = FastAPI()
         app.include_router(create_sagas_router())
@@ -350,7 +350,7 @@ class TestAssignWorkflow:
         assert body["workflow"] == workflow.name
         assert body["workflow_version"] == workflow.version
 
-    def test_rejects_non_executable_workflow(
+    def test_assigns_workflow_even_without_compiled_definition(
         self,
         mock_tracker: MockTracker,
         saga_repo: MockSagaRepo,
@@ -369,7 +369,7 @@ class TestAssignWorkflow:
             json={"workflow_id": str(workflow.id)},
         )
 
-        assert response.status_code == 422
+        assert response.status_code == 200
 
     def test_phases_contain_raids(self, client: TestClient, saga_repo: MockSagaRepo):
         saga_id = str(saga_repo.sagas[0].id)

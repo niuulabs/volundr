@@ -116,6 +116,7 @@ def _build_ravn_config(
     persona_source_mode: str = _PERSONA_SOURCE_FILESYSTEM,
     persona_source_mount_path: str = _PERSONA_CM_DEFAULT_MOUNT_PATH,
     persona_source_http_base_url: str = "",
+    workflow: dict[str, Any] | None = None,
 ) -> str:
     """Generate the ravn daemon YAML config for a single flock node.
 
@@ -232,7 +233,31 @@ def _build_ravn_config(
             "webhook": {"publish_urls": sleipnir_publish_urls},
         }
 
+    if workflow:
+        config["workflow"] = workflow
+
     return yaml.safe_dump(config, default_flow_style=False, sort_keys=False)
+
+
+def _normalize_workflow_config(
+    workflow: dict[str, Any] | None,
+    initiative_context: str,
+) -> dict[str, Any] | None:
+    if not isinstance(workflow, dict):
+        return None
+
+    graph = workflow.get("graph")
+    if not isinstance(graph, dict):
+        return None
+
+    return {
+        "workflow_id": str(workflow.get("workflow_id") or ""),
+        "name": str(workflow.get("name") or ""),
+        "version": str(workflow.get("version") or ""),
+        "scope": str(workflow.get("scope") or ""),
+        "initial_context": initiative_context,
+        "graph": graph,
+    }
 
 
 class RavnFlockContributor(SessionContributor):
@@ -316,6 +341,10 @@ class RavnFlockContributor(SessionContributor):
             "max_concurrent_tasks", _DEFAULT_MAX_CONCURRENT_TASKS
         )
         global_llm: dict | None = wc.get("llm_config") or None
+        workflow_cfg = _normalize_workflow_config(
+            wc.get("workflow"),
+            str(wc.get("initiative_context") or ""),
+        )
 
         values, pod_spec = self._build_flock_spec(
             session=session,
@@ -330,6 +359,7 @@ class RavnFlockContributor(SessionContributor):
             persona_source_mount_path=self._persona_source_mount_path,
             persona_source_token_secret_name=self._persona_source_token_secret_name,
             persona_source_http_base_url=self._persona_source_http_base_url,
+            workflow=workflow_cfg,
         )
 
         return SessionContribution(values=values, pod_spec=pod_spec)
@@ -365,6 +395,7 @@ class RavnFlockContributor(SessionContributor):
         persona_source_mount_path: str = _PERSONA_CM_DEFAULT_MOUNT_PATH,
         persona_source_token_secret_name: str = "",
         persona_source_http_base_url: str = "",
+        workflow: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], PodSpecAdditions]:
         session_id = str(session.id)
         base_port = self._base_port
@@ -458,6 +489,7 @@ class RavnFlockContributor(SessionContributor):
                 persona_source_mode=persona_source_mode,
                 persona_source_mount_path=persona_source_mount_path,
                 persona_source_http_base_url=persona_source_http_base_url,
+                workflow=workflow,
             )
 
             # Per-sidecar emptyDir volume for the mounted config file
@@ -542,6 +574,8 @@ class RavnFlockContributor(SessionContributor):
                 "peerPorts": skuld_ports,
             },
         }
+        if workflow:
+            values["workflow"] = workflow
 
         if mimir_hosted_url:
             values["mimir"] = {"hostedUrl": mimir_hosted_url}

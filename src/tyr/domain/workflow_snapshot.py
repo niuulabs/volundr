@@ -9,6 +9,7 @@ from tyr.domain.models import WorkflowDefinition
 
 def build_workflow_snapshot(workflow: WorkflowDefinition) -> dict[str, Any]:
     """Build a serializable workflow snapshot for saga assignment and dispatch."""
+    personas = workflow_personas_from_snapshot({"graph": workflow.graph})
     return {
         "workflow_id": str(workflow.id),
         "name": workflow.name,
@@ -16,6 +17,7 @@ def build_workflow_snapshot(workflow: WorkflowDefinition) -> dict[str, Any]:
         "scope": workflow.scope.value,
         "definition_yaml": workflow.definition_yaml,
         "graph": workflow.graph,
+        "personas": personas,
     }
 
 
@@ -33,6 +35,12 @@ def workflow_personas_from_snapshot(snapshot: dict[str, Any] | None) -> list[dic
     """Extract an ordered unique persona list from a workflow snapshot graph."""
     if not snapshot:
         return []
+
+    personas = snapshot.get("personas")
+    if isinstance(personas, list):
+        normalized = [persona for persona in personas if isinstance(persona, dict)]
+        if normalized:
+            return normalized
 
     graph = snapshot.get("graph")
     if not isinstance(graph, dict):
