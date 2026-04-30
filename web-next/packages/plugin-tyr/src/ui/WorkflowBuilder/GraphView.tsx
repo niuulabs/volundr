@@ -652,7 +652,7 @@ function TriggerNode({
         {node.label.length > 20 ? node.label.slice(0, 18) + '…' : node.label}
       </text>
       <text x={x + 14} y={y + 38} fill={C.textMuted} fontSize={8.5} fontFamily="var(--font-mono)">
-        {node.source ?? 'manual dispatch'}
+        {node.dispatchEvent ?? 'code.requested'}
       </text>
       <circle
         data-testid={`trigger-output-${node.id}`}
@@ -664,7 +664,7 @@ function TriggerNode({
         strokeWidth={1}
         onClick={(e) => {
           e.stopPropagation();
-          onStartConnect('start');
+          onStartConnect(node.dispatchEvent ?? 'code.requested');
         }}
         className="niuu-cursor-pointer"
       />

@@ -99,6 +99,13 @@ def _normalize_personas(raw: list) -> list[dict]:
     return result
 
 
+def _split_workflow_edge_label(label: object) -> tuple[str, str]:
+    if not isinstance(label, str) or "->" not in label:
+        return "", ""
+    source, target = label.split("->", 1)
+    return source.strip(), target.strip()
+
+
 def _build_ravn_config(
     *,
     persona: str,
@@ -260,6 +267,50 @@ def _normalize_workflow_config(
     }
 
 
+def _workflow_trigger_config(workflow: dict[str, Any] | None) -> dict[str, str] | None:
+    if not isinstance(workflow, dict):
+        return None
+
+    graph = workflow.get("graph")
+    if not isinstance(graph, dict):
+        return None
+
+    nodes = list(graph.get("nodes") or [])
+    edges = list(graph.get("edges") or [])
+    trigger = next(
+        (
+            node
+            for node in nodes
+            if isinstance(node, dict) and str(node.get("kind") or "") == "trigger"
+        ),
+        None,
+    )
+    if trigger is None:
+        return None
+
+    event_type = str(trigger.get("dispatchEvent") or "").strip()
+    if not event_type:
+        trigger_id = str(trigger.get("id") or "")
+        for edge in edges:
+            if not isinstance(edge, dict) or str(edge.get("source") or "") != trigger_id:
+                continue
+            _source_event, target_event = _split_workflow_edge_label(edge.get("label"))
+            if target_event:
+                event_type = target_event
+                break
+
+    if not event_type:
+        return None
+
+    return {
+        "enabled": "true",
+        "node_id": str(trigger.get("id") or ""),
+        "label": str(trigger.get("label") or ""),
+        "source": str(trigger.get("source") or "manual dispatch"),
+        "event_type": event_type,
+    }
+
+
 class RavnFlockContributor(SessionContributor):
     """Contributes flock pod spec when workload_type == 'ravn_flock'.
 
@@ -413,6 +464,32 @@ class RavnFlockContributor(SessionContributor):
             {"name": "MESH_REP_ADDRESS", "value": f"tcp://{self._mesh_host}:{skuld_rep}"},
             {"name": "MESH_HANDSHAKE_PORT", "value": str(skuld_hs)},
         ]
+        workflow_trigger = _workflow_trigger_config(workflow)
+        if workflow_trigger is not None:
+            skuld_env.extend(
+                [
+                    {
+                        "name": "SKULD__WORKFLOW_TRIGGER__ENABLED",
+                        "value": workflow_trigger["enabled"],
+                    },
+                    {
+                        "name": "SKULD__WORKFLOW_TRIGGER__NODE_ID",
+                        "value": workflow_trigger["node_id"],
+                    },
+                    {
+                        "name": "SKULD__WORKFLOW_TRIGGER__LABEL",
+                        "value": workflow_trigger["label"],
+                    },
+                    {
+                        "name": "SKULD__WORKFLOW_TRIGGER__SOURCE",
+                        "value": workflow_trigger["source"],
+                    },
+                    {
+                        "name": "SKULD__WORKFLOW_TRIGGER__EVENT_TYPE",
+                        "value": workflow_trigger["event_type"],
+                    },
+                ]
+            )
 
         if sleipnir_publish_urls:
             skuld_env.append(

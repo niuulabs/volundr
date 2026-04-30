@@ -79,6 +79,7 @@ export const workflowTriggerNodeSchema = z.object({
   kind: z.literal('trigger'),
   label: z.string().min(1),
   source: z.string().default('manual dispatch'),
+  dispatchEvent: z.string().default('code.requested'),
   position: positionSchema,
 });
 export type WorkflowTriggerNode = z.input<typeof workflowTriggerNodeSchema>;

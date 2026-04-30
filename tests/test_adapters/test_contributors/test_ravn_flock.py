@@ -242,6 +242,42 @@ class TestContributorOutput:
         assert "MESH_PUB_ADDRESS" in env_names
         assert "MESH_REP_ADDRESS" in env_names
 
+    async def test_skuld_workflow_trigger_env_present_when_graph_has_trigger(self, session):
+        template = WorkspaceTemplate(
+            name="workflow-flock",
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": ["coder"],
+                "workflow": {
+                    "workflow_id": "wf-1",
+                    "name": "Code",
+                    "version": "1.0.0",
+                    "scope": "user",
+                    "graph": {
+                        "nodes": [
+                            {
+                                "id": "trigger-1",
+                                "kind": "trigger",
+                                "label": "Dispatch",
+                                "source": "manual dispatch",
+                                "dispatchEvent": "code.requested",
+                            }
+                        ],
+                        "edges": [],
+                    },
+                },
+            },
+        )
+        provider = MagicMock()
+        provider.get.return_value = template
+        c = RavnFlockContributor(template_provider=provider)
+        result = await c.contribute(session, SessionContext(template_name="workflow-flock"))
+
+        env_names = {e["name"]: e["value"] for e in result.pod_spec.env}
+        assert env_names["SKULD__WORKFLOW_TRIGGER__ENABLED"] == "true"
+        assert env_names["SKULD__WORKFLOW_TRIGGER__EVENT_TYPE"] == "code.requested"
+        assert env_names["SKULD__WORKFLOW_TRIGGER__NODE_ID"] == "trigger-1"
+
     async def test_mimir_volume_added(self, session, flock_template):
         provider = MagicMock()
         provider.get.return_value = flock_template

@@ -2749,6 +2749,7 @@ def _wire_cascade(
                 priority=5,
                 root_correlation_id=result.root_correlation_id,
             )
+            task.session_id = event.session_id or task.session_id
 
             try:
                 await drive_loop.enqueue(task)

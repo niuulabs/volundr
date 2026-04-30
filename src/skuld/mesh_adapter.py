@@ -117,6 +117,12 @@ class SkuldMeshAdapter:
 
         logger.info("mesh adapter: stopped (peer_id=%s)", self._peer_id)
 
+    async def publish(self, event: RavnEvent, topic: str) -> None:
+        """Publish an event onto the mesh when the adapter is active."""
+        if self._mesh is None:
+            return
+        await self._mesh.publish(event, topic=topic)
+
     async def _handle_rpc(self, message: dict) -> dict:
         """Handle incoming RPC messages (work_request, task_dispatch)."""
         msg_type = message.get("type", "")

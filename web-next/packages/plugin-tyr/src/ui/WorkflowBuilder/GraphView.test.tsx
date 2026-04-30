@@ -37,6 +37,7 @@ const triggerNode: WorkflowNode = {
   kind: 'trigger',
   label: 'Start',
   source: 'manual dispatch',
+  dispatchEvent: 'code.requested',
   position: { x: 40, y: 80 },
 };
 
@@ -211,7 +212,7 @@ describe('GraphView', () => {
     };
     render(<GraphView {...props} />);
     fireEvent.click(screen.getByTestId('trigger-output-trigger-1'));
-    expect(props.onStartConnect).toHaveBeenCalledWith('trigger-1', 'start');
+    expect(props.onStartConnect).toHaveBeenCalledWith('trigger-1', 'code.requested');
   });
 
   it('calls onCompleteConnect from an end input port in connecting mode', () => {

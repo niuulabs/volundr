@@ -240,6 +240,30 @@ class TestSessionFiltering:
         await bridge.stop()
 
     @pytest.mark.asyncio
+    async def test_matching_root_correlation_id_passes(self):
+        room = _make_room_bridge()
+        bus = InProcessBus()
+        bridge = RoomMeshBridge(subscriber=bus, room_bridge=room, session_id="sess-abc")
+        await bridge.start()
+
+        evt = _make_event(
+            correlation_id="event_code_changed_sess",
+            payload={
+                "ravn_event": {"persona": "reviewer"},
+                "ravn_type": "RavnEventType.OUTCOME",
+                "ravn_source": "flock-reviewer",
+                "ravn_session_id": "",
+                "ravn_root_correlation_id": "sess-abc",
+                "ravn_urgency": 0.5,
+                "ravn_task_id": "event_code_changed_sess",
+            },
+        )
+        await bridge._handle_event(evt)
+
+        room.handle_ravn_frame.assert_awaited_once()
+        await bridge.stop()
+
+    @pytest.mark.asyncio
     async def test_no_session_filter_passes_all(self):
         room = _make_room_bridge()
         bus = InProcessBus()

@@ -696,6 +696,52 @@ class Broker:
             logger.error("Mesh adapter start failed: %r", exc, exc_info=True)
             self._mesh_adapter = None
 
+    def _has_workflow_trigger(self) -> bool:
+        cfg = self._settings.workflow_trigger
+        return bool(cfg.enabled and cfg.event_type and self._settings.session.initial_prompt)
+
+    async def _publish_workflow_trigger(self) -> None:
+        """Publish the initial Tyr task into the flock as a mesh outcome event."""
+        if self._mesh_adapter is None or not self._has_workflow_trigger():
+            return
+
+        from ravn.domain.events import RavnEvent, RavnEventType
+
+        cfg = self._settings.workflow_trigger
+        delay_s = max(0.0, float(cfg.startup_delay_s or 0.0))
+        if delay_s:
+            logger.info(
+                "Workflow trigger waiting %.1fs for flock subscribers before mesh dispatch",
+                delay_s,
+            )
+            await asyncio.sleep(delay_s)
+        event = RavnEvent(
+            type=RavnEventType.OUTCOME,
+            source=f"skuld:{self._mesh_adapter.peer_id}",
+            payload={
+                "event_type": cfg.event_type,
+                "session_id": self.session_id,
+                "persona": "skuld",
+                "summary": f"Workflow dispatch: {cfg.label or cfg.event_type}",
+                "task_description": self._settings.session.initial_prompt,
+                "trigger_source": cfg.source,
+                "workflow_trigger_label": cfg.label,
+                "workflow_trigger_node_id": cfg.node_id,
+                "workspace_path": self.workspace_dir,
+            },
+            timestamp=datetime.now(UTC),
+            urgency=0.8,
+            correlation_id=self.session_id,
+            session_id=self.session_id,
+            root_correlation_id=self.session_id,
+        )
+        await self._mesh_adapter.publish(event, cfg.event_type)
+        logger.info(
+            "Workflow trigger dispatched onto mesh event_type=%s node_id=%s",
+            cfg.event_type,
+            cfg.node_id,
+        )
+
     def _build_transport_kwargs(self) -> dict:
         """Return superset of kwargs that any transport constructor might need."""
         return {
@@ -781,16 +827,23 @@ class Broker:
         # (dispatched sessions should begin work immediately, not wait
         # for a browser to connect).
         if self._settings.session.initial_prompt:
-            logger.info("Initial prompt configured — auto-starting transport")
-            try:
-                await self._transport.start()
-                logger.info("Transport auto-started successfully")
-            except Exception as e:
-                logger.error("Transport auto-start failed: %r", e, exc_info=True)
+            if self._has_workflow_trigger():
+                logger.info("Workflow trigger configured — holding initial prompt for mesh dispatch")
+            else:
+                logger.info("Initial prompt configured — auto-starting transport")
+                try:
+                    await self._transport.start()
+                    logger.info("Transport auto-started successfully")
+                except Exception as e:
+                    logger.error("Transport auto-start failed: %r", e, exc_info=True)
 
         # Start mesh adapter if enabled (after transport is ready)
         if self._settings.mesh.enabled:
             await self._start_mesh_adapter()
+            if self._has_workflow_trigger():
+                await self._publish_workflow_trigger()
+        elif self._has_workflow_trigger():
+            logger.warning("Workflow trigger configured but mesh is disabled — skipping dispatch")
 
     async def shutdown(self) -> None:
         """Clean up on shutdown.

@@ -61,6 +61,7 @@ def _ravn_to_sleipnir(event: RavnEvent, topic: str, source_peer_id: str) -> dict
             "ravn_urgency": event.urgency,
             "ravn_session_id": event.session_id,
             "ravn_task_id": event.task_id,
+            "ravn_root_correlation_id": event.root_correlation_id,
         },
         summary=f"Mesh event: {topic}",
         urgency=event.urgency,
@@ -90,6 +91,7 @@ def _sleipnir_to_ravn(sleipnir_event: Any) -> RavnEvent:
         correlation_id=sleipnir_event.correlation_id or "",
         session_id=payload.get("ravn_session_id", ""),
         task_id=payload.get("ravn_task_id"),
+        root_correlation_id=payload.get("ravn_root_correlation_id", ""),
     )
 
 

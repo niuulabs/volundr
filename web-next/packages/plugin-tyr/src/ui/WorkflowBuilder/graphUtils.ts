@@ -191,6 +191,7 @@ export function workflowToYaml(workflow: {
       }
       if (node.kind === 'trigger') {
         lines.push(`    source: ${JSON.stringify(node.source ?? 'manual dispatch')}`);
+        lines.push(`    dispatchEvent: ${JSON.stringify(node.dispatchEvent ?? 'code.requested')}`);
       }
       lines.push(`    position: {x: ${node.position.x}, y: ${node.position.y}}`);
     }

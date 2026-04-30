@@ -161,6 +161,57 @@ class TestBroker:
         assert test_broker._transport is not None
 
     @pytest.mark.asyncio
+    async def test_startup_dispatches_workflow_trigger_instead_of_auto_starting_transport(
+        self, tmp_path
+    ):
+        settings = SkuldSettings(
+            session={
+                "id": "wf-session-1",
+                "workspace_dir": str(tmp_path),
+                "initial_prompt": "Implement the requested change",
+            },
+            mesh={"enabled": True, "peer_id": "skuld-wf"},
+            workflow_trigger={
+                "enabled": True,
+                "node_id": "trigger-1",
+                "label": "Dispatch",
+                "source": "manual dispatch",
+                "event_type": "code.requested",
+                "startup_delay_s": 0.0,
+            },
+            chronicle_watcher_enabled=False,
+        )
+        broker = Broker(settings=settings)
+        mock_transport = AsyncMock()
+        mock_transport.on_event = MagicMock()
+        mock_adapter = MagicMock()
+        mock_adapter.peer_id = "skuld-wf"
+        mock_adapter.publish = AsyncMock()
+
+        with (
+            patch.object(broker, "_create_transport", return_value=mock_transport),
+            patch("skuld.broker.ServiceManager") as mock_service_manager_cls,
+            patch.object(
+                broker,
+                "_start_mesh_adapter",
+                new=AsyncMock(
+                    side_effect=lambda: setattr(broker, "_mesh_adapter", mock_adapter),
+                ),
+            ),
+        ):
+            mock_service_manager = AsyncMock()
+            mock_service_manager_cls.return_value = mock_service_manager
+            await broker.startup()
+
+        mock_transport.start.assert_not_called()
+        mock_adapter.publish.assert_awaited_once()
+        published_event = mock_adapter.publish.await_args.args[0]
+        published_topic = mock_adapter.publish.await_args.args[1]
+        assert published_topic == "code.requested"
+        assert published_event.payload["task_description"] == "Implement the requested change"
+        assert published_event.payload["workflow_trigger_node_id"] == "trigger-1"
+
+    @pytest.mark.asyncio
     async def test_shutdown_stops_transport(self, test_broker):
         mock_transport = AsyncMock()
         test_broker._transport = mock_transport

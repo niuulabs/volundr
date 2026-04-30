@@ -203,6 +203,9 @@ class RoomMeshBridge:
         if event.payload.get("ravn_session_id") == self._session_id:
             return True
 
+        if event.payload.get("ravn_root_correlation_id") == self._session_id:
+            return True
+
         return False
 
     async def _ensure_peer_registered(self, event: SleipnirEvent, peer_id: str) -> None:

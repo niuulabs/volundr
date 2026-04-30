@@ -331,6 +331,9 @@ class DirectK8sPodManager(PodManager):
             for k, v in extra_env.items():
                 env.append({"name": k, "value": str(v)})
 
+        if spec.pod_spec and spec.pod_spec.env:
+            env.extend(spec.pod_spec.env)
+
         # Inject git credentials into the skuld container so that
         # git push / gh CLI work with the same token used for cloning.
         git_secret = git_config.get("secretName", "github-token")
