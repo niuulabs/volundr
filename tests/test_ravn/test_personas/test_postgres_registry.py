@@ -23,6 +23,13 @@ def _mock_row(**overrides):
             "allowed_tools": ["read"],
             "forbidden_tools": [],
             "permission_mode": "default",
+            "executor": {
+                "adapter": "ravn.adapters.executors.cli.CliTransportExecutor",
+                "kwargs": {
+                    "transport_adapter": "skuld.transports.codex_ws.CodexWebSocketTransport",
+                    "transport_kwargs": {"model": ""},
+                },
+            },
             "iteration_budget": 7,
             "llm_primary_alias": "balanced",
             "llm_thinking_enabled": False,
@@ -110,6 +117,13 @@ class TestGetPersona:
                     "allowed_tools": ["read", "write"],
                     "forbidden_tools": [],
                     "permission_mode": "default",
+                    "executor": {
+                        "adapter": "ravn.adapters.executors.cli.CliTransportExecutor",
+                        "kwargs": {
+                            "transport_adapter": "skuld.transports.codex_ws.CodexWebSocketTransport",
+                            "transport_kwargs": {"model": ""},
+                        },
+                    },
                     "iteration_budget": 11,
                     "llm_primary_alias": "balanced",
                     "llm_thinking_enabled": True,
@@ -134,6 +148,7 @@ class TestGetPersona:
         assert result.override_source == "[user:user-1]"
         assert result.payload["summary"] == "Overridden coding agent"
         assert result.config.permission_mode == "workspace-write"
+        assert result.config.executor.adapter == "ravn.adapters.executors.cli.CliTransportExecutor"
 
     async def test_get_persona_yaml_returns_runtime_yaml(self):
         registry, pool = _make_registry()
@@ -160,6 +175,13 @@ class TestSavePersona:
             "allowed_tools": ["read"],
             "forbidden_tools": [],
             "permission_mode": "safe",
+            "executor": {
+                "adapter": "ravn.adapters.executors.cli.CliTransportExecutor",
+                "kwargs": {
+                    "transport_adapter": "skuld.transports.codex_ws.CodexWebSocketTransport",
+                    "transport_kwargs": {"model": ""},
+                },
+            },
             "iteration_budget": 7,
             "llm_primary_alias": "balanced",
             "llm_thinking_enabled": False,
@@ -177,6 +199,8 @@ class TestSavePersona:
         assert "runtime_config_json" in sql
         assert raw_json["permission_mode"] == "safe"
         assert runtime_json["permission_mode"] == "read-only"
+        assert raw_json["executor"]["adapter"] == "ravn.adapters.executors.cli.CliTransportExecutor"
+        assert runtime_json["executor"]["adapter"] == "ravn.adapters.executors.cli.CliTransportExecutor"
 
 
 class TestDeletePersona:
@@ -207,6 +231,7 @@ class TestParsePayload:
                         "allowed_tools": [],
                         "forbidden_tools": [],
                         "permission_mode": "default",
+                        "executor": {"adapter": "", "kwargs": {}},
                         "iteration_budget": 0,
                         "llm_primary_alias": "",
                         "llm_thinking_enabled": False,

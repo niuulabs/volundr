@@ -81,10 +81,10 @@ def test_register_service_depends_on_postgres():
     assert "postgres" in defn.depends_on
 
 
-def test_register_service_description_mentions_persona():
+def test_register_service_description_mentions_agent_runtime():
     plugin = RavnPlugin()
     defn = plugin.register_service()
-    assert "persona" in defn.description.lower()
+    assert "agent" in defn.description.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +311,7 @@ def test_create_api_app_returns_fastapi():
     assert isinstance(app, FastAPI)
 
 
-def test_create_api_app_includes_personas_endpoint():
+def test_create_api_app_does_not_mount_personas_endpoint():
     from pathlib import Path
 
     from fastapi.testclient import TestClient
@@ -324,8 +324,7 @@ def test_create_api_app_includes_personas_endpoint():
 
     client = TestClient(app)
     resp = client.get("/api/v1/ravn/personas")
-    assert resp.status_code == 200
-    assert isinstance(resp.json(), list)
+    assert resp.status_code == 404
 
 
 def test_create_api_app_lists_ravens_sessions_and_triggers():

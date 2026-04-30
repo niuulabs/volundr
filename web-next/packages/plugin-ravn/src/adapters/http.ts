@@ -57,6 +57,11 @@ interface RawPersonaFanIn {
   params: Record<string, unknown>;
 }
 
+interface RawPersonaExecutor {
+  adapter: string;
+  kwargs?: Record<string, unknown>;
+}
+
 interface RawPersonaSummary {
   name: string;
   role: string;
@@ -76,12 +81,14 @@ interface RawPersonaDetail extends RawPersonaSummary {
   description: string;
   system_prompt_template: string;
   forbidden_tools: string[];
+  executor?: RawPersonaExecutor;
   llm: RawPersonaLLM & { temperature?: number };
   produces: RawPersonaProduces;
   consumes: RawPersonaConsumes;
   fan_in: RawPersonaFanIn;
   mimir_write_routing?: string;
   yaml_source: string;
+  override_source?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +118,12 @@ function toDetail(raw: RawPersonaDetail): PersonaDetail {
     description: raw.description,
     systemPromptTemplate: raw.system_prompt_template,
     forbiddenTools: raw.forbidden_tools,
+    executor: raw.executor
+      ? {
+          adapter: raw.executor.adapter,
+          kwargs: raw.executor.kwargs ?? {},
+        }
+      : undefined,
     llm: {
       primaryAlias: raw.llm.primary_alias,
       thinkingEnabled: raw.llm.thinking_enabled,
@@ -134,6 +147,7 @@ function toDetail(raw: RawPersonaDetail): PersonaDetail {
       params: raw.fan_in.params,
     },
     yamlSource: raw.yaml_source,
+    overrideSource: raw.override_source,
   };
 }
 
@@ -149,6 +163,12 @@ function toRequestBody(req: PersonaCreateRequest): Record<string, unknown> {
     allowed_tools: req.allowedTools,
     forbidden_tools: req.forbiddenTools,
     permission_mode: req.permissionMode,
+    executor: req.executor
+      ? {
+          adapter: req.executor.adapter,
+          kwargs: req.executor.kwargs,
+        }
+      : null,
     iteration_budget: req.iterationBudget,
     llm_primary_alias: req.llmPrimaryAlias,
     llm_thinking_enabled: req.llmThinkingEnabled,
@@ -170,7 +190,7 @@ function toRequestBody(req: PersonaCreateRequest): Record<string, unknown> {
 /**
  * Build an IPersonaStore backed by the Ravn REST API.
  *
- * @param client - HTTP client scoped to the Ravn base path (e.g. /api/v1/ravn).
+ * @param client - HTTP client scoped to the shared API base (e.g. /api/v1).
  */
 export function buildRavnPersonaAdapter(client: ApiClient): IPersonaStore {
   return {

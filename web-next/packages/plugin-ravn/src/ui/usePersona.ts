@@ -31,3 +31,27 @@ export function useUpdatePersona(name: string) {
     },
   });
 }
+
+export function useCreatePersona() {
+  const service = useService<IPersonaStore>('ravn.personas');
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (req: PersonaCreateRequest) => service.createPersona(req),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ravn', 'personas'] });
+    },
+  });
+}
+
+export function useForkPersona(name: string) {
+  const service = useService<IPersonaStore>('ravn.personas');
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (newName: string) => service.forkPersona(name, { newName }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ravn', 'personas'] });
+    },
+  });
+}

@@ -15,6 +15,13 @@ const MOCK_PERSONA: PersonaDetail = {
   permissionMode: 'default',
   allowedTools: ['read', 'write'],
   forbiddenTools: [],
+  executor: {
+    adapter: 'ravn.adapters.executors.cli.CliTransportExecutor',
+    kwargs: {
+      transport_adapter: 'skuld.transports.codex_ws.CodexWebSocketTransport',
+      transport_kwargs: { model: '' },
+    },
+  },
   iterationBudget: 20,
   isBuiltin: false,
   hasOverride: false,
@@ -46,6 +53,7 @@ describe('PersonaForm', () => {
     });
     expect(screen.getByText('Identity')).toBeInTheDocument();
     expect(screen.getByText('Runtime')).toBeInTheDocument();
+    expect(screen.getByText('Execution')).toBeInTheDocument();
     expect(screen.getByText('Tool access')).toBeInTheDocument();
     expect(screen.getByText('Produces')).toBeInTheDocument();
     expect(screen.getByText('Consumes')).toBeInTheDocument();
@@ -66,6 +74,16 @@ describe('PersonaForm', () => {
     });
     // LLM alias is now a select in the Runtime section
     expect(screen.getByDisplayValue('sonnet-primary')).toBeInTheDocument();
+  });
+
+  it('populates execution mode from persona executor', () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    expect(screen.getByDisplayValue('codex streaming')).toBeInTheDocument();
+    expect(
+      screen.getByDisplayValue('skuld.transports.codex_ws.CodexWebSocketTransport'),
+    ).toBeInTheDocument();
   });
 
   it('shows save bar when a field is changed', async () => {
@@ -104,6 +122,56 @@ describe('PersonaForm', () => {
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith(
         expect.objectContaining({ llmPrimaryAlias: 'claude-opus-4-6' }),
+      );
+    });
+  });
+
+  it('switches to the embedded ravn executor when selected', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={onSave} />, {
+      wrapper: wrap(),
+    });
+
+    fireEvent.change(screen.getByDisplayValue('codex streaming'), {
+      target: { value: 'ravn' },
+    });
+
+    await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /save persona/i }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ executor: undefined }));
+    });
+  });
+
+  it('switches to codex streaming preset when selected', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <PersonaForm
+        persona={{ ...MOCK_PERSONA, executor: undefined }}
+        onSave={onSave}
+      />,
+      { wrapper: wrap() },
+    );
+
+    fireEvent.change(screen.getByDisplayValue('embedded ravn agent'), {
+      target: { value: 'codex_ws' },
+    });
+
+    await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /save persona/i }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          executor: {
+            adapter: 'ravn.adapters.executors.cli.CliTransportExecutor',
+            kwargs: {
+              transport_adapter: 'skuld.transports.codex_ws.CodexWebSocketTransport',
+              transport_kwargs: { model: '' },
+            },
+          },
+        }),
       );
     });
   });

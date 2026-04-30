@@ -49,7 +49,7 @@ class RavnPlugin(ServicePlugin):
     def register_service(self) -> ServiceDefinition:
         return ServiceDefinition(
             name="ravn",
-            description="Persona registry and agent management",
+            description="Agent runtime and session management",
             factory=_RavnService,
             default_enabled=True,
             depends_on=["postgres"],
@@ -59,11 +59,9 @@ class RavnPlugin(ServicePlugin):
         return self.register_service().factory()
 
     def create_api_app(self) -> Any:
-        from ravn.adapters.personas.loader import FilesystemPersonaAdapter
         from ravn.api import create_app
 
-        persona_loader = FilesystemPersonaAdapter()
-        return create_app(persona_loader=persona_loader)
+        return create_app()
 
     def create_api_client(self) -> Any:
         return CLIAPIClient(base_url="http://localhost:8080", service_name="Ravn")
@@ -95,11 +93,6 @@ class RavnPlugin(ServicePlugin):
                     "/api/v1/ravn/sessions",
                 ),
                 description="Ravn session inventory and platform status routes.",
-            ),
-            APIRouteDomain(
-                name="persona-api",
-                prefixes=("/api/v1/ravn/personas",),
-                description="Ravn persona registry CRUD and validation routes.",
             ),
             APIRouteDomain(
                 name="ravn-api",

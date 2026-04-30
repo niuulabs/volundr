@@ -14,6 +14,7 @@ from ravn.adapters.personas.loader import (
     FilesystemPersonaAdapter,
     PersonaConfig,
     PersonaConsumes,
+    PersonaExecutorConfig,
     PersonaFanIn,
     PersonaLLMConfig,
     PersonaProduces,
@@ -416,6 +417,7 @@ def _normalize_payload(
     normalized["permission_mode"] = _normalize_permission_mode(
         payload.get("permission_mode") or base["permission_mode"]
     )
+    normalized["executor"] = _normalize_executor(payload.get("executor"), base["executor"])
     normalized["iteration_budget"] = _normalize_non_negative_int(
         payload.get("iteration_budget"),
         default=int(base["iteration_budget"]),
@@ -461,6 +463,10 @@ def _config_to_payload(config: PersonaConfig | None) -> dict[str, Any]:
         "allowed_tools": list(config.allowed_tools),
         "forbidden_tools": list(config.forbidden_tools),
         "permission_mode": _normalize_permission_mode(config.permission_mode),
+        "executor": {
+            "adapter": config.executor.adapter,
+            "kwargs": dict(config.executor.kwargs),
+        },
         "iteration_budget": config.iteration_budget,
         "llm_primary_alias": config.llm.primary_alias or "",
         "llm_thinking_enabled": config.llm.thinking_enabled,
@@ -510,6 +516,10 @@ def _payload_to_config(payload: dict[str, Any]) -> PersonaConfig:
             str(payload["permission_mode"]),
             str(payload["permission_mode"]),
         ),
+        executor=PersonaExecutorConfig(
+            adapter=str((payload.get("executor") or {}).get("adapter", "")),
+            kwargs=dict((payload.get("executor") or {}).get("kwargs") or {}),
+        ),
         llm=PersonaLLMConfig(
             primary_alias=str(payload["llm_primary_alias"]),
             thinking_enabled=bool(payload["llm_thinking_enabled"]),
@@ -548,6 +558,7 @@ def _default_payload(name: str) -> dict[str, Any]:
         "allowed_tools": [],
         "forbidden_tools": [],
         "permission_mode": "default",
+        "executor": {"adapter": "", "kwargs": {}},
         "iteration_budget": 0,
         "llm_primary_alias": "",
         "llm_thinking_enabled": False,
@@ -583,6 +594,32 @@ def _normalize_permission_mode(raw: object) -> str:
     if not value:
         return "default"
     return _RUNTIME_TO_UI_PERMISSION.get(value, value)
+
+
+def _normalize_executor(raw: object, fallback: object) -> dict[str, Any]:
+    base = {"adapter": "", "kwargs": {}}
+    if isinstance(fallback, dict):
+        base["adapter"] = str(fallback.get("adapter", "")).strip()
+        kwargs = fallback.get("kwargs")
+        if isinstance(kwargs, dict):
+            base["kwargs"] = {str(key): value for key, value in kwargs.items()}
+
+    if not isinstance(raw, dict):
+        return base
+
+    adapter = str(raw.get("adapter", "")).strip()
+    kwargs = raw.get("kwargs")
+    normalized_kwargs: dict[str, Any] = {}
+    if isinstance(kwargs, dict):
+        normalized_kwargs = {str(key): value for key, value in kwargs.items()}
+
+    if not adapter and not normalized_kwargs:
+        return {"adapter": "", "kwargs": {}}
+
+    return {
+        "adapter": adapter,
+        "kwargs": normalized_kwargs,
+    }
 
 
 def _normalize_non_negative_int(raw: object, *, default: int) -> int:

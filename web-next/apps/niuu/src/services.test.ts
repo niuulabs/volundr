@@ -464,8 +464,8 @@ describe('buildServiceBackendStatus', () => {
     expect(status['ravn.personas']).toEqual({
       mode: 'live',
       transport: 'http',
-      target: 'http://localhost:8080/api/v1/ravn',
-      source: 'ravn',
+      target: 'http://localhost:8080/api/v1',
+      source: 'shared-api',
     });
   });
 
@@ -517,7 +517,7 @@ describe('buildServiceBackendStatus', () => {
     });
   });
 
-  it('normalizes explicit ravn sub-service bases back to /api/v1/ravn', () => {
+  it('normalizes explicit ravn persona bases back to the shared /api/v1 root', () => {
     const status = buildServiceBackendStatus({
       services: {
         'ravn.personas': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn/personas' },
@@ -531,7 +531,7 @@ describe('buildServiceBackendStatus', () => {
     expect(status['ravn.personas']).toEqual({
       mode: 'live',
       transport: 'http',
-      target: 'http://localhost:8080/api/v1/ravn',
+      target: 'http://localhost:8080/api/v1',
       source: 'ravn.personas',
     });
     expect(status['ravn.ravens']).toEqual({
@@ -557,6 +557,21 @@ describe('buildServiceBackendStatus', () => {
       transport: 'http',
       target: 'http://localhost:8080/api/v1/ravn',
       source: 'ravn.budget',
+    });
+  });
+
+  it('prefers an explicit personas service base for ravn.personas when configured', () => {
+    const status = buildServiceBackendStatus({
+      services: {
+        personas: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/personas' },
+      },
+    } as any);
+
+    expect(status['ravn.personas']).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1',
+      source: 'personas',
     });
   });
 });
@@ -735,7 +750,7 @@ describe('buildServices', () => {
     } as any);
 
     expect(ravnMocks.buildRavnPersonaAdapter).toHaveBeenCalledWith({
-      basePath: 'http://localhost:8080/api/v1/ravn',
+      basePath: 'http://localhost:8080/api/v1',
     });
     expect(ravnMocks.buildRavnSessionAdapter).toHaveBeenCalledWith({
       basePath: 'http://localhost:8080/api/v1/ravn',
@@ -748,6 +763,20 @@ describe('buildServices', () => {
     });
     expect(ravnMocks.buildRavnBudgetAdapter).toHaveBeenCalledWith({
       basePath: 'http://localhost:8080/api/v1/ravn',
+    });
+  });
+
+  it('uses the explicit personas service base for the persona adapter when present', () => {
+    buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        personas: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/personas' },
+      },
+    } as any);
+
+    expect(ravnMocks.buildRavnPersonaAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1',
     });
   });
 

@@ -288,12 +288,19 @@ function resolveRavnServiceBase(
   config: Pick<NiuuConfig, 'services'>,
   serviceKey: 'ravn.personas' | 'ravn.ravens' | 'ravn.sessions' | 'ravn.triggers' | 'ravn.budget',
 ): string | null {
-  const explicitBase = resolveDirectServiceBase(config, serviceKey);
-  if (!explicitBase) return resolveDirectServiceBase(config, 'ravn');
+  const explicitBase =
+    serviceKey === 'ravn.personas'
+      ? resolveDirectServiceBase(config, serviceKey, 'personas')
+      : resolveDirectServiceBase(config, serviceKey);
+  if (!explicitBase) {
+    return serviceKey === 'ravn.personas'
+      ? resolveSharedApiBase(config)
+      : resolveDirectServiceBase(config, 'ravn');
+  }
 
   switch (serviceKey) {
     case 'ravn.personas':
-      return explicitBase.replace(/\/personas\/?$/, '');
+      return explicitBase.replace(/\/(?:ravn\/)?personas\/?$/, '');
     case 'ravn.ravens':
       return explicitBase.replace(/\/ravens\/?$/, '');
     case 'ravn.sessions':
@@ -311,10 +318,13 @@ function resolveRavnServiceStatus(
   config: Pick<NiuuConfig, 'services'>,
   serviceKey: 'ravn.personas' | 'ravn.ravens' | 'ravn.sessions' | 'ravn.triggers' | 'ravn.budget',
 ): ServiceBackendStatus {
-  const explicit = resolveDirectServiceStatus(config, 'http', serviceKey);
+  const explicit =
+    serviceKey === 'ravn.personas'
+      ? resolveDirectServiceStatus(config, 'http', serviceKey, 'personas')
+      : resolveDirectServiceStatus(config, 'http', serviceKey);
   if (explicit.mode === 'live' && explicit.target) {
     if (serviceKey === 'ravn.personas')
-      return { ...explicit, target: explicit.target.replace(/\/personas\/?$/, '') };
+      return { ...explicit, target: explicit.target.replace(/\/(?:ravn\/)?personas\/?$/, '') };
     if (serviceKey === 'ravn.ravens')
       return { ...explicit, target: explicit.target.replace(/\/ravens\/?$/, '') };
     if (serviceKey === 'ravn.sessions')
@@ -322,6 +332,18 @@ function resolveRavnServiceStatus(
     if (serviceKey === 'ravn.triggers')
       return { ...explicit, target: explicit.target.replace(/\/triggers\/?$/, '') };
     return { ...explicit, target: explicit.target.replace(/\/budget\/?$/, '') };
+  }
+
+  if (serviceKey === 'ravn.personas') {
+    const sharedBase = resolveSharedApiBase(config);
+    if (sharedBase) {
+      return {
+        mode: 'live',
+        transport: 'http',
+        target: sharedBase,
+        source: 'shared-api',
+      };
+    }
   }
 
   return resolveDirectServiceStatus(config, 'http', 'ravn');

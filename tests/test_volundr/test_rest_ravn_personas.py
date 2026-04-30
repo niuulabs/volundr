@@ -117,6 +117,13 @@ def _make_payload(name: str) -> dict:
         "allowed_tools": ["read", "write"],
         "forbidden_tools": [],
         "permission_mode": "default",
+        "executor": {
+            "adapter": "ravn.adapters.executors.cli.CliTransportExecutor",
+            "kwargs": {
+                "transport_adapter": "skuld.transports.codex_ws.CodexWebSocketTransport",
+                "transport_kwargs": {"model": ""},
+            },
+        },
         "iteration_budget": 12,
         "llm_primary_alias": "claude-sonnet-4-6",
         "llm_thinking_enabled": True,
@@ -135,7 +142,7 @@ class TestRavnPersonaRoutes:
         client, _ = _make_client()
 
         create_resp = client.post(
-            "/api/v1/ravn/personas",
+            "/api/v1/personas",
             json=_make_payload("custom-agent"),
             headers={"Authorization": "Bearer token"},
         )
@@ -143,30 +150,47 @@ class TestRavnPersonaRoutes:
         created = create_resp.json()
         assert created["name"] == "custom-agent"
         assert created["role"] == "build"
+        assert created["executor"]["adapter"] == "ravn.adapters.executors.cli.CliTransportExecutor"
         assert created["mimir_write_routing"] == "local"
         assert created["consumes"]["events"][0]["name"] == "code.requested"
 
         list_resp = client.get(
-            "/api/v1/ravn/personas?source=custom",
+            "/api/v1/personas?source=custom",
             headers={"Authorization": "Bearer token"},
         )
         assert list_resp.status_code == 200
         assert [item["name"] for item in list_resp.json()] == ["custom-agent"]
 
         detail_resp = client.get(
-            "/api/v1/ravn/personas/custom-agent",
+            "/api/v1/personas/custom-agent",
             headers={"Authorization": "Bearer token"},
         )
         assert detail_resp.status_code == 200
         assert detail_resp.json()["yaml_source"] == "[user:user-1]"
 
         yaml_resp = client.get(
-            "/api/v1/ravn/personas/custom-agent/yaml",
+            "/api/v1/personas/custom-agent/yaml",
             headers={"Authorization": "Bearer token"},
         )
         assert yaml_resp.status_code == 200
         assert "name: custom-agent" in yaml_resp.text
         assert "permission_mode: workspace-write" in yaml_resp.text
+
+    def test_legacy_ravn_routes_still_work(self) -> None:
+        client, _ = _make_client()
+        client.post(
+            "/api/v1/personas",
+            json=_make_payload("legacy-agent"),
+            headers={"Authorization": "Bearer token"},
+        )
+
+        resp = client.get(
+            "/api/v1/ravn/personas/legacy-agent",
+            headers={"Authorization": "Bearer token"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "legacy-agent"
 
     def test_builtin_override_and_delete_restore_builtin(self) -> None:
         client, _ = _make_client()

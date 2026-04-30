@@ -2,7 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
-import { usePersona, usePersonaYaml, useUpdatePersona } from './usePersona';
+import {
+  useCreatePersona,
+  useForkPersona,
+  usePersona,
+  usePersonaYaml,
+  useUpdatePersona,
+} from './usePersona';
 import { createMockPersonaStore } from '../adapters/mock';
 import type { PersonaCreateRequest } from '../ports';
 
@@ -92,6 +98,75 @@ describe('useUpdatePersona', () => {
     };
 
     result.current.mutate(req);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalled();
+  });
+});
+
+describe('useCreatePersona', () => {
+  it('creates a persona and invalidates cache', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const store = createMockPersonaStore();
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+
+    function Wrapper({ children }: { children: React.ReactNode }) {
+      return (
+        <QueryClientProvider client={client}>
+          <ServicesProvider services={{ 'ravn.personas': store }}>{children}</ServicesProvider>
+        </QueryClientProvider>
+      );
+    }
+
+    const { result } = renderHook(() => useCreatePersona(), { wrapper: Wrapper });
+
+    result.current.mutate({
+      name: 'streaming-reviewer',
+      role: 'review',
+      letter: 'S',
+      color: 'var(--color-accent-indigo)',
+      summary: 'Streaming reviewer',
+      description: 'Streaming reviewer persona',
+      systemPromptTemplate: '# streaming-reviewer',
+      allowedTools: [],
+      forbiddenTools: [],
+      permissionMode: 'default',
+      executor: {
+        adapter: 'ravn.adapters.executors.cli.CliTransportExecutor',
+        kwargs: {
+          transport_adapter: 'skuld.transports.codex_ws.CodexWebSocketTransport',
+        },
+      },
+      iterationBudget: 20,
+      llmPrimaryAlias: 'claude-sonnet-4-6',
+      llmThinkingEnabled: false,
+      llmMaxTokens: 8192,
+      producesEventType: '',
+      producesSchema: {},
+      consumesEvents: [],
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalled();
+  });
+});
+
+describe('useForkPersona', () => {
+  it('forks a persona and invalidates cache', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const store = createMockPersonaStore();
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+
+    function Wrapper({ children }: { children: React.ReactNode }) {
+      return (
+        <QueryClientProvider client={client}>
+          <ServicesProvider services={{ 'ravn.personas': store }}>{children}</ServicesProvider>
+        </QueryClientProvider>
+      );
+    }
+
+    const { result } = renderHook(() => useForkPersona('reviewer'), { wrapper: Wrapper });
+
+    result.current.mutate('reviewer-copy');
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(invalidateSpy).toHaveBeenCalled();
   });

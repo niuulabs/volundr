@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import { PersonasPage } from './PersonasPage';
 import {
@@ -22,6 +22,7 @@ function allServices() {
 
 beforeEach(() => {
   localStorage.clear();
+  vi.restoreAllMocks();
 });
 
 describe('PersonasPage', () => {
@@ -100,5 +101,31 @@ describe('PersonasPage', () => {
     expect(() => {
       window.dispatchEvent(new CustomEvent('ravn:persona-selected', { detail: 'coder' }));
     }).not.toThrow();
+  });
+
+  it('creates a new persona from the header action', async () => {
+    vi.spyOn(window, 'prompt').mockReturnValue('streaming-reviewer');
+    render(<PersonasPage />, { wrapper: wrapWithServices(allServices()) });
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: /form/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /\+ new persona/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('streaming-reviewer')).toBeInTheDocument();
+      expect(localStorage.getItem('ravn.persona')).toBe('"streaming-reviewer"');
+    });
+  });
+
+  it('forks the selected persona from the header action', async () => {
+    vi.spyOn(window, 'prompt').mockReturnValue('reviewer-copy');
+    render(<PersonasPage />, { wrapper: wrapWithServices(allServices()) });
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: /form/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /clone as…/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('reviewer-copy')).toBeInTheDocument();
+      expect(localStorage.getItem('ravn.persona')).toBe('"reviewer-copy"');
+    });
   });
 });

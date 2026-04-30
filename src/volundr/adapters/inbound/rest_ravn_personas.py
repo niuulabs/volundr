@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
 from niuu.domain.models import Principal
@@ -55,6 +55,13 @@ class PersonaLLMResponse(BaseModel):
     temperature: float | None = None
 
 
+class PersonaExecutorResponse(BaseModel):
+    """Executor configuration embedded in persona detail responses."""
+
+    adapter: str
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+
+
 class PersonaProducesResponse(BaseModel):
     """Produced event configuration."""
 
@@ -89,6 +96,7 @@ class PersonaDetailResponse(PersonaSummaryResponse):
     description: str
     system_prompt_template: str
     forbidden_tools: list[str]
+    executor: PersonaExecutorResponse | None = None
     llm: PersonaLLMResponse
     produces: PersonaProducesResponse
     consumes: PersonaConsumesResponse
@@ -106,6 +114,13 @@ class PersonaConsumesEventRequest(BaseModel):
     trust: float | None = Field(default=None, ge=0, le=1)
 
 
+class PersonaExecutorRequest(BaseModel):
+    """Executor request payload."""
+
+    adapter: str = Field(default="")
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+
+
 class PersonaCreateRequest(BaseModel):
     """Create or replace a persona."""
 
@@ -119,6 +134,7 @@ class PersonaCreateRequest(BaseModel):
     allowed_tools: list[str] = Field(default_factory=list)
     forbidden_tools: list[str] = Field(default_factory=list)
     permission_mode: str = Field(default="default")
+    executor: PersonaExecutorRequest | None = Field(default=None)
     iteration_budget: int = Field(default=0, ge=0)
     llm_primary_alias: str = Field(default="")
     llm_thinking_enabled: bool = Field(default=False)
@@ -144,6 +160,7 @@ class PersonaCreateRequest(BaseModel):
             "allowed_tools": list(self.allowed_tools),
             "forbidden_tools": list(self.forbidden_tools),
             "permission_mode": self.permission_mode,
+            "executor": self.executor.model_dump() if self.executor is not None else None,
             "iteration_budget": self.iteration_budget,
             "llm_primary_alias": self.llm_primary_alias,
             "llm_thinking_enabled": self.llm_thinking_enabled,
@@ -171,19 +188,34 @@ class PersonaValidateResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
-def create_ravn_personas_router(registry: PostgresPersonaRegistry) -> APIRouter:
-    """Create Volundr-hosted Ravn persona routes."""
-    router = APIRouter(prefix="/api/v1/ravn", tags=["Personas"])
+def create_ravn_personas_router(registry: PostgresPersonaRegistry | None = None) -> APIRouter:
+    """Create persona registry routes."""
+    router = APIRouter(prefix="/api/v1", tags=["Personas"])
+
+    def _get_registry(request: Request) -> PostgresPersonaRegistry:
+        if registry is not None:
+            return registry
+        active = getattr(request.app.state, "persona_registry", None)
+        if isinstance(active, PostgresPersonaRegistry):
+            return active
+        raise RuntimeError("Persona registry is not configured on this app.")
 
     @router.get("/personas", response_model=list[PersonaSummaryResponse])
+    @router.get("/ravn/personas", response_model=list[PersonaSummaryResponse], include_in_schema=False)
     async def list_personas(
         source: str = Query(default="all"),
         principal: Principal = Depends(extract_principal),
+        persona_registry: PostgresPersonaRegistry = Depends(_get_registry),
     ) -> list[PersonaSummaryResponse]:
-        views = await registry.list_personas(principal.user_id, source=source)
+        views = await persona_registry.list_personas(principal.user_id, source=source)
         return [_to_summary(view) for view in views]
 
     @router.post("/personas/validate", response_model=PersonaValidateResponse)
+    @router.post(
+        "/ravn/personas/validate",
+        response_model=PersonaValidateResponse,
+        include_in_schema=False,
+    )
     async def validate_persona(data: PersonaCreateRequest) -> PersonaValidateResponse:
         errors: list[str] = []
         overlap = sorted(set(data.allowed_tools) & set(data.forbidden_tools))
@@ -196,16 +228,19 @@ def create_ravn_personas_router(registry: PostgresPersonaRegistry) -> APIRouter:
             )
         return PersonaValidateResponse(valid=not errors, errors=errors)
 
+    @router.get("/personas/{name}", response_model=PersonaDetailResponse, responses={404: {"model": ErrorResponse}})
     @router.get(
-        "/personas/{name}",
+        "/ravn/personas/{name}",
         response_model=PersonaDetailResponse,
         responses={404: {"model": ErrorResponse}},
+        include_in_schema=False,
     )
     async def get_persona(
         name: str = Path(description="Persona name"),
         principal: Principal = Depends(extract_principal),
+        persona_registry: PostgresPersonaRegistry = Depends(_get_registry),
     ) -> PersonaDetailResponse:
-        view = await registry.get_persona(principal.user_id, name)
+        view = await persona_registry.get_persona(principal.user_id, name)
         if view is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -213,16 +248,19 @@ def create_ravn_personas_router(registry: PostgresPersonaRegistry) -> APIRouter:
             )
         return _to_detail(view)
 
+    @router.get("/personas/{name}/yaml", response_class=Response, responses={404: {"model": ErrorResponse}})
     @router.get(
-        "/personas/{name}/yaml",
+        "/ravn/personas/{name}/yaml",
         response_class=Response,
         responses={404: {"model": ErrorResponse}},
+        include_in_schema=False,
     )
     async def get_persona_yaml(
         name: str = Path(description="Persona name"),
         principal: Principal = Depends(extract_principal),
+        persona_registry: PostgresPersonaRegistry = Depends(_get_registry),
     ) -> Response:
-        yaml_text = await registry.get_persona_yaml(principal.user_id, name)
+        yaml_text = await persona_registry.get_persona_yaml(principal.user_id, name)
         if yaml_text is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -230,107 +268,119 @@ def create_ravn_personas_router(registry: PostgresPersonaRegistry) -> APIRouter:
             )
         return Response(content=yaml_text, media_type="text/yaml")
 
+    @router.post("/personas", response_model=PersonaDetailResponse, status_code=status.HTTP_201_CREATED, responses={409: {"model": ErrorResponse}})
     @router.post(
-        "/personas",
+        "/ravn/personas",
         response_model=PersonaDetailResponse,
         status_code=status.HTTP_201_CREATED,
         responses={409: {"model": ErrorResponse}},
+        include_in_schema=False,
     )
     async def create_persona(
         data: PersonaCreateRequest,
         principal: Principal = Depends(extract_principal),
         user: User = Depends(get_current_user),
+        persona_registry: PostgresPersonaRegistry = Depends(_get_registry),
     ) -> PersonaDetailResponse:
         del user
-        existing = await registry.get_persona(principal.user_id, data.name)
+        existing = await persona_registry.get_persona(principal.user_id, data.name)
         if existing is not None and existing.has_override:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Persona already exists as custom: {data.name}",
             )
-        if registry.is_builtin(data.name):
+        if persona_registry.is_builtin(data.name):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Persona already exists as built-in: {data.name}",
             )
-        await registry.save_persona(principal.user_id, data.to_payload())
-        saved = await registry.get_persona(principal.user_id, data.name)
+        await persona_registry.save_persona(principal.user_id, data.to_payload())
+        saved = await persona_registry.get_persona(principal.user_id, data.name)
         assert saved is not None
         return _to_detail(saved)
 
+    @router.put("/personas/{name}", response_model=PersonaDetailResponse, responses={404: {"model": ErrorResponse}})
     @router.put(
-        "/personas/{name}",
+        "/ravn/personas/{name}",
         response_model=PersonaDetailResponse,
         responses={404: {"model": ErrorResponse}},
+        include_in_schema=False,
     )
     async def replace_persona(
         data: PersonaCreateRequest,
         name: str = Path(description="Persona name"),
         principal: Principal = Depends(extract_principal),
         user: User = Depends(get_current_user),
+        persona_registry: PostgresPersonaRegistry = Depends(_get_registry),
     ) -> PersonaDetailResponse:
         del user
-        existing = await registry.get_persona(principal.user_id, name)
+        existing = await persona_registry.get_persona(principal.user_id, name)
         if existing is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Persona not found: {name}",
             )
-        await registry.save_persona(principal.user_id, data.to_payload(name=name))
-        saved = await registry.get_persona(principal.user_id, name)
+        await persona_registry.save_persona(principal.user_id, data.to_payload(name=name))
+        saved = await persona_registry.get_persona(principal.user_id, name)
         assert saved is not None
         return _to_detail(saved)
 
+    @router.delete("/personas/{name}", status_code=status.HTTP_204_NO_CONTENT, responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     @router.delete(
-        "/personas/{name}",
+        "/ravn/personas/{name}",
         status_code=status.HTTP_204_NO_CONTENT,
         responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+        include_in_schema=False,
     )
     async def delete_persona(
         name: str = Path(description="Persona name"),
         principal: Principal = Depends(extract_principal),
         user: User = Depends(get_current_user),
+        persona_registry: PostgresPersonaRegistry = Depends(_get_registry),
     ) -> None:
         del user
-        existing = await registry.get_persona(principal.user_id, name)
+        existing = await persona_registry.get_persona(principal.user_id, name)
         if existing is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Persona not found: {name}",
             )
-        deleted = await registry.delete_persona(principal.user_id, name)
+        deleted = await persona_registry.delete_persona(principal.user_id, name)
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot delete built-in persona without a user override: {name}",
             )
 
+    @router.post("/personas/{name}/fork", response_model=PersonaDetailResponse, status_code=status.HTTP_201_CREATED, responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
     @router.post(
-        "/personas/{name}/fork",
+        "/ravn/personas/{name}/fork",
         response_model=PersonaDetailResponse,
         status_code=status.HTTP_201_CREATED,
         responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+        include_in_schema=False,
     )
     async def fork_persona(
         body: PersonaForkRequest,
         name: str = Path(description="Source persona name"),
         principal: Principal = Depends(extract_principal),
         user: User = Depends(get_current_user),
+        persona_registry: PostgresPersonaRegistry = Depends(_get_registry),
     ) -> PersonaDetailResponse:
         del user
-        source_view = await registry.get_persona(principal.user_id, name)
+        source_view = await persona_registry.get_persona(principal.user_id, name)
         if source_view is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Persona not found: {name}",
             )
-        existing = await registry.get_persona(principal.user_id, body.new_name)
+        existing = await persona_registry.get_persona(principal.user_id, body.new_name)
         if existing is not None and existing.has_override:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Persona already exists as custom: {body.new_name}",
             )
-        if registry.is_builtin(body.new_name):
+        if persona_registry.is_builtin(body.new_name):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Persona already exists as built-in: {body.new_name}",
@@ -338,8 +388,8 @@ def create_ravn_personas_router(registry: PostgresPersonaRegistry) -> APIRouter:
 
         payload = dict(source_view.payload)
         payload["name"] = body.new_name
-        await registry.save_persona(principal.user_id, payload)
-        saved = await registry.get_persona(principal.user_id, body.new_name)
+        await persona_registry.save_persona(principal.user_id, payload)
+        saved = await persona_registry.get_persona(principal.user_id, body.new_name)
         assert saved is not None
         return _to_detail(saved)
 
@@ -381,6 +431,7 @@ def _to_detail(view: PersonaView) -> PersonaDetailResponse:
         description=str(payload["description"]),
         system_prompt_template=str(payload["system_prompt_template"]),
         forbidden_tools=list(payload["forbidden_tools"]),
+        executor=_to_executor(payload.get("executor")),
         llm=PersonaLLMResponse(
             primary_alias=str(payload["llm_primary_alias"]),
             thinking_enabled=bool(payload["llm_thinking_enabled"]),
@@ -418,3 +469,14 @@ def _to_detail(view: PersonaView) -> PersonaDetailResponse:
         yaml_source=view.yaml_source,
         override_source=view.override_source,
     )
+
+
+def _to_executor(raw: object) -> PersonaExecutorResponse | None:
+    if not isinstance(raw, dict):
+        return None
+    adapter = str(raw.get("adapter", "")).strip()
+    kwargs = raw.get("kwargs")
+    normalized_kwargs = dict(kwargs) if isinstance(kwargs, dict) else {}
+    if not adapter and not normalized_kwargs:
+        return None
+    return PersonaExecutorResponse(adapter=adapter, kwargs=normalized_kwargs)
