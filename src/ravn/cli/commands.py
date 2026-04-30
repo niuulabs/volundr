@@ -14,7 +14,7 @@ from typing import Any
 
 import typer
 
-from ravn.agent import PostToolHook, PreToolHook, RavnAgent
+from ravn.agent import PostToolHook, PreToolHook
 from ravn.config import (
     InitiativeConfig,
     ProjectConfig,
@@ -37,6 +37,7 @@ from ravn.domain.models import (
 )
 from ravn.domain.profile import RavnProfile
 from ravn.ports.checkpoint import CheckpointPort
+from ravn.ports.executor import ExecutionAgentPort, ExecutorPort
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +158,22 @@ def _build_llm(settings: Settings) -> Any:
         providers.append(fb_cls(**fb_kwargs))
 
     return FallbackLLMAdapter(providers=providers)
+
+
+def _build_executor(persona_config: Any | None = None) -> ExecutorPort:
+    """Build the persona-selected executor adapter."""
+    adapter_path = "ravn.adapters.executors.agent.AgentExecutor"
+    kwargs: dict[str, Any] = {}
+
+    executor_cfg = getattr(persona_config, "executor", None)
+    if executor_cfg is not None and getattr(executor_cfg, "adapter", ""):
+        adapter_path = str(executor_cfg.adapter)
+        raw_kwargs = getattr(executor_cfg, "kwargs", {})
+        if isinstance(raw_kwargs, dict):
+            kwargs = dict(raw_kwargs)
+
+    cls = _import_class(adapter_path)
+    return cls(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -660,7 +677,7 @@ def _build_prompt_builder(settings: Settings) -> Any:
 
 async def _start_mcp(
     settings: Settings,
-    agent: RavnAgent,
+    agent: ExecutionAgentPort,
 ) -> Any | None:
     """Start MCP servers and register discovered tools into the agent.
 
@@ -954,7 +971,7 @@ def _build_agent(
     session: Session | None = None,
     task_id: str | None = None,
     sleipnir_publisher: object | None = None,
-) -> tuple[RavnAgent, Any]:
+) -> tuple[ExecutionAgentPort, Any]:
     from ravn.adapters.channels.composite import CompositeChannel
     from ravn.adapters.cli_channel import CliChannel
     from ravn.budget import IterationBudget
@@ -978,6 +995,9 @@ def _build_agent(
                 max_tokens = persona_config.llm.max_tokens
 
     workspace = _resolve_workspace(settings)
+    permission_mode = settings.permission.mode
+    if persona_config is not None and persona_config.permission_mode:
+        permission_mode = persona_config.permission_mode
     llm = _build_llm(settings)
     session = session or Session()
     base_channel: CliChannel = CliChannel()
@@ -1024,15 +1044,18 @@ def _build_agent(
     )
 
     cp_cfg = settings.checkpoint
-    agent = RavnAgent(
+    executor = _build_executor(persona_config)
+    agent = executor.build(
         llm=llm,
         tools=tools,
         channel=channel,
         permission=permission,
+        permission_mode=permission_mode,
         system_prompt=system_prompt,
         model=settings.effective_model(),
         max_tokens=max_tokens,
         max_iterations=max_iterations,
+        workspace_dir=str(workspace),
         session=session,
         pre_tool_hooks=pre_hooks or None,
         post_tool_hooks=post_hooks or None,
@@ -1055,7 +1078,6 @@ def _build_agent(
         checkpoint_every_n_tools=cp_cfg.checkpoint_every_n_tools,
         auto_checkpoint_before_destructive=cp_cfg.auto_before_destructive,
         budget_milestone_fractions=cp_cfg.budget_milestone_fractions,
-        # NIU-598: session lifecycle events + learnings injection
         sleipnir_publisher=sleipnir_publisher,
         reflection_config=settings.reflection,
         persona=persona_config.name if persona_config else "",
@@ -1064,7 +1086,7 @@ def _build_agent(
     return agent, channel
 
 
-def _make_slash_ctx(agent: RavnAgent, settings: Settings) -> Any:
+def _make_slash_ctx(agent: ExecutionAgentPort, settings: Settings) -> Any:
     """Build a SlashCommandContext from the running agent and loaded settings."""
     from ravn.adapters.slash_commands import SlashCommandContext
 
@@ -1285,7 +1307,7 @@ async def _load_checkpoint_session(
 
 
 async def _chat(
-    agent: RavnAgent,
+    agent: ExecutionAgentPort,
     channel: Any,
     *,
     settings: Settings,
@@ -1327,7 +1349,7 @@ async def _chat(
 
 
 async def _run_turn(
-    agent: RavnAgent,
+    agent: ExecutionAgentPort,
     channel: Any,
     user_input: str,
     *,
@@ -1679,13 +1701,16 @@ async def _run_gateway(
     # Start MCP servers (shared across sessions)
     mcp_manager, mcp_tools = await _start_mcp_shared(settings)
 
-    def _agent_factory(channel: ChannelPort) -> RavnAgent:
+    def _agent_factory(channel: ChannelPort) -> ExecutionAgentPort:
         # Per-session: fresh session, budget, and tools
         session = Session()
         budget = IterationBudget(
             total=settings.iteration_budget.total,
             near_limit_threshold=settings.iteration_budget.near_limit_threshold,
         )
+        permission_mode = settings.permission.mode
+        if persona_config is not None and persona_config.permission_mode:
+            permission_mode = persona_config.permission_mode
         permission = _build_permission(
             settings,
             workspace,
@@ -1717,15 +1742,18 @@ async def _run_gateway(
             )
             effective_channel = CompositeChannel([channel, sleipnir_ch])
 
-        return RavnAgent(
+        executor = _build_executor(persona_config)
+        return executor.build(
             llm=llm,
             tools=tools,
             channel=effective_channel,
             permission=permission,
+            permission_mode=permission_mode,
             system_prompt=system_prompt,
             model=settings.effective_model(),
             max_tokens=max_tokens_gw,
             max_iterations=max_iterations,
+            workspace_dir=str(workspace),
             session=session,
             pre_tool_hooks=pre_hooks or None,
             post_tool_hooks=post_hooks or None,
@@ -1983,7 +2011,8 @@ async def _run_daemon(
         # NIU-571: Apply trust gradient constraints for thread-triggered tasks
         tools = _apply_trust_filter(tools, settings, triggered_by)
 
-        return RavnAgent(
+        executor = _build_executor(resolved_persona)
+        return executor.build(
             llm=llm,
             tools=tools,
             channel=channel,

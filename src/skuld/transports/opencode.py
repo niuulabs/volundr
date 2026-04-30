@@ -16,13 +16,12 @@ import os
 
 import httpx
 
-from skuld.transports import (
-    CLITransport,
-    TransportCapabilities,
-    _drain_stream,
-    _filter_event,
-    _stop_process,
+from niuu.adapters.cli.runtime import (
+    drain_process_stream as _drain_stream,
+    filter_cli_event as _filter_event,
+    stop_subprocess as _stop_process,
 )
+from niuu.ports.cli import CLITransport, TransportCapabilities
 from skuld.transports.codex import _map_codex_tool
 
 logger = logging.getLogger("skuld.transport")

@@ -71,6 +71,14 @@ class PersonaLLMConfig:
 
 
 @dataclass
+class PersonaExecutorConfig:
+    """Executor adapter settings embedded in a persona."""
+
+    adapter: str = ""
+    kwargs: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class PersonaProduces:
     """What this persona outputs when it completes.
 
@@ -116,6 +124,7 @@ class PersonaConfig:
     allowed_tools: list[str] = field(default_factory=list)
     forbidden_tools: list[str] = field(default_factory=list)
     permission_mode: str = ""
+    executor: PersonaExecutorConfig = field(default_factory=PersonaExecutorConfig)
     llm: PersonaLLMConfig = field(default_factory=PersonaLLMConfig)
     iteration_budget: int = 0
     produces: PersonaProduces = field(default_factory=PersonaProduces)
@@ -141,6 +150,13 @@ class PersonaConfig:
             d["forbidden_tools"] = list(self.forbidden_tools)
         if self.permission_mode:
             d["permission_mode"] = self.permission_mode
+        if self.executor.adapter or self.executor.kwargs:
+            executor_dict: dict[str, Any] = {}
+            if self.executor.adapter:
+                executor_dict["adapter"] = self.executor.adapter
+            if self.executor.kwargs:
+                executor_dict["kwargs"] = dict(self.executor.kwargs)
+            d["executor"] = executor_dict
 
         llm_dict: dict = {}
         if self.llm.primary_alias:
@@ -1056,6 +1072,19 @@ class FilesystemPersonaAdapter(PersonaRegistryPort):
             max_tokens=_safe_int(llm_raw.get("max_tokens", 0)),
         )
 
+        executor_raw: dict[str, Any] = {}
+        if isinstance(raw.get("executor"), dict):
+            executor_raw = raw["executor"]
+
+        executor = PersonaExecutorConfig(
+            adapter=str(executor_raw.get("adapter", "")),
+            kwargs=(
+                dict(executor_raw.get("kwargs", {}))
+                if isinstance(executor_raw.get("kwargs"), dict)
+                else {}
+            ),
+        )
+
         allowed = raw.get("allowed_tools", [])
         forbidden = raw.get("forbidden_tools", [])
 
@@ -1065,6 +1094,7 @@ class FilesystemPersonaAdapter(PersonaRegistryPort):
             allowed_tools=list(allowed) if isinstance(allowed, list) else [],
             forbidden_tools=list(forbidden) if isinstance(forbidden, list) else [],
             permission_mode=str(raw.get("permission_mode", "")),
+            executor=executor,
             llm=llm,
             iteration_budget=_safe_int(raw.get("iteration_budget", 0)),
             produces=_parse_produces(raw.get("produces")),
@@ -1092,6 +1122,7 @@ class FilesystemPersonaAdapter(PersonaRegistryPort):
             permission_mode=(
                 project.permission_mode if project.permission_mode else persona.permission_mode
             ),
+            executor=persona.executor,
             llm=persona.llm,
             iteration_budget=(
                 project.iteration_budget if project.iteration_budget else persona.iteration_budget

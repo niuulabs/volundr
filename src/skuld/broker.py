@@ -28,6 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from niuu.ports.cli import CLITransport
 from niuu.domain.logging import LoggingConfig
 from niuu.domain.outcome import parse_outcome_block
 from niuu.mesh.cluster import read_cluster_pub_addresses
@@ -48,7 +49,6 @@ from skuld.service_manager import (
     ServiceManager,
     ServiceStatus,
 )
-from skuld.transport import CLITransport
 from sleipnir.adapters.in_process import InProcessBus
 from sleipnir.domain.catalog import ravn_session_ended
 from sleipnir.ports.events import SleipnirPublisher
