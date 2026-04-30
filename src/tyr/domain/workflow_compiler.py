@@ -25,12 +25,12 @@ def compile_workflow_definition(workflow: WorkflowDefinition) -> WorkflowCompile
 
 
 def compile_workflow_graph(name: str, graph: dict[str, Any]) -> WorkflowCompileResult:
-    """Compile a workflow DAG into a linear Tyr pipeline definition.
+    """Compile a workflow DAG into a Tyr pipeline definition.
 
-    The current Tyr runtime supports a linear sequence of stages, with each
-    stage executing participants sequentially or in parallel. Conditional graph
-    branching and multi-edge fan-out/fan-in are persisted in the workflow graph
-    but are not yet executable here.
+    Tyr executes pipeline stages sequentially. Visual workflow DAGs are
+    therefore compiled into a deterministic topological stage order. Branching
+    and joins are preserved as dependency ordering, while per-stage execution
+    mode remains encoded inside each compiled stage.
     """
 
     nodes = list(graph.get("nodes") or [])
@@ -73,8 +73,9 @@ def compile_workflow_graph(name: str, graph: dict[str, Any]) -> WorkflowCompileR
         return WorkflowCompileResult(definition_yaml=None, errors=errors)
 
     trigger = triggers[0]
-    runtime_nodes, traversal_errors = _linear_runtime_nodes(
+    runtime_nodes, traversal_errors = _reachable_runtime_nodes(
         trigger=trigger,
+        nodes=nodes,
         node_map=node_map,
         incoming=incoming,
         outgoing=outgoing,
@@ -127,71 +128,101 @@ def compile_workflow_graph(name: str, graph: dict[str, Any]) -> WorkflowCompileR
     )
 
 
-def _linear_runtime_nodes(
+def _reachable_runtime_nodes(
     *,
     trigger: dict[str, Any],
+    nodes: list[dict[str, Any]],
     node_map: dict[str, dict[str, Any]],
     incoming: dict[str, list[dict[str, Any]]],
     outgoing: dict[str, list[dict[str, Any]]],
 ) -> tuple[list[dict[str, Any]], list[str]]:
     errors: list[str] = []
-    runtime_nodes: list[dict[str, Any]] = []
-    visited: set[str] = {str(trigger["id"])}
-    current = trigger
+    trigger_id = str(trigger["id"])
+    reachable_ids = _reachable_node_ids(trigger_id=trigger_id, outgoing=outgoing)
 
-    while True:
-        next_edges = outgoing.get(str(current["id"]), [])
-        if not next_edges:
-            break
+    for node_id in reachable_ids:
+        node = node_map[node_id]
+        kind = node.get("kind")
+        if kind in {"trigger", "stage", "gate", "end"}:
+            continue
+        errors.append(f"Node '{_node_label(node)}' is not executable in Tyr runtime.")
 
-        if len(next_edges) > 1:
-            errors.append(
-                f"Node '{_node_label(current)}' fans out to multiple paths, which Tyr "
-                "cannot execute yet.",
-            )
-            break
-
-        next_node = node_map[str(next_edges[0]["target"])]
-        next_id = str(next_node["id"])
-        if next_id in visited:
-            errors.append(f"Workflow graph contains a cycle at node '{_node_label(next_node)}'.")
-            break
-
-        visited.add(next_id)
-
-        if next_node.get("kind") == "end":
-            break
-
-        if next_node.get("kind") not in {"stage", "gate"}:
-            errors.append(
-                f"Node '{_node_label(next_node)}' is not executable in Tyr runtime.",
-            )
-            break
-
-        if len(incoming.get(next_id, [])) > 1:
-            errors.append(
-                f"Node '{_node_label(next_node)}' has multiple inbound edges, which Tyr "
-                "cannot execute yet.",
-            )
-            break
-
-        runtime_nodes.append(next_node)
-        current = next_node
+    if errors:
+        return [], errors
 
     expected_runtime_ids = {
         str(node["id"])
         for node in node_map.values()
         if node.get("kind") in {"stage", "gate"}
     }
-    visited_runtime_ids = {str(node["id"]) for node in runtime_nodes}
-    missing = expected_runtime_ids - visited_runtime_ids
+    reachable_runtime_ids = {
+        node_id for node_id in reachable_ids if node_map[node_id].get("kind") in {"stage", "gate"}
+    }
+    missing = expected_runtime_ids - reachable_runtime_ids
     if missing:
         errors.append(
             "Workflow graph contains disconnected or unsupported runtime nodes: "
             + ", ".join(sorted(_node_label(node_map[node_id]) for node_id in missing)),
         )
 
+    if errors:
+        return [], errors
+
+    node_order = {
+        str(node.get("id")): idx for idx, node in enumerate(nodes) if node.get("id") is not None
+    }
+    indegree: dict[str, int] = {node_id: 0 for node_id in reachable_runtime_ids}
+    successors: dict[str, list[str]] = {node_id: [] for node_id in reachable_runtime_ids}
+
+    for node_id in reachable_runtime_ids:
+        for edge in incoming.get(node_id, []):
+            source_id = str(edge["source"])
+            if source_id == trigger_id:
+                continue
+            if source_id not in reachable_runtime_ids:
+                continue
+            indegree[node_id] += 1
+            successors[source_id].append(node_id)
+
+    ready = [node_id for node_id, degree in indegree.items() if degree == 0]
+    ready.sort(key=lambda node_id: _runtime_node_sort_key(node_map[node_id], node_order[node_id]))
+
+    runtime_nodes: list[dict[str, Any]] = []
+    while ready:
+        node_id = ready.pop(0)
+        runtime_nodes.append(node_map[node_id])
+        for successor_id in successors[node_id]:
+            indegree[successor_id] -= 1
+            if indegree[successor_id] != 0:
+                continue
+            ready.append(successor_id)
+        ready.sort(key=lambda ready_id: _runtime_node_sort_key(node_map[ready_id], node_order[ready_id]))
+
+    if len(runtime_nodes) != len(reachable_runtime_ids):
+        errors.append("Workflow graph contains a cycle among executable runtime nodes.")
+
     return runtime_nodes, errors
+
+
+def _reachable_node_ids(
+    *,
+    trigger_id: str,
+    outgoing: dict[str, list[dict[str, Any]]],
+) -> set[str]:
+    visited: set[str] = set()
+    stack = [trigger_id]
+
+    while stack:
+        node_id = stack.pop()
+        if node_id in visited:
+            continue
+        visited.add(node_id)
+        for edge in outgoing.get(node_id, []):
+            target_id = str(edge["target"])
+            if target_id not in visited:
+                stack.append(target_id)
+
+    return visited
 
 
 def _compile_stage(
@@ -245,6 +276,13 @@ def _compile_stage(
         stage["fan_in"] = fan_in
 
     return stage, errors
+
+
+def _runtime_node_sort_key(node: dict[str, Any], index: int) -> tuple[float, float, int]:
+    position = node.get("position") or {}
+    x = float(position.get("x") or 0.0)
+    y = float(position.get("y") or 0.0)
+    return (x, y, index)
 
 
 def _stage_members(node: dict[str, Any]) -> list[dict[str, Any]]:
