@@ -32,6 +32,21 @@ const condNode: WorkflowNode = {
   position: { x: 500, y: 100 },
 };
 
+const triggerNode: WorkflowNode = {
+  id: 'trigger-1',
+  kind: 'trigger',
+  label: 'Start',
+  source: 'manual dispatch',
+  position: { x: 40, y: 80 },
+};
+
+const endNode: WorkflowNode = {
+  id: 'end-1',
+  kind: 'end',
+  label: 'Done',
+  position: { x: 700, y: 80 },
+};
+
 const edge: WorkflowEdge = {
   id: 'e1',
   source: 'stage-1',
@@ -186,5 +201,29 @@ describe('GraphView', () => {
     render(<GraphView {...props} />);
     fireEvent.click(screen.getByTestId('delete-btn-stage-1'));
     expect(props.onDeleteNode).toHaveBeenCalledWith('stage-1');
+  });
+
+  it('calls onStartConnect from a trigger output port', () => {
+    const props = {
+      ...defaultProps(),
+      nodes: [triggerNode, stageNode],
+      edges: [],
+    };
+    render(<GraphView {...props} />);
+    fireEvent.click(screen.getByTestId('trigger-output-trigger-1'));
+    expect(props.onStartConnect).toHaveBeenCalledWith('trigger-1', 'start');
+  });
+
+  it('calls onCompleteConnect from an end input port in connecting mode', () => {
+    const props = {
+      ...defaultProps(),
+      nodes: [stageNode, endNode],
+      edges: [],
+      connectingFromId: 'stage-1',
+      selectedNodeId: 'stage-1',
+    };
+    render(<GraphView {...props} />);
+    fireEvent.click(screen.getByTestId('end-input-end-1'));
+    expect(props.onCompleteConnect).toHaveBeenCalledWith('end-1', 'complete');
   });
 });

@@ -238,6 +238,29 @@ describe('useWorkflowBuilder — startConnect / cancelConnect / completeConnect'
     expect(result.current.connectingFromId).toBeNull();
   });
 
+  it('completeConnect can target an end node without an explicit input label', () => {
+    const { result } = renderHook(() => useWorkflowBuilder(makeWorkflow()));
+    act(() => result.current.addNode('end', { x: 500, y: 100 }));
+    const endNodeId = result.current.workflow.nodes[2]!.id;
+    act(() => result.current.startConnect('stage-1', 'qa.report'));
+    act(() => result.current.completeConnect(endNodeId));
+    const newEdge = result.current.workflow.edges.find(
+      (e) => e.source === 'stage-1' && e.target === endNodeId,
+    );
+    expect(newEdge).toBeDefined();
+    expect(newEdge?.label).toBe('qa.report -> complete');
+  });
+
+  it('completeConnect can target a gate without an explicit input label', () => {
+    const { result } = renderHook(() => useWorkflowBuilder(makeWorkflow()));
+    act(() => result.current.startConnect('stage-1', 'qa.report'));
+    act(() => result.current.completeConnect('gate-1'));
+    const newEdge = result.current.workflow.edges.find(
+      (e) => e.source === 'stage-1' && e.target === 'gate-1' && e.label === 'qa.report -> approval.requested',
+    );
+    expect(newEdge).toBeDefined();
+  });
+
   it('completeConnect does not create duplicate edges', () => {
     const { result } = renderHook(() => useWorkflowBuilder(makeWorkflow()));
     act(() => result.current.startConnect('stage-1', 'qa.report'));

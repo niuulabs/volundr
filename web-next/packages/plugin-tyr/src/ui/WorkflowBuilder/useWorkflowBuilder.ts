@@ -113,6 +113,20 @@ function syncStagePersonaIds(node: WorkflowStageNode): WorkflowStageNode {
   };
 }
 
+function defaultInputLabelForNode(node: WorkflowNode): string | null {
+  switch (node.kind) {
+    case 'end':
+      return 'complete';
+    case 'gate':
+      return 'approval.requested';
+    case 'cond':
+      return 'condition.input';
+    case 'trigger':
+    case 'stage':
+      return null;
+  }
+}
+
 export function useWorkflowBuilder(
   initial: Workflow,
 ): WorkflowBuilderState & WorkflowBuilderActions {
@@ -220,17 +234,18 @@ export function useWorkflowBuilder(
     connectingLabelRef.current = null;
     setConnectingFromId(null);
     setConnectingFromLabel(null);
-    if (!fromId || !fromLabel || !inputLabel || fromId === targetId) return;
+    if (!fromId || !fromLabel || fromId === targetId) return;
     setWorkflowState((prev) => {
-      const edgeLabel = `${fromLabel} -> ${inputLabel}`;
-      const alreadyExists = prev.edges.some(
-        (e) =>
-          e.source === fromId && e.target === targetId && (e.label ?? '') === (edgeLabel ?? ''),
-      );
-      if (alreadyExists) return prev;
       const srcNode = prev.nodes.find((n) => n.id === fromId);
       const tgtNode = prev.nodes.find((n) => n.id === targetId);
       if (!srcNode || !tgtNode) return prev;
+      const resolvedInputLabel = inputLabel ?? defaultInputLabelForNode(tgtNode);
+      if (!resolvedInputLabel) return prev;
+      const edgeLabel = `${fromLabel} -> ${resolvedInputLabel}`;
+      const alreadyExists = prev.edges.some(
+        (e) => e.source === fromId && e.target === targetId && (e.label ?? '') === edgeLabel,
+      );
+      if (alreadyExists) return prev;
       const { cp1, cp2 } = defaultBezierCPs(srcNode.position, tgtNode.position);
       const newEdge = {
         id: makeEdgeId(),

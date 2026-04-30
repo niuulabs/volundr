@@ -77,10 +77,11 @@ describe('validateWorkflowFull — valid workflow', () => {
   it('returns no issues for a single isolated node', () => {
     // Single node — orphan, no_producer, no_consumer rules do not apply
     const issues = validateWorkflowFull(makeWorkflow([makeStage('s1')], []));
-    // confidence_underset + missing_persona will fire (no raidId / personaIds)
+    // missing_persona will fire; draft templates with no raid mapping should not.
     const kinds = issues.map((i) => i.kind);
     expect(kinds).not.toContain('cycle');
     expect(kinds).not.toContain('orphan');
+    expect(kinds).not.toContain('confidence_underset');
     expect(kinds).not.toContain('no_producer');
     expect(kinds).not.toContain('no_consumer');
   });
@@ -195,20 +196,29 @@ describe('validateWorkflowFull — dangling_condition', () => {
 // ---------------------------------------------------------------------------
 
 describe('validateWorkflowFull — confidence_underset', () => {
-  it('reports confidence_underset for stage with null raidId', () => {
-    const nodes = [makeStage('s1', { raidId: null })];
-    const issues = validateWorkflowFull(makeWorkflow(nodes, []));
-    expect(issues.some((i) => i.kind === 'confidence_underset' && i.nodeId === 's1')).toBe(true);
-  });
-
-  it('does NOT report confidence_underset for stage with raidId set', () => {
-    const nodes = [makeStage('s1', { raidId: 'raid-123' })];
+  it('does NOT report confidence_underset when no stages are raid-mapped', () => {
+    const nodes = [makeStage('s1', { raidId: null }), makeStage('s2', { raidId: null })];
     const issues = validateWorkflowFull(makeWorkflow(nodes, []));
     expect(issues.filter((i) => i.kind === 'confidence_underset')).toHaveLength(0);
   });
 
+  it('does NOT report confidence_underset for a fully mapped workflow', () => {
+    const nodes = [
+      makeStage('s1', { raidId: 'raid-123' }),
+      makeStage('s2', { raidId: 'raid-456' }),
+    ];
+    const issues = validateWorkflowFull(makeWorkflow(nodes, []));
+    expect(issues.filter((i) => i.kind === 'confidence_underset')).toHaveLength(0);
+  });
+
+  it('reports confidence_underset for unmapped stages when another stage is mapped', () => {
+    const nodes = [makeStage('s1', { raidId: 'raid-123' }), makeStage('s2', { raidId: null })];
+    const issues = validateWorkflowFull(makeWorkflow(nodes, []));
+    expect(issues.some((i) => i.kind === 'confidence_underset' && i.nodeId === 's2')).toBe(true);
+  });
+
   it('confidence_underset has warning severity', () => {
-    const nodes = [makeStage('s1', { raidId: null })];
+    const nodes = [makeStage('s1', { raidId: 'raid-123' }), makeStage('s2', { raidId: null })];
     const issues = validateWorkflowFull(makeWorkflow(nodes, []));
     for (const issue of issues.filter((i) => i.kind === 'confidence_underset')) {
       expect(issue.severity).toBe('warning');
@@ -337,9 +347,9 @@ describe('validateWorkflowFull — no_consumer', () => {
 
 describe('validateWorkflowFull — multiple issues', () => {
   it('reports all applicable issues for a poorly formed workflow', () => {
-    // cond with 1 out, stage with no persona/raidId, orphan stage
+    // cond with 1 out, orphan stage, mixed raid mapping
     const nodes = [
-      makeStage('s1'), // orphan, missing_persona, confidence_underset
+      makeStage('s1', { raidId: 'raid-123' }), // orphan, missing_persona
       makeCond('c1'), // dangling_condition (only 1 out), no_producer
       makeStage('s2'), // missing_persona, confidence_underset
     ];

@@ -586,7 +586,7 @@ function TriggerNode({
   issueLevel,
   onSelect,
   onInspect,
-  onStartConnect: _onStartConnect,
+  onStartConnect,
   onCompleteConnect,
   onDelete,
   onDragEnd,
@@ -654,6 +654,20 @@ function TriggerNode({
       <text x={x + 14} y={y + 38} fill={C.textMuted} fontSize={8.5} fontFamily="var(--font-mono)">
         {node.source ?? 'manual dispatch'}
       </text>
+      <circle
+        data-testid={`trigger-output-${node.id}`}
+        cx={x + TRIGGER_WIDTH - 10}
+        cy={y + TRIGGER_HEIGHT / 2}
+        r={4}
+        fill="var(--color-bg-primary)"
+        stroke="var(--color-brand)"
+        strokeWidth={1}
+        onClick={(e) => {
+          e.stopPropagation();
+          onStartConnect('start');
+        }}
+        className="niuu-cursor-pointer"
+      />
       {selected && !isConnectingMode && (
         <DeleteButton nodeId={node.id} cx={x + TRIGGER_WIDTH / 2} cy={y - 10} onClick={onDelete} />
       )}
@@ -735,6 +749,22 @@ function EndNode({
       >
         {node.label.length > 10 ? node.label.slice(0, 8) + '…' : node.label}
       </text>
+      {isConnectingMode && (
+        <circle
+          data-testid={`end-input-${node.id}`}
+          cx={x + 6}
+          cy={cy}
+          r={4}
+          fill="var(--color-bg-primary)"
+          stroke="var(--color-brand)"
+          strokeWidth={1}
+          onClick={(e) => {
+            e.stopPropagation();
+            onCompleteConnect('complete');
+          }}
+          className="niuu-cursor-pointer"
+        />
+      )}
       {selected && !isConnectingMode && (
         <DeleteButton nodeId={node.id} cx={cx} cy={y - 10} onClick={onDelete} />
       )}

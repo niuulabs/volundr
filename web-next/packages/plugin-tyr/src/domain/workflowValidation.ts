@@ -44,7 +44,8 @@ export interface WorkflowIssue {
  * 1. **cycle** — directed cycle exists; every participating node gets an issue.
  * 2. **orphan** — node has no edges at all (workflow has >1 node).
  * 3. **dangling_condition** — `cond` node has fewer than 2 outgoing edges.
- * 4. **confidence_underset** — `stage` node has no `raidId` (work is unplanned).
+ * 4. **confidence_underset** — when any stage is raid-mapped, other `stage`
+ *    nodes without `raidId` are treated as unplanned work.
  * 5. **missing_persona** — `stage` node has an empty `personaIds` array.
  * 6. **no_producer** — `gate`/`cond` node has no incoming edges.
  * 7. **no_consumer** — `stage` node has no outgoing edges (non-singleton workflow).
@@ -114,16 +115,16 @@ export function validateWorkflowFull(workflow: Workflow): WorkflowIssue[] {
   }
 
   // ── 4. Confidence underset ────────────────────────────────────────────────
-  for (const node of nodes) {
-    if (node.kind !== 'stage') continue;
-    if (!node.raidId) {
-      issues.push({
-        kind: 'confidence_underset',
-        nodeId: node.id,
-        message: 'Stage has no raid assigned — work is unplanned',
-        severity: 'warning',
-      });
-    }
+  const stages = nodes.filter((node) => node.kind === 'stage');
+  const hasMappedRaidStages = stages.some((node) => Boolean(node.raidId));
+  for (const node of stages) {
+    if (!hasMappedRaidStages || node.raidId) continue;
+    issues.push({
+      kind: 'confidence_underset',
+      nodeId: node.id,
+      message: 'Stage has no raid assigned — work is unplanned',
+      severity: 'warning',
+    });
   }
 
   // ── 5. Missing personas ───────────────────────────────────────────────────
