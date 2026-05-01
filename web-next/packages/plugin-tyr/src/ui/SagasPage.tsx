@@ -62,6 +62,20 @@ function statusClasses(status: SagaStatus): string {
   return `${base} niuu-border-brand/45 niuu-text-brand-200 niuu-bg-brand/10`;
 }
 
+function isTerminalTrackerStatus(status: string): boolean {
+  const normalized = status.trim().toLowerCase();
+  return [
+    'complete',
+    'completed',
+    'done',
+    'closed',
+    'cancelled',
+    'canceled',
+    'archived',
+    'merged',
+  ].includes(normalized);
+}
+
 function confidenceTone(value: number): string {
   if (value >= 85) return 'niuu-bg-brand';
   if (value >= 65) return 'niuu-bg-brand/80';
@@ -309,7 +323,9 @@ function SagasPageContent() {
     enabled: showImportModal && selectedRepos.length > 0 && repoCatalogQuery.data?.length === 0,
   });
 
-  const trackerProjects = trackerProjectsQuery.data ?? [];
+  const trackerProjects = (trackerProjectsQuery.data ?? []).filter(
+    (project) => !isTerminalTrackerStatus(project.status),
+  );
   const availableRepos = repoCatalogQuery.data ?? [];
   const selectedProject =
     trackerProjects.find((project) => project.id === selectedProjectId) ?? null;

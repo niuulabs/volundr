@@ -24,6 +24,21 @@ from tyr.ports.tracker import TrackerPort
 
 logger = logging.getLogger(__name__)
 
+_TERMINAL_PROJECT_STATUSES = {
+    "complete",
+    "completed",
+    "done",
+    "closed",
+    "cancelled",
+    "canceled",
+    "archived",
+    "merged",
+}
+
+
+def _is_terminal_project_status(status: str) -> bool:
+    return status.strip().lower() in _TERMINAL_PROJECT_STATUSES
+
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -114,7 +129,9 @@ def _build_tracker_router(
         for adapter in adapters:
             try:
                 projects = await adapter.list_projects()
-                results.extend(projects)
+                results.extend(
+                    project for project in projects if not _is_terminal_project_status(project.status)
+                )
             except Exception:
                 logger.warning("list_projects failed for adapter", exc_info=True)
         if deprecated:

@@ -238,6 +238,15 @@ def mock_tracker() -> MockTracker:
             milestone_count=0,
             issue_count=0,
         ),
+        TrackerProject(
+            id="proj-3",
+            name="Gamma",
+            description="Completed project",
+            status="completed",
+            url="https://linear.app/proj-3",
+            milestone_count=1,
+            issue_count=2,
+        ),
     ]
     tracker.milestones = {
         "proj-1": [
@@ -405,13 +414,14 @@ def client(mock_tracker: MockTracker) -> TestClient:
 
 
 class TestListProjects:
-    def test_returns_all(self, client: TestClient):
+    def test_filters_terminal_projects(self, client: TestClient):
         resp = client.get("/api/v1/tyr/tracker/projects")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data) == 2
         assert data[0]["id"] == "proj-1"
         assert data[1]["id"] == "proj-2"
+        assert {project["id"] for project in data} == {"proj-1", "proj-2"}
 
     def test_canonical_projects_match_legacy(self, client: TestClient):
         legacy = client.get("/api/v1/tyr/tracker/projects")

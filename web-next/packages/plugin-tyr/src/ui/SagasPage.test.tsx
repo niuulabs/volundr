@@ -216,6 +216,41 @@ describe('SagasPage', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('does not list terminal tracker projects in the import modal', async () => {
+    const tracker = createMockTrackerService();
+    const trackerSvc: ITrackerBrowserService = {
+      ...tracker,
+      listProjects: async () => [
+        {
+          id: 'proj-active',
+          name: 'Active Project',
+          description: 'Still in progress',
+          status: 'active',
+          url: 'https://linear.app/niuu/project/active',
+          milestoneCount: 1,
+          issueCount: 3,
+        },
+        {
+          id: 'proj-done',
+          name: 'Done Project',
+          description: 'Already complete',
+          status: 'completed',
+          url: 'https://linear.app/niuu/project/done',
+          milestoneCount: 1,
+          issueCount: 3,
+        },
+      ],
+    };
+
+    render(<SagasPage />, { wrapper: wrap(withDefaults({ 'tyr.tracker': trackerSvc })) });
+    await waitFor(() => expect(screen.getAllByText('Auth Rewrite').length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByRole('button', { name: /Import saga from tracker/i }));
+    await waitFor(() => expect(screen.getByText('Import From Tracker')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('Active Project').length).toBeGreaterThan(0));
+    expect(screen.queryByText('Done Project')).not.toBeInTheDocument();
+  });
+
   it('renders grouped bucket items from mixed data', async () => {
     const mixedSvc = {
       getSagas: async (): Promise<Saga[]> => [
