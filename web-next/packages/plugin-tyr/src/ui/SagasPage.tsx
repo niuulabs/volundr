@@ -324,13 +324,18 @@ function SagasPageContent() {
     !isImporting;
 
   useEffect(() => {
-    if (!showImportModal) return;
-    if (selectedRepos.length > 0) return;
+    if (!showImportModal) {
+      setSelectedProjectId(null);
+      setSelectedRepos([]);
+      setRepoCandidate('');
+      setBaseBranch('main');
+      return;
+    }
     const defaultRepos = allSagas[0]?.repos ?? [];
     const defaultBaseBranch = allSagas[0]?.baseBranch ?? 'main';
     setSelectedRepos(defaultRepos);
     setBaseBranch(defaultBaseBranch);
-  }, [allSagas, selectedRepos.length, showImportModal]);
+  }, [allSagas, showImportModal]);
 
   useEffect(() => {
     if (!showImportModal) return;
