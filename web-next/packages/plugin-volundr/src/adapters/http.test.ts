@@ -85,6 +85,27 @@ describe('buildVolundrHttpAdapter', () => {
     expect(client.get).toHaveBeenCalledWith('/sessions/s1');
   });
 
+  it('getSession synthesizes trackerIssue from legacy tracker fields', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValueOnce({
+      id: 's1',
+      name: 'niu-766',
+      source: { type: 'git', repo: 'https://github.com/niuulabs/volundr', branch: 'feat/test' },
+      status: 'running',
+      model: 'claude-sonnet-4-6',
+      tracker_issue_id: 'NIU-766',
+      issue_tracker_url:
+        'https://linear.app/niuu/issue/NIU-766/update-readme-with-canonical-route-families-and-ownership-map',
+    });
+
+    const session = await buildVolundrHttpAdapter(client).getSession('s1');
+
+    expect(session.trackerIssue).toMatchObject({
+      identifier: 'NIU-766',
+      url: 'https://linear.app/niuu/issue/NIU-766/update-readme-with-canonical-route-families-and-ownership-map',
+    });
+  });
+
   it('getActiveSessions calls GET /sessions?active=true', async () => {
     const client = makeClient();
     await buildVolundrHttpAdapter(client).getActiveSessions();

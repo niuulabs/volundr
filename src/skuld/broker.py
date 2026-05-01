@@ -567,6 +567,23 @@ class Broker:
         self._pending_assistant_parts = []
         self._pending_reasoning_text = ""
 
+    def _ensure_workflow_prompt_turn(self) -> None:
+        """Persist the workflow trigger prompt without executing it locally."""
+        prompt = self._settings.session.initial_prompt
+        if not prompt:
+            return
+
+        if any(turn.role == "user" and turn.content == prompt for turn in self._conversation_turns):
+            return
+
+        self._append_turn(
+            ConversationTurn(
+                id=str(uuid.uuid4()),
+                role="user",
+                content=prompt,
+            )
+        )
+
     async def _start_mesh_adapter(self) -> None:
         """Build and start the mesh adapter when mesh.enabled is True.
 
@@ -656,6 +673,7 @@ class Broker:
                     subscribes_to=list(mesh_cfg.consumes_event_types),
                     emits=["code.changed"],
                     tools=list(mesh_cfg.tools),
+                    participant_type="skuld",
                 )
             has_peers = discovery is not None and hasattr(discovery, "peers")
             if self._room_bridge is not None and has_peers:
@@ -752,7 +770,9 @@ class Broker:
             "skip_permissions": self._settings.skip_permissions,
             "agent_teams": self._settings.agent_teams,
             "system_prompt": self._settings.session.system_prompt,
-            "initial_prompt": self._settings.session.initial_prompt,
+            "initial_prompt": (
+                "" if self._has_workflow_trigger() else self._settings.session.initial_prompt
+            ),
         }
 
     def _create_transport(self) -> CLITransport:
@@ -829,6 +849,7 @@ class Broker:
         if self._settings.session.initial_prompt:
             if self._has_workflow_trigger():
                 logger.info("Workflow trigger configured — holding initial prompt for mesh dispatch")
+                self._ensure_workflow_prompt_turn()
             else:
                 logger.info("Initial prompt configured — auto-starting transport")
                 try:

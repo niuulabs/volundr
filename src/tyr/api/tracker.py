@@ -267,6 +267,14 @@ def _build_tracker_router(
 
         now = datetime.now(UTC)
         slug = project.slug or _slugify(project.name)
+        saga_repo: SagaRepository = request.app.state.saga_repo
+        existing = await saga_repo.get_saga_by_slug(slug)
+        if existing is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Saga with slug '{slug}' already exists",
+            )
+
         saga = Saga(
             id=uuid4(),
             tracker_id=project.id,
@@ -282,7 +290,6 @@ def _build_tracker_router(
             owner_id=principal.user_id,
         )
 
-        saga_repo: SagaRepository = request.app.state.saga_repo
         await saga_repo.save_saga(saga)
 
         logger.info(

@@ -21,6 +21,7 @@ export type SessionStatus =
   | 'running'
   | 'stopping'
   | 'stopped'
+  | 'failed'
   | 'error'
   | 'archived';
 

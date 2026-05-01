@@ -21,6 +21,20 @@ interface GatewaySectionProps {
   region?: string;
 }
 
+function isMeshVisibleParticipant(participant: RoomParticipant): boolean {
+  return participant.participantType === 'ravn' || participant.participantType === 'skuld';
+}
+
+function formatParticipantLabel(participant: RoomParticipant): string {
+  const role = participant.participantType === 'skuld' ? 'observer' : participant.persona;
+  const baseName = participant.displayName ?? participant.persona ?? participant.peerId;
+  if (!baseName) return role || participant.peerId;
+  if (participant.participantType === 'skuld' || participant.displayName) {
+    return role ? `${baseName} (${role})` : baseName;
+  }
+  return baseName;
+}
+
 function latencyClass(ms: number | undefined): string {
   if (ms === undefined) return '';
   if (ms < 100) return 'niuu-chat-peer-gw-latency--ok';
@@ -99,11 +113,7 @@ function PeerCard({ participant, isSelected, onSelect }: PeerCardProps) {
     >
       <div className="niuu-chat-peer-header">
         <span className="niuu-chat-peer-status-dot" data-status={participant.status} />
-        <span className="niuu-chat-peer-name">
-          {participant.displayName
-            ? `${participant.displayName} (${participant.persona})`
-            : participant.persona || participant.peerId}
-        </span>
+        <span className="niuu-chat-peer-name">{formatParticipantLabel(participant)}</span>
         <span className="niuu-chat-peer-status-label">{participant.status}</span>
       </div>
 
@@ -172,9 +182,10 @@ function PeerCard({ participant, isSelected, onSelect }: PeerCardProps) {
 }
 
 export function MeshSidebar({ participants, selectedPeerId, onSelectPeer }: MeshSidebarProps) {
-  const peers = Array.from(participants.values()).filter((p) => p.participantType === 'ravn');
+  const ravnPeers = Array.from(participants.values()).filter((p) => p.participantType === 'ravn');
+  const peers = Array.from(participants.values()).filter(isMeshVisibleParticipant);
 
-  if (peers.length === 0) return null;
+  if (ravnPeers.length === 0 || peers.length === 0) return null;
 
   return (
     <aside className="niuu-chat-mesh-sidebar" data-testid="mesh-sidebar">

@@ -64,8 +64,22 @@ def _make_room_bridge(known_peers: list[str] | None = None) -> MagicMock:
     bridge = MagicMock()
     bridge.handle_ravn_frame = AsyncMock()
     bridge.register_mesh_peer = AsyncMock()
-    # Participants dict: peer_id → meta
-    bridge.participants = {pid: MagicMock(peer_id=pid) for pid in (known_peers or [])}
+    participants = {}
+    for pid in known_peers or []:
+        persona = pid.split("-", 1)[-1] if "-" in pid else pid
+        display_name = persona
+        participant_type = "ravn"
+        if pid.startswith("skuld-"):
+            persona = "coder"
+            display_name = "skuld"
+            participant_type = "skuld"
+        participants[pid] = MagicMock(
+            peer_id=pid,
+            persona=persona,
+            display_name=display_name,
+            participant_type=participant_type,
+        )
+    bridge.participants = participants
     bridge.has_participant = MagicMock(side_effect=lambda pid: pid in bridge.participants)
     return bridge
 
@@ -507,6 +521,35 @@ class TestPeerAutoRegistration:
         await bridge._handle_event(evt)
 
         room.register_mesh_peer.assert_not_awaited()
+        await bridge.stop()
+
+    @pytest.mark.asyncio
+    async def test_internal_drive_loop_source_maps_to_matching_ravn_peer(self):
+        room = _make_room_bridge(known_peers=["flock-reviewer", "skuld-01"])
+        bus = InProcessBus()
+        bridge = RoomMeshBridge(
+            subscriber=bus,
+            room_bridge=room,
+            session_id="sess-abc",
+        )
+        await bridge.start()
+
+        evt = _make_event(
+            payload={
+                "ravn_event": {"persona": "reviewer", "event_type": "review.completed"},
+                "ravn_type": "RavnEventType.OUTCOME",
+                "ravn_source": "drive_loop",
+                "ravn_session_id": "sess-abc",
+                "ravn_urgency": 0.6,
+                "ravn_task_id": None,
+            },
+            source="ravn:drive_loop",
+        )
+        await bridge._handle_event(evt)
+
+        room.register_mesh_peer.assert_not_awaited()
+        room.handle_ravn_frame.assert_awaited_once()
+        assert room.handle_ravn_frame.call_args[0][0] == "flock-reviewer"
         await bridge.stop()
 
     @pytest.mark.asyncio

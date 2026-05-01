@@ -210,6 +210,8 @@ class TestBroker:
         assert published_topic == "code.requested"
         assert published_event.payload["task_description"] == "Implement the requested change"
         assert published_event.payload["workflow_trigger_node_id"] == "trigger-1"
+        assert [turn.role for turn in broker._conversation_turns] == ["user"]
+        assert broker._conversation_turns[0].content == "Implement the requested change"
 
     @pytest.mark.asyncio
     async def test_shutdown_stops_transport(self, test_broker):
@@ -413,6 +415,27 @@ class TestBroker:
         assert kwargs["agent_teams"] is True
         assert kwargs["system_prompt"] == "be helpful"
         assert kwargs["initial_prompt"] == "hello"
+
+    def test_build_transport_kwargs_omits_initial_prompt_for_workflow_trigger(self, tmp_path):
+        settings = SkuldSettings(
+            session={
+                "id": "s1",
+                "workspace_dir": str(tmp_path),
+                "initial_prompt": "dispatch this task",
+            },
+            workflow_trigger={
+                "enabled": True,
+                "node_id": "trigger-1",
+                "label": "Dispatch",
+                "source": "manual dispatch",
+                "event_type": "code.requested",
+            },
+        )
+        b = Broker(settings=settings)
+
+        kwargs = b._build_transport_kwargs()
+
+        assert kwargs["initial_prompt"] == ""
 
     def test_create_transport_filters_kwargs(self, tmp_path):
         """Only kwargs matching the constructor signature are passed."""

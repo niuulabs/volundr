@@ -409,6 +409,19 @@ class TestHistoryPersistence:
 
 class TestCliParticipantHelpers:
     @pytest.mark.asyncio
+    async def test_register_mesh_peer_can_mark_skuld_participant(self):
+        bridge, _ = _make_bridge()
+
+        meta = await bridge.register_mesh_peer(
+            "skuld-1",
+            "coder",
+            display_name="skuld",
+            participant_type="skuld",
+        )
+
+        assert meta.participant_type == "skuld"
+
+    @pytest.mark.asyncio
     async def test_broadcast_cli_activity_emits_room_activity(self):
         bridge, registry = _make_bridge()
         await bridge.register_mesh_peer("skuld-1", "coder", display_name="skuld")

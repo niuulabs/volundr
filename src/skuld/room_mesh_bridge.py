@@ -61,6 +61,8 @@ _RAVN_TYPE_TO_ACTIVITY: dict[str, str] = {
     "response": "response",
 }
 
+_INTERNAL_SOURCE_IDS = {"drive_loop"}
+
 
 def _extract_peer_id(event: SleipnirEvent) -> str:
     """Return the originating peer_id from a mesh Sleipnir event.
@@ -170,7 +172,7 @@ class RoomMeshBridge:
             logger.info("RoomMeshBridge: session mismatch, dropping")
             return
 
-        peer_id = _extract_peer_id(event)
+        peer_id = self._resolve_peer_id(event)
         if not peer_id:
             logger.debug("RoomMeshBridge: cannot determine peer_id for event %s", event.event_type)
             return
@@ -191,6 +193,42 @@ class RoomMeshBridge:
         activity_type = self._ravn_type_to_activity(ravn_type)
         if activity_type:
             await self._translate_activity(peer_id, activity_type, ravn_event_payload)
+
+    def _resolve_peer_id(self, event: SleipnirEvent) -> str:
+        """Resolve the UI participant for a Sleipnir event.
+
+        Internal runtime helpers such as ``drive_loop`` should not appear as
+        separate room peers. When possible, map those events back to the mesh
+        participant that owns the reported persona.
+        """
+        peer_id = _extract_peer_id(event)
+        if not peer_id or peer_id not in _INTERNAL_SOURCE_IDS:
+            return peer_id
+
+        persona = _extract_persona(event, peer_id)
+        participants = list(self._room_bridge.participants.values())
+        matching = [participant for participant in participants if participant.persona == persona]
+        if not matching:
+            logger.info(
+                "RoomMeshBridge: dropping internal source peer_id=%s persona=%s",
+                peer_id,
+                persona,
+            )
+            return ""
+
+        exact_display = [
+            participant
+            for participant in matching
+            if participant.display_name == persona and participant.participant_type == "ravn"
+        ]
+        preferred = exact_display[0] if exact_display else matching[0]
+        logger.info(
+            "RoomMeshBridge: remapped internal source peer_id=%s persona=%s -> %s",
+            peer_id,
+            persona,
+            preferred.peer_id,
+        )
+        return preferred.peer_id
 
     def _matches_session(self, event: SleipnirEvent) -> bool:
         """Return True if the event belongs to this bridge's session context."""

@@ -469,6 +469,10 @@ class RavnFlockContributor(SessionContributor):
             skuld_env.extend(
                 [
                     {
+                        "name": "SKULD__MESH__CONSUMES_EVENT_TYPES",
+                        "value": "[]",
+                    },
+                    {
                         "name": "SKULD__WORKFLOW_TRIGGER__ENABLED",
                         "value": workflow_trigger["enabled"],
                     },

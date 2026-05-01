@@ -71,7 +71,9 @@ export function UserMessage({ message }: UserMessageProps) {
   return (
     <div className="niuu-chat-user-wrapper" data-testid="user-message">
       <div className="niuu-chat-user-bubble">
-        <div className="niuu-chat-user-text">{message.content}</div>
+        <div className="niuu-chat-user-text">
+          <MarkdownContent content={message.content} />
+        </div>
         {message.attachments && message.attachments.length > 0 && (
           <div className="niuu-chat-attachment-row">
             {message.attachments.map((att, i) => (

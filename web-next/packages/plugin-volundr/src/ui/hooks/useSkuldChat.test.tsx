@@ -70,6 +70,52 @@ describe('useSkuldChat', () => {
     expect(result.current.participants.get('peer-1')?.status).toBe('thinking');
   });
 
+  it('hydrates history from websocket conversation_history events', async () => {
+    const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'conversation_history',
+          turns: [
+            {
+              id: 'turn-1',
+              role: 'user',
+              content: 'Kick off the raid.',
+              created_at: '2026-05-01T10:18:36.889091+00:00',
+            },
+          ],
+        }),
+      );
+    });
+
+    await waitFor(() => expect(result.current.historyLoaded).toBe(true));
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0]?.content).toBe('Kick off the raid.');
+  });
+
+  it('ignores unsuccessful room_outcome events', async () => {
+    const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
+
+    await waitFor(() => expect(result.current.historyLoaded).toBe(true));
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_outcome',
+          participantId: 'peer-1',
+          participant: { peer_id: 'peer-1', persona: 'reviewer', participant_type: 'ravn' },
+          persona: 'reviewer',
+          eventType: 'review.completed',
+          fields: { success: false },
+          summary: 'LLM backend unavailable',
+        }),
+      );
+    });
+
+    expect(result.current.meshEvents).toHaveLength(0);
+  });
+
   it('captures room_agent_event frames per participant', async () => {
     const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
 

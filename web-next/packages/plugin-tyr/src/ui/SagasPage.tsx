@@ -140,7 +140,14 @@ function SagaRailItem({
       ].join(' ')}
     >
       <span className={['niuu-w-2.5 niuu-h-2.5 niuu-rounded-full', bucketColor].join(' ')} />
-      <span className="niuu-truncate niuu-text-[13px] niuu-font-medium">{`${saga.trackerId} · ${saga.name}`}</span>
+      <span className="niuu-min-w-0 niuu-flex niuu-flex-col">
+        <span className="niuu-truncate niuu-text-[13px] niuu-font-medium niuu-text-text-primary">
+          {saga.name}
+        </span>
+        <span className="niuu-truncate niuu-text-[11px] niuu-font-mono niuu-text-text-muted">
+          {saga.trackerId}
+        </span>
+      </span>
     </button>
   );
 }

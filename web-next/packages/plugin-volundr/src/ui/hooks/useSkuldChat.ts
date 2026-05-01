@@ -89,6 +89,8 @@ type CliStreamEvent = {
     data?: string | Record<string, unknown>;
     metadata?: Record<string, unknown>;
   };
+  turns?: ConversationTurn[];
+  fields?: Record<string, unknown>;
 };
 
 interface ConversationTurn {
@@ -807,6 +809,27 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
             });
             break;
           }
+          case 'conversation_history': {
+            const nextMessages = event.turns?.length ? transformTurns(event.turns) : [];
+            if (
+              nextMessages.some((message) => message.role === 'assistant') &&
+              !nextMessages.some((message) => message.participant) &&
+              participantsRef.current.size === 0
+            ) {
+              const participant = ensureSingleParticipant();
+              setMessages(
+                nextMessages.map((message) =>
+                  message.role === 'assistant' ? { ...message, participant } : message,
+                ),
+              );
+            } else {
+              setMessages(nextMessages);
+            }
+            if (url) {
+              setHistoryLoadedForUrl(url);
+            }
+            break;
+          }
           case 'control_request': {
             if (!event.request_id) break;
             setPendingPermissions((prev) => [
@@ -882,6 +905,9 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
             break;
           }
           case 'room_outcome': {
+            if (event.fields && event.fields.success === false) {
+              break;
+            }
             const participant = parseParticipantMeta(event.participant);
             setMeshEvents((prev) => [
               ...prev,
@@ -1023,7 +1049,7 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
         }
       }
     },
-    [ensureSingleParticipant, finalizeStreaming, getDefaultAssistantParticipant],
+    [ensureSingleParticipant, finalizeStreaming, getDefaultAssistantParticipant, url],
   );
 
   const { sendJson } = useWebSocket(url, {

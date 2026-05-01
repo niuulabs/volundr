@@ -76,8 +76,13 @@
   flex-shrink: 0;
 }
 
+.niuu-chat-peer-status-dot[data-status='thinking'],
+.niuu-chat-peer-status-dot[data-status='tool_executing'] {
+  animation: niuu-chat-peer-status-pulse 1.2s ease-in-out infinite;
+}
+
 .niuu-chat-peer-status-dot[data-status='thinking'] {
-  background-color: var(--color-accent-purple);
+  background-color: var(--color-brand);
 }
 
 .niuu-chat-peer-status-dot[data-status='tool_executing'] {
@@ -104,6 +109,21 @@
   font-family: var(--font-mono);
   color: var(--color-text-muted);
   flex-shrink: 0;
+}
+
+@keyframes niuu-chat-peer-status-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 38%, transparent);
+    transform: scale(0.92);
+  }
+  70% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 0%, transparent);
+    transform: scale(1);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 0%, transparent);
+    transform: scale(0.92);
+  }
 }
 
 .niuu-chat-peer-expand-toggle {

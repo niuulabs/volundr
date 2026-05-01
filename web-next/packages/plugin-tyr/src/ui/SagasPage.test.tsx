@@ -71,6 +71,29 @@ describe('SagasPage', () => {
     expect(screen.getAllByText('FAILED').length).toBeGreaterThan(0);
   });
 
+  it('uses the saga title as the left-rail primary label', async () => {
+    const sagaName = 'Readable Saga Title';
+    const trackerId = '00000000-0000-0000-0000-000000000123';
+    const sagasSvc = {
+      ...createMockTyrService(),
+      getSagas: async (): Promise<Saga[]> => [
+        makeSaga({
+          id: '00000000-0000-0000-0000-000000000123',
+          name: sagaName,
+          trackerId,
+        }),
+      ],
+    };
+
+    render(<SagasPage />, { wrapper: wrap(withDefaults({ tyr: sagasSvc })) });
+
+    await waitFor(() => expect(screen.getAllByText(sagaName).length).toBeGreaterThan(0));
+    const railButton = screen.getAllByRole('button').find((button) => button.textContent?.includes(sagaName));
+    expect(railButton).toBeDefined();
+    expect(railButton).toHaveTextContent(sagaName);
+    expect(railButton).toHaveTextContent(trackerId);
+  });
+
   it('filters sagas from the page-head search', async () => {
     render(<SagasPage />, { wrapper: wrap(withDefaults({})) });
     await waitFor(() => expect(screen.getAllByText('Auth Rewrite').length).toBeGreaterThan(0));
@@ -185,20 +208,21 @@ describe('SagasPage', () => {
   });
 
   it('does not treat completed sagas as already imported in the tracker modal', async () => {
+    const completedSaga = makeSaga({
+      id: '00000000-0000-0000-0000-000000000222',
+      name: 'Completed Niuu Core',
+      trackerId: 'proj-niuu-core',
+      status: 'complete',
+      phaseSummary: { total: 3, completed: 3 },
+    });
     const sagasSvc = {
-      getSagas: async (): Promise<Saga[]> => [
-        makeSaga({
-          id: 'done-1',
-          name: 'Completed Niuu Core',
-          trackerId: 'proj-niuu-core',
-          status: 'complete',
-          phaseSummary: { total: 3, completed: 3 },
-        }),
-      ],
+      ...createMockTyrService(),
+      getSagas: async (): Promise<Saga[]> => [completedSaga],
+      getSaga: async (id: string): Promise<Saga | null> => (id === completedSaga.id ? completedSaga : null),
     };
 
     render(<SagasPage />, { wrapper: wrap(withDefaults({ tyr: sagasSvc })) });
-    await waitFor(() => expect(screen.getByText('Completed Niuu Core')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('Completed Niuu Core').length).toBeGreaterThan(0));
 
     fireEvent.click(screen.getByRole('button', { name: /Import saga from tracker/i }));
     await waitFor(() => expect(screen.getByText('Import From Tracker')).toBeInTheDocument());

@@ -394,8 +394,7 @@ class MockSagaRepo(SagaRepository):
         return [raid for raid in self.raids if raid.phase_id == phase_id]
 
 
-@pytest.fixture
-def client(mock_tracker: MockTracker) -> TestClient:
+def _build_test_client(mock_tracker: MockTracker) -> TestClient:
     app = FastAPI()
     app.state.legacy_route_hits = {}
     app.include_router(create_canonical_tracker_router())
@@ -406,6 +405,11 @@ def client(mock_tracker: MockTracker) -> TestClient:
     mock_settings.auth = AuthConfig(allow_anonymous_dev=True)
     app.state.settings = mock_settings
     return TestClient(app)
+
+
+@pytest.fixture
+def client(mock_tracker: MockTracker) -> TestClient:
+    return _build_test_client(mock_tracker)
 
 
 # ---------------------------------------------------------------------------
@@ -524,8 +528,25 @@ class TestImportProject:
         )
         assert resp.status_code == 404
 
-    def test_canonical_import_matches_legacy_shape(self, client: TestClient):
-        legacy = client.post(
+    def test_duplicate_slug_returns_409(self, client: TestClient):
+        client.app.state.saga_repo.sagas.append(
+            Saga(
+                id=uuid4(),
+                tracker_id="existing",
+                tracker_type="mock",
+                slug="alpha",
+                name="Existing",
+                repos=["org/repo"],
+                feature_branch="feat/alpha",
+                status=SagaStatus.ACTIVE,
+                confidence=0.0,
+                created_at=datetime.now(UTC),
+                base_branch="dev",
+                owner_id="dev-user",
+            )
+        )
+
+        resp = client.post(
             "/api/v1/tyr/tracker/import",
             json={
                 "project_id": "proj-1",
@@ -533,7 +554,22 @@ class TestImportProject:
                 "base_branch": "dev",
             },
         )
-        canonical = client.post(
+        assert resp.status_code == 409
+        assert "already exists" in resp.json()["detail"]
+
+    def test_canonical_import_matches_legacy_shape(self, mock_tracker: MockTracker):
+        legacy_client = _build_test_client(mock_tracker)
+        canonical_client = _build_test_client(mock_tracker)
+
+        legacy = legacy_client.post(
+            "/api/v1/tyr/tracker/import",
+            json={
+                "project_id": "proj-1",
+                "repos": ["org/repo"],
+                "base_branch": "dev",
+            },
+        )
+        canonical = canonical_client.post(
             "/api/v1/tracker/import",
             json={
                 "project_id": "proj-1",

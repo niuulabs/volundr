@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import signal
+import socket
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -280,6 +281,14 @@ class TestSdkPortAllocator:
         """Integration test: _is_port_free works with real sockets."""
         # Pick a high ephemeral port that is very likely free
         assert SdkPortAllocator._is_port_free(59999) is True
+
+    def test_is_port_free_detects_wildcard_listener(self) -> None:
+        """Wildcard listeners must block flock reuse of the same port."""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("0.0.0.0", 0))
+            sock.listen(1)
+            port = sock.getsockname()[1]
+            assert SdkPortAllocator._is_port_free(port) is False
 
     def test_release_nonexistent_port_is_noop(self) -> None:
         """Releasing a port that was never allocated is a no-op."""

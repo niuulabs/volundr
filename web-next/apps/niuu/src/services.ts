@@ -537,7 +537,10 @@ function toSessionState(session: VolundrSession): Session['state'] {
     case 'stopped':
     case 'archived':
       return 'terminated';
+    case 'failed':
     case 'error':
+      return 'failed';
+    default:
       return 'failed';
   }
 }
@@ -920,6 +923,7 @@ function toPodStatus(session: VolundrSession): Cluster['pods'][number]['status']
       return 'pending';
     case 'running':
       return session.activityState === 'idle' ? 'idle' : 'running';
+    case 'failed':
     case 'error':
       return 'failed';
     default:

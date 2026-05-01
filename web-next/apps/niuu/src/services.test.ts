@@ -1273,7 +1273,7 @@ describe('buildServices', () => {
         {
           id: 'sess-error',
           name: 'broken-session',
-          status: 'error',
+          status: 'failed',
           lastActive: Date.parse('2026-04-24T12:45:00Z'),
           source: { type: 'git', repo: 'github.com/niuulabs/volundr', branch: 'main' },
           model: 'claude-sonnet',
@@ -1423,7 +1423,7 @@ describe('buildServices', () => {
       id: 'sess-error',
       name: 'error/session',
       source: { type: 'git', repo: 'github.com/niuulabs/volundr', branch: 'err' },
-      status: 'error',
+      status: 'failed',
       model: 'claude-haiku',
       lastActive: Date.parse('2026-04-23T12:30:00Z'),
       messageCount: 0,

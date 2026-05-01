@@ -106,6 +106,10 @@ type SessionPayload = {
   archivedAt?: Date | string | null;
   archived_at?: string | null;
   trackerIssue?: TrackerIssue;
+  trackerIssueId?: string | null;
+  tracker_issue_id?: string | null;
+  issueTrackerUrl?: string | null;
+  issue_tracker_url?: string | null;
   activityState?: VolundrSession['activityState'];
   activity_state?: VolundrSession['activityState'];
   ownerId?: string | null;
@@ -261,6 +265,21 @@ function toDate(value?: Date | string | null): Date | undefined {
 }
 
 function normalizeSession(session: SessionPayload): VolundrSession {
+  const trackerIssue =
+    session.trackerIssue ??
+    (() => {
+      const identifier = session.trackerIssueId ?? session.tracker_issue_id ?? null;
+      const url = session.issueTrackerUrl ?? session.issue_tracker_url ?? null;
+      if (!identifier || !url) return undefined;
+      return {
+        id: identifier,
+        identifier,
+        title: session.name,
+        status: 'todo' as const,
+        url,
+      };
+    })();
+
   return {
     id: session.id,
     name: session.name,
@@ -278,7 +297,7 @@ function normalizeSession(session: SessionPayload): VolundrSession {
     codeEndpoint: session.codeEndpoint ?? session.code_endpoint ?? undefined,
     taskType: session.taskType ?? session.task_type ?? undefined,
     archivedAt: toDate(session.archivedAt ?? session.archived_at),
-    trackerIssue: session.trackerIssue,
+    trackerIssue,
     activityState: session.activityState ?? session.activity_state ?? undefined,
     ownerId: session.ownerId ?? session.owner_id ?? undefined,
     tenantId: session.tenantId ?? session.tenant_id ?? undefined,

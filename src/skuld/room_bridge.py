@@ -138,6 +138,7 @@ class RoomBridge:
         subscribes_to: list[str] | None = None,
         emits: list[str] | None = None,
         tools: list[str] | None = None,
+        participant_type: str = "ravn",
     ) -> ParticipantMeta:
         """Register a mesh-discovered peer (no WebSocket connection).
 
@@ -152,7 +153,7 @@ class RoomBridge:
             peer_id=peer_id,
             persona=persona,
             color=color,
-            participant_type="ravn",
+            participant_type=participant_type,
             display_name=display_name or persona,
             subscribes_to=tuple(subscribes_to or ()),
             emits=tuple(emits or ()),
