@@ -146,7 +146,8 @@ describe('SagasPage', () => {
     await waitFor(() => expect(screen.getByText('Import From Tracker')).toBeInTheDocument());
     await waitFor(() => expect(screen.getAllByText('Niuu Core').length).toBeGreaterThan(0));
     expect(screen.getByTestId('repo-select')).toBeInTheDocument();
-    expect(screen.getByTestId('branch-select')).toBeInTheDocument();
+    expect(screen.queryByTestId('branch-select')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import saga' })).toBeDisabled();
   });
 
   it('imports a tracker project', async () => {

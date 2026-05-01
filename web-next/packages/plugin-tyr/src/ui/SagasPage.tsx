@@ -320,6 +320,7 @@ function SagasPageContent() {
   const canImportSelectedProject =
     selectedProject !== null &&
     selectedRepos.length > 0 &&
+    Boolean(baseBranch.trim()) &&
     !importedTrackerIds.has(selectedProject.id) &&
     !isImporting;
 
@@ -328,14 +329,13 @@ function SagasPageContent() {
       setSelectedProjectId(null);
       setSelectedRepos([]);
       setRepoCandidate('');
-      setBaseBranch('main');
+      setBaseBranch('');
       return;
     }
-    const defaultRepos = allSagas[0]?.repos ?? [];
-    const defaultBaseBranch = allSagas[0]?.baseBranch ?? 'main';
-    setSelectedRepos(defaultRepos);
-    setBaseBranch(defaultBaseBranch);
-  }, [allSagas, showImportModal]);
+    setSelectedRepos([]);
+    setRepoCandidate('');
+    setBaseBranch('');
+  }, [showImportModal]);
 
   useEffect(() => {
     if (!showImportModal) return;
