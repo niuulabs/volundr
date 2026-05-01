@@ -3,14 +3,19 @@ import { useNavigate, useParams } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useService } from '@niuulabs/plugin-sdk';
 import {
+  BranchSelect,
+  findRepoByRef,
+  getCommonBranches,
   LoadingState,
   ErrorState,
   EmptyState,
   Pipe,
+  RepoSelect,
   Rune,
   ToastProvider,
   useToast,
   Modal,
+  type RepoRecord,
 } from '@niuulabs/ui';
 import type { Saga } from '../domain/saga';
 import type { SagaStatus } from '../domain/saga';
@@ -71,12 +76,10 @@ function relTime(date: string): string {
   return `${days}d ago`;
 }
 
-function parseRepoList(value: string): string[] {
-  return value
-    .split(',')
-    .map((repo) => repo.trim())
-    .filter(Boolean);
-}
+type RepoCatalogService = {
+  getRepos(): Promise<RepoRecord[]>;
+  getBranches(repoUrl: string): Promise<string[]>;
+};
 
 function ConfidenceMeter({ value }: { value: number }) {
   const clamped = Math.max(0, Math.min(100, value));
@@ -248,13 +251,15 @@ function SagasPageContent() {
   const { toast } = useToast();
   const params = useParams({ strict: false }) as { sagaId?: string };
   const tracker = useService<ITrackerBrowserService>('tyr.tracker');
+  const repoCatalog = useService<RepoCatalogService>('niuu.repos');
   const { data: sagas, isLoading, isError, error } = useSagas();
   const [showNewSagaModal, setShowNewSagaModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedSagaId, setSelectedSagaId] = useState<string | null>(params.sagaId ?? null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [repoList, setRepoList] = useState('');
+  const [selectedRepos, setSelectedRepos] = useState<string[]>([]);
+  const [repoCandidate, setRepoCandidate] = useState('');
   const [baseBranch, setBaseBranch] = useState('main');
   const [isImporting, setIsImporting] = useState(false);
 
@@ -266,7 +271,12 @@ function SagasPageContent() {
 
   const allSagas = sagas ?? [];
   const importedTrackerIds = useMemo(
-    () => new Set(allSagas.map((saga) => saga.trackerId)),
+    () =>
+      new Set(
+        allSagas
+          .filter((saga) => saga.status !== 'complete')
+          .map((saga) => saga.trackerId),
+      ),
     [allSagas],
   );
   const filtered = allSagas.filter((saga) => {
@@ -280,25 +290,66 @@ function SagasPageContent() {
     queryFn: () => tracker.listProjects(),
     enabled: showImportModal,
   });
+  const repoCatalogQuery = useQuery({
+    queryKey: ['niuu', 'repos'],
+    queryFn: () => repoCatalog.getRepos(),
+    enabled: showImportModal,
+  });
+  const repoBranchesQuery = useQuery({
+    queryKey: ['niuu', 'repos', 'branches', selectedRepos],
+    queryFn: async () => {
+      const branchSets = await Promise.all(
+        selectedRepos.map((repo) => repoCatalog.getBranches(repo).catch(() => [] as string[])),
+      );
+      return branchSets.reduce<string[]>((acc, branches, index) => {
+        if (index === 0) return [...branches];
+        return acc.filter((branch) => branches.includes(branch));
+      }, []);
+    },
+    enabled: showImportModal && selectedRepos.length > 0 && repoCatalogQuery.data?.length === 0,
+  });
 
   const trackerProjects = trackerProjectsQuery.data ?? [];
+  const availableRepos = repoCatalogQuery.data ?? [];
   const selectedProject =
     trackerProjects.find((project) => project.id === selectedProjectId) ?? null;
-  const parsedRepos = parseRepoList(repoList);
+  const commonBranches =
+    availableRepos.length > 0
+      ? getCommonBranches(availableRepos, selectedRepos)
+      : (repoBranchesQuery.data ?? []);
   const canImportSelectedProject =
     selectedProject !== null &&
-    parsedRepos.length > 0 &&
+    selectedRepos.length > 0 &&
     !importedTrackerIds.has(selectedProject.id) &&
     !isImporting;
 
   useEffect(() => {
     if (!showImportModal) return;
-    if (repoList) return;
-    const defaultRepos = allSagas[0]?.repos.join(', ') ?? '';
+    if (selectedRepos.length > 0) return;
+    const defaultRepos = allSagas[0]?.repos ?? [];
     const defaultBaseBranch = allSagas[0]?.baseBranch ?? 'main';
-    setRepoList(defaultRepos);
+    setSelectedRepos(defaultRepos);
     setBaseBranch(defaultBaseBranch);
-  }, [allSagas, repoList, showImportModal]);
+  }, [allSagas, selectedRepos.length, showImportModal]);
+
+  useEffect(() => {
+    if (!showImportModal) return;
+    if (commonBranches.length === 0) return;
+    if (!commonBranches.includes(baseBranch)) {
+      setBaseBranch(commonBranches[0] ?? 'main');
+    }
+  }, [baseBranch, commonBranches, showImportModal]);
+
+  function addSelectedRepo(repoRef: string) {
+    const value = repoRef.trim();
+    if (!value || selectedRepos.includes(value)) return;
+    setSelectedRepos((current) => [...current, value]);
+    if (selectedRepos.length === 0) {
+      const repo = findRepoByRef(availableRepos, value);
+      setBaseBranch(repo?.defaultBranch ?? 'main');
+    }
+    setRepoCandidate('');
+  }
 
   useEffect(() => {
     if (!showImportModal) return;
@@ -334,6 +385,7 @@ function SagasPageContent() {
     if (!open) {
       setSelectedProjectId(null);
       setIsImporting(false);
+      setRepoCandidate('');
     }
   }
 
@@ -343,7 +395,7 @@ function SagasPageContent() {
 
     setIsImporting(true);
     try {
-      const importedSaga = await tracker.importProject(selectedProject.id, parsedRepos, baseBranch);
+      const importedSaga = await tracker.importProject(selectedProject.id, selectedRepos, baseBranch);
       await queryClient.invalidateQueries({ queryKey: ['tyr', 'sagas'] });
       setSelectedSagaId(importedSaga.id);
       setShowImportModal(false);
@@ -619,32 +671,120 @@ function SagasPageContent() {
                       <span className="niuu-block niuu-mb-1.5 niuu-text-xs niuu-font-mono niuu-text-text-muted">
                         Repositories
                       </span>
-                      <input
-                        type="text"
-                        value={repoList}
-                        onChange={(e) => setRepoList(e.target.value)}
-                        placeholder="org/repo, org/other-repo"
-                        className="niuu-w-full niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-tertiary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary niuu-outline-none focus:niuu-border-brand"
-                      />
+                      {availableRepos.length > 0 ? (
+                        <div className="niuu-flex niuu-flex-col niuu-gap-3">
+                          {selectedRepos.length > 0 ? (
+                            <div className="niuu-flex niuu-flex-wrap niuu-gap-2">
+                              {selectedRepos.map((repoUrl) => {
+                                const repo = findRepoByRef(availableRepos, repoUrl);
+                                const label = repo ? `${repo.org}/${repo.name}` : repoUrl;
+                                return (
+                                  <button
+                                    key={repoUrl}
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedRepos((current) =>
+                                        current.filter((item) => item !== repoUrl),
+                                      )
+                                    }
+                                    className="niuu-inline-flex niuu-items-center niuu-gap-2 niuu-rounded-full niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-px-3 niuu-py-1 niuu-text-xs niuu-font-mono niuu-text-text-secondary"
+                                  >
+                                    <span>{label}</span>
+                                    <span aria-hidden="true">×</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                          <RepoSelect
+                            repos={availableRepos}
+                            value={repoCandidate}
+                            excludedRepos={selectedRepos}
+                            valueMode="slug"
+                            onChange={addSelectedRepo}
+                            placeholder={
+                              selectedRepos.length > 0 ? 'Add repository' : 'Select repository'
+                            }
+                            testId="repo-select"
+                          />
+                        </div>
+                      ) : (
+                        <div className="niuu-flex niuu-flex-col niuu-gap-3">
+                          {selectedRepos.length > 0 ? (
+                            <div className="niuu-flex niuu-flex-wrap niuu-gap-2">
+                              {selectedRepos.map((repoUrl) => (
+                                <button
+                                  key={repoUrl}
+                                  type="button"
+                                  onClick={() =>
+                                    setSelectedRepos((current) =>
+                                      current.filter((item) => item !== repoUrl),
+                                    )
+                                  }
+                                  className="niuu-inline-flex niuu-items-center niuu-gap-2 niuu-rounded-full niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-px-3 niuu-py-1 niuu-text-xs niuu-font-mono niuu-text-text-secondary"
+                                >
+                                  <span>{repoUrl}</span>
+                                  <span aria-hidden="true">×</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                          <div className="niuu-flex niuu-gap-2">
+                            <input
+                              type="text"
+                              value={repoCandidate}
+                              onChange={(e) => setRepoCandidate(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  addSelectedRepo(repoCandidate);
+                                }
+                              }}
+                              placeholder="org/repo or https://host/org/repo.git"
+                              data-testid="repo-select"
+                              className="niuu-w-full niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-tertiary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary niuu-outline-none focus:niuu-border-brand"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => addSelectedRepo(repoCandidate)}
+                              className="niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-px-3 niuu-py-2 niuu-text-xs niuu-font-mono niuu-text-text-primary"
+                            >
+                              add
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </label>
 
                     <label className="niuu-block">
                       <span className="niuu-block niuu-mb-1.5 niuu-text-xs niuu-font-mono niuu-text-text-muted">
                         Base branch
                       </span>
-                      <input
-                        type="text"
-                        value={baseBranch}
-                        onChange={(e) => setBaseBranch(e.target.value)}
-                        placeholder="main"
-                        className="niuu-w-full niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-tertiary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary niuu-outline-none focus:niuu-border-brand"
-                      />
+                      {commonBranches.length > 0 ? (
+                        <BranchSelect
+                          repos={availableRepos}
+                          selectedRepos={selectedRepos}
+                          value={baseBranch}
+                          onChange={setBaseBranch}
+                          placeholder="Select branch"
+                          testId="branch-select"
+                          className="niuu-bg-bg-tertiary"
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={baseBranch}
+                          onChange={(e) => setBaseBranch(e.target.value)}
+                          placeholder="main"
+                          className="niuu-w-full niuu-rounded-md niuu-border niuu-border-border niuu-bg-bg-tertiary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary niuu-outline-none focus:niuu-border-brand"
+                        />
+                      )}
                     </label>
 
                     <div className="niuu-rounded-md niuu-bg-bg-tertiary niuu-p-3 niuu-text-xs niuu-leading-5 niuu-text-text-secondary">
                       {importedTrackerIds.has(selectedProject.id)
                         ? 'This tracker project is already imported into Tyr.'
-                        : 'Use a comma-separated repo list when the saga spans more than one repository.'}
+                        : 'Select one or more repositories to bind the imported saga to.'}
                     </div>
                   </>
                 ) : (

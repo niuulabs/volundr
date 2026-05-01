@@ -68,6 +68,16 @@ describe('PersonaForm', () => {
     expect(screen.getByDisplayValue('test-persona')).toBeInTheDocument();
   });
 
+  it('shows summary and system prompt fields from persona', () => {
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
+      wrapper: wrap(),
+    });
+    expect(screen.getByDisplayValue('A test persona')).toBeInTheDocument();
+    expect(screen.getByLabelText('system_prompt_template')).toHaveValue(
+      '# test-persona\nYou are {{name}}, a {{role}} persona.',
+    );
+  });
+
   it('populates LLM alias from persona', () => {
     render(<PersonaForm persona={MOCK_PERSONA} onSave={vi.fn()} />, {
       wrapper: wrap(),
@@ -122,6 +132,28 @@ describe('PersonaForm', () => {
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith(
         expect.objectContaining({ llmPrimaryAlias: 'claude-opus-4-6' }),
+      );
+    });
+  });
+
+  it('calls onSave with updated system prompt template when saved', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<PersonaForm persona={MOCK_PERSONA} onSave={onSave} />, {
+      wrapper: wrap(),
+    });
+
+    fireEvent.change(screen.getByLabelText('system_prompt_template'), {
+      target: { value: '# updated\nYou are a stricter reviewer.' },
+    });
+
+    await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /save persona/i }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          systemPromptTemplate: '# updated\nYou are a stricter reviewer.',
+        }),
       );
     });
   });

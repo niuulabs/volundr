@@ -28,9 +28,11 @@ function wrap(services: Record<string, unknown>) {
 }
 
 function withDefaults(services: Record<string, unknown>) {
+  const volundrRepos = createMockTyrService();
   return {
-    tyr: createMockTyrService(),
+    tyr: volundrRepos,
     'tyr.tracker': createMockTrackerService(),
+    'niuu.repos': { getRepos: async () => [{ provider: 'github', org: 'niuulabs', name: 'volundr', cloneUrl: 'https://github.com/niuulabs/volundr.git', url: 'https://github.com/niuulabs/volundr', defaultBranch: 'main', branches: ['main', 'develop'] }] },
     ...services,
   };
 }
@@ -143,6 +145,8 @@ describe('SagasPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Import saga from tracker/i }));
     await waitFor(() => expect(screen.getByText('Import From Tracker')).toBeInTheDocument());
     await waitFor(() => expect(screen.getAllByText('Niuu Core').length).toBeGreaterThan(0));
+    expect(screen.getByTestId('repo-select')).toBeInTheDocument();
+    expect(screen.getByTestId('branch-select')).toBeInTheDocument();
   });
 
   it('imports a tracker project', async () => {
@@ -165,14 +169,50 @@ describe('SagasPage', () => {
       .find((button) => button.textContent?.includes('Niuu Core'));
     expect(projectButton).toBeDefined();
     fireEvent.click(projectButton!);
-    fireEvent.change(screen.getByPlaceholderText('org/repo, org/other-repo'), {
+    fireEvent.change(screen.getByTestId('repo-select'), {
       target: { value: 'niuulabs/volundr' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Import saga' }));
 
     await waitFor(() =>
-      expect(importProject).toHaveBeenCalledWith('proj-niuu-core', ['niuulabs/volundr'], 'main'),
+      expect(importProject).toHaveBeenCalledWith(
+        'proj-niuu-core',
+        ['niuulabs/volundr'],
+        'main',
+      ),
     );
+  });
+
+  it('does not treat completed sagas as already imported in the tracker modal', async () => {
+    const sagasSvc = {
+      getSagas: async (): Promise<Saga[]> => [
+        makeSaga({
+          id: 'done-1',
+          name: 'Completed Niuu Core',
+          trackerId: 'proj-niuu-core',
+          status: 'complete',
+          phaseSummary: { total: 3, completed: 3 },
+        }),
+      ],
+    };
+
+    render(<SagasPage />, { wrapper: wrap(withDefaults({ tyr: sagasSvc })) });
+    await waitFor(() => expect(screen.getByText('Completed Niuu Core')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Import saga from tracker/i }));
+    await waitFor(() => expect(screen.getByText('Import From Tracker')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('Niuu Core').length).toBeGreaterThan(0));
+
+    const projectButton = screen
+      .getAllByRole('button')
+      .find((button) => button.textContent?.includes('Niuu Core'));
+    expect(projectButton).toBeDefined();
+    fireEvent.click(projectButton!);
+
+    expect(screen.queryByText('imported')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('This tracker project is already imported into Tyr.'),
+    ).not.toBeInTheDocument();
   });
 
   it('renders grouped bucket items from mixed data', async () => {

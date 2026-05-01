@@ -574,6 +574,21 @@ describe('buildServiceBackendStatus', () => {
       source: 'personas',
     });
   });
+
+  it('resolves niuu.repos against the shared niuu route instead of forge or volundr', () => {
+    const status = buildServiceBackendStatus({
+      services: {
+        tyr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/tyr' },
+      },
+    } as any);
+
+    expect(status['niuu.repos']).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1/niuu',
+      source: 'shared-api',
+    });
+  });
 });
 
 describe('buildServices', () => {
@@ -717,6 +732,19 @@ describe('buildServices', () => {
     expect(volundrMocks.buildVolundrFileSystemHttpAdapter).toHaveBeenCalledWith({
       baseUrl: 'http://localhost:8080',
     });
+  });
+
+  it('builds niuu.repos against the shared repo catalog route', () => {
+    const services = buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        tyr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/tyr' },
+      },
+    } as any);
+
+    expect(queryMocks.createApiClient).toHaveBeenCalledWith('http://localhost:8080/api/v1/niuu');
+    expect(services['niuu.repos']).toBeDefined();
   });
 
   it('prefers an explicit filesystem base over the derived forge host', () => {

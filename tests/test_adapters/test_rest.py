@@ -710,60 +710,6 @@ class TestGetStats:
         assert data["cost_today"] == 0.0
 
 
-class TestListProviders:
-    """Tests for GET /api/v1/volundr/providers."""
-
-    @pytest.fixture
-    def repo_service(self) -> RepoService:
-        """Create a RepoService with mock providers."""
-        gh = MockGitProvider(
-            name="GitHub",
-            provider_type=GitProviderType.GITHUB,
-            orgs=("my-org",),
-        )
-        gl = MockGitProvider(
-            name="Internal GitLab",
-            provider_type=GitProviderType.GITLAB,
-            supported_hosts=["gitlab.internal.com"],
-            orgs=("platform", "infra"),
-        )
-        registry = MockGitRegistry([gh, gl])
-        return RepoService(registry)
-
-    @pytest.fixture
-    def providers_client(self, service: SessionService, repo_service: RepoService) -> TestClient:
-        """Create a test client with repo_service."""
-        app = FastAPI()
-        router = create_router(service, repo_service=repo_service)
-        app.include_router(router)
-        client = TestClient(app)
-        yield client
-        client.close()
-
-    def test_list_providers_success(self, providers_client: TestClient):
-        """Returns list of configured providers."""
-        response = providers_client.get("/api/v1/volundr/providers")
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 2
-        assert data[0]["name"] == "GitHub"
-        assert data[0]["type"] == "github"
-        assert data[0]["orgs"] == ["my-org"]
-        assert data[1]["name"] == "Internal GitLab"
-        assert data[1]["type"] == "gitlab"
-        assert data[1]["orgs"] == ["platform", "infra"]
-
-    def test_list_providers_without_service(self, service: SessionService):
-        """Returns 503 when repo service is not available."""
-        app = FastAPI()
-        router = create_router(service, repo_service=None)
-        app.include_router(router)
-        with TestClient(app) as client:
-            response = client.get("/api/v1/volundr/providers")
-        assert response.status_code == 503
-        assert "not available" in response.json()["detail"].lower()
-
-
 class TestListRepos:
     """Tests for GET /api/v1/niuu/repos."""
 

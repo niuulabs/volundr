@@ -1705,59 +1705,6 @@ def create_router(
                 detail=f"Could not connect to session pod: {e}",
             )
 
-    @router.get(
-        "/providers",
-        response_model=list[ProviderResponse],
-        responses={503: {"model": ErrorResponse}},
-        tags=["Repositories"],
-    )
-    async def list_providers() -> list[ProviderResponse]:
-        """List all configured git providers."""
-        try:
-            providers = forge.list_providers()
-        except RuntimeError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=str(exc),
-            )
-        return [ProviderResponse.from_provider_info(p) for p in providers]
-
-    @router.get(
-        "/repos/branches",
-        response_model=list[str],
-        responses={
-            400: {"model": ErrorResponse},
-            401: {"model": ErrorResponse},
-            404: {"model": ErrorResponse},
-            503: {"model": ErrorResponse},
-        },
-        tags=["Repositories"],
-    )
-    async def list_branches(
-        request: Request,
-        repo_url: str = Query(..., description="Repository URL"),
-    ) -> list[str]:
-        """List branches for a repository using the user's credentials."""
-        from volundr.domain.ports import GitAuthError, GitRepoNotFoundError
-
-        user_id = await _optional_user_id(request)
-        try:
-            return await forge.list_branches(repo_url, user_id=user_id)
-        except RuntimeError as e:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=str(e),
-            )
-        except GitAuthError as e:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=str(e),
-            )
-        except GitRepoNotFoundError as e:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=str(e),
-            )
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

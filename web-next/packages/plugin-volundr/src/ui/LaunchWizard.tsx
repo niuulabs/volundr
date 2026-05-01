@@ -2,7 +2,16 @@ import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useService } from '@niuulabs/plugin-sdk';
-import { Dialog, DialogContent, Field, Input, Textarea } from '@niuulabs/ui';
+import {
+  BranchSelect,
+  Dialog,
+  DialogContent,
+  Field,
+  Input,
+  RepoSelect,
+  type RepoRecord,
+  Textarea,
+} from '@niuulabs/ui';
 import './LaunchWizard.css';
 import { useTemplates } from './useTemplates';
 import type { Template } from '../domain/template';
@@ -17,7 +26,6 @@ import type {
   TrackerIssue,
   VolundrPreset,
   VolundrModel,
-  VolundrRepo,
   VolundrWorkspace,
 } from '../models/volundr.model';
 import { parsePresetYaml, serializePresetYaml } from '../utils/presetYaml';
@@ -115,15 +123,44 @@ const BOOT_STEPS = [
 
 const NEW_WORKSPACE_VALUE = '__new__';
 const NO_PRESET_VALUE = '__custom__';
-const PROVIDER_LABELS: Record<VolundrRepo['provider'], string> = {
-  github: 'GitHub',
-  gitlab: 'GitLab',
-  bitbucket: 'Bitbucket',
+type RepoCatalogService = {
+  getRepos(): Promise<RepoRecord[]>;
+  getBranches(repoUrl: string): Promise<string[]>;
 };
 const SECONDARY_BUTTON_CLASS =
   'niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-px-3 niuu-py-2 niuu-text-xs niuu-text-text-primary hover:niuu-border-brand hover:niuu-bg-bg-tertiary';
 const MUTED_BUTTON_CLASS =
   'niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-3 niuu-py-2 niuu-text-xs niuu-text-text-primary hover:niuu-border-brand hover:niuu-bg-bg-tertiary';
+
+function WizardSelect({
+  options,
+  value,
+  onChange,
+  placeholder,
+  testId,
+}: {
+  options: Array<{ value: string; label: string }>;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  testId?: string;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      data-testid={testId}
+      aria-label={placeholder}
+      className="niuu-form-control niuu-w-full niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary outline-none focus:niuu-border-brand"
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 export interface LaunchWizardProps {
   open: boolean;
@@ -570,50 +607,6 @@ function SectionCard({
   );
 }
 
-type WizardSelectOption = { value: string; label: string };
-
-function WizardSelect({
-  value,
-  options,
-  onChange,
-  placeholder,
-  groupedOptions,
-  testId,
-}: {
-  value: string;
-  options?: WizardSelectOption[];
-  onChange: (value: string) => void;
-  placeholder?: string;
-  groupedOptions?: Array<{ label: string; options: WizardSelectOption[] }>;
-  testId?: string;
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      data-testid={testId}
-      className="niuu-w-full niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary outline-none focus:niuu-border-brand"
-    >
-      {placeholder ? <option value="">{placeholder}</option> : null}
-      {groupedOptions
-        ? groupedOptions.map((group) => (
-            <optgroup key={group.label} label={group.label}>
-              {group.options.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </optgroup>
-          ))
-        : options?.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-    </select>
-  );
-}
-
 function RuntimePanel({
   title,
   description,
@@ -644,31 +637,18 @@ function SourceStep({
   form,
   update,
   repos,
+  branchOptions,
   trackerResults,
   trackerLoading,
 }: {
   form: WizardForm;
   update: (patch: Partial<WizardForm>) => void;
-  repos: VolundrRepo[];
+  repos: RepoRecord[];
+  branchOptions: string[];
   trackerResults: TrackerIssue[];
   trackerLoading: boolean;
 }) {
   const currentRepo = repos.find((repo) => repo.cloneUrl === form.repo);
-  const repoGroups = Object.entries(
-    repos.reduce<Record<string, WizardSelectOption[]>>((groups, repo) => {
-      const groupLabel = PROVIDER_LABELS[repo.provider] ?? repo.provider;
-      groups[groupLabel] ??= [];
-      groups[groupLabel].push({
-        value: repo.cloneUrl,
-        label: `${repo.org}/${repo.name}`,
-      });
-      return groups;
-    }, {}),
-  ).map(([label, options]) => ({ label, options }));
-  const branchOptions = (currentRepo?.branches ?? []).map((branch) => ({
-    value: branch,
-    label: branch,
-  }));
 
   return (
     <div className="niuu-flex niuu-flex-col niuu-gap-4" data-testid="step-source-content">
@@ -695,11 +675,11 @@ function SourceStep({
         {form.sourcetype === 'git' ? (
           <div className="niuu-grid niuu-grid-cols-2 niuu-gap-4">
             <Field label="Repository">
-              {repoGroups.length > 0 ? (
-                <WizardSelect
-                  groupedOptions={repoGroups}
+              {repos.length > 0 ? (
+                <RepoSelect
+                  repos={repos}
                   value={form.repo}
-                  onChange={(value) => {
+                  onChange={(value: string) => {
                     const repo = repos.find((item) => item.cloneUrl === value);
                     update({
                       repo: value,
@@ -719,14 +699,25 @@ function SourceStep({
               )}
             </Field>
             <Field label="Branch">
-              {branchOptions.length > 0 ? (
-                <WizardSelect
-                  options={branchOptions}
-                  value={form.branch}
-                  onChange={(value) => update({ branch: value })}
-                  placeholder="Select branch"
-                  testId="branch-select"
-                />
+              {branchOptions.length ? (
+                currentRepo?.branches.length ? (
+                  <BranchSelect
+                    repos={repos}
+                    selectedRepos={form.repo}
+                    value={form.branch}
+                    onChange={(value: string) => update({ branch: value })}
+                    placeholder="Select branch"
+                    testId="branch-select"
+                  />
+                ) : (
+                  <WizardSelect
+                    options={branchOptions.map((branch) => ({ value: branch, label: branch }))}
+                    value={form.branch}
+                    onChange={(value) => update({ branch: value })}
+                    placeholder="Select branch"
+                    testId="branch-select"
+                  />
+                )
               ) : (
                 <Input
                   value={form.branch}
@@ -1841,11 +1832,13 @@ function BootingStep({ bootStep, progress }: { bootStep: number; progress: numbe
 /** 4-step modal wizard for launching new Volundr sessions. */
 export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWizardProps) {
   const volundr = useService<IVolundrService>('volundr');
+  const repoCatalog = useService<RepoCatalogService>('niuu.repos');
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const templates = useTemplates();
   const allTemplates = useMemo(() => templates.data ?? [], [templates.data]);
-  const [repos, setRepos] = useState<VolundrRepo[]>([]);
+  const [repos, setRepos] = useState<RepoRecord[]>([]);
+  const [manualBranches, setManualBranches] = useState<string[]>([]);
   const [models, setModels] = useState<Record<string, VolundrModel>>({});
   const [workspaces, setWorkspaces] = useState<VolundrWorkspace[]>([]);
   const [credentials, setCredentials] = useState<StoredCredential[]>([]);
@@ -1898,7 +1891,7 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
     let cancelled = false;
 
     void Promise.all([
-      volundr.getRepos().catch(() => []),
+      repoCatalog.getRepos().catch(() => []),
       volundr.getModels().catch(() => ({})),
       Promise.all([
         volundr.listWorkspaces('archived').catch(() => []),
@@ -1940,7 +1933,7 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
     return () => {
       cancelled = true;
     };
-  }, [open, volundr]);
+  }, [open, repoCatalog, volundr]);
 
   // Update template ID when templates load
   useEffect(() => {
@@ -1948,6 +1941,33 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
       setForm((f) => ({ ...f, templateId: allTemplates[0]!.id }));
     }
   }, [allTemplates, form.templateId]);
+
+  useEffect(() => {
+    if (!open || form.sourcetype !== 'git' || !form.repo.trim()) {
+      setManualBranches([]);
+      return;
+    }
+
+    const matchingRepo = repos.find((repo) => repo.cloneUrl === form.repo);
+    if (matchingRepo?.branches.length) {
+      setManualBranches([]);
+      return;
+    }
+
+    let cancelled = false;
+    void repoCatalog
+      .getBranches(form.repo)
+      .then((branches) => {
+        if (!cancelled) setManualBranches(branches);
+      })
+      .catch(() => {
+        if (!cancelled) setManualBranches([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.repo, form.sourcetype, open, repoCatalog, repos]);
 
   useEffect(() => {
     setForm((current) => {
@@ -2247,6 +2267,11 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
               form={form}
               update={update}
               repos={repos}
+              branchOptions={
+                repos.find((repo) => repo.cloneUrl === form.repo)?.branches.length
+                  ? (repos.find((repo) => repo.cloneUrl === form.repo)?.branches ?? [])
+                  : manualBranches
+              }
               trackerResults={trackerResults}
               trackerLoading={trackerLoading}
             />

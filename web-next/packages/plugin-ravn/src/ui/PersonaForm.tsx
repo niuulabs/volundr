@@ -439,11 +439,29 @@ export function PersonaForm({ persona, onSave, isSaving = false }: PersonaFormPr
             />
           </label>
           <label className="rv-pf-field">
+            <span className="rv-pf-field__label">summary</span>
+            <input
+              className="niuu-form-control"
+              value={form.summary}
+              onChange={(e) => update('summary', e.target.value)}
+            />
+          </label>
+          <label className="rv-pf-field">
             <span className="rv-pf-field__label">description</span>
             <input
               className="niuu-form-control"
               value={form.description}
               onChange={(e) => update('description', e.target.value)}
+            />
+          </label>
+          <label className="rv-pf-field">
+            <span className="rv-pf-field__label">system_prompt_template</span>
+            <textarea
+              className="niuu-form-control niuu-font-mono"
+              value={form.systemPromptTemplate}
+              onChange={(e) => update('systemPromptTemplate', e.target.value)}
+              rows={10}
+              spellCheck={false}
             />
           </label>
         </Section>

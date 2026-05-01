@@ -70,6 +70,10 @@ import {
   type IIdentityService,
 } from '@niuulabs/plugin-sdk';
 import type { NiuuConfig, ServiceConfig, ServicesMap } from '@niuulabs/plugin-sdk';
+import {
+  buildRepoCatalogHttpAdapter,
+  createMockRepoCatalogService,
+} from './repoCatalog';
 
 export interface ServiceBackendStatus {
   mode: 'live' | 'mock';
@@ -187,6 +191,38 @@ export function resolveCanonicalServiceBase(
 
 export function resolveForgeServiceBase(config: Pick<NiuuConfig, 'services'>): string | null {
   return resolveDirectServiceBase(config, 'forge', 'volundr');
+}
+
+function resolveRepoCatalogBase(config: Pick<NiuuConfig, 'services'>): string | null {
+  const explicitBase = resolveDirectServiceBase(config, 'niuu.repos', 'niuu');
+  if (explicitBase) return explicitBase.replace(/\/repos\/?$/, '');
+
+  const sharedBase = resolveSharedApiBase(config);
+  return sharedBase ? `${sharedBase}/niuu` : null;
+}
+
+function resolveRepoCatalogStatus(config: Pick<NiuuConfig, 'services'>): ServiceBackendStatus {
+  const explicit = resolveDirectServiceStatus(config, 'http', 'niuu.repos', 'niuu');
+  if (explicit.mode === 'live' && explicit.target) {
+    return { ...explicit, target: explicit.target.replace(/\/repos\/?$/, '') };
+  }
+
+  const base = resolveRepoCatalogBase(config);
+  if (!base) {
+    return {
+      mode: 'mock',
+      transport: 'mock',
+      target: null,
+      source: 'mock',
+    };
+  }
+
+  return {
+    mode: 'live',
+    transport: 'http',
+    target: base,
+    source: 'shared-api',
+  };
 }
 
 function resolveVolundrServiceBase(config: Pick<NiuuConfig, 'services'>): string | null {
@@ -427,6 +463,7 @@ export function buildServiceBackendStatus(
     'ravn.sessions': resolveRavnServiceStatus(config, 'ravn.sessions'),
     'ravn.triggers': resolveRavnServiceStatus(config, 'ravn.triggers'),
     'ravn.budget': resolveRavnServiceStatus(config, 'ravn.budget'),
+    'niuu.repos': resolveRepoCatalogStatus(config),
     forge: resolveDirectServiceStatus(config, 'http', 'forge', 'volundr'),
     'forge.pty':
       forgePtyStatus.mode === 'live'
@@ -1023,6 +1060,10 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const volundr = volundrBase
     ? buildVolundrHttpAdapter(createApiClient(volundrBase))
     : createMockVolundrService();
+  const repoCatalogBase = resolveRepoCatalogBase(config);
+  const repoCatalogService = repoCatalogBase
+    ? buildRepoCatalogHttpAdapter(createApiClient(repoCatalogBase))
+    : createMockRepoCatalogService();
   const sessionStore = forgeBase ? buildVolundrSessionStore(volundr) : createMockSessionStore();
   const clusterAdapter = forgeBase
     ? buildVolundrClusterAdapter(volundr)
@@ -1116,6 +1157,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     'ravn.budget': ravnBudget,
     mimir,
     volundr,
+    'niuu.repos': repoCatalogService,
     ptyStream,
     metricsStream,
     features: featureCatalogService,

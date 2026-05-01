@@ -432,6 +432,27 @@ function normalizeChronicle(payload: ChroniclePayload): SessionChronicle {
   };
 }
 
+function normalizeModel(payload: ApiModelInfo): VolundrModel {
+  return {
+    name: payload.name,
+    provider: payload.provider,
+    tier: payload.tier,
+    color: payload.color,
+    cost:
+      payload.cost_per_million_tokens != null ? `$${payload.cost_per_million_tokens}/M` : undefined,
+    vram: payload.vram_required ?? undefined,
+  };
+}
+
+function normalizeModelList(
+  payload: ApiModelInfo[] | Record<string, VolundrModel>,
+): Record<string, VolundrModel> {
+  if (Array.isArray(payload)) {
+    return Object.fromEntries(payload.map((model) => [model.id, normalizeModel(model)]));
+  }
+  return payload;
+}
+
 function normalizeRepo(payload: SharedRepoPayload): VolundrRepo {
   return {
     provider: payload.provider as VolundrRepo['provider'],
@@ -454,27 +475,6 @@ function normalizeRepoList(
   }
 
   return Object.values(payload).flat().map(normalizeRepo);
-}
-
-function normalizeModel(payload: ApiModelInfo): VolundrModel {
-  return {
-    name: payload.name,
-    provider: payload.provider,
-    tier: payload.tier,
-    color: payload.color,
-    cost:
-      payload.cost_per_million_tokens != null ? `$${payload.cost_per_million_tokens}/M` : undefined,
-    vram: payload.vram_required ?? undefined,
-  };
-}
-
-function normalizeModelList(
-  payload: ApiModelInfo[] | Record<string, VolundrModel>,
-): Record<string, VolundrModel> {
-  if (Array.isArray(payload)) {
-    return Object.fromEntries(payload.map((model) => [model.id, normalizeModel(model)]));
-  }
-  return payload;
 }
 
 type SubscriberSet<T> = Set<(item: T) => void>;
