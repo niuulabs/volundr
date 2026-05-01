@@ -238,6 +238,56 @@ describe('SagasPage', () => {
     expect(
       screen.queryByText('This tracker project is already imported into Tyr.'),
     ).not.toBeInTheDocument();
+    expect(screen.queryByText(/already exists in Tyr/i)).not.toBeInTheDocument();
+  });
+
+  it('blocks tracker import when a saga with the same slug already exists', async () => {
+    const conflictingSaga = makeSaga({
+      id: '00000000-0000-0000-0000-000000000333',
+      trackerId: 'other-project',
+      slug: 'service-boundary-restoration-and-api-consolidation',
+      name: 'Existing conflicting saga',
+    });
+    const sagasSvc = {
+      ...createMockTyrService(),
+      getSagas: async (): Promise<Saga[]> => [conflictingSaga],
+      getSaga: async (id: string): Promise<Saga | null> =>
+        id === conflictingSaga.id ? conflictingSaga : null,
+    };
+    const trackerSvc: ITrackerBrowserService = {
+      ...createMockTrackerService(),
+      listProjects: async () => [
+        {
+          id: 'proj-conflict',
+          name: 'Service Boundary Restoration and API Consolidation',
+          description: 'Conflicting slug project',
+          status: 'active',
+          url: 'https://linear.app/niuu/project/proj-conflict',
+          milestoneCount: 2,
+          issueCount: 5,
+          slug: 'service-boundary-restoration-and-api-consolidation',
+        },
+      ],
+    };
+
+    render(<SagasPage />, {
+      wrapper: wrap(withDefaults({ tyr: sagasSvc, 'tyr.tracker': trackerSvc })),
+    });
+    await waitFor(() =>
+      expect(screen.getAllByText('Existing conflicting saga').length).toBeGreaterThan(0),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Import saga from tracker/i }));
+    await waitFor(() => expect(screen.getByText('Import From Tracker')).toBeInTheDocument());
+    const [projectTitle] = await screen.findAllByText(
+      'Service Boundary Restoration and API Consolidation',
+    );
+    const projectButton = projectTitle.closest('button');
+    expect(projectButton).not.toBeNull();
+    fireEvent.click(projectButton!);
+
+    expect(screen.getByText(/already exists in Tyr/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import saga' })).toBeDisabled();
   });
 
   it('does not list terminal tracker projects in the import modal', async () => {

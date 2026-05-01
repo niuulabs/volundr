@@ -262,6 +262,9 @@ def _create_contributors(
 
     contributors: list[SessionContributor] = []
 
+    def _has_contributor(name: str) -> bool:
+        return any(contributor.name == name for contributor in contributors)
+
     # Auto-wire SessionDefinitionContributor first so definition defaults
     # (broker.cliType, transportAdapter, etc.) are the base layer that
     # later contributors (templates, profiles, resources) can override.
@@ -311,8 +314,9 @@ def _create_contributors(
     # multi-sidecar sessions (locally via ravn flock init/start).
     from volundr.adapters.outbound.contributors.ravn_flock import RavnFlockContributor
 
-    contributors.append(RavnFlockContributor(**ports))
-    logger.info("Session contributor: ravn_flock (auto-wired)")
+    if not _has_contributor("ravn_flock"):
+        contributors.append(RavnFlockContributor(**ports))
+        logger.info("Session contributor: ravn_flock (auto-wired)")
 
     return contributors
 

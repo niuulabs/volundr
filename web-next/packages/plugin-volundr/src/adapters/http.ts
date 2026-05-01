@@ -20,6 +20,8 @@ import type {
   VolundrRepo,
   VolundrMessage,
   VolundrLog,
+  VolundrAggregatedLog,
+  VolundrLogParticipant,
   SessionChronicle,
   ClusterResourceInfo,
   PullRequest,
@@ -158,6 +160,26 @@ type LogPayload = {
   }>;
 };
 
+type AggregatedLogPayload = {
+  available_participants?: Array<{
+    id: string;
+    label?: string;
+    kind?: VolundrLogParticipant['kind'];
+  }>;
+  lines: Array<{
+    id?: string;
+    timestamp?: number | string;
+    level?: string;
+    participant?: string;
+    participant_label?: string;
+    participant_kind?: VolundrLogParticipant['kind'];
+    source?: string;
+    message?: string;
+    sequence?: number;
+    stream?: string;
+  }>;
+};
+
 type ChroniclePayload = {
   events: SessionChronicle['events'];
   files: SessionChronicle['files'];
@@ -172,6 +194,11 @@ type ChronicleEventPayload = {
   files: SessionChronicle['files'];
   commits: SessionChronicle['commits'];
   token_burn?: number[];
+};
+
+type AggregatedLogsResult = {
+  lines: VolundrAggregatedLog[];
+  participants: VolundrLogParticipant[];
 };
 
 type CanonicalCredentialPayload = {
@@ -442,6 +469,53 @@ function normalizeLogs(sessionId: string, payload: LogPayload): VolundrLog[] {
   });
 }
 
+function normalizeAggregateParticipants(
+  payload: AggregatedLogPayload,
+): VolundrLogParticipant[] {
+  return (payload.available_participants ?? []).map((participant) => ({
+    id: participant.id,
+    label: participant.label ?? participant.id,
+    kind: participant.kind ?? 'ravn',
+  }));
+}
+
+function normalizeAggregatedLogs(
+  sessionId: string,
+  payload: AggregatedLogPayload,
+): { lines: VolundrAggregatedLog[]; participants: VolundrLogParticipant[] } {
+  const participants = normalizeAggregateParticipants(payload);
+  const seenCounts = new Map<string, number>();
+  const lines = payload.lines.map((line, index) => {
+    const normalized: Omit<VolundrAggregatedLog, 'id'> = {
+      sessionId,
+      timestamp: toEpochMs(line.timestamp),
+      level: normalizeLogLevel(line.level),
+      participant: line.participant ?? 'session',
+      participantLabel: line.participant_label ?? line.participant ?? 'session',
+      participantKind: line.participant_kind ?? 'ravn',
+      source: line.source ?? 'session',
+      message: line.message ?? '',
+      sequence: line.sequence ?? index,
+      stream: line.stream ?? 'workspace',
+    };
+    const fingerprint = [
+      normalized.timestamp,
+      normalized.level,
+      normalized.participant,
+      normalized.source,
+      normalized.sequence,
+      normalized.message,
+    ].join(':');
+    const occurrence = (seenCounts.get(fingerprint) ?? 0) + 1;
+    seenCounts.set(fingerprint, occurrence);
+    return {
+      id: line.id ?? `${sessionId}-aggregate-log-${fingerprint}:${occurrence}`,
+      ...normalized,
+    };
+  });
+  return { lines, participants };
+}
+
 function normalizeChronicle(payload: ChroniclePayload): SessionChronicle {
   return {
     events: payload.events,
@@ -522,6 +596,29 @@ function rememberKnownKey<T>(
 
 function makeLogKey(log: VolundrLog): string {
   return log.id;
+}
+
+function makeAggregatedLogsKey(payload: AggregatedLogsResult): string {
+  const ids = payload.lines.map((line) => line.id).join('|');
+  const participants = payload.participants.map((participant) => participant.id).join('|');
+  return `${participants}::${ids}`;
+}
+
+function buildAggregatedLogsQuery(options?: {
+  limit?: number;
+  level?: string;
+  participants?: string[];
+  query?: string;
+}): string {
+  const params = new URLSearchParams();
+  if (options?.limit) params.set('lines', String(options.limit));
+  if (options?.level) params.set('level', options.level);
+  if (options?.participants && options.participants.length > 0) {
+    params.set('participants', options.participants.join(','));
+  }
+  if (options?.query) params.set('query', options.query);
+  const encoded = params.toString();
+  return encoded ? `?${encoded}` : '';
 }
 
 function applyChronicleEvent(
@@ -819,6 +916,22 @@ export function buildVolundrHttpAdapter(
       .then((payload) => normalizeLogs(sessionId, payload));
   }
 
+  async function loadAggregatedLogs(
+    sessionId: string,
+    options?: {
+      limit?: number;
+      level?: string;
+      participants?: string[];
+      query?: string;
+    },
+  ): Promise<AggregatedLogsResult> {
+    return forgeClient
+      .get<AggregatedLogPayload>(
+        `/sessions/${sessionId}/logs/aggregate${buildAggregatedLogsQuery(options)}`,
+      )
+      .then((payload) => normalizeAggregatedLogs(sessionId, payload));
+  }
+
   function ensurePollingConnection<T>(
     registry: Map<string, PollingConnection<T>>,
     sessionId: string,
@@ -1079,6 +1192,30 @@ export function buildVolundrHttpAdapter(
       return () => {
         connection.subscribers.delete(callback);
         maybeClosePollingConnection(logSubscribers, sessionId);
+      };
+    },
+    getAggregatedLogs: (sessionId, options) => loadAggregatedLogs(sessionId, options),
+    subscribeAggregatedLogs: (sessionId, options, callback) => {
+      let disposed = false;
+      let lastKey = '';
+      const poll = async (): Promise<void> => {
+        try {
+          const payload = await loadAggregatedLogs(sessionId, options);
+          const nextKey = makeAggregatedLogsKey(payload);
+          if (nextKey === lastKey) return;
+          lastKey = nextKey;
+          if (!disposed) callback(payload);
+        } catch {
+          // Best-effort live polling on top of stable snapshot endpoints.
+        }
+      };
+      void poll();
+      const timer = setInterval(() => {
+        void poll();
+      }, LIVE_POLL_MS);
+      return () => {
+        disposed = true;
+        clearInterval(timer);
       };
     },
 

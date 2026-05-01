@@ -766,13 +766,21 @@ def build_root_app(
                     status_code=502,
                 )
 
-    if "runtime-config" in active_mounts:
+    live_config_template: str | None = None
 
-        @root.get("/config.json")
-        async def config_json() -> dict[str, str]:
-            return {"apiBaseUrl": f"http://{host}:{port}"}
+    def render_live_config(origin: str) -> str:
+        assert live_config_template is not None
+        payload = live_config_template.replace("http://localhost:8080", origin)
+        payload = payload.replace("http://127.0.0.1:8080", origin)
+        return payload
 
     if "web-ui" not in active_mounts:
+        if "runtime-config" in active_mounts:
+
+            @root.get("/config.json")
+            async def config_json() -> dict[str, str]:
+                return {"apiBaseUrl": f"http://{host}:{port}"}
+
         logger.info("Web UI disabled by host profile or --no-web")
         return root
 
@@ -803,9 +811,17 @@ def build_root_app(
             @root.get("/config.live.json", include_in_schema=False)
             async def live_config(request: Request) -> Response:
                 origin = str(request.base_url).rstrip("/")
-                payload = live_config_template.replace("http://localhost:8080", origin)
-                payload = payload.replace("http://127.0.0.1:8080", origin)
-                return Response(content=payload, media_type="application/json")
+                return Response(content=render_live_config(origin), media_type="application/json")
+
+        if "runtime-config" in active_mounts:
+
+            @root.get("/config.json", include_in_schema=False)
+            async def config_json(request: Request):
+                if live_config_template is None:
+                    return {"apiBaseUrl": f"http://{host}:{port}"}
+
+                origin = str(request.base_url).rstrip("/")
+                return Response(content=render_live_config(origin), media_type="application/json")
 
         index_html = (dist / "index.html").read_bytes()
 

@@ -31,6 +31,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from niuu.mesh.ipc import cleanup_skuld_mesh_sockets, skuld_mesh_addresses
 from volundr.domain.models import (
     GitSource,
     LocalMountSource,
@@ -642,12 +643,10 @@ class LocalProcessPodManager(PodManager):
             )
 
         if flock_plan is not None:
-            env["SKULD__MESH__NNG__PUB_SUB_ADDRESS"] = (
-                f"tcp://0.0.0.0:{flock_plan.skuld_pub_port}"
-            )
-            env["SKULD__MESH__NNG__REQ_REP_ADDRESS"] = (
-                f"tcp://0.0.0.0:{flock_plan.skuld_rep_port}"
-            )
+            cleanup_skuld_mesh_sockets(flock_dir)
+            skuld_pub, skuld_rep = skuld_mesh_addresses(flock_dir)
+            env["SKULD__MESH__NNG__PUB_SUB_ADDRESS"] = skuld_pub
+            env["SKULD__MESH__NNG__REQ_REP_ADDRESS"] = skuld_rep
             env["SKULD__MESH__HANDSHAKE_PORT"] = str(flock_plan.skuld_handshake_port)
 
         env["SKULD__SESSION__ID"] = session_id
@@ -741,6 +740,9 @@ class LocalProcessPodManager(PodManager):
                 str(flock_dir),
                 "--discovery",
                 "static",
+                "--mesh-transport",
+                "ipc",
+                "--no-http-gateway",
                 "--base-port",
                 str(ravn_base_port),
                 "--force",
@@ -760,8 +762,7 @@ class LocalProcessPodManager(PodManager):
         cluster_path = flock_dir / "cluster.yaml"
         if cluster_path.exists():
             cluster = yaml.safe_load(cluster_path.read_text())
-            skuld_pub = f"tcp://127.0.0.1:{flock_plan.skuld_pub_port}"
-            skuld_rep = f"tcp://127.0.0.1:{flock_plan.skuld_rep_port}"
+            skuld_pub, skuld_rep = skuld_mesh_addresses(flock_dir)
             skuld_peer_id = ""
             if spec.pod_spec and spec.pod_spec.env:
                 for entry in spec.pod_spec.env:
@@ -821,6 +822,7 @@ class LocalProcessPodManager(PodManager):
             return
         import subprocess as sp
 
+        flock_path = Path(flock_dir)
         try:
             sp.run(
                 [
@@ -835,6 +837,7 @@ class LocalProcessPodManager(PodManager):
                 capture_output=True,
                 timeout=15,
             )
+            cleanup_skuld_mesh_sockets(flock_path)
             logger.info("Flock stopped: %s", flock_dir)
         except Exception:
             logger.warning("Failed to stop flock at %s", flock_dir, exc_info=True)

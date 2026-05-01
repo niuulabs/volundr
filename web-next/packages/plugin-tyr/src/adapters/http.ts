@@ -128,6 +128,7 @@ interface RawTrackerProject {
   url: string;
   milestone_count: number;
   issue_count: number;
+  slug?: string;
 }
 
 interface RawTrackerMilestone {
@@ -299,6 +300,7 @@ function toTrackerProject(raw: RawTrackerProject): TrackerProject {
     url: raw.url,
     milestoneCount: raw.milestone_count,
     issueCount: raw.issue_count,
+    slug: raw.slug ?? '',
   };
 }
 

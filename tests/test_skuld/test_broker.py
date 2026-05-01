@@ -724,6 +724,32 @@ class TestFastAPIEndpoints:
         msgs = [e["message"] for e in data["lines"]]
         assert "hello from test" in msgs
 
+    def test_aggregate_logs_endpoint(self, client, tmp_path):
+        original_workspace = broker.workspace_dir
+        broker.workspace_dir = str(tmp_path)
+        try:
+            (tmp_path / ".flock" / "logs").mkdir(parents=True)
+            (tmp_path / ".skuld.log").write_text(
+                "2026-05-01 15:19:48,121 - skuld.broker - INFO - Starting Skuld broker\n",
+                encoding="utf-8",
+            )
+            (tmp_path / ".flock" / "logs" / "coder.log").write_text(
+                "2026-05-01 15:19:58,326 ravn.drive_loop ERROR drive_loop: task failed after 3 retries\n",
+                encoding="utf-8",
+            )
+
+            response = client.get("/api/logs/aggregate?lines=10&level=INFO")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["session_id"] == broker.session_id
+            assert {participant["id"] for participant in data["available_participants"]} == {
+                "skuld",
+                "coder",
+            }
+            assert [line["participant"] for line in data["lines"]] == ["skuld", "coder"]
+        finally:
+            broker.workspace_dir = original_workspace
+
     def test_capabilities_endpoint_returns_transport_caps(self, client):
         """GET /api/capabilities returns transport capabilities as JSON."""
         mock_transport = MagicMock()

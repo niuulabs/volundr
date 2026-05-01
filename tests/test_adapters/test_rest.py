@@ -1,8 +1,10 @@
 """Tests for the REST adapter."""
 
 from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -550,6 +552,126 @@ class TestStopSession:
         response = client.post(f"/api/v1/volundr/sessions/{session.id}/stop")
         assert response.status_code == 409
         assert "cannot stop" in response.json()["detail"].lower()
+
+
+class TestSessionLogAggregationProxy:
+    """Tests for aggregated session log proxy endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_get_session_logs_aggregate_success(
+        self,
+        client: TestClient,
+        service: SessionService,
+    ) -> None:
+        session = await service.create_session(
+            "test",
+            "claude-sonnet-4",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
+        )
+        await service.start_session(session.id)
+
+        response_payload = {
+            "session_id": str(session.id),
+            "available_participants": [
+                {"id": "skuld", "label": "Skuld", "kind": "broker"},
+                {"id": "coder", "label": "Coder", "kind": "ravn"},
+            ],
+            "lines": [
+                {
+                    "id": "agg-1",
+                    "timestamp": "2026-05-01T15:19:51.232000+00:00",
+                    "level": "INFO",
+                    "participant": "coder",
+                    "participant_label": "Coder",
+                    "participant_kind": "ravn",
+                    "source": "ravn.cli.commands",
+                    "message": "mesh: received outcome event_type=code.requested",
+                    "sequence": 28,
+                    "stream": "logs/coder.log",
+                }
+            ],
+        }
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.json.return_value = response_payload
+        mock_response.raise_for_status.return_value = None
+
+        with patch("volundr.adapters.inbound.rest.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get.return_value = mock_response
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+            response = client.get(
+                f"/api/v1/volundr/sessions/{session.id}/logs/aggregate?lines=50&level=WARNING&participants=coder&query=mesh"
+            )
+
+        assert response.status_code == 200
+        assert response.json() == response_payload
+        mock_client.get.assert_awaited_once_with(
+            f"http://localhost:8080/s/{session.id}/api/logs/aggregate",
+            params={
+                "lines": 50,
+                "level": "WARNING",
+                "participants": "coder",
+                "query": "mesh",
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_session_logs_aggregate_falls_back_to_local_workspace_on_404(
+        self,
+        client: TestClient,
+        service: SessionService,
+        tmp_path,
+    ) -> None:
+        workspace = tmp_path / "workspace"
+        flock_logs = workspace / ".flock" / "logs"
+        flock_logs.mkdir(parents=True)
+        (workspace / ".skuld.log").write_text(
+            "2026-05-01 15:19:48,121 - skuld.broker - INFO - Starting Skuld broker\n",
+            encoding="utf-8",
+        )
+        (flock_logs / "coder.log").write_text(
+            "2026-05-01 15:19:58,326 ravn.drive_loop ERROR drive_loop: task failed after 3 retries\n",
+            encoding="utf-8",
+        )
+
+        session = await service.create_session(
+            "test",
+            "claude-sonnet-4",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
+        )
+        session = session.with_endpoints(
+            f"ws://localhost:8080/s/{session.id}/session",
+            f"file://{workspace}",
+        ).with_status(SessionStatus.RUNNING)
+        await service._repository.update(session)
+
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 404
+        request = httpx.Request("GET", f"http://localhost:8080/s/{session.id}/api/logs/aggregate")
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "not found",
+            request=request,
+            response=mock_response,
+        )
+
+        with patch("volundr.adapters.inbound.rest.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get.return_value = mock_response
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+            response = client.get(
+                f"/api/v1/volundr/sessions/{session.id}/logs/aggregate?lines=10&level=DEBUG"
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session_id"] == str(session.id)
+        assert {participant["id"] for participant in data["available_participants"]} == {
+            "skuld",
+            "coder",
+        }
+        assert [line["participant"] for line in data["lines"]] == ["skuld", "coder"]
 
 
 class TestFeatureFlags:

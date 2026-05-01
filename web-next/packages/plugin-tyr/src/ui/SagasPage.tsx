@@ -76,6 +76,14 @@ function isTerminalTrackerStatus(status: string): boolean {
   ].includes(normalized);
 }
 
+function trackerProjectSlug(project: TrackerProject): string {
+  const source = (project.slug ?? '').trim() || project.name;
+  return source
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 function confidenceTone(value: number): string {
   if (value >= 85) return 'niuu-bg-brand';
   if (value >= 65) return 'niuu-bg-brand/80';
@@ -300,6 +308,7 @@ function SagasPageContent() {
       ),
     [allSagas],
   );
+  const existingSagaSlugs = useMemo(() => new Set(allSagas.map((saga) => saga.slug)), [allSagas]);
   const filtered = allSagas.filter((saga) => {
     if (!search) return true;
     const haystack = `${saga.name} ${saga.trackerId} ${saga.featureBranch}`.toLowerCase();
@@ -336,6 +345,9 @@ function SagasPageContent() {
   const availableRepos = repoCatalogQuery.data ?? [];
   const selectedProject =
     trackerProjects.find((project) => project.id === selectedProjectId) ?? null;
+  const selectedProjectHasSlugConflict =
+    selectedProject !== null && existingSagaSlugs.has(trackerProjectSlug(selectedProject));
+  const selectedProjectSlug = selectedProject ? trackerProjectSlug(selectedProject) : '';
   const commonBranches =
     availableRepos.length > 0
       ? getCommonBranches(availableRepos, selectedRepos)
@@ -345,6 +357,7 @@ function SagasPageContent() {
     selectedRepos.length > 0 &&
     Boolean(baseBranch.trim()) &&
     !importedTrackerIds.has(selectedProject.id) &&
+    !selectedProjectHasSlugConflict &&
     !isImporting;
 
   useEffect(() => {
@@ -637,6 +650,7 @@ function SagasPageContent() {
                 ) : (
                   trackerProjects.map((project: TrackerProject) => {
                     const imported = importedTrackerIds.has(project.id);
+                    const slugConflict = existingSagaSlugs.has(trackerProjectSlug(project));
                     const selected = selectedProjectId === project.id;
                     return (
                       <button
@@ -662,6 +676,11 @@ function SagasPageContent() {
                               {imported && (
                                 <span className="niuu-rounded niuu-bg-brand/15 niuu-px-2 niuu-py-0.5 niuu-text-[11px] niuu-font-mono niuu-text-brand">
                                   imported
+                                </span>
+                              )}
+                              {!imported && slugConflict && (
+                                <span className="niuu-rounded niuu-bg-amber-500/15 niuu-px-2 niuu-py-0.5 niuu-text-[11px] niuu-font-mono niuu-text-amber-300">
+                                  slug conflict
                                 </span>
                               )}
                             </div>
@@ -812,7 +831,9 @@ function SagasPageContent() {
                     <div className="niuu-rounded-md niuu-bg-bg-tertiary niuu-p-3 niuu-text-xs niuu-leading-5 niuu-text-text-secondary">
                       {importedTrackerIds.has(selectedProject.id)
                         ? 'This tracker project is already imported into Tyr.'
-                        : 'Select one or more repositories to bind the imported saga to.'}
+                        : selectedProjectHasSlugConflict
+                          ? `A saga with slug "${selectedProjectSlug}" already exists in Tyr.`
+                          : 'Select one or more repositories to bind the imported saga to.'}
                     </div>
                   </>
                 ) : (

@@ -663,6 +663,7 @@ const SEED_PROJECTS: TrackerProject[] = [
     url: 'https://linear.app/niuu/proj/niuu-core',
     milestoneCount: 8,
     issueCount: 64,
+    slug: 'niuu-core',
   },
   {
     id: 'proj-plugin-platform',
@@ -672,6 +673,7 @@ const SEED_PROJECTS: TrackerProject[] = [
     url: 'https://linear.app/niuu/proj/plugin-platform',
     milestoneCount: 4,
     issueCount: 28,
+    slug: 'plugin-platform',
   },
 ];
 

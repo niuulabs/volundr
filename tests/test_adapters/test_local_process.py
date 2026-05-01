@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 
+from niuu.mesh.ipc import skuld_mesh_addresses
 from volundr.adapters.outbound.local_process import (
     DEFAULT_CLAUDE_BINARY,
     DEFAULT_MAX_CONCURRENT,
@@ -867,11 +868,14 @@ class TestProcessSpawning:
         mock_proc = MagicMock()
         mock_proc.pid = 42
 
-        with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock,
-            return_value=mock_proc,
-        ) as mock_exec:
+        with (
+            patch.object(manager, "_resolve_claude_binary", return_value="/usr/bin/fake-claude"),
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=mock_proc,
+            ) as mock_exec,
+        ):
             await manager._spawn_skuld(
                 git_session,
                 spec,
@@ -887,8 +891,9 @@ class TestProcessSpawning:
             )
 
         env = mock_exec.call_args.kwargs["env"]
-        assert env["SKULD__MESH__NNG__PUB_SUB_ADDRESS"] == "tcp://0.0.0.0:7484"
-        assert env["SKULD__MESH__NNG__REQ_REP_ADDRESS"] == "tcp://0.0.0.0:7485"
+        expected_pub, expected_rep = skuld_mesh_addresses(workspace / ".flock")
+        assert env["SKULD__MESH__NNG__PUB_SUB_ADDRESS"] == expected_pub
+        assert env["SKULD__MESH__NNG__REQ_REP_ADDRESS"] == expected_rep
         assert env["SKULD__MESH__HANDSHAKE_PORT"] == "7584"
 
     async def test_start_flock_uses_shifted_ravn_ports_and_loopback_peer(
@@ -938,11 +943,19 @@ class TestProcessSpawning:
 
         assert result == flock_dir
         init_call = mock_run.call_args_list[0]
-        assert init_call.args[0][-2:] == ["7486", "--force"]
+        assert init_call.args[0][-6:] == [
+            "--mesh-transport",
+            "ipc",
+            "--no-http-gateway",
+            "--base-port",
+            "7486",
+            "--force",
+        ]
         cluster = (flock_dir / "cluster.yaml").read_text(encoding="utf-8")
+        expected_pub, expected_rep = skuld_mesh_addresses(flock_dir)
         assert "peer_id: skuld-test" in cluster
-        assert "pub_address: tcp://127.0.0.1:7484" in cluster
-        assert "rep_address: tcp://127.0.0.1:7485" in cluster
+        assert f"pub_address: {expected_pub}" in cluster
+        assert f"rep_address: {expected_rep}" in cluster
 
     async def test_start_flock_injects_workflow_into_node_configs(
         self,
@@ -1552,3 +1565,175 @@ class TestConstructor:
             )
         assert "~" not in str(mgr._workspaces_dir)
         assert "~" not in str(mgr._state_file)
+
+
+class TestLocalFlockMeshMode:
+    async def test_spawn_skuld_uses_ipc_mesh_addresses_for_local_flock(
+        self,
+        manager: LocalProcessPodManager,
+        git_session: Session,
+        tmp_workspaces: Path,
+    ) -> None:
+        workspace = tmp_workspaces / str(git_session.id)
+        workspace.mkdir(parents=True)
+
+        spec = SessionSpec(
+            values={},
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_ENABLED", "value": "true"},
+                    {"name": "MESH_PUB_ADDRESS", "value": "tcp://0.0.0.0:7480"},
+                    {"name": "MESH_REP_ADDRESS", "value": "tcp://0.0.0.0:7481"},
+                    {"name": "MESH_HANDSHAKE_PORT", "value": "7580"},
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        mock_proc = MagicMock()
+        mock_proc.pid = 42
+
+        with (
+            patch.object(manager, "_resolve_claude_binary", return_value="/usr/bin/fake-claude"),
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=mock_proc,
+            ) as mock_exec,
+        ):
+            await manager._spawn_skuld(
+                git_session,
+                spec,
+                workspace,
+                9100,
+                flock_plan=FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+            )
+
+        env = mock_exec.call_args.kwargs["env"]
+        expected_pub, expected_rep = skuld_mesh_addresses(workspace / ".flock")
+        assert env["SKULD__MESH__NNG__PUB_SUB_ADDRESS"] == expected_pub
+        assert env["SKULD__MESH__NNG__REQ_REP_ADDRESS"] == expected_rep
+        assert env["SKULD__MESH__HANDSHAKE_PORT"] == "7584"
+
+    async def test_start_flock_uses_ipc_mode_and_skuld_socket_addresses(
+        self,
+        manager: LocalProcessPodManager,
+        tmp_workspaces: Path,
+    ) -> None:
+        workspace = tmp_workspaces / "session"
+        workspace.mkdir(parents=True)
+        flock_dir = workspace / ".flock"
+        flock_dir.mkdir()
+        (flock_dir / "cluster.yaml").write_text(
+            "peers:\n"
+            "- peer_id: flock-reviewer\n"
+            "  persona: reviewer\n"
+            "  display_name: reviewer\n"
+            "  pub_address: tcp://127.0.0.1:7486\n"
+            "  rep_address: tcp://127.0.0.1:7487\n",
+            encoding="utf-8",
+        )
+
+        spec = SessionSpec(
+            values={},
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        with patch("subprocess.run") as mock_run:
+            result = await manager._start_flock(
+                spec,
+                workspace,
+                FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+            )
+
+        assert result == flock_dir
+        init_call = mock_run.call_args_list[0]
+        assert init_call.args[0][-6:] == [
+            "--mesh-transport",
+            "ipc",
+            "--no-http-gateway",
+            "--base-port",
+            "7486",
+            "--force",
+        ]
+        cluster = (flock_dir / "cluster.yaml").read_text(encoding="utf-8")
+        expected_pub, expected_rep = skuld_mesh_addresses(flock_dir)
+        assert "peer_id: skuld-test" in cluster
+        assert f"pub_address: {expected_pub}" in cluster
+        assert f"rep_address: {expected_rep}" in cluster
+
+    async def test_start_flock_preserves_workflow_injection_in_ipc_mode(
+        self,
+        manager: LocalProcessPodManager,
+        tmp_workspaces: Path,
+    ) -> None:
+        workspace = tmp_workspaces / "session-with-workflow"
+        workspace.mkdir(parents=True)
+        flock_dir = workspace / ".flock"
+        flock_dir.mkdir()
+        (flock_dir / "cluster.yaml").write_text("peers: []\n", encoding="utf-8")
+        (flock_dir / "node-reviewer.yaml").write_text("persona: reviewer\n", encoding="utf-8")
+
+        spec = SessionSpec(
+            values={
+                "workflow": {
+                    "workflow_id": "wf-1",
+                    "name": "Review Flow",
+                    "version": "draft",
+                    "scope": "user",
+                    "initial_context": "Review this change.",
+                    "graph": {
+                        "nodes": [{"id": "stage-1", "kind": "stage", "label": "Review"}],
+                        "edges": [],
+                    },
+                }
+            },
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        with patch("subprocess.run"):
+            await manager._start_flock(
+                spec,
+                workspace,
+                FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+            )
+
+        node_config = (flock_dir / "node-reviewer.yaml").read_text(encoding="utf-8")
+        assert "workflow_id: wf-1" in node_config
+        assert "name: Review Flow" in node_config
+        assert "initial_context: Review this change." in node_config

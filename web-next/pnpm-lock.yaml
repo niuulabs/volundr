@@ -604,6 +604,9 @@ importers:
 
   packages/plugin-volundr:
     dependencies:
+      '@niuulabs/domain':
+        specifier: workspace:*
+        version: link:../domain
       '@niuulabs/plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk

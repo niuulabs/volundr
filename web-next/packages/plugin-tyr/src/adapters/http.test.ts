@@ -112,6 +112,7 @@ const rawProject = {
   url: 'https://linear.app/niuu/proj/1',
   milestone_count: 3,
   issue_count: 12,
+  slug: 'my-project',
 };
 
 const rawDispatchQueueItem = {
@@ -473,6 +474,7 @@ describe('buildTrackerHttpAdapter', () => {
     const [project] = await buildTrackerHttpAdapter(client).listProjects();
     expect(project?.milestoneCount).toBe(3);
     expect(project?.issueCount).toBe(12);
+    expect(project?.slug).toBe('my-project');
   });
 
   it('calls GET /tracker/projects/:id', async () => {

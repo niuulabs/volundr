@@ -42,6 +42,7 @@ from skuld.channels import (
 )
 from skuld.chronicle_watcher import ChronicleWatcher
 from skuld.config import SkuldSettings
+from skuld.log_aggregate import aggregate_workspace_logs
 from skuld.room_bridge import RoomBridge
 from skuld.room_mesh_bridge import RoomMeshBridge
 from skuld.service_manager import (
@@ -2202,6 +2203,28 @@ async def get_broker_logs(
         "returned": len(tail),
         "lines": tail,
     }
+
+
+@app.get("/api/logs/aggregate")
+async def get_aggregate_logs(
+    lines: int = Query(default=100, ge=1, le=2000),
+    level: str = Query(default="DEBUG"),
+    participants: str | None = Query(default=None),
+    query: str = Query(default=""),
+) -> dict:
+    """Return interleaved broker, flock, and service logs from the session workspace."""
+    requested_participants = (
+        {item.strip() for item in participants.split(",") if item.strip()} if participants else None
+    )
+    payload = aggregate_workspace_logs(
+        broker.workspace_dir,
+        lines=lines,
+        level=level,
+        participants=requested_participants,
+        query=query,
+    )
+    payload["session_id"] = broker.session_id
+    return payload
 
 
 # --- Conversation History API ---

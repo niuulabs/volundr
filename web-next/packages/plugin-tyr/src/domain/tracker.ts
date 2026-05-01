@@ -18,6 +18,7 @@ export const trackerProjectSchema = z.object({
   url: z.string(),
   milestoneCount: z.number().int().nonnegative(),
   issueCount: z.number().int().nonnegative(),
+  slug: z.string().default(''),
 });
 export type TrackerProject = z.infer<typeof trackerProjectSchema>;
 

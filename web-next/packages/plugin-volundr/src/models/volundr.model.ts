@@ -207,6 +207,28 @@ export interface VolundrLog {
   message: string;
 }
 
+export type VolundrLogParticipantKind = 'broker' | 'ravn' | 'service';
+
+export interface VolundrLogParticipant {
+  id: string;
+  label: string;
+  kind: VolundrLogParticipantKind;
+}
+
+export interface VolundrAggregatedLog {
+  id: string;
+  sessionId: string;
+  timestamp: number;
+  level: LogLevel;
+  participant: string;
+  participantLabel: string;
+  participantKind: VolundrLogParticipantKind;
+  source: string;
+  message: string;
+  sequence: number;
+  stream: string;
+}
+
 export type ChronicleEventType = 'message' | 'file' | 'git' | 'terminal' | 'error' | 'session';
 
 export interface ChronicleEvent {

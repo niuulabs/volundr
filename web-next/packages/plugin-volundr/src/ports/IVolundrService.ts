@@ -13,6 +13,8 @@ import type {
   VolundrRepo,
   VolundrMessage,
   VolundrLog,
+  VolundrAggregatedLog,
+  VolundrLogParticipant,
   SessionChronicle,
   ClusterResourceInfo,
   PullRequest,
@@ -131,6 +133,28 @@ export interface IVolundrService {
   // Logs
   getLogs(sessionId: string, limit?: number): Promise<VolundrLog[]>;
   subscribeLogs(sessionId: string, callback: (log: VolundrLog) => void): () => void;
+  getAggregatedLogs(
+    sessionId: string,
+    options?: {
+      limit?: number;
+      level?: string;
+      participants?: string[];
+      query?: string;
+    },
+  ): Promise<{ lines: VolundrAggregatedLog[]; participants: VolundrLogParticipant[] }>;
+  subscribeAggregatedLogs(
+    sessionId: string,
+    options: {
+      limit?: number;
+      level?: string;
+      participants?: string[];
+      query?: string;
+    },
+    callback: (payload: {
+      lines: VolundrAggregatedLog[];
+      participants: VolundrLogParticipant[];
+    }) => void,
+  ): () => void;
 
   // Code server
   getCodeServerUrl(sessionId: string): Promise<string | null>;

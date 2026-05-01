@@ -526,6 +526,15 @@ class TestRootServerBuildApp:
         assert config_resp.json()["services"]["forge"]["mode"] == "http"
         assert config_resp.json()["services"]["forge"]["baseUrl"] == "http://testserver/api/v1/forge"
 
+        default_config_resp = client.get("/config.json")
+        assert default_config_resp.status_code == 200
+        assert default_config_resp.headers["content-type"].startswith("application/json")
+        assert default_config_resp.json()["services"]["forge"]["mode"] == "http"
+        assert (
+            default_config_resp.json()["services"]["forge"]["baseUrl"]
+            == "http://testserver/api/v1/forge"
+        )
+
     def test_web_ui_filenotfound_gracefully_handled(self) -> None:
         """When web_dist_dir raises FileNotFoundError, app is still returned."""
         registry = PluginRegistry()
