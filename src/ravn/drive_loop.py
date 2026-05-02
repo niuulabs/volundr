@@ -29,6 +29,7 @@ from ravn.adapters.channels.composite import CompositeChannel
 from ravn.adapters.channels.mesh_channel import MeshActivityChannel
 from ravn.adapters.channels.silent import SilentChannel
 from ravn.adapters.channels.skuld_channel import SkuldChannel
+from ravn.adapters.channels.task_context import TaskContextChannel
 from ravn.adapters.events.noop_publisher import NoOpEventPublisher
 from ravn.config import BudgetConfig, InitiativeConfig, Settings
 from ravn.domain.budget import DailyBudgetTracker, compute_cost
@@ -429,6 +430,9 @@ class DriveLoop:
         )
 
         # Skuld channel for browser delivery (mesh cascade visualization)
+        # TODO(niu-activity-bus): Once direct Skuld streaming is stable again,
+        # split high-frequency live activity onto a dedicated activity bus/channel
+        # and leave workflow/outcome propagation on the mesh.
         self._skuld_channel: SkuldChannel | None = None
         if settings.skuld.enabled:
             # peer_id is appended to the broker_url
@@ -712,6 +716,17 @@ class DriveLoop:
         if event is not None:
             event.set()
 
+    def _wrap_activity_channel(self, channel: ChannelPort, task: AgentTask) -> ChannelPort:
+        """Attach stable outer session/task ids to live activity events."""
+        root_corr = task.root_correlation_id or task.task_id
+        return TaskContextChannel(
+            channel,
+            correlation_id=task.task_id,
+            session_id=task.session_id,
+            task_id=task.task_id,
+            root_correlation_id=root_corr,
+        )
+
     async def _run_task(self, task: AgentTask) -> None:
         """Execute a single initiative task."""
         # Budget pre-check: skip when daily cap is reached.
@@ -737,9 +752,9 @@ class DriveLoop:
             extra: list[ChannelPort] = []
             if self._skuld_channel is not None:
                 self._skuld_channel._persona = task.persona  # Update persona for this task
-                extra.append(self._skuld_channel)
-            if self._mesh is not None and peer_id:
-                extra.append(MeshActivityChannel(self._mesh, peer_id))
+                extra.append(self._wrap_activity_channel(self._skuld_channel, task))
+            elif self._mesh is not None and peer_id:
+                extra.append(self._wrap_activity_channel(MeshActivityChannel(self._mesh, peer_id), task))
             if extra:
                 channel: ChannelPort = CompositeChannel([capture_channel, *extra])
             else:
@@ -748,9 +763,9 @@ class DriveLoop:
             sinks: list[ChannelPort] = []
             if self._skuld_channel is not None:
                 self._skuld_channel._persona = task.persona
-                sinks.append(self._skuld_channel)
-            if self._mesh is not None and peer_id:
-                sinks.append(MeshActivityChannel(self._mesh, peer_id))
+                sinks.append(self._wrap_activity_channel(self._skuld_channel, task))
+            elif self._mesh is not None and peer_id:
+                sinks.append(self._wrap_activity_channel(MeshActivityChannel(self._mesh, peer_id), task))
             if sinks:
                 channel = CompositeChannel(sinks) if len(sinks) > 1 else sinks[0]
             else:
@@ -949,8 +964,10 @@ class DriveLoop:
         except Exception:
             logger.warning("Failed to publish mesh outcome event; continuing.", exc_info=True)
 
-        # Also emit to skuld channel for browser visualization
-        if self._skuld_channel is not None:
+        # In flock mode, live browser activity/response flows directly over the
+        # Skuld websocket channel. Outcomes stay on the mesh to avoid duplicate
+        # room_outcome cards when both direct streaming and RoomMeshBridge exist.
+        if self._skuld_channel is not None and self._mesh is None:
             try:
                 await self._skuld_channel.emit(event)
             except Exception:

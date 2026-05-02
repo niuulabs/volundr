@@ -348,8 +348,8 @@ export function SessionsPage() {
           </div>
         ) : (
           <div className="niuu-flex niuu-h-full niuu-flex-col niuu-overflow-hidden">
-            <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-white/8 niuu-px-3 niuu-py-2.5">
-              <div className="niuu-flex niuu-items-baseline niuu-gap-2">
+            <div className="niuu-flex niuu-items-center niuu-justify-between niuu-border-b niuu-border-white/8 niuu-px-2.5 niuu-py-2">
+              <div className="niuu-flex niuu-items-center niuu-gap-1.5">
                 <h2 className="niuu-text-sm niuu-font-semibold niuu-text-text-primary">Sessions</h2>
                 <span
                   className="niuu-rounded-full niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-muted"
@@ -369,13 +369,7 @@ export function SessionsPage() {
               </button>
             </div>
 
-            <div className="niuu-px-3 niuu-pb-1.5">
-              <p className="niuu-text-[10px] niuu-font-mono niuu-text-text-faint">
-                filter in header · click to open
-              </p>
-            </div>
-
-            <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-px-3 niuu-pb-1.5">
+            <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-px-2.5 niuu-py-1">
               <span className="niuu-text-[10px] niuu-font-mono niuu-text-text-faint">group by</span>
               <div
                 className="niuu-inline-flex niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-p-0.5"
@@ -404,8 +398,8 @@ export function SessionsPage() {
               </div>
             </div>
 
-            <div className="niuu-px-3 niuu-py-1">
-              <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-px-3 niuu-py-1.5 niuu-shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] focus-within:niuu-border-brand/50 focus-within:niuu-ring-1 focus-within:niuu-ring-brand/20">
+            <div className="niuu-px-2.5 niuu-pb-1">
+              <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-tertiary niuu-px-3 niuu-py-1 niuu-shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] focus-within:niuu-border-brand/50 focus-within:niuu-ring-1 focus-within:niuu-ring-brand/20">
                 <Search
                   className="niuu-h-4 niuu-w-4 niuu-flex-shrink-0 niuu-text-text-muted"
                   aria-hidden="true"

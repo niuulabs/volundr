@@ -31,6 +31,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from niuu.domain.llm_merge import merge_llm
 from niuu.mesh.ipc import cleanup_skuld_mesh_sockets, skuld_mesh_addresses
 from volundr.domain.models import (
     GitSource,
@@ -201,6 +202,83 @@ def _inject_token_into_url(repo_url: str, token: str) -> str:
     return repo_url
 
 
+def _stage_personas(node: dict[str, Any]) -> set[str]:
+    personas = {
+        str(persona)
+        for persona in (node.get("personaIds") or [])
+        if isinstance(persona, str) and persona
+    }
+    for member in node.get("stageMembers") or []:
+        if isinstance(member, dict):
+            persona_id = member.get("personaId")
+            if isinstance(persona_id, str) and persona_id:
+                personas.add(persona_id)
+    return personas
+
+
+def _split_workflow_edge_label(label: object) -> tuple[str, str]:
+    if not isinstance(label, str) or "->" not in label:
+        return "", ""
+    left, right = label.split("->", 1)
+    return left.strip(), right.strip()
+
+
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def _workflow_event_metadata(workflow: dict[str, Any] | None, persona: str) -> tuple[list[str], list[str]]:
+    """Infer consumed/emitted event types for a persona from the workflow graph."""
+    if not isinstance(workflow, dict):
+        return [], []
+    graph = workflow.get("graph")
+    if not isinstance(graph, dict):
+        return [], []
+
+    nodes = [node for node in graph.get("nodes", []) if isinstance(node, dict)]
+    edges = [edge for edge in graph.get("edges", []) if isinstance(edge, dict)]
+    persona_node_ids = {
+        str(node.get("id"))
+        for node in nodes
+        if persona in _stage_personas(node)
+    }
+    if not persona_node_ids:
+        return [], []
+
+    consumes: list[str] = []
+    emits: list[str] = []
+    has_inbound = False
+
+    for edge in edges:
+        source_event, target_event = _split_workflow_edge_label(edge.get("label"))
+        source_id = str(edge.get("source", ""))
+        target_id = str(edge.get("target", ""))
+
+        if target_id in persona_node_ids and source_event:
+            consumes.append(source_event)
+            has_inbound = True
+
+        if source_id in persona_node_ids and target_event and target_event != "complete":
+            emits.append(target_event)
+
+    if not has_inbound:
+        trigger_events = [
+            str(node.get("dispatchEvent"))
+            for node in nodes
+            if node.get("kind") == "trigger" and node.get("dispatchEvent")
+        ]
+        consumes.extend(trigger_events)
+
+    return _dedupe_preserve_order(consumes), _dedupe_preserve_order(emits)
+
+
 class LocalProcessPodManager(PodManager):
     """Manages Claude Code as local subprocesses.
 
@@ -302,7 +380,12 @@ class LocalProcessPodManager(PodManager):
 
             # Spawn ravn flock sidecars if the contributor produced extra containers
             if spec.pod_spec and spec.pod_spec.extra_containers and flock_plan is not None:
-                flock_dir = await self._start_flock(spec, workspace, flock_plan)
+                flock_dir = await self._start_flock(
+                    spec,
+                    workspace,
+                    flock_plan,
+                    skuld_port=port,
+                )
                 info.flock_dir = str(flock_dir)
                 self._persist_state()
 
@@ -703,6 +786,8 @@ class LocalProcessPodManager(PodManager):
         spec: SessionSpec,
         workspace: Path,
         flock_plan: FlockPortPlan,
+        *,
+        skuld_port: int,
     ) -> Path:
         """Init and start a ravn flock alongside the Skuld session.
 
@@ -798,6 +883,8 @@ class LocalProcessPodManager(PodManager):
                 flock_dir,
             )
 
+        self._apply_local_flock_overrides(spec, flock_dir, personas, skuld_port=skuld_port)
+
         # ravn flock start
         sp.run(
             [
@@ -815,6 +902,137 @@ class LocalProcessPodManager(PodManager):
         logger.info("Flock started: %s", flock_dir)
 
         return flock_dir
+
+    def _apply_local_flock_overrides(
+        self,
+        spec: SessionSpec,
+        flock_dir: Path,
+        personas: list[str],
+        *,
+        skuld_port: int,
+    ) -> None:
+        """Apply workload-derived overrides to local flock node and cluster files."""
+        import yaml
+
+        flock_cfg = spec.values.get("flock")
+        if not isinstance(flock_cfg, dict):
+            return
+
+        persona_entries = flock_cfg.get("personas")
+        persona_overrides = {
+            entry["name"]: entry
+            for entry in persona_entries or []
+            if isinstance(entry, dict) and isinstance(entry.get("name"), str)
+        }
+        global_llm = flock_cfg.get("llm_config")
+        if not isinstance(global_llm, dict):
+            global_llm = None
+        global_max_tasks = flock_cfg.get("max_concurrent_tasks", DEFAULT_MAX_CONCURRENT)
+        try:
+            global_max_tasks = int(global_max_tasks)
+        except (TypeError, ValueError):
+            global_max_tasks = DEFAULT_MAX_CONCURRENT
+
+        workflow_cfg = spec.values.get("workflow")
+        if not isinstance(workflow_cfg, dict):
+            workflow_cfg = None
+
+        try:
+            from ravn.adapters.personas.loader import FilesystemPersonaAdapter
+
+            persona_loader = FilesystemPersonaAdapter()
+        except Exception:
+            logger.warning("Failed to load persona adapter for local flock metadata", exc_info=True)
+            persona_loader = None
+
+        for persona in personas:
+            node_path = flock_dir / f"node-{persona}.yaml"
+            if not node_path.exists():
+                continue
+
+            node_config = yaml.safe_load(node_path.read_text()) or {}
+            persona_override = persona_overrides.get(persona, {})
+
+            effective_llm = merge_llm(
+                defaults=None,
+                global_override=global_llm,
+                persona_override=persona_override.get("llm"),
+            )
+            if effective_llm:
+                node_config["llm"] = effective_llm
+
+            initiative_cfg = node_config.setdefault("initiative", {})
+            initiative_cfg["max_concurrent_tasks"] = int(
+                persona_override.get("max_concurrent_tasks") or global_max_tasks
+            )
+
+            skuld_cfg = node_config.setdefault("skuld", {})
+            skuld_cfg["enabled"] = True
+            skuld_cfg["broker_url"] = f"ws://127.0.0.1:{skuld_port}/ws/ravn"
+
+            persona_runtime_overrides: dict[str, Any] = {}
+            system_prompt_extra = persona_override.get("system_prompt_extra")
+            if isinstance(system_prompt_extra, str) and system_prompt_extra.strip():
+                persona_runtime_overrides["system_prompt_extra"] = system_prompt_extra
+
+            iteration_budget = persona_override.get("iteration_budget")
+            if iteration_budget:
+                initiative_cfg["iteration_budget"] = int(iteration_budget)
+                persona_runtime_overrides["iteration_budget"] = int(iteration_budget)
+
+            if persona_runtime_overrides:
+                node_config["persona_overrides"] = persona_runtime_overrides
+            else:
+                node_config.pop("persona_overrides", None)
+
+            node_path.write_text(
+                yaml.safe_dump(node_config, default_flow_style=False),
+                encoding="utf-8",
+            )
+
+        cluster_path = flock_dir / "cluster.yaml"
+        if not cluster_path.exists():
+            return
+
+        cluster = yaml.safe_load(cluster_path.read_text()) or {}
+        peers = cluster.get("peers")
+        if not isinstance(peers, list):
+            return
+
+        for peer in peers:
+            if not isinstance(peer, dict):
+                continue
+            persona = peer.get("persona")
+            if not isinstance(persona, str) or persona not in personas:
+                continue
+
+            tools: list[str] = []
+            if persona_loader is not None:
+                try:
+                    persona_config = persona_loader.load(persona)
+                except Exception:
+                    logger.warning(
+                        "Failed loading persona %s for local flock metadata",
+                        persona,
+                        exc_info=True,
+                    )
+                    persona_config = None
+                if persona_config is not None:
+                    tools = list(persona_config.allowed_tools or [])
+
+            consumes, emits = _workflow_event_metadata(workflow_cfg, persona)
+            if tools:
+                peer["capabilities"] = tools
+            if consumes:
+                peer["consumes_event_types"] = consumes
+            if emits:
+                peer["emits_event_types"] = emits
+
+        cluster_path.write_text(
+            yaml.safe_dump(cluster, default_flow_style=False),
+            encoding="utf-8",
+        )
+        logger.info("Applied local flock overrides and peer metadata: %s", flock_dir)
 
     def _stop_flock(self, flock_dir: str) -> None:
         """Stop a ravn flock via the CLI."""

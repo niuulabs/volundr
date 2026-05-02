@@ -65,6 +65,27 @@ describe('MeshSidebar', () => {
     expect(screen.getByTestId('peer-card-peer-1').className).toContain('selected');
   });
 
+  it('renders a collapsed rail and expands from the header control', () => {
+    const onToggleCollapsed = vi.fn();
+    render(
+      <MeshSidebar
+        participants={participants}
+        selectedPeerId="peer-1"
+        onSelectPeer={vi.fn()}
+        collapsed
+        onToggleCollapsed={onToggleCollapsed}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: /expand mesh peers sidebar/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Mesh Peers')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /expand mesh peers sidebar/i }));
+    expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
+  });
+
   it('shows expand toggle when participant has metadata', () => {
     const withMeta: ReadonlyMap<string, RoomParticipant> = new Map([
       [

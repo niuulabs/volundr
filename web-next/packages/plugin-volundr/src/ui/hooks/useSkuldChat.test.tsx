@@ -114,6 +114,74 @@ describe('useSkuldChat', () => {
     });
 
     expect(result.current.meshEvents).toHaveLength(0);
+    expect(result.current.messages).toHaveLength(0);
+  });
+
+  it('renders successful room_outcome events as outcome messages', async () => {
+    const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
+
+    await waitFor(() => expect(result.current.historyLoaded).toBe(true));
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_outcome',
+          participantId: 'peer-1',
+          participant: { peer_id: 'peer-1', persona: 'reviewer', participant_type: 'ravn' },
+          persona: 'reviewer',
+          eventType: 'review.completed',
+          verdict: 'needs_changes',
+          summary: 'Found two regressions.',
+          fields: {
+            verdict: 'needs_changes',
+            summary: 'Found two regressions.',
+            findings_count: 2,
+            files: ['README.md', 'docs/api.md'],
+          },
+        }),
+      );
+    });
+
+    expect(result.current.meshEvents).toHaveLength(1);
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0]?.participant?.persona).toBe('reviewer');
+    expect(result.current.messages[0]?.content).toContain('```outcome');
+    expect(result.current.messages[0]?.content).toContain('verdict: needs_changes');
+    expect(result.current.messages[0]?.content).toContain('summary: Found two regressions.');
+    expect(result.current.messages[0]?.content).toContain('findings_count: 2');
+    expect(result.current.messages[0]?.content).toContain('files: ["README.md","docs/api.md"]');
+  });
+
+  it('serializes multiline room_outcome fields as yaml block scalars', async () => {
+    const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
+
+    await waitFor(() => expect(result.current.historyLoaded).toBe(true));
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_outcome',
+          participantId: 'peer-1',
+          participant: { peer_id: 'peer-1', persona: 'reviewer', participant_type: 'ravn' },
+          persona: 'reviewer',
+          eventType: 'review.completed',
+          verdict: 'conditional',
+          summary: 'Needs a closer look.',
+          fields: {
+            verdict: 'conditional',
+            summary: 'Needs a closer look.',
+            findings: '## Verified\n- **Route pair count**: 26\n- Use `/api/v1/credentials/secrets`',
+          },
+        }),
+      );
+    });
+
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0]?.content).toContain('findings: |');
+    expect(result.current.messages[0]?.content).toContain('  ## Verified');
+    expect(result.current.messages[0]?.content).toContain(
+      '  - **Route pair count**: 26',
+    );
   });
 
   it('captures room_agent_event frames per participant', async () => {

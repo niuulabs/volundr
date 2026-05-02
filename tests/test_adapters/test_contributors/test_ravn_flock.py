@@ -365,6 +365,35 @@ class TestContributorOutput:
         assert result.values.get("mesh", {}).get("enabled") is True
         assert result.values["mesh"]["transport"] == "nng"
 
+    async def test_flock_values_preserve_llm_and_persona_overrides(self, session, flock_template):
+        provider = MagicMock()
+        provider.get.return_value = flock_template
+        c = RavnFlockContributor(template_provider=provider)
+        ctx = SessionContext(
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": [
+                    {"name": "coder", "llm": {"model": "Qwen/Qwen3.6-35B-A3B-FP8"}},
+                    {
+                        "name": "reviewer",
+                        "system_prompt_extra": "Be thorough.",
+                        "iteration_budget": 40,
+                    },
+                ],
+                "llm_config": {"model": "google/gemma-4-26B-A4B-it"},
+                "max_concurrent_tasks": 5,
+            },
+        )
+
+        result = await c.contribute(session, ctx)
+
+        assert result.values["flock"]["llm_config"]["model"] == "google/gemma-4-26B-A4B-it"
+        assert result.values["flock"]["max_concurrent_tasks"] == 5
+        assert result.values["flock"]["personas"][0]["name"] == "coder"
+        assert result.values["flock"]["personas"][0]["llm"]["model"] == "Qwen/Qwen3.6-35B-A3B-FP8"
+        assert result.values["flock"]["personas"][1]["system_prompt_extra"] == "Be thorough."
+        assert result.values["flock"]["personas"][1]["iteration_budget"] == 40
+
 
 # ---------------------------------------------------------------------------
 # Mounted config (replaces RAVN_CONFIG_INLINE)

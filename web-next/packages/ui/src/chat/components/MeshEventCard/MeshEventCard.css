@@ -9,6 +9,10 @@
   border-left: 2px solid var(--niuu-participant-color, var(--color-border));
 }
 
+.niuu-chat-mesh-card[data-event-type='outcome'] {
+  cursor: pointer;
+}
+
 .niuu-chat-mesh-card[data-event-type='notification'][data-urgent] {
   border-left-color: var(--color-accent-amber);
 }
@@ -26,6 +30,13 @@
   border-radius: 50%;
   background-color: var(--niuu-participant-color, var(--color-text-muted));
   flex-shrink: 0;
+}
+
+.niuu-chat-mesh-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-left: calc(8px + var(--space-2));
 }
 
 .niuu-chat-mesh-persona {
@@ -96,6 +107,20 @@
   color: var(--color-accent-amber);
 }
 
+.niuu-chat-mesh-detail-link {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--color-brand);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  align-self: flex-start;
+}
+
 .niuu-chat-mesh-reason,
 .niuu-chat-mesh-recommendation {
   font-size: var(--text-xs);
@@ -103,9 +128,16 @@
   font-family: var(--font-sans);
 }
 
+.niuu-chat-mesh-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
 .niuu-chat-mesh-timestamp {
   font-size: 10px;
   font-family: var(--font-mono);
   color: var(--color-text-faint);
-  align-self: flex-end;
+  margin-left: auto;
 }

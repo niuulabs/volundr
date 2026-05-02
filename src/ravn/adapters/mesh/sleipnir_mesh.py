@@ -38,10 +38,15 @@ _RPC_REPLY_PREFIX = "ravn.mesh.rpc.reply"
 def _sanitize_for_event_type(s: str) -> str:
     """Sanitize a string for use in Sleipnir event types.
 
-    Sleipnir requires lowercase alphanumeric + underscores only.
-    Converts hyphens to underscores and removes other invalid chars.
+    Sleipnir event type segments require lowercase alphanumeric + underscores only.
+    Converts hyphens to underscores inside a segment.
     """
-    return s.lower().replace("-", "_").replace(".", "_")
+    return s.lower().replace("-", "_")
+
+
+def _sanitize_topic(topic: str) -> str:
+    """Sanitize a dotted topic while preserving segment boundaries."""
+    return ".".join(_sanitize_for_event_type(segment) for segment in topic.split("."))
 
 
 def _ravn_to_sleipnir(event: RavnEvent, topic: str, source_peer_id: str) -> dict:
@@ -49,7 +54,7 @@ def _ravn_to_sleipnir(event: RavnEvent, topic: str, source_peer_id: str) -> dict
     from sleipnir.domain.events import SleipnirEvent
 
     # Use topic as part of the event type
-    event_type = f"{_MESH_EVENT_PREFIX}.{topic}"
+    event_type = f"{_MESH_EVENT_PREFIX}.{_sanitize_topic(topic)}"
 
     return SleipnirEvent(
         event_type=event_type,
@@ -154,7 +159,7 @@ class SleipnirMeshAdapter:
         handler: Callable[[RavnEvent], Awaitable[None]],
     ) -> None:
         """Register *handler* for events on *topic*."""
-        event_type_pattern = f"{_MESH_EVENT_PREFIX}.{topic}"
+        event_type_pattern = f"{_MESH_EVENT_PREFIX}.{_sanitize_topic(topic)}"
 
         async def _wrapped_handler(sleipnir_event: Any) -> None:
             try:

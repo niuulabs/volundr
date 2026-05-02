@@ -323,6 +323,51 @@ function transformTurns(turns: ConversationTurn[]): ChatMessage[] {
   }));
 }
 
+function stringifyOutcomeValue(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function pushOutcomeField(lines: string[], key: string, value: unknown): void {
+  const text = stringifyOutcomeValue(value);
+  if (!text) return;
+  if (text.includes('\n')) {
+    lines.push(`${key}: |`);
+    for (const line of text.split('\n')) {
+      lines.push(`  ${line}`);
+    }
+    return;
+  }
+  lines.push(`${key}: ${text}`);
+}
+
+function formatOutcomeContent(event: CliStreamEvent): string {
+  const fields =
+    event.fields && typeof event.fields === 'object' ? { ...event.fields } : ({} as Record<string, unknown>);
+
+  const lines: string[] = [];
+  pushOutcomeField(lines, 'verdict', event.verdict ?? fields.verdict);
+  pushOutcomeField(lines, 'summary', event.summary ?? fields.summary);
+
+  for (const [key, value] of Object.entries(fields)) {
+    if (key === 'verdict' || key === 'summary' || key === 'success') continue;
+    pushOutcomeField(lines, key, value);
+  }
+
+  if (lines.length === 0 && event.eventType) {
+    pushOutcomeField(lines, 'event_type', event.eventType);
+  }
+
+  const raw = lines.join('\n');
+  return `\`\`\`outcome\n${raw}\n\`\`\``;
+}
+
 async function attachmentToWireContent(
   attachment: FileAttachment,
 ): Promise<{ block: ContentBlock; meta: AttachmentMeta } | null> {
@@ -909,19 +954,35 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
               break;
             }
             const participant = parseParticipantMeta(event.participant);
+            const participantId = String(event.participantId ?? event.participant_id ?? '');
             setMeshEvents((prev) => [
               ...prev,
               {
                 type: 'outcome',
                 id: generateId(),
                 timestamp: new Date(),
-                participantId: String(event.participantId ?? event.participant_id ?? ''),
+                participantId,
                 participant: { color: participant?.color },
                 persona: event.persona ?? participant?.persona ?? '',
                 eventType: event.eventType ?? '',
                 verdict: event.verdict as MeshOutcomeEvent['verdict'],
                 summary: event.summary,
+                fields: event.fields,
+                valid: event.valid === false ? false : true,
               },
+            ]);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: generateId(),
+                role: 'assistant',
+                content: formatOutcomeContent(event),
+                createdAt: new Date(),
+                status: 'done',
+                participant,
+                participantId,
+                visibility: 'internal',
+              } as ChatMessage & { participantId?: string },
             ]);
             break;
           }

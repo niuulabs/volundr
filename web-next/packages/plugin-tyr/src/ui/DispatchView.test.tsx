@@ -150,7 +150,12 @@ describe('DispatchView', () => {
       dispatch: {
         getQueue: async () => [
           makeQueueItem({ issueId: 'issue-1', title: 'Ready Raid', status: 'todo' }),
-          makeQueueItem({ issueId: 'issue-2', identifier: 'NIU-011', title: 'Queued Raid', status: 'queued' }),
+          makeQueueItem({
+            issueId: 'issue-2',
+            identifier: 'NIU-011',
+            title: 'Queued Raid',
+            status: 'queued',
+          }),
         ],
       },
     });
@@ -169,7 +174,12 @@ describe('DispatchView', () => {
       dispatch: {
         getQueue: async () => [
           makeQueueItem({ issueId: 'issue-1', title: 'Ready Raid', status: 'todo' }),
-          makeQueueItem({ issueId: 'issue-2', identifier: 'NIU-011', title: 'Running Raid', status: 'running' }),
+          makeQueueItem({
+            issueId: 'issue-2',
+            identifier: 'NIU-011',
+            title: 'Running Raid',
+            status: 'running',
+          }),
         ],
       },
     });
@@ -249,25 +259,32 @@ describe('DispatchView', () => {
     await waitFor(() => expect(screen.queryByText(/1 selected/i)).not.toBeInTheDocument());
   });
 
-  it('optimistically clears selection while approval is in flight', async () => {
+  it('shows a dispatching overlay while approval is in flight', async () => {
     const user = userEvent.setup();
-    const approveSpy = vi.fn().mockImplementation(
+    let resolveApprove:
+      | ((
+          value: {
+            issueId: string;
+            sessionId: string;
+            sessionName: string;
+            status: string;
+            clusterName: string;
+          }[],
+        ) => void)
+      | null = null;
+    const approveSpy = vi.fn(
       () =>
-        new Promise((resolve) =>
-          setTimeout(
-            () =>
-              resolve([
-                {
-                  issueId: 'issue-1',
-                  sessionId: 'sess-1',
-                  sessionName: 'NIU-010',
-                  status: 'spawned',
-                  clusterName: '',
-                },
-              ]),
-            50,
-          ),
-        ),
+        new Promise<
+          {
+            issueId: string;
+            sessionId: string;
+            sessionName: string;
+            status: string;
+            clusterName: string;
+          }[]
+        >((resolve) => {
+          resolveApprove = resolve;
+        }),
     );
     const services = makeServices({ dispatch: { approve: approveSpy } });
 
@@ -278,7 +295,23 @@ describe('DispatchView', () => {
     await user.click(screen.getByRole('button', { name: /dispatch now/i }));
 
     await waitFor(() => expect(screen.queryByText(/1 selected/i)).not.toBeInTheDocument());
-    expect(screen.getByText('Test Raid')).toBeInTheDocument();
+    expect(screen.getByText(/dispatching 1 raid/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/submitting/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Test Raid').length).toBeGreaterThan(0);
+
+    resolveApprove?.([
+      {
+        issueId: 'issue-1',
+        sessionId: 'sess-1',
+        sessionName: 'NIU-010',
+        status: 'spawned',
+        clusterName: '',
+      },
+    ]);
+
+    await waitFor(() => {
+      expect(screen.queryByText(/dispatching 1 raid/i)).not.toBeInTheDocument();
+    });
   });
 
   it('shows synthesized confidence for dispatcher queue items', async () => {

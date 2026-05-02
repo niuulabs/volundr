@@ -939,6 +939,7 @@ class TestProcessSpawning:
                     skuld_rep_port=7485,
                     skuld_handshake_port=7584,
                 ),
+                skuld_port=9101,
             )
 
         assert result == flock_dir
@@ -1004,12 +1005,182 @@ class TestProcessSpawning:
                     skuld_rep_port=7485,
                     skuld_handshake_port=7584,
                 ),
+                skuld_port=9101,
             )
 
         node_config = (flock_dir / "node-reviewer.yaml").read_text(encoding="utf-8")
         assert "workflow_id: wf-1" in node_config
         assert "name: Review Flow" in node_config
         assert "initial_context: Review this change." in node_config
+        assert "enabled: true" in node_config
+        assert "broker_url: ws://127.0.0.1:9101/ws/ravn" in node_config
+
+    async def test_start_flock_applies_llm_and_persona_overrides(
+        self,
+        manager: LocalProcessPodManager,
+        tmp_workspaces: Path,
+    ) -> None:
+        workspace = tmp_workspaces / "session-with-overrides"
+        workspace.mkdir(parents=True)
+        flock_dir = workspace / ".flock"
+        flock_dir.mkdir()
+        (flock_dir / "cluster.yaml").write_text("peers: []\n", encoding="utf-8")
+        (flock_dir / "node-reviewer.yaml").write_text(
+            "persona: reviewer\ninitiative:\n  enabled: true\n  max_concurrent_tasks: 3\n",
+            encoding="utf-8",
+        )
+
+        spec = SessionSpec(
+            values={
+                "flock": {
+                    "personas": [
+                        {
+                            "name": "reviewer",
+                            "llm": {"model": "Qwen/Qwen3.6-35B-A3B-FP8"},
+                            "system_prompt_extra": "Be extra careful.",
+                            "iteration_budget": 40,
+                            "max_concurrent_tasks": 1,
+                        }
+                    ],
+                    "llm_config": {
+                        "model": "google/gemma-4-26B-A4B-it",
+                        "max_tokens": 8192,
+                    },
+                    "max_concurrent_tasks": 5,
+                }
+            },
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        with (
+            patch("subprocess.run"),
+            patch("ravn.adapters.personas.loader.FilesystemPersonaAdapter") as loader_cls,
+        ):
+            loader_cls.return_value.load.return_value = MagicMock(allowed_tools=["file", "git"])
+            await manager._start_flock(
+                spec,
+                workspace,
+                FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+                skuld_port=9101,
+            )
+
+        node_config = (flock_dir / "node-reviewer.yaml").read_text(encoding="utf-8")
+        assert "model: Qwen/Qwen3.6-35B-A3B-FP8" in node_config
+        assert "max_concurrent_tasks: 1" in node_config
+        assert "system_prompt_extra: Be extra careful." in node_config
+        assert "iteration_budget: 40" in node_config
+        assert "enabled: true" in node_config
+        assert "broker_url: ws://127.0.0.1:9101/ws/ravn" in node_config
+
+    async def test_start_flock_enriches_cluster_peers_with_persona_metadata(
+        self,
+        manager: LocalProcessPodManager,
+        tmp_workspaces: Path,
+    ) -> None:
+        workspace = tmp_workspaces / "session-with-metadata"
+        workspace.mkdir(parents=True)
+        flock_dir = workspace / ".flock"
+        flock_dir.mkdir()
+        (flock_dir / "cluster.yaml").write_text(
+            "peers:\n"
+            "  - peer_id: flock-coder\n"
+            "    persona: coder\n"
+            "    display_name: coder\n"
+            "  - peer_id: flock-reviewer\n"
+            "    persona: reviewer\n"
+            "    display_name: reviewer\n",
+            encoding="utf-8",
+        )
+        (flock_dir / "node-coder.yaml").write_text("persona: coder\n", encoding="utf-8")
+        (flock_dir / "node-reviewer.yaml").write_text("persona: reviewer\n", encoding="utf-8")
+
+        spec = SessionSpec(
+            values={
+                "workflow": {
+                    "graph": {
+                        "nodes": [
+                            {
+                                "id": "stage-coder",
+                                "kind": "stage",
+                                "personaIds": ["coder"],
+                            },
+                            {
+                                "id": "stage-reviewer",
+                                "kind": "stage",
+                                "personaIds": ["reviewer"],
+                            },
+                            {
+                                "id": "trigger-1",
+                                "kind": "trigger",
+                                "dispatchEvent": "code.requested",
+                            },
+                        ],
+                        "edges": [
+                            {
+                                "source": "stage-coder",
+                                "target": "stage-reviewer",
+                                "label": "code.changed -> code.changed",
+                            }
+                        ],
+                    }
+                },
+                "flock": {
+                    "personas": [{"name": "coder"}, {"name": "reviewer"}],
+                    "llm_config": {"model": "google/gemma-4-26B-A4B-it"},
+                    "max_concurrent_tasks": 3,
+                },
+            },
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-coder"},
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        with (
+            patch("subprocess.run"),
+            patch("ravn.adapters.personas.loader.FilesystemPersonaAdapter") as loader_cls,
+        ):
+            loader = loader_cls.return_value
+            loader.load.side_effect = lambda persona: MagicMock(
+                allowed_tools=["file", "git"] if persona == "coder" else ["file", "ravn"]
+            )
+            await manager._start_flock(
+                spec,
+                workspace,
+                FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+                skuld_port=9101,
+            )
+
+        cluster = (flock_dir / "cluster.yaml").read_text(encoding="utf-8")
+        assert "capabilities:" in cluster
+        assert "consumes_event_types:" in cluster
+        assert "emits_event_types:" in cluster
+        assert "code.requested" in cluster
+        assert "code.changed" in cluster
 
 
 class TestResolveClaude:
@@ -1666,6 +1837,7 @@ class TestLocalFlockMeshMode:
                     skuld_rep_port=7485,
                     skuld_handshake_port=7584,
                 ),
+                skuld_port=9101,
             )
 
         assert result == flock_dir
@@ -1731,6 +1903,7 @@ class TestLocalFlockMeshMode:
                     skuld_rep_port=7485,
                     skuld_handshake_port=7584,
                 ),
+                skuld_port=9101,
             )
 
         node_config = (flock_dir / "node-reviewer.yaml").read_text(encoding="utf-8")

@@ -348,6 +348,10 @@
   gap: var(--space-3);
 }
 
+.niuu-chat-outcome-dialog {
+  width: min(1080px, calc(100vw - var(--space-8)));
+}
+
 @media (max-width: 768px) {
   .niuu-chat-messages-container {
     padding: var(--space-2) var(--space-3);

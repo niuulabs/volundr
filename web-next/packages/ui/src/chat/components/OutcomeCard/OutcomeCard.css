@@ -82,6 +82,10 @@
   line-height: 1.5;
 }
 
+.niuu-chat-outcome-summary .niuu-chat-md-root {
+  gap: var(--space-2);
+}
+
 .niuu-chat-outcome-fields {
   display: flex;
   flex-direction: column;
@@ -104,6 +108,21 @@
 
 .niuu-chat-outcome-field-value {
   color: var(--color-text-secondary);
+  min-width: 0;
+}
+
+.niuu-chat-outcome-field-value .niuu-chat-md-root {
+  gap: var(--space-1);
+}
+
+.niuu-chat-outcome-field-value .niuu-chat-md-p,
+.niuu-chat-outcome-summary .niuu-chat-md-p {
+  margin: 0;
+}
+
+.niuu-chat-outcome-field-value .niuu-chat-md-codeblock,
+.niuu-chat-outcome-summary .niuu-chat-md-codeblock {
+  margin-top: var(--space-1);
 }
 
 .niuu-chat-outcome-toggle {

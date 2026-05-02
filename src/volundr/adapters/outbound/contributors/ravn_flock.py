@@ -654,6 +654,11 @@ class RavnFlockContributor(SessionContributor):
                 "transport": mesh_transport,
                 "peerPorts": skuld_ports,
             },
+            "flock": {
+                "personas": persona_dicts,
+                "llm_config": global_llm or {},
+                "max_concurrent_tasks": global_max_concurrent_tasks,
+            },
         }
         if workflow:
             values["workflow"] = workflow

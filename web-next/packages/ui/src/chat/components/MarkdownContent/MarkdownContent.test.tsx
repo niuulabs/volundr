@@ -85,6 +85,22 @@ describe('MarkdownContent', () => {
     expect(screen.getByTestId('outcome-card')).toBeInTheDocument();
   });
 
+  it('renders outcome card for dashed outcome markers', () => {
+    render(
+      <MarkdownContent content={'Before\n---outcome---\nverdict: pass\n---end---\nAfter'} />,
+    );
+    expect(screen.getByTestId('outcome-card')).toBeInTheDocument();
+    expect(screen.getByText('Before')).toBeInTheDocument();
+    expect(screen.getByText('After')).toBeInTheDocument();
+  });
+
+  it('renders outcome card for dashed outcome markers closed by bare dashes', () => {
+    render(<MarkdownContent content={'Before\n---outcome---\nverdict: pass\n---\nAfter'} />);
+    expect(screen.getByTestId('outcome-card')).toBeInTheDocument();
+    expect(screen.getByText('Before')).toBeInTheDocument();
+    expect(screen.getByText('After')).toBeInTheDocument();
+  });
+
   it('enables word wrap on word-wrap button click', () => {
     const { container } = render(<MarkdownContent content={'```js\nconst x = 1\n```'} />);
     const wrapBtn = screen.getAllByRole('button').find((b) => b.title === 'Enable word wrap');

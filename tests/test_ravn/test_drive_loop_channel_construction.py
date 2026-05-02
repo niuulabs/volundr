@@ -14,6 +14,7 @@ import pytest
 from ravn.adapters.channels.composite import CompositeChannel
 from ravn.adapters.channels.mesh_channel import MeshActivityChannel
 from ravn.adapters.channels.silent import SilentChannel
+from ravn.adapters.channels.task_context import TaskContextChannel
 from ravn.config import InitiativeConfig
 from ravn.domain.models import AgentTask, OutputMode
 from ravn.drive_loop import DriveLoop
@@ -71,7 +72,7 @@ class TestDriveLoopChannelConstruction:
 
     @pytest.mark.asyncio
     async def test_mesh_enabled_no_cascade_uses_mesh_channel(self):
-        """Mesh enabled, no cascade → channel is MeshActivityChannel."""
+        """Mesh enabled, no direct Skuld stream → channel wraps MeshActivityChannel."""
         dl, captured = _make_drive_loop_with_mesh(cascade_enabled=False)
         mock_mesh = AsyncMock()
         dl._mesh = mock_mesh
@@ -80,7 +81,8 @@ class TestDriveLoopChannelConstruction:
 
         assert len(captured) == 1
         channel = captured[0]
-        assert isinstance(channel, MeshActivityChannel)
+        assert isinstance(channel, TaskContextChannel)
+        assert isinstance(channel._channel, MeshActivityChannel)
 
     @pytest.mark.asyncio
     async def test_mesh_disabled_no_cascade_uses_silent(self):
@@ -104,7 +106,7 @@ class TestDriveLoopChannelConstruction:
 
     @pytest.mark.asyncio
     async def test_cascade_with_mesh_uses_composite(self):
-        """cascade.enabled=True + mesh → CompositeChannel including MeshActivityChannel."""
+        """cascade.enabled=True + mesh → CompositeChannel including wrapped mesh activity."""
         dl, captured = _make_drive_loop_with_mesh(cascade_enabled=True)
         mock_mesh = AsyncMock()
         dl._mesh = mock_mesh
@@ -113,7 +115,9 @@ class TestDriveLoopChannelConstruction:
 
         assert isinstance(captured[0], CompositeChannel)
         channel_types = [type(ch) for ch in captured[0]._channels]
-        assert MeshActivityChannel in channel_types
+        assert TaskContextChannel in channel_types
+        wrapped = [ch for ch in captured[0]._channels if isinstance(ch, TaskContextChannel)]
+        assert any(isinstance(ch._channel, MeshActivityChannel) for ch in wrapped)
 
     @pytest.mark.asyncio
     async def test_cascade_without_mesh_uses_capture_only(self):
@@ -130,7 +134,7 @@ class TestDriveLoopChannelConstruction:
 
     @pytest.mark.asyncio
     async def test_no_cascade_skuld_and_mesh_uses_composite(self):
-        """No cascade, skuld_channel + mesh → CompositeChannel(sinks) with both."""
+        """No cascade, skuld_channel + mesh → direct Skuld stream wins for live activity."""
         dl, captured = _make_drive_loop_with_mesh(cascade_enabled=False)
         mock_skuld = MagicMock()
         mock_skuld.emit = AsyncMock()
@@ -139,13 +143,12 @@ class TestDriveLoopChannelConstruction:
 
         await dl._run_task(_make_task())
 
-        assert isinstance(captured[0], CompositeChannel)
-        channel_types = [type(ch) for ch in captured[0]._channels]
-        assert MeshActivityChannel in channel_types
+        assert isinstance(captured[0], TaskContextChannel)
+        assert captured[0]._channel is mock_skuld
 
     @pytest.mark.asyncio
     async def test_cascade_skuld_and_mesh_uses_composite_with_all(self):
-        """cascade + skuld_channel + mesh → CompositeChannel([capture, skuld, mesh])."""
+        """cascade + skuld_channel + mesh → CompositeChannel([capture, wrapped skuld])."""
         dl, captured = _make_drive_loop_with_mesh(cascade_enabled=True)
         mock_skuld = MagicMock()
         mock_skuld.emit = AsyncMock()
@@ -156,4 +159,6 @@ class TestDriveLoopChannelConstruction:
 
         assert isinstance(captured[0], CompositeChannel)
         channel_types = [type(ch) for ch in captured[0]._channels]
-        assert MeshActivityChannel in channel_types
+        assert TaskContextChannel in channel_types
+        wrapped = next(ch for ch in captured[0]._channels if isinstance(ch, TaskContextChannel))
+        assert wrapped._channel is mock_skuld

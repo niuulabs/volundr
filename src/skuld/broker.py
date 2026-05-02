@@ -683,7 +683,9 @@ class Broker:
                         peer_id=peer.peer_id,
                         persona=peer.persona,
                         display_name=peer.persona,
-                        subscribes_to=list(getattr(peer, "capabilities", [])),
+                        subscribes_to=list(getattr(peer, "consumes_event_types", [])),
+                        emits=list(getattr(peer, "emits_event_types", [])),
+                        tools=list(getattr(peer, "capabilities", [])),
                     )
 
             # Start room mesh bridge so outcomes from any mesh peer flow to the

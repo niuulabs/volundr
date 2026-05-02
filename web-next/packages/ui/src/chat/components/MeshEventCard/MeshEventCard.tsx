@@ -22,7 +22,13 @@ function getVerdictIcon(verdict: string | undefined) {
   }
 }
 
-function OutcomeCard({ event }: { event: MeshOutcomeEvent }) {
+function OutcomeCard({
+  event,
+  onShowDetails,
+}: {
+  event: MeshOutcomeEvent;
+  onShowDetails?: (event: MeshOutcomeEvent) => void;
+}) {
   const color = resolveParticipantColor(event.participantId, event.participant.color);
 
   return (
@@ -37,17 +43,31 @@ function OutcomeCard({ event }: { event: MeshOutcomeEvent }) {
         <span className="niuu-chat-mesh-event-type">{event.eventType}</span>
         {getVerdictIcon(event.verdict)}
       </div>
-      {event.summary && <div className="niuu-chat-mesh-summary">{event.summary}</div>}
-      {event.verdict && (
-        <div className="niuu-chat-mesh-verdict" data-verdict={event.verdict}>
-          {event.verdict === 'pass' && 'Passed'}
-          {event.verdict === 'fail' && 'Failed'}
-          {(event.verdict === 'needs_changes' || event.verdict === 'needs_review') &&
-            'Changes Requested'}
+      <div className="niuu-chat-mesh-card-body">
+        {event.summary && <div className="niuu-chat-mesh-summary">{event.summary}</div>}
+        {event.verdict && (
+          <div className="niuu-chat-mesh-verdict" data-verdict={event.verdict}>
+            {event.verdict === 'pass' && 'Passed'}
+            {event.verdict === 'fail' && 'Failed'}
+            {(event.verdict === 'needs_changes' || event.verdict === 'needs_review') &&
+              'Changes Requested'}
+          </div>
+        )}
+        <div className="niuu-chat-mesh-card-footer">
+          <button
+            type="button"
+            className="niuu-chat-mesh-detail-link"
+            onClick={(clickEvent) => {
+              clickEvent.stopPropagation();
+              onShowDetails?.(event);
+            }}
+          >
+            Show details
+          </button>
+          <div className="niuu-chat-mesh-timestamp">
+            {event.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </div>
         </div>
-      )}
-      <div className="niuu-chat-mesh-timestamp">
-        {event.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </div>
     </div>
   );
@@ -68,13 +88,17 @@ function DelegationCard({ event }: { event: MeshDelegationEvent }) {
         <ArrowRight className="niuu-chat-mesh-arrow-icon" />
         <span className="niuu-chat-mesh-event-type">{event.eventType}</span>
       </div>
-      {event.preview && (
-        <div className="niuu-chat-mesh-preview">
-          {event.preview.length > 200 ? `${event.preview.slice(0, 200)}...` : event.preview}
+      <div className="niuu-chat-mesh-card-body">
+        {event.preview && (
+          <div className="niuu-chat-mesh-preview">
+            {event.preview.length > 200 ? `${event.preview.slice(0, 200)}...` : event.preview}
+          </div>
+        )}
+        <div className="niuu-chat-mesh-card-footer">
+          <div className="niuu-chat-mesh-timestamp">
+            {event.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </div>
         </div>
-      )}
-      <div className="niuu-chat-mesh-timestamp">
-        {event.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </div>
     </div>
   );
@@ -96,15 +120,19 @@ function NotificationCard({ event }: { event: MeshNotificationEvent }) {
         <span className="niuu-chat-mesh-persona">{event.persona}</span>
         <span className="niuu-chat-mesh-event-type">{event.notificationType}</span>
       </div>
-      <div className="niuu-chat-mesh-summary">{event.summary}</div>
-      {event.reason && <div className="niuu-chat-mesh-reason">Reason: {event.reason}</div>}
-      {event.recommendation && (
-        <div className="niuu-chat-mesh-recommendation">
-          <strong>Suggestion:</strong> {event.recommendation}
+      <div className="niuu-chat-mesh-card-body">
+        <div className="niuu-chat-mesh-summary">{event.summary}</div>
+        {event.reason && <div className="niuu-chat-mesh-reason">Reason: {event.reason}</div>}
+        {event.recommendation && (
+          <div className="niuu-chat-mesh-recommendation">
+            <strong>Suggestion:</strong> {event.recommendation}
+          </div>
+        )}
+        <div className="niuu-chat-mesh-card-footer">
+          <div className="niuu-chat-mesh-timestamp">
+            {event.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </div>
         </div>
-      )}
-      <div className="niuu-chat-mesh-timestamp">
-        {event.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </div>
     </div>
   );
@@ -112,12 +140,13 @@ function NotificationCard({ event }: { event: MeshNotificationEvent }) {
 
 interface MeshEventCardProps {
   event: MeshEvent;
+  onShowDetails?: (event: MeshOutcomeEvent) => void;
 }
 
-export function MeshEventCard({ event }: MeshEventCardProps) {
+export function MeshEventCard({ event, onShowDetails }: MeshEventCardProps) {
   switch (event.type) {
     case 'outcome':
-      return <OutcomeCard event={event} />;
+      return <OutcomeCard event={event} onShowDetails={onShowDetails} />;
     case 'mesh_message':
       return <DelegationCard event={event} />;
     case 'notification':

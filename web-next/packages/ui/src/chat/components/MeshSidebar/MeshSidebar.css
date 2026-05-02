@@ -10,6 +10,11 @@
   scrollbar-color: var(--color-bg-elevated) transparent;
 }
 
+.niuu-chat-mesh-sidebar--collapsed {
+  width: 54px;
+  overflow: hidden;
+}
+
 .niuu-chat-mesh-sidebar-header {
   display: flex;
   align-items: center;
@@ -17,6 +22,13 @@
   padding: var(--space-3) var(--space-3);
   border-bottom: 1px solid var(--color-border-subtle);
   flex-shrink: 0;
+}
+
+.niuu-chat-mesh-sidebar-header-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .niuu-chat-mesh-sidebar-title {
@@ -35,6 +47,55 @@
   background-color: var(--color-bg-elevated);
   border-radius: var(--radius-full);
   padding: 1px var(--space-1);
+}
+
+.niuu-chat-mesh-sidebar-collapse-toggle {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.niuu-chat-mesh-sidebar-collapse-toggle:hover {
+  color: var(--color-text-secondary);
+}
+
+.niuu-chat-mesh-sidebar-collapsed-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+
+.niuu-chat-mesh-sidebar-collapsed-peer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.niuu-chat-mesh-sidebar-collapsed-peer:hover {
+  background-color: var(--color-bg-elevated);
+  border-color: var(--color-border);
+}
+
+.niuu-chat-mesh-sidebar-collapsed-peer--selected {
+  background-color: color-mix(in srgb, var(--color-brand) 10%, var(--color-bg-elevated));
+  border-color: color-mix(in srgb, var(--color-brand) 30%, var(--color-border-subtle));
 }
 
 .niuu-chat-mesh-sidebar-peer-list {

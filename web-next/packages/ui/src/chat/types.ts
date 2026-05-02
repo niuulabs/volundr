@@ -94,6 +94,8 @@ export interface MeshOutcomeEvent extends MeshEventBase {
   eventType: string;
   verdict?: MeshVerdict;
   summary?: string;
+  fields?: Record<string, unknown>;
+  valid?: boolean;
 }
 
 export interface MeshDelegationEvent extends MeshEventBase {

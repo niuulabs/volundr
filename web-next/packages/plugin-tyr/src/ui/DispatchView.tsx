@@ -155,6 +155,48 @@ function BatchDispatchBar({
   );
 }
 
+function PendingDispatchBar({ entries }: { entries: EnrichedEntry[] }) {
+  if (entries.length === 0) return null;
+
+  return (
+    <div
+      className="niuu-border-b niuu-border-brand/30 niuu-bg-[linear-gradient(90deg,rgba(56,189,248,0.10),rgba(59,130,246,0.06))] niuu-px-4 niuu-py-3"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="niuu-flex niuu-items-start niuu-gap-3">
+        <span className="niuu-mt-1 niuu-inline-flex niuu-h-2.5 niuu-w-2.5 niuu-shrink-0 niuu-rounded-full niuu-bg-brand niuu-animate-pulse" />
+        <div className="niuu-min-w-0 niuu-flex-1">
+          <div className="niuu-text-sm niuu-font-semibold niuu-text-text-primary">
+            Dispatching {entries.length} raid{entries.length === 1 ? '' : 's'}
+          </div>
+          <div className="niuu-mt-1 niuu-text-xs niuu-text-text-secondary">
+            Keeping this batch visible while Tyr submits it.
+          </div>
+          <div className="niuu-mt-3 niuu-flex niuu-flex-col niuu-gap-2">
+            {entries.map((entry) => (
+              <div
+                key={entry.raid.id}
+                className="niuu-flex niuu-items-center niuu-gap-2 niuu-rounded-md niuu-border niuu-border-brand/20 niuu-bg-bg-primary/80 niuu-px-3 niuu-py-2"
+              >
+                <span className="niuu-rounded niuu-bg-bg-elevated niuu-px-1.5 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-text-text-secondary">
+                  {entry.raid.trackerId}
+                </span>
+                <span className="niuu-min-w-0 niuu-flex-1 niuu-truncate niuu-text-sm niuu-text-text-primary">
+                  {entry.raid.name}
+                </span>
+                <span className="niuu-rounded-sm niuu-border niuu-border-brand/30 niuu-bg-brand/10 niuu-px-2 niuu-py-0.5 niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-text-brand">
+                  submitting
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Saga group header
 // ---------------------------------------------------------------------------
@@ -204,11 +246,13 @@ function RaidRow({
   isSelected,
   onToggle,
   workflowName,
+  isPendingDispatch = false,
 }: {
   entry: EnrichedEntry;
   isSelected: boolean;
   onToggle: () => void;
   workflowName?: string;
+  isPendingDispatch?: boolean;
 }) {
   const waitMin = Math.round((Date.now() - new Date(entry.raid.updatedAt).getTime()) / 60_000);
   const waitLabel = waitMin <= 1 ? 'now' : `${waitMin}m wait`;
@@ -217,29 +261,34 @@ function RaidRow({
     <div
       className={cn(
         'niuu-flex niuu-items-center niuu-gap-3 niuu-px-4 niuu-py-2.5 niuu-border niuu-rounded-md niuu-cursor-pointer niuu-transition-colors',
-        isSelected
-          ? 'niuu-bg-[#1e232a] niuu-border-border'
-          : 'niuu-bg-[#171b22] niuu-border-border-subtle hover:niuu-bg-[#1b2028]',
+        isPendingDispatch
+          ? 'niuu-bg-[linear-gradient(90deg,rgba(56,189,248,0.10),rgba(59,130,246,0.04))] niuu-border-brand/30'
+          : isSelected
+            ? 'niuu-bg-[#1e232a] niuu-border-border'
+            : 'niuu-bg-[#171b22] niuu-border-border-subtle hover:niuu-bg-[#1b2028]',
       )}
       onClick={onToggle}
     >
       <label
         className={cn(
           'niuu-w-5 niuu-h-5 niuu-rounded-sm niuu-border niuu-flex niuu-items-center niuu-justify-center niuu-shrink-0 niuu-text-[10px] niuu-cursor-pointer',
-          isSelected
-            ? 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary'
-            : 'niuu-bg-bg-tertiary niuu-border-border',
+          isPendingDispatch
+            ? 'niuu-bg-brand/15 niuu-border-brand/40 niuu-text-brand'
+            : isSelected
+              ? 'niuu-bg-brand niuu-border-brand niuu-text-bg-primary'
+              : 'niuu-bg-bg-tertiary niuu-border-border',
         )}
         onClick={(e) => e.stopPropagation()}
       >
         <input
           type="checkbox"
-          checked={isSelected}
+          checked={isSelected || isPendingDispatch}
           onChange={onToggle}
           className="niuu-sr-only"
           aria-label="Select row"
+          disabled={isPendingDispatch}
         />
-        {isSelected && '✓'}
+        {(isSelected || isPendingDispatch) && '✓'}
       </label>
       <div className="niuu-flex-1 niuu-min-w-0">
         <div className="niuu-text-sm niuu-font-medium niuu-text-text-primary niuu-truncate">
@@ -260,6 +309,11 @@ function RaidRow({
             aria-label={`workflow override: ${workflowName}`}
           >
             {workflowName}
+          </span>
+        )}
+        {isPendingDispatch && (
+          <span className="niuu-inline-flex niuu-items-center niuu-rounded-sm niuu-border niuu-border-brand/30 niuu-bg-brand/10 niuu-px-2 niuu-py-0.5 niuu-text-xs niuu-font-mono niuu-uppercase niuu-text-brand">
+            submitting
           </span>
         )}
         {entry.feasibility.feasible ? (
@@ -397,6 +451,7 @@ function DispatchViewContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [optimisticQueued, setOptimisticQueued] = useState<Set<string>>(new Set());
+  const [pendingDispatchEntries, setPendingDispatchEntries] = useState<EnrichedEntry[]>([]);
   const [isDispatching, setIsDispatching] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
 
@@ -526,16 +581,22 @@ function DispatchViewContent() {
   const selectedEntries = filtered.filter((e) => selectedIds.has(e.raid.id));
   const allSelectedFeasible =
     selectedEntries.length > 0 && selectedEntries.every((e) => e.feasibility.feasible);
+  const pendingDispatchIds = useMemo(
+    () => new Set(pendingDispatchEntries.map((entry) => entry.raid.id)),
+    [pendingDispatchEntries],
+  );
 
   async function handleDispatch() {
+    const dispatchEntries = selectedEntries;
     const ids = Array.from(selectedIds);
-    const items = selectedEntries.map((entry) => ({
+    const items = dispatchEntries.map((entry) => ({
       sagaId: entry.queueItem.sagaId,
       issueId: entry.queueItem.issueId,
       repo: entry.queueItem.repos[0] ?? '',
       workflowId: workflowOverride.get(entry.raid.id)?.id,
     }));
     setIsDispatching(true);
+    setPendingDispatchEntries(dispatchEntries);
     setOptimisticQueued((prev) => new Set([...prev, ...ids]));
     setSelectedIds(new Set());
 
@@ -543,6 +604,7 @@ function DispatchViewContent() {
       const results = await dispatchBus.approve(items);
       await queueQuery.refetch();
       setOptimisticQueued(new Set());
+      setPendingDispatchEntries([]);
       const spawned = results.filter((result) => result.status === 'spawned').length;
       toast({
         title:
@@ -557,6 +619,7 @@ function DispatchViewContent() {
         ids.forEach((id) => next.delete(id));
         return next;
       });
+      setPendingDispatchEntries([]);
       toast({ title: 'Dispatch failed', tone: 'critical' });
     } finally {
       setIsDispatching(false);
@@ -605,6 +668,8 @@ function DispatchViewContent() {
   }
 
   function toggleId(id: string) {
+    if (pendingDispatchIds.has(id)) return;
+
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -715,6 +780,8 @@ function DispatchViewContent() {
             onOverrideThreshold={() => setShowThresholdModal(true)}
           />
 
+          <PendingDispatchBar entries={pendingDispatchEntries} />
+
           {/* Grouped queue */}
           <div
             className="niuu-flex-1 niuu-overflow-y-auto niuu-p-2 niuu-flex niuu-flex-col niuu-gap-3"
@@ -747,6 +814,7 @@ function DispatchViewContent() {
                         isSelected={selectedIds.has(entry.raid.id)}
                         onToggle={() => toggleId(entry.raid.id)}
                         workflowName={workflowOverride.get(entry.raid.id)?.name}
+                        isPendingDispatch={pendingDispatchIds.has(entry.raid.id)}
                       />
                     ))}
                   </div>

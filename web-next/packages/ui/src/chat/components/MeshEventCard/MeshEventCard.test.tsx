@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { fireEvent } from '@testing-library/react';
 import { MeshEventCard } from './MeshEventCard';
 import type { MeshEvent } from '../../types';
 
@@ -46,6 +47,14 @@ describe('MeshEventCard', () => {
     expect(screen.getByText('Ada')).toBeInTheDocument();
     expect(screen.getByText('Passed')).toBeInTheDocument();
     expect(screen.getByText('All checks passed')).toBeInTheDocument();
+    expect(screen.getByText('Show details')).toBeInTheDocument();
+  });
+
+  it('calls onShowDetails only from the detail control', () => {
+    const onShowDetails = vi.fn();
+    render(<MeshEventCard event={outcomeEvent} onShowDetails={onShowDetails} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
+    expect(onShowDetails).toHaveBeenCalledWith(outcomeEvent);
   });
 
   it('renders delegation card with fromPersona', () => {

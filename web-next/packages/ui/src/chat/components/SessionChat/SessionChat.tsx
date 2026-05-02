@@ -19,6 +19,9 @@ import { MeshSidebar } from '../MeshSidebar';
 import { AgentDetailPanel } from '../AgentDetailPanel';
 import { ChatInput } from '../ChatInput';
 import { SessionEmptyChat } from '../ChatEmptyStates';
+import { MarkdownContent } from '../MarkdownContent';
+import { extractOutcomeBlock } from '../OutcomeCard';
+import { Dialog, DialogContent } from '../../../primitives/Dialog';
 import type {
   AgentInternalEvent,
   ChatMessage,
@@ -43,6 +46,69 @@ const THINKING_PRESETS = [
   { label: '16K', value: 16384 },
   { label: '32K', value: 32768 },
 ] as const;
+
+function stringifyOutcomeValue(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function pushOutcomeField(lines: string[], key: string, value: unknown): void {
+  const text = stringifyOutcomeValue(value);
+  if (!text) return;
+  if (text.includes('\n')) {
+    lines.push(`${key}: |`);
+    for (const line of text.split('\n')) {
+      lines.push(`  ${line}`);
+    }
+    return;
+  }
+  lines.push(`${key}: ${text}`);
+}
+
+function formatOutcomeMarkdown(event: Extract<MeshEvent, { type: 'outcome' }>): string {
+  const fields = event.fields ?? {};
+  const lines: string[] = [];
+  pushOutcomeField(lines, 'verdict', event.verdict ?? fields.verdict);
+  pushOutcomeField(lines, 'summary', event.summary ?? fields.summary);
+
+  for (const [key, value] of Object.entries(fields)) {
+    if (key === 'verdict' || key === 'summary' || key === 'success') continue;
+    pushOutcomeField(lines, key, value);
+  }
+
+  if (lines.length === 0) {
+    pushOutcomeField(lines, 'event_type', event.eventType);
+  }
+
+  return `### ${event.persona}\n\n\`\`\`outcome\n${lines.join('\n')}\n\`\`\``;
+}
+
+function isOutcomeMessageContent(content: string): boolean {
+  return (
+    content.includes('```outcome') ||
+    content.includes('---outcome---') ||
+    content.includes('<outcome>')
+  );
+}
+
+function formatOutcomeDialogContent(
+  messageContent: string | undefined,
+  event: Extract<MeshEvent, { type: 'outcome' }>,
+): string {
+  if (messageContent) {
+    const extracted = extractOutcomeBlock(messageContent);
+    if (extracted) {
+      return `\`\`\`outcome\n${extracted.raw}\n\`\`\``;
+    }
+  }
+  return formatOutcomeMarkdown(event);
+}
 
 export interface SessionChatProps {
   /** All completed messages */
@@ -104,6 +170,11 @@ export interface SessionChatProps {
   ) => ReactNode;
 }
 
+type SelectedOutcomeDetail = {
+  event: Extract<MeshEvent, { type: 'outcome' }>;
+  content: string;
+};
+
 export function SessionChat({
   messages,
   streamingContent,
@@ -152,6 +223,11 @@ export function SessionChat({
   const [showThinkingMenu, setShowThinkingMenu] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
+  const [selectedOutcomeDetail, setSelectedOutcomeDetail] = useState<SelectedOutcomeDetail | null>(
+    null,
+  );
+  const [peerSidebarCollapsed, setPeerSidebarCollapsed] = useState(false);
+  const [cascadePanelCollapsed, setCascadePanelCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -180,19 +256,31 @@ export function SessionChat({
       : null;
 
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
-  const handleOutcomeClick = useCallback(
-    (event: MeshEvent) => {
-      if (event.type !== 'outcome') return;
+  const findClosestParticipantMessage = useCallback(
+    (event: MeshEvent, outcomeOnly = false) => {
       const targetTime = event.timestamp.getTime();
       const participantMsgs = messages.filter(
-        (m) => m.participant?.peerId === event.participantId && m.role === 'assistant',
+        (message) => message.participant?.peerId === event.participantId && message.role === 'assistant',
       );
-      if (participantMsgs.length === 0) return;
-      const closest = participantMsgs.reduce((best, m) => {
-        const dt = Math.abs(m.createdAt.getTime() - targetTime);
+      const scopedMessages =
+        outcomeOnly || event.type === 'outcome'
+          ? participantMsgs.filter((message) => isOutcomeMessageContent(message.content))
+          : participantMsgs;
+      const candidateMessages = scopedMessages.length > 0 ? scopedMessages : participantMsgs;
+      if (candidateMessages.length === 0) return null;
+      return candidateMessages.reduce((best, message) => {
+        const dt = Math.abs(message.createdAt.getTime() - targetTime);
         const bestDt = Math.abs(best.createdAt.getTime() - targetTime);
-        return dt < bestDt ? m : best;
+        return dt < bestDt ? message : best;
       });
+    },
+    [messages],
+  );
+
+  const handleOutcomeClick = useCallback(
+    (event: MeshEvent) => {
+      const closest = findClosestParticipantMessage(event);
+      if (!closest) return;
       const el = document.getElementById(`msg-${closest.id}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -200,8 +288,16 @@ export function SessionChat({
         setTimeout(() => setHighlightedMsgId(null), 2000);
       }
     },
-    [messages],
+    [findClosestParticipantMessage],
   );
+
+  const handleOutcomeShowDetails = useCallback((event: Extract<MeshEvent, { type: 'outcome' }>) => {
+    const closest = findClosestParticipantMessage(event, true);
+    setSelectedOutcomeDetail({
+      event,
+      content: formatOutcomeDialogContent(closest?.content, event),
+    });
+  }, [findClosestParticipantMessage]);
 
   const hasConversation = useMemo(
     () =>
@@ -432,6 +528,8 @@ export function SessionChat({
           participants={participants}
           selectedPeerId={selectedAgentId}
           onSelectPeer={handleSelectAgent}
+          collapsed={peerSidebarCollapsed}
+          onToggleCollapsed={() => setPeerSidebarCollapsed((value) => !value)}
         />
       )}
 
@@ -708,8 +806,31 @@ export function SessionChat({
         </div>
       </div>
 
+      <Dialog
+        open={selectedOutcomeDetail !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedOutcomeDetail(null);
+        }}
+      >
+        {selectedOutcomeDetail && (
+          <DialogContent
+            title={`${selectedOutcomeDetail.event.persona} outcome`}
+            description={selectedOutcomeDetail.event.eventType}
+            className="niuu-chat-outcome-dialog"
+          >
+            <MarkdownContent content={selectedOutcomeDetail.content} />
+          </DialogContent>
+        )}
+      </Dialog>
+
       {showRightPanel && effectiveRightPanelMode === 'cascade' && meshEvents.length > 0 && (
-        <MeshCascadePanel events={meshEvents} onEventClick={handleOutcomeClick} />
+        <MeshCascadePanel
+          events={meshEvents}
+          onEventClick={handleOutcomeClick}
+          onOutcomeShowDetails={handleOutcomeShowDetails}
+          collapsed={cascadePanelCollapsed}
+          onToggleCollapsed={() => setCascadePanelCollapsed((value) => !value)}
+        />
       )}
 
       {showRightPanel &&

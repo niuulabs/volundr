@@ -7,6 +7,11 @@
   border-left: 1px solid var(--color-border-subtle);
 }
 
+.niuu-chat-cascade-panel--collapsed {
+  width: 54px;
+  overflow: hidden;
+}
+
 .niuu-chat-cascade-header {
   display: flex;
   align-items: center;
@@ -70,7 +75,37 @@
 }
 
 .niuu-chat-cascade-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   flex-shrink: 0;
+}
+
+.niuu-chat-cascade-collapse-toggle {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.niuu-chat-cascade-collapse-toggle:hover {
+  color: var(--color-text-secondary);
+}
+
+.niuu-chat-cascade-collapsed-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
 }
 
 .niuu-chat-cascade-summary {
