@@ -32,6 +32,7 @@ from ravn.adapters.channels.skuld_channel import SkuldChannel
 from ravn.adapters.channels.task_context import TaskContextChannel
 from ravn.adapters.events.noop_publisher import NoOpEventPublisher
 from ravn.config import BudgetConfig, InitiativeConfig, Settings
+from ravn.domain.exceptions import LLMError
 from ravn.domain.budget import DailyBudgetTracker, compute_cost
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.models import AgentTask, OutputMode
@@ -780,6 +781,16 @@ class DriveLoop:
             task.triggered_by,
         )
 
+        await channel.emit(
+            RavnEvent.task_started(
+                source=self._source_id,
+                task_id=task.task_id,
+                title=task.title,
+                correlation_id=task.task_id,
+                session_id=task.session_id or task.task_id,
+            )
+        )
+
         await self._event_publisher.publish(
             RavnEvent(
                 type=RavnEventType.TASK_STARTED,
@@ -840,6 +851,15 @@ class DriveLoop:
         except Exception as exc:
             logger.error("drive_loop: task %s failed: %s", task.task_id, exc)
             self._result_store.set_status(task.task_id, "failed")
+            await channel.emit(
+                RavnEvent.error(
+                    source=self._source_id,
+                    message=self._format_task_error(task, exc),
+                    correlation_id=task.task_id,
+                    session_id=task.session_id or task.task_id,
+                    task_id=task.task_id,
+                )
+            )
 
         outcome = "success" if success else "error"
         emit_fn = getattr(agent, "emit_session_ended", None)
@@ -866,6 +886,15 @@ class DriveLoop:
                 task_id=task.task_id,
             )
         )
+        await channel.emit(
+            RavnEvent.task_complete(
+                source=self._source_id,
+                success=success,
+                correlation_id=task.task_id,
+                session_id=task.session_id or task.task_id,
+                task_id=task.task_id,
+            )
+        )
 
         if capture_channel and capture_channel.surface_triggered:
             await self._re_deliver_surface(task, capture_channel.response_text)
@@ -879,6 +908,15 @@ class DriveLoop:
         if task.triggered_by and task.triggered_by.startswith("thread:"):
             thread_path = task.triggered_by.removeprefix("thread:")
             await self._finalise_thread(thread_path, success)
+
+    def _format_task_error(self, task: AgentTask, exc: Exception) -> str:
+        """Render a user-visible task failure message for live room chat."""
+        if isinstance(exc, LLMError):
+            return (
+                f"LLM backend unavailable while handling `{task.title}`: {exc}. "
+                "The task will not make progress until the upstream model/service recovers."
+            )
+        return f"{type(exc).__name__}: {exc}"
 
     async def _emit_sleipnir_task_completed(self, task: AgentTask, outcome: str) -> None:
         """Publish ravn.task.completed to Sleipnir (no-op when publisher absent)."""
@@ -910,6 +948,13 @@ class DriveLoop:
         This is fully generic — any persona with produces.event_type participates.
         """
         if self._mesh is None or self._persona_config is None:
+            return
+        if not success:
+            logger.info(
+                "drive_loop: skipping mesh outcome publish for failed task_id=%s persona=%s",
+                task.task_id,
+                self._persona_config.name,
+            )
             return
 
         # Parse outcome block from response

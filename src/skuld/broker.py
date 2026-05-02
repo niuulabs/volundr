@@ -35,6 +35,7 @@ from niuu.mesh.cluster import read_cluster_pub_addresses
 from niuu.mesh.discovery_builder import build_discovery_adapters
 from niuu.mesh.identity import MeshIdentity
 from niuu.utils import import_class
+from ravn.domain.exceptions import LLMError
 from skuld.channels import (
     ChannelRegistry,
     TelegramChannel,
@@ -129,6 +130,9 @@ _GIT_COMMIT_PREFIXES = ("git commit", "git -c ", "git -C ")
 
 # Matches git commit output like: [main e4f7a21] fix: some message
 _GIT_COMMIT_OUTPUT_RE = re.compile(r"\[[\w/-]+\s+([a-f0-9]{7,})\]\s+(.+)")
+_PEER_WATCHDOG_POLL_SECONDS = 5.0
+_PEER_WATCHDOG_SILENCE_SECONDS = 45.0
+_PEER_WATCHDOG_TOOL_SILENCE_SECONDS = 90.0
 
 
 def _is_git_commit(cmd: str) -> bool:
@@ -327,6 +331,19 @@ class SessionArtifacts:
         self.turn_count += 1
 
 
+@dataclass
+class PeerWatchState:
+    """Tracks one active flock peer task for Skuld's silence watchdog."""
+
+    peer_id: str
+    task_id: str
+    title: str
+    started_at: float
+    last_progress_at: float
+    last_status: str = "busy"
+    warned: bool = False
+
+
 # ---------------------------------------------------------------------------
 # JWT helpers
 # ---------------------------------------------------------------------------
@@ -472,6 +489,8 @@ class Broker:
         self._pending_block_type: str = ""
         self._pending_reasoning_text: str = ""
         self._chronicle_watcher: ChronicleWatcher | None = None
+        self._peer_watchdog_task: asyncio.Task[None] | None = None
+        self._peer_watches: dict[str, PeerWatchState] = {}
 
         # Mesh adapter — only active when mesh.enabled is True
         self._mesh_adapter: Any = None
@@ -486,6 +505,8 @@ class Broker:
                 config=self._settings.room,
                 channels=self._channels,
                 append_turn=self._append_turn,
+                report_timeline_event=self._report_timeline_event,
+                observe_peer_event=self._observe_room_peer_event,
             )
             if self._settings.room.enabled
             else None
@@ -669,8 +690,8 @@ class Broker:
             if self._room_bridge is not None:
                 await self._room_bridge.register_mesh_peer(
                     peer_id=self._mesh_adapter.peer_id,
-                    persona=mesh_cfg.persona,
-                    display_name="skuld",
+                    persona="Skuld",
+                    display_name="Skuld",
                     subscribes_to=list(mesh_cfg.consumes_event_types),
                     emits=["code.changed"],
                     tools=list(mesh_cfg.tools),
@@ -720,6 +741,15 @@ class Broker:
     def _has_workflow_trigger(self) -> bool:
         cfg = self._settings.workflow_trigger
         return bool(cfg.enabled and cfg.event_type and self._settings.session.initial_prompt)
+
+    def _is_room_only_workflow_session(self) -> bool:
+        """Return True when flock workflow sessions should stay room-only.
+
+        In these sessions, browser traffic should observe and direct mesh peers
+        through the room bridge. Lazy-starting Skuld's own CLI transport on
+        browser connect would spawn a second agent and confuse session state.
+        """
+        return bool(self._has_workflow_trigger() and self._settings.room.enabled)
 
     async def _publish_workflow_trigger(self) -> None:
         """Publish the initial Tyr task into the flock as a mesh outcome event."""
@@ -869,6 +899,9 @@ class Broker:
         elif self._has_workflow_trigger():
             logger.warning("Workflow trigger configured but mesh is disabled — skipping dispatch")
 
+        if self._room_bridge is not None and self._settings.mesh.enabled:
+            self._peer_watchdog_task = asyncio.create_task(self._peer_watchdog_loop())
+
     async def shutdown(self) -> None:
         """Clean up on shutdown.
 
@@ -880,6 +913,11 @@ class Broker:
         # Stop chronicle watcher first (flush pending events)
         if self._chronicle_watcher:
             await self._chronicle_watcher.stop()
+
+        if self._peer_watchdog_task is not None:
+            self._peer_watchdog_task.cancel()
+            await asyncio.gather(self._peer_watchdog_task, return_exceptions=True)
+            self._peer_watchdog_task = None
 
         # Report chronicle BEFORE stopping the transport (CLI must be alive)
         await self._report_chronicle()
@@ -905,6 +943,133 @@ class Broker:
         if self._http_client:
             await self._http_client.aclose()
             self._http_client = None
+
+    def _observer_peer_id(self) -> str:
+        """Return Skuld's room participant id when available."""
+        if self._mesh_adapter is not None and getattr(self._mesh_adapter, "peer_id", ""):
+            return str(self._mesh_adapter.peer_id)
+        if self._room_bridge is None:
+            return ""
+        for participant in self._room_bridge.participants.values():
+            if participant.participant_type == "skuld":
+                return participant.peer_id
+        return ""
+
+    async def _observe_room_peer_event(
+        self,
+        peer_id: str,
+        event_type: str,
+        frame: dict[str, Any],
+    ) -> None:
+        """Track flock peer progress so Skuld can surface silent failures."""
+        if self._room_bridge is None:
+            return
+        observer_peer_id = self._observer_peer_id()
+        if peer_id == observer_peer_id:
+            return
+
+        now = time.monotonic()
+        watch = self._peer_watches.get(peer_id)
+
+        if event_type == "task_started":
+            metadata = frame.get("metadata", {})
+            title = str(metadata.get("title") or frame.get("data") or "task")
+            task_id = str(metadata.get("task_id") or frame.get("task_id") or peer_id)
+            self._peer_watches[peer_id] = PeerWatchState(
+                peer_id=peer_id,
+                task_id=task_id,
+                title=title,
+                started_at=now,
+                last_progress_at=now,
+                last_status="busy",
+            )
+            return
+
+        if watch is None:
+            return
+
+        watch.last_progress_at = now
+        watch.warned = False
+        if event_type == "tool_start":
+            watch.last_status = "tool_executing"
+        elif event_type in {"thought", "thinking"}:
+            watch.last_status = "thinking"
+        elif event_type in {"tool_result", "task_complete"}:
+            watch.last_status = "idle"
+        elif event_type == "error":
+            watch.last_status = "error"
+            self._peer_watches.pop(peer_id, None)
+        elif event_type in {"response", "outcome", "help_needed"}:
+            self._peer_watches.pop(peer_id, None)
+
+    async def _peer_watchdog_loop(self) -> None:
+        """Warn in chat when a flock peer accepted work but goes quiet."""
+        try:
+            while True:
+                await asyncio.sleep(_PEER_WATCHDOG_POLL_SECONDS)
+                await self._check_peer_watchdog_once()
+        except asyncio.CancelledError:
+            return
+
+    async def _check_peer_watchdog_once(self) -> None:
+        """Run one silence-watchdog pass for active flock peers."""
+        now = time.monotonic()
+        for peer_id, watch in list(self._peer_watches.items()):
+            threshold = (
+                _PEER_WATCHDOG_TOOL_SILENCE_SECONDS
+                if watch.last_status == "tool_executing"
+                else _PEER_WATCHDOG_SILENCE_SECONDS
+            )
+            silence_seconds = now - watch.last_progress_at
+            if silence_seconds < threshold or watch.warned:
+                continue
+            watch.warned = True
+            await self._emit_peer_silence_warning(watch, int(silence_seconds))
+
+    async def _emit_peer_silence_warning(
+        self,
+        watch: PeerWatchState,
+        silence_seconds: int,
+    ) -> None:
+        """Surface a stalled-peer warning in chat and peer status."""
+        if self._room_bridge is None:
+            return
+
+        participant = self._room_bridge.participants.get(watch.peer_id)
+        peer_name = (
+            participant.display_name
+            or participant.persona
+            or watch.peer_id
+        ) if participant is not None else watch.peer_id
+        status_hint = (
+            "while waiting on a tool result"
+            if watch.last_status == "tool_executing"
+            else "after accepting work"
+        )
+        content = (
+            f"Skuld watchdog: `{peer_name}` has shown no visible progress for "
+            f"{silence_seconds}s {status_hint} on `{watch.title}`. "
+            "The agent may be blocked on an upstream LLM/backend failure or a stalled tool."
+        )
+        await self._room_bridge.broadcast_cli_activity(
+            watch.peer_id,
+            "blocked",
+            f"silent for {silence_seconds}s",
+        )
+        observer_peer_id = self._observer_peer_id()
+        if observer_peer_id:
+            await self._room_bridge.broadcast_cli_message(
+                observer_peer_id,
+                content,
+                is_error=True,
+            )
+        await self._report_timeline_event(
+            {
+                "t": self._artifacts.duration_seconds,
+                "type": "error",
+                "label": content[:120],
+            }
+        )
 
     async def _handle_cli_event(self, data: dict) -> None:
         """Forward a CLI event to all connected channels."""
@@ -1276,6 +1441,16 @@ class Broker:
             case _:
                 message = data.get("content", "")
                 if not message:
+                    return
+
+                if self._is_room_only_workflow_session():
+                    error_msg = (
+                        "Direct chat is disabled for flock workflow sessions. "
+                        "Target a mesh peer instead."
+                    )
+                    logger.info("_dispatch_browser_message: %s", error_msg)
+                    if sender_ws:
+                        await sender_ws.send_json({"type": "error", "content": error_msg})
                     return
 
                 # Record user turn in conversation history
@@ -1937,23 +2112,29 @@ class Broker:
 
             # Lazy-start transport on first browser connection
             if not self._transport.is_alive:
-                logger.info("handle_websocket: transport not alive, starting...")
-                try:
-                    await self._transport.start()
-                    logger.info("handle_websocket: transport started successfully")
-                except Exception as e:
-                    logger.error(
-                        "handle_websocket: transport.start() failed: %r",
-                        e,
-                        exc_info=True,
+                if self._is_room_only_workflow_session():
+                    logger.info(
+                        "handle_websocket: workflow room session detected; "
+                        "skipping transport lazy-start"
                     )
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "content": f"Transport start failed: {e}",
-                        }
-                    )
-                    return
+                else:
+                    logger.info("handle_websocket: transport not alive, starting...")
+                    try:
+                        await self._transport.start()
+                        logger.info("handle_websocket: transport started successfully")
+                    except Exception as e:
+                        logger.error(
+                            "handle_websocket: transport.start() failed: %r",
+                            e,
+                            exc_info=True,
+                        )
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "content": f"Transport start failed: {e}",
+                            }
+                        )
+                        return
             else:
                 logger.debug("handle_websocket: transport already alive")
 

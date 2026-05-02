@@ -371,6 +371,57 @@ class TestBroker:
         with pytest.raises(ValueError, match="Cannot load transport adapter"):
             b._create_transport()
 
+    @pytest.mark.asyncio
+    async def test_peer_watchdog_surfaces_silent_peer_in_chat(self, test_broker):
+        test_broker._mesh_adapter = MagicMock(peer_id="skuld-peer")
+        test_broker._room_bridge = MagicMock()
+        test_broker._room_bridge.participants = {
+            "flock-coder": MagicMock(
+                display_name="coder",
+                persona="coder",
+                participant_type="ravn",
+            )
+        }
+        test_broker._room_bridge.broadcast_cli_activity = AsyncMock()
+        test_broker._room_bridge.broadcast_cli_message = AsyncMock()
+        test_broker._report_timeline_event = AsyncMock()
+
+        await test_broker._observe_room_peer_event(
+            "flock-coder",
+            "task_started",
+            {"metadata": {"task_id": "task-1", "title": "Handle code.requested"}},
+        )
+
+        watch = test_broker._peer_watches["flock-coder"]
+        watch.last_progress_at -= 60
+
+        await test_broker._check_peer_watchdog_once()
+
+        test_broker._room_bridge.broadcast_cli_activity.assert_awaited_once()
+        test_broker._room_bridge.broadcast_cli_message.assert_awaited_once()
+        message = test_broker._room_bridge.broadcast_cli_message.await_args.args[1]
+        assert "Skuld watchdog" in message
+        assert "Handle code.requested" in message
+        assert "no visible progress" in message
+
+    @pytest.mark.asyncio
+    async def test_peer_watchdog_clears_watch_on_error(self, test_broker):
+        test_broker._room_bridge = MagicMock()
+
+        await test_broker._observe_room_peer_event(
+            "flock-coder",
+            "task_started",
+            {"metadata": {"task_id": "task-1", "title": "Handle code.requested"}},
+        )
+        assert "flock-coder" in test_broker._peer_watches
+
+        await test_broker._observe_room_peer_event(
+            "flock-coder",
+            "error",
+            {"data": "backend unavailable"},
+        )
+        assert "flock-coder" not in test_broker._peer_watches
+
     def test_create_transport_invalid_class(self, tmp_path):
         """Valid module but missing class raises ValueError via AttributeError."""
         settings = SkuldSettings(
@@ -473,6 +524,36 @@ class TestDispatchBrowserMessage:
     async def test_dispatch_user_message_empty_ignored(self, test_broker):
         await test_broker._dispatch_browser_message({"content": ""})
         test_broker._transport.send_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_user_message_rejected_for_workflow_room_session(self, tmp_path):
+        settings = SkuldSettings(
+            session={
+                "id": "test-session",
+                "workspace_dir": str(tmp_path),
+                "initial_prompt": "Do the work",
+            },
+            transport="sdk",
+            room={"enabled": True},
+            workflow_trigger={
+                "enabled": True,
+                "node_id": "trigger-1",
+                "label": "Dispatch",
+                "source": "manual dispatch",
+                "event_type": "code.requested",
+            },
+        )
+        broker = Broker(settings=settings)
+        broker._transport = AsyncMock()
+        sender_ws = AsyncMock()
+
+        await broker._dispatch_browser_message({"content": "hello"}, sender_ws=sender_ws)
+
+        broker._transport.send_message.assert_not_called()
+        sender_ws.send_json.assert_called_once()
+        sent = sender_ws.send_json.call_args[0][0]
+        assert sent["type"] == "error"
+        assert "Target a mesh peer instead" in sent["content"]
 
     @pytest.mark.asyncio
     async def test_dispatch_permission_response_allow(self, test_broker):
@@ -1656,6 +1737,39 @@ class TestHandleWebSocket:
         await test_broker.handle_websocket(mock_ws)
 
         mock_transport.start.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_handle_websocket_does_not_start_transport_for_workflow_room_session(
+        self, tmp_path
+    ):
+        settings = SkuldSettings(
+            session={
+                "id": "ws-session",
+                "workspace_dir": str(tmp_path),
+                "initial_prompt": "Do the work",
+            },
+            transport="sdk",
+            room={"enabled": True},
+            workflow_trigger={
+                "enabled": True,
+                "node_id": "trigger-1",
+                "label": "Dispatch",
+                "source": "manual dispatch",
+                "event_type": "code.requested",
+            },
+        )
+        broker = Broker(settings=settings)
+        mock_transport = AsyncMock()
+        mock_transport.is_alive = False
+        mock_transport.capabilities = TransportCapabilities()
+        broker._transport = mock_transport
+
+        mock_ws = AsyncMock()
+        mock_ws.receive_json = AsyncMock(side_effect=WebSocketDisconnect())
+
+        await broker.handle_websocket(mock_ws)
+
+        mock_transport.start.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_handle_websocket_dispatch_error(self, test_broker):

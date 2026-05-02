@@ -97,6 +97,7 @@ class VolundrHTTPAdapter(VolundrPort):
                 repo=source.get("repo", ""),
                 branch=source.get("branch", ""),
                 base_branch=source.get("base_branch", ""),
+                workload_type=data.get("workload_type", "default"),
             )
 
     async def get_session(
@@ -125,6 +126,7 @@ class VolundrHTTPAdapter(VolundrPort):
                 repo=source.get("repo", ""),
                 branch=source.get("branch", ""),
                 base_branch=source.get("base_branch", ""),
+                workload_type=data.get("workload_type", "default"),
             )
 
     async def list_sessions(
@@ -145,6 +147,7 @@ class VolundrHTTPAdapter(VolundrPort):
                     status=s["status"],
                     tracker_issue_id=s.get("tracker_issue_id"),
                     cluster_name=self._name,
+                    workload_type=s.get("workload_type", "default"),
                 )
                 for s in resp.json()
             ]

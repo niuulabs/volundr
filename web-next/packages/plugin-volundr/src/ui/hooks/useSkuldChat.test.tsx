@@ -224,6 +224,49 @@ describe('useSkuldChat', () => {
     ]);
   });
 
+  it('coalesces streamed room_agent_event text chunks without inserting newlines', async () => {
+    const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
+
+    await waitFor(() => expect(result.current.historyLoaded).toBe(true));
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_state',
+          participants: [{ peer_id: 'peer-1', persona: 'coder', participant_type: 'ravn' }],
+        }),
+      );
+    });
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_agent_event',
+          participantId: 'peer-1',
+          frame: { type: 'message', data: 'The ' },
+        }),
+      );
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_agent_event',
+          participantId: 'peer-1',
+          frame: { type: 'message', data: 'smoke ' },
+        }),
+      );
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_agent_event',
+          participantId: 'peer-1',
+          frame: { type: 'message', data: 'test' },
+        }),
+      );
+    });
+
+    const running = result.current.messages.at(-1);
+    expect(running?.content).toBe('The smoke test');
+    expect(running?.parts).toEqual([{ type: 'text', text: 'The smoke test' }]);
+  });
+
   it('creates a single Skuld participant for non-room assistant sessions', async () => {
     const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
 

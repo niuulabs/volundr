@@ -196,6 +196,11 @@ ALTER TABLE sessions ADD COLUMN IF NOT EXISTS owner_id TEXT;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS tenant_id TEXT;
 """
 
+SESSIONS_WORKLOAD_TYPE_COLUMN_SQL = """
+ALTER TABLE sessions
+    ADD COLUMN IF NOT EXISTS workload_type VARCHAR(100) NOT NULL DEFAULT 'session';
+"""
+
 SESSIONS_IDENTITY_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_sessions_owner_id ON sessions(owner_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_tenant_id ON sessions(tenant_id);
@@ -434,6 +439,7 @@ async def init_db(pool: asyncpg.Pool) -> None:
         await conn.execute(TENANT_MEMBERSHIPS_TABLE_SQL)
         await conn.execute(TENANT_MEMBERSHIPS_INDEX_SQL)
         await conn.execute(SESSIONS_IDENTITY_COLUMNS_SQL)
+        await conn.execute(SESSIONS_WORKLOAD_TYPE_COLUMN_SQL)
         await conn.execute(SESSIONS_IDENTITY_INDEX_SQL)
         # Additional tables from migrations
         await conn.execute(SAVED_PROMPTS_TABLE_SQL)

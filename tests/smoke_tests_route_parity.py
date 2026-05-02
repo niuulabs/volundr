@@ -5,9 +5,16 @@ surfaces and reports whether responses are equivalent.
 
 Usage:
     python -m tests/smoke_tests_route_parity --base-url http://localhost:8080 --token $TOKEN
+    python -m tests/smoke_tests_route_parity --base-url http://localhost:8080 --domain forge
+    python -m tests/smoke_tests_route_parity --base-url http://localhost:8080 --checklist
 
 If no --base-url is given, the script reads from environment or defaults to
 http://localhost:8080.
+
+Options:
+    --domain <name>   Filter to a specific domain (identity, tracker, integrations,
+                      audit, forge, tokens, credentials, features, git, sessions).
+    --checklist       Print a numbered checklist for manual execution.
 """
 
 from __future__ import annotations
@@ -37,6 +44,8 @@ class RoutePair:
     name: str
     legacy: RouteSpec
     canonical: RouteSpec
+    domain: str = ""
+    priority: str = "high"  # high / medium / low
 
 
 @dataclass(frozen=True)
@@ -48,150 +57,273 @@ class RouteSpec:
     headers: dict[str, str] = field(default_factory=dict)
 
 
-# Define representative route pairs per domain.
-# Only includes the highest-risk domains mentioned in the RAID scope.
+# ── Representative route pairs per domain (from route-inventory.json) ────
+# Only highest-risk domains from the NIU-768 raid scope.
+
 ROUTE_PAIRS: list[RoutePair] = [
-    # ── Identity ──────────────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════
+    # Identity
+    # ══════════════════════════════════════════════════════════════════════
     RoutePair(
         "identity/me",
         RouteSpec("/api/v1/volundr/me", method="GET"),
         RouteSpec("/api/v1/identity/me", method="GET"),
+        domain="identity",
+        priority="high",
     ),
     RoutePair(
         "identity/tenants",
-        RouteSpec("/api/v1/volundr/identity", method="GET"),
+        RouteSpec("/api/v1/volundr/tenants", method="GET"),
         RouteSpec("/api/v1/identity/tenants", method="GET"),
+        domain="identity",
+        priority="high",
     ),
-    # ── Tracker ───────────────────────────────────────────────────────────
+    RoutePair(
+        "identity/settings",
+        RouteSpec("/api/v1/volundr/settings", method="GET"),
+        RouteSpec("/api/v1/identity/settings", method="GET"),
+        domain="identity",
+        priority="medium",
+    ),
+    RoutePair(
+        "identity/users",
+        RouteSpec("/api/v1/volundr/users", method="GET"),
+        RouteSpec("/api/v1/identity/users", method="GET"),
+        domain="identity",
+        priority="medium",
+    ),
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Tracker
+    # ══════════════════════════════════════════════════════════════════════
     RoutePair(
         "tracker/status",
+        RouteSpec("/api/v1/volundr/tracker/status", method="GET"),
         RouteSpec("/api/v1/tracker/status", method="GET"),
-        RouteSpec("/api/v1/tracker/status", method="GET"),
-    ),
-    RoutePair(
-        "tracker/issues",
-        RouteSpec("/api/v1/tracker/issues", method="GET", params={"limit": 10}),
-        RouteSpec("/api/v1/tracker/issues", method="GET", params={"limit": 10}),
-    ),
-    RoutePair(
-        "tracker/import",
-        RouteSpec("/api/v1/tracker/import", method="POST", json_body={"repo": "github.com/acme/repo"}),
-        RouteSpec("/api/v1/tracker/import", method="POST", json_body={"repo": "github.com/acme/repo"}),
+        domain="tracker",
+        priority="high",
     ),
     RoutePair(
         "tracker/repo-mappings",
+        RouteSpec("/api/v1/volundr/tracker/mappings", method="GET"),
         RouteSpec("/api/v1/tracker/repo-mappings", method="GET"),
-        RouteSpec("/api/v1/tracker/repo-mappings", method="GET"),
+        domain="tracker",
+        priority="high",
     ),
     RoutePair(
-        "tracker/projects",
-        RouteSpec("/api/v1/tracker/projects", method="GET"),
-        RouteSpec("/api/v1/tracker/projects", method="GET"),
+        "tracker/issues",
+        RouteSpec("/api/v1/volundr/tracker/issues", method="GET", params={"q": "test"}),
+        RouteSpec("/api/v1/tracker/issues", method="GET", params={"q": "test"}),
+        domain="tracker",
+        priority="high",
     ),
-    # ── Integrations ──────────────────────────────────────────────────────
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Integrations
+    # ══════════════════════════════════════════════════════════════════════
     RoutePair(
         "integrations/list",
         RouteSpec("/api/v1/volundr/integrations", method="GET"),
         RouteSpec("/api/v1/integrations", method="GET"),
+        domain="integrations",
+        priority="high",
     ),
-    # ── Audit ─────────────────────────────────────────────────────────────
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Audit
+    # ══════════════════════════════════════════════════════════════════════
     RoutePair(
         "audit/events",
-        RouteSpec("/api/v1/volundr/audit/events", method="GET", params={"limit": 10}),
         RouteSpec("/api/v1/audit/events", method="GET", params={"limit": 10}),
+        RouteSpec("/api/v1/audit/events", method="GET", params={"limit": 10}),
+        domain="audit",
+        priority="high",
     ),
-    # ── Forge: Sessions ───────────────────────────────────────────────────
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Forge — Sessions
+    # ══════════════════════════════════════════════════════════════════════
     RoutePair(
         "forge/sessions/list",
         RouteSpec("/api/v1/volundr/sessions", method="GET"),
         RouteSpec("/api/v1/forge/sessions", method="GET"),
+        domain="forge",
+        priority="high",
     ),
-    # ── Forge: Chronicles ─────────────────────────────────────────────────
     RoutePair(
         "forge/chronicles",
         RouteSpec("/api/v1/volundr/chronicles", method="GET"),
         RouteSpec("/api/v1/forge/chronicles", method="GET"),
+        domain="forge",
+        priority="high",
     ),
-    # ── Forge: Templates ──────────────────────────────────────────────────
+    RoutePair(
+        "forge/events",
+        RouteSpec("/api/v1/volundr/events", method="GET"),
+        RouteSpec("/api/v1/forge/events", method="GET"),
+        domain="forge",
+        priority="medium",
+    ),
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Forge — Catalog (templates, presets, profiles, resources, prompts)
+    # ══════════════════════════════════════════════════════════════════════
     RoutePair(
         "forge/templates",
         RouteSpec("/api/v1/volundr/templates", method="GET"),
         RouteSpec("/api/v1/forge/templates", method="GET"),
+        domain="forge",
+        priority="high",
     ),
     RoutePair(
         "forge/presets",
         RouteSpec("/api/v1/volundr/presets", method="GET"),
         RouteSpec("/api/v1/forge/presets", method="GET"),
+        domain="forge",
+        priority="high",
     ),
     RoutePair(
         "forge/profiles",
         RouteSpec("/api/v1/volundr/profiles", method="GET"),
         RouteSpec("/api/v1/forge/profiles", method="GET"),
+        domain="forge",
+        priority="high",
     ),
     RoutePair(
         "forge/resources",
         RouteSpec("/api/v1/volundr/resources", method="GET"),
         RouteSpec("/api/v1/forge/resources", method="GET"),
-    ),
-    RoutePair(
-        "forge/models",
-        RouteSpec("/api/v1/volundr/models", method="GET"),
-        RouteSpec("/api/v1/forge/models", method="GET"),
-    ),
-    RoutePair(
-        "forge/stats",
-        RouteSpec("/api/v1/volundr/stats", method="GET"),
-        RouteSpec("/api/v1/forge/stats", method="GET"),
+        domain="forge",
+        priority="medium",
     ),
     RoutePair(
         "forge/prompts",
         RouteSpec("/api/v1/volundr/prompts", method="GET"),
         RouteSpec("/api/v1/forge/prompts", method="GET"),
+        domain="forge",
+        priority="medium",
+    ),
+    RoutePair(
+        "forge/mcp-servers",
+        RouteSpec("/api/v1/volundr/mcp-servers", method="GET"),
+        RouteSpec("/api/v1/forge/mcp-servers", method="GET"),
+        domain="forge",
+        priority="medium",
+    ),
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Forge — Models & Stats
+    # ══════════════════════════════════════════════════════════════════════
+    RoutePair(
+        "forge/models",
+        RouteSpec("/api/v1/volundr/models", method="GET"),
+        RouteSpec("/api/v1/forge/models", method="GET"),
+        domain="forge",
+        priority="medium",
+    ),
+    RoutePair(
+        "forge/stats",
+        RouteSpec("/api/v1/volundr/stats", method="GET"),
+        RouteSpec("/api/v1/forge/stats", method="GET"),
+        domain="forge",
+        priority="low",
     ),
     RoutePair(
         "forge/cluster",
         RouteSpec("/api/v1/volundr/cluster", method="GET"),
         RouteSpec("/api/v1/forge/cluster", method="GET"),
+        domain="forge",
+        priority="low",
     ),
-    # ── Forge: Git ────────────────────────────────────────────────────────
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Forge — Git
+    # ══════════════════════════════════════════════════════════════════════
     RoutePair(
         "forge/repos/branches",
         RouteSpec("/api/v1/volundr/repos/branches", method="GET", params={"repo": "github.com/acme/repo"}),
         RouteSpec("/api/v1/forge/repos/branches", method="GET", params={"repo": "github.com/acme/repo"}),
+        domain="forge",
+        priority="high",
     ),
     RoutePair(
         "forge/repos/prs",
         RouteSpec("/api/v1/volundr/repos/prs", method="GET", params={"repo": "github.com/acme/repo"}),
         RouteSpec("/api/v1/forge/repos/prs", method="GET", params={"repo": "github.com/acme/repo"}),
+        domain="forge",
+        priority="high",
     ),
-    # ── Forge: Workspaces ─────────────────────────────────────────────────
+    RoutePair(
+        "forge/git",
+        RouteSpec("/api/v1/volundr/git", method="GET"),
+        RouteSpec("/api/v1/forge/git", method="GET"),
+        domain="forge",
+        priority="medium",
+    ),
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Forge — Workspaces
+    # ══════════════════════════════════════════════════════════════════════
     RoutePair(
         "forge/workspaces",
         RouteSpec("/api/v1/volundr/workspaces", method="GET"),
         RouteSpec("/api/v1/forge/workspaces", method="GET"),
+        domain="forge",
+        priority="medium",
     ),
-    # ── Tokens ────────────────────────────────────────────────────────────
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Tokens (PATs)
+    # ══════════════════════════════════════════════════════════════════════
     RoutePair(
         "tokens/list",
         RouteSpec("/api/v1/volundr/tokens", method="GET"),
         RouteSpec("/api/v1/tokens", method="GET"),
+        domain="tokens",
+        priority="high",
     ),
-    # ── Credentials ───────────────────────────────────────────────────────
+    RoutePair(
+        "tokens/users/list",
+        RouteSpec("/api/v1/users/tokens", method="GET"),
+        RouteSpec("/api/v1/tokens", method="GET"),
+        domain="tokens",
+        priority="medium",
+    ),
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Credentials & Secrets
+    # ══════════════════════════════════════════════════════════════════════
     RoutePair(
         "credentials/user",
         RouteSpec("/api/v1/volundr/credentials", method="GET"),
-        RouteSpec("/api/v1/credentials/user", method="GET"),
+        RouteSpec("/api/v1/credentials", method="GET"),
+        domain="credentials",
+        priority="high",
     ),
     RoutePair(
         "credentials/secrets",
-        RouteSpec("/api/v1/volundr/secrets/store", method="GET"),
-        RouteSpec("/api/v1/credentials/user", method="GET"),
+        RouteSpec("/api/v1/volundr/secrets", method="GET"),
+        RouteSpec("/api/v1/credentials/secrets", method="GET"),
+        domain="credentials",
+        priority="high",
     ),
-    # ── Features ──────────────────────────────────────────────────────────
+    RoutePair(
+        "credentials/mcp-servers",
+        RouteSpec("/api/v1/volundr/mcp-servers", method="GET"),
+        RouteSpec("/api/v1/credentials/mcp-servers", method="GET"),
+        domain="credentials",
+        priority="low",
+    ),
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Features
+    # ══════════════════════════════════════════════════════════════════════
     RoutePair(
         "features/modules",
         RouteSpec("/api/v1/volundr/features", method="GET"),
         RouteSpec("/api/v1/features", method="GET"),
+        domain="features",
+        priority="medium",
     ),
 ]
 
@@ -263,6 +395,7 @@ def run_smoke_test(
     base_url: str,
     token: str | None = None,
     timeout: float = 10.0,
+    domain: str | None = None,
 ) -> list[tuple[RoutePair, bool, str]]:
     """Run all smoke tests and return results."""
     results: list[tuple[RoutePair, bool, str]] = []
@@ -270,9 +403,14 @@ def run_smoke_test(
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
+    pairs = ROUTE_PAIRS
+    if domain:
+        pairs = [p for p in ROUTE_PAIRS if p.domain == domain]
+        log.info("Filtering to domain: %s (%d pairs)", domain, len(pairs))
+
     with httpx.Client(base_url=base_url, timeout=timeout, headers=headers) as client:
-        for pair in ROUTE_PAIRS:
-            log.info("Testing %s …", pair.name)
+        for pair in pairs:
+            log.info("[%s] Testing %s …", pair.domain.upper(), pair.name)
             try:
                 legacy_resp = client.request(
                     pair.legacy.method,
@@ -305,23 +443,115 @@ def print_report(results: list[tuple[RoutePair, bool, str]]) -> int:
     failed = total - passed
 
     print()
-    print("=" * 60)
+    print("=" * 70)
     print("  Smoke Test Report: Canonical Route Parity")
-    print("=" * 60)
+    print("=" * 70)
     print(f"  Total : {total}")
     print(f"  Passed: {passed}")
     print(f"  Failed: {failed}")
-    print("=" * 60)
+    print("=" * 70)
+
+    # Group by domain for better visibility
+    by_domain: dict[str, list[tuple[RoutePair, bool, str]]] = {}
+    for pair, ok, detail in results:
+        by_domain.setdefault(pair.domain, []).append((pair, ok, detail))
+
+    if by_domain:
+        print()
+        print("By domain:")
+        for domain in sorted(by_domain):
+            domain_results = by_domain[domain]
+            d_passed = sum(1 for _, ok, _ in domain_results if ok)
+            d_total = len(domain_results)
+            print(f"  {domain:>15}: {d_passed}/{d_total}")
 
     if failed:
         print()
         print("Failures:")
         for pair, ok, detail in results:
             if not ok:
-                print(f"  ✗ {pair.name}: {detail}")
+                print(f"  ✗ [{pair.domain.upper()}] {pair.name}: {detail}")
 
     print()
     return 1 if failed else 0
+
+
+def print_checklist(results: list[tuple[RoutePair, bool, str]]) -> None:
+    """Print a numbered checklist for manual execution."""
+    print()
+    print("=" * 70)
+    print("  Smoke Test Checklist — Manual Execution")
+    print("  NIU-768: Canonical route parity confidence pass")
+    print("=" * 70)
+    print()
+    print("Instructions:")
+    print("  1. Start volundr/niuu with both legacy and canonical routes active.")
+    print("  2. For each item below, verify both routes return equivalent responses.")
+    print("  3. Mark [x] when passed, [ ] when skipped or failing.")
+    print("  4. Note any differences in the 'observed' column.")
+    print()
+    print("-" * 70)
+    print(f"  {'#':<4} {'Domain':<15} {'Priority':<10} {'Legacy path':<42} Canonical path")
+    print("-" * 70)
+
+    for i, (pair, ok, detail) in enumerate(results, 1):
+        legacy_path = f"{pair.legacy.path}"
+        canonical_path = f"{pair.canonical.path}"
+        if pair.legacy.params:
+            legacy_path += "?" + "&".join(f"{k}={v}" for k, v in pair.legacy.params.items())
+        if pair.canonical.params:
+            canonical_path += "?" + "&".join(f"{k}={v}" for k, v in pair.canonical.params.items())
+        marker = "[x]" if ok else "[ ]"
+        priority_tag = pair.priority.upper()
+        print(f"  {marker} {i:<3} {pair.domain:<15} {priority_tag:<10} {legacy_path:<42} {canonical_path}")
+
+    print()
+    print("Results from automated run:")
+    failed = [(p, d) for p, ok, d in results if not ok]
+    if failed:
+        for pair, detail in failed:
+            print(f"  ✗ {pair.name}: {detail}")
+    else:
+        print("  All checks passed!")
+
+    print()
+    print("-" * 70)
+    print("  Status: ___________    Sign-off: ___________    Date: ___________")
+    print("=" * 70)
+
+
+def print_checklist_prompt() -> None:
+    """Print a checklist template for users to fill in."""
+    print()
+    print("=" * 70)
+    print("  Smoke Test Checklist Template — Manual Execution")
+    print("  NIU-768: Canonical route parity confidence pass")
+    print("=" * 70)
+    print()
+    print("Instructions:")
+    print("  1. Start volundr/niuu with both legacy and canonical routes active.")
+    print("  2. For each item below, verify both routes return equivalent responses.")
+    print("  3. Mark [x] when passed, [ ] when skipped or failing.")
+    print("  4. Note any differences in the 'observed' column.")
+    print()
+    print("-" * 70)
+    print(f"  {'#':<4} {'Domain':<15} {'Priority':<10} {'Legacy path':<42} Canonical path")
+    print("-" * 70)
+
+    for i, pair in enumerate(ROUTE_PAIRS, 1):
+        legacy_path = pair.legacy.path
+        if pair.legacy.params:
+            legacy_path += "?" + "&".join(f"{k}={v}" for k, v in pair.legacy.params.items())
+        canonical_path = pair.canonical.path
+        if pair.canonical.params:
+            canonical_path += "?" + "&".join(f"{k}={v}" for k, v in pair.canonical.params.items())
+        priority_tag = pair.priority.upper()
+        print(f"  [ ] {i:<3} {pair.domain:<15} {priority_tag:<10} {legacy_path:<42} {canonical_path}")
+
+    print()
+    print("-" * 70)
+    print("  Status: ___________    Sign-off: ___________    Date: ___________")
+    print("=" * 70)
 
 
 # ---------------------------------------------------------------------------
@@ -354,16 +584,43 @@ def main() -> None:
         action="store_true",
         help="Print full JSON diffs on failure.",
     )
+    parser.add_argument(
+        "--domain",
+        default=None,
+        choices=[
+            "identity", "tracker", "integrations", "audit",
+            "forge", "tokens", "credentials", "features",
+        ],
+        help="Filter to a specific domain for focused testing.",
+    )
+    parser.add_argument(
+        "--checklist",
+        action="store_true",
+        help="Print a numbered checklist for manual execution.",
+    )
 
     args = parser.parse_args()
-    base_url = args.base_url or "http://localhost:8080"
-    token = args.token or ""
 
-    # Strip trailing slash
-    base_url = base_url.rstrip("/")
+    # Strip trailing slash from base URL if provided
+    base_url = args.base_url
+    if base_url:
+        base_url = base_url.rstrip("/")
 
-    results = run_smoke_test(base_url, token or None, timeout=args.timeout)
-    sys.exit(print_report(results))
+    if not base_url and args.checklist:
+        # No server provided, just show template
+        print_checklist_prompt()
+        sys.exit(0)
+
+    if not base_url:
+        base_url = "http://localhost:8080"
+
+    results = run_smoke_test(base_url, args.token or None, timeout=args.timeout, domain=args.domain)
+    print_report(results)
+
+    if args.checklist:
+        print_checklist(results)
+
+    sys.exit(1 if any(not ok for _, ok, _ in results) else 0)
 
 
 if __name__ == "__main__":

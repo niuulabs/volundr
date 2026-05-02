@@ -235,6 +235,7 @@ class InMemoryEventBroadcaster(EventBroadcaster):
                 "tracker_issue_id": session.tracker_issue_id,
                 "issue_tracker_url": session.issue_tracker_url,
                 "task_type": getattr(session, "task_type", None),
+                "workload_type": getattr(session, "workload_type", "session"),
                 "owner_id": str(session.owner_id) if session.owner_id else None,
                 "tenant_id": str(session.tenant_id) if session.tenant_id else None,
             },

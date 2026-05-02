@@ -49,6 +49,29 @@ const ACCEPTED_FILE_TYPES = [
   '.sql',
 ].join(',');
 
+function resolveInlineAgentMentions(
+  input: string,
+  participants: ReadonlyMap<string, RoomParticipant>,
+): RoomParticipant[] {
+  const byPersona = new Map(
+    Array.from(participants.values())
+      .filter((participant) => participant.participantType === 'ravn')
+      .map((participant) => [participant.persona.toLowerCase(), participant] as const),
+  );
+  const seen = new Set<string>();
+  const matches = input.matchAll(/(^|\s)@([^\s@]+)/g);
+  const resolved: RoomParticipant[] = [];
+  for (const match of matches) {
+    const persona = match[2]?.toLowerCase();
+    if (!persona) continue;
+    const participant = byPersona.get(persona);
+    if (!participant || seen.has(participant.peerId)) continue;
+    seen.add(participant.peerId);
+    resolved.push(participant);
+  }
+  return resolved;
+}
+
 interface ChatInputProps {
   onSend: (text: string, attachments: FileAttachment[]) => void;
   onSendDirected?: (
@@ -130,15 +153,24 @@ export function ChatInput({
     const trimmed = input.trim();
     if (!trimmed || disabled) return;
 
-    const agentMentions = mentionMenu.mentions
+    const selectedAgentMentions = mentionMenu.mentions
       .filter((m): m is { kind: 'agent'; participant: RoomParticipant } => m.kind === 'agent')
       .map((m) => m.participant);
+    const inlineAgentMentions = resolveInlineAgentMentions(trimmed, participants);
+    const agentMentions = Array.from(
+      new Map(
+        [...selectedAgentMentions, ...inlineAgentMentions].map((participant) => [
+          participant.peerId,
+          participant,
+        ]),
+      ).values(),
+    );
 
     const fileMentions = mentionMenu.mentions.filter(
       (m): m is Extract<SelectedMention, { kind: 'file' }> => m.kind === 'file',
     );
 
-    const agentPrefixes = agentMentions.map((p) => `@${p.persona}`);
+    const agentPrefixes = selectedAgentMentions.map((p) => `@${p.persona}`);
     const filePaths = fileMentions.map((m) => `@${m.entry.path}`);
     const allPrefixes = [...agentPrefixes, ...filePaths];
     const fullMessage = allPrefixes.length > 0 ? `${allPrefixes.join(' ')} ${trimmed}` : trimmed;
@@ -163,6 +195,7 @@ export function ChatInput({
     mentionMenu,
     fileAttachmentsList,
     clearFileAttachments,
+    participants,
   ]);
 
   const handleKeyDown = useCallback(

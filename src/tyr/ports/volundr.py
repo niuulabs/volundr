@@ -68,6 +68,7 @@ class VolundrSession:
     repo: str = ""
     branch: str = ""
     base_branch: str = ""
+    workload_type: str = "default"
 
 
 @dataclass(frozen=True)

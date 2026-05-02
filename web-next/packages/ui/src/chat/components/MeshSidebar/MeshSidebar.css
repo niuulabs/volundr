@@ -154,6 +154,14 @@
   background-color: var(--color-brand);
 }
 
+.niuu-chat-peer-status-dot[data-status='blocked'] {
+  background-color: var(--color-warning, #f59e0b);
+}
+
+.niuu-chat-peer-status-dot[data-status='error'] {
+  background-color: var(--color-danger, #ef4444);
+}
+
 .niuu-chat-peer-name {
   font-size: var(--text-xs);
   font-family: var(--font-mono);

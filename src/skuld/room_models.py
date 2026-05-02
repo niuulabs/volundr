@@ -33,6 +33,7 @@ class ParticipantMeta:
     subscribes_to: tuple[str, ...] = ()
     emits: tuple[str, ...] = ()
     tools: tuple[str, ...] = ()
+    status: str = "idle"
 
 
 @dataclass(frozen=True)

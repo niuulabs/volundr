@@ -480,6 +480,50 @@ describe('LiveSessionDetailPage', () => {
       await screen.findByTestId('live-session-detail-page');
       expect(screen.getByTitle(/Delete/i)).toBeInTheDocument();
     });
+
+    it('opens a centered delete dialog with visible cleanup options and submits them', async () => {
+      const service = buildVolundrService();
+      service.deleteSession = vi.fn().mockResolvedValue(undefined);
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={client}>
+          <ServicesProvider
+            services={{
+              volundr: service,
+              ptyStream: buildPtyStream(),
+              filesystem: buildFilesystem(),
+              sessionStore: buildSessionStore(),
+              metricsStream: createMockMetricsStream(),
+            }}
+          >
+            <LiveSessionDetailPage sessionId="test-session-id-1234" />
+          </ServicesProvider>
+        </QueryClientProvider>,
+      );
+
+      await screen.findByTestId('live-session-detail-page');
+      fireEvent.click(screen.getByTitle(/Delete session/i));
+
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toBeInTheDocument();
+      expect(screen.getByTestId('cleanup-workspace_storage')).toBeInTheDocument();
+      expect(screen.getByTestId('cleanup-chronicles')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('cleanup-workspace_storage'));
+      fireEvent.click(screen.getByTestId('cleanup-chronicles'));
+
+      expect(screen.getByTestId('cleanup-workspace_storage')).toBeChecked();
+      expect(screen.getByTestId('cleanup-chronicles')).toBeChecked();
+
+      fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+      await waitFor(() => {
+        expect(service.deleteSession).toHaveBeenCalledWith('test-session-id-1234', [
+          'workspace_storage',
+          'chronicles',
+        ]);
+      });
+    });
   });
 
   describe('local mount source', () => {

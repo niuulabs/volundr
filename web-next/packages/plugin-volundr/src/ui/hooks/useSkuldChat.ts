@@ -1061,10 +1061,18 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
                 } as ChatMessage & { participantId?: string },
               ]);
             }
+            const appendStreamingTextPart = (type: 'reasoning' | 'text', text: string) => {
+              const lastPart = stream.parts.at(-1);
+              if (lastPart?.type === type) {
+                lastPart.text = `${lastPart.text ?? ''}${text}`;
+                return;
+              }
+              stream.parts.push({ type, text });
+            };
             if (frame.type === 'thought') {
               const text =
                 typeof frame.data === 'string' ? frame.data : JSON.stringify(frame.data ?? '');
-              stream.parts.push({ type: 'reasoning', text });
+              appendStreamingTextPart('reasoning', text);
             } else if (frame.type === 'tool_start') {
               const toolName =
                 (frame.metadata?.tool_name as string) ||
@@ -1085,12 +1093,12 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
             } else if (frame.type === 'text' || frame.type === 'message') {
               const text =
                 typeof frame.data === 'string' ? frame.data : JSON.stringify(frame.data ?? '');
-              stream.parts.push({ type: 'text', text });
+              appendStreamingTextPart('text', text);
             }
             const streamContent = stream.parts
               .filter((part) => part.type === 'reasoning' || part.type === 'text')
               .map((part) => part.text ?? '')
-              .join('\n');
+              .join('');
             const currentParts = [...stream.parts];
             setMessages((prev) =>
               prev.map((message) =>

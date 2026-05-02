@@ -3,7 +3,6 @@
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
-
 import pytest
 
 from volundr.adapters.outbound.postgres import PostgresSessionRepository
@@ -87,7 +86,6 @@ class TestPostgresSessionRepositoryCreate:
         """Test that create returns the session."""
         result = await repository.create(sample_session)
         assert result == sample_session
-
 
 class TestPostgresSessionRepositoryGet:
     """Tests for get method."""
@@ -225,7 +223,6 @@ class TestPostgresSessionRepositoryUpdate:
         """Test that update returns the session."""
         result = await repository.update(sample_session)
         assert result == sample_session
-
 
 class TestPostgresSessionRepositoryDelete:
     """Tests for delete method."""

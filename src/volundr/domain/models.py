@@ -394,6 +394,10 @@ class Session(BaseModel):
         default_factory=dict,
         description="Metadata from the latest activity report",
     )
+    workload_type: str = Field(
+        default="session",
+        description="Workload type used to launch the session",
+    )
 
     model_config = {"frozen": False}
 

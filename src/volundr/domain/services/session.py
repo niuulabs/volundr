@@ -575,7 +575,15 @@ class SessionService:
         port = os.environ.get("NIUU_SERVER_PORT", "8080")
         chat_endpoint = f"ws://{host}:{port}/s/{session_id}/session"
 
-        starting = session.with_status(SessionStatus.STARTING).with_endpoints(chat_endpoint, None)
+        starting = session.model_copy(
+            update={
+                "status": SessionStatus.STARTING,
+                "chat_endpoint": chat_endpoint,
+                "code_endpoint": None,
+                "updated_at": datetime.now(UTC),
+                "workload_type": workload_type,
+            }
+        )
         await self._repository.update(starting)
 
         if self._broadcaster is not None:

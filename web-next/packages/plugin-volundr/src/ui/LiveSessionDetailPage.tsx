@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useService } from '@niuulabs/plugin-sdk';
 import { getAccessToken } from '@niuulabs/query';
-import { ErrorState, LoadingState, SessionChat, cn, type PermissionBehavior } from '@niuulabs/ui';
+import {
+  Dialog,
+  DialogContent,
+  ErrorState,
+  LoadingState,
+  SessionChat,
+  cn,
+  type PermissionBehavior,
+} from '@niuulabs/ui';
 import {
   AlertTriangle,
   Check,
@@ -294,12 +302,14 @@ function HeaderActionButton({
   disabled,
   tone = 'neutral',
   title,
+  className,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
   tone?: 'neutral' | 'critical' | 'brand';
   title?: string;
+  className?: string;
 }) {
   const toneClass =
     tone === 'critical'
@@ -315,8 +325,9 @@ function HeaderActionButton({
       disabled={disabled}
       title={title}
       className={cn(
-        'niuu-rounded-md niuu-border niuu-px-3 niuu-py-1.5 niuu-font-mono niuu-text-[11px] niuu-transition-colors disabled:niuu-cursor-not-allowed disabled:niuu-opacity-45',
+        'niuu-inline-flex niuu-appearance-none niuu-items-center niuu-justify-center niuu-rounded-md niuu-border niuu-px-3 niuu-py-1.5 niuu-font-mono niuu-text-[11px] niuu-transition-colors disabled:niuu-cursor-not-allowed disabled:niuu-opacity-45',
         toneClass,
+        className,
       )}
     >
       {label}
@@ -413,103 +424,109 @@ function DeleteSessionDialog({
   const isManual = session.origin === 'manual';
   const isLocalStorage = session.source.type === 'local_mount';
 
+  function toggleCleanup(key: string) {
+    setCleanup((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   return (
-    <>
-      <div
-        className="niuu-fixed niuu-inset-0 niuu-z-[90] niuu-bg-black/45"
-        onClick={onClose}
-        role="presentation"
-      />
-      <div className="niuu-fixed niuu-inset-0 niuu-z-[100] niuu-flex niuu-items-center niuu-justify-center niuu-p-4">
-        <div className="niuu-w-[520px] niuu-max-w-[calc(100vw-32px)] niuu-rounded-xl niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-p-5 niuu-shadow-2xl">
-          <div className="niuu-text-lg niuu-font-medium niuu-text-text-primary">
-            {isManual ? 'Remove session' : 'Delete session'}
-          </div>
-          <div className="niuu-mt-2 niuu-text-sm niuu-leading-6 niuu-text-text-muted">
-            {isManual ? (
-              <>
-                Remove <span className="niuu-font-mono niuu-text-text-primary">{session.name}</span>{' '}
-                from the session list?
-              </>
-            ) : (
-              <>
-                Delete <span className="niuu-font-mono niuu-text-text-primary">{session.name}</span>
-                ? This action cannot be undone.
-              </>
-            )}
-          </div>
-
-          {!isManual && (
-            <div className="niuu-mt-5">
-              <div className="niuu-mb-3 niuu-font-mono niuu-text-[10px] niuu-uppercase niuu-tracking-[0.18em] niuu-text-text-faint">
-                Also clean up
-              </div>
-              <div className="niuu-space-y-2">
-                <label className="niuu-flex niuu-gap-3 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-3">
-                  <input
-                    type="checkbox"
-                    checked={cleanup.has('workspace_storage')}
-                    onChange={() =>
-                      setCleanup((prev) => {
-                        const next = new Set(prev);
-                        if (next.has('workspace_storage')) next.delete('workspace_storage');
-                        else next.add('workspace_storage');
-                        return next;
-                      })
-                    }
-                    disabled={isLocalStorage}
-                    data-testid="cleanup-workspace_storage"
-                    className="niuu-mt-0.5 niuu-h-4 niuu-w-4 niuu-flex-shrink-0"
-                  />
-                  <div>
-                    <div className="niuu-text-sm niuu-text-text-primary">
-                      Delete workspace storage
-                    </div>
-                    <div className="niuu-mt-1 niuu-text-xs niuu-text-text-muted">
-                      {isLocalStorage
-                        ? 'Local mounted workspace — manage storage on your machine.'
-                        : 'Permanently delete the workspace storage so future sessions cannot reuse it.'}
-                    </div>
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <DialogContent
+        title={isManual ? 'Remove session' : 'Delete session'}
+        description={
+          isManual
+            ? `Remove ${session.name} from the session list?`
+            : `Delete ${session.name}? This action cannot be undone.`
+        }
+        className="niuu-live-delete-dialog"
+      >
+        {!isManual && (
+          <div className="niuu-live-delete-dialog__cleanup">
+            <div className="niuu-live-delete-dialog__cleanup-label">Also clean up</div>
+            <div className="niuu-live-delete-dialog__cleanup-list">
+              <label
+                className={cn(
+                  'niuu-live-delete-dialog__cleanup-option',
+                  isLocalStorage && 'niuu-live-delete-dialog__cleanup-option--disabled',
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={cleanup.has('workspace_storage')}
+                  onChange={() => toggleCleanup('workspace_storage')}
+                  disabled={isLocalStorage}
+                  data-testid="cleanup-workspace_storage"
+                  className="niuu-sr-only"
+                />
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'niuu-live-delete-dialog__checkbox',
+                    cleanup.has('workspace_storage') &&
+                      'niuu-live-delete-dialog__checkbox--checked',
+                    isLocalStorage && 'niuu-live-delete-dialog__checkbox--disabled',
+                  )}
+                >
+                  {cleanup.has('workspace_storage') ? <Check className="niuu-h-3 niuu-w-3" /> : null}
+                </span>
+                <div>
+                  <div className="niuu-text-sm niuu-text-text-primary">Delete workspace storage</div>
+                  <div className="niuu-mt-1 niuu-text-xs niuu-text-text-muted">
+                    {isLocalStorage
+                      ? 'Local mounted workspace — manage storage on your machine.'
+                      : 'Permanently delete the workspace storage so future sessions cannot reuse it.'}
                   </div>
-                </label>
-                <label className="niuu-flex niuu-gap-3 niuu-rounded-lg niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-p-3">
-                  <input
-                    type="checkbox"
-                    checked={cleanup.has('chronicles')}
-                    onChange={() =>
-                      setCleanup((prev) => {
-                        const next = new Set(prev);
-                        if (next.has('chronicles')) next.delete('chronicles');
-                        else next.add('chronicles');
-                        return next;
-                      })
-                    }
-                    data-testid="cleanup-chronicles"
-                    className="niuu-mt-0.5 niuu-h-4 niuu-w-4 niuu-flex-shrink-0"
-                  />
-                  <div>
-                    <div className="niuu-text-sm niuu-text-text-primary">Delete chronicles</div>
-                    <div className="niuu-mt-1 niuu-text-xs niuu-text-text-muted">
-                      Remove timeline history and chronicle records for this session.
-                    </div>
+                </div>
+              </label>
+              <label className="niuu-live-delete-dialog__cleanup-option">
+                <input
+                  type="checkbox"
+                  checked={cleanup.has('chronicles')}
+                  onChange={() => toggleCleanup('chronicles')}
+                  data-testid="cleanup-chronicles"
+                  className="niuu-sr-only"
+                />
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'niuu-live-delete-dialog__checkbox',
+                    cleanup.has('chronicles') && 'niuu-live-delete-dialog__checkbox--checked',
+                  )}
+                >
+                  {cleanup.has('chronicles') ? <Check className="niuu-h-3 niuu-w-3" /> : null}
+                </span>
+                <div>
+                  <div className="niuu-text-sm niuu-text-text-primary">Delete chronicles</div>
+                  <div className="niuu-mt-1 niuu-text-xs niuu-text-text-muted">
+                    Remove timeline history and chronicle records for this session.
                   </div>
-                </label>
-              </div>
+                </div>
+              </label>
             </div>
-          )}
-
-          <div className="niuu-mt-5 niuu-flex niuu-justify-end niuu-gap-2">
-            <HeaderActionButton label="cancel" onClick={onClose} disabled={busy} />
-            <HeaderActionButton
-              label={busy ? (isManual ? 'removing…' : 'deleting…') : isManual ? 'remove' : 'delete'}
-              onClick={() => onConfirm(Array.from(cleanup))}
-              disabled={busy}
-              tone="critical"
-            />
           </div>
+        )}
+
+        <div className="niuu-live-delete-dialog__actions">
+          <HeaderActionButton
+            label="cancel"
+            onClick={onClose}
+            disabled={busy}
+            className="niuu-live-delete-dialog__action-button"
+          />
+          <HeaderActionButton
+            label={busy ? (isManual ? 'removing…' : 'deleting…') : isManual ? 'remove' : 'delete'}
+            onClick={() => onConfirm(Array.from(cleanup))}
+            disabled={busy}
+            tone="critical"
+            className="niuu-live-delete-dialog__action-button niuu-live-delete-dialog__action-button--critical"
+          />
         </div>
-      </div>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }
 

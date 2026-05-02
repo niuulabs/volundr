@@ -372,6 +372,10 @@ class SessionResponse(BaseModel):
         default_factory=dict,
         description="Metadata from the latest activity report",
     )
+    workload_type: str = Field(
+        default="session",
+        description="Workload type used to launch the session",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -428,6 +432,7 @@ class SessionResponse(BaseModel):
             tenant_id=session.tenant_id,
             activity_state=(session.activity_state.value if session.activity_state else None),
             activity_metadata=session.activity_metadata,
+            workload_type=session.workload_type,
         )
 
 
