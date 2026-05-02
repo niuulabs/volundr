@@ -521,6 +521,13 @@ export function SessionChat({
       className={cn('niuu-chat-outer-grid', className)}
       data-has-sidebar={hasSidebar || undefined}
       data-right-panel={showRightPanel || undefined}
+      data-right-panel-collapsed={
+        showRightPanel &&
+        effectiveRightPanelMode === 'cascade' &&
+        cascadePanelCollapsed
+          ? true
+          : undefined
+      }
       data-testid="session-chat"
     >
       {hasSidebar && (

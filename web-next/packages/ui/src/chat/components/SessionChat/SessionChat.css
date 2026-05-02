@@ -22,6 +22,14 @@
   grid-template-columns: 1fr 360px;
 }
 
+.niuu-chat-outer-grid[data-has-sidebar][data-right-panel][data-right-panel-collapsed] {
+  grid-template-columns: auto 1fr 54px;
+}
+
+.niuu-chat-outer-grid[data-right-panel][data-right-panel-collapsed]:not([data-has-sidebar]) {
+  grid-template-columns: 1fr 54px;
+}
+
 /* Highlight animation for scroll-to-message from outcome click */
 .niuu-chat-outer-grid [data-highlighted] {
   animation: niuu-chat-highlight-flash 2s ease-out;

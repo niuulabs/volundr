@@ -8,6 +8,7 @@
 }
 
 .niuu-chat-cascade-panel--collapsed {
+  position: relative;
   width: 54px;
   overflow: hidden;
 }
@@ -102,10 +103,18 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   justify-content: flex-start;
   gap: var(--space-3);
-  padding-top: var(--space-3);
+  padding-top: calc(var(--space-3) + 24px);
+  padding-right: var(--space-2);
+  width: 100%;
+}
+
+.niuu-chat-cascade-panel--collapsed .niuu-chat-cascade-collapse-toggle {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
 }
 
 .niuu-chat-cascade-summary {

@@ -48,6 +48,13 @@ export function MeshCascadePanel({
         }`}
         data-testid="mesh-cascade-panel"
       >
+        <div className="niuu-chat-cascade-collapsed-body">
+          <Workflow className="niuu-chat-cascade-icon" />
+          <span className="niuu-chat-cascade-badge">{events.length}</span>
+          {latestVerdict && (
+            <span className="niuu-chat-cascade-status-dot" data-verdict={latestVerdict} />
+          )}
+        </div>
         <button
           type="button"
           className="niuu-chat-cascade-collapse-toggle"
@@ -57,13 +64,6 @@ export function MeshCascadePanel({
         >
           ‹
         </button>
-        <div className="niuu-chat-cascade-collapsed-body">
-          <Workflow className="niuu-chat-cascade-icon" />
-          <span className="niuu-chat-cascade-badge">{events.length}</span>
-          {latestVerdict && (
-            <span className="niuu-chat-cascade-status-dot" data-verdict={latestVerdict} />
-          )}
-        </div>
       </aside>
     );
   }
