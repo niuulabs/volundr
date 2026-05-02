@@ -73,6 +73,21 @@ ROUTE_PAIRS: list[RoutePair] = [
         RouteSpec("/api/v1/tracker/issues", method="GET", params={"limit": 10}),
         RouteSpec("/api/v1/tracker/issues", method="GET", params={"limit": 10}),
     ),
+    RoutePair(
+        "tracker/import",
+        RouteSpec("/api/v1/tracker/import", method="POST", json_body={"repo": "github.com/acme/repo"}),
+        RouteSpec("/api/v1/tracker/import", method="POST", json_body={"repo": "github.com/acme/repo"}),
+    ),
+    RoutePair(
+        "tracker/repo-mappings",
+        RouteSpec("/api/v1/tracker/repo-mappings", method="GET"),
+        RouteSpec("/api/v1/tracker/repo-mappings", method="GET"),
+    ),
+    RoutePair(
+        "tracker/projects",
+        RouteSpec("/api/v1/tracker/projects", method="GET"),
+        RouteSpec("/api/v1/tracker/projects", method="GET"),
+    ),
     # ── Integrations ──────────────────────────────────────────────────────
     RoutePair(
         "integrations/list",
@@ -91,11 +106,63 @@ ROUTE_PAIRS: list[RoutePair] = [
         RouteSpec("/api/v1/volundr/sessions", method="GET"),
         RouteSpec("/api/v1/forge/sessions", method="GET"),
     ),
+    # ── Forge: Chronicles ─────────────────────────────────────────────────
+    RoutePair(
+        "forge/chronicles",
+        RouteSpec("/api/v1/volundr/chronicles", method="GET"),
+        RouteSpec("/api/v1/forge/chronicles", method="GET"),
+    ),
     # ── Forge: Templates ──────────────────────────────────────────────────
     RoutePair(
         "forge/templates",
         RouteSpec("/api/v1/volundr/templates", method="GET"),
         RouteSpec("/api/v1/forge/templates", method="GET"),
+    ),
+    RoutePair(
+        "forge/presets",
+        RouteSpec("/api/v1/volundr/presets", method="GET"),
+        RouteSpec("/api/v1/forge/presets", method="GET"),
+    ),
+    RoutePair(
+        "forge/profiles",
+        RouteSpec("/api/v1/volundr/profiles", method="GET"),
+        RouteSpec("/api/v1/forge/profiles", method="GET"),
+    ),
+    RoutePair(
+        "forge/resources",
+        RouteSpec("/api/v1/volundr/resources", method="GET"),
+        RouteSpec("/api/v1/forge/resources", method="GET"),
+    ),
+    RoutePair(
+        "forge/models",
+        RouteSpec("/api/v1/volundr/models", method="GET"),
+        RouteSpec("/api/v1/forge/models", method="GET"),
+    ),
+    RoutePair(
+        "forge/stats",
+        RouteSpec("/api/v1/volundr/stats", method="GET"),
+        RouteSpec("/api/v1/forge/stats", method="GET"),
+    ),
+    RoutePair(
+        "forge/prompts",
+        RouteSpec("/api/v1/volundr/prompts", method="GET"),
+        RouteSpec("/api/v1/forge/prompts", method="GET"),
+    ),
+    RoutePair(
+        "forge/cluster",
+        RouteSpec("/api/v1/volundr/cluster", method="GET"),
+        RouteSpec("/api/v1/forge/cluster", method="GET"),
+    ),
+    # ── Forge: Git ────────────────────────────────────────────────────────
+    RoutePair(
+        "forge/repos/branches",
+        RouteSpec("/api/v1/volundr/repos/branches", method="GET", params={"repo": "github.com/acme/repo"}),
+        RouteSpec("/api/v1/forge/repos/branches", method="GET", params={"repo": "github.com/acme/repo"}),
+    ),
+    RoutePair(
+        "forge/repos/prs",
+        RouteSpec("/api/v1/volundr/repos/prs", method="GET", params={"repo": "github.com/acme/repo"}),
+        RouteSpec("/api/v1/forge/repos/prs", method="GET", params={"repo": "github.com/acme/repo"}),
     ),
     # ── Forge: Workspaces ─────────────────────────────────────────────────
     RoutePair(
@@ -113,6 +180,11 @@ ROUTE_PAIRS: list[RoutePair] = [
     RoutePair(
         "credentials/user",
         RouteSpec("/api/v1/volundr/credentials", method="GET"),
+        RouteSpec("/api/v1/credentials/user", method="GET"),
+    ),
+    RoutePair(
+        "credentials/secrets",
+        RouteSpec("/api/v1/volundr/secrets/store", method="GET"),
         RouteSpec("/api/v1/credentials/user", method="GET"),
     ),
     # ── Features ──────────────────────────────────────────────────────────

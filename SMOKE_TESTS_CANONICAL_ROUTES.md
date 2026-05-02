@@ -9,6 +9,14 @@ Each test below is a self-contained `curl` or `httpx` call you can run against a
 running instance.  Where a legacy route exists, send the same request to both
 the legacy and canonical path and compare status code + response shape.
 
+**Scripted**: run the full suite with:
+
+```bash
+python -m tests.smoke_tests_route_parity --base-url http://localhost:8080 --token $TOKEN
+```
+
+**Manual**: follow the curl examples below.
+
 **Goal**: a fast confidence pass — not a full regression suite.
 
 ---
@@ -45,6 +53,7 @@ diff -u legacy_tenants.json canonical_tenants.json
 | 2.3 | `/api/v1/tracker/issues/{id}` | `/api/v1/tracker/issues/{id}` | `GET` | 200 + same issue details |
 | 2.4 | `/api/v1/tracker/repo-mappings` | `/api/v1/tracker/repo-mappings` | `GET` | 200 + same mappings |
 | 2.5 | `/api/v1/tracker/import` | `/api/v1/tracker/import` | `POST` | 202/200 + same job-id response |
+| 2.6 | `/api/v1/tracker/projects` | `/api/v1/tracker/projects` | `GET` | 200 + same project list |
 
 **curl example**
 ```bash
@@ -117,13 +126,18 @@ jq '.id' created.json
 
 ---
 
-## 6. Forge — Templates & Catalog
+## 6. Forge — Templates, Catalog & Profiles
 
 | # | Legacy Path | Canonical Path | Method | What to Check |
 |---|-------------|----------------|--------|---------------|
 | 6.1 | `/api/v1/volundr/templates` | `/api/v1/forge/templates` | `GET` | 200 + same template list |
 | 6.2 | `/api/v1/volundr/presets` | `/api/v1/forge/presets` | `GET` | 200 + same preset list |
 | 6.3 | `/api/v1/volundr/profiles` | `/api/v1/forge/profiles` | `GET` | 200 + same profile list |
+| 6.4 | `/api/v1/volundr/resources` | `/api/v1/forge/resources` | `GET` | 200 + same resource list |
+| 6.5 | `/api/v1/volundr/models` | `/api/v1/forge/models` | `GET` | 200 + same model catalog |
+| 6.6 | `/api/v1/volundr/stats` | `/api/v1/forge/stats` | `GET` | 200 + same stats |
+| 6.7 | `/api/v1/volundr/prompts` | `/api/v1/forge/prompts` | `GET` | 200 + same prompt list |
+| 6.8 | `/api/v1/volundr/cluster` | `/api/v1/forge/cluster` | `GET` | 200 + same cluster info |
 
 **curl example**
 ```bash
@@ -247,41 +261,3 @@ curl -s -X DELETE -H "Authorization: Bearer $TOKEN" \
 - **Time budget**: ~15 minutes for a full pass of all 12 domains.
 
 ---
-
-## Appendix A: Route Mapping Quick Reference
-
-The following table shows the full legacy → canonical route mapping used
-in this smoke test.  It is derived from `route-inventory.json`.
-
-| Domain | Legacy Prefix(es) | Canonical Prefix(es) |
-|--------|------------------|---------------------|
-| Identity | `/api/v1/volundr/me`<br>`/api/v1/volundr/identity` | `/api/v1/identity` |
-| Tracker | `/api/v1/tracker/*` | `/api/v1/tracker/*` |
-| Integrations | `/api/v1/volundr/integrations` | `/api/v1/integrations` |
-| Audit | `/api/v1/audit`<br>`/api/v1/volundr/audit` | `/api/v1/audit` |
-| Forge sessions | `/api/v1/volundr/sessions` | `/api/v1/forge/sessions` |
-| Forge chronicles | `/api/v1/volundr/chronicles` | `/api/v1/forge/chronicles` |
-| Forge events | `/api/v1/volundr/events` | `/api/v1/forge/events` |
-| Forge templates | `/api/v1/volundr/templates` | `/api/v1/forge/templates` |
-| Forge presets | `/api/v1/volundr/presets` | `/api/v1/forge/presets` |
-| Forge profiles | `/api/v1/volundr/profiles` | `/api/v1/forge/profiles` |
-| Forge resources | `/api/v1/volundr/resources` | `/api/v1/forge/resources` |
-| Forge prompts | `/api/v1/volundr/prompts` | `/api/v1/forge/prompts` |
-| Forge mcp-servers | `/api/v1/volundr/mcp-servers` | `/api/v1/forge/mcp-servers` |
-| Forge workspaces | `/api/v1/volundr/workspaces` | `/api/v1/forge/workspaces` |
-| Forge models | `/api/v1/volundr/models` | `/api/v1/forge/models` |
-| Forge stats | `/api/v1/volundr/stats` | `/api/v1/forge/stats` |
-| Forge cluster | `/api/v1/volundr/cluster` | `/api/v1/forge/cluster` |
-| Forge git | `/api/v1/volundr/git` | `/api/v1/forge/git` |
-| Git branches | `/api/v1/volundr/repos/branches` | `/api/v1/forge/repos/branches` |
-| Git PRs | `/api/v1/volundr/repos/prs` | `/api/v1/forge/repos/prs` |
-| Tokens | `/api/v1/volundr/tokens`<br>`/api/v1/users/tokens` | `/api/v1/tokens` |
-| Credentials | `/api/v1/volundr/credentials` | `/api/v1/credentials` |
-| Secrets | `/api/v1/volundr/secrets` | `/api/v1/credentials/secrets` |
-| Features | `/api/v1/volundr/features` | `/api/v1/features` |
-| Admin settings | `/api/v1/volundr/admin/settings` | `/api/v1/volundr/admin/settings` |
-| Tenants | `/api/v1/volundr/tenants` | `/api/v1/volundr/tenants` |
-| Volundr API | `/api/v1/volundr/*` (catch-all) | *(deprecated shim)* |
-
-Note: Some domains (tracker, audit) were already using the canonical path and
-only have legacy aliases that are being removed.
