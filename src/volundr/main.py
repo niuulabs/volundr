@@ -6,8 +6,10 @@ import os
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from importlib.metadata import metadata
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -306,7 +308,14 @@ def _create_contributors(
 
     # Always wire the prompt contributor so system_prompt/initial_prompt
     # from the launch request (or dispatch) are injected into the spec.
+    from volundr.adapters.outbound.contributors.notification_channels import (
+        NotificationChannelContributor,
+    )
     from volundr.adapters.outbound.contributors.prompt import PromptContributor
+
+    if not _has_contributor("notification_channels"):
+        contributors.append(NotificationChannelContributor(**ports))
+        logger.info("Session contributor: notification_channels (auto-wired)")
 
     contributors.append(PromptContributor())
 
@@ -417,8 +426,6 @@ async def _seed_linear_integration(
     This lets the integration-based /issues/search endpoint find Linear
     without manual UI setup.
     """
-    from datetime import UTC, datetime
-
     from niuu.domain.models import IntegrationConnection, IntegrationType, SecretType
 
     owner_id = "dev-user"
@@ -445,6 +452,79 @@ async def _seed_linear_integration(
         slug="linear",
     )
     await integration_repo.save_connection(connection)
+
+
+def _seeded_integration_connection_id(
+    *,
+    owner_type: str,
+    owner_id: str,
+    integration_type: str,
+    adapter: str,
+    credential_name: str,
+    slug: str,
+) -> str:
+    """Return a stable UUID for a config-seeded integration connection."""
+    value = (
+        f"volundr:integration-seed:{owner_type}:{owner_id}:{integration_type}:"
+        f"{adapter}:{credential_name}:{slug}"
+    )
+    return str(uuid5(NAMESPACE_URL, value))
+
+
+async def _seed_configured_integrations(
+    integration_repo: object,
+    credential_store: object,
+    settings: Settings,
+) -> None:
+    """Seed configured integration connections into storage at startup."""
+    from niuu.domain.models import IntegrationConnection
+
+    for seed in settings.integrations.seed_connections:
+        if seed.credential is not None:
+            await credential_store.store(
+                owner_type=seed.owner_type,
+                owner_id=seed.owner_id,
+                name=seed.credential_name,
+                secret_type=seed.credential.secret_type,
+                data=seed.credential.data,
+                metadata=seed.credential.metadata,
+            )
+
+        connection = IntegrationConnection(
+            id=seed.id
+            or _seeded_integration_connection_id(
+                owner_type=seed.owner_type,
+                owner_id=seed.owner_id,
+                integration_type=str(seed.integration_type),
+                adapter=seed.adapter,
+                credential_name=seed.credential_name,
+                slug=seed.slug,
+            ),
+            owner_id=seed.owner_id,
+            integration_type=seed.integration_type,
+            adapter=seed.adapter,
+            credential_name=seed.credential_name,
+            config=seed.config,
+            enabled=seed.enabled,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            slug=seed.slug,
+        )
+        await integration_repo.save_connection(connection)
+
+
+def _has_seeded_linear_integration(settings: Settings) -> bool:
+    """Return whether config already seeds a Linear issue-tracker connection."""
+    from niuu.domain.models import IntegrationType
+
+    for seed in settings.integrations.seed_connections:
+        if seed.integration_type != IntegrationType.ISSUE_TRACKER:
+            continue
+        if seed.slug == "linear":
+            return True
+        if seed.adapter == "volundr.adapters.outbound.linear.LinearAdapter":
+            return True
+    return False
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -869,9 +949,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 tracker_factory=tracker_factory,
             )
 
+            if settings.integrations.seed_connections:
+                await _seed_configured_integrations(
+                    integration_repo=integration_repo,
+                    credential_store=credential_store,
+                    settings=settings,
+                )
+                logger.info(
+                    "Seeded %d integration connection(s) from config",
+                    len(settings.integrations.seed_connections),
+                )
+
             # Seed Linear integration from config so the integration-based
             # endpoints (/issues/search) find it in the DB.
-            if settings.linear.enabled and settings.linear.api_key:
+            if (
+                settings.linear.enabled
+                and settings.linear.api_key
+                and not _has_seeded_linear_integration(settings)
+            ):
                 await _seed_linear_integration(
                     integration_repo,
                     credential_store,

@@ -137,6 +137,8 @@ class TelegramConfig(BaseModel):
     bot_token: str = Field(default="")
     chat_id: str = Field(default="")
     notify_only: bool = Field(default=False)
+    topic_mode: str = Field(default="topic_per_session")
+    message_thread_id: int | None = Field(default=None)
 
 
 class SkuldSessionConfig(BaseModel):

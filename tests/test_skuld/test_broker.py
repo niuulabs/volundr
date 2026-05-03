@@ -187,6 +187,10 @@ class TestBroker:
         mock_adapter = MagicMock()
         mock_adapter.peer_id = "skuld-wf"
         mock_adapter.publish = AsyncMock()
+        mock_channel = AsyncMock()
+        mock_channel.channel_type = "telegram"
+        mock_channel.is_open = True
+        broker._channels.add(mock_channel)
 
         with (
             patch.object(broker, "_create_transport", return_value=mock_transport),
@@ -212,6 +216,11 @@ class TestBroker:
         assert published_event.payload["workflow_trigger_node_id"] == "trigger-1"
         assert [turn.role for turn in broker._conversation_turns] == ["user"]
         assert broker._conversation_turns[0].content == "Implement the requested change"
+        assert any(
+            call.args[0].get("type") == "user_confirmed"
+            and call.args[0].get("content") == "Implement the requested change"
+            for call in mock_channel.send_event.await_args_list
+        )
 
     @pytest.mark.asyncio
     async def test_shutdown_stops_transport(self, test_broker):

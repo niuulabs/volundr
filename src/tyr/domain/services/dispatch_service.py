@@ -18,6 +18,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 try:
     from sleipnir.domain.catalog import tyr_saga_completed as _catalog_saga_completed
@@ -36,9 +37,12 @@ from tyr.domain.models import (
     TrackerProject,
     WorkflowScope,
 )
-from tyr.domain.workflow_snapshot import workflow_name_from_snapshot, workflow_personas_from_snapshot
 from tyr.domain.templates import BUNDLED_TEMPLATES_DIR, TemplatePhase, load_template
 from tyr.domain.utils import _slugify
+from tyr.domain.workflow_snapshot import (
+    workflow_name_from_snapshot,
+    workflow_personas_from_snapshot,
+)
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.flock_flow import FlockFlowProvider
@@ -453,10 +457,18 @@ class DispatchService:
                 continue
 
             target_connection = item.connection_id or connection_id
-            target_volundr = resolve_target_adapter(target_connection, adapter_by_name, volundr)
+            target_volundr = resolve_target_adapter(
+                target_connection,
+                adapter_by_name,
+                volundr,
+            )
             workflow_snapshot, workflow_error = await self._resolve_workflow_snapshot(item, saga)
             if workflow_error:
-                logger.warning("Workflow resolution failed for issue %s: %s", item.issue_id, workflow_error)
+                logger.warning(
+                    "Workflow resolution failed for issue %s: %s",
+                    item.issue_id,
+                    workflow_error,
+                )
                 results.append(
                     DispatchResult(
                         issue_id=item.issue_id,
@@ -705,6 +717,12 @@ class DispatchService:
             )
             return
 
+        integration_ids = await self._fetch_integration_ids(
+            volundr,
+            None,
+            owner_id,
+        )
+
         repo = saga.repos[0] if saga.repos else ""
         for raid, tpl_raid in zip(raids, tpl_phase.raids):
             session_name = re.sub(r"[^a-z0-9]+", "-", raid.name.lower()).strip("-")[:48]
@@ -725,7 +743,7 @@ class DispatchService:
                 system_prompt=self._config.default_system_prompt,
                 initial_prompt=tpl_raid.prompt,
                 profile=tpl_raid.persona or None,
-                integration_ids=[],
+                integration_ids=integration_ids,
                 workload_type="ravn_flock" if workload_config else "default",
                 workload_config=workload_config or {},
             )
@@ -948,7 +966,11 @@ class DispatchService:
             personas = copy.deepcopy(workflow_personas)
             flow_name_for_log = str(workflow_snapshot.get("name") or "")
         else:
-            flow = self._flow_provider.get(flock_flow) if flock_flow and self._flow_provider else None
+            flow = (
+                self._flow_provider.get(flock_flow)
+                if flock_flow and self._flow_provider
+                else None
+            )
             if flow is None and flock_flow:
                 logger.warning("Flock flow '%s' not found, using default personas", flock_flow)
             if flow is not None:

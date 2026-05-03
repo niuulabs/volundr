@@ -62,6 +62,7 @@ class MockVolundr(VolundrPort):
         self.spawned: list[SpawnRequest] = []
         self.last_auth_token: str | None = None
         self.fail_spawn: bool = False
+        self.integration_ids: list[str] = []
 
     async def spawn_session(
         self,
@@ -132,7 +133,8 @@ class MockVolundr(VolundrPort):
         *,
         auth_token: str | None = None,
     ) -> list[str]:
-        return []
+        self.last_auth_token = auth_token
+        return list(self.integration_ids)
 
     async def list_repos(self, *, auth_token: str | None = None) -> list[dict]:
         return []

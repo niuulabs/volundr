@@ -9,8 +9,11 @@ from volundr.config import (
     GitHubInstance,
     GitLabConfig,
     GitLabInstance,
+    IntegrationType,
     OtelConfig,
     RabbitMQConfig,
+    SecretType,
+    SeededIntegrationConnectionConfig,
     Settings,
     _default_feature_modules,
 )
@@ -695,6 +698,67 @@ git:
 
         assert settings.database.host == "localhost"
         assert settings.pod_manager.kwargs == {}
+
+    def test_settings_loads_seeded_integrations_from_yaml(self, tmp_path, monkeypatch):
+        """Settings parses config-seeded integration connections."""
+        yaml_content = """
+integrations:
+  seed_connections:
+    - id: linear-seed
+      owner_id: dev-user
+      integration_type: issue_tracker
+      adapter: volundr.adapters.outbound.linear.LinearAdapter
+      credential_name: linear-config
+      slug: linear
+      enabled: true
+      credential:
+        secret_type: api_key
+        data:
+          api_key: linear-foobar
+    - owner_id: dev-user
+      integration_type: messaging
+      adapter: tyr.adapters.telegram_notification.TelegramNotificationAdapter
+      credential_name: telegram-main
+      slug: telegram
+      enabled: true
+      config:
+        notify_only: true
+      credential:
+        secret_type: generic
+        data:
+          bot_token: foobar
+          chat_id: foobar
+"""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(yaml_content)
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("NIUU_CONFIG", raising=False)
+
+        settings = Settings()
+
+        assert len(settings.integrations.seed_connections) == 2
+        linear_seed = settings.integrations.seed_connections[0]
+        assert linear_seed.id == "linear-seed"
+        assert linear_seed.integration_type == IntegrationType.ISSUE_TRACKER
+        assert linear_seed.adapter == "volundr.adapters.outbound.linear.LinearAdapter"
+        assert linear_seed.credential_name == "linear-config"
+        assert linear_seed.slug == "linear"
+        assert linear_seed.credential is not None
+        assert linear_seed.credential.secret_type == SecretType.API_KEY
+        assert linear_seed.credential.data == {"api_key": "linear-foobar"}
+
+        seed = settings.integrations.seed_connections[1]
+        assert isinstance(seed, SeededIntegrationConnectionConfig)
+        assert seed.owner_id == "dev-user"
+        assert seed.integration_type == IntegrationType.MESSAGING
+        assert seed.adapter == "tyr.adapters.telegram_notification.TelegramNotificationAdapter"
+        assert seed.credential_name == "telegram-main"
+        assert seed.slug == "telegram"
+        assert seed.config == {"notify_only": True}
+        assert seed.credential is not None
+        assert seed.credential.secret_type == SecretType.GENERIC
+        assert seed.credential.data == {"bot_token": "foobar", "chat_id": "foobar"}
 
 
 class TestFeatureModuleConfig:

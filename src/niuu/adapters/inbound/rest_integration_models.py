@@ -5,6 +5,8 @@ Used by both Tyr and Volundr integration routers.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field, model_serializer
 
 from niuu.domain.models import IntegrationConnection
@@ -17,7 +19,7 @@ class IntegrationResponse(BaseModel):
     integration_type: str = Field(description="Integration category")
     adapter: str = Field(description="Fully-qualified adapter class path")
     credential_name: str = Field(description="Stored credential name")
-    config: dict[str, str] = Field(description="Adapter-specific configuration")
+    config: dict[str, Any] = Field(description="Adapter-specific configuration")
     enabled: bool = Field(description="Whether the integration is active")
     created_at: str = Field(description="ISO 8601 creation timestamp")
     updated_at: str = Field(description="ISO 8601 last update timestamp")

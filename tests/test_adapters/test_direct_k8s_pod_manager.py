@@ -230,6 +230,54 @@ class TestEnvironment:
         env_dict = {e["name"]: e["value"] for e in env if "value" in e}
         assert env_dict["SKULD__SESSION__INITIAL_PROMPT"] == "Fix the auth bug."
 
+    def test_build_env_with_broker_telegram(
+        self,
+        pod_manager: DirectK8sPodManager,
+        sample_session: Session,
+    ) -> None:
+        spec = make_spec(
+            broker={
+                "telegram": {
+                    "enabled": True,
+                    "botToken": "bot-token",
+                    "chatId": "chat-123",
+                    "notifyOnly": True,
+                    "topicMode": "topic_per_session",
+                }
+            }
+        )
+        env = pod_manager._build_env(sample_session, spec)
+
+        env_dict = {e["name"]: e["value"] for e in env if "value" in e}
+        assert env_dict["SKULD__TELEGRAM__ENABLED"] == "true"
+        assert env_dict["SKULD__TELEGRAM__BOT_TOKEN"] == "bot-token"
+        assert env_dict["SKULD__TELEGRAM__CHAT_ID"] == "chat-123"
+        assert env_dict["SKULD__TELEGRAM__NOTIFY_ONLY"] == "true"
+        assert env_dict["SKULD__TELEGRAM__TOPIC_MODE"] == "topic_per_session"
+
+    def test_build_env_with_broker_telegram_fixed_topic(
+        self,
+        pod_manager: DirectK8sPodManager,
+        sample_session: Session,
+    ) -> None:
+        spec = make_spec(
+            broker={
+                "telegram": {
+                    "enabled": True,
+                    "botToken": "bot-token",
+                    "chatId": "chat-123",
+                    "notifyOnly": True,
+                    "topicMode": "fixed_topic",
+                    "messageThreadId": 77,
+                }
+            }
+        )
+        env = pod_manager._build_env(sample_session, spec)
+
+        env_dict = {e["name"]: e["value"] for e in env if "value" in e}
+        assert env_dict["SKULD__TELEGRAM__TOPIC_MODE"] == "fixed_topic"
+        assert env_dict["SKULD__TELEGRAM__MESSAGE_THREAD_ID"] == "77"
+
     def test_build_env_without_prompts_omits_vars(
         self,
         pod_manager: DirectK8sPodManager,

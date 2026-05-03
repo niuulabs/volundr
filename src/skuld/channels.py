@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
+from typing import Literal
 
 logger = logging.getLogger("skuld.channels")
 
@@ -17,6 +18,9 @@ TELEGRAM_MAX_MESSAGE_LENGTH = 4096
 
 # Buffer flush interval for streaming text (seconds)
 TELEGRAM_BUFFER_FLUSH_INTERVAL = 1.5
+TELEGRAM_TOPIC_NAME_MAX_LENGTH = 128
+
+TelegramTopicMode = Literal["shared_chat", "fixed_topic", "topic_per_session"]
 
 try:
     from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
@@ -128,10 +132,10 @@ def format_telegram_event(event: dict) -> str | None:
 
     Formatting rules:
     - Text responses: plain text (Telegram MarkdownV2 is fragile)
-    - Code blocks: wrapped in triple backticks
-    - Tool use: prefixed with wrench indicator
-    - Errors: prefixed with warning indicator
-    - Thinking blocks: skipped
+    - Tool use: prefixed with a compact tool label
+    - Errors: prefixed with an error label
+    - Public room events: fanned out so Telegram can mirror user-visible chat
+    - Internal room events/activity/detail frames: skipped
     - content_block_delta: returns the delta text fragment
     """
     event_type = event.get("type", "")
@@ -142,6 +146,12 @@ def format_telegram_event(event: dict) -> str | None:
         if not text:
             return None
         return text
+
+    if event_type == "user_confirmed":
+        content = event.get("content", "")
+        if not content:
+            return None
+        return f"[prompt] {content}"
 
     if event_type == "assistant":
         content = event.get("content", event.get("message", {}).get("content", []))
@@ -178,6 +188,84 @@ def format_telegram_event(event: dict) -> str | None:
         if not parts:
             return None
         return "\n".join(parts)
+
+    if event_type == "room_message":
+        if event.get("visibility") == "internal":
+            return None
+        participant = event.get("participant", {}) or {}
+        name = (
+            participant.get("display_name")
+            or participant.get("persona")
+            or event.get("participantId")
+            or "agent"
+        )
+        content = event.get("content", "")
+        if not content:
+            return None
+        prefix = "[error]" if event.get("error") else f"[{name}]"
+        return f"{prefix} {content}"
+
+    if event_type == "room_notification":
+        participant = event.get("participant", {}) or {}
+        name = (
+            participant.get("display_name")
+            or participant.get("persona")
+            or event.get("participantId")
+            or "agent"
+        )
+        summary = event.get("summary", "")
+        reason = event.get("reason", "")
+        recommendation = event.get("recommendation", "")
+        parts = [f"[{name}] {summary or 'needs attention'}"]
+        if reason:
+            parts.append(f"reason: {reason}")
+        if recommendation:
+            parts.append(f"next: {recommendation}")
+        return "\n".join(parts)
+
+    if event_type == "room_outcome":
+        participant = event.get("participant", {}) or {}
+        name = (
+            participant.get("display_name")
+            or participant.get("persona")
+            or event.get("participantId")
+            or "agent"
+        )
+        summary = event.get("summary", "")
+        verdict = event.get("verdict", "")
+        outcome_type = event.get("eventType", "") or "outcome"
+        fields = event.get("fields", {})
+        lines = [f"[{name}] outcome: {outcome_type}"]
+        if verdict:
+            lines.append(f"verdict: {verdict}")
+        if summary:
+            lines.append(summary)
+        if isinstance(fields, dict):
+            for key, value in fields.items():
+                if key in {"summary", "verdict"}:
+                    continue
+                if isinstance(value, (dict, list)):
+                    value = json.dumps(value, default=str)
+                lines.append(f"{key}: {value}")
+        elif fields:
+            lines.append(str(fields))
+        return "\n".join(line for line in lines if line)
+
+    if event_type == "room_mesh_message":
+        participant = event.get("participant", {}) or {}
+        name = (
+            participant.get("display_name")
+            or participant.get("persona")
+            or event.get("participantId")
+            or "agent"
+        )
+        event_name = event.get("eventType", "") or "work"
+        preview = event.get("preview", "")
+        direction = event.get("direction", "") or "delegate"
+        lines = [f"[{name}] {direction}: {event_name}"]
+        if preview:
+            lines.append(preview)
+        return "\n".join(lines)
 
     if event_type == "error":
         error_content = event.get("content", event.get("error", "Unknown error"))
@@ -242,6 +330,9 @@ class TelegramChannel(MessageChannel):
         chat_id: str,
         *,
         notify_only: bool = False,
+        topic_mode: TelegramTopicMode = "topic_per_session",
+        message_thread_id: int | None = None,
+        topic_name: str | None = None,
         on_message: object | None = None,
     ) -> None:
         if not HAS_TELEGRAM:
@@ -253,6 +344,10 @@ class TelegramChannel(MessageChannel):
         self._bot_token = bot_token
         self._chat_id = chat_id
         self._notify_only = notify_only
+        self._topic_mode = topic_mode
+        self._message_thread_id = message_thread_id
+        base_topic_name = (topic_name or "Volundr session").strip()
+        self._topic_name = base_topic_name[:TELEGRAM_TOPIC_NAME_MAX_LENGTH]
         self._on_message = on_message
         self._bot: object | None = None
         self._application: object | None = None
@@ -269,10 +364,17 @@ class TelegramChannel(MessageChannel):
         self._bot = Bot(token=self._bot_token)
         self._started = True
         logger.info(
-            "TelegramChannel started (chat_id=%s, notify_only=%s)",
+            (
+                "TelegramChannel started (chat_id=%s, notify_only=%s, "
+                "topic_mode=%s, message_thread_id=%s)"
+            ),
             self._chat_id,
             self._notify_only,
+            self._topic_mode,
+            self._message_thread_id,
         )
+
+        await self._ensure_topic_target()
 
         if not self._notify_only:
             self._application = Application.builder().token(self._bot_token).build()
@@ -343,9 +445,14 @@ class TelegramChannel(MessageChannel):
         chunks = split_message(text)
         for chunk in chunks:
             try:
+                kwargs = {
+                    "chat_id": self._chat_id,
+                    "text": chunk,
+                }
+                if self._message_thread_id is not None:
+                    kwargs["message_thread_id"] = self._message_thread_id
                 await self._bot.send_message(
-                    chat_id=self._chat_id,
-                    text=chunk,
+                    **kwargs,
                 )
             except Exception:
                 logger.warning(
@@ -389,13 +496,74 @@ class TelegramChannel(MessageChannel):
             ]
         )
         try:
-            await self._bot.send_message(
-                chat_id=self._chat_id,
-                text=text,
-                reply_markup=keyboard,
-            )
+            kwargs = {
+                "chat_id": self._chat_id,
+                "text": text,
+                "reply_markup": keyboard,
+            }
+            if self._message_thread_id is not None:
+                kwargs["message_thread_id"] = self._message_thread_id
+            await self._bot.send_message(**kwargs)
         except Exception:
             logger.warning("Failed to send permission request to Telegram", exc_info=True)
+
+    async def _ensure_topic_target(self) -> None:
+        """Resolve the effective Telegram topic target for this session."""
+        if not self._bot:
+            return
+
+        if self._topic_mode == "shared_chat":
+            return
+
+        if self._topic_mode == "fixed_topic":
+            if self._message_thread_id is None:
+                logger.warning(
+                    "Telegram fixed_topic mode selected without message_thread_id; "
+                    "falling back to shared chat"
+                )
+                self._topic_mode = "shared_chat"
+            return
+
+        if self._topic_mode != "topic_per_session":
+            logger.warning(
+                "Unknown Telegram topic mode %r; falling back to shared chat",
+                self._topic_mode,
+            )
+            self._topic_mode = "shared_chat"
+            return
+
+        if self._message_thread_id is not None:
+            return
+
+        try:
+            topic = await self._bot.create_forum_topic(
+                chat_id=self._chat_id,
+                name=self._topic_name or "Volundr session",
+            )
+            thread_id = getattr(topic, "message_thread_id", None)
+            if thread_id is None:
+                logger.warning(
+                    "Telegram topic creation returned no message_thread_id; "
+                    "falling back to shared chat"
+                )
+                self._topic_mode = "shared_chat"
+                return
+            self._message_thread_id = int(thread_id)
+            logger.info(
+                (
+                    "Telegram topic created for session "
+                    "(chat_id=%s, message_thread_id=%s, topic_name=%s)"
+                ),
+                self._chat_id,
+                self._message_thread_id,
+                self._topic_name,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to create Telegram session topic; falling back to shared chat",
+                exc_info=True,
+            )
+            self._topic_mode = "shared_chat"
 
     async def close(self) -> None:
         """Stop the Telegram bot and clean up."""

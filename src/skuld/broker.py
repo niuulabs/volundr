@@ -28,14 +28,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from niuu.ports.cli import CLITransport
 from niuu.domain.logging import LoggingConfig
 from niuu.domain.outcome import parse_outcome_block
 from niuu.mesh.cluster import read_cluster_pub_addresses
 from niuu.mesh.discovery_builder import build_discovery_adapters
 from niuu.mesh.identity import MeshIdentity
+from niuu.ports.cli import CLITransport
 from niuu.utils import import_class
-from ravn.domain.exceptions import LLMError
 from skuld.channels import (
     ChannelRegistry,
     TelegramChannel,
@@ -589,7 +588,7 @@ class Broker:
         self._pending_assistant_parts = []
         self._pending_reasoning_text = ""
 
-    def _ensure_workflow_prompt_turn(self) -> None:
+    async def _ensure_workflow_prompt_turn(self) -> None:
         """Persist the workflow trigger prompt without executing it locally."""
         prompt = self._settings.session.initial_prompt
         if not prompt:
@@ -598,12 +597,20 @@ class Broker:
         if any(turn.role == "user" and turn.content == prompt for turn in self._conversation_turns):
             return
 
+        turn_id = str(uuid.uuid4())
         self._append_turn(
             ConversationTurn(
-                id=str(uuid.uuid4()),
+                id=turn_id,
                 role="user",
                 content=prompt,
             )
+        )
+        await self._channels.broadcast(
+            {
+                "type": "user_confirmed",
+                "id": turn_id,
+                "content": prompt,
+            }
         )
 
     async def _start_mesh_adapter(self) -> None:
@@ -881,8 +888,10 @@ class Broker:
         # for a browser to connect).
         if self._settings.session.initial_prompt:
             if self._has_workflow_trigger():
-                logger.info("Workflow trigger configured — holding initial prompt for mesh dispatch")
-                self._ensure_workflow_prompt_turn()
+                logger.info(
+                    "Workflow trigger configured — holding initial prompt for mesh dispatch"
+                )
+                await self._ensure_workflow_prompt_turn()
             else:
                 logger.info("Initial prompt configured — auto-starting transport")
                 try:
@@ -2055,6 +2064,9 @@ class Broker:
                 bot_token=tg_config.bot_token,
                 chat_id=tg_config.chat_id,
                 notify_only=tg_config.notify_only,
+                topic_mode=tg_config.topic_mode,
+                message_thread_id=tg_config.message_thread_id,
+                topic_name=self._build_telegram_topic_name(),
                 on_message=self._dispatch_browser_message,
             )
             await channel.start()
@@ -2064,6 +2076,22 @@ class Broker:
             logger.warning("python-telegram-bot not installed, Telegram channel disabled")
         except Exception:
             logger.warning("Failed to initialize Telegram channel", exc_info=True)
+
+    def _build_telegram_topic_name(self) -> str:
+        """Build a readable Telegram topic name for the active session."""
+        session_name = (self._settings.session.name or "").strip()
+        session_id = (self._settings.session.id or "").strip()
+
+        if not session_name or session_name == "unknown":
+            session_name = "Volundr session"
+
+        pieces = [session_name]
+        if session_id and session_id not in session_name:
+            pieces.append(session_id[:8])
+
+        topic_name = " · ".join(piece for piece in pieces if piece).strip()
+        topic_name = " ".join(topic_name.split())
+        return topic_name[:128] or "Volundr session"
 
     def _update_jwt_from_websocket(self, websocket: WebSocket) -> None:
         """Extract and store JWT from an incoming WebSocket connection.

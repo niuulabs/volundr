@@ -234,7 +234,10 @@ def _dedupe_preserve_order(values: list[str]) -> list[str]:
     return result
 
 
-def _workflow_event_metadata(workflow: dict[str, Any] | None, persona: str) -> tuple[list[str], list[str]]:
+def _workflow_event_metadata(
+    workflow: dict[str, Any] | None,
+    persona: str,
+) -> tuple[list[str], list[str]]:
     """Infer consumed/emitted event types for a persona from the workflow graph."""
     if not isinstance(workflow, dict):
         return [], []
@@ -1126,6 +1129,34 @@ class LocalProcessPodManager(PodManager):
 
             if "agentTeams" in broker:
                 env["SKULD__AGENT_TEAMS"] = str(bool(broker["agentTeams"])).lower()
+
+            telegram = broker.get("telegram")
+            if isinstance(telegram, dict):
+                if "enabled" in telegram:
+                    env["SKULD__TELEGRAM__ENABLED"] = str(bool(telegram["enabled"])).lower()
+
+                bot_token = telegram.get("botToken", telegram.get("bot_token"))
+                if bot_token:
+                    env["SKULD__TELEGRAM__BOT_TOKEN"] = str(bot_token)
+
+                chat_id = telegram.get("chatId", telegram.get("chat_id"))
+                if chat_id:
+                    env["SKULD__TELEGRAM__CHAT_ID"] = str(chat_id)
+
+                if "notifyOnly" in telegram or "notify_only" in telegram:
+                    notify_only = telegram.get("notifyOnly", telegram.get("notify_only"))
+                    env["SKULD__TELEGRAM__NOTIFY_ONLY"] = str(bool(notify_only)).lower()
+
+                topic_mode = telegram.get("topicMode", telegram.get("topic_mode"))
+                if topic_mode:
+                    env["SKULD__TELEGRAM__TOPIC_MODE"] = str(topic_mode)
+
+                message_thread_id = telegram.get(
+                    "messageThreadId",
+                    telegram.get("message_thread_id"),
+                )
+                if message_thread_id not in (None, ""):
+                    env["SKULD__TELEGRAM__MESSAGE_THREAD_ID"] = str(message_thread_id)
 
         return env
 

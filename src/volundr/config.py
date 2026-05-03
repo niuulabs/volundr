@@ -32,6 +32,7 @@ from niuu.config import (
     GitLabInstance,  # noqa: F401
 )
 from ravn.config import PersonaSourceConfig
+from volundr.domain.models import IntegrationType, SecretType
 
 
 # Config file search paths (in order of priority).
@@ -792,6 +793,75 @@ class IntegrationsConfig(BaseModel):
 
     definitions: list[IntegrationDefinitionConfig] = Field(
         default_factory=_default_integration_definitions,
+    )
+    seed_connections: list["SeededIntegrationConnectionConfig"] = Field(
+        default_factory=list,
+        description=(
+            "Integration connections to seed into the credential store and "
+            "integration repository at startup."
+        ),
+    )
+
+
+class SeededIntegrationCredentialConfig(BaseModel):
+    """Credential payload to seed for an integration connection."""
+
+    secret_type: SecretType = Field(
+        default=SecretType.GENERIC,
+        description="Secret type stored for the seeded credential.",
+    )
+    data: dict[str, str] = Field(
+        default_factory=dict,
+        description="Secret key/value pairs to store in the credential store.",
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Optional credential metadata stored alongside the secret values.",
+    )
+
+
+class SeededIntegrationConnectionConfig(BaseModel):
+    """A startup-seeded integration connection."""
+
+    id: str | None = Field(
+        default=None,
+        description=(
+            "Optional fixed integration connection ID. When omitted, Volundr "
+            "derives a stable UUID from the seeded connection fields."
+        ),
+    )
+    owner_type: str = Field(
+        default="user",
+        description="Credential/integration owner type, usually 'user' in mini mode.",
+    )
+    owner_id: str = Field(
+        default="dev-user",
+        description="Owner receiving the seeded integration connection.",
+    )
+    integration_type: IntegrationType = Field(
+        description="Category of integration being seeded.",
+    )
+    adapter: str = Field(
+        description="Fully-qualified adapter path for the integration connection.",
+    )
+    credential_name: str = Field(
+        description="Credential name referenced by the integration connection.",
+    )
+    slug: str = Field(
+        default="",
+        description="Catalog slug for the integration definition, e.g. 'telegram'.",
+    )
+    enabled: bool = Field(
+        default=True,
+        description="Whether the seeded connection starts enabled.",
+    )
+    config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Adapter-specific connection config.",
+    )
+    credential: SeededIntegrationCredentialConfig | None = Field(
+        default=None,
+        description="Optional credential payload to seed before creating the connection.",
     )
 
 

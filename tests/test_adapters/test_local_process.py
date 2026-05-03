@@ -186,6 +186,53 @@ class TestSkuldEnv:
         assert env["SKULD__SKIP_PERMISSIONS"] == "false"
         assert env["SKULD__AGENT_TEAMS"] == "true"
 
+    def test_build_env_includes_telegram_runtime_channel(self) -> None:
+        """Broker telegram values are mapped to Skuld env vars."""
+        spec = SessionSpec(
+            values={
+                "broker": {
+                    "telegram": {
+                        "enabled": True,
+                        "botToken": "bot-token",
+                        "chatId": "chat-123",
+                        "notifyOnly": True,
+                        "topicMode": "topic_per_session",
+                    }
+                }
+            },
+            pod_spec=PodSpecAdditions(),
+        )
+
+        env = LocalProcessPodManager._build_env(spec, Path("/tmp/ws"))
+
+        assert env["SKULD__TELEGRAM__ENABLED"] == "true"
+        assert env["SKULD__TELEGRAM__BOT_TOKEN"] == "bot-token"
+        assert env["SKULD__TELEGRAM__CHAT_ID"] == "chat-123"
+        assert env["SKULD__TELEGRAM__NOTIFY_ONLY"] == "true"
+        assert env["SKULD__TELEGRAM__TOPIC_MODE"] == "topic_per_session"
+
+    def test_build_env_includes_telegram_thread_override(self) -> None:
+        spec = SessionSpec(
+            values={
+                "broker": {
+                    "telegram": {
+                        "enabled": True,
+                        "botToken": "bot-token",
+                        "chatId": "chat-123",
+                        "notifyOnly": True,
+                        "topicMode": "fixed_topic",
+                        "messageThreadId": 77,
+                    }
+                }
+            },
+            pod_spec=PodSpecAdditions(),
+        )
+
+        env = LocalProcessPodManager._build_env(spec, Path("/tmp/ws"))
+
+        assert env["SKULD__TELEGRAM__TOPIC_MODE"] == "fixed_topic"
+        assert env["SKULD__TELEGRAM__MESSAGE_THREAD_ID"] == "77"
+
 
 class TestFlockPortAllocation:
     def test_pick_flock_base_port_skips_taken_ranges(
@@ -799,6 +846,29 @@ class TestProcessSpawning:
         )
         assert env["SKULD__SKIP_PERMISSIONS"] == "false"
         assert env["SKULD__AGENT_TEAMS"] == "true"
+
+    def test_build_env_includes_telegram_runtime_channel(self) -> None:
+        """Broker telegram values are mapped to Skuld env vars."""
+        spec = SessionSpec(
+            values={
+                "broker": {
+                    "telegram": {
+                        "enabled": True,
+                        "botToken": "bot-token",
+                        "chatId": "chat-123",
+                        "notifyOnly": False,
+                    }
+                }
+            },
+            pod_spec=PodSpecAdditions(),
+        )
+
+        env = LocalProcessPodManager._build_env(spec, Path("/tmp/ws"))
+
+        assert env["SKULD__TELEGRAM__ENABLED"] == "true"
+        assert env["SKULD__TELEGRAM__BOT_TOKEN"] == "bot-token"
+        assert env["SKULD__TELEGRAM__CHAT_ID"] == "chat-123"
+        assert env["SKULD__TELEGRAM__NOTIFY_ONLY"] == "false"
 
     async def test_spawn_skuld_preserves_broker_transport_overrides(
         self,

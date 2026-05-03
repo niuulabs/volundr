@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, status
@@ -60,7 +61,7 @@ class IntegrationCreateRequest(BaseModel):
         description="Stored credential name for authentication",
         examples=["linear-api-key"],
     )
-    config: dict[str, str] = Field(
+    config: dict[str, Any] = Field(
         default_factory=dict,
         description="Adapter-specific configuration key-value pairs",
         examples=[{"team_id": "TEAM-1"}],
@@ -90,7 +91,7 @@ class IntegrationUpdateRequest(BaseModel):
         description="New credential name (null to keep current)",
         examples=["linear-api-key"],
     )
-    config: dict[str, str] | None = Field(
+    config: dict[str, Any] | None = Field(
         default=None,
         description="New adapter config (null to keep current)",
         examples=[{"team_id": "TEAM-2"}],

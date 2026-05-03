@@ -1257,6 +1257,7 @@ class TestDispatchTemplatePhaseFlockFlow:
         )
         provider = StubFlockFlowProvider({"code-review-flow": flow})
         volundr = MockVolundr()
+        volundr.integration_ids = ["int-telegram", "int-linear"]
         repo = MockSagaRepo()
         service = _make_dispatch_service(volundr, provider, repo)
 
@@ -1275,11 +1276,13 @@ class TestDispatchTemplatePhaseFlockFlow:
         assert len(volundr.spawned) == 1
         assert volundr.spawned[0].workload_type == "ravn_flock"
         assert "personas" in volundr.spawned[0].workload_config
+        assert volundr.spawned[0].integration_ids == ["int-telegram", "int-linear"]
 
     @pytest.mark.asyncio
     async def test_empty_flock_flow_name_is_solo_dispatch(self):
         """Without flock_flow_name, workload_type is default."""
         volundr = MockVolundr()
+        volundr.integration_ids = ["int-telegram"]
         repo = MockSagaRepo()
         service = _make_dispatch_service(volundr, saga_repo=repo)
 
@@ -1298,3 +1301,4 @@ class TestDispatchTemplatePhaseFlockFlow:
         assert len(volundr.spawned) == 1
         assert volundr.spawned[0].workload_type == "default"
         assert volundr.spawned[0].workload_config == {}
+        assert volundr.spawned[0].integration_ids == ["int-telegram"]
