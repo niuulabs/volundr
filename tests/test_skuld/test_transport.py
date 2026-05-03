@@ -16,6 +16,7 @@ from skuld.transports import (
     _map_codex_tool,
     _stop_process,
 )
+from skuld.transports import subprocess as subprocess_transport
 
 # ---------------------------------------------------------------------------
 # TransportCapabilities
@@ -287,7 +288,9 @@ class TestSubprocessTransport:
             assert "--permission-mode" in call_args
             assert "bypassPermissions" in call_args
 
-            stdin_payload = b"".join(call.args[0] for call in mock_subprocess.stdin.write.call_args_list)
+            stdin_payload = b"".join(
+                call.args[0] for call in mock_subprocess.stdin.write.call_args_list
+            )
             sent = json.loads(stdin_payload.decode().strip())
             assert sent["type"] == "user"
             assert sent["message"]["role"] == "user"
@@ -405,7 +408,9 @@ class TestSubprocessTransport:
             "session_id": "s1",
             "modelUsage": {"opus": {"inputTokens": 10}},
         }
-        mock_subprocess = self._mock_process(stdout_lines=[json.dumps(result_data).encode() + b"\n"])
+        mock_subprocess = self._mock_process(
+            stdout_lines=[json.dumps(result_data).encode() + b"\n"]
+        )
 
         transport.on_event(AsyncMock())
 
@@ -447,7 +452,9 @@ class TestSubprocessTransport:
 
     @pytest.mark.asyncio
     async def test_process_cleaned_up_after_send(self, transport):
-        mock_subprocess = self._mock_process(stdout_lines=[b'{"type": "result", "result": "Done"}\n'])
+        mock_subprocess = self._mock_process(
+            stdout_lines=[b'{"type": "result", "result": "Done"}\n']
+        )
 
         transport.on_event(AsyncMock())
 
@@ -469,7 +476,9 @@ class TestSubprocessTransport:
             agent_teams=True,
             system_prompt="Be careful.",
         )
-        mock_subprocess = self._mock_process(stdout_lines=[b'{"type": "result", "result": "Done"}\n'])
+        mock_subprocess = self._mock_process(
+            stdout_lines=[b'{"type": "result", "result": "Done"}\n']
+        )
 
         transport.on_event(AsyncMock())
 
@@ -516,7 +525,9 @@ class TestSubprocessTransport:
     @pytest.mark.asyncio
     async def test_send_message_retries_transient_error(self, transport):
         first_process = self._mock_process(
-            stdout_lines=[b'{"type": "error", "message": "ProcessTransport not ready for writing"}\n']
+            stdout_lines=[
+                b'{"type": "error", "message": "ProcessTransport not ready for writing"}\n'
+            ]
         )
         second_process = self._mock_process(
             stdout_lines=[b'{"type": "result", "result": "Done", "session_id": "sess-789"}\n']
@@ -529,7 +540,10 @@ class TestSubprocessTransport:
                 "skuld.transports.subprocess.asyncio.create_subprocess_exec",
                 new_callable=AsyncMock,
             ) as mock_exec,
-            patch("skuld.transports.subprocess.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch(
+                "skuld.transports.subprocess.asyncio.sleep",
+                new_callable=AsyncMock,
+            ) as mock_sleep,
         ):
             mock_exec.side_effect = [first_process, second_process]
             await transport.send_message("retry me")
@@ -555,7 +569,10 @@ class TestSubprocessTransport:
                 "skuld.transports.subprocess.asyncio.create_subprocess_exec",
                 new_callable=AsyncMock,
             ) as mock_exec,
-            patch("skuld.transports.subprocess.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch(
+                "skuld.transports.subprocess.asyncio.sleep",
+                new_callable=AsyncMock,
+            ) as mock_sleep,
         ):
             mock_exec.return_value = mock_subprocess
             with pytest.raises(RuntimeError, match="completed without a result event"):
@@ -599,6 +616,23 @@ class TestSubprocessTransport:
             mock_exec.return_value = mock_subprocess
             with pytest.raises(RuntimeError, match="completed without a result event"):
                 await transport.send_message("test")
+
+
+class TestSubprocessHelpers:
+    def test_extract_error_message_prefers_nested_error_message(self):
+        data = {"error": {"message": "nested error"}}
+        assert subprocess_transport._extract_error_message(data) == "nested error"
+
+    def test_extract_error_message_falls_back_to_serialized_payload(self):
+        data = {"type": "error", "detail": "missing"}
+        message = subprocess_transport._extract_error_message(data)
+        assert '"detail": "missing"' in message
+
+    def test_retryable_error_detection_and_output_classification(self):
+        assert subprocess_transport._is_retryable_error("ProcessTransport not ready for writing")
+        assert not subprocess_transport._is_retryable_error("permission denied")
+        assert subprocess_transport._counts_as_output({"type": "assistant"})
+        assert not subprocess_transport._counts_as_output({"type": "system"})
 
 
 # ---------------------------------------------------------------------------
