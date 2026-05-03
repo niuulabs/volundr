@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-
 _SOCKET_ROOT_NAME = "niuu-mesh"
 
 

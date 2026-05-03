@@ -220,8 +220,9 @@ export function SessionFilesWorkspace({ sessionId, filesystem }: SessionFilesWor
         multiple
         hidden
         onChange={async (e) => {
-          if (e.target.files) await uploadFiles(e.target.files);
-          e.currentTarget.value = '';
+          const input = e.currentTarget;
+          if (input.files) await uploadFiles(input.files);
+          input.value = '';
         }}
       />
 
@@ -660,7 +661,7 @@ function DialogShell({
   );
 }
 
-function normalizeRoots(nodes: FileTreeNode[]): BrowserNode[] {
+export function normalizeRoots(nodes: FileTreeNode[]): BrowserNode[] {
   const workspaceChildren = nodes.filter((node) => !node.mountName);
   const mountRoots = nodes.filter((node) => node.mountName).map(cloneNode);
   const roots: BrowserNode[] = [];
@@ -675,14 +676,14 @@ function normalizeRoots(nodes: FileTreeNode[]): BrowserNode[] {
   return [...roots, ...mountRoots];
 }
 
-function cloneNode(node: FileTreeNode): BrowserNode {
+export function cloneNode(node: FileTreeNode): BrowserNode {
   return {
     ...node,
     children: node.children?.map(cloneNode),
   };
 }
 
-function buildIndex(nodes: BrowserNode[]): Map<string, BrowserNode> {
+export function buildIndex(nodes: BrowserNode[]): Map<string, BrowserNode> {
   const map = new Map<string, BrowserNode>();
   const visit = (node: BrowserNode) => {
     map.set(node.path, node);
@@ -692,7 +693,7 @@ function buildIndex(nodes: BrowserNode[]): Map<string, BrowserNode> {
   return map;
 }
 
-function buildBreadcrumbs(path: string, index: Map<string, BrowserNode>) {
+export function buildBreadcrumbs(path: string, index: Map<string, BrowserNode>) {
   const crumbs: Array<{ path: string; name: string }> = [];
   let current = path;
   while (current) {
@@ -705,18 +706,18 @@ function buildBreadcrumbs(path: string, index: Map<string, BrowserNode>) {
   return crumbs;
 }
 
-function joinPath(base: string, name: string) {
+export function joinPath(base: string, name: string) {
   if (base.endsWith('/')) return `${base}${name}`;
   return `${base}/${name}`;
 }
 
-function formatSize(size: number) {
+export function formatSize(size: number) {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function sortEntries(nodes: BrowserNode[]) {
+export function sortEntries(nodes: BrowserNode[]) {
   return [...nodes].sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1;
     return a.name.localeCompare(b.name);

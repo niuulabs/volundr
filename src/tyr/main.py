@@ -14,9 +14,9 @@ from niuu.adapters.pat_revocation_middleware import PATRevocationMiddleware
 from niuu.adapters.postgres_integrations import PostgresIntegrationRepository
 from niuu.domain.models import Principal
 from niuu.domain.services.pat_validator import PATValidator
+from niuu.utils import import_class, resolve_secret_kwargs
 from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 from ravn.ports.persona import PersonaPort
-from niuu.utils import import_class, resolve_secret_kwargs
 from tyr.adapters.github_git import GitHubGitAdapter
 from tyr.adapters.inbound.rest_integrations import (
     create_integrations_router,

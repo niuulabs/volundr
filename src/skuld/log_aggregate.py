@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import UTC, datetime
 import logging
 import re
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -155,7 +155,9 @@ def _parse_log_file(path: Path, participant: AggregateParticipant) -> list[Aggre
     last_source = participant.id
     entries: list[AggregateLogEntry] = []
 
-    for index, raw_line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines()):
+    for index, raw_line in enumerate(
+        path.read_text(encoding="utf-8", errors="replace").splitlines()
+    ):
         line = raw_line.rstrip("\n")
         if not line:
             continue
@@ -175,7 +177,8 @@ def _parse_log_file(path: Path, participant: AggregateParticipant) -> list[Aggre
             last_source = source
 
         entry_id = (
-            f"{participant.id}:{index}:{int(timestamp.timestamp() * 1000)}:{level}:{source}:{message}"
+            f"{participant.id}:{index}:{int(timestamp.timestamp() * 1000)}:"
+            f"{level}:{source}:{message}"
         )
         entries.append(
             AggregateLogEntry(
@@ -188,7 +191,11 @@ def _parse_log_file(path: Path, participant: AggregateParticipant) -> list[Aggre
                 source=source,
                 message=message,
                 sequence=index,
-                stream=str(path.relative_to(path.parent.parent if path.parent.name == "logs" else path.parent)),
+                stream=str(
+                    path.relative_to(
+                        path.parent.parent if path.parent.name == "logs" else path.parent
+                    )
+                ),
             )
         )
 

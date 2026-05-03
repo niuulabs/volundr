@@ -120,7 +120,9 @@ class TestGetPersona:
                     "executor": {
                         "adapter": "ravn.adapters.executors.cli.CliTransportExecutor",
                         "kwargs": {
-                            "transport_adapter": "skuld.transports.codex_ws.CodexWebSocketTransport",
+                            "transport_adapter": (
+                                "skuld.transports.codex_ws.CodexWebSocketTransport"
+                            ),
                             "transport_kwargs": {"model": ""},
                         },
                     },
@@ -200,7 +202,10 @@ class TestSavePersona:
         assert raw_json["permission_mode"] == "safe"
         assert runtime_json["permission_mode"] == "read-only"
         assert raw_json["executor"]["adapter"] == "ravn.adapters.executors.cli.CliTransportExecutor"
-        assert runtime_json["executor"]["adapter"] == "ravn.adapters.executors.cli.CliTransportExecutor"
+        assert (
+            runtime_json["executor"]["adapter"]
+            == "ravn.adapters.executors.cli.CliTransportExecutor"
+        )
 
 
 class TestDeletePersona:

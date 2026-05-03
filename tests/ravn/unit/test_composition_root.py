@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ravn.config import Settings
 from ravn.adapters.personas.loader import PersonaExecutorConfig
+from ravn.config import Settings
 
 # ---------------------------------------------------------------------------
 # Fixtures

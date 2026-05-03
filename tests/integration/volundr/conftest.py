@@ -19,8 +19,8 @@ import httpx
 import pytest_asyncio
 from fastapi import FastAPI
 
-from tests.integration.pool_wrapper import TransactionalPool
 from ravn.adapters.personas.postgres_registry import PostgresPersonaRegistry
+from tests.integration.pool_wrapper import TransactionalPool
 from volundr.adapters.inbound.rest import create_router as create_session_router
 from volundr.adapters.inbound.rest_prompts import create_prompts_router
 from volundr.adapters.inbound.rest_ravn_personas import create_ravn_personas_router

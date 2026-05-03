@@ -130,7 +130,9 @@ def _build_tracker_router(
             try:
                 projects = await adapter.list_projects()
                 results.extend(
-                    project for project in projects if not _is_terminal_project_status(project.status)
+                    project
+                    for project in projects
+                    if not _is_terminal_project_status(project.status)
                 )
             except Exception:
                 logger.warning("list_projects failed for adapter", exc_info=True)

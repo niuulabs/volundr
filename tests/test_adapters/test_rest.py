@@ -631,7 +631,8 @@ class TestSessionLogAggregationProxy:
             encoding="utf-8",
         )
         (flock_logs / "coder.log").write_text(
-            "2026-05-01 15:19:58,326 ravn.drive_loop ERROR drive_loop: task failed after 3 retries\n",
+            "2026-05-01 15:19:58,326 ravn.drive_loop ERROR "
+            "drive_loop: task failed after 3 retries\n",
             encoding="utf-8",
         )
 

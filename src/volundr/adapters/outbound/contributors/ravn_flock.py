@@ -122,7 +122,9 @@ def _normalize_mimir_workload_config(
     return normalized
 
 
-def _resolve_mimir_runtime(mimir_cfg: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _resolve_mimir_runtime(
+    mimir_cfg: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     instances: list[dict[str, Any]] = [
         {"name": "local", "role": "local", "path": _MIMIR_MOUNT_PATH},
     ]
@@ -226,13 +228,17 @@ def _resolve_mimir_runtime(mimir_cfg: dict[str, Any]) -> tuple[list[dict[str, An
     for raw_binding in list(mimir_cfg.get("bindings") or []):
         if not isinstance(raw_binding, dict):
             continue
-        mount_name = str(raw_binding.get("mount_name") or raw_binding.get("mountName") or "").strip()
+        mount_name = str(
+            raw_binding.get("mount_name") or raw_binding.get("mountName") or ""
+        ).strip()
         if not mount_name or mount_name not in known_mounts:
             continue
         access = str(raw_binding.get("access") or "read")
         if "write" not in access:
             continue
-        for prefix in _string_list(raw_binding.get("write_prefixes") or raw_binding.get("writePrefixes")):
+        for prefix in _string_list(
+            raw_binding.get("write_prefixes") or raw_binding.get("writePrefixes")
+        ):
             write_rules.append({"prefix": prefix, "mounts": [mount_name]})
 
     explicit_routing = mimir_cfg.get("write_routing") or {}
@@ -241,7 +247,9 @@ def _resolve_mimir_runtime(mimir_cfg: dict[str, Any]) -> tuple[list[dict[str, An
             if not isinstance(raw_rule, dict):
                 continue
             prefix = str(raw_rule.get("prefix") or "").strip()
-            mounts = [mount for mount in _string_list(raw_rule.get("mounts")) if mount in known_mounts]
+            mounts = [
+                mount for mount in _string_list(raw_rule.get("mounts")) if mount in known_mounts
+            ]
             if not prefix or not mounts:
                 continue
             write_rules.append({"prefix": prefix, "mounts": mounts})

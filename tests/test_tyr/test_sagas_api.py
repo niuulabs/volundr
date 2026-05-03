@@ -284,7 +284,9 @@ class TestGetSaga:
         assert data["phases"][1]["name"] == "Phase 2"
         assert data["phases"][2]["name"] == "Unassigned"
 
-    def test_returns_assigned_workflow_fields(self, mock_tracker: MockTracker, saga_repo: MockSagaRepo):
+    def test_returns_assigned_workflow_fields(
+        self, mock_tracker: MockTracker, saga_repo: MockSagaRepo
+    ):
         workflow = _workflow()
         saga = saga_repo.sagas[0]
         saga_repo.sagas[0] = Saga(
@@ -329,7 +331,9 @@ class TestGetSaga:
 
 
 class TestAssignWorkflow:
-    def test_assigns_graph_backed_workflow(self, mock_tracker: MockTracker, saga_repo: MockSagaRepo):
+    def test_assigns_graph_backed_workflow(
+        self, mock_tracker: MockTracker, saga_repo: MockSagaRepo
+    ):
         workflow = _workflow()
         app = FastAPI()
         app.include_router(create_sagas_router())

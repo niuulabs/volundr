@@ -273,7 +273,10 @@ class SkuldChannel(ChannelPort):
                 metadata = {}
             case RavnEventType.TASK_STARTED:
                 data = payload.get("title", "")
-                metadata = {"task_id": payload.get("task_id", ""), "title": payload.get("title", "")}
+                metadata = {
+                    "task_id": payload.get("task_id", ""),
+                    "title": payload.get("title", ""),
+                }
             case RavnEventType.TASK_COMPLETE:
                 data = payload
                 metadata = {

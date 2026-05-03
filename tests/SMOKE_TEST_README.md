@@ -93,7 +93,7 @@ The test compares these legacy → canonical route pairs:
 /api/v1/volundr/models              → /api/v1/forge/models
 /api/v1/volundr/stats               → /api/v1/forge/stats
 /api/v1/volundr/cluster             → /api/v1/forge/cluster
-/api/v1/volundr/repos/branches      → /api/v1/forge/repos/branches
+/api/v1/volundr/repos/branches      → /api/v1/niuu/repos/branches
 /api/v1/volundr/repos/prs           → /api/v1/forge/repos/prs
 /api/v1/volundr/git                 → /api/v1/forge/git
 /api/v1/volundr/workspaces          → /api/v1/forge/workspaces

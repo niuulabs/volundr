@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock
 
-from ravn.adapters.personas.loader import FilesystemPersonaAdapter, PersonaConfig
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from ravn.adapters.personas.loader import FilesystemPersonaAdapter
 from ravn.adapters.personas.postgres_registry import (
     PersonaView,
     _config_to_payload,
@@ -229,8 +230,12 @@ class TestRavnPersonaRoutes:
 
     def test_user_scoping_isolated(self) -> None:
         client, registry = _make_client()
-        registry._overrides["user-1"]["scoped-agent"] = _normalize_payload(_make_payload("scoped-agent"))
-        registry._overrides["user-2"]["other-agent"] = _normalize_payload(_make_payload("other-agent"))
+        registry._overrides["user-1"]["scoped-agent"] = _normalize_payload(
+            _make_payload("scoped-agent")
+        )
+        registry._overrides["user-2"]["other-agent"] = _normalize_payload(
+            _make_payload("other-agent")
+        )
 
         user_one = client.get(
             "/api/v1/ravn/personas?source=custom",

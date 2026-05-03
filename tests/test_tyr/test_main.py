@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from ravn.ports.persona import PersonaPort
-
 from tyr.api.persona_names import build_persona_names_dependency
 
 

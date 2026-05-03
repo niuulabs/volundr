@@ -117,3 +117,52 @@ def test_build_workflow_snapshot_preserves_mimir_resource_data() -> None:
             "read_priority": 10,
         },
     ]
+
+
+def test_build_workflow_snapshot_preserves_concrete_registry_mount_metadata() -> None:
+    workflow = WorkflowDefinition(
+        id=uuid4(),
+        name="Knowledge Flow",
+        description="Workflow with concrete registry resource metadata",
+        version="1.0.0",
+        scope=WorkflowScope.USER,
+        owner_id="user-1",
+        definition_yaml="name: Knowledge Flow",
+        graph={
+            "nodes": [
+                {
+                    "id": "mimir-shared",
+                    "kind": "resource",
+                    "label": "Shared Mimir",
+                    "resourceType": "mimir",
+                    "bindingMode": "registry",
+                    "registryEntryId": "shared-team-mimir",
+                    "url": "https://mimir.shared.test/api/v1",
+                    "role": "shared",
+                    "authRef": "mimir-token",
+                    "defaultReadPriority": 3,
+                    "categories": ["entity"],
+                }
+            ],
+            "edges": [],
+            "resourceBindings": [],
+        },
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    snapshot = build_workflow_snapshot(workflow)
+
+    assert snapshot["mimir"]["registry_refs"] == [
+        {
+            "resource_node_id": "mimir-shared",
+            "registry_entry_id": "shared-team-mimir",
+            "mount_name": "shared-team-mimir",
+            "label": "Shared Mimir",
+            "categories": ["entity"],
+            "url": "https://mimir.shared.test/api/v1",
+            "role": "shared",
+            "auth_ref": "mimir-token",
+            "default_read_priority": 3,
+        }
+    ]
