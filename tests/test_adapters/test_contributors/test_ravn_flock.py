@@ -10,8 +10,13 @@ from volundr.adapters.outbound.contributors.core import CoreSessionContributor
 from volundr.adapters.outbound.contributors.ravn_flock import (
     RavnFlockContributor,
     _gateway_port_for,
+    _normalize_instance,
+    _normalize_mimir_workload_config,
     _normalize_personas,
     _ports_for,
+    _resolve_mimir_runtime,
+    _split_workflow_edge_label,
+    _string_list,
 )
 from volundr.domain.models import (
     ForgeProfile,
@@ -1518,3 +1523,114 @@ class TestPerPersonaLLMOverrides:
         assert "dropping security key" in caplog.text
         cfg = _extract_mounted_config(result.pod_spec, "reviewer")
         assert "allowed_tools" not in cfg
+
+
+class TestMimirHelpers:
+    def test_split_edge_label_and_string_list_helpers(self):
+        assert _split_workflow_edge_label("code.requested -> code.changed") == (
+            "code.requested",
+            "code.changed",
+        )
+        assert _split_workflow_edge_label(None) == ("", "")
+        assert _string_list([" a ", "", None, "b"]) == ["a", "None", "b"]
+        assert _string_list("bad") == []
+
+    def test_normalize_instance_and_workload_config_helpers(self):
+        assert _normalize_instance({"name": "shared", "path": "/tmp/shared"}) == {
+            "name": "shared",
+            "role": "shared",
+            "path": "/tmp/shared",
+        }
+        assert _normalize_instance({"name": "shared", "url": "https://mimir.example"}) == {
+            "name": "shared",
+            "role": "shared",
+            "url": "https://mimir.example",
+        }
+        assert _normalize_instance({"name": "shared"}) is None
+        assert _normalize_instance({"url": "https://mimir.example"}) is None
+
+        assert _normalize_mimir_workload_config({}, "https://legacy.example") == {
+            "hosted_url": "https://legacy.example"
+        }
+        assert _normalize_mimir_workload_config(
+            {"hosted_url": "https://explicit.example"},
+            "https://legacy.example",
+        ) == {"hosted_url": "https://explicit.example"}
+
+    def test_resolve_mimir_runtime_supports_hosted_registry_ephemeral_and_explicit_routing(self):
+        instances, routing = _resolve_mimir_runtime(
+            {
+                "hosted_url": "https://hosted.example",
+                "instances": [
+                    {"name": "shared", "url": "https://shared.example", "categories": ["entity"]},
+                    {"name": "shared", "url": "https://duplicate.example"},
+                    {"url": "https://invalid.example"},
+                    "bad",
+                ],
+                "registry_refs": [
+                    {
+                        "mount_name": "registry-a",
+                        "path": "/mnt/registry-a",
+                        "role": "shared",
+                        "categories": ["directive"],
+                    },
+                    {
+                        "registryEntryId": "registry-b",
+                        "url": "https://registry-b.example",
+                    },
+                    {
+                        "mount_name": "hosted-backed",
+                        "role": "shared",
+                    },
+                    {"mount_name": "registry-a", "url": "https://duplicate.example"},
+                    "bad",
+                ],
+                "ephemeral_locals": [
+                    {"mount_name": "scratch", "categories": ["draft"]},
+                    {"mountName": "scratch-2"},
+                    {"mount_name": "scratch"},
+                    "bad",
+                ],
+                "bindings": [
+                    {
+                        "mount_name": "registry-a",
+                        "access": "read_write",
+                        "write_prefixes": ["docs/"],
+                    },
+                    {"mountName": "scratch", "access": "write", "writePrefixes": ["drafts/"]},
+                    {"mount_name": "missing", "access": "write", "write_prefixes": ["ignored/"]},
+                    "bad",
+                ],
+                "write_routing": {
+                    "rules": [
+                        {"prefix": "reviews/", "mounts": ["registry-b", "missing"]},
+                        {"prefix": "ignored/", "mounts": []},
+                        "bad",
+                    ],
+                    "default": ["registry-b", "missing"],
+                },
+                "default_mounts": ["scratch", "missing"],
+            }
+        )
+
+        assert [instance["name"] for instance in instances] == [
+            "local",
+            "shared",
+            "registry-a",
+            "registry-b",
+            "hosted-backed",
+            "scratch",
+            "scratch-2",
+        ]
+        assert {"prefix": "docs/", "mounts": ["registry-a"]} in routing["rules"]
+        assert {"prefix": "drafts/", "mounts": ["scratch"]} in routing["rules"]
+        assert {"prefix": "reviews/", "mounts": ["registry-b"]} in routing["rules"]
+        assert routing["default"] == ["scratch"]
+
+    def test_resolve_mimir_runtime_adds_default_hosted_instance_when_no_registry_refs(self):
+        instances, routing = _resolve_mimir_runtime({"hosted_url": "https://hosted.example"})
+
+        assert [instance["name"] for instance in instances] == ["local", "hosted"]
+        assert {"prefix": "project/", "mounts": ["hosted"]} in routing["rules"]
+        assert {"prefix": "entity/", "mounts": ["hosted"]} in routing["rules"]
+        assert routing["default"] == ["local"]

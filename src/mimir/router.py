@@ -854,9 +854,15 @@ class MimirRouter:
             ]
 
         @router.post("/registry/mounts", response_model=RegistryMountResponse)
-        async def create_registry_mount(request: RegistryMountRequest) -> RegistryMountResponse:
+        async def create_registry_mount(
+            request: RegistryMountRequest,
+            _auth: None = Depends(_require_write_auth),
+        ) -> RegistryMountResponse:
             if self._registry_store is None:
-                raise HTTPException(status_code=501, detail="Registry persistence is not configured")
+                raise HTTPException(
+                    status_code=501,
+                    detail="Registry persistence is not configured",
+                )
 
             entry = MimirRegistryEntry(**request.model_dump())
             self._registry_store.save_entry(entry)
@@ -866,9 +872,13 @@ class MimirRouter:
         async def update_registry_mount(
             entry_id: str,
             request: RegistryMountRequest,
+            _auth: None = Depends(_require_write_auth),
         ) -> RegistryMountResponse:
             if self._registry_store is None:
-                raise HTTPException(status_code=501, detail="Registry persistence is not configured")
+                raise HTTPException(
+                    status_code=501,
+                    detail="Registry persistence is not configured",
+                )
 
             existing = self._registry_store.get_entry(entry_id)
             if existing is None:
@@ -879,9 +889,15 @@ class MimirRouter:
             return _registry_to_response(entry)
 
         @router.delete("/registry/mounts/{entry_id}", status_code=204)
-        async def delete_registry_mount(entry_id: str) -> None:
+        async def delete_registry_mount(
+            entry_id: str,
+            _auth: None = Depends(_require_write_auth),
+        ) -> None:
             if self._registry_store is None:
-                raise HTTPException(status_code=501, detail="Registry persistence is not configured")
+                raise HTTPException(
+                    status_code=501,
+                    detail="Registry persistence is not configured",
+                )
 
             self._registry_store.delete_entry(entry_id)
 
@@ -1379,7 +1395,11 @@ class MimirRouter:
             request: UrlIngestRequest,
             _auth: None = Depends(_require_write_auth),
         ) -> SourceResponse:
-            port, resolved_mount = _resolve_mount_port(adapter, request.mount, default_name=self._name)
+            port, resolved_mount = _resolve_mount_port(
+                adapter,
+                request.mount,
+                default_name=self._name,
+            )
             safe_url = _validated_ingest_url(request.url)
             try:
                 async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:

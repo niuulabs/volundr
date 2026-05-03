@@ -32,9 +32,9 @@ from ravn.adapters.channels.skuld_channel import SkuldChannel
 from ravn.adapters.channels.task_context import TaskContextChannel
 from ravn.adapters.events.noop_publisher import NoOpEventPublisher
 from ravn.config import BudgetConfig, InitiativeConfig, Settings
-from ravn.domain.exceptions import LLMError
 from ravn.domain.budget import DailyBudgetTracker, compute_cost
 from ravn.domain.events import RavnEvent, RavnEventType
+from ravn.domain.exceptions import LLMError
 from ravn.domain.models import AgentTask, OutputMode
 from ravn.ports.channel import ChannelPort
 from ravn.ports.event_publisher import EventPublisherPort
@@ -755,7 +755,9 @@ class DriveLoop:
                 self._skuld_channel._persona = task.persona  # Update persona for this task
                 extra.append(self._wrap_activity_channel(self._skuld_channel, task))
             elif self._mesh is not None and peer_id:
-                extra.append(self._wrap_activity_channel(MeshActivityChannel(self._mesh, peer_id), task))
+                extra.append(
+                    self._wrap_activity_channel(MeshActivityChannel(self._mesh, peer_id), task)
+                )
             if extra:
                 channel: ChannelPort = CompositeChannel([capture_channel, *extra])
             else:
@@ -766,7 +768,9 @@ class DriveLoop:
                 self._skuld_channel._persona = task.persona
                 sinks.append(self._wrap_activity_channel(self._skuld_channel, task))
             elif self._mesh is not None and peer_id:
-                sinks.append(self._wrap_activity_channel(MeshActivityChannel(self._mesh, peer_id), task))
+                sinks.append(
+                    self._wrap_activity_channel(MeshActivityChannel(self._mesh, peer_id), task)
+                )
             if sinks:
                 channel = CompositeChannel(sinks) if len(sinks) > 1 else sinks[0]
             else:

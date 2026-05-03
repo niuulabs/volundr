@@ -5,7 +5,12 @@ import asyncio
 import pytest
 
 from niuu.ports.cli import CLITransport, TransportCapabilities
-from ravn.adapters.executors.cli import CliTransportExecutor
+from ravn.adapters.executors.cli import (
+    CliTransportAgent,
+    CliTransportExecutor,
+    _sum_model_usage,
+    _TransportBinding,
+)
 from ravn.domain.checkpoint import InterruptReason
 from ravn.domain.events import RavnEvent
 from ravn.domain.models import Message, Session
@@ -254,3 +259,149 @@ async def test_cli_executor_interrupts_active_transport_when_supported() -> None
     assert transport is not None
     assert transport.control_calls == [("interrupt", {})]
     assert agent._interrupt_reason == InterruptReason.SIGINT
+
+
+def _make_agent(
+    *,
+    binding: _TransportBinding | None = None,
+    session: Session | None = None,
+    channel: _CollectingChannel | None = None,
+) -> tuple[CliTransportAgent, _CollectingChannel]:
+    bound_channel = channel or _CollectingChannel()
+    agent = CliTransportAgent(
+        transport_binding=binding or _TransportBinding(FakeStatelessTransport, False),
+        transport_kwargs={
+            "workspace_dir": "/tmp/workspace",
+            "model": "fake-model",
+            "extra": "x",
+        },
+        channel=bound_channel,
+        system_prompt="You are helpful.",
+        session=session or Session(),
+        model="fake-model",
+        max_iterations=4,
+        checkpoint_port=None,
+        task_id="task-helper",
+        persona="reviewer",
+        preloaded_tools=[type("Tool", (), {"name": "alpha"})()],
+    )
+    return agent, bound_channel
+
+
+def test_sum_model_usage_handles_invalid_and_sparse_payloads() -> None:
+    empty = _sum_model_usage(None)
+    assert empty.input_tokens == 0
+    assert empty.output_tokens == 0
+
+    usage = _sum_model_usage(
+        {
+            "modelUsage": {
+                "first": {
+                    "inputTokens": 3,
+                    "outputTokens": 5,
+                    "cacheReadInputTokens": 1,
+                    "cacheCreationInputTokens": 2,
+                    "thinkingTokens": 4,
+                },
+                "second": "ignored",
+            }
+        }
+    )
+    assert usage.input_tokens == 3
+    assert usage.output_tokens == 5
+    assert usage.cache_read_tokens == 1
+    assert usage.cache_write_tokens == 2
+    assert usage.thinking_tokens == 4
+
+
+@pytest.mark.asyncio
+async def test_cli_transport_agent_helper_paths_and_failures() -> None:
+    agent, _ = _make_agent()
+
+    assert [tool.name for tool in agent.tools] == ["alpha"]
+    assert agent.max_iterations == 4
+    assert agent.llm_adapter_name == "FakeStatelessTransport"
+    assert agent.checkpoint_port is None
+    assert agent.task_id == "task-helper"
+
+    agent.interrupt(InterruptReason.SIGINT)
+    assert agent._interrupt_reason == InterruptReason.SIGINT
+    with pytest.raises(RuntimeError, match="turn interrupted"):
+        await agent.run_turn("hello")
+
+    agent, _ = _make_agent(session=Session())
+    agent._transport = FakeStatelessTransport("/tmp/workspace", model="fake-model")
+    prompt = agent._build_prompt("Ship it")
+    assert "System instructions:\nYou are helpful." in prompt
+    assert prompt.endswith("User:\nShip it")
+
+    agent._session.add_message(
+        Message(
+            role="assistant",
+            content=[
+                {"text": "Earlier answer"},
+                {"content": "with detail"},
+                "ignored",
+            ],
+        )
+    )
+    agent._session.add_message(Message(role="user", content="latest"))
+    transcript = agent._render_transcript()
+    assert "Assistant:\nEarlier answer\nwith detail" in transcript
+
+    with pytest.raises(RuntimeError, match="boom"):
+        agent._raise_if_transport_failed({"stop_reason": "error", "result": "boom"})
+    with pytest.raises(RuntimeError, match="bad news"):
+        agent._raise_if_transport_failed({"is_error": True, "content": "bad news"})
+
+
+@pytest.mark.asyncio
+async def test_cli_transport_agent_emits_event_variants_and_filters_transport_kwargs() -> None:
+    channel = _CollectingChannel()
+    agent, _ = _make_agent(channel=channel, session=Session())
+
+    await agent._ensure_transport()
+    assert isinstance(agent._transport, FakeStatelessTransport)
+    assert agent._transport.workspace_dir == "/tmp/workspace"
+    assert not hasattr(agent._transport, "extra")
+
+    await agent._handle_transport_event(
+        {"type": "content_block_delta", "delta": {"thinking": "hm"}}
+    )
+    await agent._handle_transport_event({"type": "content_block_delta", "delta": "ignored"})
+    await agent._handle_transport_event({"type": "assistant", "message": {"content": "plain"}})
+    await agent._handle_transport_event(
+        {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "text", "text": "block text"},
+                    {"type": "tool_use", "name": "Bash", "input": "bad-input"},
+                    {"type": "other"},
+                ]
+            },
+        }
+    )
+    await agent._handle_transport_event(
+        {
+            "type": "user",
+            "content": [
+                {"type": "tool_result", "tool_use_id": "tool_1", "content": "ok", "is_error": True},
+                {"type": "note"},
+            ],
+        }
+    )
+    await agent._handle_transport_event({"type": "user", "content": "ignored"})
+    await agent._handle_transport_event({"type": "error", "message": "kaboom"})
+
+    assert [event.type.value for event in channel.events] == [
+        "thought",
+        "thought",
+        "thought",
+        "tool_start",
+        "tool_result",
+        "error",
+    ]
+    assert channel.events[-1].payload["message"] == "kaboom"
+    assert [call.name for call in agent._turn_tool_calls] == ["Bash"]
+    assert [result.is_error for result in agent._turn_tool_results] == [True]

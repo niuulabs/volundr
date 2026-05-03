@@ -20,10 +20,8 @@ Options:
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import sys
-import urllib.parse
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -241,15 +239,31 @@ ROUTE_PAIRS: list[RoutePair] = [
     # ══════════════════════════════════════════════════════════════════════
     RoutePair(
         "forge/repos/branches",
-        RouteSpec("/api/v1/volundr/repos/branches", method="GET", params={"repo": "github.com/acme/repo"}),
-        RouteSpec("/api/v1/forge/repos/branches", method="GET", params={"repo": "github.com/acme/repo"}),
+        RouteSpec(
+            "/api/v1/volundr/repos/branches",
+            method="GET",
+            params={"repo_url": "github.com/acme/repo"},
+        ),
+        RouteSpec(
+            "/api/v1/niuu/repos/branches",
+            method="GET",
+            params={"repo_url": "github.com/acme/repo"},
+        ),
         domain="forge",
         priority="high",
     ),
     RoutePair(
         "forge/repos/prs",
-        RouteSpec("/api/v1/volundr/repos/prs", method="GET", params={"repo": "github.com/acme/repo"}),
-        RouteSpec("/api/v1/forge/repos/prs", method="GET", params={"repo": "github.com/acme/repo"}),
+        RouteSpec(
+            "/api/v1/volundr/repos/prs",
+            method="GET",
+            params={"repo_url": "github.com/acme/repo"},
+        ),
+        RouteSpec(
+            "/api/v1/forge/repos/prs",
+            method="GET",
+            params={"repo_url": "github.com/acme/repo"},
+        ),
         domain="forge",
         priority="high",
     ),
@@ -498,12 +512,19 @@ def print_checklist(results: list[tuple[RoutePair, bool, str]]) -> None:
         legacy_path = f"{pair.legacy.path}"
         canonical_path = f"{pair.canonical.path}"
         if pair.legacy.params:
-            legacy_path += "?" + "&".join(f"{k}={v}" for k, v in pair.legacy.params.items())
+            legacy_path += "?" + "&".join(
+                f"{k}={v}" for k, v in pair.legacy.params.items()
+            )
         if pair.canonical.params:
-            canonical_path += "?" + "&".join(f"{k}={v}" for k, v in pair.canonical.params.items())
+            canonical_path += "?" + "&".join(
+                f"{k}={v}" for k, v in pair.canonical.params.items()
+            )
         marker = "[x]" if ok else "[ ]"
         priority_tag = pair.priority.upper()
-        print(f"  {marker} {i:<3} {pair.domain:<15} {priority_tag:<10} {legacy_path:<42} {canonical_path}")
+        print(
+            f"  {marker} {i:<3} {pair.domain:<15} {priority_tag:<10} "
+            f"{legacy_path:<42} {canonical_path}"
+        )
 
     print()
     print("Results from automated run:")
@@ -541,12 +562,19 @@ def print_checklist_prompt() -> None:
     for i, pair in enumerate(ROUTE_PAIRS, 1):
         legacy_path = pair.legacy.path
         if pair.legacy.params:
-            legacy_path += "?" + "&".join(f"{k}={v}" for k, v in pair.legacy.params.items())
+            legacy_path += "?" + "&".join(
+                f"{k}={v}" for k, v in pair.legacy.params.items()
+            )
         canonical_path = pair.canonical.path
         if pair.canonical.params:
-            canonical_path += "?" + "&".join(f"{k}={v}" for k, v in pair.canonical.params.items())
+            canonical_path += "?" + "&".join(
+                f"{k}={v}" for k, v in pair.canonical.params.items()
+            )
         priority_tag = pair.priority.upper()
-        print(f"  [ ] {i:<3} {pair.domain:<15} {priority_tag:<10} {legacy_path:<42} {canonical_path}")
+        print(
+            f"  [ ] {i:<3} {pair.domain:<15} {priority_tag:<10} "
+            f"{legacy_path:<42} {canonical_path}"
+        )
 
     print()
     print("-" * 70)

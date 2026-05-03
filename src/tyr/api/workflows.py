@@ -11,8 +11,8 @@ from pydantic import BaseModel, Field
 
 from niuu.domain.models import Principal
 from tyr.adapters.inbound.auth import extract_principal
-from tyr.domain.workflow_compiler import compile_workflow_graph
 from tyr.domain.models import WorkflowDefinition, WorkflowScope
+from tyr.domain.workflow_compiler import compile_workflow_graph
 from tyr.ports.workflow_repository import WorkflowRepository
 
 

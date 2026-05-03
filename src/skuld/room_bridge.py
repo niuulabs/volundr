@@ -24,8 +24,7 @@ import logging
 import re
 import time
 import uuid
-from collections.abc import Awaitable
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
@@ -219,7 +218,9 @@ class RoomBridge:
         if event_type in ("response", "error"):
             await self._handle_response_frame(meta, frame, is_error=(event_type == "error"))
             # Agent turn is complete — reset status to idle.
-            await self._handle_activity_frame(meta, "error" if event_type == "error" else "idle", "")
+            await self._handle_activity_frame(
+                meta, "error" if event_type == "error" else "idle", ""
+            )
             await self._notify_peer_event(meta.peer_id, event_type, frame)
             return
 
@@ -345,7 +346,9 @@ class RoomBridge:
 
         await self._channels.broadcast(event)
 
-    async def _notify_peer_event(self, peer_id: str, event_type: str, frame: dict[str, Any]) -> None:
+    async def _notify_peer_event(
+        self, peer_id: str, event_type: str, frame: dict[str, Any]
+    ) -> None:
         """Report a peer event to the broker for watchdog/status bookkeeping."""
         if self._observe_peer_event is None:
             return

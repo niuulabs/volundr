@@ -15,8 +15,7 @@ from ravn.adapters.channels.composite import CompositeChannel
 from ravn.adapters.channels.mesh_channel import MeshActivityChannel
 from ravn.adapters.channels.silent import SilentChannel
 from ravn.adapters.channels.task_context import TaskContextChannel
-from ravn.adapters.personas.loader import PersonaConfig
-from ravn.adapters.personas.loader import PersonaProduces
+from ravn.adapters.personas.loader import PersonaConfig, PersonaProduces
 from ravn.config import InitiativeConfig
 from ravn.domain.exceptions import LLMError
 from ravn.domain.models import AgentTask, OutputMode

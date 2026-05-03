@@ -1,9 +1,22 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from niuu.mesh.ipc import cleanup_ravn_mesh_sockets, flock_socket_dir, ipc_path, ravn_mesh_addresses
-from ravn.cli.flock import FlockDef, NodeDef, _check_ports, _write_cluster_yaml, _write_node_config
+from ravn.cli.flock import (
+    FlockDef,
+    FlockRuntime,
+    NodeDef,
+    _check_ports,
+    _delete_runtime,
+    _load_flock_def,
+    _load_runtime,
+    _save_flock_def,
+    _save_runtime,
+    _write_cluster_yaml,
+    _write_node_config,
+)
 
 
 def _node(tmp_path: Path, persona: str = "reviewer") -> NodeDef:
@@ -89,3 +102,54 @@ def test_check_ports_skips_mesh_and_gateway_for_ipc_static() -> None:
     )
 
     assert _check_ports(flock_def) == []
+
+
+def test_flock_def_round_trips_yaml_with_new_fields(tmp_path: Path) -> None:
+    flock_def = FlockDef(
+        base_port=7480,
+        discovery="static",
+        mesh_transport="ipc",
+        http_gateway_enabled=False,
+        nodes=[_node(tmp_path)],
+    )
+
+    loaded = FlockDef.from_yaml(flock_def.to_yaml())
+
+    assert loaded.base_port == 7480
+    assert loaded.discovery == "static"
+    assert loaded.mesh_transport == "ipc"
+    assert loaded.http_gateway_enabled is False
+    assert [node.persona for node in loaded.nodes] == ["reviewer"]
+
+
+def test_save_and_load_flock_def_uses_expected_path(tmp_path: Path) -> None:
+    flock_def = FlockDef(base_port=7500, nodes=[_node(tmp_path)])
+
+    _save_flock_def(flock_def, tmp_path)
+    loaded = _load_flock_def(tmp_path)
+
+    assert loaded is not None
+    assert loaded.base_port == 7500
+    assert (tmp_path / "flock.yaml").exists()
+
+
+def test_runtime_helpers_round_trip_and_delete_state(tmp_path: Path) -> None:
+    runtime = FlockRuntime(
+        started_at="2026-05-03T00:00:00+00:00",
+        pids={"reviewer": 1234},
+    )
+
+    parsed = FlockRuntime.from_json(runtime.to_json())
+    assert parsed.started_at == runtime.started_at
+    assert parsed.pids == runtime.pids
+
+    _save_runtime(runtime, tmp_path)
+    loaded = _load_runtime(tmp_path)
+    assert loaded is not None
+    assert json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))["pids"] == {
+        "reviewer": 1234
+    }
+    assert loaded.pids == {"reviewer": 1234}
+
+    _delete_runtime(tmp_path)
+    assert _load_runtime(tmp_path) is None

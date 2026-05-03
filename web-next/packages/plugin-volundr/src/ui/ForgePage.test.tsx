@@ -23,10 +23,23 @@ function wrap(
   templateStore = createMockTemplateStore(),
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const repoCatalog = {
+    getRepos: async () => service.getRepos(),
+    getBranches: async (repoUrl: string) => {
+      const repos = await service.getRepos();
+      const repo = repos.find(
+        (item) =>
+          item.cloneUrl === repoUrl || item.url === repoUrl || `${item.org}/${item.name}` === repoUrl,
+      );
+      return repo?.branches ?? ['main'];
+    },
+  };
+
   return render(
     <QueryClientProvider client={client}>
       <ServicesProvider
         services={{
+          'niuu.repos': repoCatalog,
           volundr: service,
           clusterAdapter,
           sessionStore,

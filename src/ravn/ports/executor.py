@@ -7,6 +7,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from ravn.domain.checkpoint import InterruptReason
 
+
 @runtime_checkable
 class ExecutionAgentPort(Protocol):
     """Minimal interface the CLI, gateway, and drive loop need from an agent."""

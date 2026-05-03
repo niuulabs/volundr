@@ -298,7 +298,7 @@ function SagasPageContent() {
     }
   }, [sagas, selectedSagaId]);
 
-  const allSagas = sagas ?? [];
+  const allSagas = useMemo(() => sagas ?? [], [sagas]);
   const importedTrackerIds = useMemo(
     () =>
       new Set(
@@ -342,16 +342,19 @@ function SagasPageContent() {
   const trackerProjects = (trackerProjectsQuery.data ?? []).filter(
     (project) => !isTerminalTrackerStatus(project.status),
   );
-  const availableRepos = repoCatalogQuery.data ?? [];
+  const availableRepos = useMemo(() => repoCatalogQuery.data ?? [], [repoCatalogQuery.data]);
   const selectedProject =
     trackerProjects.find((project) => project.id === selectedProjectId) ?? null;
   const selectedProjectHasSlugConflict =
     selectedProject !== null && existingSagaSlugs.has(trackerProjectSlug(selectedProject));
   const selectedProjectSlug = selectedProject ? trackerProjectSlug(selectedProject) : '';
-  const commonBranches =
-    availableRepos.length > 0
-      ? getCommonBranches(availableRepos, selectedRepos)
-      : (repoBranchesQuery.data ?? []);
+  const commonBranches = useMemo(
+    () =>
+      availableRepos.length > 0
+        ? getCommonBranches(availableRepos, selectedRepos)
+        : (repoBranchesQuery.data ?? []),
+    [availableRepos, repoBranchesQuery.data, selectedRepos],
+  );
   const canImportSelectedProject =
     selectedProject !== null &&
     selectedRepos.length > 0 &&

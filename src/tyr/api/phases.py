@@ -62,7 +62,9 @@ def _coerce_issue_status(issue: TrackerIssue) -> str:
     return RaidStatus.PENDING.value.lower()
 
 
-def _coerce_phase_status(raids: list[RaidPhaseItemResponse], milestone: TrackerMilestone | None) -> str:
+def _coerce_phase_status(
+    raids: list[RaidPhaseItemResponse], milestone: TrackerMilestone | None
+) -> str:
     if raids:
         statuses = {raid.status for raid in raids}
         if statuses and statuses.issubset({RaidStatus.MERGED.value.lower()}):

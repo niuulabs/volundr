@@ -458,6 +458,13 @@ class FlockConfig(BaseModel):
         default="",
         description="URL of the Mimir knowledge base for coordinator context queries.",
     )
+    mimir_registry_path: str = Field(
+        default="~/.ravn/mimir/.mimir-registry.json",
+        description=(
+            "Path to the persisted Mimir registry used to resolve registry-backed "
+            "workflow resource mounts into concrete path/url runtime config."
+        ),
+    )
     sleipnir_publish_urls: list[str] = Field(
         default_factory=list,
         description="Sleipnir publish URLs for flock task event routing.",

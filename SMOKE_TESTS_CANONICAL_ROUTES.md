@@ -151,14 +151,14 @@ jq '.[].name' templates.json
 
 | # | Legacy Path | Canonical Path | Method | What to Check |
 |---|-------------|----------------|--------|---------------|
-| 7.1 | `/api/v1/volundr/repos/branches` | `/api/v1/forge/repos/branches` | `GET` | 200 + same branch list |
+| 7.1 | `/api/v1/volundr/repos/branches` | `/api/v1/niuu/repos/branches` | `GET` | 200 + same branch list |
 | 7.2 | `/api/v1/volundr/repos/prs` | `/api/v1/forge/repos/prs` | `GET` | 200 + same PR list |
 
 **curl example**
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "$BASE/api/v1/forge/repos/branches?repo=github.com/acme/repo" > branches.json
-jq '.[].name' branches.json
+  "$BASE/api/v1/niuu/repos/branches?repo_url=github.com/acme/repo" > branches.json
+jq '.[]' branches.json
 ```
 
 ---

@@ -172,15 +172,31 @@ def workflow_mimir_from_snapshot(snapshot: dict[str, Any] | None) -> dict[str, A
             )
             continue
 
-        registry_refs.append(
-            {
-                "resource_node_id": resource_node_id,
-                "registry_entry_id": _optional_string(node.get("registryEntryId")),
-                "mount_name": mount_name,
-                "label": str(node.get("label") or mount_name),
-                "categories": categories,
-            }
+        ref = {
+            "resource_node_id": resource_node_id,
+            "registry_entry_id": _optional_string(node.get("registryEntryId")),
+            "mount_name": mount_name,
+            "label": str(node.get("label") or mount_name),
+            "categories": categories,
+        }
+        if path := _optional_string(node.get("path")):
+            ref["path"] = path
+        if url := _optional_string(node.get("url")):
+            ref["url"] = url
+        if role := _optional_string(node.get("role")):
+            ref["role"] = role
+        if auth_ref := _optional_string(
+            node.get("authRef") if "authRef" in node else node.get("auth_ref")
+        ):
+            ref["auth_ref"] = auth_ref
+        default_read_priority = (
+            node.get("defaultReadPriority")
+            if "defaultReadPriority" in node
+            else node.get("default_read_priority")
         )
+        if isinstance(default_read_priority, int):
+            ref["default_read_priority"] = default_read_priority
+        registry_refs.append(ref)
 
     bindings: list[dict[str, Any]] = []
     for binding in resource_bindings:

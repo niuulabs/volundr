@@ -9,7 +9,6 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-
 RegistryMountKind = Literal["local", "remote"]
 RegistryMountLifecycle = Literal["registered", "ephemeral"]
 RegistryMountHealth = Literal["healthy", "degraded", "down", "unknown"]

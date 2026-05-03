@@ -201,7 +201,9 @@ def create_ravn_personas_router(registry: PostgresPersonaRegistry | None = None)
         raise RuntimeError("Persona registry is not configured on this app.")
 
     @router.get("/personas", response_model=list[PersonaSummaryResponse])
-    @router.get("/ravn/personas", response_model=list[PersonaSummaryResponse], include_in_schema=False)
+    @router.get(
+        "/ravn/personas", response_model=list[PersonaSummaryResponse], include_in_schema=False
+    )
     async def list_personas(
         source: str = Query(default="all"),
         principal: Principal = Depends(extract_principal),
@@ -228,7 +230,11 @@ def create_ravn_personas_router(registry: PostgresPersonaRegistry | None = None)
             )
         return PersonaValidateResponse(valid=not errors, errors=errors)
 
-    @router.get("/personas/{name}", response_model=PersonaDetailResponse, responses={404: {"model": ErrorResponse}})
+    @router.get(
+        "/personas/{name}",
+        response_model=PersonaDetailResponse,
+        responses={404: {"model": ErrorResponse}},
+    )
     @router.get(
         "/ravn/personas/{name}",
         response_model=PersonaDetailResponse,
@@ -248,7 +254,9 @@ def create_ravn_personas_router(registry: PostgresPersonaRegistry | None = None)
             )
         return _to_detail(view)
 
-    @router.get("/personas/{name}/yaml", response_class=Response, responses={404: {"model": ErrorResponse}})
+    @router.get(
+        "/personas/{name}/yaml", response_class=Response, responses={404: {"model": ErrorResponse}}
+    )
     @router.get(
         "/ravn/personas/{name}/yaml",
         response_class=Response,
@@ -268,7 +276,12 @@ def create_ravn_personas_router(registry: PostgresPersonaRegistry | None = None)
             )
         return Response(content=yaml_text, media_type="text/yaml")
 
-    @router.post("/personas", response_model=PersonaDetailResponse, status_code=status.HTTP_201_CREATED, responses={409: {"model": ErrorResponse}})
+    @router.post(
+        "/personas",
+        response_model=PersonaDetailResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={409: {"model": ErrorResponse}},
+    )
     @router.post(
         "/ravn/personas",
         response_model=PersonaDetailResponse,
@@ -299,7 +312,11 @@ def create_ravn_personas_router(registry: PostgresPersonaRegistry | None = None)
         assert saved is not None
         return _to_detail(saved)
 
-    @router.put("/personas/{name}", response_model=PersonaDetailResponse, responses={404: {"model": ErrorResponse}})
+    @router.put(
+        "/personas/{name}",
+        response_model=PersonaDetailResponse,
+        responses={404: {"model": ErrorResponse}},
+    )
     @router.put(
         "/ravn/personas/{name}",
         response_model=PersonaDetailResponse,
@@ -325,7 +342,11 @@ def create_ravn_personas_router(registry: PostgresPersonaRegistry | None = None)
         assert saved is not None
         return _to_detail(saved)
 
-    @router.delete("/personas/{name}", status_code=status.HTTP_204_NO_CONTENT, responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
+    @router.delete(
+        "/personas/{name}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    )
     @router.delete(
         "/ravn/personas/{name}",
         status_code=status.HTTP_204_NO_CONTENT,
@@ -352,7 +373,12 @@ def create_ravn_personas_router(registry: PostgresPersonaRegistry | None = None)
                 detail=f"Cannot delete built-in persona without a user override: {name}",
             )
 
-    @router.post("/personas/{name}/fork", response_model=PersonaDetailResponse, status_code=status.HTTP_201_CREATED, responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
+    @router.post(
+        "/personas/{name}/fork",
+        response_model=PersonaDetailResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    )
     @router.post(
         "/ravn/personas/{name}/fork",
         response_model=PersonaDetailResponse,
@@ -451,20 +477,14 @@ def _to_detail(view: PersonaView) -> PersonaDetailResponse:
                 PersonaConsumesEventResponse(
                     name=str(event["name"]),
                     injects=list(event.get("injects", [])) or None,
-                    trust=(
-                        float(event["trust"])
-                        if event.get("trust") is not None
-                        else None
-                    ),
+                    trust=(float(event["trust"]) if event.get("trust") is not None else None),
                 )
                 for event in payload["consumes_events"]
             ]
         ),
         fan_in=fan_in,
         mimir_write_routing=(
-            str(payload["mimir_write_routing"])
-            if payload.get("mimir_write_routing")
-            else None
+            str(payload["mimir_write_routing"]) if payload.get("mimir_write_routing") else None
         ),
         yaml_source=view.yaml_source,
         override_source=view.override_source,

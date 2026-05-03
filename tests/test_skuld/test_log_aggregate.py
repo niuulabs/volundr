@@ -22,7 +22,8 @@ def test_aggregate_workspace_logs_interleaves_skuld_and_flock_participants(tmp_p
         tmp_path / ".flock" / "logs" / "coder.log",
         "\n".join(
             [
-                "2026-05-01 15:19:51,232 ravn.cli.commands INFO mesh: received outcome event_type=code.requested",
+                "2026-05-01 15:19:51,232 ravn.cli.commands INFO "
+                "mesh: received outcome event_type=code.requested",
                 "2026-05-01 15:19:58,326 ravn.drive_loop ERROR drive_loop: task failed",
             ]
         ),
@@ -52,8 +53,10 @@ def test_aggregate_workspace_logs_filters_by_participant_query_and_level(tmp_pat
         tmp_path / ".flock" / "logs" / "coder.log",
         "\n".join(
             [
-                "2026-05-01 15:19:51,232 ravn.cli.commands INFO mesh: received outcome event_type=code.requested",
-                "2026-05-01 15:19:58,326 ravn.drive_loop ERROR drive_loop: task failed after 3 retries",
+                "2026-05-01 15:19:51,232 ravn.cli.commands INFO "
+                "mesh: received outcome event_type=code.requested",
+                "2026-05-01 15:19:58,326 ravn.drive_loop ERROR "
+                "drive_loop: task failed after 3 retries",
             ]
         ),
     )

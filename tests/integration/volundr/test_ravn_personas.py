@@ -75,7 +75,9 @@ async def test_builtin_override_can_be_restored(volundr_client, auth_headers):
         "system_prompt_template": "Override built-in coding agent.",
     }
 
-    put_resp = await volundr_client.put(f"{API}/personas/coding-agent", json=payload, headers=headers)
+    put_resp = await volundr_client.put(
+        f"{API}/personas/coding-agent", json=payload, headers=headers
+    )
     assert put_resp.status_code == 200, put_resp.text
     updated = put_resp.json()
     assert updated["name"] == "coding-agent"

@@ -25,6 +25,7 @@ try:
 except ImportError:
     _catalog_saga_completed = None  # type: ignore[assignment]
 
+from mimir.registry import MimirRegistryStore
 from tyr.domain.flock_merge import build_flock_workload_config
 from tyr.domain.models import (
     Phase,
@@ -76,6 +77,66 @@ def _normalize_mimir_workload_config(
     normalized = copy.deepcopy(raw) if isinstance(raw, dict) else {}
     if hosted_url and not normalized.get("hosted_url"):
         normalized["hosted_url"] = hosted_url
+    return normalized
+
+
+def _resolve_mimir_registry_refs(
+    raw: dict[str, Any] | None = None,
+    *,
+    registry_path: str = "",
+) -> dict[str, Any]:
+    """Hydrate registry-backed Mimir refs with concrete path/url metadata.
+
+    Workflow snapshots currently preserve registry IDs, mount names, and binding
+    metadata. Before dispatching a flock, resolve those IDs against the local
+    Mimir registry so Volundr can materialize real mount instances.
+    """
+    normalized = copy.deepcopy(raw) if isinstance(raw, dict) else {}
+    registry_refs = normalized.get("registry_refs")
+    if not isinstance(registry_refs, list) or not registry_refs or not registry_path.strip():
+        return normalized
+
+    registry_file = Path(registry_path).expanduser()
+    store = MimirRegistryStore(registry_file)
+    entries = store.list_entries()
+    if not entries:
+        return normalized
+
+    by_id = {entry.id: entry for entry in entries}
+    by_name = {entry.name: entry for entry in entries}
+
+    resolved_refs: list[dict[str, Any]] = []
+    for raw_ref in registry_refs:
+        if not isinstance(raw_ref, dict):
+            continue
+        resolved = dict(raw_ref)
+        lookup_key = str(
+            raw_ref.get("registry_entry_id")
+            or raw_ref.get("registryEntryId")
+            or raw_ref.get("mount_name")
+            or raw_ref.get("mountName")
+            or ""
+        ).strip()
+        entry = by_id.get(lookup_key) or by_name.get(lookup_key)
+        if entry is None:
+            resolved_refs.append(resolved)
+            continue
+
+        if entry.path and not str(resolved.get("path") or "").strip():
+            resolved["path"] = entry.path
+        if entry.url and not str(resolved.get("url") or "").strip():
+            resolved["url"] = entry.url
+        if entry.role and not str(resolved.get("role") or "").strip():
+            resolved["role"] = entry.role
+        if entry.categories and not resolved.get("categories"):
+            resolved["categories"] = list(entry.categories)
+        if entry.auth_ref and not str(resolved.get("auth_ref") or "").strip():
+            resolved["auth_ref"] = entry.auth_ref
+        resolved.setdefault("default_read_priority", entry.default_read_priority)
+        resolved.setdefault("enabled", entry.enabled)
+        resolved_refs.append(resolved)
+
+    normalized["registry_refs"] = resolved_refs
     return normalized
 
 
@@ -294,6 +355,7 @@ class DispatchConfig:
         default_factory=lambda: [{"name": "coordinator"}, {"name": "reviewer"}]
     )
     flock_mimir_hosted_url: str = ""
+    flock_mimir_registry_path: str = "~/.ravn/mimir/.mimir-registry.json"
     flock_sleipnir_publish_urls: list[str] = field(default_factory=list)
     flock_llm_config: dict = field(default_factory=dict)
     live_flock: object | None = field(default=None, repr=False)
@@ -308,6 +370,8 @@ class DispatchConfig:
             return [p.to_dict() for p in live.default_personas]  # type: ignore[union-attr]
         if name == "flock_mimir_hosted_url":
             return live.mimir_hosted_url  # type: ignore[union-attr]
+        if name == "flock_mimir_registry_path":
+            return live.mimir_registry_path  # type: ignore[union-attr]
         if name == "flock_sleipnir_publish_urls":
             return list(live.sleipnir_publish_urls)  # type: ignore[union-attr]
         if name == "flock_llm_config":
@@ -975,6 +1039,7 @@ class DispatchService:
         personas = copy.deepcopy(self._config.flock_default_personas)
         flow_name_for_log = ""
         mimir_url = self._config.flock_mimir_hosted_url
+        mimir_registry_path = self._config.flock_mimir_registry_path
         sleipnir_urls = list(self._config.flock_sleipnir_publish_urls)
         mimir_cfg = _normalize_mimir_workload_config(hosted_url=mimir_url)
         mesh_transport = "nng"
@@ -982,7 +1047,10 @@ class DispatchService:
         if use_workflow_flock:
             personas = copy.deepcopy(workflow_personas)
             flow_name_for_log = str(workflow_snapshot.get("name") or "")
-            mimir_cfg = _normalize_mimir_workload_config(workflow_mimir_from_snapshot(workflow_snapshot))
+            mimir_cfg = _resolve_mimir_registry_refs(
+                _normalize_mimir_workload_config(workflow_mimir_from_snapshot(workflow_snapshot)),
+                registry_path=mimir_registry_path,
+            )
         else:
             flow = (
                 self._flow_provider.get(flock_flow)
@@ -995,7 +1063,10 @@ class DispatchService:
                 flow_name_for_log = flow.name
                 personas = [p.to_dict() for p in flow.personas]
                 mimir_url = flow.mimir_hosted_url or mimir_url
-                mimir_cfg = _normalize_mimir_workload_config(flow.mimir, hosted_url=mimir_url)
+                mimir_cfg = _resolve_mimir_registry_refs(
+                    _normalize_mimir_workload_config(flow.mimir, hosted_url=mimir_url),
+                    registry_path=mimir_registry_path,
+                )
                 mesh_transport = flow.mesh_transport or mesh_transport
                 if flow.sleipnir_publish_urls:
                     sleipnir_urls = list(flow.sleipnir_publish_urls)

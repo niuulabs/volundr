@@ -158,15 +158,15 @@ type InternalParticipantStream = {
   currentToolId: string;
 };
 
-function generateId(): string {
+export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function getStorageKey(url: string): string {
+export function getStorageKey(url: string): string {
   return `${STORAGE_PREFIX}${url}`;
 }
 
-function safeSessionStorageGet(url: string): PersistedChatState | null {
+export function safeSessionStorageGet(url: string): PersistedChatState | null {
   try {
     const raw = sessionStorage.getItem(getStorageKey(url));
     if (!raw) return null;
@@ -176,7 +176,7 @@ function safeSessionStorageGet(url: string): PersistedChatState | null {
   }
 }
 
-function safeSessionStorageSet(url: string, state: PersistedChatState): void {
+export function safeSessionStorageSet(url: string, state: PersistedChatState): void {
   try {
     sessionStorage.setItem(getStorageKey(url), JSON.stringify(state));
   } catch {
@@ -184,7 +184,7 @@ function safeSessionStorageSet(url: string, state: PersistedChatState): void {
   }
 }
 
-function makeSingleParticipant(): RoomParticipant {
+export function makeSingleParticipant(): RoomParticipant {
   return {
     peerId: SINGLE_PARTICIPANT_ID,
     persona: 'Skuld',
@@ -195,7 +195,7 @@ function makeSingleParticipant(): RoomParticipant {
   };
 }
 
-function parseParticipantMeta(
+export function parseParticipantMeta(
   raw: WireParticipant | Record<string, unknown> | undefined,
 ): RoomParticipant | undefined {
   if (!raw) return undefined;
@@ -217,7 +217,7 @@ function parseParticipantMeta(
   };
 }
 
-function getString(
+export function getString(
   raw: WireParticipant | Record<string, unknown>,
   ...keys: string[]
 ): string | undefined {
@@ -229,7 +229,7 @@ function getString(
   return undefined;
 }
 
-function getNumber(
+export function getNumber(
   raw: WireParticipant | Record<string, unknown>,
   ...keys: string[]
 ): number | undefined {
@@ -241,7 +241,7 @@ function getNumber(
   return undefined;
 }
 
-function getStringArray(
+export function getStringArray(
   raw: WireParticipant | Record<string, unknown>,
   key: string,
 ): string[] | undefined {
@@ -251,7 +251,7 @@ function getStringArray(
     : undefined;
 }
 
-function reviveMessages(messages: PersistedChatState['messages']): ChatMessage[] {
+export function reviveMessages(messages: PersistedChatState['messages']): ChatMessage[] {
   return (messages ?? [])
     .filter((message) => message.status !== 'running')
     .map((message) => ({
@@ -260,14 +260,14 @@ function reviveMessages(messages: PersistedChatState['messages']): ChatMessage[]
     }));
 }
 
-function reviveMeshEvents(events: PersistedChatState['meshEvents']): MeshEvent[] {
+export function reviveMeshEvents(events: PersistedChatState['meshEvents']): MeshEvent[] {
   return (events ?? []).map((event) => ({
     ...event,
     timestamp: new Date(event.timestamp),
   })) as MeshEvent[];
 }
 
-function reviveAgentEvents(
+export function reviveAgentEvents(
   events: PersistedChatState['agentEvents'],
 ): Map<string, AgentInternalEvent[]> {
   const next = new Map<string, AgentInternalEvent[]>();
@@ -283,7 +283,7 @@ function reviveAgentEvents(
   return next;
 }
 
-function serializeMessages(messages: ChatMessage[]): PersistedChatState['messages'] {
+export function serializeMessages(messages: ChatMessage[]): PersistedChatState['messages'] {
   return messages
     .filter((message) => message.status !== 'running')
     .map((message) => ({
@@ -292,14 +292,14 @@ function serializeMessages(messages: ChatMessage[]): PersistedChatState['message
     }));
 }
 
-function serializeMeshEvents(meshEvents: MeshEvent[]): PersistedChatState['meshEvents'] {
+export function serializeMeshEvents(meshEvents: MeshEvent[]): PersistedChatState['meshEvents'] {
   return meshEvents.map((event) => ({
     ...event,
     timestamp: event.timestamp.toISOString(),
   }));
 }
 
-function serializeAgentEvents(
+export function serializeAgentEvents(
   agentEvents: Map<string, AgentInternalEvent[]>,
 ): PersistedChatState['agentEvents'] {
   return Object.fromEntries(
@@ -313,7 +313,7 @@ function serializeAgentEvents(
   );
 }
 
-function transformTurns(turns: ConversationTurn[]): ChatMessage[] {
+export function transformTurns(turns: ConversationTurn[]): ChatMessage[] {
   return turns.map((turn) => ({
     id: turn.id,
     role: turn.role === 'user' ? 'user' : 'assistant',
@@ -328,7 +328,7 @@ function transformTurns(turns: ConversationTurn[]): ChatMessage[] {
   }));
 }
 
-function stringifyOutcomeValue(value: unknown): string {
+export function stringifyOutcomeValue(value: unknown): string {
   if (value == null) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
@@ -339,7 +339,7 @@ function stringifyOutcomeValue(value: unknown): string {
   }
 }
 
-function pushOutcomeField(lines: string[], key: string, value: unknown): void {
+export function pushOutcomeField(lines: string[], key: string, value: unknown): void {
   const text = stringifyOutcomeValue(value);
   if (!text) return;
   if (text.includes('\n')) {
@@ -352,7 +352,7 @@ function pushOutcomeField(lines: string[], key: string, value: unknown): void {
   lines.push(`${key}: ${text}`);
 }
 
-function formatOutcomeContent(event: CliStreamEvent): string {
+export function formatOutcomeContent(event: CliStreamEvent): string {
   const fields =
     event.fields && typeof event.fields === 'object' ? { ...event.fields } : ({} as Record<string, unknown>);
 
@@ -403,7 +403,7 @@ async function attachmentToWireContent(
   };
 }
 
-function parseEvent(raw: string): CliStreamEvent | null {
+export function parseEvent(raw: string): CliStreamEvent | null {
   let jsonStr = raw.trim();
   if (jsonStr.startsWith('data:')) jsonStr = jsonStr.slice(5).trim();
   try {

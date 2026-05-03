@@ -347,8 +347,6 @@ class PostgresPersonaRegistry:
     ) -> PersonaView | None:
         builtin_config = self._builtin_loader.load(name)
         is_builtin = builtin_config is not None
-        has_override = override_payload is not None
-
         if override_payload is not None:
             payload = _normalize_payload(override_payload, fallback=builtin_config)
             config = _payload_to_config(payload)
@@ -422,7 +420,9 @@ def _normalize_payload(
         payload.get("iteration_budget"),
         default=int(base["iteration_budget"]),
     )
-    normalized["llm_primary_alias"] = str(payload.get("llm_primary_alias") or base["llm_primary_alias"])
+    normalized["llm_primary_alias"] = str(
+        payload.get("llm_primary_alias") or base["llm_primary_alias"]
+    )
     normalized["llm_thinking_enabled"] = bool(
         payload.get("llm_thinking_enabled", base["llm_thinking_enabled"])
     )
@@ -473,15 +473,11 @@ def _config_to_payload(config: PersonaConfig | None) -> dict[str, Any]:
         "llm_max_tokens": config.llm.max_tokens,
         "llm_temperature": None,
         "produces_event_type": config.produces.event_type,
-        "produces_schema": {
-            key: field.type for key, field in config.produces.schema.items()
-        },
+        "produces_schema": {key: field.type for key, field in config.produces.schema.items()},
         "consumes_events": [{"name": name} for name in config.consumes.event_types],
         "fan_in_strategy": _RUNTIME_TO_FAN_IN.get(config.fan_in.strategy),
         "fan_in_params": (
-            {"contributes_to": config.fan_in.contributes_to}
-            if config.fan_in.contributes_to
-            else {}
+            {"contributes_to": config.fan_in.contributes_to} if config.fan_in.contributes_to else {}
         ),
         "mimir_write_routing": None,
     }
@@ -531,7 +527,9 @@ def _payload_to_config(payload: dict[str, Any]) -> PersonaConfig:
             schema=schema,
         ),
         consumes=PersonaConsumes(
-            event_types=[str(event["name"]) for event in consumes_events if str(event.get("name", ""))],
+            event_types=[
+                str(event["name"]) for event in consumes_events if str(event.get("name", ""))
+            ],
             injects=sorted(set(injects)),
         ),
         fan_in=PersonaFanIn(

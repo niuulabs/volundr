@@ -79,7 +79,8 @@ class TrackerAdapterFactory:
                 )
         if not adapters and self._pool is not None:
             logger.info(
-                "No tracker integrations configured for owner %s; using NativeTrackerAdapter fallback",
+                "No tracker integrations configured for owner %s; "
+                "using NativeTrackerAdapter fallback",
                 owner_id,
             )
             adapters.append(NativeTrackerAdapter(pool=self._pool))

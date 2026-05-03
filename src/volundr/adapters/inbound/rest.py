@@ -35,7 +35,12 @@ from volundr.domain.models import (
     TimelineEventType,
     WorkspaceStatus,
 )
-from volundr.domain.ports import EventBroadcaster, PricingProvider
+from volundr.domain.ports import (
+    EventBroadcaster,
+    GitAuthError,
+    GitRepoNotFoundError,
+    PricingProvider,
+)
 from volundr.domain.services import (
     ChronicleNotFoundError,
     ChronicleService,
@@ -965,6 +970,35 @@ def create_router(
             "file_manager_enabled": admin.get("storage", {}).get("file_manager_enabled", True),
             "mini_mode": settings.local_mounts.mini_mode,
         }
+
+    @router.get("/repos/branches", response_model=list[str], tags=["Repositories"])
+    async def list_branches(request: Request, repo_url: str = Query(...)) -> list[str]:
+        """Legacy Volundr compatibility route for repository branch listings."""
+        if repo_service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Repo service not available",
+            )
+
+        user_id = request.headers.get("x-auth-user-id")
+
+        try:
+            return await repo_service.list_branches(repo_url, user_id=user_id)
+        except GitAuthError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(e),
+            )
+        except GitRepoNotFoundError as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
 
     @router.get("/auth/config", tags=["Auth"])
     async def get_auth_config(request: Request) -> dict:
