@@ -9,6 +9,7 @@ import { RavnsPage } from './ui/RavnsPage';
 import { IngestPage } from './ui/IngestPage';
 import { LintPage } from './ui/LintPage';
 import { DreamsPage } from './ui/DreamsPage';
+import { RegistryPage } from './ui/RegistryPage';
 import { MimirSubnav } from './ui/MimirSubnav';
 import { MimirTopbar } from './ui/MimirTopbar';
 
@@ -22,6 +23,7 @@ export const mimirPlugin = definePlugin({
     { id: 'pages', label: 'Pages', rune: '❑', path: '/mimir/pages' },
     { id: 'search', label: 'Search', rune: '⌕', path: '/mimir/search' },
     { id: 'graph', label: 'Graph', rune: '⌖', path: '/mimir/graph' },
+    { id: 'registry', label: 'Registry', rune: '⛁', path: '/mimir/registry' },
     { id: 'wardens', label: 'Wardens', rune: 'ᚢ', path: '/mimir/ravns' },
     { id: 'ingest', label: 'Ingest', rune: '↧', path: '/mimir/ingest' },
     { id: 'lint', label: 'Lint', rune: '⚠', path: '/mimir/lint' },
@@ -52,6 +54,11 @@ export const mimirPlugin = definePlugin({
       getParentRoute: () => rootRoute,
       path: '/mimir/graph',
       component: GraphPage,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/mimir/registry',
+      component: RegistryPage,
     }),
     createRoute({
       getParentRoute: () => rootRoute,
@@ -114,6 +121,7 @@ export { resolveRoute } from './domain/routing';
 export type { RavnState, RavnBinding } from './domain/ravn-binding';
 export type { Source, OriginType } from './domain/source';
 export type { EntityKind, EntityMeta } from './domain/entity';
+export type { RegistryMount } from './domain/registry';
 export type {
   FileTreeDir,
   FileTreeLeaf,

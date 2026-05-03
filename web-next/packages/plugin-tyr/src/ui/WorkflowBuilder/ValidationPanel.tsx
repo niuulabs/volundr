@@ -28,6 +28,7 @@ const KIND_ICON: Record<WorkflowIssue['kind'], string> = {
   missing_persona: '👤',
   no_producer: '←',
   no_consumer: '→',
+  resource_link: '⛁',
 };
 
 const ZOOM_BTN =

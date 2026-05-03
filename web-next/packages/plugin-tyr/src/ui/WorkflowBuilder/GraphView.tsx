@@ -25,6 +25,7 @@ import type {
   WorkflowCondNode,
   WorkflowTriggerNode,
   WorkflowEndNode,
+  WorkflowResourceNode,
 } from '../../domain/workflow';
 import type { WorkflowIssue } from '../../domain/workflowValidation';
 import type { WorkflowBuilderActions } from './useWorkflowBuilder';
@@ -36,6 +37,8 @@ import {
   TRIGGER_WIDTH,
   TRIGGER_HEIGHT,
   END_RADIUS,
+  RESOURCE_WIDTH,
+  RESOURCE_HEIGHT,
   nodeCentre,
   stageNodeHeight,
   normalizedStageMembers,
@@ -772,6 +775,93 @@ function EndNode({
   );
 }
 
+function ResourceNode({
+  node,
+  selected,
+  issueLevel,
+  onSelect,
+  onInspect,
+  onStartConnect: _onStartConnect,
+  onCompleteConnect,
+  onDelete,
+  onDragEnd,
+  isConnectingMode,
+}: BaseNodeProps<WorkflowResourceNode>) {
+  const { x, y } = node.position;
+  const { handleMouseDown, handleMouseMove, handleMouseUp } = useDragNode({
+    x,
+    y,
+    isConnectingMode,
+    onSelect,
+    onCompleteConnect,
+    onDragEnd,
+  });
+  const fill = selected
+    ? 'var(--color-bg-elevated)'
+    : issueLevel === 'error'
+      ? C.errorFill
+      : issueLevel === 'warning'
+        ? C.warnFill
+        : 'color-mix(in srgb, var(--color-brand) 16%, var(--color-bg-secondary))';
+  const stroke = selected
+    ? C.nodeStrokeSelected
+    : issueLevel === 'error'
+      ? C.errorStroke
+      : issueLevel === 'warning'
+        ? C.warnStroke
+        : 'var(--color-brand)';
+  const sw = selected || issueLevel ? 2 : 1;
+
+  return (
+    <g
+      data-testid={`workflow-node-${node.id}`}
+      data-kind="resource"
+      data-selected={selected ? 'true' : undefined}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onInspect();
+      }}
+      style={{ cursor: isConnectingMode ? 'crosshair' : 'grab' }}
+    >
+      <rect
+        x={x}
+        y={y}
+        width={RESOURCE_WIDTH}
+        height={RESOURCE_HEIGHT}
+        rx={8}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={sw}
+      />
+      <text
+        x={x + 14}
+        y={y + 22}
+        fill={C.text}
+        fontSize={11}
+        fontWeight="600"
+        fontFamily="var(--font-sans)"
+      >
+        {node.label.length > 20 ? node.label.slice(0, 18) + '…' : node.label}
+      </text>
+      <text
+        x={x + 14}
+        y={y + 38}
+        fill={C.textMuted}
+        fontSize={8.5}
+        fontFamily="var(--font-mono)"
+      >
+        {node.bindingMode === 'ephemeral_local' ? 'new local mimir' : 'registry mimir'}
+      </text>
+      {selected && !isConnectingMode && (
+        <DeleteButton nodeId={node.id} cx={x + RESOURCE_WIDTH / 2} cy={y - 10} onClick={onDelete} />
+      )}
+    </g>
+  );
+}
+
 function stagePortLists(node: WorkflowStageNode, personas: PersonaEntry[]) {
   const stageMembers = normalizedStageMembers(node);
   const personaMap = new Map(personas.map((persona) => [persona.id, persona]));
@@ -1224,6 +1314,8 @@ export function GraphView({
                 return <CondNode key={node.id} node={node} {...props} />;
               case 'end':
                 return <EndNode key={node.id} node={node} {...props} />;
+              case 'resource':
+                return <ResourceNode key={node.id} node={node} {...props} />;
             }
           })}
         </g>

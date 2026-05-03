@@ -64,6 +64,7 @@ type CliStreamEvent = {
   total_cost_usd?: number;
   num_turns?: number;
   is_error?: boolean;
+  valid?: boolean;
   request_id?: string;
   tool?: string;
   input?: Record<string, unknown>;
@@ -95,7 +96,6 @@ type CliStreamEvent = {
   };
   turns?: ConversationTurn[];
   fields?: Record<string, unknown>;
-  valid?: boolean;
 };
 
 interface ConversationTurn {
@@ -1121,13 +1121,14 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
             const appendStreamingTextPart = (type: 'reasoning' | 'text', text: string) => {
               const lastPart = stream.parts.at(-1);
               if (lastPart?.type === type) {
-                stream.parts = [
-                  ...stream.parts.slice(0, -1),
-                  { ...lastPart, text: `${lastPart.text ?? ''}${text}` },
-                ];
+                const updatedLastPart = {
+                  ...lastPart,
+                  text: `${lastPart.text ?? ''}${text}`,
+                };
+                stream.parts = [...stream.parts.slice(0, -1), updatedLastPart];
                 return;
               }
-              stream.parts.push({ type, text });
+              stream.parts = [...stream.parts, { type, text }];
             };
             if (frame.type === 'thought') {
               const text =
@@ -1143,12 +1144,15 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
                 typeof frame.metadata?.input === 'object' && frame.metadata.input !== null
                   ? (frame.metadata.input as Record<string, unknown>)
                   : {};
-              stream.parts.push({ type: 'tool_use', id: toolId, name: toolName, input });
+              stream.parts = [...stream.parts, { type: 'tool_use', id: toolId, name: toolName, input }];
             } else if (frame.type === 'tool_result') {
               const result =
                 typeof frame.data === 'string' ? frame.data : JSON.stringify(frame.data ?? '');
               const toolUseId = stream.currentToolId || `tool-${generateId()}`;
-              stream.parts.push({ type: 'tool_result', tool_use_id: toolUseId, content: result });
+              stream.parts = [
+                ...stream.parts,
+                { type: 'tool_result', tool_use_id: toolUseId, content: result },
+              ];
               stream.currentToolId = '';
             } else if (frame.type === 'text' || frame.type === 'message') {
               const text =

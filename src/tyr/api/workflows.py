@@ -23,7 +23,13 @@ class WorkflowBody(BaseModel):
     scope: Literal["system", "user"] = "user"
     nodes: list[dict[str, Any]] = Field(default_factory=list)
     edges: list[dict[str, Any]] = Field(default_factory=list)
+    resource_bindings: list[dict[str, Any]] = Field(
+        default_factory=list,
+        alias="resourceBindings",
+        serialization_alias="resourceBindings",
+    )
     definition_yaml: str | None = None
+    model_config = {"populate_by_name": True}
 
 
 class WorkflowResponse(BaseModel):
@@ -35,6 +41,10 @@ class WorkflowResponse(BaseModel):
     owner_id: str | None
     nodes: list[dict[str, Any]]
     edges: list[dict[str, Any]]
+    resource_bindings: list[dict[str, Any]] = Field(
+        default_factory=list,
+        serialization_alias="resourceBindings",
+    )
     definition_yaml: str | None
     compile_errors: list[str] = Field(default_factory=list)
     created_at: datetime
@@ -181,6 +191,7 @@ def _body_to_graph(body: WorkflowBody) -> dict[str, Any]:
     return {
         "nodes": body.nodes,
         "edges": body.edges,
+        "resourceBindings": body.resource_bindings,
     }
 
 
@@ -196,6 +207,9 @@ def _to_response(workflow: WorkflowDefinition) -> WorkflowResponse:
         owner_id=workflow.owner_id,
         nodes=list(graph.get("nodes") or []),
         edges=list(graph.get("edges") or []),
+        resource_bindings=list(
+            graph.get("resourceBindings") or graph.get("resource_bindings") or []
+        ),
         definition_yaml=workflow.definition_yaml,
         compile_errors=compiled.errors,
         created_at=workflow.created_at,

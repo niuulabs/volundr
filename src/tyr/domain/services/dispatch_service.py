@@ -40,6 +40,7 @@ from tyr.domain.models import (
 from tyr.domain.templates import BUNDLED_TEMPLATES_DIR, TemplatePhase, load_template
 from tyr.domain.utils import _slugify
 from tyr.domain.workflow_snapshot import (
+    workflow_mimir_from_snapshot,
     workflow_name_from_snapshot,
     workflow_personas_from_snapshot,
 )
@@ -62,6 +63,20 @@ _READY_STATUSES = {"todo", "backlog", "triage"}
 _READY_STATUS_TYPES = {"unstarted"}
 _ACTIVE_SESSION_STATUSES = {"running", "starting", "creating"}
 _COMPLETED_LINEAR_STATES = {"completed", "cancelled"}
+
+
+def _normalize_mimir_workload_config(
+    raw: dict[str, Any] | None = None,
+    *,
+    hosted_url: str = "",
+) -> dict[str, Any]:
+    if not raw and not hosted_url:
+        return {}
+
+    normalized = copy.deepcopy(raw) if isinstance(raw, dict) else {}
+    if hosted_url and not normalized.get("hosted_url"):
+        normalized["hosted_url"] = hosted_url
+    return normalized
 
 
 @dataclass(frozen=True)
@@ -961,10 +976,13 @@ class DispatchService:
         flow_name_for_log = ""
         mimir_url = self._config.flock_mimir_hosted_url
         sleipnir_urls = list(self._config.flock_sleipnir_publish_urls)
+        mimir_cfg = _normalize_mimir_workload_config(hosted_url=mimir_url)
+        mesh_transport = "nng"
 
         if use_workflow_flock:
             personas = copy.deepcopy(workflow_personas)
             flow_name_for_log = str(workflow_snapshot.get("name") or "")
+            mimir_cfg = _normalize_mimir_workload_config(workflow_mimir_from_snapshot(workflow_snapshot))
         else:
             flow = (
                 self._flow_provider.get(flock_flow)
@@ -977,6 +995,8 @@ class DispatchService:
                 flow_name_for_log = flow.name
                 personas = [p.to_dict() for p in flow.personas]
                 mimir_url = flow.mimir_hosted_url or mimir_url
+                mimir_cfg = _normalize_mimir_workload_config(flow.mimir, hosted_url=mimir_url)
+                mesh_transport = flow.mesh_transport or mesh_transport
                 if flow.sleipnir_publish_urls:
                     sleipnir_urls = list(flow.sleipnir_publish_urls)
 
@@ -1023,11 +1043,14 @@ class DispatchService:
         workload_config: dict = {
             "personas": personas,
             "initiative_context": initiative_context,
+            "mesh_transport": mesh_transport,
         }
         if workflow_snapshot:
             workload_config["workflow"] = workflow_snapshot
         if sleipnir_urls:
             workload_config["sleipnir_publish_urls"] = sleipnir_urls
+        if mimir_cfg:
+            workload_config["mimir"] = mimir_cfg
         if mimir_url:
             workload_config["mimir_hosted_url"] = mimir_url
         if self._config.flock_llm_config:

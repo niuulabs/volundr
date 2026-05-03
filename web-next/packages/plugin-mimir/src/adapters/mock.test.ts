@@ -31,6 +31,38 @@ describe('createMimirMockAdapter', () => {
     });
   });
 
+  describe('mounts.registry', () => {
+    it('lists registry mounts', async () => {
+      const svc = createMimirMockAdapter();
+      const mounts = await svc.mounts.listRegistryMounts?.();
+      expect(mounts?.length).toBeGreaterThan(0);
+    });
+
+    it('creates and deletes a registry mount', async () => {
+      const svc = createMimirMockAdapter();
+      const created = await svc.mounts.createRegistryMount?.({
+        name: 'new-remote',
+        kind: 'remote',
+        lifecycle: 'registered',
+        role: 'shared',
+        url: 'https://mimir.example.com',
+        path: '',
+        categories: ['decision'],
+        authRef: null,
+        defaultReadPriority: 5,
+        enabled: true,
+        healthStatus: 'unknown',
+        healthMessage: '',
+        desc: 'test mount',
+      });
+      expect(created?.id).toBeTruthy();
+
+      await svc.mounts.deleteRegistryMount?.(created!.id);
+      const mounts = await svc.mounts.listRegistryMounts?.();
+      expect(mounts?.some((mount) => mount.id === created!.id)).toBe(false);
+    });
+  });
+
   describe('pages.getStats', () => {
     it('returns healthy flag and non-zero pageCount', async () => {
       const svc = createMimirMockAdapter();

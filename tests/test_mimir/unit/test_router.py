@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from mimir.adapters.markdown import MarkdownMimirAdapter
+from mimir.registry import MimirRegistryStore
 from mimir.router import MimirRouter
 from ravn.adapters.mimir.composite import CompositeMimirAdapter
 from ravn.domain.mimir import MimirMount, WriteRouting
@@ -48,6 +49,20 @@ def _make_composite_app(tmp_path: Path) -> FastAPI:
         ),
     )
     router = MimirRouter(adapter=adapter, name="test", role="local")
+    app = FastAPI()
+    app.include_router(router.router, prefix="/mimir")
+    return app
+
+
+def _make_registry_app(tmp_path: Path) -> FastAPI:
+    adapter = MarkdownMimirAdapter(root=tmp_path / "mimir")
+    registry_store = MimirRegistryStore(tmp_path / "mimir" / ".mimir-registry.json")
+    router = MimirRouter(
+        adapter=adapter,
+        name="test",
+        role="local",
+        registry_store=registry_store,
+    )
     app = FastAPI()
     app.include_router(router.router, prefix="/mimir")
     return app
@@ -132,6 +147,11 @@ def composite_client(tmp_path: Path) -> TestClient:
     return tc
 
 
+@pytest.fixture()
+def registry_client(tmp_path: Path) -> TestClient:
+    return TestClient(_make_registry_app(tmp_path))
+
+
 # ---------------------------------------------------------------------------
 # GET /mimir/stats
 # ---------------------------------------------------------------------------
@@ -184,6 +204,60 @@ def test_list_pages_category_filter(client_with_page: TestClient) -> None:
     assert len(resp2.json()) == 0
 
 
+def test_registry_mount_crud(registry_client: TestClient) -> None:
+    create = registry_client.post(
+        "/mimir/registry/mounts",
+        json={
+            "name": "shared-kb",
+            "kind": "remote",
+            "lifecycle": "registered",
+            "role": "shared",
+            "url": "https://kb.example.test",
+            "path": "",
+            "categories": ["arch", "api"],
+            "default_read_priority": 5,
+            "enabled": True,
+            "health_status": "unknown",
+            "health_message": "",
+            "desc": "Shared KB",
+        },
+    )
+    assert create.status_code == 200
+    created = create.json()
+    assert created["name"] == "shared-kb"
+
+    listed = registry_client.get("/mimir/registry/mounts")
+    assert listed.status_code == 200
+    assert any(item["id"] == created["id"] for item in listed.json())
+
+    update = registry_client.put(
+        f"/mimir/registry/mounts/{created['id']}",
+        json={
+            "name": "shared-kb",
+            "kind": "remote",
+            "lifecycle": "registered",
+            "role": "shared",
+            "url": "https://kb.example.test",
+            "path": "",
+            "categories": ["arch"],
+            "default_read_priority": 3,
+            "enabled": True,
+            "health_status": "healthy",
+            "health_message": "reachable",
+            "desc": "Shared KB updated",
+        },
+    )
+    assert update.status_code == 200
+    updated = update.json()
+    assert updated["default_read_priority"] == 3
+    assert updated["health_status"] == "healthy"
+
+    delete = registry_client.delete(f"/mimir/registry/mounts/{created['id']}")
+    assert delete.status_code == 204
+    remaining = registry_client.get("/mimir/registry/mounts")
+    assert all(item["id"] != created["id"] for item in remaining.json())
+
+
 # ---------------------------------------------------------------------------
 # GET /mimir/page
 # ---------------------------------------------------------------------------
@@ -200,6 +274,27 @@ def test_read_page_found(client_with_page: TestClient) -> None:
 def test_read_page_not_found(client: TestClient) -> None:
     resp = client.get("/mimir/page", params={"path": "technical/missing.md"})
     assert resp.status_code == 404
+
+
+def test_ingest_source_respects_requested_mount(composite_client: TestClient) -> None:
+    resp = composite_client.post(
+        "/mimir/ingest",
+        json={
+            "title": "Shared Source",
+            "content": "Shared knowledge source.",
+            "source_type": "document",
+            "mount": "shared",
+        },
+    )
+    assert resp.status_code == 200
+
+    shared_sources = composite_client.get("/mimir/sources", params={"mount": "shared"})
+    local_sources = composite_client.get("/mimir/sources", params={"mount": "local"})
+
+    shared_titles = {item["title"] for item in shared_sources.json()}
+    local_titles = {item["title"] for item in local_sources.json()}
+    assert "Shared Source" in shared_titles
+    assert "Shared Source" not in local_titles
 
 
 # ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@
  * Owner: plugin-tyr (WorkflowBuilder).
  */
 
-import type { WorkflowNode, WorkflowEdge, WorkflowStageNode } from '../../domain/workflow';
+import type { Workflow, WorkflowNode, WorkflowEdge, WorkflowStageNode } from '../../domain/workflow';
 
 // ---------------------------------------------------------------------------
 // Node geometry constants
@@ -19,6 +19,8 @@ export const COND_RADIUS = 34; // circle radius
 export const TRIGGER_WIDTH = 168;
 export const TRIGGER_HEIGHT = 58;
 export const END_RADIUS = 26;
+export const RESOURCE_WIDTH = 168;
+export const RESOURCE_HEIGHT = 58;
 
 /** Default bezier control-point offset (pixels). */
 const CP_OFFSET = 92;
@@ -103,6 +105,11 @@ export function nodeCentre(node: WorkflowNode): { x: number; y: number } {
       return { x: node.position.x + TRIGGER_WIDTH / 2, y: node.position.y + TRIGGER_HEIGHT / 2 };
     case 'end':
       return { x: node.position.x + END_RADIUS, y: node.position.y + END_RADIUS };
+    case 'resource':
+      return {
+        x: node.position.x + RESOURCE_WIDTH / 2,
+        y: node.position.y + RESOURCE_HEIGHT / 2,
+      };
   }
 }
 
@@ -141,12 +148,9 @@ export function edgeToPath(edge: WorkflowEdge, nodes: Map<string, WorkflowNode>)
  *
  * The output is deterministic — keys are in a fixed meaningful order.
  */
-export function workflowToYaml(workflow: {
-  id: string;
-  name: string;
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
-}): string {
+export function workflowToYaml(
+  workflow: Pick<Workflow, 'id' | 'name' | 'nodes' | 'edges' | 'resourceBindings'>,
+): string {
   const lines: string[] = [];
 
   lines.push(`id: ${JSON.stringify(workflow.id)}`);
@@ -193,6 +197,19 @@ export function workflowToYaml(workflow: {
         lines.push(`    source: ${JSON.stringify(node.source ?? 'manual dispatch')}`);
         lines.push(`    dispatchEvent: ${JSON.stringify(node.dispatchEvent ?? 'code.requested')}`);
       }
+      if (node.kind === 'resource') {
+        lines.push(`    resourceType: ${JSON.stringify(node.resourceType ?? 'mimir')}`);
+        lines.push(`    bindingMode: ${JSON.stringify(node.bindingMode ?? 'registry')}`);
+        lines.push(
+          `    registryEntryId: ${node.registryEntryId === null ? 'null' : JSON.stringify(node.registryEntryId)}`,
+        );
+        lines.push(
+          `    seedFromRegistryId: ${node.seedFromRegistryId === null ? 'null' : JSON.stringify(node.seedFromRegistryId)}`,
+        );
+        lines.push(
+          `    categories: ${(node.categories ?? []).length === 0 ? '[]' : `[${(node.categories ?? []).map((cat) => JSON.stringify(cat)).join(', ')}]`}`,
+        );
+      }
       lines.push(`    position: {x: ${node.position.x}, y: ${node.position.y}}`);
     }
   }
@@ -210,6 +227,24 @@ export function workflowToYaml(workflow: {
       }
       lines.push(`    cp1: {x: ${edge.cp1.x}, y: ${edge.cp1.y}}`);
       lines.push(`    cp2: {x: ${edge.cp2.x}, y: ${edge.cp2.y}}`);
+    }
+  }
+
+  const resourceBindings = workflow.resourceBindings ?? [];
+  if (resourceBindings.length === 0) {
+    lines.push('resourceBindings: []');
+  } else {
+    lines.push('resourceBindings:');
+    for (const binding of resourceBindings) {
+      lines.push(`  - id: ${JSON.stringify(binding.id)}`);
+      lines.push(`    resourceNodeId: ${JSON.stringify(binding.resourceNodeId)}`);
+      lines.push(`    targetType: ${binding.targetType}`);
+      lines.push(`    targetId: ${JSON.stringify(binding.targetId)}`);
+      lines.push(`    access: ${binding.access}`);
+      lines.push(
+        `    writePrefixes: ${(binding.writePrefixes ?? []).length === 0 ? '[]' : `[${(binding.writePrefixes ?? []).map((prefix: string) => JSON.stringify(prefix)).join(', ')}]`}`,
+      );
+      lines.push(`    readPriority: ${binding.readPriority}`);
     }
   }
 

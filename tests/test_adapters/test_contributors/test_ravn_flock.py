@@ -355,6 +355,31 @@ class TestContributorOutput:
             result.values.get("mimir", {}).get("hostedUrl") == "https://mimir.niuu.internal/api/v1"
         )
 
+    async def test_richer_mimir_workload_is_preserved_in_values(self, session):
+        provider = MagicMock()
+        provider.get.return_value = WorkspaceTemplate(
+            name="registry-values",
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": ["coordinator"],
+                "mimir": {
+                    "registry_refs": [{"registry_entry_id": "shared", "mount_name": "shared"}],
+                    "ephemeral_locals": [{"mount_name": "scratchpad"}],
+                    "bindings": [{"mount_name": "scratchpad", "write_prefixes": ["draft/"]}],
+                },
+            },
+        )
+        c = RavnFlockContributor(template_provider=provider)
+        result = await c.contribute(session, SessionContext(template_name="registry-values"))
+
+        assert result.values["mimir"]["registryRefs"] == [
+            {"registry_entry_id": "shared", "mount_name": "shared"}
+        ]
+        assert result.values["mimir"]["ephemeralLocals"] == [{"mount_name": "scratchpad"}]
+        assert result.values["mimir"]["bindings"] == [
+            {"mount_name": "scratchpad", "write_prefixes": ["draft/"]}
+        ]
+
     async def test_mesh_values_present(self, session, flock_template):
         provider = MagicMock()
         provider.get.return_value = flock_template
@@ -563,6 +588,56 @@ class TestConfigGeneration:
             assert "/mimir/local" in cfg
             assert "project/" not in cfg
             assert "entity/" not in cfg
+
+    async def test_mounted_config_resolves_registry_refs_and_ephemeral_locals(self, session):
+        template = WorkspaceTemplate(
+            name="registry-flock",
+            workload_type="ravn_flock",
+            workload_config={
+                "personas": ["coordinator"],
+                "mimir": {
+                    "hosted_url": "https://mimir.niuu.internal/api/v1",
+                    "registry_refs": [
+                        {
+                            "registry_entry_id": "shared-team-mimir",
+                            "mount_name": "shared-team-mimir",
+                            "categories": ["entity", "decision"],
+                        }
+                    ],
+                    "ephemeral_locals": [
+                        {
+                            "resource_node_id": "scratch",
+                            "mount_name": "scratchpad",
+                            "categories": ["draft"],
+                        }
+                    ],
+                    "bindings": [
+                        {
+                            "mount_name": "shared-team-mimir",
+                            "access": "read_write",
+                            "write_prefixes": ["project/"],
+                        },
+                        {
+                            "mount_name": "scratchpad",
+                            "access": "write",
+                            "write_prefixes": ["draft/"],
+                        },
+                    ],
+                },
+            },
+        )
+        provider = MagicMock()
+        provider.get.return_value = template
+        c = RavnFlockContributor(template_provider=provider)
+        result = await c.contribute(session, SessionContext(template_name="registry-flock"))
+
+        cfg = _extract_mounted_config(result.pod_spec, "coordinator")
+        assert "shared-team-mimir" in cfg
+        assert "https://mimir.niuu.internal/api/v1" in cfg
+        assert "scratchpad" in cfg
+        assert "/mimir/local/scratchpad" in cfg
+        assert "project/" in cfg
+        assert "draft/" in cfg
 
     async def test_mounted_config_sleipnir_webhook(self, session, flock_template):
         provider = MagicMock()

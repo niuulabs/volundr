@@ -179,6 +179,7 @@ class TestBuildSpawnRequestFlockEnabled:
         )
 
         assert req.workload_config["mimir_hosted_url"] == "https://mimir.example.com"
+        assert req.workload_config["mimir"] == {"hosted_url": "https://mimir.example.com"}
 
     def test_no_sleipnir_key_when_urls_empty(self) -> None:
         config = _make_flock_config(flock_sleipnir_publish_urls=[])
@@ -219,6 +220,65 @@ class TestBuildSpawnRequestFlockEnabled:
         )
 
         assert "mimir_hosted_url" not in req.workload_config
+        assert "mimir" not in req.workload_config
+
+    def test_workload_config_contains_workflow_snapshot_mimir_resources(self) -> None:
+        config = _make_flock_config(flock_mimir_hosted_url="")
+        saga = _make_saga()
+        issue = _make_issue()
+        item = DispatchItem(saga_id=str(saga.id), issue_id="i-1", repo="org/repo-a")
+        workflow_snapshot = {
+            "workflow_id": str(uuid4()),
+            "name": "Knowledge Flow",
+            "version": "1.0.0",
+            "mimir": {
+                "registry_refs": [
+                    {
+                        "resource_node_id": "mimir-1",
+                        "registry_entry_id": "shared-team-mimir",
+                        "mount_name": "shared-team-mimir",
+                        "categories": ["entity"],
+                    }
+                ],
+                "bindings": [
+                    {
+                        "resource_node_id": "mimir-1",
+                        "mount_name": "shared-team-mimir",
+                        "target_type": "workflow",
+                        "target_id": "wf-1",
+                        "access": "read_write",
+                        "write_prefixes": ["project/"],
+                        "read_priority": 3,
+                    }
+                ],
+            },
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "stage-1",
+                        "kind": "stage",
+                        "label": "Review",
+                        "stageMembers": [{"personaId": "reviewer", "budget": 40}],
+                    }
+                ]
+            },
+        }
+
+        svc = MagicMock()
+        svc._config = config
+        svc._flow_provider = None
+        req = DispatchService._build_spawn_request(
+            svc,
+            item=item,
+            saga=saga,
+            issue=issue,
+            effective_model="claude-sonnet-4-6",
+            effective_prompt="",
+            integration_ids=[],
+            workflow_snapshot=workflow_snapshot,
+        )
+
+        assert req.workload_config["mimir"] == workflow_snapshot["mimir"]
 
     def test_workload_config_contains_llm_config(self) -> None:
         llm = {

@@ -102,6 +102,18 @@ function makeNewNode(kind: WorkflowNodeKind, position: { x: number; y: number })
       };
     case 'end':
       return { id, kind: 'end', label: 'Complete', position };
+    case 'resource':
+      return {
+        id,
+        kind: 'resource',
+        label: 'Mimir resource',
+        resourceType: 'mimir',
+        bindingMode: 'registry',
+        registryEntryId: null,
+        seedFromRegistryId: null,
+        categories: [],
+        position,
+      };
   }
 }
 
@@ -131,6 +143,7 @@ function defaultInputLabelForNode(node: WorkflowNode): string | null {
       return 'condition.input';
     case 'trigger':
     case 'stage':
+    case 'resource':
       return null;
   }
 }

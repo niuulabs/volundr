@@ -19,6 +19,7 @@ export type WorkflowIssueKind =
   | 'cycle'
   | 'orphan'
   | 'dangling_condition'
+  | 'resource_link'
   | 'confidence_underset'
   | 'missing_persona'
   | 'no_producer'
@@ -67,6 +68,8 @@ export function validateWorkflowFull(workflow: Workflow): WorkflowIssue[] {
         return 'Trigger';
       case 'end':
         return 'End';
+      case 'resource':
+        return 'Resource';
     }
   };
 
@@ -87,6 +90,7 @@ export function validateWorkflowFull(workflow: Workflow): WorkflowIssue[] {
   // ── 2. Orphan detection ───────────────────────────────────────────────────
   if (nodes.length > 1) {
     for (const node of nodes) {
+      if (node.kind === 'resource') continue;
       const hasIn = edges.some((e) => e.target === node.id);
       const hasOut = edges.some((e) => e.source === node.id);
       if (!hasIn && !hasOut) {
@@ -144,7 +148,7 @@ export function validateWorkflowFull(workflow: Workflow): WorkflowIssue[] {
   // Gates, conditions, and terminal nodes should have at least one inbound connection.
   if (nodes.length > 1) {
     for (const node of nodes) {
-      if (node.kind === 'trigger' || node.kind === 'stage') continue;
+      if (node.kind === 'trigger' || node.kind === 'stage' || node.kind === 'resource') continue;
       const hasIn = edges.some((e) => e.target === node.id);
       if (!hasIn) {
         issues.push({
@@ -172,6 +176,23 @@ export function validateWorkflowFull(workflow: Workflow): WorkflowIssue[] {
         });
       }
     }
+  }
+
+  const resourceNodeIds = new Set(
+    nodes.filter((node) => node.kind === 'resource').map((node) => node.id),
+  );
+
+  for (const binding of workflow.resourceBindings ?? []) {
+    if (resourceNodeIds.has(binding.resourceNodeId)) {
+      continue;
+    }
+
+    issues.push({
+      kind: 'resource_link',
+      nodeId: binding.resourceNodeId,
+      message: 'Resource binding references a missing resource node',
+      severity: 'error',
+    });
   }
 
   return issues;

@@ -27,6 +27,7 @@ from fastapi import FastAPI
 from mimir.adapters.markdown import MarkdownMimirAdapter
 from mimir.config import MimirServiceConfig
 from mimir.mcp import MimirMcpServer
+from mimir.registry import MimirRegistryStore
 from mimir.router import MimirRouter
 from niuu.settings_schema import (
     SettingsFieldSchema,
@@ -85,7 +86,23 @@ def create_app(config: MimirServiceConfig) -> FastAPI:
     search_port = SqliteSearchAdapter(path=search_db, embed_fn=embed_fn)
 
     adapter = MarkdownMimirAdapter(root=config.path, search_port=search_port)
-    mimir_router = MimirRouter(adapter=adapter, name=config.name, role=config.role)
+    registry_store = MimirRegistryStore(Path(config.path).expanduser() / ".mimir-registry.json")
+    registry_store.ensure_entry(
+        name=config.name,
+        role=config.role,
+        kind="local" if not config.announce_url else "remote",
+        path=str(Path(config.path).expanduser()),
+        url=config.announce_url or "",
+        categories=config.categories,
+        default_read_priority=0,
+        desc="Current Mimir service instance",
+    )
+    mimir_router = MimirRouter(
+        adapter=adapter,
+        name=config.name,
+        role=config.role,
+        registry_store=registry_store,
+    )
     mcp_server = MimirMcpServer(adapter=adapter, name=config.name)
 
     @asynccontextmanager

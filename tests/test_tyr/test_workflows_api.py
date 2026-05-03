@@ -244,6 +244,77 @@ class TestWorkflowCatalogAPI:
         assert body["definition_yaml"] is None
         assert body["compile_errors"]
 
+    def test_create_workflow_preserves_resource_bindings(self) -> None:
+        repo = InMemoryWorkflowRepository()
+        client = _make_client(repo)
+
+        response = client.post(
+            "/api/v1/tyr/workflows",
+            headers=_headers(),
+            json={
+                "name": "Knowledge Flow",
+                "description": "Workflow with explicit Mimir resources",
+                "version": "1.0.0",
+                "scope": "user",
+                "nodes": [
+                    {
+                        "id": "trigger-1",
+                        "kind": "trigger",
+                        "label": "Start",
+                        "source": "manual dispatch",
+                        "dispatchEvent": "code.requested",
+                    },
+                    {
+                        "id": "stage-1",
+                        "kind": "stage",
+                        "label": "Review",
+                        "personaIds": ["reviewer"],
+                        "stageMembers": [{"personaId": "reviewer", "budget": 40}],
+                        "executionMode": "parallel",
+                        "maxConcurrent": 3,
+                        "joinMode": "all",
+                    },
+                    {
+                        "id": "mimir-1",
+                        "kind": "resource",
+                        "label": "Shared Mimir",
+                        "resourceType": "mimir",
+                        "bindingMode": "registry",
+                        "registryEntryId": "shared-team-mimir",
+                        "categories": ["decision", "entity"],
+                    },
+                ],
+                "edges": [
+                    {"id": "e1", "source": "trigger-1", "target": "stage-1"},
+                ],
+                "resourceBindings": [
+                    {
+                        "id": "binding-1",
+                        "resourceNodeId": "mimir-1",
+                        "targetType": "stage",
+                        "targetId": "stage-1",
+                        "access": "read_write",
+                        "writePrefixes": ["project/", "entity/"],
+                        "readPriority": 5,
+                    }
+                ],
+            },
+        )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert body["resourceBindings"] == [
+            {
+                "id": "binding-1",
+                "resourceNodeId": "mimir-1",
+                "targetType": "stage",
+                "targetId": "stage-1",
+                "access": "read_write",
+                "writePrefixes": ["project/", "entity/"],
+                "readPriority": 5,
+            }
+        ]
+
     def test_owner_can_update_user_workflow(self) -> None:
         workflow = _make_workflow(owner_id="user-1")
         repo = InMemoryWorkflowRepository([workflow])

@@ -144,3 +144,56 @@ class TestWorkflowCompiler:
             "Node 'Review' fans out to multiple paths, which Tyr cannot execute yet.",
             "Workflow graph contains disconnected or unsupported runtime nodes: QA, Security",
         ]
+
+    def test_ignores_resource_nodes_for_pipeline_compilation(self) -> None:
+        workflow = _workflow(
+            {
+                "nodes": [
+                    {
+                        "id": "trigger-1",
+                        "kind": "trigger",
+                        "label": "Start",
+                        "source": "manual dispatch",
+                    },
+                    {
+                        "id": "stage-1",
+                        "kind": "stage",
+                        "label": "Review",
+                        "personaIds": ["reviewer"],
+                        "stageMembers": [{"personaId": "reviewer", "budget": 40}],
+                        "executionMode": "parallel",
+                        "joinMode": "all",
+                    },
+                    {
+                        "id": "resource-1",
+                        "kind": "resource",
+                        "label": "Shared Mimir",
+                        "resourceType": "mimir",
+                        "bindingMode": "registry",
+                        "registryEntryId": "mimir-shared",
+                    },
+                    {"id": "end-1", "kind": "end", "label": "Done"},
+                ],
+                "edges": [
+                    {"id": "e1", "source": "trigger-1", "target": "stage-1"},
+                    {"id": "e2", "source": "stage-1", "target": "end-1"},
+                ],
+                "resourceBindings": [
+                    {
+                        "id": "binding-1",
+                        "resourceNodeId": "resource-1",
+                        "targetType": "stage",
+                        "targetId": "stage-1",
+                        "access": "read_write",
+                        "writePrefixes": ["projects/"],
+                        "readPriority": 3,
+                    }
+                ],
+            }
+        )
+
+        result = compile_workflow_definition(workflow)
+
+        assert result.errors == []
+        assert result.definition_yaml is not None
+        assert "persona: reviewer" in result.definition_yaml

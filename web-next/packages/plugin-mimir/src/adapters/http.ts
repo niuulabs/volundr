@@ -24,6 +24,7 @@ import type { EmbeddingSearchResult } from '../ports/IEmbeddingStore';
 import type { EntityKind, EntityMeta } from '../domain/entity';
 import type { WriteRoutingRule } from '../domain/routing';
 import type { RavnBinding } from '../domain/ravn-binding';
+import type { RegistryMount } from '../domain/registry';
 import { tallySeverity } from '../domain/lint';
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,23 @@ interface RawMount {
   last_write: string;
   embedding: string;
   size_kb: number;
+  desc: string;
+}
+
+interface RawRegistryMount {
+  id: string;
+  name: string;
+  kind: 'local' | 'remote';
+  lifecycle: 'registered' | 'ephemeral';
+  role: string;
+  url: string;
+  path: string;
+  categories: string[] | null;
+  auth_ref?: string | null;
+  default_read_priority: number;
+  enabled: boolean;
+  health_status: 'healthy' | 'degraded' | 'down' | 'unknown';
+  health_message: string;
   desc: string;
 }
 
@@ -201,6 +219,25 @@ function toMount(raw: RawMount): Mount {
     lastWrite: raw.last_write,
     embedding: raw.embedding,
     sizeKb: raw.size_kb,
+    desc: raw.desc,
+  };
+}
+
+function toRegistryMount(raw: RawRegistryMount): RegistryMount {
+  return {
+    id: raw.id,
+    name: raw.name,
+    kind: raw.kind,
+    lifecycle: raw.lifecycle,
+    role: raw.role as RegistryMount['role'],
+    url: raw.url,
+    path: raw.path,
+    categories: raw.categories,
+    authRef: raw.auth_ref,
+    defaultReadPriority: raw.default_read_priority,
+    enabled: raw.enabled,
+    healthStatus: raw.health_status,
+    healthMessage: raw.health_message,
     desc: raw.desc,
   };
 }
@@ -438,6 +475,74 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
             },
           ];
         }
+      },
+
+      async listRegistryMounts(): Promise<RegistryMount[]> {
+        try {
+          const raw = await client.get<RawRegistryMount[]>('/registry/mounts');
+          return raw.map(toRegistryMount);
+        } catch (error) {
+          if (!isMissingRouteError(error)) throw error;
+          const mounts = await this.listMounts();
+          return mounts.map((mount) => ({
+            id: `registry-${mount.name}`,
+            name: mount.name,
+            kind: mount.url ? 'remote' : 'local',
+            lifecycle: 'registered',
+            role: mount.role,
+            url: mount.url,
+            path: '',
+            categories: mount.categories,
+            authRef: null,
+            defaultReadPriority: mount.priority,
+            enabled: mount.status !== 'down',
+            healthStatus: mount.status === 'healthy' ? 'healthy' : mount.status,
+            healthMessage: '',
+            desc: mount.desc,
+          }));
+        }
+      },
+
+      async createRegistryMount(mount: Omit<RegistryMount, 'id'>): Promise<RegistryMount> {
+        const raw = await client.post<RawRegistryMount>('/registry/mounts', {
+          name: mount.name,
+          kind: mount.kind,
+          lifecycle: mount.lifecycle,
+          role: mount.role,
+          url: mount.url,
+          path: mount.path,
+          categories: mount.categories,
+          auth_ref: mount.authRef ?? null,
+          default_read_priority: mount.defaultReadPriority,
+          enabled: mount.enabled,
+          health_status: mount.healthStatus,
+          health_message: mount.healthMessage,
+          desc: mount.desc,
+        });
+        return toRegistryMount(raw);
+      },
+
+      async updateRegistryMount(id: string, mount: Omit<RegistryMount, 'id'>): Promise<RegistryMount> {
+        const raw = await client.put<RawRegistryMount>(`/registry/mounts/${id}`, {
+          name: mount.name,
+          kind: mount.kind,
+          lifecycle: mount.lifecycle,
+          role: mount.role,
+          url: mount.url,
+          path: mount.path,
+          categories: mount.categories,
+          auth_ref: mount.authRef ?? null,
+          default_read_priority: mount.defaultReadPriority,
+          enabled: mount.enabled,
+          health_status: mount.healthStatus,
+          health_message: mount.healthMessage,
+          desc: mount.desc,
+        });
+        return toRegistryMount(raw);
+      },
+
+      async deleteRegistryMount(id: string): Promise<void> {
+        await client.delete<void>(`/registry/mounts/${id}`);
       },
 
       async listRoutingRules(): Promise<WriteRoutingRule[]> {
