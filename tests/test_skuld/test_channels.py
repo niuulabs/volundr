@@ -228,6 +228,23 @@ class TestFormatTelegramEvent:
         }
         assert format_telegram_event(event) is None
 
+    def test_user_confirmed_source_platform_skipped(self):
+        event = {
+            "type": "user_confirmed",
+            "content": "Confirm this step",
+            "source": "browser",
+            "metadata": {"source_platform": "slack"},
+        }
+        assert format_telegram_event(event) is None
+
+    def test_user_confirmed_without_content_skipped(self):
+        event = {
+            "type": "user_confirmed",
+            "content": "",
+            "source": "browser",
+        }
+        assert format_telegram_event(event) is None
+
     def test_room_message_public(self):
         event = {
             "type": "room_message",
@@ -243,6 +260,15 @@ class TestFormatTelegramEvent:
             "participant": {"persona": "coder"},
             "content": "internal detail",
             "visibility": "internal",
+        }
+        assert format_telegram_event(event) is None
+
+    def test_room_message_without_content_skipped(self):
+        event = {
+            "type": "room_message",
+            "participant": {"persona": "coder"},
+            "content": "",
+            "visibility": "public",
         }
         assert format_telegram_event(event) is None
 
@@ -272,6 +298,25 @@ class TestFormatTelegramEvent:
         assert "[verifier] outcome: verification.completed" in result
         assert "verdict: conditional" in result
         assert "checks_passed: 12" in result
+
+    def test_room_outcome_serializes_list_fields(self):
+        event = {
+            "type": "room_outcome",
+            "participant": {"persona": "verifier"},
+            "fields": {"affected_files": ["a.py", "b.py"]},
+        }
+        result = format_telegram_event(event)
+        assert "[verifier] outcome: outcome" in result
+        assert 'affected_files: ["a.py", "b.py"]' in result
+
+    def test_room_outcome_renders_non_dict_fields(self):
+        event = {
+            "type": "room_outcome",
+            "participant": {"persona": "verifier"},
+            "fields": "fallback payload",
+        }
+        result = format_telegram_event(event)
+        assert "fallback payload" in result
 
     def test_room_mesh_message_rendered(self):
         event = {
@@ -303,6 +348,15 @@ class TestFormatTelegramEvent:
         assert "<b>blocked</b>" in rendered
         assert "<code>README.md</code>" in rendered
         assert '<a href="https://example.com">docs</a>' in rendered
+
+    def test_render_telegram_html_formats_headings_lists_and_quotes(self):
+        rendered = render_telegram_html(
+            "# Heading\n- bullet\n1. ordered\n> quoted"
+        )
+        assert "<b>Heading</b>" in rendered
+        assert "• bullet" in rendered
+        assert "1. ordered" in rendered
+        assert "&gt; quoted" in rendered
 
 
 # ---------------------------------------------------------------------------
