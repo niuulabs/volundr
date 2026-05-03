@@ -201,8 +201,8 @@ def _default_session_definitions() -> dict[str, SessionDefinitionConfig]:
             defaults={
                 "broker": {
                     "cliType": "claude",
-                    "transport": "sdk",
-                    "transportAdapter": "skuld.transports.sdk_websocket.SdkWebSocketTransport",
+                    "transport": "subprocess",
+                    "transportAdapter": "skuld.transports.subprocess.SubprocessTransport",
                     "skipPermissions": True,
                     "agentTeams": False,
                 },
