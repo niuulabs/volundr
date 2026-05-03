@@ -10,6 +10,7 @@ import {
   createMockFileSystemPort,
 } from '../adapters/mock';
 import type { ISessionStore } from '../ports/ISessionStore';
+import type { Session } from '../domain/session';
 
 // ---------------------------------------------------------------------------
 // Mock xterm + shiki (SessionDetailPage embeds terminal)
@@ -65,6 +66,58 @@ function wrap(sessionStore: ISessionStore = createMockSessionStore()) {
       </ServicesProvider>
     </QueryClientProvider>,
   );
+}
+
+function makeSession(
+  overrides: Partial<Session> & Pick<Session, 'id' | 'personaName' | 'state'>,
+): Session {
+  return {
+    id: overrides.id,
+    ravnId: overrides.ravnId ?? `ravn-${overrides.id}`,
+    personaName: overrides.personaName,
+    templateId: overrides.templateId ?? 'tpl-default',
+    clusterId: overrides.clusterId ?? 'cluster-a',
+    state: overrides.state,
+    startedAt: overrides.startedAt ?? new Date('2026-05-01T00:00:00.000Z').toISOString(),
+    readyAt: overrides.readyAt,
+    lastActivityAt: overrides.lastActivityAt ?? new Date('2026-05-01T00:05:00.000Z').toISOString(),
+    terminatedAt: overrides.terminatedAt,
+    resources: overrides.resources ?? {
+      cpuRequest: 1,
+      cpuLimit: 2,
+      cpuUsed: 0.5,
+      memRequestMi: 512,
+      memLimitMi: 1024,
+      memUsedMi: 256,
+      gpuCount: 0,
+    },
+    env: overrides.env ?? {},
+    events: overrides.events ?? [],
+    bootProgress: overrides.bootProgress,
+    connectionType: overrides.connectionType,
+    tokensIn: overrides.tokensIn,
+    tokensOut: overrides.tokensOut,
+    costCents: overrides.costCents,
+    preview: overrides.preview,
+    files: overrides.files,
+    sagaId: overrides.sagaId,
+    raidId: overrides.raidId,
+  };
+}
+
+function createSessionStoreWithSessions(sessions: Session[]): ISessionStore {
+  return {
+    getSession: async (id) => sessions.find((session) => session.id === id) ?? null,
+    listSessions: async () => sessions,
+    createSession: async () => {
+      throw new Error('not implemented');
+    },
+    updateSession: async () => {
+      throw new Error('not implemented');
+    },
+    deleteSession: async () => {},
+    subscribe: () => () => {},
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +194,38 @@ describe('SessionsPage', () => {
       expect(screen.getByTestId('pod-entry-mimir-bge-reindex')).toBeInTheDocument(),
     );
     expect(screen.queryByTestId('pod-entry-ds-1')).not.toBeInTheDocument();
+  });
+
+  it('can group sessions by repo', async () => {
+    const store = createSessionStoreWithSessions([
+      makeSession({
+        id: 'alpha-1',
+        personaName: 'alpha one',
+        state: 'running',
+        preview: 'github.com/acme/alpha#main',
+      }),
+      makeSession({
+        id: 'alpha-2',
+        personaName: 'alpha two',
+        state: 'idle',
+        preview: 'github.com/acme/alpha#feature/docs',
+      }),
+      makeSession({
+        id: 'beta-1',
+        personaName: 'beta one',
+        state: 'failed',
+        preview: 'github.com/acme/beta#fix/login',
+      }),
+    ]);
+
+    wrap(store);
+    await waitFor(() => expect(screen.getByTestId('pod-group-mode-repo')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('pod-group-mode-repo'));
+
+    await waitFor(() => expect(screen.getByTestId('pod-group-alpha')).toBeInTheDocument());
+    expect(screen.getByTestId('pod-group-alpha-count')).toHaveTextContent('2');
+    expect(screen.getByTestId('pod-group-beta')).toBeInTheDocument();
+    expect(screen.queryByTestId('pod-group-active')).not.toBeInTheDocument();
   });
 
   it('shows loading state initially', () => {

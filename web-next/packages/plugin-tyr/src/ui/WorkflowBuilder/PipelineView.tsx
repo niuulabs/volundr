@@ -25,6 +25,7 @@ const KIND_LABEL: Record<WorkflowNode['kind'], string> = {
   gate: 'Gate',
   cond: 'Cond',
   end: 'End',
+  resource: 'Resource',
 };
 
 const KIND_BADGE_CLASS: Record<WorkflowNode['kind'], string> = {
@@ -33,6 +34,7 @@ const KIND_BADGE_CLASS: Record<WorkflowNode['kind'], string> = {
   gate: 'niuu-text-status-amber',
   cond: 'niuu-text-status-cyan',
   end: 'niuu-text-status-emerald',
+  resource: 'niuu-text-text-secondary',
 };
 
 function stageSummary(node: WorkflowStageNode) {

@@ -16,6 +16,7 @@ import type {
   WorkflowNodeKind,
   WorkflowStageNode,
 } from '../../domain/workflow';
+import type { PersonaEntry } from './LibraryPanel';
 import { makeNodeId, makeEdgeId, defaultBezierCPs } from './graphUtils';
 
 export type WorkflowView = 'graph' | 'pipeline' | 'yaml';
@@ -91,9 +92,28 @@ function makeNewNode(kind: WorkflowNodeKind, position: { x: number; y: number })
     case 'cond':
       return { id, kind: 'cond', label: 'Condition', predicate: '', position };
     case 'trigger':
-      return { id, kind: 'trigger', label: 'Manual trigger', source: 'manual dispatch', position };
+      return {
+        id,
+        kind: 'trigger',
+        label: 'Manual trigger',
+        source: 'manual dispatch',
+        dispatchEvent: 'code.requested',
+        position,
+      };
     case 'end':
       return { id, kind: 'end', label: 'Complete', position };
+    case 'resource':
+      return {
+        id,
+        kind: 'resource',
+        label: 'Mimir resource',
+        resourceType: 'mimir',
+        bindingMode: 'registry',
+        registryEntryId: null,
+        seedFromRegistryId: null,
+        categories: [],
+        position,
+      };
   }
 }
 
@@ -113,8 +133,157 @@ function syncStagePersonaIds(node: WorkflowStageNode): WorkflowStageNode {
   };
 }
 
+function defaultInputLabelForNode(node: WorkflowNode): string | null {
+  switch (node.kind) {
+    case 'end':
+      return 'complete';
+    case 'gate':
+      return 'approval.requested';
+    case 'cond':
+      return 'condition.input';
+    case 'trigger':
+    case 'stage':
+    case 'resource':
+      return null;
+  }
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function firstSharedEvent(source: string[], target: string[]): string | null {
+  for (const eventType of source) {
+    if (target.includes(eventType)) return eventType;
+  }
+  return null;
+}
+
+function splitEdgeLabel(label?: string | null): { source: string; target: string } | null {
+  if (!label) return null;
+  const parts = label.split('->').map((part) => part.trim());
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+  return { source: parts[0], target: parts[1] };
+}
+
+function stageEventProfile(
+  node: WorkflowStageNode,
+  personas: PersonaEntry[],
+): { consumes: string[]; produces: string[] } {
+  const personaMap = new Map(personas.map((persona) => [persona.id, persona]));
+  const members = syncStagePersonaIds(node).stageMembers ?? [];
+  return {
+    consumes: uniqueStrings(
+      members.flatMap((member) => personaMap.get(member.personaId)?.consumes ?? []),
+    ),
+    produces: uniqueStrings(
+      members.flatMap((member) => personaMap.get(member.personaId)?.produces ?? []),
+    ),
+  };
+}
+
+function buildEdge(
+  sourceNode: WorkflowNode,
+  targetNode: WorkflowNode,
+  eventType: string,
+): {
+  id: string;
+  source: string;
+  target: string;
+  label: string;
+  cp1: { x: number; y: number };
+  cp2: { x: number; y: number };
+} {
+  const { cp1, cp2 } = defaultBezierCPs(sourceNode.position, targetNode.position);
+  return {
+    id: makeEdgeId(),
+    source: sourceNode.id,
+    target: targetNode.id,
+    label: `${eventType} -> ${eventType}`,
+    cp1,
+    cp2,
+  };
+}
+
+function hasMatchingEdge(
+  edges: Workflow['edges'],
+  sourceId: string,
+  targetId: string,
+  eventType: string,
+): boolean {
+  const expected = `${eventType} -> ${eventType}`;
+  return edges.some(
+    (edge) =>
+      edge.source === sourceId && edge.target === targetId && (edge.label ?? '') === expected,
+  );
+}
+
+function autoWireStageForPersona(
+  workflow: Workflow,
+  newStage: WorkflowStageNode,
+  personas: PersonaEntry[],
+): Workflow['edges'] {
+  if (personas.length === 0) return [];
+  const newProfile = stageEventProfile(newStage, personas);
+  const edges: Workflow['edges'] = [];
+
+  for (const node of workflow.nodes) {
+    if (node.kind === 'trigger') {
+      const triggerEvent = node.dispatchEvent ?? 'code.requested';
+      if (
+        triggerEvent &&
+        newProfile.consumes.includes(triggerEvent) &&
+        !hasMatchingEdge(workflow.edges, node.id, newStage.id, triggerEvent)
+      ) {
+        edges.push(buildEdge(node, newStage, triggerEvent));
+      }
+      continue;
+    }
+
+    if (node.kind !== 'stage') continue;
+    const existing = syncStagePersonaIds(node);
+    const existingProfile = stageEventProfile(existing, personas);
+    const forward = firstSharedEvent(existingProfile.produces, newProfile.consumes);
+    const backward = firstSharedEvent(newProfile.produces, existingProfile.consumes);
+
+    if (forward && backward) {
+      if (existing.position.x <= newStage.position.x) {
+        if (!hasMatchingEdge(workflow.edges, existing.id, newStage.id, forward)) {
+          edges.push(buildEdge(existing, newStage, forward));
+        }
+      } else if (!hasMatchingEdge(workflow.edges, newStage.id, existing.id, backward)) {
+        edges.push(buildEdge(newStage, existing, backward));
+      }
+      continue;
+    }
+
+    if (forward && !hasMatchingEdge(workflow.edges, existing.id, newStage.id, forward)) {
+      edges.push(buildEdge(existing, newStage, forward));
+    }
+    if (backward && !hasMatchingEdge(workflow.edges, newStage.id, existing.id, backward)) {
+      edges.push(buildEdge(newStage, existing, backward));
+    }
+  }
+
+  return edges;
+}
+
+function rewriteTriggerEdges(
+  edges: Workflow['edges'],
+  triggerId: string,
+  eventType: string,
+): Workflow['edges'] {
+  return edges.map((edge) => {
+    if (edge.source !== triggerId) return edge;
+    const parsed = splitEdgeLabel(edge.label);
+    if (!parsed) return { ...edge, label: `${eventType} -> ${eventType}` };
+    return { ...edge, label: `${eventType} -> ${eventType}` };
+  });
+}
+
 export function useWorkflowBuilder(
   initial: Workflow,
+  personas: PersonaEntry[] = [],
 ): WorkflowBuilderState & WorkflowBuilderActions {
   const [workflow, setWorkflowState] = useState<Workflow>(initial);
   const [view, setViewState] = useState<WorkflowView>('graph');
@@ -152,21 +321,23 @@ export function useWorkflowBuilder(
       setWorkflowState((prev) => {
         const pos = position ?? nextPosition(prev);
         const node = makeNewNode('stage', pos);
+        const stage =
+          node.kind === 'stage'
+            ? syncStagePersonaIds({
+                ...node,
+                stageMembers: [{ personaId, budget: 40 }],
+              })
+            : node;
+        const autoEdges =
+          stage.kind === 'stage' ? autoWireStageForPersona(prev, stage, personas) : [];
         return {
           ...prev,
-          nodes: [
-            ...prev.nodes,
-            node.kind === 'stage'
-              ? syncStagePersonaIds({
-                  ...node,
-                  stageMembers: [{ personaId, budget: 40 }],
-                })
-              : node,
-          ],
+          nodes: [...prev.nodes, stage],
+          edges: [...prev.edges, ...autoEdges],
         };
       });
     },
-    [],
+    [personas],
   );
 
   const deleteNode = useCallback((id: string) => {
@@ -220,17 +391,21 @@ export function useWorkflowBuilder(
     connectingLabelRef.current = null;
     setConnectingFromId(null);
     setConnectingFromLabel(null);
-    if (!fromId || !fromLabel || !inputLabel || fromId === targetId) return;
+    if (!fromId || !fromLabel || fromId === targetId) return;
     setWorkflowState((prev) => {
-      const edgeLabel = `${fromLabel} -> ${inputLabel}`;
-      const alreadyExists = prev.edges.some(
-        (e) =>
-          e.source === fromId && e.target === targetId && (e.label ?? '') === (edgeLabel ?? ''),
-      );
-      if (alreadyExists) return prev;
       const srcNode = prev.nodes.find((n) => n.id === fromId);
       const tgtNode = prev.nodes.find((n) => n.id === targetId);
       if (!srcNode || !tgtNode) return prev;
+      const resolvedInputLabel = inputLabel ?? defaultInputLabelForNode(tgtNode);
+      if (!resolvedInputLabel) return prev;
+      const edgeLabel =
+        srcNode.kind === 'trigger'
+          ? `${resolvedInputLabel} -> ${resolvedInputLabel}`
+          : `${fromLabel} -> ${resolvedInputLabel}`;
+      const alreadyExists = prev.edges.some(
+        (e) => e.source === fromId && e.target === targetId && (e.label ?? '') === edgeLabel,
+      );
+      if (alreadyExists) return prev;
       const { cp1, cp2 } = defaultBezierCPs(srcNode.position, tgtNode.position);
       const newEdge = {
         id: makeEdgeId(),
@@ -240,7 +415,13 @@ export function useWorkflowBuilder(
         cp1,
         cp2,
       };
-      return { ...prev, edges: [...prev.edges, newEdge] };
+      const nodes =
+        srcNode.kind === 'trigger'
+          ? prev.nodes.map((node) =>
+              node.id === srcNode.id ? { ...node, dispatchEvent: resolvedInputLabel } : node,
+            )
+          : prev.nodes;
+      return { ...prev, nodes, edges: [...prev.edges, newEdge] };
     });
   }, []);
 
@@ -320,14 +501,29 @@ export function useWorkflowBuilder(
   }, []);
 
   const updateNode = useCallback((id: string, patch: Partial<WorkflowNode>) => {
-    setWorkflowState((prev) => ({
-      ...prev,
-      nodes: prev.nodes.map((n) => {
+    setWorkflowState((prev) => {
+      const current = prev.nodes.find((node) => node.id === id);
+      const triggerDispatchEvent =
+        current?.kind === 'trigger' &&
+        'dispatchEvent' in patch &&
+        typeof patch.dispatchEvent === 'string' &&
+        patch.dispatchEvent
+          ? patch.dispatchEvent
+          : null;
+      const nextNodes = prev.nodes.map((n) => {
         if (n.id !== id) return n;
         const next = { ...n, ...patch } as WorkflowNode;
         return next.kind === 'stage' ? syncStagePersonaIds(next) : next;
-      }),
-    }));
+      });
+      const nextEdges = triggerDispatchEvent
+        ? rewriteTriggerEdges(prev.edges, id, triggerDispatchEvent)
+        : prev.edges;
+      return {
+        ...prev,
+        nodes: nextNodes,
+        edges: nextEdges,
+      };
+    });
   }, []);
 
   const updateWorkflowMeta = useCallback(

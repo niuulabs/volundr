@@ -38,6 +38,7 @@ import httpx
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
+from mimir.registry import MimirRegistryEntry, MimirRegistryStore
 from niuu.domain.mimir import (
     MimirLintReport,
     MimirPage,
@@ -186,6 +187,39 @@ class MountResponse(BaseModel):
     last_write: str
     embedding: str
     size_kb: int
+    desc: str
+
+
+class RegistryMountRequest(BaseModel):
+    name: str
+    kind: str = "remote"
+    lifecycle: str = "registered"
+    role: str = "shared"
+    url: str = ""
+    path: str = ""
+    categories: list[str] | None = None
+    auth_ref: str | None = None
+    default_read_priority: int = 10
+    enabled: bool = True
+    health_status: str = "unknown"
+    health_message: str = ""
+    desc: str = ""
+
+
+class RegistryMountResponse(BaseModel):
+    id: str
+    name: str
+    kind: str
+    lifecycle: str
+    role: str
+    url: str
+    path: str
+    categories: list[str] | None
+    auth_ref: str | None = None
+    default_read_priority: int
+    enabled: bool
+    health_status: str
+    health_message: str
     desc: str
 
 
@@ -605,6 +639,89 @@ async def _summarize_mount(
     )
 
 
+def _registry_to_response(entry: MimirRegistryEntry) -> RegistryMountResponse:
+    return RegistryMountResponse(**entry.model_dump(mode="json"))
+
+
+def _registry_mount_host(entry: MimirRegistryEntry) -> str:
+    if entry.url:
+        parsed = urlparse(entry.url)
+        return parsed.netloc or parsed.path or "remote"
+
+    if entry.path:
+        return entry.path
+
+    return "registered"
+
+
+def _mount_from_registry(entry: MimirRegistryEntry) -> MountResponse:
+    return MountResponse(
+        name=entry.name,
+        role=entry.role,
+        host=_registry_mount_host(entry),
+        url=entry.url,
+        priority=entry.default_read_priority,
+        categories=entry.categories,
+        status="down" if entry.enabled else "down",
+        pages=0,
+        sources=0,
+        lint_issues=0,
+        last_write="",
+        embedding="fts",
+        size_kb=0,
+        desc=entry.desc or f"registered {entry.role} mount",
+    )
+
+
+async def _merged_mount_responses(
+    adapter: MimirPort,
+    *,
+    default_name: str,
+    default_role: str,
+    registry_store: MimirRegistryStore | None,
+) -> list[MountResponse]:
+    live_summaries = [
+        await _summarize_mount(mount)
+        for mount in _extract_mount_definitions(
+            adapter,
+            default_name=default_name,
+            default_role=default_role,
+        )
+    ]
+    live_by_name = {mount.name: mount for mount in live_summaries}
+    entries = registry_store.list_entries() if registry_store is not None else []
+    if not entries:
+        return sorted(live_summaries, key=lambda mount: mount.priority)
+
+    merged: list[MountResponse] = []
+    seen_names: set[str] = set()
+
+    for entry in entries:
+        live_mount = live_by_name.get(entry.name)
+        if live_mount is None:
+            merged.append(_mount_from_registry(entry))
+            seen_names.add(entry.name)
+            continue
+
+        merged.append(
+            live_mount.model_copy(
+                update={
+                    "priority": entry.default_read_priority,
+                    "categories": entry.categories or live_mount.categories,
+                    "desc": entry.desc or live_mount.desc,
+                }
+            )
+        )
+        seen_names.add(entry.name)
+
+    for live_mount in live_summaries:
+        if live_mount.name in seen_names:
+            continue
+        merged.append(live_mount)
+
+    return sorted(merged, key=lambda mount: mount.priority)
+
+
 def _decorate_page_meta(meta: MimirPageMeta, mounts: list[str] | None = None) -> PageMetaResponse:
     return PageMetaResponse(
         path=meta.path,
@@ -675,10 +792,12 @@ class MimirRouter:
         adapter: MimirPort,
         name: str = "local",
         role: str = "local",
+        registry_store: MimirRegistryStore | None = None,
     ) -> None:
         self._adapter = adapter
         self._name = name
         self._role = role
+        self._registry_store = registry_store
         self.router = APIRouter()
         self._register_routes()
 
@@ -699,12 +818,88 @@ class MimirRouter:
 
         @router.get("/mounts", response_model=list[MountResponse])
         async def list_mounts() -> list[MountResponse]:
-            mounts = _extract_mount_definitions(
+            return await _merged_mount_responses(
                 adapter,
                 default_name=self._name,
                 default_role=self._role,
+                registry_store=self._registry_store,
             )
-            return [await _summarize_mount(mount) for mount in mounts]
+
+        @router.get("/registry/mounts", response_model=list[RegistryMountResponse])
+        async def list_registry_mounts() -> list[RegistryMountResponse]:
+            if self._registry_store is None:
+                mounts = _extract_mount_definitions(
+                    adapter,
+                    default_name=self._name,
+                    default_role=self._role,
+                )
+                return [
+                    _registry_to_response(
+                        MimirRegistryEntry(
+                            name=mount["name"],
+                            kind="remote" if getattr(mount["port"], "_base_url", "") else "local",
+                            role=mount["role"],
+                            categories=mount["categories"],
+                            url=getattr(mount["port"], "_base_url", ""),
+                            default_read_priority=mount["priority"],
+                            desc=f"{mount['role']} mount",
+                        )
+                    )
+                    for mount in mounts
+                ]
+
+            return [
+                _registry_to_response(entry)
+                for entry in self._registry_store.list_entries()
+            ]
+
+        @router.post("/registry/mounts", response_model=RegistryMountResponse)
+        async def create_registry_mount(
+            request: RegistryMountRequest,
+            _auth: None = Depends(_require_write_auth),
+        ) -> RegistryMountResponse:
+            if self._registry_store is None:
+                raise HTTPException(
+                    status_code=501,
+                    detail="Registry persistence is not configured",
+                )
+
+            entry = MimirRegistryEntry(**request.model_dump())
+            self._registry_store.save_entry(entry)
+            return _registry_to_response(entry)
+
+        @router.put("/registry/mounts/{entry_id}", response_model=RegistryMountResponse)
+        async def update_registry_mount(
+            entry_id: str,
+            request: RegistryMountRequest,
+            _auth: None = Depends(_require_write_auth),
+        ) -> RegistryMountResponse:
+            if self._registry_store is None:
+                raise HTTPException(
+                    status_code=501,
+                    detail="Registry persistence is not configured",
+                )
+
+            existing = self._registry_store.get_entry(entry_id)
+            if existing is None:
+                raise HTTPException(status_code=404, detail=f"Unknown registry mount: {entry_id}")
+
+            entry = existing.model_copy(update=request.model_dump())
+            self._registry_store.save_entry(entry)
+            return _registry_to_response(entry)
+
+        @router.delete("/registry/mounts/{entry_id}", status_code=204)
+        async def delete_registry_mount(
+            entry_id: str,
+            _auth: None = Depends(_require_write_auth),
+        ) -> None:
+            if self._registry_store is None:
+                raise HTTPException(
+                    status_code=501,
+                    detail="Registry persistence is not configured",
+                )
+
+            self._registry_store.delete_entry(entry_id)
 
         @router.get("/routing/rules", response_model=list[RoutingRuleResponse])
         async def list_routing_rules() -> list[RoutingRuleResponse]:
@@ -1180,6 +1375,7 @@ class MimirRouter:
             request: IngestRequest,
             _auth: None = Depends(_require_write_auth),
         ) -> IngestResponse:
+            port, _ = _resolve_mount_port(adapter, request.mount, default_name=self._name)
             content_hash = compute_content_hash(request.content)
             source_id = "src_" + content_hash[:16]
             source = MimirSource(
@@ -1191,7 +1387,7 @@ class MimirRouter:
                 content_hash=content_hash,
                 ingested_at=datetime.now(UTC),
             )
-            page_paths = await adapter.ingest(source)
+            page_paths = await port.ingest(source)
             return IngestResponse(source_id=source_id, pages_updated=page_paths)
 
         @router.post("/sources/ingest/url", response_model=SourceResponse)
@@ -1199,6 +1395,11 @@ class MimirRouter:
             request: UrlIngestRequest,
             _auth: None = Depends(_require_write_auth),
         ) -> SourceResponse:
+            port, resolved_mount = _resolve_mount_port(
+                adapter,
+                request.mount,
+                default_name=self._name,
+            )
             safe_url = _validated_ingest_url(request.url)
             try:
                 async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
@@ -1225,11 +1426,11 @@ class MimirRouter:
                 content_hash=compute_content_hash(response.text),
                 ingested_at=datetime.now(UTC),
             )
-            page_paths = await adapter.ingest(source)
+            page_paths = await port.ingest(source)
             return _decorate_source(
                 source,
                 compiled_into=page_paths,
-                mount_name=request.mount or self._name,
+                mount_name=resolved_mount,
             )
 
         @router.post("/sources/ingest/file", response_model=SourceResponse)
@@ -1238,6 +1439,7 @@ class MimirRouter:
             mount: str | None = Form(default=None),
             _auth: None = Depends(_require_write_auth),
         ) -> SourceResponse:
+            port, resolved_mount = _resolve_mount_port(adapter, mount, default_name=self._name)
             raw_bytes = await file.read()
             content = raw_bytes.decode("utf-8", errors="replace")
             source = MimirSource(
@@ -1249,11 +1451,11 @@ class MimirRouter:
                 content_hash=compute_content_hash(content),
                 ingested_at=datetime.now(UTC),
             )
-            page_paths = await adapter.ingest(source)
+            page_paths = await port.ingest(source)
             return _decorate_source(
                 source,
                 compiled_into=page_paths,
-                mount_name=mount or self._name,
+                mount_name=resolved_mount,
             )
 
 

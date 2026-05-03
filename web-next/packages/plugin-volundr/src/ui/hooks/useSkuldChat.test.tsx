@@ -70,6 +70,145 @@ describe('useSkuldChat', () => {
     expect(result.current.participants.get('peer-1')?.status).toBe('thinking');
   });
 
+  it('hydrates history from websocket conversation_history events', async () => {
+    const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'conversation_history',
+          turns: [
+            {
+              id: 'turn-1',
+              role: 'user',
+              content: 'Kick off the raid.',
+              created_at: '2026-05-01T10:18:36.889091+00:00',
+            },
+          ],
+        }),
+      );
+    });
+
+    await waitFor(() => expect(result.current.historyLoaded).toBe(true));
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0]?.content).toBe('Kick off the raid.');
+  });
+
+  it('renders live user_confirmed events without requiring a refresh', async () => {
+    const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
+
+    await waitFor(() => expect(result.current.historyLoaded).toBe(true));
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'user_confirmed',
+          id: 'telegram-turn-1',
+          content: 'Can you tell me the participants in this chat',
+          created_at: '2026-05-03T13:24:30.988625+00:00',
+          metadata: { source_platform: 'telegram' },
+        }),
+      );
+    });
+
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0]?.id).toBe('telegram-turn-1');
+    expect(result.current.messages[0]?.role).toBe('user');
+    expect(result.current.messages[0]?.content).toBe(
+      'Can you tell me the participants in this chat',
+    );
+    expect(result.current.messages[0]?.metadata).toEqual({ source_platform: 'telegram' });
+  });
+
+  it('ignores unsuccessful room_outcome events', async () => {
+    const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
+
+    await waitFor(() => expect(result.current.historyLoaded).toBe(true));
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_outcome',
+          participantId: 'peer-1',
+          participant: { peer_id: 'peer-1', persona: 'reviewer', participant_type: 'ravn' },
+          persona: 'reviewer',
+          eventType: 'review.completed',
+          fields: { success: false },
+          summary: 'LLM backend unavailable',
+        }),
+      );
+    });
+
+    expect(result.current.meshEvents).toHaveLength(0);
+    expect(result.current.messages).toHaveLength(0);
+  });
+
+  it('renders successful room_outcome events as outcome messages', async () => {
+    const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
+
+    await waitFor(() => expect(result.current.historyLoaded).toBe(true));
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_outcome',
+          participantId: 'peer-1',
+          participant: { peer_id: 'peer-1', persona: 'reviewer', participant_type: 'ravn' },
+          persona: 'reviewer',
+          eventType: 'review.completed',
+          verdict: 'needs_changes',
+          summary: 'Found two regressions.',
+          fields: {
+            verdict: 'needs_changes',
+            summary: 'Found two regressions.',
+            findings_count: 2,
+            files: ['README.md', 'docs/api.md'],
+          },
+        }),
+      );
+    });
+
+    expect(result.current.meshEvents).toHaveLength(1);
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0]?.participant?.persona).toBe('reviewer');
+    expect(result.current.messages[0]?.content).toContain('```outcome');
+    expect(result.current.messages[0]?.content).toContain('verdict: needs_changes');
+    expect(result.current.messages[0]?.content).toContain('summary: Found two regressions.');
+    expect(result.current.messages[0]?.content).toContain('findings_count: 2');
+    expect(result.current.messages[0]?.content).toContain('files: ["README.md","docs/api.md"]');
+  });
+
+  it('serializes multiline room_outcome fields as yaml block scalars', async () => {
+    const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
+
+    await waitFor(() => expect(result.current.historyLoaded).toBe(true));
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_outcome',
+          participantId: 'peer-1',
+          participant: { peer_id: 'peer-1', persona: 'reviewer', participant_type: 'ravn' },
+          persona: 'reviewer',
+          eventType: 'review.completed',
+          verdict: 'conditional',
+          summary: 'Needs a closer look.',
+          fields: {
+            verdict: 'conditional',
+            summary: 'Needs a closer look.',
+            findings:
+              '## Verified\n- **Route pair count**: 26\n- Use `/api/v1/credentials/secrets`',
+          },
+        }),
+      );
+    });
+
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0]?.content).toContain('findings: |');
+    expect(result.current.messages[0]?.content).toContain('  ## Verified');
+    expect(result.current.messages[0]?.content).toContain('  - **Route pair count**: 26');
+  });
+
   it('captures room_agent_event frames per participant', async () => {
     const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
 
@@ -108,6 +247,49 @@ describe('useSkuldChat', () => {
     expect(running?.parts).toEqual([
       { type: 'reasoning', text: 'Need to inspect the config first.' },
     ]);
+  });
+
+  it('coalesces streamed room_agent_event text chunks without inserting newlines', async () => {
+    const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
+
+    await waitFor(() => expect(result.current.historyLoaded).toBe(true));
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_state',
+          participants: [{ peer_id: 'peer-1', persona: 'coder', participant_type: 'ravn' }],
+        }),
+      );
+    });
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_agent_event',
+          participantId: 'peer-1',
+          frame: { type: 'message', data: 'The ' },
+        }),
+      );
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_agent_event',
+          participantId: 'peer-1',
+          frame: { type: 'message', data: 'smoke ' },
+        }),
+      );
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'room_agent_event',
+          participantId: 'peer-1',
+          frame: { type: 'message', data: 'test' },
+        }),
+      );
+    });
+
+    const running = result.current.messages.at(-1);
+    expect(running?.content).toBe('The smoke test');
+    expect(running?.parts).toEqual([{ type: 'text', text: 'The smoke test' }]);
   });
 
   it('creates a single Skuld participant for non-room assistant sessions', async () => {

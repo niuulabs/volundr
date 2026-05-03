@@ -113,6 +113,7 @@ class TestSpawnSession:
             system_prompt="prompt",
             initial_prompt="go",
             base_branch="dev",
+            definition="skuldCodex",
         )
         await adapter.spawn_session(req)
 
@@ -128,6 +129,7 @@ class TestSpawnSession:
         assert body["system_prompt"] == "prompt"
         assert body["initial_prompt"] == "go"
         assert body["issue_id"] == "X-1"
+        assert body["definition"] == "skuldCodex"
         assert body["issue_url"] == "https://example.com/X-1"
 
     @pytest.mark.asyncio

@@ -1,6 +1,7 @@
 import type { Mount } from '@niuulabs/domain';
 import type { WriteRoutingRule } from '../domain/routing';
 import type { RavnBinding } from '../domain/ravn-binding';
+import type { RegistryMount } from '../domain/registry';
 
 /**
  * A single entry in the recent-writes activity feed.
@@ -28,6 +29,18 @@ export interface RecentWrite {
 export interface IMountAdapter {
   /** List all registered mounts and their current status. */
   listMounts(): Promise<Mount[]>;
+
+  /** List known registry entries, including inactive ones. */
+  listRegistryMounts?(): Promise<RegistryMount[]>;
+
+  /** Create a new registry entry. */
+  createRegistryMount?(mount: Omit<RegistryMount, 'id'>): Promise<RegistryMount>;
+
+  /** Update an existing registry entry. */
+  updateRegistryMount?(id: string, mount: Omit<RegistryMount, 'id'>): Promise<RegistryMount>;
+
+  /** Delete a registry entry. */
+  deleteRegistryMount?(id: string): Promise<void>;
 
   /** List write-routing rules, ordered by ascending priority. */
   listRoutingRules(): Promise<WriteRoutingRule[]>;

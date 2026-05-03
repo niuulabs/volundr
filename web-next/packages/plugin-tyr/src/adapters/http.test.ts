@@ -9,6 +9,7 @@ import {
   buildTrackerHttpAdapter,
   buildTyrIntegrationHttpAdapter,
   buildDispatchBusHttpAdapter,
+  buildWorkflowHttpAdapter,
 } from './http';
 import type {
   ITyrService,
@@ -20,6 +21,7 @@ import type {
   CommitSagaRequest,
   CreateIntegrationParams,
 } from '../ports';
+import type { Workflow } from '../domain/workflow';
 
 // ---------------------------------------------------------------------------
 // Shared mock client factory
@@ -112,6 +114,7 @@ const rawProject = {
   url: 'https://linear.app/niuu/proj/1',
   milestone_count: 3,
   issue_count: 12,
+  slug: 'my-project',
 };
 
 const rawDispatchQueueItem = {
@@ -170,6 +173,42 @@ const rawIntegration = {
   enabled: true,
   status: 'connected',
   created_at: '2026-01-01T00:00:00Z',
+};
+
+const rawWorkflow = {
+  id: '00000000-0000-0000-0000-0000000000aa',
+  name: 'Knowledge Flow',
+  description: 'Workflow with resource attachments',
+  version: '1.0.0',
+  scope: 'user' as const,
+  owner_id: 'user-1',
+  nodes: [
+    { id: 'stage-1', kind: 'stage', label: 'Review', position: { x: 0, y: 0 } },
+    {
+      id: 'mimir-1',
+      kind: 'resource',
+      label: 'Shared Mimir',
+      resourceType: 'mimir',
+      bindingMode: 'registry',
+      registryEntryId: 'shared-team-mimir',
+      categories: ['entity'],
+      position: { x: 200, y: 0 },
+    },
+  ],
+  edges: [],
+  resourceBindings: [
+    {
+      id: 'binding-1',
+      resourceNodeId: 'mimir-1',
+      targetType: 'stage',
+      targetId: 'stage-1',
+      access: 'read_write',
+      writePrefixes: ['project/'],
+      readPriority: 3,
+    },
+  ],
+  definition_yaml: 'name: Knowledge Flow',
+  compile_errors: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -333,6 +372,46 @@ describe('buildTyrHttpAdapter', () => {
   });
 });
 
+describe('buildWorkflowHttpAdapter', () => {
+  it('maps resource bindings from the API payload', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue([rawWorkflow]);
+
+    const [workflow] = await buildWorkflowHttpAdapter(client).listWorkflows();
+
+    expect(workflow.resourceBindings).toEqual(rawWorkflow.resourceBindings);
+  });
+
+  it('sends resource bindings when saving a workflow', async () => {
+    const client = makeClient();
+    client.get.mockRejectedValue(new Error('not found'));
+    client.post.mockResolvedValue(rawWorkflow);
+
+    const workflow = {
+      id: rawWorkflow.id,
+      name: rawWorkflow.name,
+      description: rawWorkflow.description,
+      version: rawWorkflow.version,
+      scope: rawWorkflow.scope,
+      ownerId: rawWorkflow.owner_id,
+      definitionYaml: rawWorkflow.definition_yaml,
+      compileErrors: [],
+      nodes: rawWorkflow.nodes,
+      edges: rawWorkflow.edges,
+      resourceBindings: rawWorkflow.resourceBindings,
+    } satisfies Workflow;
+
+    await buildWorkflowHttpAdapter(client).saveWorkflow(workflow);
+
+    expect(client.post).toHaveBeenCalledWith(
+      '/workflows',
+      expect.objectContaining({
+        resourceBindings: rawWorkflow.resourceBindings,
+      }),
+    );
+  });
+});
+
 // ---------------------------------------------------------------------------
 // buildDispatcherHttpAdapter
 // ---------------------------------------------------------------------------
@@ -473,6 +552,7 @@ describe('buildTrackerHttpAdapter', () => {
     const [project] = await buildTrackerHttpAdapter(client).listProjects();
     expect(project?.milestoneCount).toBe(3);
     expect(project?.issueCount).toBe(12);
+    expect(project?.slug).toBe('my-project');
   });
 
   it('calls GET /tracker/projects/:id', async () => {
@@ -635,12 +715,14 @@ describe('buildDispatchBusHttpAdapter', () => {
           issueId: 'issue-1',
           repo: 'niuulabs/volundr',
           connectionId: 'cluster-1',
+          sessionDefinition: 'skuldCodex',
         },
       ],
       {
         model: 'gpt-test',
         systemPrompt: 'Ship it',
         connectionId: 'cluster-default',
+        sessionDefinition: 'skuldCodex',
         workloadType: 'ravn_flock',
         workloadConfig: { personas: ['coder'] },
       },
@@ -653,11 +735,13 @@ describe('buildDispatchBusHttpAdapter', () => {
           issue_id: 'issue-1',
           repo: 'niuulabs/volundr',
           connection_id: 'cluster-1',
+          session_definition: 'skuldCodex',
         },
       ],
       model: 'gpt-test',
       system_prompt: 'Ship it',
       connection_id: 'cluster-default',
+      session_definition: 'skuldCodex',
       workload_type: 'ravn_flock',
       workload_config: { personas: ['coder'] },
     });

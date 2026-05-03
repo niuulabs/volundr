@@ -26,13 +26,14 @@ import httpx
 from fastapi import FastAPI, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from niuu.domain.logging import LoggingConfig
 from niuu.domain.outcome import parse_outcome_block
 from niuu.mesh.cluster import read_cluster_pub_addresses
 from niuu.mesh.discovery_builder import build_discovery_adapters
 from niuu.mesh.identity import MeshIdentity
+from niuu.ports.cli import CLITransport
 from niuu.utils import import_class
 from skuld.channels import (
     ChannelRegistry,
@@ -41,6 +42,7 @@ from skuld.channels import (
 )
 from skuld.chronicle_watcher import ChronicleWatcher
 from skuld.config import SkuldSettings
+from skuld.log_aggregate import aggregate_workspace_logs
 from skuld.room_bridge import RoomBridge
 from skuld.room_mesh_bridge import RoomMeshBridge
 from skuld.service_manager import (
@@ -48,7 +50,6 @@ from skuld.service_manager import (
     ServiceManager,
     ServiceStatus,
 )
-from skuld.transport import CLITransport
 from sleipnir.adapters.in_process import InProcessBus
 from sleipnir.domain.catalog import ravn_session_ended
 from sleipnir.ports.events import SleipnirPublisher
@@ -128,6 +129,9 @@ _GIT_COMMIT_PREFIXES = ("git commit", "git -c ", "git -C ")
 
 # Matches git commit output like: [main e4f7a21] fix: some message
 _GIT_COMMIT_OUTPUT_RE = re.compile(r"\[[\w/-]+\s+([a-f0-9]{7,})\]\s+(.+)")
+_PEER_WATCHDOG_POLL_SECONDS = 5.0
+_PEER_WATCHDOG_SILENCE_SECONDS = 45.0
+_PEER_WATCHDOG_TOOL_SILENCE_SECONDS = 90.0
 
 
 def _is_git_commit(cmd: str) -> bool:
@@ -326,6 +330,19 @@ class SessionArtifacts:
         self.turn_count += 1
 
 
+@dataclass
+class PeerWatchState:
+    """Tracks one active flock peer task for Skuld's silence watchdog."""
+
+    peer_id: str
+    task_id: str
+    title: str
+    started_at: float
+    last_progress_at: float
+    last_status: str = "busy"
+    warned: bool = False
+
+
 # ---------------------------------------------------------------------------
 # JWT helpers
 # ---------------------------------------------------------------------------
@@ -470,7 +487,11 @@ class Broker:
         self._pending_assistant_parts: list[dict] = []
         self._pending_block_type: str = ""
         self._pending_reasoning_text: str = ""
+        self._pending_explicit_human_messages: list[tuple[str, str]] = []
+        self._pending_explicit_human_response_count = 0
         self._chronicle_watcher: ChronicleWatcher | None = None
+        self._peer_watchdog_task: asyncio.Task[None] | None = None
+        self._peer_watches: dict[str, PeerWatchState] = {}
 
         # Mesh adapter — only active when mesh.enabled is True
         self._mesh_adapter: Any = None
@@ -485,6 +506,8 @@ class Broker:
                 config=self._settings.room,
                 channels=self._channels,
                 append_turn=self._append_turn,
+                report_timeline_event=self._report_timeline_event,
+                observe_peer_event=self._observe_room_peer_event,
             )
             if self._settings.room.enabled
             else None
@@ -566,6 +589,31 @@ class Broker:
         self._pending_assistant_content = ""
         self._pending_assistant_parts = []
         self._pending_reasoning_text = ""
+
+    async def _ensure_workflow_prompt_turn(self) -> None:
+        """Persist the workflow trigger prompt without executing it locally."""
+        prompt = self._settings.session.initial_prompt
+        if not prompt:
+            return
+
+        if any(turn.role == "user" and turn.content == prompt for turn in self._conversation_turns):
+            return
+
+        turn_id = str(uuid.uuid4())
+        self._append_turn(
+            ConversationTurn(
+                id=turn_id,
+                role="user",
+                content=prompt,
+            )
+        )
+        await self._channels.broadcast(
+            {
+                "type": "user_confirmed",
+                "id": turn_id,
+                "content": prompt,
+            }
+        )
 
     async def _start_mesh_adapter(self) -> None:
         """Build and start the mesh adapter when mesh.enabled is True.
@@ -651,11 +699,12 @@ class Broker:
             if self._room_bridge is not None:
                 await self._room_bridge.register_mesh_peer(
                     peer_id=self._mesh_adapter.peer_id,
-                    persona=mesh_cfg.persona,
-                    display_name="skuld",
+                    persona="Skuld",
+                    display_name="Skuld",
                     subscribes_to=list(mesh_cfg.consumes_event_types),
                     emits=["code.changed"],
                     tools=list(mesh_cfg.tools),
+                    participant_type="skuld",
                 )
             has_peers = discovery is not None and hasattr(discovery, "peers")
             if self._room_bridge is not None and has_peers:
@@ -664,7 +713,9 @@ class Broker:
                         peer_id=peer.peer_id,
                         persona=peer.persona,
                         display_name=peer.persona,
-                        subscribes_to=list(getattr(peer, "capabilities", [])),
+                        subscribes_to=list(getattr(peer, "consumes_event_types", [])),
+                        emits=list(getattr(peer, "emits_event_types", [])),
+                        tools=list(getattr(peer, "capabilities", [])),
                     )
 
             # Start room mesh bridge so outcomes from any mesh peer flow to the
@@ -696,6 +747,61 @@ class Broker:
             logger.error("Mesh adapter start failed: %r", exc, exc_info=True)
             self._mesh_adapter = None
 
+    def _has_workflow_trigger(self) -> bool:
+        cfg = self._settings.workflow_trigger
+        return bool(cfg.enabled and cfg.event_type and self._settings.session.initial_prompt)
+
+    def _is_room_only_workflow_session(self) -> bool:
+        """Return True when flock workflow sessions should stay room-only.
+
+        In these sessions, browser traffic should observe and direct mesh peers
+        through the room bridge. Lazy-starting Skuld's own CLI transport on
+        browser connect would spawn a second agent and confuse session state.
+        """
+        return bool(self._has_workflow_trigger() and self._settings.room.enabled)
+
+    async def _publish_workflow_trigger(self) -> None:
+        """Publish the initial Tyr task into the flock as a mesh outcome event."""
+        if self._mesh_adapter is None or not self._has_workflow_trigger():
+            return
+
+        from ravn.domain.events import RavnEvent, RavnEventType
+
+        cfg = self._settings.workflow_trigger
+        delay_s = max(0.0, float(cfg.startup_delay_s or 0.0))
+        if delay_s:
+            logger.info(
+                "Workflow trigger waiting %.1fs for flock subscribers before mesh dispatch",
+                delay_s,
+            )
+            await asyncio.sleep(delay_s)
+        event = RavnEvent(
+            type=RavnEventType.OUTCOME,
+            source=f"skuld:{self._mesh_adapter.peer_id}",
+            payload={
+                "event_type": cfg.event_type,
+                "session_id": self.session_id,
+                "persona": "skuld",
+                "summary": f"Workflow dispatch: {cfg.label or cfg.event_type}",
+                "task_description": self._settings.session.initial_prompt,
+                "trigger_source": cfg.source,
+                "workflow_trigger_label": cfg.label,
+                "workflow_trigger_node_id": cfg.node_id,
+                "workspace_path": self.workspace_dir,
+            },
+            timestamp=datetime.now(UTC),
+            urgency=0.8,
+            correlation_id=self.session_id,
+            session_id=self.session_id,
+            root_correlation_id=self.session_id,
+        )
+        await self._mesh_adapter.publish(event, cfg.event_type)
+        logger.info(
+            "Workflow trigger dispatched onto mesh event_type=%s node_id=%s",
+            cfg.event_type,
+            cfg.node_id,
+        )
+
     def _build_transport_kwargs(self) -> dict:
         """Return superset of kwargs that any transport constructor might need."""
         return {
@@ -706,7 +812,9 @@ class Broker:
             "skip_permissions": self._settings.skip_permissions,
             "agent_teams": self._settings.agent_teams,
             "system_prompt": self._settings.session.system_prompt,
-            "initial_prompt": self._settings.session.initial_prompt,
+            "initial_prompt": (
+                "" if self._has_workflow_trigger() else self._settings.session.initial_prompt
+            ),
         }
 
     def _create_transport(self) -> CLITransport:
@@ -781,16 +889,29 @@ class Broker:
         # (dispatched sessions should begin work immediately, not wait
         # for a browser to connect).
         if self._settings.session.initial_prompt:
-            logger.info("Initial prompt configured — auto-starting transport")
-            try:
-                await self._transport.start()
-                logger.info("Transport auto-started successfully")
-            except Exception as e:
-                logger.error("Transport auto-start failed: %r", e, exc_info=True)
+            if self._has_workflow_trigger():
+                logger.info(
+                    "Workflow trigger configured — holding initial prompt for mesh dispatch"
+                )
+                await self._ensure_workflow_prompt_turn()
+            else:
+                logger.info("Initial prompt configured — auto-starting transport")
+                try:
+                    await self._transport.start()
+                    logger.info("Transport auto-started successfully")
+                except Exception as e:
+                    logger.error("Transport auto-start failed: %r", e, exc_info=True)
 
         # Start mesh adapter if enabled (after transport is ready)
         if self._settings.mesh.enabled:
             await self._start_mesh_adapter()
+            if self._has_workflow_trigger():
+                await self._publish_workflow_trigger()
+        elif self._has_workflow_trigger():
+            logger.warning("Workflow trigger configured but mesh is disabled — skipping dispatch")
+
+        if self._room_bridge is not None and self._settings.mesh.enabled:
+            self._peer_watchdog_task = asyncio.create_task(self._peer_watchdog_loop())
 
     async def shutdown(self) -> None:
         """Clean up on shutdown.
@@ -803,6 +924,11 @@ class Broker:
         # Stop chronicle watcher first (flush pending events)
         if self._chronicle_watcher:
             await self._chronicle_watcher.stop()
+
+        if self._peer_watchdog_task is not None:
+            self._peer_watchdog_task.cancel()
+            await asyncio.gather(self._peer_watchdog_task, return_exceptions=True)
+            self._peer_watchdog_task = None
 
         # Report chronicle BEFORE stopping the transport (CLI must be alive)
         await self._report_chronicle()
@@ -829,14 +955,146 @@ class Broker:
             await self._http_client.aclose()
             self._http_client = None
 
+    def _observer_peer_id(self) -> str:
+        """Return Skuld's room participant id when available."""
+        if self._mesh_adapter is not None and getattr(self._mesh_adapter, "peer_id", ""):
+            return str(self._mesh_adapter.peer_id)
+        if self._room_bridge is None:
+            return ""
+        for participant in self._room_bridge.participants.values():
+            if participant.participant_type == "skuld":
+                return participant.peer_id
+        return ""
+
+    async def _observe_room_peer_event(
+        self,
+        peer_id: str,
+        event_type: str,
+        frame: dict[str, Any],
+    ) -> None:
+        """Track flock peer progress so Skuld can surface silent failures."""
+        if self._room_bridge is None:
+            return
+        observer_peer_id = self._observer_peer_id()
+        if peer_id == observer_peer_id:
+            return
+
+        now = time.monotonic()
+        watch = self._peer_watches.get(peer_id)
+
+        if event_type == "task_started":
+            metadata = frame.get("metadata", {})
+            title = str(metadata.get("title") or frame.get("data") or "task")
+            task_id = str(metadata.get("task_id") or frame.get("task_id") or peer_id)
+            self._peer_watches[peer_id] = PeerWatchState(
+                peer_id=peer_id,
+                task_id=task_id,
+                title=title,
+                started_at=now,
+                last_progress_at=now,
+                last_status="busy",
+            )
+            return
+
+        if watch is None:
+            return
+
+        watch.last_progress_at = now
+        watch.warned = False
+        if event_type == "tool_start":
+            watch.last_status = "tool_executing"
+        elif event_type in {"thought", "thinking"}:
+            watch.last_status = "thinking"
+        elif event_type in {"tool_result", "task_complete"}:
+            watch.last_status = "idle"
+        elif event_type == "error":
+            watch.last_status = "error"
+            self._peer_watches.pop(peer_id, None)
+        elif event_type in {"response", "outcome", "help_needed"}:
+            self._peer_watches.pop(peer_id, None)
+
+    async def _peer_watchdog_loop(self) -> None:
+        """Warn in chat when a flock peer accepted work but goes quiet."""
+        try:
+            while True:
+                await asyncio.sleep(_PEER_WATCHDOG_POLL_SECONDS)
+                await self._check_peer_watchdog_once()
+        except asyncio.CancelledError:
+            return
+
+    async def _check_peer_watchdog_once(self) -> None:
+        """Run one silence-watchdog pass for active flock peers."""
+        now = time.monotonic()
+        for peer_id, watch in list(self._peer_watches.items()):
+            threshold = (
+                _PEER_WATCHDOG_TOOL_SILENCE_SECONDS
+                if watch.last_status == "tool_executing"
+                else _PEER_WATCHDOG_SILENCE_SECONDS
+            )
+            silence_seconds = now - watch.last_progress_at
+            if silence_seconds < threshold or watch.warned:
+                continue
+            watch.warned = True
+            await self._emit_peer_silence_warning(watch, int(silence_seconds))
+
+    async def _emit_peer_silence_warning(
+        self,
+        watch: PeerWatchState,
+        silence_seconds: int,
+    ) -> None:
+        """Surface a stalled-peer warning in chat and peer status."""
+        if self._room_bridge is None:
+            return
+
+        participant = self._room_bridge.participants.get(watch.peer_id)
+        peer_name = (
+            participant.display_name
+            or participant.persona
+            or watch.peer_id
+        ) if participant is not None else watch.peer_id
+        status_hint = (
+            "while waiting on a tool result"
+            if watch.last_status == "tool_executing"
+            else "after accepting work"
+        )
+        content = (
+            f"Skuld watchdog: `{peer_name}` has shown no visible progress for "
+            f"{silence_seconds}s {status_hint} on `{watch.title}`. "
+            "The agent may be blocked on an upstream LLM/backend failure or a stalled tool."
+        )
+        await self._room_bridge.broadcast_cli_activity(
+            watch.peer_id,
+            "blocked",
+            f"silent for {silence_seconds}s",
+        )
+        observer_peer_id = self._observer_peer_id()
+        if observer_peer_id:
+            await self._room_bridge.broadcast_cli_message(
+                observer_peer_id,
+                content,
+                is_error=True,
+            )
+        await self._report_timeline_event(
+            {
+                "t": self._artifacts.duration_seconds,
+                "type": "error",
+                "label": content[:120],
+            }
+        )
+
     async def _handle_cli_event(self, data: dict) -> None:
         """Forward a CLI event to all connected channels."""
         event_type = data.get("type", "unknown")
+        suppress_channel_broadcast = (
+            event_type in {"user", "assistant", "content_block_delta", "result"}
+            and self._pending_explicit_human_response_count > 0
+        )
         num_channels = self._channels.count
         logger.debug(
-            "_handle_cli_event: type=%s, forwarding to %d channel(s)",
+            "_handle_cli_event: type=%s, forwarding to %d channel(s) suppress=%s",
             event_type,
             num_channels,
+            suppress_channel_broadcast,
         )
 
         if num_channels == 0:
@@ -845,7 +1103,8 @@ class Broker:
                 event_type,
             )
 
-        await self._channels.broadcast(data)
+        if not suppress_channel_broadcast:
+            await self._channels.broadcast(data)
 
         # Record user messages that arrive via the transport (e.g. the
         # initial prompt flushed as a pending message) into conversation
@@ -860,13 +1119,19 @@ class Broker:
             if isinstance(msg, dict):
                 user_content = msg.get("content", "")
             if isinstance(user_content, str) and user_content:
-                self._append_turn(
-                    ConversationTurn(
-                        id=str(uuid.uuid4()),
-                        role="user",
-                        content=user_content,
+                if self._pending_explicit_human_messages:
+                    raw_pending, outbound_pending = self._pending_explicit_human_messages[0]
+                    if user_content in {raw_pending, outbound_pending}:
+                        self._pending_explicit_human_messages.pop(0)
+                        user_content = ""
+                if user_content:
+                    self._append_turn(
+                        ConversationTurn(
+                            id=str(uuid.uuid4()),
+                            role="user",
+                            content=user_content,
+                        )
                     )
-                )
 
         # When CLI sends system/init, broadcast available commands to browsers
         if event_type == "system" and data.get("subtype") == "init":
@@ -891,7 +1156,8 @@ class Broker:
                 )
         elif event_type == "result":
             asyncio.create_task(self._report_activity_state("idle"))
-            asyncio.create_task(self._on_result_publish_mesh())
+            if self._pending_explicit_human_response_count == 0:
+                asyncio.create_task(self._on_result_publish_mesh())
 
         # Track conversation from assistant messages.
         # The SDK WebSocket protocol sends complete messages as type=assistant
@@ -980,6 +1246,7 @@ class Broker:
         if event_type == "result":
             self._artifacts.record_result()
             asyncio.create_task(self._report_usage(data))
+            explicit_room_reply = self._pending_explicit_human_response_count > 0
 
             # Flush pending assistant turn (HTTP streaming format sends result)
             if not self._pending_assistant_content:
@@ -1001,18 +1268,25 @@ class Broker:
 
             # Capture content before flush clears it
             content = self._pending_assistant_content or data.get("result", "")
-            self._flush_pending_assistant_turn(
-                metadata={
-                    "usage": model_usage_for_turn,
-                    "cost": result_cost,
-                    "model": result_model,
-                }
-            )
+            if explicit_room_reply:
+                self._pending_assistant_content = ""
+                self._pending_assistant_parts = []
+                self._pending_reasoning_text = ""
+            else:
+                self._flush_pending_assistant_turn(
+                    metadata={
+                        "usage": model_usage_for_turn,
+                        "cost": result_cost,
+                        "model": result_model,
+                    }
+                )
 
             # Emit CLI turn as room_message so it shows participant color
             if self._room_bridge is not None and self._mesh_adapter is not None and content:
                 await self._room_bridge.broadcast_cli_message(self._mesh_adapter.peer_id, content)
                 await self._room_bridge.broadcast_cli_activity(self._mesh_adapter.peer_id, "idle")
+            if explicit_room_reply and self._pending_explicit_human_response_count > 0:
+                self._pending_explicit_human_response_count -= 1
 
             first_line = ""
             if content:
@@ -1201,6 +1475,16 @@ class Broker:
                 if not message:
                     return
 
+                if self._is_room_only_workflow_session():
+                    error_msg = (
+                        "Direct chat is disabled for flock workflow sessions. "
+                        "Target a mesh peer instead."
+                    )
+                    logger.info("_dispatch_browser_message: %s", error_msg)
+                    if sender_ws:
+                        await sender_ws.send_json({"type": "error", "content": error_msg})
+                    return
+
                 # Record user turn in conversation history
                 content_str = message if isinstance(message, str) else json.dumps(message)
                 msg_id = str(uuid.uuid4())
@@ -1222,6 +1506,138 @@ class Broker:
                 )
 
                 await self._transport.send_message(message)
+
+    async def handle_human_room_message(
+        self,
+        content: str,
+        *,
+        source: str = "external",
+        metadata: dict[str, Any] | None = None,
+        deliver_to_transport: bool = True,
+    ) -> str:
+        """Record and broadcast a human-originated room message."""
+        if not content.strip():
+            raise ValueError("content is required")
+
+        msg_id = str(uuid.uuid4())
+        self._append_turn(
+            ConversationTurn(
+                id=msg_id,
+                role="user",
+                content=content,
+            )
+        )
+        await self._channels.broadcast(
+            {
+                "type": "user_confirmed",
+                "id": msg_id,
+                "content": content,
+                "source": source,
+                "metadata": metadata or {},
+            }
+        )
+        if deliver_to_transport:
+            await self._send_explicit_human_message_to_transport(content)
+        return msg_id
+
+    async def handle_directed_room_message(
+        self,
+        target_peer_id: str,
+        content: str,
+        *,
+        source: str = "external",
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        """Record and route a directed human message to a room participant."""
+        if self._room_bridge is None:
+            raise RuntimeError("Room mode is not enabled")
+        if not target_peer_id.strip():
+            raise ValueError("target_peer_id is required")
+        if not content.strip():
+            raise ValueError("content is required")
+
+        participant = self._room_bridge.participants.get(target_peer_id)
+        display_target = participant.persona if participant else target_peer_id
+        rendered_content = f"@{display_target} {content}"
+        msg_id = await self.handle_human_room_message(
+            rendered_content,
+            source=source,
+            metadata=metadata,
+            deliver_to_transport=False,
+        )
+
+        delivered = await self._room_bridge.route_directed_message(target_peer_id, content)
+        if not delivered:
+            raise LookupError(f"Unknown room participant: {target_peer_id}")
+        return msg_id
+
+    async def _send_explicit_human_message_to_transport(self, content: str) -> None:
+        """Deliver an explicit human room message to Skuld's own transport."""
+        if self._transport is None:
+            logger.warning("No transport available for explicit human room message")
+            return
+        outbound = self._format_room_message_for_skuld(content)
+        self._pending_explicit_human_messages.append((content, outbound))
+        self._pending_explicit_human_response_count += 1
+        if not self._transport.is_alive:
+            logger.info("Starting transport for explicit human room message")
+            await self._transport.start()
+        await self._transport.send_message(outbound)
+
+    def _format_room_message_for_skuld(self, content: str) -> str:
+        """Wrap an explicit human room message with flock context for Skuld."""
+        if self._room_bridge is None:
+            return content
+
+        participants = sorted(
+            self._room_bridge.participants.values(),
+            key=lambda participant: (
+                0 if participant.participant_type == "skuld" else 1,
+                participant.persona.lower(),
+            ),
+        )
+        lines = [
+            "You are Skuld, the observer/coordinator for an active flock session.",
+            (
+                "Answer as the session observer using the live flock context below, "
+                "not as a generic standalone chat."
+            ),
+            "",
+            "Current room participants:",
+        ]
+        for participant in participants:
+            display = participant.display_name or participant.persona or participant.peer_id
+            status = participant.status or "idle"
+            lines.append(
+                f"- {display} (peer_id={participant.peer_id}, "
+                f"type={participant.participant_type}, status={status})"
+            )
+        lines.extend(
+            [
+                "",
+                "Human message from an external communication interface:",
+                content,
+            ]
+        )
+        return "\n".join(lines)
+
+    def get_room_participants(self) -> list[dict[str, Any]]:
+        """Return the current room participants as plain dictionaries."""
+        if self._room_bridge is None:
+            return []
+        return [asdict(participant) for participant in self._room_bridge.participants.values()]
+
+    def get_communication_routes(self) -> list[dict[str, Any]]:
+        """Return active external communication routes exposed by this broker."""
+        routes: list[dict[str, Any]] = []
+        for channel in self._channels.channels:
+            route_getter = getattr(channel, "communication_route", None)
+            if not callable(route_getter):
+                continue
+            route = route_getter()
+            if isinstance(route, dict):
+                routes.append(route)
+        return routes
 
     def _build_auth_headers(self) -> dict[str, str]:
         """Build authentication headers for Volundr API calls.
@@ -1803,6 +2219,9 @@ class Broker:
                 bot_token=tg_config.bot_token,
                 chat_id=tg_config.chat_id,
                 notify_only=tg_config.notify_only,
+                topic_mode=tg_config.topic_mode,
+                message_thread_id=tg_config.message_thread_id,
+                topic_name=self._build_telegram_topic_name(),
                 on_message=self._dispatch_browser_message,
             )
             await channel.start()
@@ -1812,6 +2231,22 @@ class Broker:
             logger.warning("python-telegram-bot not installed, Telegram channel disabled")
         except Exception:
             logger.warning("Failed to initialize Telegram channel", exc_info=True)
+
+    def _build_telegram_topic_name(self) -> str:
+        """Build a readable Telegram topic name for the active session."""
+        session_name = (self._settings.session.name or "").strip()
+        session_id = (self._settings.session.id or "").strip()
+
+        if not session_name or session_name == "unknown":
+            session_name = "Volundr session"
+
+        pieces = [session_name]
+        if session_id and session_id not in session_name:
+            pieces.append(session_id[:8])
+
+        topic_name = " · ".join(piece for piece in pieces if piece).strip()
+        topic_name = " ".join(topic_name.split())
+        return topic_name[:128] or "Volundr session"
 
     def _update_jwt_from_websocket(self, websocket: WebSocket) -> None:
         """Extract and store JWT from an incoming WebSocket connection.
@@ -1860,23 +2295,29 @@ class Broker:
 
             # Lazy-start transport on first browser connection
             if not self._transport.is_alive:
-                logger.info("handle_websocket: transport not alive, starting...")
-                try:
-                    await self._transport.start()
-                    logger.info("handle_websocket: transport started successfully")
-                except Exception as e:
-                    logger.error(
-                        "handle_websocket: transport.start() failed: %r",
-                        e,
-                        exc_info=True,
+                if self._is_room_only_workflow_session():
+                    logger.info(
+                        "handle_websocket: workflow room session detected; "
+                        "skipping transport lazy-start"
                     )
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "content": f"Transport start failed: {e}",
-                        }
-                    )
-                    return
+                else:
+                    logger.info("handle_websocket: transport not alive, starting...")
+                    try:
+                        await self._transport.start()
+                        logger.info("handle_websocket: transport started successfully")
+                    except Exception as e:
+                        logger.error(
+                            "handle_websocket: transport.start() failed: %r",
+                            e,
+                            exc_info=True,
+                        )
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "content": f"Transport start failed: {e}",
+                            }
+                        )
+                        return
             else:
                 logger.debug("handle_websocket: transport already alive")
 
@@ -2128,6 +2569,28 @@ async def get_broker_logs(
         "returned": len(tail),
         "lines": tail,
     }
+
+
+@app.get("/api/logs/aggregate")
+async def get_aggregate_logs(
+    lines: int = Query(default=100, ge=1, le=2000),
+    level: str = Query(default="DEBUG"),
+    participants: str | None = Query(default=None),
+    query: str = Query(default=""),
+) -> dict:
+    """Return interleaved broker, flock, and service logs from the session workspace."""
+    requested_participants = (
+        {item.strip() for item in participants.split(",") if item.strip()} if participants else None
+    )
+    payload = aggregate_workspace_logs(
+        broker.workspace_dir,
+        lines=lines,
+        level=level,
+        participants=requested_participants,
+        query=query,
+    )
+    payload["session_id"] = broker.session_id
+    return payload
 
 
 # --- Conversation History API ---
@@ -2641,6 +3104,23 @@ class _SendMessageRequest(BaseModel):
     content: str
 
 
+class _RoomMessageRequest(BaseModel):
+    """Request body for a human message entering a room session."""
+
+    content: str
+    source: str = "external"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class _DirectedRoomMessageRequest(BaseModel):
+    """Request body for a directed human message entering a room session."""
+
+    target_peer_id: str
+    content: str
+    source: str = "external"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 @app.post("/api/message")
 async def send_message_to_session(body: _SendMessageRequest) -> dict:
     """Send a message to another session via Volundr's WS proxy.
@@ -2662,6 +3142,53 @@ async def send_message_to_session(body: _SendMessageRequest) -> dict:
         raise HTTPException(502, f"Failed to reach Volundr: {e}")
 
     return {"status": "sent", "target_session_id": body.session_id}
+
+
+@app.post("/api/room/message")
+async def send_room_message(body: _RoomMessageRequest) -> dict:
+    """Inject a human-originated message into the active room session."""
+    try:
+        message_id = await broker.handle_human_room_message(
+            body.content,
+            source=body.source,
+            metadata=body.metadata,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+    return {"status": "sent", "message_id": message_id}
+
+
+@app.post("/api/room/direct")
+async def send_directed_room_message(body: _DirectedRoomMessageRequest) -> dict:
+    """Inject a human-originated directed room message."""
+    try:
+        message_id = await broker.handle_directed_room_message(
+            body.target_peer_id,
+            body.content,
+            source=body.source,
+            metadata=body.metadata,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc))
+    except LookupError as exc:
+        raise HTTPException(404, str(exc))
+
+    return {"status": "sent", "message_id": message_id}
+
+
+@app.get("/api/room/participants")
+async def get_room_participants() -> dict:
+    """Return the current participants in the active room session."""
+    return {"participants": broker.get_room_participants()}
+
+
+@app.get("/api/communication/routes")
+async def get_communication_routes() -> dict:
+    """Return active external communication routes for the live session."""
+    return {"routes": broker.get_communication_routes()}
 
 
 class _TokenRedactFilter(logging.Filter):

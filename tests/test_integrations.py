@@ -392,6 +392,34 @@ class TestIntegrationEndpoints:
         assert response.headers["Deprecation"] == "true"
         assert response.headers["X-Niuu-Canonical-Route"] == "/api/v1/integrations"
 
+    def test_list_preserves_boolean_config_values(
+        self,
+        integration_client: TestClient,
+        integration_repo: InMemoryIntegrationRepository,
+    ):
+        now = datetime.now(UTC)
+        connection = IntegrationConnection(
+            id="conn-bool",
+            owner_id="user-1",
+            integration_type="messaging",
+            adapter="tyr.adapters.telegram_notification.TelegramNotificationAdapter",
+            credential_name="telegram-main",
+            config={"notify_only": True},
+            enabled=True,
+            created_at=now,
+            updated_at=now,
+            slug="telegram",
+        )
+        import asyncio
+
+        asyncio.run(integration_repo.save_connection(connection))
+
+        response = integration_client.get("/api/v1/volundr/integrations")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["config"]["notify_only"] is True
+
     def test_create_integration(self, integration_client: TestClient):
         response = integration_client.post(
             "/api/v1/volundr/integrations",

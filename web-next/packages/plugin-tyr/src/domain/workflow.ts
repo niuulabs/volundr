@@ -17,7 +17,14 @@ import { z } from 'zod';
 // Nodes
 // ---------------------------------------------------------------------------
 
-export const workflowNodeKindSchema = z.enum(['stage', 'gate', 'cond', 'trigger', 'end']);
+export const workflowNodeKindSchema = z.enum([
+  'stage',
+  'gate',
+  'cond',
+  'trigger',
+  'end',
+  'resource',
+]);
 export type WorkflowNodeKind = z.input<typeof workflowNodeKindSchema>;
 
 /** Spatial position for UI rendering (pixels from top-left). */
@@ -79,6 +86,7 @@ export const workflowTriggerNodeSchema = z.object({
   kind: z.literal('trigger'),
   label: z.string().min(1),
   source: z.string().default('manual dispatch'),
+  dispatchEvent: z.string().default('code.requested'),
   position: positionSchema,
 });
 export type WorkflowTriggerNode = z.input<typeof workflowTriggerNodeSchema>;
@@ -91,12 +99,30 @@ export const workflowEndNodeSchema = z.object({
 });
 export type WorkflowEndNode = z.input<typeof workflowEndNodeSchema>;
 
+const workflowResourceBindingModeSchema = z.enum(['registry', 'ephemeral_local']);
+const workflowResourceAccessSchema = z.enum(['read', 'write', 'read_write']);
+const workflowResourceTargetTypeSchema = z.enum(['workflow', 'stage', 'persona']);
+
+export const workflowResourceNodeSchema = z.object({
+  id: z.string().min(1),
+  kind: z.literal('resource'),
+  label: z.string().min(1),
+  resourceType: z.literal('mimir').default('mimir'),
+  bindingMode: workflowResourceBindingModeSchema.default('registry'),
+  registryEntryId: z.string().nullable().default(null),
+  seedFromRegistryId: z.string().nullable().default(null),
+  categories: z.array(z.string()).default([]),
+  position: positionSchema,
+});
+export type WorkflowResourceNode = z.input<typeof workflowResourceNodeSchema>;
+
 export const workflowNodeSchema = z.discriminatedUnion('kind', [
   workflowStageNodeSchema,
   workflowGateNodeSchema,
   workflowCondNodeSchema,
   workflowTriggerNodeSchema,
   workflowEndNodeSchema,
+  workflowResourceNodeSchema,
 ]);
 export type WorkflowNode = z.input<typeof workflowNodeSchema>;
 
@@ -119,6 +145,17 @@ export const workflowEdgeSchema = z.object({
 });
 export type WorkflowEdge = z.input<typeof workflowEdgeSchema>;
 
+export const workflowResourceBindingSchema = z.object({
+  id: z.string().min(1),
+  resourceNodeId: z.string().min(1),
+  targetType: workflowResourceTargetTypeSchema,
+  targetId: z.string().min(1),
+  access: workflowResourceAccessSchema.default('read'),
+  writePrefixes: z.array(z.string()).default([]),
+  readPriority: z.number().int().default(10),
+});
+export type WorkflowResourceBinding = z.input<typeof workflowResourceBindingSchema>;
+
 // ---------------------------------------------------------------------------
 // Workflow DAG invariants
 // ---------------------------------------------------------------------------
@@ -139,10 +176,20 @@ export const workflowSchema = z.object({
   version: z.string().optional(),
   /** Human-readable description. */
   description: z.string().optional(),
+  /** Visibility scope in the persisted workflow catalog. */
+  scope: z.enum(['system', 'user']).optional(),
+  /** Owning user for user-scoped workflows. */
+  ownerId: z.string().nullable().optional(),
+  /** Compiled Tyr runtime YAML, when the workflow is executable. */
+  definitionYaml: z.string().nullable().optional(),
+  /** Backend compile diagnostics for non-executable graph shapes. */
+  compileErrors: z.array(z.string()).optional(),
   /** Nodes in the DAG. IDs must be unique within a workflow. */
   nodes: z.array(workflowNodeSchema),
   /** Directed edges. Source and target must reference valid node IDs. */
   edges: z.array(workflowEdgeSchema),
+  /** Non-execution resource attachments used by runtime composition. */
+  resourceBindings: z.array(workflowResourceBindingSchema).default([]),
 });
 export type Workflow = z.input<typeof workflowSchema>;
 
@@ -157,12 +204,16 @@ export type Workflow = z.input<typeof workflowSchema>;
  */
 export function validateWorkflow(workflow: Workflow): void {
   const nodeIds = new Set<string>();
+  const resourceNodeIds = new Set<string>();
 
   for (const node of workflow.nodes) {
     if (nodeIds.has(node.id)) {
       throw new WorkflowValidationError(`Duplicate node id: ${node.id}`);
     }
     nodeIds.add(node.id);
+    if (node.kind === 'resource') {
+      resourceNodeIds.add(node.id);
+    }
   }
 
   const edgeKeys = new Set<string>();
@@ -188,5 +239,41 @@ export function validateWorkflow(workflow: Workflow): void {
       );
     }
     edgeKeys.add(key);
+  }
+
+  const bindingKeys = new Set<string>();
+
+  for (const binding of workflow.resourceBindings ?? []) {
+    if (!resourceNodeIds.has(binding.resourceNodeId)) {
+      throw new WorkflowValidationError(
+        `Resource binding ${binding.id} references unknown resource node: ${binding.resourceNodeId}`,
+      );
+    }
+
+    if (binding.targetType === 'workflow' && binding.targetId !== workflow.id) {
+      throw new WorkflowValidationError(
+        `Resource binding ${binding.id} references unknown workflow target: ${binding.targetId}`,
+      );
+    }
+
+    if (binding.targetType === 'stage' && !nodeIds.has(binding.targetId)) {
+      throw new WorkflowValidationError(
+        `Resource binding ${binding.id} references unknown stage target: ${binding.targetId}`,
+      );
+    }
+
+    const key = [
+      binding.resourceNodeId,
+      binding.targetType,
+      binding.targetId,
+      binding.access,
+      (binding.writePrefixes ?? []).join(','),
+    ].join('::');
+    if (bindingKeys.has(key)) {
+      throw new WorkflowValidationError(
+        `Duplicate resource binding for ${binding.targetType} target ${binding.targetId}`,
+      );
+    }
+    bindingKeys.add(key);
   }
 }

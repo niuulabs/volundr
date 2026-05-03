@@ -1,16 +1,26 @@
 import { useRef, useEffect } from 'react';
 import { Workflow } from 'lucide-react';
 import { MeshEventCard } from '../MeshEventCard';
-import type { MeshEvent } from '../../types';
+import type { MeshEvent, MeshOutcomeEvent } from '../../types';
 import './MeshCascadePanel.css';
 
 interface MeshCascadePanelProps {
   events: readonly MeshEvent[];
   onEventClick?: (event: MeshEvent) => void;
+  onOutcomeShowDetails?: (event: MeshOutcomeEvent) => void;
   className?: string;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }
 
-export function MeshCascadePanel({ events, onEventClick, className }: MeshCascadePanelProps) {
+export function MeshCascadePanel({
+  events,
+  onEventClick,
+  onOutcomeShowDetails,
+  className,
+  collapsed = false,
+  onToggleCollapsed,
+}: MeshCascadePanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(events.length);
 
@@ -29,6 +39,34 @@ export function MeshCascadePanel({ events, onEventClick, className }: MeshCascad
 
   const latestOutcome = [...events].reverse().find((e) => e.type === 'outcome');
   const latestVerdict = latestOutcome?.type === 'outcome' ? latestOutcome.verdict : undefined;
+
+  if (collapsed) {
+    return (
+      <aside
+        className={`niuu-chat-cascade-panel niuu-chat-cascade-panel--collapsed${
+          className ? ` ${className}` : ''
+        }`}
+        data-testid="mesh-cascade-panel"
+      >
+        <div className="niuu-chat-cascade-collapsed-body">
+          <Workflow className="niuu-chat-cascade-icon" />
+          <span className="niuu-chat-cascade-badge">{events.length}</span>
+          {latestVerdict && (
+            <span className="niuu-chat-cascade-status-dot" data-verdict={latestVerdict} />
+          )}
+        </div>
+        <button
+          type="button"
+          className="niuu-chat-cascade-collapse-toggle"
+          onClick={onToggleCollapsed}
+          aria-label="Expand mesh cascade sidebar"
+          title="Expand mesh cascade sidebar"
+        >
+          ‹
+        </button>
+      </aside>
+    );
+  }
 
   return (
     <div
@@ -62,6 +100,15 @@ export function MeshCascadePanel({ events, onEventClick, className }: MeshCascad
               </span>
             )}
           </span>
+          <button
+            type="button"
+            className="niuu-chat-cascade-collapse-toggle"
+            onClick={onToggleCollapsed}
+            aria-label="Collapse mesh cascade sidebar"
+            title="Collapse mesh cascade sidebar"
+          >
+            ›
+          </button>
         </div>
       </div>
 
@@ -75,7 +122,7 @@ export function MeshCascadePanel({ events, onEventClick, className }: MeshCascad
               data-clickable={onEventClick ? true : undefined}
             >
               <div className="niuu-chat-cascade-timeline-line" />
-              <MeshEventCard event={event} />
+              <MeshEventCard event={event} onShowDetails={onOutcomeShowDetails} />
             </div>
           ))}
         </div>

@@ -53,9 +53,39 @@ describe('MeshCascadePanel', () => {
     expect(onEventClick).toHaveBeenCalledWith(events[0]);
   });
 
+  it('routes Show details to the outcome detail handler without triggering card click', () => {
+    const onEventClick = vi.fn();
+    const onOutcomeShowDetails = vi.fn();
+    render(
+      <MeshCascadePanel
+        events={events}
+        onEventClick={onEventClick}
+        onOutcomeShowDetails={onOutcomeShowDetails}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
+
+    expect(onOutcomeShowDetails).toHaveBeenCalledWith(events[0]);
+    expect(onEventClick).not.toHaveBeenCalled();
+  });
+
   it('shows summary counts', () => {
     render(<MeshCascadePanel events={events} />);
     expect(screen.getByText('1 outcome')).toBeInTheDocument();
     expect(screen.getByText('1 delegation')).toBeInTheDocument();
+  });
+
+  it('renders a collapsed rail and expands from the header control', () => {
+    const onToggleCollapsed = vi.fn();
+    render(<MeshCascadePanel events={events} collapsed onToggleCollapsed={onToggleCollapsed} />);
+
+    expect(
+      screen.getByRole('button', { name: /expand mesh cascade sidebar/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Mesh Cascade')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /expand mesh cascade sidebar/i }));
+    expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
   });
 });

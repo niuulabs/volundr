@@ -2,7 +2,16 @@ import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useService } from '@niuulabs/plugin-sdk';
-import { Dialog, DialogContent, Field, Input, Textarea } from '@niuulabs/ui';
+import {
+  BranchSelect,
+  Dialog,
+  DialogContent,
+  Field,
+  Input,
+  RepoSelect,
+  type RepoRecord,
+  Textarea,
+} from '@niuulabs/ui';
 import './LaunchWizard.css';
 import { useTemplates } from './useTemplates';
 import type { Template } from '../domain/template';
@@ -17,7 +26,6 @@ import type {
   TrackerIssue,
   VolundrPreset,
   VolundrModel,
-  VolundrRepo,
   VolundrWorkspace,
 } from '../models/volundr.model';
 import { parsePresetYaml, serializePresetYaml } from '../utils/presetYaml';
@@ -28,7 +36,7 @@ import { parsePresetYaml, serializePresetYaml } from '../utils/presetYaml';
 
 type WizardStep = 'template' | 'source' | 'runtime' | 'confirm' | 'booting';
 
-interface WizardForm {
+export interface WizardForm {
   templateId: string;
   presetId: string;
   sourcetype: 'git' | 'local_mount' | 'blank';
@@ -92,12 +100,12 @@ const FALLBACK_SESSION_DEFINITIONS: SessionDefinition[] = [
   { key: 'skuld-aider', displayName: 'Aider', description: '', labels: [], defaultModel: '' },
 ];
 
-function getDefinitionRune(key: string): string {
+export function getDefinitionRune(key: string): string {
   return DEFINITION_RUNES[key] ?? '\u16A0';
 }
 
 /** Derive a CLI tool name from a definition key for backward compat. */
-function deriveCliTool(definitionKey: string): string {
+export function deriveCliTool(definitionKey: string): string {
   if (definitionKey.startsWith('skuld-')) return definitionKey.slice('skuld-'.length);
   return definitionKey;
 }
@@ -115,15 +123,44 @@ const BOOT_STEPS = [
 
 const NEW_WORKSPACE_VALUE = '__new__';
 const NO_PRESET_VALUE = '__custom__';
-const PROVIDER_LABELS: Record<VolundrRepo['provider'], string> = {
-  github: 'GitHub',
-  gitlab: 'GitLab',
-  bitbucket: 'Bitbucket',
+type RepoCatalogService = {
+  getRepos(): Promise<RepoRecord[]>;
+  getBranches(repoUrl: string): Promise<string[]>;
 };
 const SECONDARY_BUTTON_CLASS =
   'niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-px-3 niuu-py-2 niuu-text-xs niuu-text-text-primary hover:niuu-border-brand hover:niuu-bg-bg-tertiary';
 const MUTED_BUTTON_CLASS =
   'niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-secondary niuu-px-3 niuu-py-2 niuu-text-xs niuu-text-text-primary hover:niuu-border-brand hover:niuu-bg-bg-tertiary';
+
+function WizardSelect({
+  options,
+  value,
+  onChange,
+  placeholder,
+  testId,
+}: {
+  options: Array<{ value: string; label: string }>;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  testId?: string;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      data-testid={testId}
+      aria-label={placeholder}
+      className="niuu-form-control niuu-w-full niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary outline-none focus:niuu-border-brand"
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 export interface LaunchWizardProps {
   open: boolean;
@@ -131,7 +168,7 @@ export interface LaunchWizardProps {
   initialTemplateId?: string;
 }
 
-function workspaceLabel(workspace: VolundrWorkspace): string {
+export function workspaceLabel(workspace: VolundrWorkspace): string {
   if (workspace.sessionName) return workspace.sessionName;
   if (workspace.sourceUrl) {
     const repoName = workspace.sourceUrl.replace(/.*\//, '').replace(/\.git$/, '');
@@ -140,26 +177,26 @@ function workspaceLabel(workspace: VolundrWorkspace): string {
   return workspace.pvcName;
 }
 
-function normalizeRepoUrl(url: string): string {
+export function normalizeRepoUrl(url: string): string {
   return url
     .replace(/^https?:\/\//, '')
-    .replace(/\.git$/, '')
-    .replace(/\/$/, '');
+    .replace(/\/$/, '')
+    .replace(/\.git$/, '');
 }
 
-function pickDefaultModel(models: Record<string, VolundrModel>): string {
+export function pickDefaultModel(models: Record<string, VolundrModel>): string {
   if ('sonnet-primary' in models) return 'sonnet-primary';
   return Object.keys(models)[0] ?? '';
 }
 
-function formatModelOption(id: string, model?: VolundrModel): string {
+export function formatModelOption(id: string, model?: VolundrModel): string {
   if (!model) return id;
   const parts = [model.name || id, model.provider];
   if (model.tier) parts.push(model.tier);
   return parts.join(' · ');
 }
 
-function formatIntegrationLabel(integration: IntegrationConnection): string {
+export function formatIntegrationLabel(integration: IntegrationConnection): string {
   const base = integration.slug
     ? integration.slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
     : integration.id;
@@ -167,7 +204,7 @@ function formatIntegrationLabel(integration: IntegrationConnection): string {
   return base;
 }
 
-function formatIntegrationMeta(integration: IntegrationConnection): string | null {
+export function formatIntegrationMeta(integration: IntegrationConnection): string | null {
   if (integration.integrationType && integration.credentialName) {
     return `${integration.integrationType.replace(/_/g, ' ')} · ${integration.credentialName}`;
   }
@@ -177,7 +214,7 @@ function formatIntegrationMeta(integration: IntegrationConnection): string | nul
   return null;
 }
 
-function parseResourceValue(value: string, unit: string): number {
+export function parseResourceValue(value: string, unit: string): number {
   const trimmed = value.trim();
   if (!trimmed) return Number.NaN;
 
@@ -206,7 +243,7 @@ function parseResourceValue(value: string, unit: string): number {
   return Number.parseFloat(trimmed);
 }
 
-function formatResourceValue(value: number, unit: string): string {
+export function formatResourceValue(value: number, unit: string): string {
   if (!Number.isFinite(value)) return 'unknown';
   if (unit === 'bytes') {
     const gib = value / 1024 ** 3;
@@ -218,7 +255,7 @@ function formatResourceValue(value: number, unit: string): string {
   return `${Number.isInteger(value) ? value : value.toFixed(1)}`;
 }
 
-function aggregateResourceCapacity(clusterResources: ClusterResourceInfo | null) {
+export function aggregateResourceCapacity(clusterResources: ClusterResourceInfo | null) {
   const totals = new Map<string, { unit: string; total: number; label: string }>();
   if (!clusterResources) return totals;
 
@@ -239,7 +276,7 @@ function aggregateResourceCapacity(clusterResources: ClusterResourceInfo | null)
   return totals;
 }
 
-function getResourceErrors(form: WizardForm, clusterResources: ClusterResourceInfo | null) {
+export function getResourceErrors(form: WizardForm, clusterResources: ClusterResourceInfo | null) {
   const capacities = aggregateResourceCapacity(clusterResources);
   const errors: Partial<Record<'cpu' | 'memory' | 'gpu', string>> = {};
 
@@ -267,7 +304,7 @@ function getResourceErrors(form: WizardForm, clusterResources: ClusterResourceIn
   return errors;
 }
 
-function slugifySessionName(value: string): string {
+export function slugifySessionName(value: string): string {
   return value
     .trim()
     .toLowerCase()
@@ -277,7 +314,7 @@ function slugifySessionName(value: string): string {
     .slice(0, 63);
 }
 
-function validateSessionName(name: string): string | null {
+export function validateSessionName(name: string): string | null {
   if (!name) return null;
   if (name.length > 63) return 'Session name must be 63 characters or fewer';
   if (/[A-Z]/.test(name)) return 'Session name must be lowercase';
@@ -291,7 +328,7 @@ function validateSessionName(name: string): string | null {
   return null;
 }
 
-function deriveSessionName(form: WizardForm, template?: Template): string {
+export function deriveSessionName(form: WizardForm, template?: Template): string {
   const explicit = slugifySessionName(form.sessionName);
   if (explicit) return explicit;
 
@@ -310,7 +347,7 @@ function deriveSessionName(form: WizardForm, template?: Template): string {
   return templateName || 'forge-session';
 }
 
-function buildSessionSource(form: WizardForm): SessionSource {
+export function buildSessionSource(form: WizardForm): SessionSource {
   if (form.sourcetype === 'local_mount') {
     const hostPath = form.mountPath.trim();
     return {
@@ -335,7 +372,7 @@ function buildSessionSource(form: WizardForm): SessionSource {
   };
 }
 
-function buildResourceConfig(form: WizardForm): Record<string, string> | undefined {
+export function buildResourceConfig(form: WizardForm): Record<string, string> | undefined {
   const resourceConfig = Object.fromEntries(
     Object.entries({
       cpu: form.cpu.trim(),
@@ -347,13 +384,15 @@ function buildResourceConfig(form: WizardForm): Record<string, string> | undefin
   return Object.keys(resourceConfig).length > 0 ? resourceConfig : undefined;
 }
 
-function normalizeEnvVars(entries: Array<{ key: string; value: string }>): Record<string, string> {
+export function normalizeEnvVars(
+  entries: Array<{ key: string; value: string }>,
+): Record<string, string> {
   return Object.fromEntries(
     entries.filter((entry) => entry.key.trim()).map((entry) => [entry.key.trim(), entry.value]),
   );
 }
 
-function buildPresetRuntimePayload(
+export function buildPresetRuntimePayload(
   form: WizardForm,
   presetName?: string,
 ): Omit<VolundrPreset, 'id' | 'createdAt' | 'updatedAt'> {
@@ -392,14 +431,14 @@ function buildPresetRuntimePayload(
   };
 }
 
-function buildPresetPayload(
+export function buildPresetPayload(
   form: WizardForm,
   presetName: string,
 ): Omit<VolundrPreset, 'id' | 'createdAt' | 'updatedAt'> {
   return buildPresetRuntimePayload(form, presetName);
 }
 
-function buildPresetComparisonPayload(
+export function buildPresetComparisonPayload(
   preset: VolundrPreset,
 ): Omit<VolundrPreset, 'id' | 'createdAt' | 'updatedAt'> {
   return {
@@ -424,7 +463,7 @@ function buildPresetComparisonPayload(
   };
 }
 
-function buildYamlRuntimeFields(form: WizardForm) {
+export function buildYamlRuntimeFields(form: WizardForm) {
   return {
     cliTool: deriveCliTool(form.definition) as 'claude' | 'codex' | 'gemini' | 'aider',
     workloadType: form.definition.startsWith('skuld-')
@@ -460,7 +499,7 @@ function buildYamlRuntimeFields(form: WizardForm) {
   };
 }
 
-function hasPresetBackedRuntime(form: WizardForm): boolean {
+export function hasPresetBackedRuntime(form: WizardForm): boolean {
   return (
     form.mcpServers.length > 0 ||
     form.envVars.some((entry) => entry.key.trim()) ||
@@ -472,7 +511,7 @@ function hasPresetBackedRuntime(form: WizardForm): boolean {
 // Step indicator
 // ---------------------------------------------------------------------------
 
-function StepIndicator({ current, steps }: { current: WizardStep; steps: WizardStep[] }) {
+export function StepIndicator({ current, steps }: { current: WizardStep; steps: WizardStep[] }) {
   const idx = steps.indexOf(current);
   return (
     <div className="niuu-flex niuu-items-center niuu-gap-2 niuu-py-4" data-testid="step-indicator">
@@ -510,7 +549,7 @@ function StepIndicator({ current, steps }: { current: WizardStep; steps: WizardS
 // Step: Template
 // ---------------------------------------------------------------------------
 
-function TemplateStep({
+export function TemplateStep({
   templates,
   selectedId,
   onSelect,
@@ -548,7 +587,7 @@ function TemplateStep({
   );
 }
 
-function SectionCard({
+export function SectionCard({
   title,
   description,
   children,
@@ -570,51 +609,7 @@ function SectionCard({
   );
 }
 
-type WizardSelectOption = { value: string; label: string };
-
-function WizardSelect({
-  value,
-  options,
-  onChange,
-  placeholder,
-  groupedOptions,
-  testId,
-}: {
-  value: string;
-  options?: WizardSelectOption[];
-  onChange: (value: string) => void;
-  placeholder?: string;
-  groupedOptions?: Array<{ label: string; options: WizardSelectOption[] }>;
-  testId?: string;
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      data-testid={testId}
-      className="niuu-w-full niuu-rounded-md niuu-border niuu-border-border-subtle niuu-bg-bg-primary niuu-px-3 niuu-py-2 niuu-text-sm niuu-text-text-primary outline-none focus:niuu-border-brand"
-    >
-      {placeholder ? <option value="">{placeholder}</option> : null}
-      {groupedOptions
-        ? groupedOptions.map((group) => (
-            <optgroup key={group.label} label={group.label}>
-              {group.options.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </optgroup>
-          ))
-        : options?.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-    </select>
-  );
-}
-
-function RuntimePanel({
+export function RuntimePanel({
   title,
   description,
   children,
@@ -640,35 +635,22 @@ function RuntimePanel({
 // Step: Source
 // ---------------------------------------------------------------------------
 
-function SourceStep({
+export function SourceStep({
   form,
   update,
   repos,
+  branchOptions,
   trackerResults,
   trackerLoading,
 }: {
   form: WizardForm;
   update: (patch: Partial<WizardForm>) => void;
-  repos: VolundrRepo[];
+  repos: RepoRecord[];
+  branchOptions: string[];
   trackerResults: TrackerIssue[];
   trackerLoading: boolean;
 }) {
   const currentRepo = repos.find((repo) => repo.cloneUrl === form.repo);
-  const repoGroups = Object.entries(
-    repos.reduce<Record<string, WizardSelectOption[]>>((groups, repo) => {
-      const groupLabel = PROVIDER_LABELS[repo.provider] ?? repo.provider;
-      groups[groupLabel] ??= [];
-      groups[groupLabel].push({
-        value: repo.cloneUrl,
-        label: `${repo.org}/${repo.name}`,
-      });
-      return groups;
-    }, {}),
-  ).map(([label, options]) => ({ label, options }));
-  const branchOptions = (currentRepo?.branches ?? []).map((branch) => ({
-    value: branch,
-    label: branch,
-  }));
 
   return (
     <div className="niuu-flex niuu-flex-col niuu-gap-4" data-testid="step-source-content">
@@ -695,11 +677,11 @@ function SourceStep({
         {form.sourcetype === 'git' ? (
           <div className="niuu-grid niuu-grid-cols-2 niuu-gap-4">
             <Field label="Repository">
-              {repoGroups.length > 0 ? (
-                <WizardSelect
-                  groupedOptions={repoGroups}
+              {repos.length > 0 ? (
+                <RepoSelect
+                  repos={repos}
                   value={form.repo}
-                  onChange={(value) => {
+                  onChange={(value: string) => {
                     const repo = repos.find((item) => item.cloneUrl === value);
                     update({
                       repo: value,
@@ -719,14 +701,25 @@ function SourceStep({
               )}
             </Field>
             <Field label="Branch">
-              {branchOptions.length > 0 ? (
-                <WizardSelect
-                  options={branchOptions}
-                  value={form.branch}
-                  onChange={(value) => update({ branch: value })}
-                  placeholder="Select branch"
-                  testId="branch-select"
-                />
+              {branchOptions.length ? (
+                currentRepo?.branches.length ? (
+                  <BranchSelect
+                    repos={repos}
+                    selectedRepos={form.repo}
+                    value={form.branch}
+                    onChange={(value: string) => update({ branch: value })}
+                    placeholder="Select branch"
+                    testId="branch-select"
+                  />
+                ) : (
+                  <WizardSelect
+                    options={branchOptions.map((branch) => ({ value: branch, label: branch }))}
+                    value={form.branch}
+                    onChange={(value) => update({ branch: value })}
+                    placeholder="Select branch"
+                    testId="branch-select"
+                  />
+                )
               ) : (
                 <Input
                   value={form.branch}
@@ -806,7 +799,7 @@ function SourceStep({
 // Step: Runtime
 // ---------------------------------------------------------------------------
 
-function RuntimeStep({
+export function RuntimeStep({
   form,
   update,
   models,
@@ -1593,7 +1586,7 @@ function RuntimeStep({
 // Step: Confirm
 // ---------------------------------------------------------------------------
 
-function ConfirmStep({
+export function ConfirmStep({
   form,
   templates,
   models,
@@ -1713,7 +1706,7 @@ function ConfirmStep({
   );
 }
 
-function ConfirmRow({ label, value }: { label: string; value: string }) {
+export function ConfirmRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="niuu-flex niuu-items-center niuu-gap-4 niuu-py-2" data-testid="confirm-row">
       <span className="niuu-w-24 niuu-font-mono niuu-text-xs niuu-text-text-faint">{label}</span>
@@ -1722,7 +1715,7 @@ function ConfirmRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ConfirmChipList({
+export function ConfirmChipList({
   title,
   items,
   emptyLabel,
@@ -1756,7 +1749,7 @@ function ConfirmChipList({
 // Step: Booting
 // ---------------------------------------------------------------------------
 
-function BootingStep({ bootStep, progress }: { bootStep: number; progress: number }) {
+export function BootingStep({ bootStep, progress }: { bootStep: number; progress: number }) {
   return (
     <div
       className="niuu-flex niuu-flex-col niuu-items-center niuu-gap-6 niuu-py-4"
@@ -1841,11 +1834,13 @@ function BootingStep({ bootStep, progress }: { bootStep: number; progress: numbe
 /** 4-step modal wizard for launching new Volundr sessions. */
 export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWizardProps) {
   const volundr = useService<IVolundrService>('volundr');
+  const repoCatalog = useService<RepoCatalogService>('niuu.repos');
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const templates = useTemplates();
   const allTemplates = useMemo(() => templates.data ?? [], [templates.data]);
-  const [repos, setRepos] = useState<VolundrRepo[]>([]);
+  const [repos, setRepos] = useState<RepoRecord[]>([]);
+  const [manualBranches, setManualBranches] = useState<string[]>([]);
   const [models, setModels] = useState<Record<string, VolundrModel>>({});
   const [workspaces, setWorkspaces] = useState<VolundrWorkspace[]>([]);
   const [credentials, setCredentials] = useState<StoredCredential[]>([]);
@@ -1898,7 +1893,7 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
     let cancelled = false;
 
     void Promise.all([
-      volundr.getRepos().catch(() => []),
+      repoCatalog.getRepos().catch(() => []),
       volundr.getModels().catch(() => ({})),
       Promise.all([
         volundr.listWorkspaces('archived').catch(() => []),
@@ -1940,7 +1935,7 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
     return () => {
       cancelled = true;
     };
-  }, [open, volundr]);
+  }, [open, repoCatalog, volundr]);
 
   // Update template ID when templates load
   useEffect(() => {
@@ -1948,6 +1943,33 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
       setForm((f) => ({ ...f, templateId: allTemplates[0]!.id }));
     }
   }, [allTemplates, form.templateId]);
+
+  useEffect(() => {
+    if (!open || form.sourcetype !== 'git' || !form.repo.trim()) {
+      setManualBranches([]);
+      return;
+    }
+
+    const matchingRepo = repos.find((repo) => repo.cloneUrl === form.repo);
+    if (matchingRepo?.branches.length) {
+      setManualBranches([]);
+      return;
+    }
+
+    let cancelled = false;
+    void repoCatalog
+      .getBranches(form.repo)
+      .then((branches) => {
+        if (!cancelled) setManualBranches(branches);
+      })
+      .catch(() => {
+        if (!cancelled) setManualBranches([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.repo, form.sourcetype, open, repoCatalog, repos]);
 
   useEffect(() => {
     setForm((current) => {
@@ -2247,6 +2269,11 @@ export function LaunchWizard({ open, onOpenChange, initialTemplateId }: LaunchWi
               form={form}
               update={update}
               repos={repos}
+              branchOptions={
+                repos.find((repo) => repo.cloneUrl === form.repo)?.branches.length
+                  ? (repos.find((repo) => repo.cloneUrl === form.repo)?.branches ?? [])
+                  : manualBranches
+              }
               trackerResults={trackerResults}
               trackerLoading={trackerLoading}
             />

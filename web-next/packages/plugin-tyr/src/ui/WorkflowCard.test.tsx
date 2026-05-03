@@ -8,19 +8,19 @@ describe('WorkflowCard', () => {
     expect(screen.getByText('Workflow')).toBeInTheDocument();
   });
 
-  it('renders default workflow name when no workflow prop supplied', () => {
+  it('renders unassigned state when no workflow prop supplied', () => {
     render(<WorkflowCard />);
-    expect(screen.getByText(/ship — default release cycle/i)).toBeInTheDocument();
+    expect(screen.getByText('No workflow assigned')).toBeInTheDocument();
   });
 
   it('renders the provided workflow name', () => {
     render(<WorkflowCard workflow="custom-flow" />);
-    expect(screen.getByText(/custom-flow — default release cycle/i)).toBeInTheDocument();
+    expect(screen.getByText('custom-flow')).toBeInTheDocument();
   });
 
-  it('renders default version chip when no workflowVersion prop supplied', () => {
+  it('omits the version chip when no workflowVersion prop supplied', () => {
     render(<WorkflowCard />);
-    expect(screen.getByText('v1.0.0')).toBeInTheDocument();
+    expect(screen.queryByText(/^v/)).not.toBeInTheDocument();
   });
 
   it('renders the provided version chip', () => {
@@ -38,15 +38,13 @@ describe('WorkflowCard', () => {
   });
 
   it('renders the workflow description text', () => {
-    render(<WorkflowCard />);
-    expect(
-      screen.getByText(/qa → pre-ship review → version bump → release PR/i),
-    ).toBeInTheDocument();
+    render(<WorkflowCard workflow="ship" />);
+    expect(screen.getByText(/saved as the saga default/i)).toBeInTheDocument();
   });
 
-  it('renders the override info row', () => {
+  it('renders the dispatch override info row', () => {
     render(<WorkflowCard />);
-    expect(screen.getByText(/override this workflow per-dispatch/i)).toBeInTheDocument();
+    expect(screen.getByText(/per-dispatch overrides from dispatch/i)).toBeInTheDocument();
   });
 
   it('renders the flock section with accessible container', () => {
@@ -57,6 +55,19 @@ describe('WorkflowCard', () => {
   it('renders APPLIED · PER-SAGA label', () => {
     render(<WorkflowCard />);
     expect(screen.getByText(/APPLIED · PER-SAGA/i)).toBeInTheDocument();
+  });
+
+  it('renders assign and clear actions when callbacks are supplied', () => {
+    render(
+      <WorkflowCard
+        workflow="ship"
+        workflowVersion="1.4.2"
+        onAssign={() => {}}
+        onClear={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Change' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
   });
 
   it('renders FLOCK section label', () => {

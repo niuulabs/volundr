@@ -25,6 +25,7 @@ export * from './data/states';
 export * from './composites/PersonaAvatar';
 export * from './composites/RavnAvatar';
 export * from './composites/MountChip';
+export * from './composites/RepoPicker';
 export * from './composites/DeployBadge';
 export * from './composites/LifecycleBadge';
 export * from './composites/Modal';

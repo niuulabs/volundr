@@ -848,8 +848,10 @@ sessionDefinitions:
       broker:
         # -- AI CLI backend: "claude" (Claude Code)
         cliType: claude
-        # -- CLI transport mode: "sdk" (WebSocket) or "subprocess" (legacy)
-        transport: sdk
+        # -- CLI transport mode for Claude Code sessions.
+        transport: subprocess
+        # -- Fully-qualified transport adapter class path
+        transportAdapter: "skuld.transports.subprocess.SubprocessTransport"
         # -- Skip tool permission prompts (--dangerously-skip-permissions)
         skipPermissions: true
         # -- Enable Claude Code experimental Agent Teams

@@ -7,6 +7,7 @@ import hmac
 import logging
 import time
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
@@ -67,7 +68,7 @@ class IntegrationCreateRequest(BaseModel):
         min_length=1,
         description="Secret value (PAT, token) — stored in credential store, never persisted raw",
     )
-    config: dict[str, str] = Field(
+    config: dict[str, Any] = Field(
         default_factory=dict,
         description="Adapter-specific configuration",
     )

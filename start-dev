@@ -33,6 +33,36 @@ wait_for_url() {
   return 1
 }
 
+wait_for_platform() {
+  local pid="$1"
+  local url="$2"
+  local attempts="${3:-60}"
+
+  for ((i = 1; i <= attempts; i++)); do
+    if ! kill -0 "${pid}" >/dev/null 2>&1; then
+      echo "Platform process exited before becoming ready. Check logs:" >&2
+      echo "  ${PLATFORM_LOG}" >&2
+      return 1
+    fi
+
+    if curl -fsS "${url}" >/dev/null 2>&1; then
+      if kill -0 "${pid}" >/dev/null 2>&1; then
+        return 0
+      fi
+
+      echo "Platform probe succeeded, but the launched process exited. Check logs:" >&2
+      echo "  ${PLATFORM_LOG}" >&2
+      return 1
+    fi
+
+    sleep 1
+  done
+
+  echo "Platform failed to become ready. Check logs:" >&2
+  echo "  ${PLATFORM_LOG}" >&2
+  return 1
+}
+
 trap cleanup_on_error ERR
 
 "${ROOT_DIR}/stop-dev" >/dev/null 2>&1 || true
@@ -55,7 +85,7 @@ echo "Starting platform..."
 nohup env PYTHONUNBUFFERED=1 uv run niuu platform up --skip-preflight \
   >"${PLATFORM_LOG}" 2>&1 &
 echo $! > "${PLATFORM_PID_FILE}"
-wait_for_url "${PLATFORM_URL}" "Platform"
+wait_for_platform "$(cat "${PLATFORM_PID_FILE}")" "${PLATFORM_URL}"
 
 trap - ERR
 

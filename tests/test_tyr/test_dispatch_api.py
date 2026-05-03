@@ -62,6 +62,7 @@ class MockVolundr(VolundrPort):
         self.spawned: list[SpawnRequest] = []
         self.last_auth_token: str | None = None
         self.fail_spawn: bool = False
+        self.integration_ids: list[str] = []
 
     async def spawn_session(
         self,
@@ -132,7 +133,8 @@ class MockVolundr(VolundrPort):
         *,
         auth_token: str | None = None,
     ) -> list[str]:
-        return []
+        self.last_auth_token = auth_token
+        return list(self.integration_ids)
 
     async def list_repos(self, *, auth_token: str | None = None) -> list[dict]:
         return []
@@ -774,6 +776,30 @@ class TestApproveDispatch:
         assert req.repo == "org/repo-a"
         assert req.branch == "feat/alpha"
         assert req.tracker_issue_id == "ALPHA-1"
+
+    def test_forwards_session_definition_override(
+        self,
+        client: TestClient,
+        saga_repo: MockSagaRepo,
+        mock_volundr: MockVolundr,
+    ):
+        saga_id = str(saga_repo.sagas[0].id)
+        resp = client.post(
+            "/api/v1/tyr/dispatch/approve",
+            json={
+                "items": [
+                    {
+                        "saga_id": saga_id,
+                        "issue_id": "i-1",
+                        "repo": "org/repo-a",
+                    },
+                ],
+                "session_definition": "skuldCodex",
+            },
+        )
+
+        assert resp.status_code == 200
+        assert mock_volundr.spawned[0].definition == "skuldCodex"
 
     def test_uses_server_defaults(
         self,

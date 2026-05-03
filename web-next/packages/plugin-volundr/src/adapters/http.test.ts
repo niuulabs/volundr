@@ -85,6 +85,27 @@ describe('buildVolundrHttpAdapter', () => {
     expect(client.get).toHaveBeenCalledWith('/sessions/s1');
   });
 
+  it('getSession synthesizes trackerIssue from legacy tracker fields', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValueOnce({
+      id: 's1',
+      name: 'niu-766',
+      source: { type: 'git', repo: 'https://github.com/niuulabs/volundr', branch: 'feat/test' },
+      status: 'running',
+      model: 'claude-sonnet-4-6',
+      tracker_issue_id: 'NIU-766',
+      issue_tracker_url:
+        'https://linear.app/niuu/issue/NIU-766/update-readme-with-canonical-route-families-and-ownership-map',
+    });
+
+    const session = await buildVolundrHttpAdapter(client).getSession('s1');
+
+    expect(session.trackerIssue).toMatchObject({
+      identifier: 'NIU-766',
+      url: 'https://linear.app/niuu/issue/NIU-766/update-readme-with-canonical-route-families-and-ownership-map',
+    });
+  });
+
   it('getActiveSessions calls GET /sessions?active=true', async () => {
     const client = makeClient();
     await buildVolundrHttpAdapter(client).getActiveSessions();
@@ -286,6 +307,59 @@ describe('buildVolundrHttpAdapter', () => {
         level: 'warn',
         source: 'skuld.broker',
         message: 'heads up',
+      }),
+    ]);
+  });
+
+  it('getAggregatedLogs uses the aggregate endpoint and normalizes participants plus rows', async () => {
+    const client = makeClient();
+    client.get.mockResolvedValue({
+      available_participants: [
+        { id: 'skuld', label: 'Skuld', kind: 'broker' },
+        { id: 'coder', label: 'Coder', kind: 'ravn' },
+      ],
+      lines: [
+        {
+          id: 'agg-1',
+          timestamp: '2026-05-01T15:19:51.232000+00:00',
+          level: 'WARNING',
+          participant: 'coder',
+          participant_label: 'Coder',
+          participant_kind: 'ravn',
+          source: 'ravn.adapters.llm.openai',
+          message: 'HTTP 503 Service Unavailable',
+          sequence: 28,
+          stream: 'logs/coder.log',
+        },
+      ],
+    });
+
+    const payload = await buildVolundrHttpAdapter(client).getAggregatedLogs('s1', {
+      limit: 50,
+      level: 'WARNING',
+      participants: ['coder'],
+      query: '503',
+    });
+
+    expect(client.get).toHaveBeenCalledWith(
+      '/sessions/s1/logs/aggregate?lines=50&level=WARNING&participants=coder&query=503',
+    );
+    expect(payload.participants).toEqual([
+      { id: 'skuld', label: 'Skuld', kind: 'broker' },
+      { id: 'coder', label: 'Coder', kind: 'ravn' },
+    ]);
+    expect(payload.lines).toEqual([
+      expect.objectContaining({
+        id: 'agg-1',
+        sessionId: 's1',
+        level: 'warn',
+        participant: 'coder',
+        participantLabel: 'Coder',
+        participantKind: 'ravn',
+        source: 'ravn.adapters.llm.openai',
+        message: 'HTTP 503 Service Unavailable',
+        sequence: 28,
+        stream: 'logs/coder.log',
       }),
     ]);
   });

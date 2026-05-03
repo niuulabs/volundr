@@ -7,7 +7,7 @@ import { PersonaList } from './PersonaList';
 import { PersonaForm } from './PersonaForm';
 import { PersonaYaml } from './PersonaYaml';
 import { PersonaSubs } from './PersonaSubs';
-import { usePersona, useUpdatePersona } from './usePersona';
+import { useCreatePersona, useForkPersona, usePersona, useUpdatePersona } from './usePersona';
 import { usePersonas } from './usePersonas';
 import { loadStorage, saveStorage } from './storage';
 import './ravn-views.css';
@@ -46,11 +46,43 @@ interface PersonaDetailPaneProps {
   name: string;
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
+  onSelectPersona: (name: string) => void;
 }
 
-function PersonaDetailPane({ name, activeTab, onTabChange }: PersonaDetailPaneProps) {
+function buildDraftPersona(name: string): PersonaCreateRequest {
+  const label = name.replace(/[-_]+/g, ' ').trim() || 'New persona';
+  return {
+    name,
+    role: 'build',
+    letter: '',
+    color: '',
+    summary: label,
+    description: `${label} persona.`,
+    systemPromptTemplate: `# ${name}\nYou are the ${name} persona.`,
+    allowedTools: [],
+    forbiddenTools: [],
+    permissionMode: 'default',
+    executor: undefined,
+    iterationBudget: 20,
+    llmPrimaryAlias: 'claude-sonnet-4-6',
+    llmThinkingEnabled: false,
+    llmMaxTokens: 8192,
+    producesEventType: '',
+    producesSchema: {},
+    consumesEvents: [],
+  };
+}
+
+function PersonaDetailPane({
+  name,
+  activeTab,
+  onTabChange,
+  onSelectPersona,
+}: PersonaDetailPaneProps) {
   const { data: persona } = usePersona(name);
   const { mutateAsync: updatePersona, isPending: isSaving } = useUpdatePersona(name);
+  const { mutateAsync: createPersona, isPending: isCreating } = useCreatePersona();
+  const { mutateAsync: forkPersona, isPending: isForking } = useForkPersona(name);
 
   const handleSave = useCallback(
     async (req: PersonaCreateRequest) => {
@@ -58,6 +90,23 @@ function PersonaDetailPane({ name, activeTab, onTabChange }: PersonaDetailPanePr
     },
     [updatePersona],
   );
+
+  const handleCreate = useCallback(async () => {
+    const requestedName = window.prompt('New persona name');
+    const nextName = requestedName?.trim();
+    if (!nextName) return;
+    const created = await createPersona(buildDraftPersona(nextName));
+    onSelectPersona(created.name);
+  }, [createPersona, onSelectPersona]);
+
+  const handleFork = useCallback(async () => {
+    if (!persona) return;
+    const requestedName = window.prompt('Clone persona as…', `${persona.name}-copy`);
+    const nextName = requestedName?.trim();
+    if (!nextName) return;
+    const forked = await forkPersona(nextName);
+    onSelectPersona(forked.name);
+  }, [forkPersona, onSelectPersona, persona]);
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'form', label: 'form' },
@@ -119,14 +168,21 @@ function PersonaDetailPane({ name, activeTab, onTabChange }: PersonaDetailPanePr
                 </button>
               ))}
             </div>
-            <button type="button" className="rv-pr-action-btn">
-              + new persona
+            <button
+              type="button"
+              className="rv-pr-action-btn"
+              onClick={() => void handleCreate()}
+              disabled={isCreating}
+            >
+              {isCreating ? 'creating…' : '+ new persona'}
             </button>
-            <button type="button" className="rv-pr-action-btn">
-              clone as…
-            </button>
-            <button type="button" className="rv-pr-action-btn">
-              save
+            <button
+              type="button"
+              className="rv-pr-action-btn"
+              onClick={() => void handleFork()}
+              disabled={!persona || isForking}
+            >
+              {isForking ? 'cloning…' : 'clone as…'}
             </button>
           </div>
         </div>
@@ -302,6 +358,7 @@ export function PersonasPage() {
               name={selectedName}
               activeTab={activeTab}
               onTabChange={setActiveTab}
+              onSelectPersona={handleSelectPersona}
             />
           ) : (
             <div className="rv-personas__empty">No personas available.</div>

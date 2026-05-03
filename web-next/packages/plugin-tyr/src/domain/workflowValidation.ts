@@ -19,6 +19,7 @@ export type WorkflowIssueKind =
   | 'cycle'
   | 'orphan'
   | 'dangling_condition'
+  | 'resource_link'
   | 'confidence_underset'
   | 'missing_persona'
   | 'no_producer'
@@ -44,7 +45,8 @@ export interface WorkflowIssue {
  * 1. **cycle** — directed cycle exists; every participating node gets an issue.
  * 2. **orphan** — node has no edges at all (workflow has >1 node).
  * 3. **dangling_condition** — `cond` node has fewer than 2 outgoing edges.
- * 4. **confidence_underset** — `stage` node has no `raidId` (work is unplanned).
+ * 4. **confidence_underset** — when any stage is raid-mapped, other `stage`
+ *    nodes without `raidId` are treated as unplanned work.
  * 5. **missing_persona** — `stage` node has an empty `personaIds` array.
  * 6. **no_producer** — `gate`/`cond` node has no incoming edges.
  * 7. **no_consumer** — `stage` node has no outgoing edges (non-singleton workflow).
@@ -66,6 +68,8 @@ export function validateWorkflowFull(workflow: Workflow): WorkflowIssue[] {
         return 'Trigger';
       case 'end':
         return 'End';
+      case 'resource':
+        return 'Resource';
     }
   };
 
@@ -86,6 +90,7 @@ export function validateWorkflowFull(workflow: Workflow): WorkflowIssue[] {
   // ── 2. Orphan detection ───────────────────────────────────────────────────
   if (nodes.length > 1) {
     for (const node of nodes) {
+      if (node.kind === 'resource') continue;
       const hasIn = edges.some((e) => e.target === node.id);
       const hasOut = edges.some((e) => e.source === node.id);
       if (!hasIn && !hasOut) {
@@ -114,16 +119,16 @@ export function validateWorkflowFull(workflow: Workflow): WorkflowIssue[] {
   }
 
   // ── 4. Confidence underset ────────────────────────────────────────────────
-  for (const node of nodes) {
-    if (node.kind !== 'stage') continue;
-    if (!node.raidId) {
-      issues.push({
-        kind: 'confidence_underset',
-        nodeId: node.id,
-        message: 'Stage has no raid assigned — work is unplanned',
-        severity: 'warning',
-      });
-    }
+  const stages = nodes.filter((node) => node.kind === 'stage');
+  const hasMappedRaidStages = stages.some((node) => Boolean(node.raidId));
+  for (const node of stages) {
+    if (!hasMappedRaidStages || node.raidId) continue;
+    issues.push({
+      kind: 'confidence_underset',
+      nodeId: node.id,
+      message: 'Stage has no raid assigned — work is unplanned',
+      severity: 'warning',
+    });
   }
 
   // ── 5. Missing personas ───────────────────────────────────────────────────
@@ -143,7 +148,7 @@ export function validateWorkflowFull(workflow: Workflow): WorkflowIssue[] {
   // Gates, conditions, and terminal nodes should have at least one inbound connection.
   if (nodes.length > 1) {
     for (const node of nodes) {
-      if (node.kind === 'trigger' || node.kind === 'stage') continue;
+      if (node.kind === 'trigger' || node.kind === 'stage' || node.kind === 'resource') continue;
       const hasIn = edges.some((e) => e.target === node.id);
       if (!hasIn) {
         issues.push({
@@ -171,6 +176,23 @@ export function validateWorkflowFull(workflow: Workflow): WorkflowIssue[] {
         });
       }
     }
+  }
+
+  const resourceNodeIds = new Set(
+    nodes.filter((node) => node.kind === 'resource').map((node) => node.id),
+  );
+
+  for (const binding of workflow.resourceBindings ?? []) {
+    if (resourceNodeIds.has(binding.resourceNodeId)) {
+      continue;
+    }
+
+    issues.push({
+      kind: 'resource_link',
+      nodeId: binding.resourceNodeId,
+      message: 'Resource binding references a missing resource node',
+      severity: 'error',
+    });
   }
 
   return issues;

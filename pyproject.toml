@@ -24,6 +24,7 @@ dependencies = [
     "respx>=0.21",
     "pynng>=0.9.0",
     "zeroconf>=0.131",
+    "python-telegram-bot>=21.0",
 ]
 
 [project.optional-dependencies]
@@ -101,6 +102,7 @@ mimir = "mimir.plugin:MimirPlugin"
 ravn = "ravn.plugin:RavnPlugin"
 bifrost = "bifrost.plugin:BifrostPlugin"
 observatory = "observatory.plugin:ObservatoryPlugin"
+personas = "personas.plugin:PersonasPlugin"
 
 [project.urls]
 Homepage = "https://github.com/niuulabs/volundr"
@@ -113,7 +115,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cli", "src/niuu", "src/volundr", "src/tyr", "src/skuld", "src/sleipnir", "src/ravn", "src/bifrost", "src/mimir", "src/observatory"]
+packages = ["src/cli", "src/niuu", "src/volundr", "src/tyr", "src/skuld", "src/sleipnir", "src/ravn", "src/bifrost", "src/mimir", "src/observatory", "src/personas"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

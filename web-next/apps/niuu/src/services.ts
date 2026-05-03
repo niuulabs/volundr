@@ -23,6 +23,7 @@ import {
   buildDispatcherHttpAdapter,
   buildTyrSessionHttpAdapter,
   buildTrackerHttpAdapter,
+  buildWorkflowHttpAdapter,
   buildDispatchBusHttpAdapter,
   buildTyrSettingsHttpAdapter,
   buildTyrAuditLogHttpAdapter,
@@ -69,6 +70,7 @@ import {
   type IIdentityService,
 } from '@niuulabs/plugin-sdk';
 import type { NiuuConfig, ServiceConfig, ServicesMap } from '@niuulabs/plugin-sdk';
+import { buildRepoCatalogHttpAdapter, createMockRepoCatalogService } from './repoCatalog';
 
 export interface ServiceBackendStatus {
   mode: 'live' | 'mock';
@@ -188,6 +190,38 @@ export function resolveForgeServiceBase(config: Pick<NiuuConfig, 'services'>): s
   return resolveDirectServiceBase(config, 'forge', 'volundr');
 }
 
+function resolveRepoCatalogBase(config: Pick<NiuuConfig, 'services'>): string | null {
+  const explicitBase = resolveDirectServiceBase(config, 'niuu.repos', 'niuu');
+  if (explicitBase) return explicitBase.replace(/\/repos\/?$/, '');
+
+  const sharedBase = resolveSharedApiBase(config);
+  return sharedBase ? `${sharedBase}/niuu` : null;
+}
+
+function resolveRepoCatalogStatus(config: Pick<NiuuConfig, 'services'>): ServiceBackendStatus {
+  const explicit = resolveDirectServiceStatus(config, 'http', 'niuu.repos', 'niuu');
+  if (explicit.mode === 'live' && explicit.target) {
+    return { ...explicit, target: explicit.target.replace(/\/repos\/?$/, '') };
+  }
+
+  const base = resolveRepoCatalogBase(config);
+  if (!base) {
+    return {
+      mode: 'mock',
+      transport: 'mock',
+      target: null,
+      source: 'mock',
+    };
+  }
+
+  return {
+    mode: 'live',
+    transport: 'http',
+    target: base,
+    source: 'shared-api',
+  };
+}
+
 function resolveVolundrServiceBase(config: Pick<NiuuConfig, 'services'>): string | null {
   return resolveDirectServiceBase(config, 'volundr', 'forge');
 }
@@ -214,7 +248,13 @@ function resolveFilesystemBase(config: Pick<NiuuConfig, 'services'>): string | n
 
 function resolveTyrServiceBase(
   config: Pick<NiuuConfig, 'services'>,
-  serviceKey: 'tyr' | 'tyr.dispatcher' | 'tyr.sessions' | 'tyr.dispatch' | 'tyr.settings',
+  serviceKey:
+    | 'tyr'
+    | 'tyr.dispatcher'
+    | 'tyr.sessions'
+    | 'tyr.dispatch'
+    | 'tyr.settings'
+    | 'tyr.workflows',
 ): string | null {
   const explicitBase = resolveDirectServiceBase(config, serviceKey);
   if (!explicitBase) return resolveDirectServiceBase(config, 'tyr');
@@ -228,6 +268,8 @@ function resolveTyrServiceBase(
       return explicitBase.replace(/\/dispatch\/?$/, '');
     case 'tyr.settings':
       return explicitBase.replace(/\/settings\/?$/, '');
+    case 'tyr.workflows':
+      return explicitBase.replace(/\/workflows\/?$/, '');
     default:
       return explicitBase;
   }
@@ -279,12 +321,19 @@ function resolveRavnServiceBase(
   config: Pick<NiuuConfig, 'services'>,
   serviceKey: 'ravn.personas' | 'ravn.ravens' | 'ravn.sessions' | 'ravn.triggers' | 'ravn.budget',
 ): string | null {
-  const explicitBase = resolveDirectServiceBase(config, serviceKey);
-  if (!explicitBase) return resolveDirectServiceBase(config, 'ravn');
+  const explicitBase =
+    serviceKey === 'ravn.personas'
+      ? resolveDirectServiceBase(config, serviceKey, 'personas')
+      : resolveDirectServiceBase(config, serviceKey);
+  if (!explicitBase) {
+    return serviceKey === 'ravn.personas'
+      ? resolveSharedApiBase(config)
+      : resolveDirectServiceBase(config, 'ravn');
+  }
 
   switch (serviceKey) {
     case 'ravn.personas':
-      return explicitBase.replace(/\/personas\/?$/, '');
+      return explicitBase.replace(/\/(?:ravn\/)?personas\/?$/, '');
     case 'ravn.ravens':
       return explicitBase.replace(/\/ravens\/?$/, '');
     case 'ravn.sessions':
@@ -302,10 +351,13 @@ function resolveRavnServiceStatus(
   config: Pick<NiuuConfig, 'services'>,
   serviceKey: 'ravn.personas' | 'ravn.ravens' | 'ravn.sessions' | 'ravn.triggers' | 'ravn.budget',
 ): ServiceBackendStatus {
-  const explicit = resolveDirectServiceStatus(config, 'http', serviceKey);
+  const explicit =
+    serviceKey === 'ravn.personas'
+      ? resolveDirectServiceStatus(config, 'http', serviceKey, 'personas')
+      : resolveDirectServiceStatus(config, 'http', serviceKey);
   if (explicit.mode === 'live' && explicit.target) {
     if (serviceKey === 'ravn.personas')
-      return { ...explicit, target: explicit.target.replace(/\/personas\/?$/, '') };
+      return { ...explicit, target: explicit.target.replace(/\/(?:ravn\/)?personas\/?$/, '') };
     if (serviceKey === 'ravn.ravens')
       return { ...explicit, target: explicit.target.replace(/\/ravens\/?$/, '') };
     if (serviceKey === 'ravn.sessions')
@@ -313,6 +365,18 @@ function resolveRavnServiceStatus(
     if (serviceKey === 'ravn.triggers')
       return { ...explicit, target: explicit.target.replace(/\/triggers\/?$/, '') };
     return { ...explicit, target: explicit.target.replace(/\/budget\/?$/, '') };
+  }
+
+  if (serviceKey === 'ravn.personas') {
+    const sharedBase = resolveSharedApiBase(config);
+    if (sharedBase) {
+      return {
+        mode: 'live',
+        transport: 'http',
+        target: sharedBase,
+        source: 'shared-api',
+      };
+    }
   }
 
   return resolveDirectServiceStatus(config, 'http', 'ravn');
@@ -396,6 +460,7 @@ export function buildServiceBackendStatus(
     'ravn.sessions': resolveRavnServiceStatus(config, 'ravn.sessions'),
     'ravn.triggers': resolveRavnServiceStatus(config, 'ravn.triggers'),
     'ravn.budget': resolveRavnServiceStatus(config, 'ravn.budget'),
+    'niuu.repos': resolveRepoCatalogStatus(config),
     forge: resolveDirectServiceStatus(config, 'http', 'forge', 'volundr'),
     'forge.pty':
       forgePtyStatus.mode === 'live'
@@ -416,13 +481,7 @@ export function buildServiceBackendStatus(
     'tyr.settings': resolveDirectServiceStatus(config, 'http', 'tyr.settings', 'tyr'),
     'tyr.tracker': resolveCanonicalServiceStatus(config, 'tracker'),
     'tyr.audit': resolveCanonicalServiceStatus(config, 'audit'),
-    'tyr.workflows': {
-      mode: 'mock',
-      transport: 'mock',
-      target: null,
-      source: 'mock',
-      note: 'No live workflow API is wired yet; see NIU-756.',
-    },
+    'tyr.workflows': resolveDirectServiceStatus(config, 'http', 'tyr.workflows', 'tyr'),
     filesystem: (() => {
       const explicit = resolveDirectServiceStatus(config, 'http', 'filesystem');
       if (explicit.mode === 'live') return explicit;
@@ -475,7 +534,10 @@ function toSessionState(session: VolundrSession): Session['state'] {
     case 'stopped':
     case 'archived':
       return 'terminated';
+    case 'failed':
     case 'error':
+      return 'failed';
+    default:
       return 'failed';
   }
 }
@@ -858,6 +920,7 @@ function toPodStatus(session: VolundrSession): Cluster['pods'][number]['status']
       return 'pending';
     case 'running':
       return session.activityState === 'idle' ? 'idle' : 'running';
+    case 'failed':
     case 'error':
       return 'failed';
     default:
@@ -998,6 +1061,10 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const volundr = volundrBase
     ? buildVolundrHttpAdapter(createApiClient(volundrBase))
     : createMockVolundrService();
+  const repoCatalogBase = resolveRepoCatalogBase(config);
+  const repoCatalogService = repoCatalogBase
+    ? buildRepoCatalogHttpAdapter(createApiClient(repoCatalogBase))
+    : createMockRepoCatalogService();
   const sessionStore = forgeBase ? buildVolundrSessionStore(volundr) : createMockSessionStore();
   const clusterAdapter = forgeBase
     ? buildVolundrClusterAdapter(volundr)
@@ -1050,6 +1117,8 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const trackerClient = trackerBase ? createApiClient(trackerBase) : null;
   const auditBase = resolveCanonicalServiceBase(config, 'audit');
   const auditClient = auditBase ? createApiClient(auditBase) : null;
+  const workflowBase = resolveTyrServiceBase(config, 'tyr.workflows');
+  const workflowClient = workflowBase ? createApiClient(workflowBase) : null;
   const tyrService = tyrClient ? buildTyrHttpAdapter(tyrClient) : createMockTyrService();
   const dispatcherService = dispatcherClient
     ? buildDispatcherHttpAdapter(dispatcherClient)
@@ -1060,7 +1129,9 @@ export function buildServices(config: NiuuConfig): ServicesMap {
   const trackerService = trackerClient
     ? buildTrackerHttpAdapter(trackerClient)
     : createMockTrackerService();
-  const workflowService = createMockWorkflowService();
+  const workflowService = workflowClient
+    ? buildWorkflowHttpAdapter(workflowClient)
+    : createMockWorkflowService();
   const dispatchBus = dispatchClient
     ? buildDispatchBusHttpAdapter(dispatchClient)
     : createMockDispatchBus();
@@ -1087,6 +1158,7 @@ export function buildServices(config: NiuuConfig): ServicesMap {
     'ravn.budget': ravnBudget,
     mimir,
     volundr,
+    'niuu.repos': repoCatalogService,
     ptyStream,
     metricsStream,
     features: featureCatalogService,

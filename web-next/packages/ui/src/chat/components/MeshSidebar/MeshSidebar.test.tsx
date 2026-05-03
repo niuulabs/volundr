@@ -32,20 +32,21 @@ describe('MeshSidebar', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders only ravn participants', () => {
+  it('renders ravn peers plus the skuld observer when a flock exists', () => {
     render(
       <MeshSidebar participants={participants} selectedPeerId={null} onSelectPeer={vi.fn()} />,
     );
     expect(screen.getByTestId('peer-card-peer-1')).toBeInTheDocument();
     expect(screen.getByTestId('peer-card-peer-2')).toBeInTheDocument();
-    expect(screen.queryByTestId('peer-card-peer-3')).not.toBeInTheDocument();
+    expect(screen.getByTestId('peer-card-peer-3')).toBeInTheDocument();
+    expect(screen.getByText('Skuld (observer)')).toBeInTheDocument();
   });
 
   it('shows peer count', () => {
     render(
       <MeshSidebar participants={participants} selectedPeerId={null} onSelectPeer={vi.fn()} />,
     );
-    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
   });
 
   it('calls onSelectPeer when peer clicked', () => {
@@ -62,6 +63,25 @@ describe('MeshSidebar', () => {
       <MeshSidebar participants={participants} selectedPeerId="peer-1" onSelectPeer={vi.fn()} />,
     );
     expect(screen.getByTestId('peer-card-peer-1').className).toContain('selected');
+  });
+
+  it('renders a collapsed rail and expands from the header control', () => {
+    const onToggleCollapsed = vi.fn();
+    render(
+      <MeshSidebar
+        participants={participants}
+        selectedPeerId="peer-1"
+        onSelectPeer={vi.fn()}
+        collapsed
+        onToggleCollapsed={onToggleCollapsed}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /expand mesh peers sidebar/i })).toBeInTheDocument();
+    expect(screen.queryByText('Mesh Peers')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /expand mesh peers sidebar/i }));
+    expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
   });
 
   it('shows expand toggle when participant has metadata', () => {

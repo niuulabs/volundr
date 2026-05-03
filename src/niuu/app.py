@@ -96,6 +96,14 @@ def get_skuld_registry() -> SkuldPortRegistry | None:
     return _skuld_registry
 
 
+def _local_service_host(host: str) -> str:
+    """Return a loopback-safe host for intra-stack HTTP calls."""
+    normalized = host.strip() or "127.0.0.1"
+    if normalized in {"0.0.0.0", "::", "[::]"}:
+        return "127.0.0.1"
+    return normalized
+
+
 _PLUGIN_API_PREFIXES: dict[str, list[str]] = {
     "volundr": ["/api/v1/volundr"],
     "tyr": ["/api/v1/tyr"],
@@ -126,7 +134,7 @@ _PLUGIN_ROUTE_DOMAINS: dict[str, str] = {
     "observatory-events-api": "observatory",
     "observatory-registry-api": "observatory",
     "observatory-topology-api": "observatory",
-    "persona-api": "ravn",
+    "persona-api": "personas",
     "ravn-api": "ravn",
     "ravn-budget-api": "ravn",
     "ravn-runtime-api": "ravn",
@@ -758,13 +766,21 @@ def build_root_app(
                     status_code=502,
                 )
 
-    if "runtime-config" in active_mounts:
+    live_config_template: str | None = None
 
-        @root.get("/config.json")
-        async def config_json() -> dict[str, str]:
-            return {"apiBaseUrl": f"http://{host}:{port}"}
+    def render_live_config(origin: str) -> str:
+        assert live_config_template is not None
+        payload = live_config_template.replace("http://localhost:8080", origin)
+        payload = payload.replace("http://127.0.0.1:8080", origin)
+        return payload
 
     if "web-ui" not in active_mounts:
+        if "runtime-config" in active_mounts:
+
+            @root.get("/config.json")
+            async def config_json() -> dict[str, str]:
+                return {"apiBaseUrl": f"http://{host}:{port}"}
+
         logger.info("Web UI disabled by host profile or --no-web")
         return root
 
@@ -790,10 +806,22 @@ def build_root_app(
 
         live_config_path = dist / "config.live.json"
         if live_config_path.exists():
+            live_config_template = live_config_path.read_text(encoding="utf-8")
 
             @root.get("/config.live.json", include_in_schema=False)
-            async def live_config() -> FileResponse:
-                return FileResponse(str(live_config_path), media_type="application/json")
+            async def live_config(request: Request) -> Response:
+                origin = str(request.base_url).rstrip("/")
+                return Response(content=render_live_config(origin), media_type="application/json")
+
+        if "runtime-config" in active_mounts:
+
+            @root.get("/config.json", include_in_schema=False)
+            async def config_json(request: Request):
+                if live_config_template is None:
+                    return {"apiBaseUrl": f"http://{host}:{port}"}
+
+                origin = str(request.base_url).rstrip("/")
+                return Response(content=render_live_config(origin), media_type="application/json")
 
         index_html = (dist / "index.html").read_bytes()
 
@@ -871,6 +899,12 @@ class RootServer(Service):
     async def start(self) -> None:
         await self._start_embedded_db()
         await self._run_migrations()
+
+        os.environ["NIUU_SERVER_HOST"] = self._host
+        os.environ["NIUU_SERVER_PORT"] = str(self._port)
+        os.environ["VOLUNDR__URL"] = (
+            f"http://{_local_service_host(self._host)}:{self._port}"
+        )
 
         app = self._build_app()
         config = uvicorn.Config(

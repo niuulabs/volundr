@@ -14,6 +14,7 @@ from cli.registry import PluginRegistry
 from mimir.plugin import MimirPlugin
 from niuu.ports.plugin import ServiceDefinition
 from observatory.plugin import ObservatoryPlugin
+from personas.plugin import PersonasPlugin
 from ravn.plugin import RavnPlugin
 from tyr.plugin import TyrPlugin
 from volundr.plugin import VolundrPlugin
@@ -392,7 +393,7 @@ class TestRavnPlugin:
     def test_description(self) -> None:
         plugin = RavnPlugin()
         desc = plugin.description.lower()
-        assert "agent" in desc or "persona" in desc
+        assert "agent" in desc or "session" in desc
 
     def test_register_service_returns_definition(self) -> None:
         plugin = RavnPlugin()
@@ -412,20 +413,9 @@ class TestRavnPlugin:
         plugin = RavnPlugin()
         sentinel = object()
 
-        class FakePersonaLoader:
-            pass
-
-        def fake_loader():
-            return FakePersonaLoader()
-
-        def fake_create_app(*, persona_loader):
-            assert isinstance(persona_loader, FakePersonaLoader)
+        def fake_create_app():
             return sentinel
 
-        monkeypatch.setattr(
-            "ravn.adapters.personas.loader.FilesystemPersonaAdapter",
-            fake_loader,
-        )
         monkeypatch.setattr("ravn.api.create_app", fake_create_app)
         assert plugin.create_api_app() is sentinel
 
@@ -438,7 +428,6 @@ class TestRavnPlugin:
             "ravn-trigger-api",
             "ravn-budget-api",
             "ravn-session-api",
-            "persona-api",
             "ravn-api",
         ]
         assert route_domains[0].prefixes == (
@@ -451,8 +440,7 @@ class TestRavnPlugin:
             "/api/v1/ravn/status",
             "/api/v1/ravn/sessions",
         )
-        assert route_domains[4].prefixes == ("/api/v1/ravn/personas",)
-        assert route_domains[5].prefixes == ("/api/v1/ravn",)
+        assert route_domains[4].prefixes == ("/api/v1/ravn",)
 
     def test_api_client_returns_instance(self) -> None:
         plugin = RavnPlugin()
@@ -534,6 +522,52 @@ class TestRavnPlugin:
         pages = plugin.tui_pages()
         assert len(pages) == 1
         assert pages[0].name == "Agents"
+
+
+class TestPersonasPlugin:
+    def test_name(self) -> None:
+        plugin = PersonasPlugin()
+        assert plugin.name == "personas"
+
+    def test_description(self) -> None:
+        plugin = PersonasPlugin()
+        assert "persona" in plugin.description.lower()
+
+    def test_register_service_returns_definition(self) -> None:
+        plugin = PersonasPlugin()
+        svc_def = plugin.register_service()
+        assert isinstance(svc_def, ServiceDefinition)
+        assert svc_def.name == "personas"
+        assert svc_def.default_enabled is True
+
+    def test_create_service_stub_health_check(self) -> None:
+        plugin = PersonasPlugin()
+        svc = plugin.create_service()
+        asyncio.run(svc.start())
+        assert asyncio.run(svc.health_check()) is True
+        asyncio.run(svc.stop())
+
+    def test_create_api_app_uses_personas_app_factory(self, monkeypatch) -> None:
+        plugin = PersonasPlugin()
+        sentinel = object()
+
+        def fake_create_app():
+            return sentinel
+
+        monkeypatch.setattr("personas.app.create_app", fake_create_app)
+        assert plugin.create_api_app() is sentinel
+
+    def test_api_route_domains_declared(self) -> None:
+        plugin = PersonasPlugin()
+        route_domains = plugin.api_route_domains()
+        assert route_domains
+        assert [route_domain.name for route_domain in route_domains] == ["persona-api"]
+        assert route_domains[0].prefixes == ("/api/v1/personas", "/api/v1/ravn/personas")
+
+    def test_api_client_returns_instance(self) -> None:
+        plugin = PersonasPlugin()
+        client = plugin.create_api_client()
+        assert client is not None
 
 
 class TestBifrostPlugin:

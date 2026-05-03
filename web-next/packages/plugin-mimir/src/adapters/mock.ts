@@ -9,6 +9,7 @@ import type { EmbeddingSearchResult } from '../ports/IEmbeddingStore';
 import type { EntityMeta } from '../domain/entity';
 import type { WriteRoutingRule } from '../domain/routing';
 import type { RavnBinding } from '../domain/ravn-binding';
+import type { RegistryMount } from '../domain/registry';
 import { tallySeverity } from '../domain/lint';
 import { toPageMeta } from '../domain/page';
 
@@ -82,6 +83,23 @@ const MOCK_MOUNTS: Mount[] = [
     desc: 'Physical dev-session definitions, templates, and forge docs',
   },
 ];
+
+const MOCK_REGISTRY_MOUNTS: RegistryMount[] = MOCK_MOUNTS.map((mount) => ({
+  id: `registry-${mount.name}`,
+  name: mount.name,
+  kind: mount.url ? 'remote' : 'local',
+  lifecycle: 'registered',
+  role: mount.role,
+  url: mount.url,
+  path: '',
+  categories: mount.categories,
+  authRef: null,
+  defaultReadPriority: mount.priority,
+  enabled: mount.status !== 'down',
+  healthStatus: mount.status === 'healthy' ? 'healthy' : mount.status,
+  healthMessage: '',
+  desc: mount.desc,
+}));
 
 // ---------------------------------------------------------------------------
 // Seed data — Pages
@@ -896,11 +914,35 @@ export function createMimirMockAdapter(): IMimirService {
   let lintIssues = [...INITIAL_LINT_ISSUES];
   let routingRules = [...INITIAL_ROUTING_RULES];
   let sources = [...MOCK_SOURCES];
+  let registryMounts = [...MOCK_REGISTRY_MOUNTS];
 
   return {
     mounts: {
       async listMounts(): Promise<Mount[]> {
         return MOCK_MOUNTS;
+      },
+
+      async listRegistryMounts(): Promise<RegistryMount[]> {
+        return [...registryMounts];
+      },
+
+      async createRegistryMount(mount: Omit<RegistryMount, 'id'>): Promise<RegistryMount> {
+        const created = { ...mount, id: `registry-${Date.now()}` };
+        registryMounts = [...registryMounts, created];
+        return created;
+      },
+
+      async updateRegistryMount(
+        id: string,
+        mount: Omit<RegistryMount, 'id'>,
+      ): Promise<RegistryMount> {
+        const updated = { ...mount, id };
+        registryMounts = registryMounts.map((entry) => (entry.id === id ? updated : entry));
+        return updated;
+      },
+
+      async deleteRegistryMount(id: string): Promise<void> {
+        registryMounts = registryMounts.filter((entry) => entry.id !== id);
       },
 
       async listRoutingRules(): Promise<WriteRoutingRule[]> {

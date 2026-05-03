@@ -56,3 +56,13 @@ export {
   type EntityType,
   type TypeRegistry,
 } from './entity-type';
+
+export {
+  repoRecordSchema,
+  sharedRepoPayloadSchema,
+  sharedRepoCatalogResponseSchema,
+  normalizeRepoCatalogResponse,
+  type RepoRecord,
+  type SharedRepoPayload,
+  type SharedRepoCatalogResponse,
+} from './repo';

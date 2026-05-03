@@ -85,6 +85,20 @@ describe('MarkdownContent', () => {
     expect(screen.getByTestId('outcome-card')).toBeInTheDocument();
   });
 
+  it('renders outcome card for dashed outcome markers', () => {
+    render(<MarkdownContent content={'Before\n---outcome---\nverdict: pass\n---end---\nAfter'} />);
+    expect(screen.getByTestId('outcome-card')).toBeInTheDocument();
+    expect(screen.getByText('Before')).toBeInTheDocument();
+    expect(screen.getByText('After')).toBeInTheDocument();
+  });
+
+  it('renders outcome card for dashed outcome markers closed by bare dashes', () => {
+    render(<MarkdownContent content={'Before\n---outcome---\nverdict: pass\n---\nAfter'} />);
+    expect(screen.getByTestId('outcome-card')).toBeInTheDocument();
+    expect(screen.getByText('Before')).toBeInTheDocument();
+    expect(screen.getByText('After')).toBeInTheDocument();
+  });
+
   it('enables word wrap on word-wrap button click', () => {
     const { container } = render(<MarkdownContent content={'```js\nconst x = 1\n```'} />);
     const wrapBtn = screen.getAllByRole('button').find((b) => b.title === 'Enable word wrap');
@@ -107,5 +121,22 @@ describe('MarkdownContent', () => {
   it('renders blockquote', () => {
     render(<MarkdownContent content={'> This is a quote'} />);
     expect(screen.getByRole('blockquote')).toBeInTheDocument();
+  });
+
+  it('renders markdown table content', () => {
+    render(
+      <MarkdownContent
+        content={
+          '| Peer | Status |\n|------|--------|\n| **Skuld** | idle |\n| `coder` | blocked |'
+        }
+      />,
+    );
+
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Peer' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument();
+    expect(screen.getByText('Skuld').tagName).toBe('STRONG');
+    expect(screen.getByText('coder').tagName).toBe('CODE');
+    expect(screen.getByText('blocked')).toBeInTheDocument();
   });
 });

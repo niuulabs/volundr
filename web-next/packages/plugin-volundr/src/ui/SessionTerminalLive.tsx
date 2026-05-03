@@ -29,14 +29,14 @@ interface TerminalInstance {
   fitAddon: FitAddon;
 }
 
-function deriveHttpBase(wsUrl: string): string {
+export function deriveHttpBase(wsUrl: string): string {
   const httpProto = wsUrl.startsWith('wss:') ? 'https:' : 'http:';
   const parsed = new URL(wsUrl);
   const prefix = parsed.pathname.replace(/\/ws\/?$/, '');
   return `${httpProto}//${parsed.host}${prefix}`;
 }
 
-async function listSessions(httpBase: string): Promise<ServerSession[] | null> {
+export async function listSessions(httpBase: string): Promise<ServerSession[] | null> {
   const headers: Record<string, string> = {};
   const token = getAccessToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -48,7 +48,7 @@ async function listSessions(httpBase: string): Promise<ServerSession[] | null> {
   return data.sessions ?? [];
 }
 
-async function spawnSession(
+export async function spawnSession(
   httpBase: string,
   cliType: string,
 ): Promise<{ terminalId: string; label: string } | null> {

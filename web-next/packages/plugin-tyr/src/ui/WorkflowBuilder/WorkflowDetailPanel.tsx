@@ -69,6 +69,17 @@ function memberIssuesForPersona(issues: WorkflowIssue[], persona: PersonaEntry |
   return issues.filter((issue) => keys.some((key) => issue.message.toLowerCase().includes(key)));
 }
 
+function triggerEventOptions(personas: PersonaEntry[], current: string): string[] {
+  return [
+    ...new Set(
+      [
+        ...personas.flatMap((persona) => persona.consumes ?? []),
+        current || 'code.requested',
+      ].filter(Boolean),
+    ),
+  ].sort();
+}
+
 function WorkflowSummary({
   workflow,
   errorCount,
@@ -577,7 +588,23 @@ export function WorkflowDetailPanel({
             />
           </div>
           <div>
-            <label className={SECTION_LABEL}>Source event</label>
+            <label className={SECTION_LABEL}>Dispatch event</label>
+            <select
+              className={cn(INPUT, 'niuu-font-mono')}
+              value={selectedNode.dispatchEvent ?? 'code.requested'}
+              onChange={(e) => onUpdateNode(selectedNode.id, { dispatchEvent: e.target.value })}
+            >
+              {triggerEventOptions(personas, selectedNode.dispatchEvent ?? 'code.requested').map(
+                (eventType) => (
+                  <option key={eventType} value={eventType}>
+                    {eventType}
+                  </option>
+                ),
+              )}
+            </select>
+          </div>
+          <div>
+            <label className={SECTION_LABEL}>Trigger source</label>
             <input
               className={cn(INPUT, 'niuu-font-mono')}
               value={selectedNode.source ?? 'manual dispatch'}

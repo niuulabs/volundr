@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, RotateCcw, ArrowUpCircle } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 import type { MeshVerdict } from '../../types';
+import { MarkdownContent } from '../MarkdownContent';
 import './OutcomeCard.css';
 
 const VERDICT_ICONS: Record<MeshVerdict, typeof CheckCircle> = {
@@ -16,12 +17,61 @@ const VERDICT_ICONS: Record<MeshVerdict, typeof CheckCircle> = {
 
 function parseFields(raw: string): Record<string, string> {
   const fields: Record<string, string> = {};
-  for (const line of raw.split('\n')) {
+  const lines = raw.split('\n');
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i] ?? '';
     const colon = line.indexOf(':');
-    if (colon === -1) continue;
+    if (colon === -1) {
+      i++;
+      continue;
+    }
+
     const key = line.slice(0, colon).trim();
     const value = line.slice(colon + 1).trim();
-    if (key) fields[key] = value;
+    if (!key) {
+      i++;
+      continue;
+    }
+
+    if (value === '|' || value === '>') {
+      const preserveNewlines = value === '|';
+      const blockLines: string[] = [];
+      let blockIndent: number | null = null;
+      i++;
+
+      while (i < lines.length) {
+        const nextLine = lines[i] ?? '';
+        const trimmed = nextLine.trim();
+
+        if (trimmed.length === 0) {
+          blockLines.push('');
+          i++;
+          continue;
+        }
+
+        const indent = nextLine.length - nextLine.trimStart().length;
+        if (blockIndent == null) {
+          blockIndent = indent;
+        }
+
+        if (indent < blockIndent) {
+          break;
+        }
+
+        blockLines.push(nextLine.slice(blockIndent));
+        i++;
+      }
+
+      fields[key] = preserveNewlines
+        ? blockLines.join('\n').trim()
+        : blockLines.join(' ').replace(/\s+/g, ' ').trim();
+      continue;
+    }
+
+    fields[key] = value;
+    i++;
   }
   return fields;
 }
@@ -51,14 +101,20 @@ export function OutcomeCard({ raw }: OutcomeCardProps) {
           </span>
         )}
       </div>
-      {summary && <p className="niuu-chat-outcome-summary">{summary}</p>}
+      {summary && (
+        <div className="niuu-chat-outcome-summary">
+          <MarkdownContent content={summary} />
+        </div>
+      )}
       <div className="niuu-chat-outcome-fields">
         {Object.entries(fields)
           .filter(([k]) => k !== 'verdict' && k !== 'status' && k !== 'summary' && k !== 'result')
           .map(([k, v]) => (
             <div key={k} className="niuu-chat-outcome-field">
               <span className="niuu-chat-outcome-field-key">{k}</span>
-              <span className="niuu-chat-outcome-field-value">{v}</span>
+              <div className="niuu-chat-outcome-field-value">
+                <MarkdownContent content={v} />
+              </div>
             </div>
           ))}
       </div>
@@ -82,10 +138,16 @@ export function extractOutcomeBlock(
 ): { before: string; raw: string; after: string } | null {
   const fenced = extractFencedOutcomeBlock(text);
   const tagged = extractTaggedOutcomeBlock(text);
+  const dashed = extractDashedOutcomeBlock(text);
 
-  if (!fenced) return tagged;
-  if (!tagged) return fenced;
-  return fenced.before.length <= tagged.before.length ? fenced : tagged;
+  const candidates = [fenced, tagged, dashed].filter(
+    (candidate): candidate is { before: string; raw: string; after: string } => candidate !== null,
+  );
+
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, candidate) =>
+    candidate.before.length <= best.before.length ? candidate : best,
+  );
 }
 
 function extractFencedOutcomeBlock(
@@ -126,5 +188,23 @@ function extractTaggedOutcomeBlock(
     before: text.slice(0, start),
     raw: text.slice(contentStart, end).trim(),
     after: text.slice(end + closeTag.length),
+  };
+}
+
+function extractDashedOutcomeBlock(
+  text: string,
+): { before: string; raw: string; after: string } | null {
+  const match = /---outcome---\s*([\s\S]*?)\s*(?:---end---|---)(?=\s|$)/i.exec(text);
+  if (!match || match.index == null) return null;
+
+  const fullMatch = match[0];
+  const raw = match[1] ?? '';
+  const start = match.index;
+  const end = start + fullMatch.length;
+
+  return {
+    before: text.slice(0, start),
+    raw: raw.trim(),
+    after: text.slice(end),
   };
 }

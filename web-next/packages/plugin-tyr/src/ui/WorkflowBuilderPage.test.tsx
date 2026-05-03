@@ -43,10 +43,16 @@ const wf2: Workflow = {
 
 function wrap(service: Record<string, unknown>) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const personaService = {
+    listPersonas: vi.fn().mockResolvedValue([]),
+    getPersonaYaml: vi.fn().mockResolvedValue(''),
+  };
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <QueryClientProvider client={client}>
-        <ServicesProvider services={service}>{children}</ServicesProvider>
+        <ServicesProvider services={{ 'ravn.personas': personaService, ...service }}>
+          {children}
+        </ServicesProvider>
       </QueryClientProvider>
     );
   };

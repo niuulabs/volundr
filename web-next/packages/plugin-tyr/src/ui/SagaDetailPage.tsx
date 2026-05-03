@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { LoadingState, ErrorState, EmptyState, PersonaAvatar } from '@niuulabs/ui';
 import type { PersonaRole } from '@niuulabs/domain';
 import type { RaidStatus, Saga, Phase, Raid } from '../domain/saga';
-import { useSaga } from './useSaga';
+import { useAssignSagaWorkflow, useSaga } from './useSaga';
 import { usePhases } from './usePhases';
 import { WorkflowCard } from './WorkflowCard';
+import { SagaWorkflowModal } from './SagaWorkflowModal';
 import { StageProgressRail } from './StageProgressRail';
 import { ConfidenceDriftCard } from './ConfidenceDriftCard';
 
@@ -177,6 +179,7 @@ interface SagaDetailPageProps {
 
 export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPageProps) {
   const navigate = useNavigate();
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
   const {
     data: saga,
     isLoading: sagaLoading,
@@ -189,6 +192,7 @@ export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPag
     isError: phasesError,
     error: phasesErr,
   } = usePhases(sagaId);
+  const assignWorkflow = useAssignSagaWorkflow(sagaId);
 
   if (sagaLoading || phasesLoading) return <LoadingState label="Loading saga…" />;
   if (sagaError)
@@ -205,6 +209,14 @@ export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPag
 
   const allPhases = phases ?? [];
   const branchLabel = `${saga.featureBranch} → ${saga.baseBranch}`;
+
+  function handleAssignWorkflow(workflowId: string | null) {
+    assignWorkflow.mutate(workflowId, {
+      onSuccess: () => {
+        setShowWorkflowModal(false);
+      },
+    });
+  }
 
   return (
     <div className="niuu-space-y-4">
@@ -242,11 +254,25 @@ export function SagaDetailPage({ sagaId, hideBackButton = false }: SagaDetailPag
         </div>
 
         <div className="niuu-space-y-4">
-          <WorkflowCard workflow={saga.workflow} workflowVersion={saga.workflowVersion} />
+          <WorkflowCard
+            workflow={saga.workflow}
+            workflowVersion={saga.workflowVersion}
+            isUpdating={assignWorkflow.isPending}
+            onAssign={() => setShowWorkflowModal(true)}
+            onClear={saga.workflowId ? () => handleAssignWorkflow(null) : undefined}
+          />
           <StageProgressRail phases={allPhases} />
           <ConfidenceDriftCard sagaId={saga.id} confidence={saga.confidence} />
         </div>
       </div>
+      {showWorkflowModal && (
+        <SagaWorkflowModal
+          open={showWorkflowModal}
+          onOpenChange={setShowWorkflowModal}
+          sagaName={saga.name}
+          onAssign={(workflow) => handleAssignWorkflow(workflow.id)}
+        />
+      )}
     </div>
   );
 }

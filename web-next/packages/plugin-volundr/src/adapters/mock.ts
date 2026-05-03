@@ -1438,6 +1438,8 @@ export function createMockVolundrService(): IVolundrService {
 
     getLogs: async () => [],
     subscribeLogs: () => () => {},
+    getAggregatedLogs: async () => ({ lines: [], participants: [] }),
+    subscribeAggregatedLogs: () => () => {},
 
     getCodeServerUrl: async () => null,
 

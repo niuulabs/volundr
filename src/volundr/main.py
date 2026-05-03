@@ -6,8 +6,10 @@ import os
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from importlib.metadata import metadata
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -58,6 +60,12 @@ from volundr.adapters.outbound.memory_secrets import InMemorySecretManager
 from volundr.adapters.outbound.pg_event_sink import PostgresEventSink
 from volundr.adapters.outbound.postgres import PostgresSessionRepository
 from volundr.adapters.outbound.postgres_chronicles import PostgresChronicleRepository
+from volundr.adapters.outbound.postgres_communication_cursors import (
+    PostgresCommunicationCursorRepository,
+)
+from volundr.adapters.outbound.postgres_communication_routes import (
+    PostgresCommunicationRouteRepository,
+)
 from volundr.adapters.outbound.postgres_integrations import PostgresIntegrationRepository
 from volundr.adapters.outbound.postgres_mappings import PostgresMappingRepository
 from volundr.adapters.outbound.postgres_presets import PostgresPresetRepository
@@ -68,6 +76,7 @@ from volundr.adapters.outbound.postgres_timeline import PostgresTimelineReposito
 from volundr.adapters.outbound.postgres_tokens import PostgresTokenTracker
 from volundr.adapters.outbound.postgres_users import PostgresUserRepository
 from volundr.adapters.outbound.pricing import HardcodedPricingProvider
+from volundr.adapters.outbound.skuld_room import SkuldRoomAdapter
 from volundr.config import LoggingConfig, Settings
 from volundr.domain.ports import SessionContributor
 from volundr.domain.services import (
@@ -82,9 +91,11 @@ from volundr.domain.services import (
     TokenService,
     TrackerService,
 )
+from volundr.domain.services.communication_ingress import CommunicationIngressService
 from volundr.domain.services.event_ingestion import EventIngestionService
 from volundr.domain.services.feature import FeatureService
 from volundr.domain.services.profile import ForgeProfileService
+from volundr.domain.services.telegram_ingress import TelegramIngressService
 from volundr.domain.services.template import WorkspaceTemplateService
 from volundr.domain.services.workspace import WorkspaceService
 from volundr.infrastructure.database import database_pool
@@ -262,6 +273,9 @@ def _create_contributors(
 
     contributors: list[SessionContributor] = []
 
+    def _has_contributor(name: str) -> bool:
+        return any(contributor.name == name for contributor in contributors)
+
     # Auto-wire SessionDefinitionContributor first so definition defaults
     # (broker.cliType, transportAdapter, etc.) are the base layer that
     # later contributors (templates, profiles, resources) can override.
@@ -303,7 +317,14 @@ def _create_contributors(
 
     # Always wire the prompt contributor so system_prompt/initial_prompt
     # from the launch request (or dispatch) are injected into the spec.
+    from volundr.adapters.outbound.contributors.notification_channels import (
+        NotificationChannelContributor,
+    )
     from volundr.adapters.outbound.contributors.prompt import PromptContributor
+
+    if not _has_contributor("notification_channels"):
+        contributors.append(NotificationChannelContributor(**ports))
+        logger.info("Session contributor: notification_channels (auto-wired)")
 
     contributors.append(PromptContributor())
 
@@ -311,8 +332,9 @@ def _create_contributors(
     # multi-sidecar sessions (locally via ravn flock init/start).
     from volundr.adapters.outbound.contributors.ravn_flock import RavnFlockContributor
 
-    contributors.append(RavnFlockContributor(**ports))
-    logger.info("Session contributor: ravn_flock (auto-wired)")
+    if not _has_contributor("ravn_flock"):
+        contributors.append(RavnFlockContributor(**ports))
+        logger.info("Session contributor: ravn_flock (auto-wired)")
 
     return contributors
 
@@ -413,8 +435,6 @@ async def _seed_linear_integration(
     This lets the integration-based /issues/search endpoint find Linear
     without manual UI setup.
     """
-    from datetime import UTC, datetime
-
     from niuu.domain.models import IntegrationConnection, IntegrationType, SecretType
 
     owner_id = "dev-user"
@@ -441,6 +461,79 @@ async def _seed_linear_integration(
         slug="linear",
     )
     await integration_repo.save_connection(connection)
+
+
+def _seeded_integration_connection_id(
+    *,
+    owner_type: str,
+    owner_id: str,
+    integration_type: str,
+    adapter: str,
+    credential_name: str,
+    slug: str,
+) -> str:
+    """Return a stable UUID for a config-seeded integration connection."""
+    value = (
+        f"volundr:integration-seed:{owner_type}:{owner_id}:{integration_type}:"
+        f"{adapter}:{credential_name}:{slug}"
+    )
+    return str(uuid5(NAMESPACE_URL, value))
+
+
+async def _seed_configured_integrations(
+    integration_repo: object,
+    credential_store: object,
+    settings: Settings,
+) -> None:
+    """Seed configured integration connections into storage at startup."""
+    from niuu.domain.models import IntegrationConnection
+
+    for seed in settings.integrations.seed_connections:
+        if seed.credential is not None:
+            await credential_store.store(
+                owner_type=seed.owner_type,
+                owner_id=seed.owner_id,
+                name=seed.credential_name,
+                secret_type=seed.credential.secret_type,
+                data=seed.credential.data,
+                metadata=seed.credential.metadata,
+            )
+
+        connection = IntegrationConnection(
+            id=seed.id
+            or _seeded_integration_connection_id(
+                owner_type=seed.owner_type,
+                owner_id=seed.owner_id,
+                integration_type=str(seed.integration_type),
+                adapter=seed.adapter,
+                credential_name=seed.credential_name,
+                slug=seed.slug,
+            ),
+            owner_id=seed.owner_id,
+            integration_type=seed.integration_type,
+            adapter=seed.adapter,
+            credential_name=seed.credential_name,
+            config=seed.config,
+            enabled=seed.enabled,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            slug=seed.slug,
+        )
+        await integration_repo.save_connection(connection)
+
+
+def _has_seeded_linear_integration(settings: Settings) -> bool:
+    """Return whether config already seeds a Linear issue-tracker connection."""
+    from niuu.domain.models import IntegrationType
+
+    for seed in settings.integrations.seed_connections:
+        if seed.integration_type != IntegrationType.ISSUE_TRACKER:
+            continue
+        if seed.slug == "linear":
+            return True
+        if seed.adapter == "volundr.adapters.outbound.linear.LinearAdapter":
+            return True
+    return False
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -558,6 +651,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             # Create adapters
             repository = PostgresSessionRepository(pool)
+            communication_route_repository = PostgresCommunicationRouteRepository(pool)
+            communication_cursor_repository = PostgresCommunicationCursorRepository(pool)
             stats_repository = PostgresStatsRepository(pool)
             token_tracker = PostgresTokenTracker(pool)
             pod_manager = _create_pod_manager(settings)
@@ -633,6 +728,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 integration_registry=integration_registry,
                 credential_store=credential_store,
             )
+            session_room_port = SkuldRoomAdapter(repository)
+            communication_ingress = CommunicationIngressService(
+                route_repository=communication_route_repository,
+                room_port=session_room_port,
+            )
+            telegram_ingress = TelegramIngressService(
+                integration_repo=integration_repo,
+                credential_store=credential_store,
+                communication_ingress=communication_ingress,
+                cursor_repository=communication_cursor_repository,
+            )
 
             # Create session contributors (dynamic adapter pattern)
             mount_strategies = SecretMountStrategyRegistry()
@@ -665,6 +771,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 provisioning_timeout=settings.provisioning.timeout_seconds,
                 provisioning_initial_delay=settings.provisioning.initial_delay_seconds,
                 integration_repo=integration_repo,
+                communication_route_repository=communication_route_repository,
+                session_communication_port=session_room_port,
             )
             stats_service = StatsService(stats_repository)
             token_service = TokenService(
@@ -865,9 +973,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 tracker_factory=tracker_factory,
             )
 
+            if settings.integrations.seed_connections:
+                await _seed_configured_integrations(
+                    integration_repo=integration_repo,
+                    credential_store=credential_store,
+                    settings=settings,
+                )
+                logger.info(
+                    "Seeded %d integration connection(s) from config",
+                    len(settings.integrations.seed_connections),
+                )
+
             # Seed Linear integration from config so the integration-based
             # endpoints (/issues/search) find it in the DB.
-            if settings.linear.enabled and settings.linear.api_key:
+            if (
+                settings.linear.enabled
+                and settings.linear.api_key
+                and not _has_seeded_linear_integration(settings)
+            ):
                 await _seed_linear_integration(
                     integration_repo,
                     credential_store,
@@ -933,6 +1056,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.include_router(canonical_tracker_router)
 
             app.state.user_integration_service = user_integration_service
+            app.state.communication_route_repository = communication_route_repository
+            app.state.communication_cursor_repository = communication_cursor_repository
+            app.state.session_room_port = session_room_port
+            app.state.communication_ingress = communication_ingress
+            app.state.telegram_ingress = telegram_ingress
 
             # Event pipeline: sinks + ingestion service + REST endpoints
             pg_event_sink = PostgresEventSink(
@@ -1058,6 +1186,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             background_task = asyncio.create_task(
                 _broadcast_periodic_updates(broadcaster, stats_service)
             )
+            await telegram_ingress.start()
 
             # Reconcile sessions stuck in PROVISIONING after a restart
             await session_service.reconcile_provisioning_sessions()
@@ -1065,6 +1194,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             try:
                 yield
             finally:
+                await telegram_ingress.stop()
                 background_task.cancel()
                 try:
                     await background_task

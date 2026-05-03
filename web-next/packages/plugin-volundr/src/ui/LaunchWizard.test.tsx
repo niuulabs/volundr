@@ -16,7 +16,13 @@ function wrap(open = true, onOpenChange = vi.fn(), service = createMockVolundrSe
   const templateStore = createMockTemplateStore();
   return render(
     <QueryClientProvider client={client}>
-      <ServicesProvider services={{ volundr: service, 'volundr.templates': templateStore }}>
+      <ServicesProvider
+        services={{
+          volundr: service,
+          'volundr.templates': templateStore,
+          'niuu.repos': { getRepos: service.getRepos.bind(service) },
+        }}
+      >
         <LaunchWizard open={open} onOpenChange={onOpenChange} />
       </ServicesProvider>
     </QueryClientProvider>,

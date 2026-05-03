@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { ChatMessage, RoomParticipant } from '../types';
 
 export interface UseRoomStateReturn {
@@ -37,8 +37,20 @@ export function useRoomState(
   const [activeFilter, setActiveFilter] = useState<string>(FILTER_ALL);
   const [showInternal, setShowInternal] = useState(false);
   const [expandedThreads, setExpandedThreads] = useState<ReadonlySet<string>>(new Set());
+  const initializedRoomModeRef = useRef(false);
 
   const isRoomMode = participants.size > 1;
+
+  useEffect(() => {
+    if (isRoomMode && !initializedRoomModeRef.current) {
+      initializedRoomModeRef.current = true;
+      setShowInternal(true);
+      return;
+    }
+    if (!isRoomMode) {
+      initializedRoomModeRef.current = false;
+    }
+  }, [isRoomMode]);
 
   const toggleInternal = useCallback(() => {
     setShowInternal((prev) => !prev);

@@ -149,6 +149,21 @@ class EventType(StrEnum):
     SESSION_ACTIVITY = "session_activity"
 
 
+class CommunicationPlatform(StrEnum):
+    """External communication platform."""
+
+    TELEGRAM = "telegram"
+    SLACK = "slack"
+    DISCORD = "discord"
+    WHATSAPP = "whatsapp"
+
+
+class CommunicationRouteMode(StrEnum):
+    """How inbound communication should enter the target session."""
+
+    ROOM = "room"
+
+
 class ModelProvider(StrEnum):
     """Provider type for LLM models."""
 
@@ -394,6 +409,10 @@ class Session(BaseModel):
         default_factory=dict,
         description="Metadata from the latest activity report",
     )
+    workload_type: str = Field(
+        default="session",
+        description="Workload type used to launch the session",
+    )
 
     model_config = {"frozen": False}
 
@@ -481,6 +500,60 @@ class Session(BaseModel):
                 "updated_at": now,
             }
         )
+
+
+@dataclass(frozen=True)
+class CommunicationRoute:
+    """Route an external conversation/thread back to a live session."""
+
+    id: UUID
+    platform: CommunicationPlatform
+    conversation_id: str
+    thread_id: str | None
+    session_id: UUID
+    owner_id: str
+    mode: CommunicationRouteMode = CommunicationRouteMode.ROOM
+    default_target: str | None = None
+    active: bool = True
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=_utc_now)
+    updated_at: datetime = field(default_factory=_utc_now)
+
+
+@dataclass(frozen=True)
+class InboundCommunicationMessage:
+    """Normalized inbound human message from an external communication channel."""
+
+    platform: CommunicationPlatform
+    conversation_id: str
+    thread_id: str | None
+    sender_external_id: str
+    sender_display_name: str
+    text: str
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class RoomParticipantInfo:
+    """Minimal participant information for dynamic targeting."""
+
+    peer_id: str
+    persona: str
+    display_name: str = ""
+    participant_type: str = "ravn"
+    status: str = "idle"
+
+
+@dataclass(frozen=True)
+class SessionCommunicationTarget:
+    """Resolved external communication target exposed by a live session."""
+
+    platform: CommunicationPlatform
+    conversation_id: str
+    thread_id: str | None = None
+    mode: CommunicationRouteMode = CommunicationRouteMode.ROOM
+    default_target: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class TimelineEventType(StrEnum):

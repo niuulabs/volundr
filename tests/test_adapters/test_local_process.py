@@ -5,17 +5,20 @@ from __future__ import annotations
 import asyncio
 import json
 import signal
+import socket
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
+from niuu.mesh.ipc import skuld_mesh_addresses
 from volundr.adapters.outbound.local_process import (
     DEFAULT_CLAUDE_BINARY,
     DEFAULT_MAX_CONCURRENT,
     DEFAULT_SDK_PORT_START,
     DEFAULT_STOP_TIMEOUT,
+    FlockPortPlan,
     LocalProcessPodManager,
     ProcessInfo,
     ProcessState,
@@ -135,6 +138,134 @@ def _mock_spawn(
 
 
 # ------------------------------------------------------------------
+# Init tests
+# ------------------------------------------------------------------
+
+
+class TestInit:
+    def test_coerces_string_kwargs_from_env_backed_config(self, tmp_path: Path) -> None:
+        mgr = LocalProcessPodManager(
+            workspaces_dir=str(tmp_path / "workspaces"),
+            claude_binary="claude",
+            max_concurrent="4",
+            sdk_port_start="9200",
+            stop_timeout="15",
+            state_file=str(tmp_path / "state.json"),
+            allowed_mount_prefixes="/repo-a,/repo-b",
+        )
+
+        assert mgr._max_concurrent == 4
+        assert mgr._stop_timeout == 15
+        assert mgr._port_allocator.allocate() == 9200
+        assert mgr._allowed_mount_prefixes == ["/repo-a", "/repo-b"]
+
+
+class TestSkuldEnv:
+    def test_build_env_includes_broker_overrides(self) -> None:
+        """Broker values from session definitions are mapped to Skuld env vars."""
+        spec = SessionSpec(
+            values={
+                "broker": {
+                    "cliType": "codex-ws",
+                    "transport": "sdk",
+                    "transportAdapter": "skuld.transports.codex_ws.CodexWebSocketTransport",
+                    "skipPermissions": False,
+                    "agentTeams": True,
+                }
+            },
+            pod_spec=PodSpecAdditions(),
+        )
+
+        env = LocalProcessPodManager._build_env(spec, Path("/tmp/ws"))
+
+        assert env["SKULD__CLI_TYPE"] == "codex-ws"
+        assert env["SKULD__TRANSPORT"] == "sdk"
+        assert env["SKULD__TRANSPORT_ADAPTER"] == (
+            "skuld.transports.codex_ws.CodexWebSocketTransport"
+        )
+        assert env["SKULD__SKIP_PERMISSIONS"] == "false"
+        assert env["SKULD__AGENT_TEAMS"] == "true"
+
+    def test_build_env_includes_telegram_runtime_channel(self) -> None:
+        """Broker telegram values are mapped to Skuld env vars."""
+        spec = SessionSpec(
+            values={
+                "broker": {
+                    "telegram": {
+                        "enabled": True,
+                        "botToken": "bot-token",
+                        "chatId": "chat-123",
+                        "notifyOnly": True,
+                        "topicMode": "topic_per_session",
+                    }
+                }
+            },
+            pod_spec=PodSpecAdditions(),
+        )
+
+        env = LocalProcessPodManager._build_env(spec, Path("/tmp/ws"))
+
+        assert env["SKULD__TELEGRAM__ENABLED"] == "true"
+        assert env["SKULD__TELEGRAM__BOT_TOKEN"] == "bot-token"
+        assert env["SKULD__TELEGRAM__CHAT_ID"] == "chat-123"
+        assert env["SKULD__TELEGRAM__NOTIFY_ONLY"] == "true"
+        assert env["SKULD__TELEGRAM__TOPIC_MODE"] == "topic_per_session"
+
+    def test_build_env_includes_telegram_thread_override(self) -> None:
+        spec = SessionSpec(
+            values={
+                "broker": {
+                    "telegram": {
+                        "enabled": True,
+                        "botToken": "bot-token",
+                        "chatId": "chat-123",
+                        "notifyOnly": True,
+                        "topicMode": "fixed_topic",
+                        "messageThreadId": 77,
+                    }
+                }
+            },
+            pod_spec=PodSpecAdditions(),
+        )
+
+        env = LocalProcessPodManager._build_env(spec, Path("/tmp/ws"))
+
+        assert env["SKULD__TELEGRAM__TOPIC_MODE"] == "fixed_topic"
+        assert env["SKULD__TELEGRAM__MESSAGE_THREAD_ID"] == "77"
+
+
+class TestFlockPortAllocation:
+    def test_pick_flock_base_port_skips_taken_ranges(
+        self,
+        manager: LocalProcessPodManager,
+    ) -> None:
+        """The flock allocator reserves ports for Skuld and all ravn peers."""
+        free_checks: list[int] = []
+        taken_ports = {7480, 7481, 7580, 7482}
+
+        def fake_is_port_free(port: int) -> bool:
+            free_checks.append(port)
+            return port not in taken_ports
+
+        with patch.object(SdkPortAllocator, "_is_port_free", side_effect=fake_is_port_free):
+            base_port = manager._pick_flock_base_port(node_count=1)
+
+        assert base_port == 7483
+        assert free_checks[:4] == [7480, 7481, 7482, 7483]
+
+    def test_flock_port_plan_offsets_ravn_after_skuld(self) -> None:
+        """Ravn sidecars are shifted off Skuld's mesh slot in mini mode."""
+        plan = LocalProcessPodManager._flock_port_plan(7484)
+        assert plan == FlockPortPlan(
+            session_base_port=7484,
+            ravn_base_port=7486,
+            skuld_pub_port=7484,
+            skuld_rep_port=7485,
+            skuld_handshake_port=7584,
+        )
+
+
+# ------------------------------------------------------------------
 # SdkPortAllocator tests
 # ------------------------------------------------------------------
 
@@ -198,6 +329,14 @@ class TestSdkPortAllocator:
         """Integration test: _is_port_free works with real sockets."""
         # Pick a high ephemeral port that is very likely free
         assert SdkPortAllocator._is_port_free(59999) is True
+
+    def test_is_port_free_detects_wildcard_listener(self) -> None:
+        """Wildcard listeners must block flock reuse of the same port."""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("0.0.0.0", 0))
+            sock.listen(1)
+            port = sock.getsockname()[1]
+            assert SdkPortAllocator._is_port_free(port) is False
 
     def test_release_nonexistent_port_is_noop(self) -> None:
         """Releasing a port that was never allocated is a no-op."""
@@ -567,7 +706,6 @@ class TestGitClone:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="Spawn tests need rewrite: _spawn_claude replaced by _spawn_skuld")
 class TestProcessSpawning:
     """Tests for Skuld process spawning."""
 
@@ -610,6 +748,11 @@ class TestProcessSpawning:
         with (
             patch.object(
                 manager,
+                "_resolve_skuld_command",
+                return_value=["python", "-m", "skuld"],
+            ),
+            patch.object(
+                manager,
                 "_resolve_claude_binary",
                 return_value="/usr/bin/fake-claude",
             ),
@@ -622,9 +765,10 @@ class TestProcessSpawning:
             await manager._spawn_skuld(git_session, default_spec, workspace, 9100)
 
         call_args = mock_exec.call_args[0]
-        assert "--sdk-url" in call_args
-        sdk_url_idx = call_args.index("--sdk-url")
-        assert f"ws://127.0.0.1:9100/ws/cli/{git_session.id}" in call_args[sdk_url_idx + 1]
+        assert call_args == ("python", "-m", "skuld")
+        env = mock_exec.call_args.kwargs["env"]
+        assert env["SKULD__PORT"] == "9100"
+        assert env["SKULD__SESSION__ID"] == str(git_session.id)
 
     async def test_spawn_closes_log_file(
         self,
@@ -682,6 +826,434 @@ class TestProcessSpawning:
         spec = SessionSpec(values={}, pod_spec=PodSpecAdditions())
         env = LocalProcessPodManager._build_env(spec, Path("/tmp/ws"))
         assert env["WORKSPACE_DIR"] == "/tmp/ws"
+
+    def test_build_env_includes_broker_overrides(self) -> None:
+        """Broker values from session definitions are mapped to Skuld env vars."""
+        spec = SessionSpec(
+            values={
+                "broker": {
+                    "cliType": "codex-ws",
+                    "transport": "sdk",
+                    "transportAdapter": "skuld.transports.codex_ws.CodexWebSocketTransport",
+                    "skipPermissions": False,
+                    "agentTeams": True,
+                }
+            },
+            pod_spec=PodSpecAdditions(),
+        )
+
+        env = LocalProcessPodManager._build_env(spec, Path("/tmp/ws"))
+
+        assert env["SKULD__CLI_TYPE"] == "codex-ws"
+        assert env["SKULD__TRANSPORT"] == "sdk"
+        assert env["SKULD__TRANSPORT_ADAPTER"] == (
+            "skuld.transports.codex_ws.CodexWebSocketTransport"
+        )
+        assert env["SKULD__SKIP_PERMISSIONS"] == "false"
+        assert env["SKULD__AGENT_TEAMS"] == "true"
+
+    def test_build_env_includes_telegram_runtime_channel(self) -> None:
+        """Broker telegram values are mapped to Skuld env vars."""
+        spec = SessionSpec(
+            values={
+                "broker": {
+                    "telegram": {
+                        "enabled": True,
+                        "botToken": "bot-token",
+                        "chatId": "chat-123",
+                        "notifyOnly": False,
+                    }
+                }
+            },
+            pod_spec=PodSpecAdditions(),
+        )
+
+        env = LocalProcessPodManager._build_env(spec, Path("/tmp/ws"))
+
+        assert env["SKULD__TELEGRAM__ENABLED"] == "true"
+        assert env["SKULD__TELEGRAM__BOT_TOKEN"] == "bot-token"
+        assert env["SKULD__TELEGRAM__CHAT_ID"] == "chat-123"
+        assert env["SKULD__TELEGRAM__NOTIFY_ONLY"] == "false"
+
+    async def test_spawn_skuld_preserves_broker_transport_overrides(
+        self,
+        manager: LocalProcessPodManager,
+        git_session: Session,
+        tmp_workspaces: Path,
+    ) -> None:
+        """Session-definition broker config must survive mini-mode spawn."""
+        workspace = tmp_workspaces / str(git_session.id)
+        workspace.mkdir(parents=True)
+
+        spec = SessionSpec(
+            values={
+                "broker": {
+                    "cliType": "codex-ws",
+                    "transportAdapter": "skuld.transports.codex_ws.CodexWebSocketTransport",
+                    "skipPermissions": False,
+                }
+            },
+            pod_spec=PodSpecAdditions(),
+        )
+
+        mock_proc = MagicMock()
+        mock_proc.pid = 42
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+            return_value=mock_proc,
+        ) as mock_exec:
+            await manager._spawn_skuld(git_session, spec, workspace, 9100)
+
+        env = mock_exec.call_args.kwargs["env"]
+        assert env["SKULD__CLI_TYPE"] == "codex-ws"
+        assert env["SKULD__TRANSPORT_ADAPTER"] == (
+            "skuld.transports.codex_ws.CodexWebSocketTransport"
+        )
+        assert env["SKULD__SKIP_PERMISSIONS"] == "false"
+        assert "SKULD__CLI_BINARY" not in env
+
+    async def test_spawn_skuld_overrides_mesh_ports_for_local_flock(
+        self,
+        manager: LocalProcessPodManager,
+        git_session: Session,
+        tmp_workspaces: Path,
+    ) -> None:
+        """Mini-mode local flocks must share one explicit mesh layout."""
+        workspace = tmp_workspaces / str(git_session.id)
+        workspace.mkdir(parents=True)
+
+        spec = SessionSpec(
+            values={},
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_ENABLED", "value": "true"},
+                    {"name": "MESH_PUB_ADDRESS", "value": "tcp://0.0.0.0:7480"},
+                    {"name": "MESH_REP_ADDRESS", "value": "tcp://0.0.0.0:7481"},
+                    {"name": "MESH_HANDSHAKE_PORT", "value": "7580"},
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        mock_proc = MagicMock()
+        mock_proc.pid = 42
+
+        with (
+            patch.object(manager, "_resolve_claude_binary", return_value="/usr/bin/fake-claude"),
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=mock_proc,
+            ) as mock_exec,
+        ):
+            await manager._spawn_skuld(
+                git_session,
+                spec,
+                workspace,
+                9100,
+                flock_plan=FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+            )
+
+        env = mock_exec.call_args.kwargs["env"]
+        expected_pub, expected_rep = skuld_mesh_addresses(workspace / ".flock")
+        assert env["SKULD__MESH__NNG__PUB_SUB_ADDRESS"] == expected_pub
+        assert env["SKULD__MESH__NNG__REQ_REP_ADDRESS"] == expected_rep
+        assert env["SKULD__MESH__HANDSHAKE_PORT"] == "7584"
+
+    async def test_start_flock_uses_shifted_ravn_ports_and_loopback_peer(
+        self,
+        manager: LocalProcessPodManager,
+        tmp_workspaces: Path,
+    ) -> None:
+        """Local flock startup must keep Skuld on loopback and shift ravn slots."""
+        workspace = tmp_workspaces / "session"
+        workspace.mkdir(parents=True)
+        flock_dir = workspace / ".flock"
+        flock_dir.mkdir()
+        (flock_dir / "cluster.yaml").write_text(
+            "peers:\n"
+            "- peer_id: flock-reviewer\n"
+            "  persona: reviewer\n"
+            "  display_name: reviewer\n"
+            "  pub_address: tcp://127.0.0.1:7486\n"
+            "  rep_address: tcp://127.0.0.1:7487\n",
+            encoding="utf-8",
+        )
+
+        spec = SessionSpec(
+            values={},
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        with patch("subprocess.run") as mock_run:
+            result = await manager._start_flock(
+                spec,
+                workspace,
+                FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+                skuld_port=9101,
+            )
+
+        assert result == flock_dir
+        init_call = mock_run.call_args_list[0]
+        assert init_call.args[0][-6:] == [
+            "--mesh-transport",
+            "ipc",
+            "--no-http-gateway",
+            "--base-port",
+            "7486",
+            "--force",
+        ]
+        cluster = (flock_dir / "cluster.yaml").read_text(encoding="utf-8")
+        expected_pub, expected_rep = skuld_mesh_addresses(flock_dir)
+        assert "peer_id: skuld-test" in cluster
+        assert f"pub_address: {expected_pub}" in cluster
+        assert f"rep_address: {expected_rep}" in cluster
+
+    async def test_start_flock_injects_workflow_into_node_configs(
+        self,
+        manager: LocalProcessPodManager,
+        tmp_workspaces: Path,
+    ) -> None:
+        workspace = tmp_workspaces / "session-with-workflow"
+        workspace.mkdir(parents=True)
+        flock_dir = workspace / ".flock"
+        flock_dir.mkdir()
+        (flock_dir / "cluster.yaml").write_text("peers: []\n", encoding="utf-8")
+        (flock_dir / "node-reviewer.yaml").write_text("persona: reviewer\n", encoding="utf-8")
+
+        spec = SessionSpec(
+            values={
+                "workflow": {
+                    "workflow_id": "wf-1",
+                    "name": "Review Flow",
+                    "version": "draft",
+                    "scope": "user",
+                    "initial_context": "Review this change.",
+                    "graph": {
+                        "nodes": [{"id": "stage-1", "kind": "stage", "label": "Review"}],
+                        "edges": [],
+                    },
+                }
+            },
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        with patch("subprocess.run"):
+            await manager._start_flock(
+                spec,
+                workspace,
+                FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+                skuld_port=9101,
+            )
+
+        node_config = (flock_dir / "node-reviewer.yaml").read_text(encoding="utf-8")
+        assert "workflow_id: wf-1" in node_config
+        assert "name: Review Flow" in node_config
+        assert "initial_context: Review this change." in node_config
+
+    async def test_start_flock_applies_llm_and_persona_overrides(
+        self,
+        manager: LocalProcessPodManager,
+        tmp_workspaces: Path,
+    ) -> None:
+        workspace = tmp_workspaces / "session-with-overrides"
+        workspace.mkdir(parents=True)
+        flock_dir = workspace / ".flock"
+        flock_dir.mkdir()
+        (flock_dir / "cluster.yaml").write_text("peers: []\n", encoding="utf-8")
+        (flock_dir / "node-reviewer.yaml").write_text(
+            "persona: reviewer\ninitiative:\n  enabled: true\n  max_concurrent_tasks: 3\n",
+            encoding="utf-8",
+        )
+
+        spec = SessionSpec(
+            values={
+                "flock": {
+                    "personas": [
+                        {
+                            "name": "reviewer",
+                            "llm": {"model": "Qwen/Qwen3.6-35B-A3B-FP8"},
+                            "system_prompt_extra": "Be extra careful.",
+                            "iteration_budget": 40,
+                            "max_concurrent_tasks": 1,
+                        }
+                    ],
+                    "llm_config": {
+                        "model": "google/gemma-4-26B-A4B-it",
+                        "max_tokens": 8192,
+                    },
+                    "max_concurrent_tasks": 5,
+                }
+            },
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        with (
+            patch("subprocess.run"),
+            patch("ravn.adapters.personas.loader.FilesystemPersonaAdapter") as loader_cls,
+        ):
+            loader_cls.return_value.load.return_value = MagicMock(allowed_tools=["file", "git"])
+            await manager._start_flock(
+                spec,
+                workspace,
+                FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+                skuld_port=9101,
+            )
+
+        node_config = (flock_dir / "node-reviewer.yaml").read_text(encoding="utf-8")
+        assert "model: Qwen/Qwen3.6-35B-A3B-FP8" in node_config
+        assert "max_concurrent_tasks: 1" in node_config
+        assert "system_prompt_extra: Be extra careful." in node_config
+        assert "iteration_budget: 40" in node_config
+        assert "enabled: true" in node_config
+        assert "broker_url: ws://127.0.0.1:9101/ws/ravn" in node_config
+
+    async def test_start_flock_enriches_cluster_peers_with_persona_metadata(
+        self,
+        manager: LocalProcessPodManager,
+        tmp_workspaces: Path,
+    ) -> None:
+        workspace = tmp_workspaces / "session-with-metadata"
+        workspace.mkdir(parents=True)
+        flock_dir = workspace / ".flock"
+        flock_dir.mkdir()
+        (flock_dir / "cluster.yaml").write_text(
+            "peers:\n"
+            "  - peer_id: flock-coder\n"
+            "    persona: coder\n"
+            "    display_name: coder\n"
+            "  - peer_id: flock-reviewer\n"
+            "    persona: reviewer\n"
+            "    display_name: reviewer\n",
+            encoding="utf-8",
+        )
+        (flock_dir / "node-coder.yaml").write_text("persona: coder\n", encoding="utf-8")
+        (flock_dir / "node-reviewer.yaml").write_text("persona: reviewer\n", encoding="utf-8")
+
+        spec = SessionSpec(
+            values={
+                "workflow": {
+                    "graph": {
+                        "nodes": [
+                            {
+                                "id": "stage-coder",
+                                "kind": "stage",
+                                "personaIds": ["coder"],
+                            },
+                            {
+                                "id": "stage-reviewer",
+                                "kind": "stage",
+                                "personaIds": ["reviewer"],
+                            },
+                            {
+                                "id": "trigger-1",
+                                "kind": "trigger",
+                                "dispatchEvent": "code.requested",
+                            },
+                        ],
+                        "edges": [
+                            {
+                                "source": "stage-coder",
+                                "target": "stage-reviewer",
+                                "label": "code.changed -> code.changed",
+                            }
+                        ],
+                    }
+                },
+                "flock": {
+                    "personas": [{"name": "coder"}, {"name": "reviewer"}],
+                    "llm_config": {"model": "google/gemma-4-26B-A4B-it"},
+                    "max_concurrent_tasks": 3,
+                },
+            },
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-coder"},
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        with (
+            patch("subprocess.run"),
+            patch("ravn.adapters.personas.loader.FilesystemPersonaAdapter") as loader_cls,
+        ):
+            loader = loader_cls.return_value
+            loader.load.side_effect = lambda persona: MagicMock(
+                allowed_tools=["file", "git"] if persona == "coder" else ["file", "ravn"]
+            )
+            await manager._start_flock(
+                spec,
+                workspace,
+                FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+                skuld_port=9101,
+            )
+
+        cluster = (flock_dir / "cluster.yaml").read_text(encoding="utf-8")
+        assert "capabilities:" in cluster
+        assert "consumes_event_types:" in cluster
+        assert "emits_event_types:" in cluster
+        assert "code.requested" in cluster
+        assert "code.changed" in cluster
 
 
 class TestResolveClaude:
@@ -1237,3 +1809,177 @@ class TestConstructor:
             )
         assert "~" not in str(mgr._workspaces_dir)
         assert "~" not in str(mgr._state_file)
+
+
+class TestLocalFlockMeshMode:
+    async def test_spawn_skuld_uses_ipc_mesh_addresses_for_local_flock(
+        self,
+        manager: LocalProcessPodManager,
+        git_session: Session,
+        tmp_workspaces: Path,
+    ) -> None:
+        workspace = tmp_workspaces / str(git_session.id)
+        workspace.mkdir(parents=True)
+
+        spec = SessionSpec(
+            values={},
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_ENABLED", "value": "true"},
+                    {"name": "MESH_PUB_ADDRESS", "value": "tcp://0.0.0.0:7480"},
+                    {"name": "MESH_REP_ADDRESS", "value": "tcp://0.0.0.0:7481"},
+                    {"name": "MESH_HANDSHAKE_PORT", "value": "7580"},
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        mock_proc = MagicMock()
+        mock_proc.pid = 42
+
+        with (
+            patch.object(manager, "_resolve_claude_binary", return_value="/usr/bin/fake-claude"),
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=mock_proc,
+            ) as mock_exec,
+        ):
+            await manager._spawn_skuld(
+                git_session,
+                spec,
+                workspace,
+                9100,
+                flock_plan=FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+            )
+
+        env = mock_exec.call_args.kwargs["env"]
+        expected_pub, expected_rep = skuld_mesh_addresses(workspace / ".flock")
+        assert env["SKULD__MESH__NNG__PUB_SUB_ADDRESS"] == expected_pub
+        assert env["SKULD__MESH__NNG__REQ_REP_ADDRESS"] == expected_rep
+        assert env["SKULD__MESH__HANDSHAKE_PORT"] == "7584"
+
+    async def test_start_flock_uses_ipc_mode_and_skuld_socket_addresses(
+        self,
+        manager: LocalProcessPodManager,
+        tmp_workspaces: Path,
+    ) -> None:
+        workspace = tmp_workspaces / "session"
+        workspace.mkdir(parents=True)
+        flock_dir = workspace / ".flock"
+        flock_dir.mkdir()
+        (flock_dir / "cluster.yaml").write_text(
+            "peers:\n"
+            "- peer_id: flock-reviewer\n"
+            "  persona: reviewer\n"
+            "  display_name: reviewer\n"
+            "  pub_address: tcp://127.0.0.1:7486\n"
+            "  rep_address: tcp://127.0.0.1:7487\n",
+            encoding="utf-8",
+        )
+
+        spec = SessionSpec(
+            values={},
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        with patch("subprocess.run") as mock_run:
+            result = await manager._start_flock(
+                spec,
+                workspace,
+                FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+                skuld_port=9101,
+            )
+
+        assert result == flock_dir
+        init_call = mock_run.call_args_list[0]
+        assert init_call.args[0][-6:] == [
+            "--mesh-transport",
+            "ipc",
+            "--no-http-gateway",
+            "--base-port",
+            "7486",
+            "--force",
+        ]
+        cluster = (flock_dir / "cluster.yaml").read_text(encoding="utf-8")
+        expected_pub, expected_rep = skuld_mesh_addresses(flock_dir)
+        assert "peer_id: skuld-test" in cluster
+        assert f"pub_address: {expected_pub}" in cluster
+        assert f"rep_address: {expected_rep}" in cluster
+
+    async def test_start_flock_preserves_workflow_injection_in_ipc_mode(
+        self,
+        manager: LocalProcessPodManager,
+        tmp_workspaces: Path,
+    ) -> None:
+        workspace = tmp_workspaces / "session-with-workflow"
+        workspace.mkdir(parents=True)
+        flock_dir = workspace / ".flock"
+        flock_dir.mkdir()
+        (flock_dir / "cluster.yaml").write_text("peers: []\n", encoding="utf-8")
+        (flock_dir / "node-reviewer.yaml").write_text("persona: reviewer\n", encoding="utf-8")
+
+        spec = SessionSpec(
+            values={
+                "workflow": {
+                    "workflow_id": "wf-1",
+                    "name": "Review Flow",
+                    "version": "draft",
+                    "scope": "user",
+                    "initial_context": "Review this change.",
+                    "graph": {
+                        "nodes": [{"id": "stage-1", "kind": "stage", "label": "Review"}],
+                        "edges": [],
+                    },
+                }
+            },
+            pod_spec=PodSpecAdditions(
+                env=(
+                    {"name": "MESH_PEER_ID", "value": "skuld-test"},
+                ),
+                extra_containers=(
+                    {"name": "ravn-reviewer"},
+                ),
+            ),
+        )
+
+        with patch("subprocess.run"):
+            await manager._start_flock(
+                spec,
+                workspace,
+                FlockPortPlan(
+                    session_base_port=7484,
+                    ravn_base_port=7486,
+                    skuld_pub_port=7484,
+                    skuld_rep_port=7485,
+                    skuld_handshake_port=7584,
+                ),
+                skuld_port=9101,
+            )
+
+        node_config = (flock_dir / "node-reviewer.yaml").read_text(encoding="utf-8")
+        assert "workflow_id: wf-1" in node_config
+        assert "name: Review Flow" in node_config
+        assert "initial_context: Review this change." in node_config

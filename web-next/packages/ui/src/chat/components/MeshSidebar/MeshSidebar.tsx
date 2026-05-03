@@ -7,6 +7,8 @@ interface MeshSidebarProps {
   participants: ReadonlyMap<string, RoomParticipant>;
   selectedPeerId: string | null;
   onSelectPeer: (peerId: string) => void;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }
 
 interface PeerCardProps {
@@ -19,6 +21,20 @@ interface GatewaySectionProps {
   gateway: string;
   latencyMs?: number;
   region?: string;
+}
+
+function isMeshVisibleParticipant(participant: RoomParticipant): boolean {
+  return participant.participantType === 'ravn' || participant.participantType === 'skuld';
+}
+
+function formatParticipantLabel(participant: RoomParticipant): string {
+  const role = participant.participantType === 'skuld' ? 'observer' : participant.persona;
+  const baseName = participant.displayName ?? participant.persona ?? participant.peerId;
+  if (!baseName) return role || participant.peerId;
+  if (participant.participantType === 'skuld' || participant.displayName) {
+    return role ? `${baseName} (${role})` : baseName;
+  }
+  return baseName;
 }
 
 function latencyClass(ms: number | undefined): string {
@@ -99,11 +115,7 @@ function PeerCard({ participant, isSelected, onSelect }: PeerCardProps) {
     >
       <div className="niuu-chat-peer-header">
         <span className="niuu-chat-peer-status-dot" data-status={participant.status} />
-        <span className="niuu-chat-peer-name">
-          {participant.displayName
-            ? `${participant.displayName} (${participant.persona})`
-            : participant.persona || participant.peerId}
-        </span>
+        <span className="niuu-chat-peer-name">{formatParticipantLabel(participant)}</span>
         <span className="niuu-chat-peer-status-label">{participant.status}</span>
       </div>
 
@@ -171,16 +183,70 @@ function PeerCard({ participant, isSelected, onSelect }: PeerCardProps) {
   );
 }
 
-export function MeshSidebar({ participants, selectedPeerId, onSelectPeer }: MeshSidebarProps) {
-  const peers = Array.from(participants.values()).filter((p) => p.participantType === 'ravn');
+export function MeshSidebar({
+  participants,
+  selectedPeerId,
+  onSelectPeer,
+  collapsed = false,
+  onToggleCollapsed,
+}: MeshSidebarProps) {
+  const ravnPeers = Array.from(participants.values()).filter((p) => p.participantType === 'ravn');
+  const peers = Array.from(participants.values()).filter(isMeshVisibleParticipant);
 
-  if (peers.length === 0) return null;
+  if (ravnPeers.length === 0 || peers.length === 0) return null;
+
+  if (collapsed) {
+    return (
+      <aside
+        className="niuu-chat-mesh-sidebar niuu-chat-mesh-sidebar--collapsed"
+        data-testid="mesh-sidebar"
+      >
+        <button
+          type="button"
+          className="niuu-chat-mesh-sidebar-collapse-toggle"
+          onClick={onToggleCollapsed}
+          aria-label="Expand mesh peers sidebar"
+          title="Expand mesh peers sidebar"
+        >
+          ›
+        </button>
+        <div className="niuu-chat-mesh-sidebar-collapsed-list">
+          {peers.map((peer) => (
+            <button
+              key={peer.peerId}
+              type="button"
+              className={cn(
+                'niuu-chat-mesh-sidebar-collapsed-peer',
+                selectedPeerId === peer.peerId && 'niuu-chat-mesh-sidebar-collapsed-peer--selected',
+              )}
+              onClick={() => onSelectPeer(peer.peerId)}
+              title={formatParticipantLabel(peer)}
+              aria-label={`Focus ${formatParticipantLabel(peer)}`}
+            >
+              <span className="niuu-chat-peer-status-dot" data-status={peer.status} />
+            </button>
+          ))}
+        </div>
+      </aside>
+    );
+  }
 
   return (
     <aside className="niuu-chat-mesh-sidebar" data-testid="mesh-sidebar">
       <div className="niuu-chat-mesh-sidebar-header">
-        <span className="niuu-chat-mesh-sidebar-title">Mesh Peers</span>
-        <span className="niuu-chat-mesh-sidebar-count">{peers.length}</span>
+        <div className="niuu-chat-mesh-sidebar-header-meta">
+          <span className="niuu-chat-mesh-sidebar-title">Mesh Peers</span>
+          <span className="niuu-chat-mesh-sidebar-count">{peers.length}</span>
+        </div>
+        <button
+          type="button"
+          className="niuu-chat-mesh-sidebar-collapse-toggle"
+          onClick={onToggleCollapsed}
+          aria-label="Collapse mesh peers sidebar"
+          title="Collapse mesh peers sidebar"
+        >
+          ‹
+        </button>
       </div>
       <div className="niuu-chat-mesh-sidebar-peer-list">
         {peers.map((peer) => (

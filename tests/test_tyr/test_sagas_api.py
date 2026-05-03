@@ -2,16 +2,28 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
+from niuu.domain.models import Principal
 from tyr.api.phases import create_saga_phases_router
-from tyr.api.sagas import create_sagas_router, resolve_saga_repo, resolve_volundr
+from tyr.api.sagas import (
+    _build_phase_summary,
+    _can_use_workflow,
+    _find_project,
+    _sanitize_log,
+    create_sagas_router,
+    resolve_git,
+    resolve_llm,
+    resolve_saga_repo,
+    resolve_volundr,
+)
 from tyr.api.tracker import resolve_trackers
 from tyr.config import AuthConfig
 from tyr.domain.models import (
@@ -24,9 +36,63 @@ from tyr.domain.models import (
     TrackerIssue,
     TrackerMilestone,
     TrackerProject,
+    WorkflowDefinition,
+    WorkflowScope,
 )
+from tyr.ports.workflow_repository import WorkflowRepository
 
 from .test_tracker_api import MockSagaRepo, MockTracker
+
+
+class InMemoryWorkflowRepository(WorkflowRepository):
+    def __init__(self, workflows: list[WorkflowDefinition] | None = None) -> None:
+        self._workflows = {workflow.id: workflow for workflow in workflows or []}
+
+    async def list_workflows(
+        self,
+        *,
+        owner_id: str,
+        scope: WorkflowScope | None = None,
+    ) -> list[WorkflowDefinition]:
+        return list(self._workflows.values())
+
+    async def get_workflow(self, workflow_id):
+        return self._workflows.get(workflow_id)
+
+    async def save_workflow(self, workflow: WorkflowDefinition) -> WorkflowDefinition:
+        self._workflows[workflow.id] = workflow
+        return workflow
+
+    async def delete_workflow(self, workflow_id) -> bool:
+        return self._workflows.pop(workflow_id, None) is not None
+
+
+def _workflow(*, executable: bool = True) -> WorkflowDefinition:
+    now = datetime.now(UTC)
+    return WorkflowDefinition(
+        id=uuid4(),
+        name="Review Flow",
+        description="",
+        version="1.0.0",
+        scope=WorkflowScope.USER,
+        owner_id="dev-user",
+        definition_yaml="name: Review Flow\nstages: []" if executable else None,
+        graph={
+            "nodes": [
+                {"id": "trigger-1", "kind": "trigger", "label": "Start"},
+                {
+                    "id": "stage-1",
+                    "kind": "stage",
+                    "label": "Review",
+                    "personaIds": ["reviewer"],
+                    "stageMembers": [{"personaId": "reviewer", "budget": 40}],
+                },
+            ],
+            "edges": [{"id": "e1", "source": "trigger-1", "target": "stage-1"}],
+        },
+        created_at=now,
+        updated_at=now,
+    )
 
 
 def _dev_settings() -> MagicMock:
@@ -34,6 +100,86 @@ def _dev_settings() -> MagicMock:
     s = MagicMock()
     s.auth = AuthConfig(allow_anonymous_dev=True)
     return s
+
+
+class _ProjectLookupFails:
+    async def get_project(self, project_id: str):
+        raise RuntimeError(f"lookup failed for {project_id}")
+
+
+class _PhaseSummaryNotImplementedRepo:
+    async def get_phases_by_saga(self, saga_id):
+        raise NotImplementedError
+
+
+def _principal(user_id: str = "dev-user") -> Principal:
+    return Principal(
+        user_id=user_id,
+        email=f"{user_id}@example.com",
+        tenant_id="tenant-1",
+        roles=[],
+    )
+
+
+def test_sanitize_log_escapes_newlines_and_carriage_returns() -> None:
+    assert _sanitize_log("hello\nworld\ragain") == "hello\\nworld\\ragain"
+
+
+def test_can_use_workflow_allows_system_scope_and_owner() -> None:
+    workflow = _workflow()
+    assert _can_use_workflow(workflow, _principal("dev-user")) is True
+    assert _can_use_workflow(workflow, _principal("other-user")) is False
+
+    assert _can_use_workflow(
+        replace(workflow, scope=WorkflowScope.SYSTEM, owner_id="someone-else"),
+        _principal("other-user"),
+    ) is True
+
+
+@pytest.mark.asyncio
+async def test_dependency_resolvers_raise_503_when_unconfigured() -> None:
+    for resolver, detail in (
+        (resolve_saga_repo, "Saga repository not configured"),
+        (resolve_llm, "LLM adapter not configured"),
+        (resolve_git, "Git adapter not configured"),
+        (resolve_volundr, "Volundr adapter not configured"),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await resolver()
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.detail == detail
+
+
+@pytest.mark.asyncio
+async def test_find_project_skips_failing_tracker_and_handles_all_failures() -> None:
+    tracker = MockTracker()
+    tracker.projects = [
+        TrackerProject(
+            id="proj-1",
+            name="Alpha",
+            description="",
+            status="started",
+            url="https://linear.app/test/project/alpha-abc123",
+            milestone_count=0,
+            issue_count=0,
+            slug="alpha",
+            progress=0.0,
+        )
+    ]
+
+    found = await _find_project("proj-1", [_ProjectLookupFails(), tracker])
+    assert found is not None
+    assert found.id == "proj-1"
+
+    missing = await _find_project("missing", [_ProjectLookupFails()])
+    assert missing is None
+
+
+@pytest.mark.asyncio
+async def test_build_phase_summary_falls_back_when_repo_does_not_support_phases() -> None:
+    summary = await _build_phase_summary(_PhaseSummaryNotImplementedRepo(), uuid4())
+    assert summary.total == 0
+    assert summary.completed == 0
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +376,179 @@ class TestGetSaga:
         assert data["phases"][1]["name"] == "Phase 2"
         assert data["phases"][2]["name"] == "Unassigned"
 
+    def test_returns_assigned_workflow_fields(
+        self, mock_tracker: MockTracker, saga_repo: MockSagaRepo
+    ):
+        workflow = _workflow()
+        saga = saga_repo.sagas[0]
+        saga_repo.sagas[0] = Saga(
+            id=saga.id,
+            tracker_id=saga.tracker_id,
+            tracker_type=saga.tracker_type,
+            slug=saga.slug,
+            name=saga.name,
+            repos=saga.repos,
+            feature_branch=saga.feature_branch,
+            status=saga.status,
+            confidence=saga.confidence,
+            created_at=saga.created_at,
+            base_branch=saga.base_branch,
+            owner_id=saga.owner_id,
+            workflow_id=workflow.id,
+            workflow_version=workflow.version,
+            workflow_snapshot={
+                "workflow_id": str(workflow.id),
+                "name": workflow.name,
+                "version": workflow.version,
+                "definition_yaml": workflow.definition_yaml,
+                "graph": workflow.graph,
+                "scope": workflow.scope.value,
+            },
+        )
+
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.state.settings = _dev_settings()
+        client = TestClient(app)
+
+        response = client.get(f"/api/v1/tyr/sagas/{saga.id}")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["workflow_id"] == str(workflow.id)
+        assert body["workflow"] == workflow.name
+        assert body["workflow_version"] == workflow.version
+
+
+class TestAssignWorkflow:
+    def test_assigns_graph_backed_workflow(
+        self, mock_tracker: MockTracker, saga_repo: MockSagaRepo
+    ):
+        workflow = _workflow()
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.state.settings = _dev_settings()
+        app.state.workflow_repo = InMemoryWorkflowRepository([workflow])
+        client = TestClient(app)
+
+        response = client.put(
+            f"/api/v1/tyr/sagas/{saga_repo.sagas[0].id}/workflow",
+            json={"workflow_id": str(workflow.id)},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["workflow_id"] == str(workflow.id)
+        assert body["workflow"] == workflow.name
+        assert body["workflow_version"] == workflow.version
+
+    def test_assigns_workflow_even_without_compiled_definition(
+        self,
+        mock_tracker: MockTracker,
+        saga_repo: MockSagaRepo,
+    ):
+        workflow = _workflow(executable=False)
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.state.settings = _dev_settings()
+        app.state.workflow_repo = InMemoryWorkflowRepository([workflow])
+        client = TestClient(app)
+
+        response = client.put(
+            f"/api/v1/tyr/sagas/{saga_repo.sagas[0].id}/workflow",
+            json={"workflow_id": str(workflow.id)},
+        )
+
+        assert response.status_code == 200
+
+    def test_rejects_invalid_saga_id_for_workflow_assignment(
+        self,
+        mock_tracker: MockTracker,
+        saga_repo: MockSagaRepo,
+    ) -> None:
+        workflow = _workflow()
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.state.settings = _dev_settings()
+        app.state.workflow_repo = InMemoryWorkflowRepository([workflow])
+        client = TestClient(app)
+
+        response = client.put("/api/v1/tyr/sagas/not-a-uuid/workflow", json={"workflow_id": None})
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Saga not found: not-a-uuid"
+
+    def test_returns_503_when_workflow_repo_is_missing(
+        self,
+        mock_tracker: MockTracker,
+        saga_repo: MockSagaRepo,
+    ) -> None:
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.state.settings = _dev_settings()
+        client = TestClient(app)
+
+        response = client.put(
+            f"/api/v1/tyr/sagas/{saga_repo.sagas[0].id}/workflow",
+            json={"workflow_id": str(uuid4())},
+        )
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "Workflow repository not configured"
+
+    def test_rejects_invalid_workflow_id(
+        self,
+        mock_tracker: MockTracker,
+        saga_repo: MockSagaRepo,
+    ) -> None:
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.state.settings = _dev_settings()
+        app.state.workflow_repo = InMemoryWorkflowRepository()
+        client = TestClient(app)
+
+        response = client.put(
+            f"/api/v1/tyr/sagas/{saga_repo.sagas[0].id}/workflow",
+            json={"workflow_id": "not-a-uuid"},
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == "Invalid workflow_id: 'not-a-uuid'"
+
+    def test_returns_404_when_workflow_assignment_target_saga_is_missing(
+        self,
+        mock_tracker: MockTracker,
+    ) -> None:
+        workflow = _workflow()
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
+        app.state.settings = _dev_settings()
+        app.state.workflow_repo = InMemoryWorkflowRepository([workflow])
+        client = TestClient(app)
+
+        missing_id = uuid4()
+        response = client.put(
+            f"/api/v1/tyr/sagas/{missing_id}/workflow",
+            json={"workflow_id": str(workflow.id)},
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == f"Saga not found: {missing_id}"
+
     def test_phases_contain_raids(self, client: TestClient, saga_repo: MockSagaRepo):
         saga_id = str(saga_repo.sagas[0].id)
         resp = client.get(f"/api/v1/tyr/sagas/{saga_id}")
@@ -329,6 +648,20 @@ class TestGetSagaErrors:
 
 
 class TestSpawnPlanSession:
+    def test_plan_config_returns_finalize_prompt(self, mock_tracker: MockTracker) -> None:
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
+        app.state.settings = _dev_settings()
+        app.state.settings.planner.finalize_prompt = "Finish the structure"
+        client = TestClient(app)
+
+        response = client.get("/api/v1/tyr/sagas/plan/config")
+
+        assert response.status_code == 200
+        assert response.json() == {"finalize_prompt": "Finish the structure"}
+
     def test_defaults_base_branch_to_main(self, mock_tracker: MockTracker) -> None:
         app = FastAPI()
         app.include_router(create_sagas_router())

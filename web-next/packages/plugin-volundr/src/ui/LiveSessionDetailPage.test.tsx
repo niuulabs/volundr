@@ -172,6 +172,11 @@ function buildVolundrService(session: VolundrSession | null = RUNNING_SESSION): 
     getUserFeaturePreferences: vi.fn().mockResolvedValue([]),
     getChronicle: vi.fn().mockResolvedValue(null),
     getLogs: vi.fn().mockResolvedValue([]),
+    getAggregatedLogs: vi.fn().mockResolvedValue({
+      lines: [],
+      participants: [],
+    }),
+    subscribeAggregatedLogs: vi.fn().mockReturnValue(() => {}),
   };
 }
 
@@ -342,6 +347,121 @@ describe('LiveSessionDetailPage', () => {
     });
   });
 
+  describe('logs tab', () => {
+    it('renders participant chips from aggregated logs', async () => {
+      const service = buildVolundrService();
+      vi.mocked(service.getAggregatedLogs).mockResolvedValue({
+        participants: [
+          { id: 'skuld', label: 'Skuld', kind: 'broker' },
+          { id: 'coder', label: 'Coder', kind: 'ravn' },
+        ],
+        lines: [
+          {
+            id: 'log-1',
+            sessionId: 'test-session-id-1234',
+            timestamp: Date.now(),
+            level: 'info',
+            participant: 'skuld',
+            participantLabel: 'Skuld',
+            participantKind: 'broker',
+            source: 'skuld.broker',
+            message: 'Workflow trigger dispatched',
+            sequence: 1,
+            stream: '.skuld.log',
+          },
+        ],
+      });
+
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={client}>
+          <ServicesProvider
+            services={{
+              volundr: service,
+              ptyStream: buildPtyStream(),
+              filesystem: buildFilesystem(),
+              sessionStore: buildSessionStore(),
+              metricsStream: createMockMetricsStream(),
+            }}
+          >
+            <LiveSessionDetailPage sessionId="test-session-id-1234" />
+          </ServicesProvider>
+        </QueryClientProvider>,
+      );
+
+      await screen.findByTestId('live-session-detail-page');
+      fireEvent.click(screen.getByRole('tab', { name: /Logs/i }));
+      await screen.findByTestId('live-logs-toolbar');
+      expect(screen.getByTestId('log-participant-skuld')).toBeInTheDocument();
+      expect(screen.getByTestId('log-participant-coder')).toBeInTheDocument();
+      expect(screen.getByText('Workflow trigger dispatched')).toBeInTheDocument();
+    });
+
+    it('filters rows when a participant chip is selected', async () => {
+      const service = buildVolundrService();
+      vi.mocked(service.getAggregatedLogs).mockResolvedValue({
+        participants: [
+          { id: 'skuld', label: 'Skuld', kind: 'broker' },
+          { id: 'coder', label: 'Coder', kind: 'ravn' },
+        ],
+        lines: [
+          {
+            id: 'log-1',
+            sessionId: 'test-session-id-1234',
+            timestamp: Date.now(),
+            level: 'info',
+            participant: 'skuld',
+            participantLabel: 'Skuld',
+            participantKind: 'broker',
+            source: 'skuld.broker',
+            message: 'Broker line',
+            sequence: 1,
+            stream: '.skuld.log',
+          },
+          {
+            id: 'log-2',
+            sessionId: 'test-session-id-1234',
+            timestamp: Date.now() + 1,
+            level: 'error',
+            participant: 'coder',
+            participantLabel: 'Coder',
+            participantKind: 'ravn',
+            source: 'ravn.adapters.llm.openai',
+            message: 'Coder line',
+            sequence: 2,
+            stream: 'logs/coder.log',
+          },
+        ],
+      });
+
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={client}>
+          <ServicesProvider
+            services={{
+              volundr: service,
+              ptyStream: buildPtyStream(),
+              filesystem: buildFilesystem(),
+              sessionStore: buildSessionStore(),
+              metricsStream: createMockMetricsStream(),
+            }}
+          >
+            <LiveSessionDetailPage sessionId="test-session-id-1234" />
+          </ServicesProvider>
+        </QueryClientProvider>,
+      );
+
+      await screen.findByTestId('live-session-detail-page');
+      fireEvent.click(screen.getByRole('tab', { name: /Logs/i }));
+      await screen.findByText('Broker line');
+      fireEvent.click(screen.getByTestId('log-participant-coder'));
+      await waitFor(() => {
+        expect(screen.queryByText('Broker line')).not.toBeInTheDocument();
+        expect(screen.getByText('Coder line')).toBeInTheDocument();
+      });
+    });
+  });
+
   describe('action buttons', () => {
     it('shows Stop button for running session', async () => {
       wrap('test-session-id-1234');
@@ -359,6 +479,50 @@ describe('LiveSessionDetailPage', () => {
       wrap('test-session-id-1234');
       await screen.findByTestId('live-session-detail-page');
       expect(screen.getByTitle(/Delete/i)).toBeInTheDocument();
+    });
+
+    it('opens a centered delete dialog with visible cleanup options and submits them', async () => {
+      const service = buildVolundrService();
+      service.deleteSession = vi.fn().mockResolvedValue(undefined);
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={client}>
+          <ServicesProvider
+            services={{
+              volundr: service,
+              ptyStream: buildPtyStream(),
+              filesystem: buildFilesystem(),
+              sessionStore: buildSessionStore(),
+              metricsStream: createMockMetricsStream(),
+            }}
+          >
+            <LiveSessionDetailPage sessionId="test-session-id-1234" />
+          </ServicesProvider>
+        </QueryClientProvider>,
+      );
+
+      await screen.findByTestId('live-session-detail-page');
+      fireEvent.click(screen.getByTitle(/Delete session/i));
+
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toBeInTheDocument();
+      expect(screen.getByTestId('cleanup-workspace_storage')).toBeInTheDocument();
+      expect(screen.getByTestId('cleanup-chronicles')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('cleanup-workspace_storage'));
+      fireEvent.click(screen.getByTestId('cleanup-chronicles'));
+
+      expect(screen.getByTestId('cleanup-workspace_storage')).toBeChecked();
+      expect(screen.getByTestId('cleanup-chronicles')).toBeChecked();
+
+      fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+      await waitFor(() => {
+        expect(service.deleteSession).toHaveBeenCalledWith('test-session-id-1234', [
+          'workspace_storage',
+          'chronicles',
+        ]);
+      });
     });
   });
 

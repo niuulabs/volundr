@@ -31,6 +31,37 @@ describe('OutcomeCard', () => {
       'niuu-chat-outcome--fail',
     );
   });
+
+  it('renders markdown inside summary and field values', () => {
+    render(
+      <OutcomeCard
+        raw={'verdict: pass\nsummary: See [docs](https://example.com)\ndetails: Use `npm test`'}
+      />,
+    );
+    const link = screen.getByRole('link', { name: 'docs' });
+    expect(link).toHaveAttribute('href', 'https://example.com');
+    expect(screen.getByText('npm test')).toBeInTheDocument();
+  });
+
+  it('renders multiline block scalar fields from raw outcome yaml', () => {
+    render(
+      <OutcomeCard
+        raw={`verdict: conditional
+summary: Top level summary
+findings: |
+  ## Verified
+  - **Route pair count**: 26
+  - Use \`/api/v1/credentials/secrets\`
+`}
+      />,
+    );
+
+    expect(screen.getByText('Verified')).toBeInTheDocument();
+    const routePairItem = screen.getByText('Route pair count').closest('li');
+    expect(routePairItem).not.toBeNull();
+    expect(routePairItem).toHaveTextContent('Route pair count: 26');
+    expect(screen.getByText('/api/v1/credentials/secrets')).toBeInTheDocument();
+  });
 });
 
 describe('extractOutcomeBlock', () => {
@@ -45,5 +76,25 @@ describe('extractOutcomeBlock', () => {
 
   it('returns null for text without outcome block', () => {
     expect(extractOutcomeBlock('just normal text')).toBeNull();
+  });
+
+  it('extracts outcome from dashed markers', () => {
+    const text = 'before\n---outcome---\nverdict: pass\nsummary: All good\n---end---\nafter';
+    const result = extractOutcomeBlock(text);
+    expect(result).toEqual({
+      before: 'before\n',
+      raw: 'verdict: pass\nsummary: All good',
+      after: '\nafter',
+    });
+  });
+
+  it('extracts outcome from dashed markers closed by bare dashes', () => {
+    const text = 'before\n---outcome---\nverdict: pass\nsummary: All good\n---\nafter';
+    const result = extractOutcomeBlock(text);
+    expect(result).toEqual({
+      before: 'before\n',
+      raw: 'verdict: pass\nsummary: All good',
+      after: '\nafter',
+    });
   });
 });

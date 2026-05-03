@@ -497,7 +497,9 @@ class TestRootServerBuildApp:
         assets.mkdir()
         (assets / "main.js").write_text("// js")
         (dist / "index.html").write_text("<html>SPA</html>")
-        (dist / "config.live.json").write_text('{"services":{"forge":{"mode":"http"}}}')
+        (dist / "config.live.json").write_text(
+            '{"services":{"forge":{"mode":"http","baseUrl":"http://localhost:8080/api/v1/forge"}}}'
+        )
         favicon = dist / "favicon.svg"
         favicon.write_text("<svg/>")
 
@@ -522,6 +524,16 @@ class TestRootServerBuildApp:
         assert config_resp.status_code == 200
         assert config_resp.headers["content-type"].startswith("application/json")
         assert config_resp.json()["services"]["forge"]["mode"] == "http"
+        assert config_resp.json()["services"]["forge"]["baseUrl"] == "http://testserver/api/v1/forge"
+
+        default_config_resp = client.get("/config.json")
+        assert default_config_resp.status_code == 200
+        assert default_config_resp.headers["content-type"].startswith("application/json")
+        assert default_config_resp.json()["services"]["forge"]["mode"] == "http"
+        assert (
+            default_config_resp.json()["services"]["forge"]["baseUrl"]
+            == "http://testserver/api/v1/forge"
+        )
 
     def test_web_ui_filenotfound_gracefully_handled(self) -> None:
         """When web_dist_dir raises FileNotFoundError, app is still returned."""
@@ -1422,10 +1434,34 @@ class TestRootServerStartStop:
             patch("uvicorn.Config"),
         ):
             await server.start()
+            assert os.environ["NIUU_SERVER_HOST"] == "127.0.0.1"
+            assert os.environ["NIUU_SERVER_PORT"] == "8080"
+            assert os.environ["VOLUNDR__URL"] == "http://127.0.0.1:8080"
 
         server._start_embedded_db.assert_awaited_once()
         server._run_migrations.assert_awaited_once()
         assert server._server is mock_uvicorn_server
+
+    @pytest.mark.asyncio
+    async def test_start_sets_loopback_safe_volundr_url(self) -> None:
+        registry = PluginRegistry()
+        server = RootServer(registry=registry, host="0.0.0.0", port=18080)
+
+        server._start_embedded_db = AsyncMock()
+        server._run_migrations = AsyncMock()
+
+        mock_uvicorn_server = MagicMock()
+        mock_uvicorn_server.serve = AsyncMock()
+
+        with (
+            patch.dict(os.environ, {"NIUU_NO_WEB": "true"}, clear=False),
+            patch("uvicorn.Server", return_value=mock_uvicorn_server),
+            patch("uvicorn.Config"),
+        ):
+            await server.start()
+            assert os.environ["NIUU_SERVER_HOST"] == "0.0.0.0"
+            assert os.environ["NIUU_SERVER_PORT"] == "18080"
+            assert os.environ["VOLUNDR__URL"] == "http://127.0.0.1:18080"
 
     @pytest.mark.asyncio
     async def test_stop_shuts_down_server_and_db(self) -> None:

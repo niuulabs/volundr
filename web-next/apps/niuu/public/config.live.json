@@ -45,7 +45,7 @@
     "tyr.settings": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/tyr/settings" },
     "tyr.tracker": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/tracker" },
     "tyr.audit": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/audit" },
-    "tyr.workflows": { "mode": "mock" },
+    "tyr.workflows": { "mode": "http", "baseUrl": "http://localhost:8080/api/v1/tyr/workflows" },
     "filesystem": { "mode": "http", "baseUrl": "http://localhost:8080" }
   }
 }

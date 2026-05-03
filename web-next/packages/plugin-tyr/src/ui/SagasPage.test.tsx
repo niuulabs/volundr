@@ -28,9 +28,23 @@ function wrap(services: Record<string, unknown>) {
 }
 
 function withDefaults(services: Record<string, unknown>) {
+  const volundrRepos = createMockTyrService();
   return {
-    tyr: createMockTyrService(),
+    tyr: volundrRepos,
     'tyr.tracker': createMockTrackerService(),
+    'niuu.repos': {
+      getRepos: async () => [
+        {
+          provider: 'github',
+          org: 'niuulabs',
+          name: 'volundr',
+          cloneUrl: 'https://github.com/niuulabs/volundr.git',
+          url: 'https://github.com/niuulabs/volundr',
+          defaultBranch: 'main',
+          branches: ['main', 'develop'],
+        },
+      ],
+    },
     ...services,
   };
 }
@@ -67,6 +81,31 @@ describe('SagasPage', () => {
     expect(screen.getByText('IN REVIEW')).toBeInTheDocument();
     expect(screen.getAllByText('COMPLETE').length).toBeGreaterThan(0);
     expect(screen.getAllByText('FAILED').length).toBeGreaterThan(0);
+  });
+
+  it('uses the saga title as the left-rail primary label', async () => {
+    const sagaName = 'Readable Saga Title';
+    const trackerId = '00000000-0000-0000-0000-000000000123';
+    const sagasSvc = {
+      ...createMockTyrService(),
+      getSagas: async (): Promise<Saga[]> => [
+        makeSaga({
+          id: '00000000-0000-0000-0000-000000000123',
+          name: sagaName,
+          trackerId,
+        }),
+      ],
+    };
+
+    render(<SagasPage />, { wrapper: wrap(withDefaults({ tyr: sagasSvc })) });
+
+    await waitFor(() => expect(screen.getAllByText(sagaName).length).toBeGreaterThan(0));
+    const railButton = screen
+      .getAllByRole('button')
+      .find((button) => button.textContent?.includes(sagaName));
+    expect(railButton).toBeDefined();
+    expect(railButton).toHaveTextContent(sagaName);
+    expect(railButton).toHaveTextContent(trackerId);
   });
 
   it('filters sagas from the page-head search', async () => {
@@ -143,6 +182,9 @@ describe('SagasPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Import saga from tracker/i }));
     await waitFor(() => expect(screen.getByText('Import From Tracker')).toBeInTheDocument());
     await waitFor(() => expect(screen.getAllByText('Niuu Core').length).toBeGreaterThan(0));
+    expect(screen.getByTestId('repo-select')).toBeInTheDocument();
+    expect(screen.queryByTestId('branch-select')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import saga' })).toBeDisabled();
   });
 
   it('imports a tracker project', async () => {
@@ -165,7 +207,7 @@ describe('SagasPage', () => {
       .find((button) => button.textContent?.includes('Niuu Core'));
     expect(projectButton).toBeDefined();
     fireEvent.click(projectButton!);
-    fireEvent.change(screen.getByPlaceholderText('org/repo, org/other-repo'), {
+    fireEvent.change(screen.getByTestId('repo-select'), {
       target: { value: 'niuulabs/volundr' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Import saga' }));
@@ -173,6 +215,127 @@ describe('SagasPage', () => {
     await waitFor(() =>
       expect(importProject).toHaveBeenCalledWith('proj-niuu-core', ['niuulabs/volundr'], 'main'),
     );
+  });
+
+  it('does not treat completed sagas as already imported in the tracker modal', async () => {
+    const completedSaga = makeSaga({
+      id: '00000000-0000-0000-0000-000000000222',
+      name: 'Completed Niuu Core',
+      trackerId: 'proj-niuu-core',
+      status: 'complete',
+      phaseSummary: { total: 3, completed: 3 },
+    });
+    const sagasSvc = {
+      ...createMockTyrService(),
+      getSagas: async (): Promise<Saga[]> => [completedSaga],
+      getSaga: async (id: string): Promise<Saga | null> =>
+        id === completedSaga.id ? completedSaga : null,
+    };
+
+    render(<SagasPage />, { wrapper: wrap(withDefaults({ tyr: sagasSvc })) });
+    await waitFor(() =>
+      expect(screen.getAllByText('Completed Niuu Core').length).toBeGreaterThan(0),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Import saga from tracker/i }));
+    await waitFor(() => expect(screen.getByText('Import From Tracker')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('Niuu Core').length).toBeGreaterThan(0));
+
+    const projectButton = screen
+      .getAllByRole('button')
+      .find((button) => button.textContent?.includes('Niuu Core'));
+    expect(projectButton).toBeDefined();
+    fireEvent.click(projectButton!);
+
+    expect(screen.queryByText('imported')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('This tracker project is already imported into Tyr.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/already exists in Tyr/i)).not.toBeInTheDocument();
+  });
+
+  it('blocks tracker import when a saga with the same slug already exists', async () => {
+    const conflictingSaga = makeSaga({
+      id: '00000000-0000-0000-0000-000000000333',
+      trackerId: 'other-project',
+      slug: 'service-boundary-restoration-and-api-consolidation',
+      name: 'Existing conflicting saga',
+    });
+    const sagasSvc = {
+      ...createMockTyrService(),
+      getSagas: async (): Promise<Saga[]> => [conflictingSaga],
+      getSaga: async (id: string): Promise<Saga | null> =>
+        id === conflictingSaga.id ? conflictingSaga : null,
+    };
+    const trackerSvc: ITrackerBrowserService = {
+      ...createMockTrackerService(),
+      listProjects: async () => [
+        {
+          id: 'proj-conflict',
+          name: 'Service Boundary Restoration and API Consolidation',
+          description: 'Conflicting slug project',
+          status: 'active',
+          url: 'https://linear.app/niuu/project/proj-conflict',
+          milestoneCount: 2,
+          issueCount: 5,
+          slug: 'service-boundary-restoration-and-api-consolidation',
+        },
+      ],
+    };
+
+    render(<SagasPage />, {
+      wrapper: wrap(withDefaults({ tyr: sagasSvc, 'tyr.tracker': trackerSvc })),
+    });
+    await waitFor(() =>
+      expect(screen.getAllByText('Existing conflicting saga').length).toBeGreaterThan(0),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Import saga from tracker/i }));
+    await waitFor(() => expect(screen.getByText('Import From Tracker')).toBeInTheDocument());
+    const [projectTitle] = await screen.findAllByText(
+      'Service Boundary Restoration and API Consolidation',
+    );
+    const projectButton = projectTitle.closest('button');
+    expect(projectButton).not.toBeNull();
+    fireEvent.click(projectButton!);
+
+    expect(screen.getByText(/already exists in Tyr/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import saga' })).toBeDisabled();
+  });
+
+  it('does not list terminal tracker projects in the import modal', async () => {
+    const tracker = createMockTrackerService();
+    const trackerSvc: ITrackerBrowserService = {
+      ...tracker,
+      listProjects: async () => [
+        {
+          id: 'proj-active',
+          name: 'Active Project',
+          description: 'Still in progress',
+          status: 'active',
+          url: 'https://linear.app/niuu/project/active',
+          milestoneCount: 1,
+          issueCount: 3,
+        },
+        {
+          id: 'proj-done',
+          name: 'Done Project',
+          description: 'Already complete',
+          status: 'completed',
+          url: 'https://linear.app/niuu/project/done',
+          milestoneCount: 1,
+          issueCount: 3,
+        },
+      ],
+    };
+
+    render(<SagasPage />, { wrapper: wrap(withDefaults({ 'tyr.tracker': trackerSvc })) });
+    await waitFor(() => expect(screen.getAllByText('Auth Rewrite').length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByRole('button', { name: /Import saga from tracker/i }));
+    await waitFor(() => expect(screen.getByText('Import From Tracker')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('Active Project').length).toBeGreaterThan(0));
+    expect(screen.queryByText('Done Project')).not.toBeInTheDocument();
   });
 
   it('renders grouped bucket items from mixed data', async () => {

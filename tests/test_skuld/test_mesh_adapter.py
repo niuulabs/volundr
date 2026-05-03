@@ -254,6 +254,22 @@ class TestSkuldMeshAdapterLifecycle:
         assert adapter.peer_id == socket.gethostname()
 
     @pytest.mark.asyncio
+    async def test_publish_forwards_event_to_mesh(self, adapter, mock_mesh):
+        event = RavnEvent(
+            type=RavnEventType.OUTCOME,
+            source="skuld:test",
+            payload={"event_type": "code.requested"},
+            timestamp=datetime.now(UTC),
+            urgency=0.5,
+            correlation_id="corr-1",
+            session_id="session-1",
+        )
+
+        await adapter.publish(event, "code.requested")
+
+        mock_mesh.publish.assert_awaited_once_with(event, topic="code.requested")
+
+    @pytest.mark.asyncio
     async def test_multiple_event_type_subscriptions(self, mock_mesh, mock_transport):
         from niuu.mesh.participant import MeshParticipant
 

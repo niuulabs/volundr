@@ -101,6 +101,17 @@ class MeshConfig(BaseModel):
     )
 
 
+class WorkflowTriggerConfig(BaseModel):
+    """Startup workflow trigger published by Skuld onto the mesh."""
+
+    enabled: bool = Field(default=False)
+    node_id: str = Field(default="")
+    label: str = Field(default="")
+    source: str = Field(default="manual dispatch")
+    event_type: str = Field(default="")
+    startup_delay_s: float = Field(default=3.0)
+
+
 class RoomConfig(BaseModel):
     """Multi-agent room chat configuration.
 
@@ -126,6 +137,8 @@ class TelegramConfig(BaseModel):
     bot_token: str = Field(default="")
     chat_id: str = Field(default="")
     notify_only: bool = Field(default=False)
+    topic_mode: str = Field(default="topic_per_session")
+    message_thread_id: int | None = Field(default=None)
 
 
 class SkuldSessionConfig(BaseModel):
@@ -185,6 +198,7 @@ class SkuldSettings(BaseSettings):
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     room: RoomConfig = Field(default_factory=RoomConfig)
     mesh: MeshConfig = Field(default_factory=MeshConfig)
+    workflow_trigger: WorkflowTriggerConfig = Field(default_factory=WorkflowTriggerConfig)
 
     @model_validator(mode="after")
     def _apply_legacy_env_vars(self) -> "SkuldSettings":

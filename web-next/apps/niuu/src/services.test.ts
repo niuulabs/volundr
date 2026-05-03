@@ -24,6 +24,7 @@ const tyrMocks = vi.hoisted(() => ({
   buildDispatcherHttpAdapter: vi.fn((client) => ({ kind: 'dispatcher', client })),
   buildTyrSessionHttpAdapter: vi.fn((client) => ({ kind: 'sessions', client })),
   buildTrackerHttpAdapter: vi.fn((client) => ({ kind: 'tracker', client })),
+  buildWorkflowHttpAdapter: vi.fn((client) => ({ kind: 'workflows', client })),
   buildDispatchBusHttpAdapter: vi.fn((client) => ({ kind: 'dispatch', client })),
   buildTyrSettingsHttpAdapter: vi.fn((client) => ({ kind: 'settings', client })),
   buildTyrAuditLogHttpAdapter: vi.fn((client) => ({ kind: 'audit', client })),
@@ -463,8 +464,8 @@ describe('buildServiceBackendStatus', () => {
     expect(status['ravn.personas']).toEqual({
       mode: 'live',
       transport: 'http',
-      target: 'http://localhost:8080/api/v1/ravn',
-      source: 'ravn',
+      target: 'http://localhost:8080/api/v1',
+      source: 'shared-api',
     });
   });
 
@@ -491,7 +492,6 @@ describe('buildServiceBackendStatus', () => {
       transport: 'mock',
       target: null,
       source: 'mock',
-      note: 'No live workflow API is wired yet; see NIU-756.',
     });
     expect(status.filesystem).toEqual({
       mode: 'mock',
@@ -517,7 +517,7 @@ describe('buildServiceBackendStatus', () => {
     });
   });
 
-  it('normalizes explicit ravn sub-service bases back to /api/v1/ravn', () => {
+  it('normalizes explicit ravn persona bases back to the shared /api/v1 root', () => {
     const status = buildServiceBackendStatus({
       services: {
         'ravn.personas': { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/ravn/personas' },
@@ -531,7 +531,7 @@ describe('buildServiceBackendStatus', () => {
     expect(status['ravn.personas']).toEqual({
       mode: 'live',
       transport: 'http',
-      target: 'http://localhost:8080/api/v1/ravn',
+      target: 'http://localhost:8080/api/v1',
       source: 'ravn.personas',
     });
     expect(status['ravn.ravens']).toEqual({
@@ -557,6 +557,36 @@ describe('buildServiceBackendStatus', () => {
       transport: 'http',
       target: 'http://localhost:8080/api/v1/ravn',
       source: 'ravn.budget',
+    });
+  });
+
+  it('prefers an explicit personas service base for ravn.personas when configured', () => {
+    const status = buildServiceBackendStatus({
+      services: {
+        personas: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/personas' },
+      },
+    } as any);
+
+    expect(status['ravn.personas']).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1',
+      source: 'personas',
+    });
+  });
+
+  it('resolves niuu.repos against the shared niuu route instead of forge or volundr', () => {
+    const status = buildServiceBackendStatus({
+      services: {
+        tyr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/tyr' },
+      },
+    } as any);
+
+    expect(status['niuu.repos']).toEqual({
+      mode: 'live',
+      transport: 'http',
+      target: 'http://localhost:8080/api/v1/niuu',
+      source: 'shared-api',
     });
   });
 });
@@ -637,6 +667,10 @@ describe('buildServices', () => {
           mode: 'http',
           baseUrl: 'http://localhost:8080/api/v1/tyr/settings',
         },
+        'tyr.workflows': {
+          mode: 'http',
+          baseUrl: 'http://localhost:8080/api/v1/tyr/workflows',
+        },
       },
     } as any);
 
@@ -650,6 +684,9 @@ describe('buildServices', () => {
       basePath: 'http://localhost:8080/api/v1/tyr',
     });
     expect(tyrMocks.buildTyrSettingsHttpAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1/tyr',
+    });
+    expect(tyrMocks.buildWorkflowHttpAdapter).toHaveBeenCalledWith({
       basePath: 'http://localhost:8080/api/v1/tyr',
     });
   });
@@ -697,6 +734,19 @@ describe('buildServices', () => {
     });
   });
 
+  it('builds niuu.repos against the shared repo catalog route', () => {
+    const services = buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        tyr: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/tyr' },
+      },
+    } as any);
+
+    expect(queryMocks.createApiClient).toHaveBeenCalledWith('http://localhost:8080/api/v1/niuu');
+    expect(services['niuu.repos']).toBeDefined();
+  });
+
   it('prefers an explicit filesystem base over the derived forge host', () => {
     const services = buildServices({
       theme: 'ice',
@@ -728,7 +778,7 @@ describe('buildServices', () => {
     } as any);
 
     expect(ravnMocks.buildRavnPersonaAdapter).toHaveBeenCalledWith({
-      basePath: 'http://localhost:8080/api/v1/ravn',
+      basePath: 'http://localhost:8080/api/v1',
     });
     expect(ravnMocks.buildRavnSessionAdapter).toHaveBeenCalledWith({
       basePath: 'http://localhost:8080/api/v1/ravn',
@@ -741,6 +791,20 @@ describe('buildServices', () => {
     });
     expect(ravnMocks.buildRavnBudgetAdapter).toHaveBeenCalledWith({
       basePath: 'http://localhost:8080/api/v1/ravn',
+    });
+  });
+
+  it('uses the explicit personas service base for the persona adapter when present', () => {
+    buildServices({
+      theme: 'ice',
+      plugins: {},
+      services: {
+        personas: { mode: 'http', baseUrl: 'http://localhost:8080/api/v1/personas' },
+      },
+    } as any);
+
+    expect(ravnMocks.buildRavnPersonaAdapter).toHaveBeenCalledWith({
+      basePath: 'http://localhost:8080/api/v1',
     });
   });
 
@@ -1209,7 +1273,7 @@ describe('buildServices', () => {
         {
           id: 'sess-error',
           name: 'broken-session',
-          status: 'error',
+          status: 'failed',
           lastActive: Date.parse('2026-04-24T12:45:00Z'),
           source: { type: 'git', repo: 'github.com/niuulabs/volundr', branch: 'main' },
           model: 'claude-sonnet',
@@ -1359,7 +1423,7 @@ describe('buildServices', () => {
       id: 'sess-error',
       name: 'error/session',
       source: { type: 'git', repo: 'github.com/niuulabs/volundr', branch: 'err' },
-      status: 'error',
+      status: 'failed',
       model: 'claude-haiku',
       lastActive: Date.parse('2026-04-23T12:30:00Z'),
       messageCount: 0,

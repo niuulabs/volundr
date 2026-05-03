@@ -29,7 +29,7 @@ export function useWorkflow(id: string) {
 export function useCreateWorkflow() {
   const svc = useService<IWorkflowService>('tyr.workflows');
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<Workflow, Error, void>({
     mutationFn: (): Promise<Workflow> => {
       const newWf: Workflow = {
         id: crypto.randomUUID(),
@@ -45,10 +45,22 @@ export function useCreateWorkflow() {
   });
 }
 
+export function useSaveWorkflow() {
+  const svc = useService<IWorkflowService>('tyr.workflows');
+  const queryClient = useQueryClient();
+  return useMutation<Workflow, Error, Workflow>({
+    mutationFn: (workflow: Workflow) => svc.saveWorkflow(workflow),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(['tyr', 'workflows', saved.id], saved);
+      void queryClient.invalidateQueries({ queryKey: ['tyr', 'workflows'] });
+    },
+  });
+}
+
 export function useDeleteWorkflow() {
   const svc = useService<IWorkflowService>('tyr.workflows');
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<void, Error, string>({
     mutationFn: (id: string) => svc.deleteWorkflow(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['tyr', 'workflows'] });

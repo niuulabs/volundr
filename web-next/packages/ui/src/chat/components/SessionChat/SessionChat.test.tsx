@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionChat } from './SessionChat';
 import type {
   AgentInternalEvent,
@@ -64,6 +64,25 @@ const roomAssistantMessage: ChatMessage = {
   participant,
 };
 
+const roomOutcomeMessage: ChatMessage = {
+  id: 'm-outcome',
+  role: 'assistant',
+  content: `### Ravn-A
+
+\`\`\`outcome
+verdict: approve
+summary: Approved the change
+checks_passed: 12
+findings: |
+  ## Verified
+  - **Route pair count**: 26
+  - Use \`/api/v1/credentials/secrets\`
+\`\`\``,
+  createdAt: new Date('2026-04-26T12:00:04Z'),
+  status: 'done',
+  participant,
+};
+
 const systemMessage: ChatMessage = {
   id: 's1',
   role: 'system',
@@ -104,6 +123,7 @@ describe('SessionChat', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
   /* ── Basic rendering ── */
@@ -715,13 +735,13 @@ describe('SessionChat', () => {
       />,
     );
     const toggle = screen.getByTestId('internal-toggle');
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
-
-    fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
   });
 
   /* ── MeshCascadePanel ── */
@@ -755,7 +775,7 @@ describe('SessionChat', () => {
 
   /* ── handleOutcomeClick ── */
 
-  it('scrolls to closest message on outcome click', () => {
+  it('scrolls to the closest outcome message when the outcome card is clicked', () => {
     const events: MeshOutcomeEvent[] = [
       {
         id: 'me-1',
@@ -767,19 +787,125 @@ describe('SessionChat', () => {
         eventType: 'code_review',
         verdict: 'approve',
         summary: 'Approved the change',
+        fields: {
+          verdict: 'approve',
+          summary: 'Approved the change',
+          findings: `## Verified
+- **Route pair count**: 26
+- Use \`/api/v1/credentials/secrets\``,
+        },
       },
     ];
     render(
       <SessionChat
         {...defaultProps}
-        messages={[roomAssistantMessage]}
+        messages={[roomAssistantMessage, roomOutcomeMessage]}
         connected
         participants={new Map([[participant.peerId, participant]])}
         meshEvents={events}
       />,
     );
-    // MeshCascadePanel should render and contain the event card
-    expect(screen.getByText('Approved the change')).toBeInTheDocument();
+    const cascadePanel = screen.getByTestId('mesh-cascade-panel');
+    const cascadeSummary = cascadePanel.querySelector('.niuu-chat-mesh-summary');
+    expect(cascadeSummary).not.toBeNull();
+    fireEvent.click(cascadeSummary!);
+    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(screen.queryByText('Ravn-A outcome')).not.toBeInTheDocument();
+  });
+
+  it('opens the rendered outcome dialog from Show details', () => {
+    const events: MeshOutcomeEvent[] = [
+      {
+        id: 'me-1',
+        type: 'outcome',
+        timestamp: new Date('2026-04-26T12:00:04Z'),
+        participantId: 'peer-1',
+        participant: { color: 'amber' },
+        persona: 'Ravn-A',
+        eventType: 'code_review',
+        verdict: 'approve',
+        summary: 'Approved the change',
+        fields: {
+          verdict: 'approve',
+          summary: 'Approved the change',
+          findings: `## Verified
+- **Route pair count**: 26
+- Use \`/api/v1/credentials/secrets\``,
+        },
+      },
+    ];
+    render(
+      <SessionChat
+        {...defaultProps}
+        messages={[roomAssistantMessage, roomOutcomeMessage]}
+        connected
+        participants={new Map([[participant.peerId, participant]])}
+        meshEvents={events}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Ravn-A outcome')).toBeInTheDocument();
+    expect(within(dialog).getAllByTestId('outcome-card').length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('Verified')).toBeInTheDocument();
+    expect(within(dialog).getByText('checks_passed')).toBeInTheDocument();
+    expect(within(dialog).getByText('12')).toBeInTheDocument();
+    const routePairItems = within(dialog)
+      .getAllByText('Route pair count')
+      .map((element) => element.closest('li'))
+      .filter((element): element is HTMLLIElement => element instanceof HTMLLIElement);
+    expect(routePairItems.length).toBeGreaterThan(0);
+    expect(routePairItems[0]).toHaveTextContent('Route pair count: 26');
+    expect(within(dialog).getByText('/api/v1/credentials/secrets')).toBeInTheDocument();
+  });
+
+  it('collapses and expands the mesh peers and mesh cascade sidebars', () => {
+    const events: MeshOutcomeEvent[] = [
+      {
+        id: 'me-1',
+        type: 'outcome',
+        timestamp: now,
+        participantId: 'peer-1',
+        participant: { color: 'amber' },
+        persona: 'Ravn-A',
+        eventType: 'code_review',
+        verdict: 'approve',
+        summary: 'Looks good',
+      },
+    ];
+    render(
+      <SessionChat
+        {...defaultProps}
+        messages={[roomAssistantMessage, roomOutcomeMessage]}
+        connected
+        participants={
+          new Map([
+            [participant.peerId, participant],
+            [skuldParticipant.peerId, skuldParticipant],
+          ])
+        }
+        meshEvents={events}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /collapse mesh peers sidebar/i }));
+    expect(screen.getByRole('button', { name: /expand mesh peers sidebar/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /collapse mesh cascade sidebar/i }));
+    expect(
+      screen.getByRole('button', { name: /expand mesh cascade sidebar/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /expand mesh peers sidebar/i }));
+    expect(
+      screen.getByRole('button', { name: /collapse mesh peers sidebar/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /expand mesh cascade sidebar/i }));
+    expect(
+      screen.getByRole('button', { name: /collapse mesh cascade sidebar/i }),
+    ).toBeInTheDocument();
   });
 
   /* ── handleSelectAgent ── */
@@ -903,9 +1029,7 @@ describe('SessionChat', () => {
     // External message should always be visible
     expect(screen.getByText('External message')).toBeInTheDocument();
 
-    // Internal messages are hidden by default in room mode
-    // Toggle internal to show them
-    fireEvent.click(screen.getByTestId('internal-toggle'));
+    // Internal messages are visible by default in room mode
     expect(screen.getByText('Internal msg 1')).toBeInTheDocument();
   });
 

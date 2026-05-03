@@ -61,6 +61,8 @@ export const sagaSchema = z.object({
   createdAt: z.string().datetime(),
   /** Phase progress summary. */
   phaseSummary: sagaPhaseSummarySchema,
+  /** Applied workflow identifier. */
+  workflowId: z.string().uuid().optional(),
   /** Applied workflow name (e.g. "ship", "scaffold"). */
   workflow: z.string().optional(),
   /** Applied workflow version string (e.g. "1.4.2"). */

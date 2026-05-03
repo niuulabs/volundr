@@ -645,6 +645,13 @@ describe('createMockVolundrService — full method sweep', () => {
     await svc.getLogs('sess-1', 20);
     const unsub4 = svc.subscribeLogs('sess-1', () => {});
     unsub4();
+    await svc.getAggregatedLogs('sess-1', { limit: 20, level: 'INFO', participants: ['coder'] });
+    const unsub4b = svc.subscribeAggregatedLogs(
+      'sess-1',
+      { limit: 20, level: 'INFO', participants: ['coder'] },
+      () => {},
+    );
+    unsub4b();
     await svc.getCodeServerUrl('sess-1');
     await svc.getChronicle('sess-1');
     const unsub5 = svc.subscribeChronicle('sess-1', () => {});

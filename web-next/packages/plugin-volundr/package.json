@@ -32,6 +32,7 @@
     "react": "^19.0.0"
   },
   "dependencies": {
+    "@niuulabs/domain": "workspace:*",
     "@niuulabs/plugin-sdk": "workspace:*",
     "@niuulabs/query": "workspace:*",
     "@niuulabs/ui": "workspace:*",
@@ -45,6 +46,7 @@
     "@niuulabs/design-tokens": "workspace:*",
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-router": "^1.95.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/react": "^19.0.7",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",

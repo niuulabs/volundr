@@ -48,7 +48,7 @@ const ACTION_BTN =
   'niuu-bg-transparent niuu-border niuu-border-solid niuu-border-border-subtle niuu-rounded-md niuu-text-text-secondary niuu-font-sans niuu-text-xs niuu-py-1.5 niuu-px-3 niuu-cursor-pointer niuu-whitespace-nowrap hover:niuu-border-border hover:niuu-text-text-primary niuu-transition-colors';
 
 export function WorkflowBuilder({ initialWorkflow, onSave, personas }: WorkflowBuilderProps) {
-  const builder = useWorkflowBuilder(initialWorkflow);
+  const builder = useWorkflowBuilder(initialWorkflow, personas ?? DEFAULT_PERSONAS);
   const {
     workflow,
     view,

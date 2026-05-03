@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServicesProvider } from '@niuulabs/plugin-sdk';
 import { SagaDetailPage, SagaDetailRoute } from './SagaDetailPage';
 import { createMockTyrService } from '../adapters/mock';
 import type { Saga, Phase, Raid } from '../domain/saga';
+import type { Workflow } from '../domain/workflow';
 
 const mockNavigate = vi.fn();
 const mockUseParams = vi.fn().mockReturnValue({ sagaId: '00000000-0000-0000-0000-000000000001' });
@@ -84,6 +86,26 @@ function makePhase(raids: Raid[] = []): Phase {
   };
 }
 
+function makeWorkflow(overrides: Partial<Workflow> = {}): Workflow {
+  return {
+    id: '00000000-0000-0000-0000-0000000000aa',
+    name: 'Ship Workflow',
+    version: '1.4.2',
+    nodes: [
+      {
+        id: 'stage-1',
+        kind: 'stage',
+        label: 'Build',
+        raidId: null,
+        personaIds: [],
+        position: { x: 0, y: 0 },
+      },
+    ],
+    edges: [],
+    ...overrides,
+  };
+}
+
 describe('SagaDetailPage', () => {
   beforeEach(() => {
     mockNavigate.mockClear();
@@ -155,6 +177,34 @@ describe('SagaDetailPage', () => {
     await waitFor(() => expect(screen.getByText('NIU-500 · Auth Rewrite')).toBeInTheDocument());
     screen.getByRole('button', { name: /Sagas/i }).click();
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/tyr/sagas' });
+  });
+
+  it('opens the workflow modal and assigns a workflow', async () => {
+    const user = userEvent.setup();
+    const assignWorkflow = vi.fn(async () => makeSaga({ workflow: 'Ship Workflow' }));
+    const tyrService = {
+      getSaga: async () => makeSaga({ workflowId: undefined, workflow: undefined }),
+      getPhases: async () => [makePhase([makeRaid()])],
+      assignWorkflow,
+    };
+    const workflowService = {
+      listWorkflows: async () => [makeWorkflow()],
+      getWorkflow: async () => makeWorkflow(),
+      saveWorkflow: async (workflow: Workflow) => workflow,
+      deleteWorkflow: async () => {},
+    };
+
+    render(<SagaDetailPage sagaId={SAGA_ID} />, {
+      wrapper: wrap({ tyr: tyrService, 'tyr.workflows': workflowService }),
+    });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Assign' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Assign' }));
+    await waitFor(() => expect(screen.getByText('Assign workflow')).toBeInTheDocument());
+    await user.click(screen.getByText('Ship Workflow'));
+    await waitFor(() =>
+      expect(assignWorkflow).toHaveBeenCalledWith(SAGA_ID, '00000000-0000-0000-0000-0000000000aa'),
+    );
   });
 });
 

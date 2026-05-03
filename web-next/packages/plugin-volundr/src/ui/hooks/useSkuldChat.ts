@@ -17,6 +17,8 @@ import type { FileAttachment } from '@niuulabs/ui';
 import { useWebSocket } from './useWebSocket';
 import { wsUrlToHttpBase } from '../liveSessionTransport';
 
+const HISTORY_RETRY_DELAY_MS = 1000;
+
 type WireParticipant = {
   peer_id?: string;
   peerId?: string;
@@ -42,6 +44,7 @@ type WireParticipant = {
 type CliStreamEvent = {
   type: string;
   subtype?: string;
+  id?: string;
   content?: string | Array<{ type: string; text?: string }>;
   result?: string;
   error?: string | { message?: string };
@@ -61,6 +64,7 @@ type CliStreamEvent = {
   total_cost_usd?: number;
   num_turns?: number;
   is_error?: boolean;
+  valid?: boolean;
   request_id?: string;
   tool?: string;
   input?: Record<string, unknown>;
@@ -72,6 +76,7 @@ type CliStreamEvent = {
   created_at?: string;
   thread_id?: string;
   visibility?: 'visible' | 'internal';
+  metadata?: Record<string, unknown>;
   eventType?: string;
   verdict?: string;
   summary?: string;
@@ -89,6 +94,8 @@ type CliStreamEvent = {
     data?: string | Record<string, unknown>;
     metadata?: Record<string, unknown>;
   };
+  turns?: ConversationTurn[];
+  fields?: Record<string, unknown>;
 };
 
 interface ConversationTurn {
@@ -151,15 +158,15 @@ type InternalParticipantStream = {
   currentToolId: string;
 };
 
-function generateId(): string {
+export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function getStorageKey(url: string): string {
+export function getStorageKey(url: string): string {
   return `${STORAGE_PREFIX}${url}`;
 }
 
-function safeSessionStorageGet(url: string): PersistedChatState | null {
+export function safeSessionStorageGet(url: string): PersistedChatState | null {
   try {
     const raw = sessionStorage.getItem(getStorageKey(url));
     if (!raw) return null;
@@ -169,7 +176,7 @@ function safeSessionStorageGet(url: string): PersistedChatState | null {
   }
 }
 
-function safeSessionStorageSet(url: string, state: PersistedChatState): void {
+export function safeSessionStorageSet(url: string, state: PersistedChatState): void {
   try {
     sessionStorage.setItem(getStorageKey(url), JSON.stringify(state));
   } catch {
@@ -177,7 +184,7 @@ function safeSessionStorageSet(url: string, state: PersistedChatState): void {
   }
 }
 
-function makeSingleParticipant(): RoomParticipant {
+export function makeSingleParticipant(): RoomParticipant {
   return {
     peerId: SINGLE_PARTICIPANT_ID,
     persona: 'Skuld',
@@ -188,7 +195,7 @@ function makeSingleParticipant(): RoomParticipant {
   };
 }
 
-function parseParticipantMeta(
+export function parseParticipantMeta(
   raw: WireParticipant | Record<string, unknown> | undefined,
 ): RoomParticipant | undefined {
   if (!raw) return undefined;
@@ -210,7 +217,7 @@ function parseParticipantMeta(
   };
 }
 
-function getString(
+export function getString(
   raw: WireParticipant | Record<string, unknown>,
   ...keys: string[]
 ): string | undefined {
@@ -222,7 +229,7 @@ function getString(
   return undefined;
 }
 
-function getNumber(
+export function getNumber(
   raw: WireParticipant | Record<string, unknown>,
   ...keys: string[]
 ): number | undefined {
@@ -234,7 +241,7 @@ function getNumber(
   return undefined;
 }
 
-function getStringArray(
+export function getStringArray(
   raw: WireParticipant | Record<string, unknown>,
   key: string,
 ): string[] | undefined {
@@ -244,7 +251,7 @@ function getStringArray(
     : undefined;
 }
 
-function reviveMessages(messages: PersistedChatState['messages']): ChatMessage[] {
+export function reviveMessages(messages: PersistedChatState['messages']): ChatMessage[] {
   return (messages ?? [])
     .filter((message) => message.status !== 'running')
     .map((message) => ({
@@ -253,14 +260,14 @@ function reviveMessages(messages: PersistedChatState['messages']): ChatMessage[]
     }));
 }
 
-function reviveMeshEvents(events: PersistedChatState['meshEvents']): MeshEvent[] {
+export function reviveMeshEvents(events: PersistedChatState['meshEvents']): MeshEvent[] {
   return (events ?? []).map((event) => ({
     ...event,
     timestamp: new Date(event.timestamp),
   })) as MeshEvent[];
 }
 
-function reviveAgentEvents(
+export function reviveAgentEvents(
   events: PersistedChatState['agentEvents'],
 ): Map<string, AgentInternalEvent[]> {
   const next = new Map<string, AgentInternalEvent[]>();
@@ -276,7 +283,7 @@ function reviveAgentEvents(
   return next;
 }
 
-function serializeMessages(messages: ChatMessage[]): PersistedChatState['messages'] {
+export function serializeMessages(messages: ChatMessage[]): PersistedChatState['messages'] {
   return messages
     .filter((message) => message.status !== 'running')
     .map((message) => ({
@@ -285,14 +292,14 @@ function serializeMessages(messages: ChatMessage[]): PersistedChatState['message
     }));
 }
 
-function serializeMeshEvents(meshEvents: MeshEvent[]): PersistedChatState['meshEvents'] {
+export function serializeMeshEvents(meshEvents: MeshEvent[]): PersistedChatState['meshEvents'] {
   return meshEvents.map((event) => ({
     ...event,
     timestamp: event.timestamp.toISOString(),
   }));
 }
 
-function serializeAgentEvents(
+export function serializeAgentEvents(
   agentEvents: Map<string, AgentInternalEvent[]>,
 ): PersistedChatState['agentEvents'] {
   return Object.fromEntries(
@@ -306,7 +313,7 @@ function serializeAgentEvents(
   );
 }
 
-function transformTurns(turns: ConversationTurn[]): ChatMessage[] {
+export function transformTurns(turns: ConversationTurn[]): ChatMessage[] {
   return turns.map((turn) => ({
     id: turn.id,
     role: turn.role === 'user' ? 'user' : 'assistant',
@@ -319,6 +326,53 @@ function transformTurns(turns: ConversationTurn[]): ChatMessage[] {
     threadId: turn.thread_id,
     visibility: turn.visibility,
   }));
+}
+
+export function stringifyOutcomeValue(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+export function pushOutcomeField(lines: string[], key: string, value: unknown): void {
+  const text = stringifyOutcomeValue(value);
+  if (!text) return;
+  if (text.includes('\n')) {
+    lines.push(`${key}: |`);
+    for (const line of text.split('\n')) {
+      lines.push(`  ${line}`);
+    }
+    return;
+  }
+  lines.push(`${key}: ${text}`);
+}
+
+export function formatOutcomeContent(event: CliStreamEvent): string {
+  const fields =
+    event.fields && typeof event.fields === 'object'
+      ? { ...event.fields }
+      : ({} as Record<string, unknown>);
+
+  const lines: string[] = [];
+  pushOutcomeField(lines, 'verdict', event.verdict ?? fields.verdict);
+  pushOutcomeField(lines, 'summary', event.summary ?? fields.summary);
+
+  for (const [key, value] of Object.entries(fields)) {
+    if (key === 'verdict' || key === 'summary' || key === 'success') continue;
+    pushOutcomeField(lines, key, value);
+  }
+
+  if (lines.length === 0 && event.eventType) {
+    pushOutcomeField(lines, 'event_type', event.eventType);
+  }
+
+  const raw = lines.join('\n');
+  return `\`\`\`outcome\n${raw}\n\`\`\``;
 }
 
 async function attachmentToWireContent(
@@ -351,7 +405,7 @@ async function attachmentToWireContent(
   };
 }
 
-function parseEvent(raw: string): CliStreamEvent | null {
+export function parseEvent(raw: string): CliStreamEvent | null {
   let jsonStr = raw.trim();
   if (jsonStr.startsWith('data:')) jsonStr = jsonStr.slice(5).trim();
   try {
@@ -386,6 +440,7 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
   const streamingModelRef = useRef('');
   const streamingInputTokensRef = useRef<number | undefined>(undefined);
   const streamingOutputTokensRef = useRef<number | undefined>(undefined);
+  const historyRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     participantsRef.current = participants;
@@ -423,6 +478,13 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
     toolIdRef.current = '';
     streamingInputTokensRef.current = undefined;
     streamingOutputTokensRef.current = undefined;
+  }, []);
+
+  const clearHistoryRetryTimer = useCallback(() => {
+    if (historyRetryTimerRef.current !== null) {
+      clearTimeout(historyRetryTimerRef.current);
+      historyRetryTimerRef.current = null;
+    }
   }, []);
 
   const finalizeStreaming = useCallback(
@@ -486,6 +548,7 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
 
   useEffect(() => {
     if (!url) return;
+    clearHistoryRetryTimer();
     const cached = safeSessionStorageGet(url);
     if (!cached) return;
     if ((cached.messages?.length ?? 0) > 0) {
@@ -502,7 +565,7 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
     if (cached.agentEvents) {
       setAgentEvents(reviveAgentEvents(cached.agentEvents));
     }
-  }, [url]);
+  }, [clearHistoryRetryTimer, url]);
 
   useEffect(() => {
     if (!url || historyLoaded) return;
@@ -522,9 +585,15 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
     const historyUrl = new URL('api/conversation/history', base);
 
     fetch(historyUrl.href, { headers })
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`history_fetch_failed:${res.status}`);
+        }
+        return res.json();
+      })
       .then((data) => {
         if (cancelled) return;
+        clearHistoryRetryTimer();
         const nextMessages = data.turns?.length ? transformTurns(data.turns) : [];
         if (
           nextMessages.some((message) => message.role === 'assistant') &&
@@ -544,13 +613,19 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
       })
       .catch(() => {
         if (cancelled) return;
-        setHistoryLoadedForUrl(url);
+        clearHistoryRetryTimer();
+        historyRetryTimerRef.current = setTimeout(() => {
+          if (!cancelled) {
+            setHistoryLoadedForUrl((current) => (current === url ? null : current));
+          }
+        }, HISTORY_RETRY_DELAY_MS);
       });
 
     return () => {
       cancelled = true;
+      clearHistoryRetryTimer();
     };
-  }, [ensureSingleParticipant, historyLoaded, url]);
+  }, [clearHistoryRetryTimer, ensureSingleParticipant, historyLoaded, url]);
 
   useEffect(() => {
     if (!url) return;
@@ -807,6 +882,58 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
             });
             break;
           }
+          case 'conversation_history': {
+            const nextMessages = event.turns?.length ? transformTurns(event.turns) : [];
+            if (
+              nextMessages.some((message) => message.role === 'assistant') &&
+              !nextMessages.some((message) => message.participant) &&
+              participantsRef.current.size === 0
+            ) {
+              const participant = ensureSingleParticipant();
+              setMessages(
+                nextMessages.map((message) =>
+                  message.role === 'assistant' ? { ...message, participant } : message,
+                ),
+              );
+            } else {
+              setMessages(nextMessages);
+            }
+            if (url) {
+              setHistoryLoadedForUrl(url);
+            }
+            break;
+          }
+          case 'user_confirmed': {
+            const messageId =
+              typeof event.id === 'string' && event.id
+                ? event.id
+                : typeof event.request_id === 'string' && event.request_id
+                  ? event.request_id
+                  : generateId();
+            const content = typeof event.content === 'string' ? event.content : '';
+            if (!content) break;
+            setMessages((prev) => {
+              if (prev.some((message) => message.id === messageId)) {
+                return prev;
+              }
+              return [
+                ...prev,
+                {
+                  id: messageId,
+                  role: 'user',
+                  content,
+                  createdAt: event.created_at ? new Date(event.created_at) : new Date(),
+                  status: 'done',
+                  metadata:
+                    event.metadata && typeof event.metadata === 'object'
+                      ? (event.metadata as ChatMessage['metadata'])
+                      : undefined,
+                  visibility: event.visibility,
+                },
+              ];
+            });
+            break;
+          }
           case 'control_request': {
             if (!event.request_id) break;
             setPendingPermissions((prev) => [
@@ -882,20 +1009,39 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
             break;
           }
           case 'room_outcome': {
+            if (event.fields && event.fields.success === false) {
+              break;
+            }
             const participant = parseParticipantMeta(event.participant);
+            const participantId = String(event.participantId ?? event.participant_id ?? '');
             setMeshEvents((prev) => [
               ...prev,
               {
                 type: 'outcome',
                 id: generateId(),
                 timestamp: new Date(),
-                participantId: String(event.participantId ?? event.participant_id ?? ''),
+                participantId,
                 participant: { color: participant?.color },
                 persona: event.persona ?? participant?.persona ?? '',
                 eventType: event.eventType ?? '',
                 verdict: event.verdict as MeshOutcomeEvent['verdict'],
                 summary: event.summary,
+                fields: event.fields,
+                valid: event.valid === false ? false : true,
               },
+            ]);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: generateId(),
+                role: 'assistant',
+                content: formatOutcomeContent(event),
+                createdAt: new Date(),
+                status: 'done',
+                participant,
+                participantId,
+                visibility: 'internal',
+              } as ChatMessage & { participantId?: string },
             ]);
             break;
           }
@@ -974,10 +1120,22 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
                 } as ChatMessage & { participantId?: string },
               ]);
             }
+            const appendStreamingTextPart = (type: 'reasoning' | 'text', text: string) => {
+              const lastPart = stream.parts.at(-1);
+              if (lastPart?.type === type) {
+                const updatedLastPart = {
+                  ...lastPart,
+                  text: `${lastPart.text ?? ''}${text}`,
+                };
+                stream.parts = [...stream.parts.slice(0, -1), updatedLastPart];
+                return;
+              }
+              stream.parts = [...stream.parts, { type, text }];
+            };
             if (frame.type === 'thought') {
               const text =
                 typeof frame.data === 'string' ? frame.data : JSON.stringify(frame.data ?? '');
-              stream.parts.push({ type: 'reasoning', text });
+              appendStreamingTextPart('reasoning', text);
             } else if (frame.type === 'tool_start') {
               const toolName =
                 (frame.metadata?.tool_name as string) ||
@@ -988,22 +1146,28 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
                 typeof frame.metadata?.input === 'object' && frame.metadata.input !== null
                   ? (frame.metadata.input as Record<string, unknown>)
                   : {};
-              stream.parts.push({ type: 'tool_use', id: toolId, name: toolName, input });
+              stream.parts = [
+                ...stream.parts,
+                { type: 'tool_use', id: toolId, name: toolName, input },
+              ];
             } else if (frame.type === 'tool_result') {
               const result =
                 typeof frame.data === 'string' ? frame.data : JSON.stringify(frame.data ?? '');
               const toolUseId = stream.currentToolId || `tool-${generateId()}`;
-              stream.parts.push({ type: 'tool_result', tool_use_id: toolUseId, content: result });
+              stream.parts = [
+                ...stream.parts,
+                { type: 'tool_result', tool_use_id: toolUseId, content: result },
+              ];
               stream.currentToolId = '';
             } else if (frame.type === 'text' || frame.type === 'message') {
               const text =
                 typeof frame.data === 'string' ? frame.data : JSON.stringify(frame.data ?? '');
-              stream.parts.push({ type: 'text', text });
+              appendStreamingTextPart('text', text);
             }
             const streamContent = stream.parts
               .filter((part) => part.type === 'reasoning' || part.type === 'text')
               .map((part) => part.text ?? '')
-              .join('\n');
+              .join('');
             const currentParts = [...stream.parts];
             setMessages((prev) =>
               prev.map((message) =>
@@ -1023,7 +1187,7 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
         }
       }
     },
-    [ensureSingleParticipant, finalizeStreaming, getDefaultAssistantParticipant],
+    [ensureSingleParticipant, finalizeStreaming, getDefaultAssistantParticipant, url],
   );
 
   const { sendJson } = useWebSocket(url, {

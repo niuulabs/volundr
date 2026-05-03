@@ -663,6 +663,7 @@ const SEED_PROJECTS: TrackerProject[] = [
     url: 'https://linear.app/niuu/proj/niuu-core',
     milestoneCount: 8,
     issueCount: 64,
+    slug: 'niuu-core',
   },
   {
     id: 'proj-plugin-platform',
@@ -672,6 +673,7 @@ const SEED_PROJECTS: TrackerProject[] = [
     url: 'https://linear.app/niuu/proj/plugin-platform',
     milestoneCount: 4,
     issueCount: 28,
+    slug: 'plugin-platform',
   },
 ];
 
@@ -1216,6 +1218,22 @@ export function createMockTyrService(): ITyrService {
           ],
         },
       };
+    },
+
+    async assignWorkflow(sagaId: string, workflowId: string | null) {
+      const saga = sagas.get(sagaId);
+      if (!saga) {
+        throw new Error(`Saga not found: ${sagaId}`);
+      }
+
+      const updated: Saga = {
+        ...saga,
+        workflowId: workflowId ?? undefined,
+        workflow: workflowId ? 'custom-workflow' : undefined,
+        workflowVersion: workflowId ? '1.0.0' : undefined,
+      };
+      sagas.set(sagaId, updated);
+      return updated;
     },
   };
 }

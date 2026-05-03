@@ -157,6 +157,32 @@ describe('ChatInput', () => {
     expect(onSend.mock.calls.length + onSendDirected.mock.calls.length).toBeGreaterThan(0);
   });
 
+  it('routes plain typed @agent prefixes as directed messages', () => {
+    const onSend = vi.fn();
+    const onSendDirected = vi.fn();
+    const participants = new Map([
+      ['p1', { peerId: 'p1', persona: 'Ada', participantType: 'ravn' }],
+    ]);
+    render(
+      <ChatInput
+        {...defaultProps}
+        onSend={onSend}
+        onSendDirected={onSendDirected}
+        participants={participants}
+      />,
+    );
+    fireEvent.change(screen.getByTestId('chat-textarea'), {
+      target: { value: '@Ada please verify this' },
+    });
+    fireEvent.click(screen.getByTestId('send-btn'));
+    expect(onSend).not.toHaveBeenCalled();
+    expect(onSendDirected).toHaveBeenCalledWith(
+      [participants.get('p1')],
+      '@Ada please verify this',
+      [],
+    );
+  });
+
   it('shows drag-over state', () => {
     render(<ChatInput {...defaultProps} />);
     const wrapper = screen.getByTestId('chat-input');

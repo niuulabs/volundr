@@ -75,6 +75,51 @@ describe('buildMimirHttpAdapter', () => {
     });
   });
 
+  describe('mounts.listRegistryMounts', () => {
+    it('calls GET /registry/mounts when the route exists', async () => {
+      const client = makeClient({ get: vi.fn().mockResolvedValue([]) });
+      await buildMimirHttpAdapter(client).mounts.listRegistryMounts?.();
+      expect(client.get).toHaveBeenCalledWith('/registry/mounts');
+    });
+
+    it('falls back to mount data when registry routes are unavailable', async () => {
+      const client = makeClient({
+        get: vi
+          .fn()
+          .mockRejectedValueOnce(missingRoute())
+          .mockResolvedValueOnce([
+            {
+              name: 'shared',
+              role: 'shared',
+              host: 'mimir.internal',
+              url: 'https://mimir.internal',
+              priority: 2,
+              categories: ['entity'],
+              status: 'healthy',
+              pages: 40,
+              sources: 12,
+              lint_issues: 0,
+              last_write: '2026-04-18T14:22:00Z',
+              embedding: 'all-minilm-l6-v2',
+              size_kb: 512,
+              desc: 'Shared mount',
+            },
+          ]),
+      });
+
+      const mounts = await buildMimirHttpAdapter(client).mounts.listRegistryMounts?.();
+
+      expect(mounts).toEqual([
+        expect.objectContaining({
+          name: 'shared',
+          role: 'shared',
+          kind: 'remote',
+          healthStatus: 'healthy',
+        }),
+      ]);
+    });
+  });
+
   describe('pages.getStats', () => {
     it('calls GET /stats', async () => {
       const client = makeClient({

@@ -6,6 +6,7 @@ import logging
 import os
 import re
 from datetime import UTC, datetime
+from pathlib import Path as FilePath
 from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID, uuid4
 
@@ -14,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, sta
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
+from skuld.log_aggregate import aggregate_workspace_logs
 from volundr.adapters.inbound.auth import extract_principal, require_role
 from volundr.domain.models import (
     Chronicle,
@@ -33,7 +35,12 @@ from volundr.domain.models import (
     TimelineEventType,
     WorkspaceStatus,
 )
-from volundr.domain.ports import EventBroadcaster, PricingProvider
+from volundr.domain.ports import (
+    EventBroadcaster,
+    GitAuthError,
+    GitRepoNotFoundError,
+    PricingProvider,
+)
 from volundr.domain.services import (
     ChronicleNotFoundError,
     ChronicleService,
@@ -82,6 +89,20 @@ def _workspace_bulk_delete_session_ids(body: dict) -> list[str]:
     if session_ids is None:
         session_ids = body.get("sessionIds", [])
     return session_ids
+
+
+def _workspace_dir_from_code_endpoint(code_endpoint: str | None) -> FilePath | None:
+    """Resolve a local workspace path from a file:// code endpoint when possible."""
+    if not code_endpoint:
+        return None
+    try:
+        parsed = urlsplit(code_endpoint)
+    except ValueError:
+        return None
+    if parsed.scheme != "file" or not parsed.path:
+        return None
+    path = FilePath(parsed.path)
+    return path if path.exists() else None
 
 
 _RFC1123_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
@@ -356,6 +377,10 @@ class SessionResponse(BaseModel):
         default_factory=dict,
         description="Metadata from the latest activity report",
     )
+    workload_type: str = Field(
+        default="session",
+        description="Workload type used to launch the session",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -412,6 +437,7 @@ class SessionResponse(BaseModel):
             tenant_id=session.tenant_id,
             activity_state=(session.activity_state.value if session.activity_state else None),
             activity_metadata=session.activity_metadata,
+            workload_type=session.workload_type,
         )
 
 
@@ -944,6 +970,35 @@ def create_router(
             "file_manager_enabled": admin.get("storage", {}).get("file_manager_enabled", True),
             "mini_mode": settings.local_mounts.mini_mode,
         }
+
+    @router.get("/repos/branches", response_model=list[str], tags=["Repositories"])
+    async def list_branches(request: Request, repo_url: str = Query(...)) -> list[str]:
+        """Legacy Volundr compatibility route for repository branch listings."""
+        if repo_service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Repo service not available",
+            )
+
+        user_id = request.headers.get("x-auth-user-id")
+
+        try:
+            return await repo_service.list_branches(repo_url, user_id=user_id)
+        except GitAuthError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(e),
+            )
+        except GitRepoNotFoundError as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
 
     @router.get("/auth/config", tags=["Auth"])
     async def get_auth_config(request: Request) -> dict:
@@ -1579,6 +1634,100 @@ def create_router(
                 detail=f"Could not connect to session pod: {e}",
             )
 
+    @router.get(
+        "/sessions/{session_id}/logs/aggregate",
+        responses={
+            404: {"model": ErrorResponse},
+            502: {"model": ErrorResponse},
+        },
+        tags=["Sessions"],
+    )
+    async def get_session_logs_aggregate(
+        session_id: UUID = Path(description="Unique session identifier"),
+        lines: int = Query(
+            default=200,
+            ge=1,
+            le=5000,
+            description="Number of interleaved log lines to retrieve",
+        ),
+        level: str = Query(
+            default="DEBUG",
+            description="Minimum log level (DEBUG, INFO, WARNING, ERROR)",
+        ),
+        participants: str | None = Query(
+            default=None,
+            description="Comma-separated participant ids to include",
+        ),
+        query: str = Query(
+            default="",
+            description="Case-insensitive text filter applied to participant, source, and message",
+        ),
+    ) -> dict:
+        """Proxy aggregated broker + flock logs from a running session pod."""
+        try:
+            session, base_url = await forge.get_session_proxy_target(session_id)
+        except LookupError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session not found: {session_id}",
+            )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session {session_id} has no active endpoint",
+            )
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"{base_url}/api/logs/aggregate",
+                    params={
+                        "lines": lines,
+                        "level": level,
+                        "participants": participants,
+                        "query": query,
+                    },
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == status.HTTP_404_NOT_FOUND:
+                workspace_dir = _workspace_dir_from_code_endpoint(session.code_endpoint)
+                if workspace_dir is not None:
+                    requested_participants = (
+                        {item.strip() for item in participants.split(",") if item.strip()}
+                        if participants
+                        else None
+                    )
+                    payload = aggregate_workspace_logs(
+                        workspace_dir,
+                        lines=lines,
+                        level=level,
+                        participants=requested_participants,
+                        query=query,
+                    )
+                    payload["session_id"] = str(session.id)
+                    return payload
+            logger.warning(
+                "Aggregate log proxy failed for session %s: %s",
+                _sanitize_log(session_id),
+                e,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to fetch aggregate logs from session pod: {e.response.status_code}",
+            )
+        except httpx.RequestError as e:
+            logger.warning(
+                "Aggregate log proxy connection failed for session %s: %s",
+                _sanitize_log(session_id),
+                e,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not connect to session pod: {e}",
+            )
+
     @router.post(
         "/sessions/{session_id}/messages",
         tags=["Sessions"],
@@ -1705,59 +1854,6 @@ def create_router(
                 detail=f"Could not connect to session pod: {e}",
             )
 
-    @router.get(
-        "/providers",
-        response_model=list[ProviderResponse],
-        responses={503: {"model": ErrorResponse}},
-        tags=["Repositories"],
-    )
-    async def list_providers() -> list[ProviderResponse]:
-        """List all configured git providers."""
-        try:
-            providers = forge.list_providers()
-        except RuntimeError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=str(exc),
-            )
-        return [ProviderResponse.from_provider_info(p) for p in providers]
-
-    @router.get(
-        "/repos/branches",
-        response_model=list[str],
-        responses={
-            400: {"model": ErrorResponse},
-            401: {"model": ErrorResponse},
-            404: {"model": ErrorResponse},
-            503: {"model": ErrorResponse},
-        },
-        tags=["Repositories"],
-    )
-    async def list_branches(
-        request: Request,
-        repo_url: str = Query(..., description="Repository URL"),
-    ) -> list[str]:
-        """List branches for a repository using the user's credentials."""
-        from volundr.domain.ports import GitAuthError, GitRepoNotFoundError
-
-        user_id = await _optional_user_id(request)
-        try:
-            return await forge.list_branches(repo_url, user_id=user_id)
-        except RuntimeError as e:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=str(e),
-            )
-        except GitAuthError as e:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=str(e),
-            )
-        except GitRepoNotFoundError as e:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=str(e),
-            )
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

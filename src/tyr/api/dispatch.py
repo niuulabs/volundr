@@ -57,6 +57,9 @@ class QueueItemResponse(BaseModel):
     priority_label: str = ""
     estimate: float | None = None
     url: str = ""
+    workflow_id: str | None = None
+    workflow: str | None = None
+    workflow_version: str | None = None
 
 
 class ModelOption(BaseModel):
@@ -86,6 +89,10 @@ class DispatchRequest(BaseModel):
         default=None,
         description="Target a specific Volundr cluster by connection ID",
     )
+    session_definition: str | None = Field(
+        default=None,
+        description="Optional Volundr session definition key (e.g. 'skuldCodex')",
+    )
     workload_type: str = Field(
         default="solo",
         description="'solo' for a single Ravn session or 'ravn_flock' for a multi-agent flock",
@@ -105,6 +112,14 @@ class DispatchItemRequest(BaseModel):
     connection_id: str | None = Field(
         default=None,
         description="Target a specific Volundr cluster for this item (overrides request-level)",
+    )
+    workflow_id: str | None = Field(
+        default=None,
+        description="Optional workflow override for this dispatch item",
+    )
+    session_definition: str | None = Field(
+        default=None,
+        description="Optional session definition override for this dispatch item",
     )
 
 
@@ -167,6 +182,9 @@ def _queue_item_to_response(item: ServiceQueueItem) -> QueueItemResponse:
         priority_label=item.priority_label,
         estimate=item.estimate,
         url=item.url,
+        workflow_id=item.workflow_id,
+        workflow=item.workflow,
+        workflow_version=item.workflow_version,
     )
 
 
@@ -327,6 +345,8 @@ def create_dispatch_router() -> APIRouter:
                 issue_id=item.issue_id,
                 repo=item.repo,
                 connection_id=item.connection_id,
+                workflow_id=item.workflow_id,
+                session_definition=item.session_definition,
             )
             for item in body.items
         ]
@@ -344,6 +364,7 @@ def create_dispatch_router() -> APIRouter:
             model=body.model or settings.dispatch.default_model,
             system_prompt=body.system_prompt or settings.dispatch.default_system_prompt,
             connection_id=body.connection_id,
+            session_definition=body.session_definition,
             persona_overrides=persona_overrides,
         )
         return [_result_to_response(r) for r in results]

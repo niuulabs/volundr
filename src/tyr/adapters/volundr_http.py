@@ -75,6 +75,7 @@ class VolundrHTTPAdapter(VolundrPort):
                     "initial_prompt": request.initial_prompt,
                     "issue_id": request.tracker_issue_id,
                     "issue_url": request.tracker_issue_url,
+                    "definition": request.definition,
                     "workload_type": request.workload_type,
                     "workload_config": request.workload_config,
                     "profile_name": request.profile,
@@ -96,6 +97,7 @@ class VolundrHTTPAdapter(VolundrPort):
                 repo=source.get("repo", ""),
                 branch=source.get("branch", ""),
                 base_branch=source.get("base_branch", ""),
+                workload_type=data.get("workload_type", "default"),
             )
 
     async def get_session(
@@ -124,6 +126,7 @@ class VolundrHTTPAdapter(VolundrPort):
                 repo=source.get("repo", ""),
                 branch=source.get("branch", ""),
                 base_branch=source.get("base_branch", ""),
+                workload_type=data.get("workload_type", "default"),
             )
 
     async def list_sessions(
@@ -137,6 +140,11 @@ class VolundrHTTPAdapter(VolundrPort):
                 headers=self._headers(auth_token),
             )
             resp.raise_for_status()
+            if not resp.content:
+                raise ValueError(
+                    f"Volundr returned empty response (status={resp.status_code}, "
+                    f"url={resp.url})"
+                )
             return [
                 VolundrSession(
                     id=s["id"],
@@ -144,6 +152,7 @@ class VolundrHTTPAdapter(VolundrPort):
                     status=s["status"],
                     tracker_issue_id=s.get("tracker_issue_id"),
                     cluster_name=self._name,
+                    workload_type=s.get("workload_type", "default"),
                 )
                 for s in resp.json()
             ]
